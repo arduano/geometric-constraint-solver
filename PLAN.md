@@ -91,8 +91,9 @@ rematerialization, atomic owner-step reconciliation, workspace v7 and a DOM-free
 TypeScript/WASM boundary. `docs/M83_GOALS.md` owns the scope and `docs/M83_IMPLEMENTATION.md` owns
 the current evidence. The prior read-only Lineage-panel candidate passed clean qualification and
 immutable byte-verified Tailscale nomination, but is withdrawn by the approved editable-Lineage/
-predictive-drag amendment. Replacement qualification, immutable nomination and human UAT remain
-pending; M83 is not accepted and M81 remains product authority.
+predictive-drag amendment. Exact replacement source `d813754`, tree `031a8c9`, passes complete
+clean qualification, independent review and immutable byte-verified Tailscale nomination. Human
+M83-U1–U12 and approval remain pending; M83 is not accepted and M81 remains product authority.
 M76's
 implementation,
 feature refinements,
@@ -5604,8 +5605,8 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: authoritative sketch lineage and deterministic rematerialization
 
-Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
-withdrawn; human UAT pending; not accepted**.
+Status: **editable-lineage/predictive-drag amendment mechanically qualified and frozen for focused
+human UAT; not accepted or published**.
 `docs/M83_GOALS.md` owns the complete scope and ADR 0039 is accepted for M83 implementation. This
 plan supersedes commit `56d1eda`'s narrow architecture slice; that commit remains historical
 evidence, not an active acceptance contract. ADR number 0038 stays with the inactive archived M82
@@ -5707,11 +5708,40 @@ workbench honestly to workspace v7 and expose the same stateful engine through
   `source_order` snapshots are not semantic operand dependencies: independently authored
   constraints/dimensions can reorder while strict replay retains surviving current source IDs,
   prunes removed IDs and appends the current action's newly materialized sources.
-- [ ] Pass the replacement complete clean release gate from committed source, receive focused
+- [x] Pass the replacement complete clean release gate from committed source, receive focused
   architecture/API/interaction review and nominate a replacement immutable byte-verified
   Tailscale candidate. The earlier read-only candidate remains historical evidence only.
 - [ ] Pass and record M83-W12 human UAT, accept and publish the already-frozen candidate artifact
   to GitHub Pages, and verify the exact public bytes before closing M83.
+
+Replacement amendment nomination evidence: exact product source
+`d8137543fecf4a09433471e16383db5069de0d41`, tree
+`031a8c95ddc99f1bf52847c0485ac857b0af1079`, passed
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from a clean committed
+worktree on 2026-08-23 from 09:52:01Z through 10:17:36Z. The 308,679-byte log
+`/tmp/geosolve-m83-amendment-release-gate.log` has SHA-256
+`015af2b3fea2c64677920b3c590df8c5812b7662900a11e4ba156633845cbd17`. The gate includes the
+complete locked all-feature workspace tests and Clippy/Rustdoc, unchanged clean 271-row golden,
+native/WASM parity, TypeScript compile/runtime checks, performance/licence/package checks, the
+256-moving-body sparse crossover in 134.56 seconds and Trunk 0.21.14 release assembly. Focused
+architecture/API/interaction and predictive-terminal audits found no release blocker. A future
+Point scene seal is retained only as defense-in-depth/API-symmetry hardening; current durable Point
+publication remains independently authenticated and atomic.
+
+Without rebuilding, the gate-produced seven-file distribution was byte-compared and frozen at
+`/tmp/geosolve-m83-amendment-uat.AVC9ce` (directory `0555`, regular non-symlink files `0444`). Its
+C-locale ordered-manifest aggregate is
+`260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`. Temporary PID `1728899`
+served only that snapshot on `100.94.63.83:18080`; all eight direct, proxy-disabled requests
+passed exact status/media/length/encoding/hash/body checks before replacement. Only then was
+withdrawn PID `4152505` retired and `geosolve-m83-lineage-uat.service`, PID `1733554`, started the
+same snapshot at `http://100.94.63.83:8080/`. Temporary and final ledgers
+`/tmp/geosolve-m83-amendment-temp-verify.8Z630V/results.tsv` and
+`/tmp/geosolve-m83-amendment-final-verify.BK5m0F/results.tsv` are byte-identical with SHA-256
+`7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`; `/` exactly equals
+`index.html`. The temporary service is retired. GitHub Pages remains unchanged at remote source
+`f55f226e28e0bbbb9d1b1c509cb68322be0a2240`; human M83-U1–U12, approval, publication and closure
+remain pending.
 
 Withdrawn read-only-panel nomination evidence: exact product source
 `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
@@ -5722,13 +5752,13 @@ seven-file distribution byte-matches the already-frozen read-only snapshot at
 `/tmp/geosolve-m83-lineage-uat.1KL8gG`; its C-locale ordered-manifest aggregate is
 `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Eight proxy-disabled,
 identity-encoded requests for `/` plus all seven files pass exact status/media/length/body checks
-first on temporary `:18080` and then at `http://100.94.63.83:8080/`; both result ledgers have
-SHA-256 `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`. The temporary listener
-is retired and `geosolve-m83-lineage-uat.service`, nomination PID `4152505`, temporarily serves
-only this frozen withdrawn snapshot until a clean, frozen and byte-verified amendment candidate is
-ready to replace it. These bytes do not contain editable Lineage or predictive drag and do not
-satisfy M83-W12. Replacement qualification, human approval, GitHub Pages publication and milestone
-closure remain pending.
+first on temporary `:18080` and then at the historical `http://100.94.63.83:8080/`; both result
+ledgers have SHA-256 `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`.
+The temporary listener
+and historical nomination PID `4152505` are retired; the qualified amendment replaced the service
+without modifying this recoverable read-only snapshot. These bytes do not contain editable Lineage
+or predictive drag and do not satisfy M83-W12. Human approval, GitHub Pages publication and
+milestone closure remain pending.
 
 Superseded pre-panel nomination evidence: exact product source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree

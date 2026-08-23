@@ -43,9 +43,20 @@ construction/NURBS UAT and certified all-family visual profiles.
   rewrite requests carry the exact document/revision/digest and return through strict-cold
   coordinator publication; transient browser selection, drafts and authenticated desktop drag
   state never become a peer authority or workspace state. The prior read-only candidate
-  `bb888cc` is superseded by this approved amendment and is withdrawn from UAT. Replacement clean
-  qualification, immutable Tailscale nomination, human UAT and explicit approval remain required;
-  M81 remains the product baseline. `docs/M83_GOALS.md` owns the full scope.
+  `bb888cc` is superseded by this approved amendment and is withdrawn from UAT. Replacement exact
+  source `d8137543fecf4a09433471e16383db5069de0d41`, tree
+  `031a8c95ddc99f1bf52847c0485ac857b0af1079`, passes the complete clean gate and independent
+  API/architecture and predictive-terminal audits without a blocker. Its no-rebuild seven-file
+  snapshot `/tmp/geosolve-m83-amendment-uat.AVC9ce` is frozen `0555`/`0444` at ordered-manifest
+  aggregate `260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`. Temporary exact
+  verification passed before old PID `4152505` was retired; `geosolve-m83-lineage-uat.service`,
+  PID `1733554`, now serves the same bytes at `http://100.94.63.83:8080/`, with temporary/final
+  ledgers byte-identical at SHA-256
+  `7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`. The optional future
+  Point scene-seal symmetry cleanup is defense in depth, not an acceptance blocker. Human
+  M83-U1 through M83-U12, explicit approval and exact Pages publication remain required; M81
+  remains the public product baseline and Pages is unchanged. `docs/M83_GOALS.md` owns the full
+  scope.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

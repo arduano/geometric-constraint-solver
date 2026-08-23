@@ -4307,9 +4307,27 @@ identity, rematerialization and adapter parity above the unchanged owning-domain
 Amendment status: prior read-only source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9` and tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc` passed the complete clean release gate and focused
 authority/UX review, but the approved editable-Lineage and predictive-drag amendment withdraws
-those bytes from current UAT. Replacement qualification and immutable Tailscale nomination are in
-progress. Earlier source `d378f7b3` remains superseded because it predates any Lineage panel.
-M83-W12 human UAT and explicit approval remain pending.
+those bytes from current UAT. Replacement exact source
+`d8137543fecf4a09433471e16383db5069de0d41`, tree
+`031a8c95ddc99f1bf52847c0485ac857b0af1079`, passed the complete clean release gate from
+2026-08-23T09:52:01Z through 10:17:36Z with exit 0; its 308,679-byte log
+`/tmp/geosolve-m83-amendment-release-gate.log` has SHA-256
+`015af2b3fea2c64677920b3c590df8c5812b7662900a11e4ba156633845cbd17`. Independent
+API/architecture and predictive-terminal audits found no blocker; a future Point scene-seal
+symmetry cleanup remains non-blocking defense in depth.
+
+The no-rebuild snapshot `/tmp/geosolve-m83-amendment-uat.AVC9ce` has directory mode `0555`, seven
+regular non-symlink files with mode `0444` and C-locale ordered-manifest aggregate
+`260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`. Temporary PID `1728899`
+passed all eight exact requests at `100.94.63.83:18080` and was retired. Only after that pass was
+old PID `4152505` retired and `geosolve-m83-lineage-uat.service`, PID `1733554`, started the
+identical snapshot at `http://100.94.63.83:8080/`. Temporary ledger
+`/tmp/geosolve-m83-amendment-temp-verify.8Z630V/results.tsv` and final ledger
+`/tmp/geosolve-m83-amendment-final-verify.BK5m0F/results.tsv` are byte-identical with SHA-256
+`7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`; all eight responses
+byte-match and `/` exactly equals `index.html`. Earlier source `d378f7b3` remains superseded
+because it predates any Lineage panel. Human M83-U1 through M83-U12, explicit approval and Pages
+publication remain pending; Pages is unchanged and M81 remains public product authority.
 
 ### M83-L1 — complete typed action catalog
 
@@ -4321,9 +4339,9 @@ Undo/Redo. The inventory is closed: a newly added public family without a mappin
 catalog test instead of falling back to an opaque flat edit.
 
 Status: the closed enum/catalog mapping, generic full-family lifecycle matrix and representative
-owning-domain coordinator routes pass. This is not described as literal runtime replay of every
-catalog row. Those lower-scope checks passed in the withdrawn read-only candidate; replacement
-aggregate qualification and human UAT remain pending.
+owning-domain coordinator routes pass in the replacement complete clean gate. This is not
+described as literal runtime replay of every catalog row. Human representative-workflow UAT
+remains pending.
 
 ### M83-L2 — exact owner leaves and atomic multi-owner rewrite
 
@@ -4338,8 +4356,8 @@ Status: focused multi-owner, exact-leaf and tampered-map regressions pass. Compl
 authentication now also rejects forged continuation leaves, same-kind inputs, outputs, identity
 flows and reservations in current/accepted/Undo/Redo authority. Tagged `domain` and
 `neighborhood` branch values remain stable atomic owner leaves when their serialized variant shape
-changes. Architecture review and the clean candidate gate passed for the withdrawn read-only
-candidate; the amended L7/L8 aggregate remains subject to replacement qualification.
+changes. The amended L7/L8 aggregate, replacement clean gate and independent architecture/API
+review pass; human UAT remains pending.
 
 ### M83-L3 — strict/local equivalence with historical host inputs
 
@@ -4350,12 +4368,12 @@ reorder, branch/property edit, Undo and Redo, dependency-local evaluation must a
 strict oracle on accepted/failure authority, canonical sketch/feature evidence, typed identities,
 ownership and branches. Only reported work may differ.
 
-Status: focused historical-input and strict/local regressions plus the withdrawn read-only
-candidate's collateral clean qualification pass. Native Fillet adds the topology-sensitive
-witness: strict and local evaluation must continue from the independently accepted upstream
-prefix, reauthenticate the prepared geometric plan and exact materialized identity delta, then
-independently validate the result. Consecutive Fillets and an opposed retained seed cover both
-terminal and reusable-prefix positions.
+Status: focused historical-input and strict/local regressions plus the current replacement clean
+qualification pass. Native Fillet adds the topology-sensitive witness: strict and local
+evaluation must continue from the independently accepted upstream prefix, reauthenticate the
+prepared geometric plan and exact materialized identity delta, then independently validate the
+result. Consecutive Fillets and an opposed retained seed cover both terminal and reusable-prefix
+positions.
 
 ### M83-L4 — retained failure and one history
 
@@ -4365,8 +4383,8 @@ reported, and the previous independently accepted lineage/materialization remain
 Projected editing is unavailable against its stale reverse map. Undo/Redo restores exact programs
 and reservations; stale, cancelled, exhausted, malformed and non-finite requests record nothing.
 
-Status: focused retained-authority coverage and the closed workbench route inventory plus
-representative dynamic routing pass; human recovery UAT remains pending.
+Status: focused retained-authority coverage, the closed workbench route inventory, representative
+dynamic routing and the replacement complete clean gate pass; human recovery UAT remains pending.
 
 ### M83-L5 — workspace-v7 cold authority and migration
 
@@ -4393,9 +4411,8 @@ historical outer schemas, 20,950 bytes total, SHA-256
 `af5e6398578dc02bc37df0a4ad8b9b0ff96295c98e6dff3992db652b4d29d4a1`; every row retains a
 failed current design over older accepted geometry, becomes exactly one imported root, re-encodes
 to v7 and cache-free cold reloads. Embedded legacy acceptance is selected by its independently
-reproduced authority digest, not merely by the presence of older input payloads. Complete release
-qualification passed for the withdrawn read-only candidate; replacement aggregate qualification
-and migration/reload interaction UAT remain pending.
+reproduced authority digest, not merely by the presence of older input payloads. Replacement
+aggregate qualification passes; migration/reload interaction UAT remains pending.
 
 ### M83-L6 — stateful native/WASM RPC and sole-workbench routing
 
@@ -4421,9 +4438,9 @@ stable discriminated error codes. The TypeScript client rejects malformed, metho
 uncorrelated envelopes/results without replacing its retained session, and rejects a request above
 the Rust UTF-8 byte bound before invoking transport. The exact native/actual-WASM transcript has
 28 responses, 117,156 bytes and FNV-1a `7063e9c6b5b5248c`. The source-route evidence is a closed
-inventory sentinel rather than runtime instrumentation of every route. Complete release
-qualification and immutable nomination passed for the withdrawn read-only candidate; amended L7/L8
-replacement qualification and human UAT remain pending.
+inventory sentinel rather than runtime instrumentation of every route. The amended L7/L8
+replacement complete qualification and immutable Tailscale nomination pass; human UAT remains
+pending.
 
 ### M83-L7 — retained lineage is selectable and editable without a second authority
 

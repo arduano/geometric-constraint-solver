@@ -2,10 +2,9 @@
 
 # M83 focused UAT — Authoritative sketch lineage
 
-Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
-withdrawn; human UAT pending**. A replacement exact source, no-rebuild snapshot and byte-verified
-Tailscale endpoint will be recorded below after qualification. M81 remains accepted public product
-authority meanwhile.
+Status: **replacement editable-lineage/predictive-drag candidate mechanically qualified, frozen
+and byte-verified; M83-U1–U12 human UAT pending**. M81 remains accepted public product authority;
+M83 is not accepted or published.
 
 M83 deliberately preserves existing sketch mathematics and visible authoring behavior while
 replacing persistent workbench authority. The amendment exposes a selectable projection and routes
@@ -15,11 +14,39 @@ whether predictive dragging improves expensive scenes without making intent look
 
 ## Replacement amendment candidate authority
 
-Qualification is in progress. The exact committed source/tree, complete clean-gate log, immutable
-seven-file manifest, temporary `:18080` verification, retained `:8080` service identity and final
-served-byte ledger will be recorded here before this scorecard begins. Until every field is frozen
-and independently verified, the withdrawn service below is historical access only and is not the
-M83-U1–U12 candidate. GitHub Pages remains unchanged until explicit approval.
+This is the sole current M83-U1–U12 candidate:
+
+- Product source: `d8137543fecf4a09433471e16383db5069de0d41`.
+- Product tree: `031a8c95ddc99f1bf52847c0485ac857b0af1079`.
+- Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0
+  from committed clean source on 2026-08-23, 09:52:01Z–10:17:36Z. The 308,679-byte log
+  `/tmp/geosolve-m83-amendment-release-gate.log` has SHA-256
+  `015af2b3fea2c64677920b3c590df8c5812b7662900a11e4ba156633845cbd17`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m83-amendment-uat.AVC9ce` (directory `0555`; exactly
+  seven regular non-symlink files `0444`).
+- C-locale ordered-manifest aggregate:
+  `260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`.
+- Temporary verification: `geosolve-m83-amendment-temp-uat.service`, PID `1728899`, served only
+  that snapshot at `100.94.63.83:18080`; it was retired after the complete pass.
+- Current UAT endpoint: `http://100.94.63.83:8080/`, served only from that snapshot by
+  `geosolve-m83-lineage-uat.service`, nomination PID `1733554`.
+- Exact served-byte evidence:
+  `/tmp/geosolve-m83-amendment-temp-verify.8Z630V/results.tsv` and
+  `/tmp/geosolve-m83-amendment-final-verify.BK5m0F/results.tsv`; the ledgers are byte-identical,
+  each with SHA-256
+  `7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`.
+
+Both verification passes cover `/` plus all seven files; each returned HTTP 200 from the direct
+Tailscale address with zero redirects, no `Location` or `Content-Encoding`, exact media type,
+`Content-Length`, downloaded length, SHA-256 and body bytes; `/` exactly equals `index.html`.
+Focused architecture/API/interaction and predictive-terminal reviews found no release blocker.
+One future hardening note is
+recorded without weakening this candidate: Point terminal publication is already protected by its
+exact retained preview, identity, coordinate, provenance, cold-reproduction and atomic-swap checks,
+while a private Point scene seal would add fail-earlier symmetry with CurveControl.
+
+GitHub Pages remains deliberately unchanged at remote source
+`f55f226e28e0bbbb9d1b1c509cb68322be0a2240` until explicit M83 approval.
 
 ## Withdrawn read-only candidate authority
 
@@ -33,8 +60,8 @@ M83-U1–U12 candidate. GitHub Pages remains unchanged until explicit approval.
   regular non-symlink files `0444`).
 - Ordered file-manifest aggregate:
   `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`.
-- Withdrawn Tailscale endpoint: `http://100.94.63.83:8080/`, currently served only from that
-  snapshot by `geosolve-m83-lineage-uat.service` (nomination PID `4152505`) until replacement.
+- Historical Tailscale endpoint: `http://100.94.63.83:8080/`, formerly served only from that
+  snapshot by `geosolve-m83-lineage-uat.service` (nomination PID `4152505`, retired).
 - Exact served-byte verification: temporary
   `/tmp/geosolve-m83-lineage-temp-verify.jbCyQE/results.tsv` and retained
   `/tmp/geosolve-m83-lineage-final-verify.2LxtXE/results.tsv`, each SHA-256
@@ -42,10 +69,10 @@ M83-U1–U12 candidate. GitHub Pages remains unchanged until explicit approval.
 
 Both historical verification passes cover `/` plus all seven files with HTTP 200, direct
 Tailscale address, zero redirects, no `Location` or `Content-Encoding`, exact media
-type/length/SHA/body and root equality with `index.html`. The temporary `:18080` listener is
-retired; the retained endpoint stays available only until the replacement service swap. These
-bytes do not contain editable Lineage or predictive drag and no longer satisfy this UAT. GitHub
-Pages is intentionally unchanged until approval.
+type/length/SHA/body and root equality with `index.html`. The historical temporary listener and PID
+`4152505` are retired; the snapshot remains recoverable but is no longer served. These bytes do not
+contain editable Lineage or predictive drag and no longer satisfy this UAT. GitHub Pages is
+intentionally unchanged until approval.
 
 Independent browser review reports zero root/Inspector overflow at the 1600, 1100, 952, 940, 929
 and 928px boundary cases, zero bounded-history overflow for `1025 / 2049`, and 6.24:1 Lineage-count

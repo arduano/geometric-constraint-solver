@@ -2,11 +2,11 @@
 
 # M83 implementation — Authoritative sketch lineage and deterministic rematerialization
 
-Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
-withdrawn; human UAT pending; not accepted**. ADR 0039 and `docs/M83_GOALS.md` own the scope. M81
-remains accepted product authority until the replacement immutable M83 candidate passes focused
-human UAT and receives explicit supervising-human approval. GitHub Pages publication is
-deliberately deferred until that approval.
+Status: **editable-lineage/predictive-drag amendment mechanically qualified, independently
+reviewed and frozen for focused human UAT; not accepted or published**. ADR 0039 and
+`docs/M83_GOALS.md` own the scope. M81 remains accepted product authority until the immutable M83
+candidate passes focused human UAT and receives explicit supervising-human approval. GitHub Pages
+publication is deliberately deferred until that approval.
 
 ## Product boundary
 
@@ -895,8 +895,9 @@ byte no-op, signed-zero byte change, changed canonical identity, rejected-attemp
 atomic rejection cases pass. The F039 M79 effective-plan failure/retry and F040 ordinary/controlled
 underconstrained construction identity regressions pass, as do the original M79 integration and
 controlled pre-commit cancellation collateral. The complete editor library passes 473/473 and
-warnings-denied editor all-feature Clippy, formatting and diff hygiene pass. These remain
-development-worktree evidence until committed-source qualification below completes.
+warnings-denied editor all-feature Clippy, formatting and diff hygiene pass. This was
+pre-nomination development evidence and is now subsumed by the committed-source qualification
+below.
 
 The editable-Lineage/predictive amendment owner pass adds five `m83_lineage_editing` cases, two
 `m83_lineage_reorder_stress` cases and the CurveControl/Point exact-terminal regressions. The
@@ -908,8 +909,8 @@ all-feature warnings-denied Clippy for the lineage/editor/demo owners, formattin
 pass. Point strict release now retains the effective model position that produced its newest
 request, so an otherwise current accepted preview cannot be committed from an unsampled release
 coordinate. Ordinary `pointer_up` deliberately retains its established last-valid fallback.
-These are development-worktree results; committed-source release qualification and immutable
-nomination remain separate below.
+These were development-worktree results; the committed-source release qualification and immutable
+nomination are recorded separately below.
 
 Workspace-v7 cold/cache authority tests pass 10/10 and historical-host-input tests pass 2/2;
 cache-free workbench routing/reload tests pass 2/2; the frozen strict v1-v6 migration matrix
@@ -925,6 +926,68 @@ timed out only while a duplicate concurrent oracle consumed the host each passed
 0.5–2.2 seconds after that contention was removed; the subsequent complete clean-oracle run passed.
 The fixture remains 271 catalog entries plus its header, with SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` at this checkpoint.
+
+### Editable-Lineage replacement qualification and immutable nomination
+
+Exact product source `d8137543fecf4a09433471e16383db5069de0d41`, tree
+`031a8c95ddc99f1bf52847c0485ac857b0af1079`, ran the canonical clean gate from committed source:
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The command ran on 2026-08-23 from 09:52:01Z through 10:17:36Z and exited zero. Its 308,679-byte
+log `/tmp/geosolve-m83-amendment-release-gate.log` has SHA-256
+`015af2b3fea2c64677920b3c590df8c5812b7662900a11e4ba156633845cbd17`. The gate passed Cargo
+metadata/offline resolution, formatting and diff hygiene, warnings-denied all-target/all-feature
+workspace Clippy, locked all-feature workspace tests, the exact unchanged clean 271-row golden,
+M70/M71/M74/M75/M76/M77/M79/M83 native/WASM parity, the demo WASM check, TypeScript install/
+compile/runtime checks, warnings-denied Rustdoc, benchmark compilation, M14/M32 budgets, the
+256-moving-body sparse crossover in 134.56 seconds, licence/package checks and Trunk 0.21.14
+release assembly. The only diagnostics were the existing non-failing Cargo notices for packages
+declaring both `license` and `license-file`.
+
+Independent architecture/API/interaction and predictive-terminal reviews found no release
+blocker. They confirmed exact-CAS editing, dependency-aware reorder, compositional `source_order`,
+stable ownership identity, staged cold publication, retained-failure atomicity, transient-only
+prediction and exact terminal publication. One future defense-in-depth note remains deliberately
+non-blocking: Point could carry a private terminal scene/origin seal for fail-earlier symmetry with
+CurveControl. Current Point publication cannot substitute geometry because it independently
+requires the current design, exact retained solved preview, named point, bit-identical coordinates,
+accepted provenance, complete continuation/reanchor, cold lineage reproduction and atomic staged
+swap; the production adapter also reconstructs the terminal scene from coordinator authority.
+
+Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m83-amendment-uat.AVC9ce`, byte-compared before and after freezing, and made
+read-only: directory `0555`, seven regular non-symlink files `0444`. Source and frozen manifests
+are retained in `/tmp/geosolve-m83-amendment-freeze.paLyEp`; both have C-locale ordered aggregate
+SHA-256 `260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 38,415 | `f7874558d05ca73078a1260af05a36f144e2dd14feef724664e0e19e06057363` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-201d6fefe570a995.js` | 37,186 | `faeda255e9a76480c2cb35feb862d7acff9d025ddf0aa294296bfaee08a91a7d` |
+| `geosolve-demo-web-201d6fefe570a995_bg.wasm` | 10,095,614 | `c23c5c9460b5a83ef3187a111236f8cd2d77b442eb5ce69cbe40ce6db2368222` |
+| `index.html` | 33,953 | `1536faf52f4dd1443154226c3b5cab214f794dd9b93e06f14e79ed7e659dad37` |
+| `styles-3bdcbd1e8b53bf2b.css` | 45,489 | `2cfc26464756b8a39e9081588d99ac207b25b2e6d1bae97f48a76b5f6e3a81bf` |
+
+Temporary service `geosolve-m83-amendment-temp-uat.service`, PID `1728899`, first served only this
+snapshot at `100.94.63.83:18080`. Proxy-disabled, cache-bypassed identity requests for `/` and all
+seven files returned HTTP 200 from the direct Tailscale address with zero redirects, no `Location`
+or `Content-Encoding`, exact media type, `Content-Length`, downloaded length, SHA-256 and body;
+`/` equals `index.html`. Evidence is
+`/tmp/geosolve-m83-amendment-temp-verify.8Z630V/results.tsv`.
+
+Only after that complete pass, withdrawn nomination PID `4152505` was retired and
+`geosolve-m83-lineage-uat.service`, PID `1733554`, began serving the identical frozen directory at
+`http://100.94.63.83:8080/`. Independent final evidence is
+`/tmp/geosolve-m83-amendment-final-verify.BK5m0F/results.tsv`; the two ledgers are byte-identical
+with SHA-256 `7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`. The temporary
+listener is retired and a later root request still byte-matched the frozen `index.html`. GitHub
+Pages remains unchanged at remote source `f55f226e28e0bbbb9d1b1c509cb68322be0a2240`; this exact
+artifact awaits M83-U1–U12 and explicit supervising-human acceptance.
 
 ### Superseded pre-panel candidate qualification and immutable nomination
 
@@ -1045,9 +1108,9 @@ file returned HTTP 200 with the direct Tailscale address, zero redirects, no `Lo
 `/` equals `index.html`. Evidence is
 `/tmp/geosolve-m83-lineage-temp-verify.jbCyQE/results.tsv`.
 
-Only after that pass, the superseded retained service was stopped and
-`geosolve-m83-lineage-uat.service`, nomination PID `4152505`, began serving the identical frozen
-directory at `http://100.94.63.83:8080/`. Independent final evidence is
+Only after that pass, the superseded retained service was stopped and historical
+`geosolve-m83-lineage-uat.service` nomination PID `4152505` began serving the identical frozen
+directory at `http://100.94.63.83:8080/`. Independent historical evidence is
 `/tmp/geosolve-m83-lineage-final-verify.2LxtXE/results.tsv`; both ledgers are byte-identical with
 SHA-256 `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`.
 The temporary listener was then retired and a final root request still byte-matched the snapshot.
@@ -1055,9 +1118,9 @@ These evidence-only documentation changes are descendants of the nominated sourc
 rebuild or replace its product bytes.
 
 The approved editable-Lineage and predictive-drag amendment supersedes this nomination and
-withdraws these bytes from current M83-W12. The retained service may continue serving the frozen
-snapshot only until a clean, frozen and byte-verified amendment candidate is ready to replace it;
-the historical artifact is not qualification evidence for the amended interaction scope.
+withdraws these bytes from current M83-W12. PID `4152505` is retired after the amendment passed
+temporary verification; the recoverable historical artifact is no longer served and is not
+qualification evidence for the amended interaction scope.
 
 ## Known limitations and next gate
 
@@ -1065,10 +1128,8 @@ M83 intentionally does not add arbitrary-curve/computed Offset, topology-changin
 computed-on-computed features, B-rep/PDM naming, formulas/configurations/units, collaboration,
 TypeScript source rewriting, a browser script editor or npm publication.
 
-The remaining engineering gate is committed-source qualification, focused review and immutable
-byte-verified Tailscale nomination for the editable-Lineage/predictive-drag amendment. The product
-gate after that is the focused scorecard in `docs/M83_UAT.md` and explicit supervising-human
-acceptance. M83 must not close or deploy to GitHub Pages before that decision. If UAT opens a
-finding, the immutable candidate is withdrawn and the exact owning-layer defect workflow applies;
-otherwise the accepted semantics proceed through the standard Pages build and exact hosted-byte
-verification.
+The remaining product gate is the focused scorecard in `docs/M83_UAT.md` and explicit
+supervising-human acceptance. M83 must not close or deploy to GitHub Pages before that decision. If
+UAT opens a finding, the immutable candidate is withdrawn and the exact owning-layer defect
+workflow applies; otherwise the accepted semantics proceed through the standard Pages build and
+exact hosted-byte verification.

@@ -2928,8 +2928,8 @@ M82's mechanical qualification as product evidence.
 
 ## M83 acceptance: authoritative sketch lineage and deterministic rematerialization
 
-Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
-withdrawn; human UAT remains pending**. `docs/M83_GOALS.md` is the
+Status: **editable-lineage/predictive-drag amendment mechanically qualified and frozen for focused
+human UAT; not accepted or published**. `docs/M83_GOALS.md` is the
 authoritative scope and ADR 0039 is accepted for implementation. This section supersedes commit
 `56d1eda`'s narrow proof criteria without claiming that the expanded product has received
 supervising-human acceptance.
@@ -3081,15 +3081,15 @@ supervising-human acceptance.
   terminal scene before one ordinary atomic owner rewrite. A rejected terminal request cannot
   borrow an older valid preview, publish lineage or trigger an unchanged workspace save. The visible
   intent marker is explicitly not solver-projected geometry.
-- [ ] Replacement focused M83-W1–W11 tests pass with unchanged
+- [x] Replacement focused M83-W1–W11 tests pass with unchanged
   sketch/operation/topology/feature/editor/
   persistence suites and reviewed 271-row golden authority. Formatting/diff hygiene,
   warnings-denied workspace Clippy/Rustdoc, locked all-feature tests, native/WASM parity,
   performance, licence/package, Trunk and the complete release gate pass from committed source.
-- [ ] Focused architecture/API review accepts authority, dependency direction, typed identity flow,
+- [x] Focused architecture/API review accepts authority, dependency direction, typed identity flow,
   strict/local equivalence, multi-owner rewrite, migration/cache truthfulness and RPC state. No
   criterion is waived because the earlier narrow proof compiled.
-- [ ] The replacement gate-produced seven-file distribution is frozen without rebuilding, first
+- [x] The replacement gate-produced seven-file distribution is frozen without rebuilding, first
   served and byte-verified on a temporary Tailscale listener, then installed at the retained UAT
   endpoint and independently verified byte-for-byte. The withdrawn read-only service is replaced
   only after the temporary verification passes; GitHub Pages remains unchanged before approval.
@@ -3098,6 +3098,31 @@ supervising-human acceptance.
   direct editing, failure recovery, Undo/Redo and workspace reload/migration. Findings are closed
   or explicitly dispositioned, and the accepted frozen bytes are deployed and exactly verified on
   GitHub Pages before milestone closure.
+
+The mechanically nominated replacement is exact source
+`d8137543fecf4a09433471e16383db5069de0d41`, tree
+`031a8c95ddc99f1bf52847c0485ac857b0af1079`. Its clean gate ran from 09:52:01Z through 10:17:36Z
+on 2026-08-23 and exited zero; the 308,679-byte log
+`/tmp/geosolve-m83-amendment-release-gate.log` has SHA-256
+`015af2b3fea2c64677920b3c590df8c5812b7662900a11e4ba156633845cbd17`. It passed the focused and
+complete native/WASM/TypeScript/workspace surface, unchanged clean 271-row golden, Clippy/Rustdoc,
+performance/licence/package checks, 134.56-second sparse crossover and Trunk assembly. Independent
+architecture/API/interaction and predictive-terminal reviews found no release blocker. The Point
+scene-seal symmetry note is future defense in depth, not an acceptance waiver: current terminal
+publication independently authenticates exact retained preview, point/coordinates, accepted
+provenance, cold reproduction and atomic lineage swap.
+
+The no-rebuild output is frozen at `/tmp/geosolve-m83-amendment-uat.AVC9ce` with directory mode
+`0555`, seven regular non-symlink files `0444` and ordered-manifest aggregate
+`260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`. All eight requests passed
+first under temporary PID `1728899` at `100.94.63.83:18080`; only then was withdrawn PID `4152505`
+retired and `geosolve-m83-lineage-uat.service`, PID `1733554`, started the identical snapshot at
+`http://100.94.63.83:8080/`. The temporary and final ledgers are byte-identical with SHA-256
+`7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`; every response is HTTP
+200 from the direct Tailscale IP with zero redirects, exact media type/length/hash/body, no
+`Location` or `Content-Encoding`, and `/` exactly equals `index.html`. Temporary PID `1728899` is
+retired. M83-W12, explicit acceptance, Pages publication and milestone closure remain pending;
+Pages remains unchanged at remote source `f55f226e28e0bbbb9d1b1c509cb68322be0a2240`.
 
 The following read-only panel nomination is superseded by the approved editable-lineage amendment
 and withdrawn from current UAT. Historical exact source
@@ -3108,15 +3133,14 @@ The unchanged 271-row golden, full native/WASM/TypeScript/workspace qualificatio
 Clippy/Rustdoc, 129.17-second sparse crossover, licence/package checks and Trunk 0.21.14 assembly
 pass. The no-rebuild seven-file output is frozen at `/tmp/geosolve-m83-lineage-uat.1KL8gG` with
 directory mode `0555`, file modes `0444` and ordered-manifest aggregate
-`d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Temporary and retained
-Tailscale verification each pass eight exact HTTP checks; both result ledgers have SHA-256
+`d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Historical temporary and
+retained Tailscale verification passed eight exact HTTP checks; both result ledgers have SHA-256
 `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`. The temporary listener is
-retired; `geosolve-m83-lineage-uat.service`, nomination PID `4152505`, serves the frozen snapshot
-at `http://100.94.63.83:8080/`. Independent responsive review additionally proves zero root,
+retired, and nomination PID `4152505` is now retired after the amendment replacement passed its
+temporary verification. Independent responsive review additionally proves zero root,
 Inspector and bounded-history overflow across the breakpoint boundaries and 6.24:1 header
-contrast. Its service may remain reachable only until the replacement candidate is qualified; its
-bytes no longer satisfy M83-W12. No Pages or milestone-acceptance claim is made before explicit
-human approval.
+contrast. Its recoverable frozen bytes no longer satisfy M83-W12. No Pages or milestone-acceptance
+claim is made before explicit human approval.
 
 The following is superseded pre-panel evidence. Exact source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree

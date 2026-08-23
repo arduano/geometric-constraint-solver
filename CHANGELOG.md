@@ -24,7 +24,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   reorder and compatible raw action rewrite without a browser-side program mirror.
   Presentation-only prediction coalesces expensive point/control dragging while
   exact terminal publication remains coordinator-owned. Replacement clean
-  qualification and immutable Tailscale nomination are pending; M81 remains
+  qualification, focused review and immutable Tailscale nomination pass; M81 remains
   accepted product authority until focused M83 human UAT approval.
 - M83's editable-lineage amendment additively exposes action schema/version queries;
   authority snapshot, reorder-lane/reason/outcome and rewrite-outcome DTOs; exact-CAS

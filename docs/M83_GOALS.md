@@ -2,9 +2,9 @@
 
 # M83 — authoritative sketch lineage and deterministic rematerialization
 
-Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
-withdrawn; human UAT pending; not accepted**. M83 is a full-workbench architecture and migration
-milestone. `LineageDocument`
+Status: **editable-lineage/predictive-drag amendment mechanically qualified, independently
+reviewed and frozen for focused human UAT; not accepted or published**. M83 is a full-workbench
+architecture and migration milestone. `LineageDocument`
 becomes the authoritative editable source for the GeoSolve demo workbench; flat `SketchDocument`,
 `ComputedFeatureDocument` and evaluated feature geometry are derived materializations. ADR 0039
 is accepted for M83 implementation.
@@ -372,14 +372,22 @@ Arbitrary TypeScript source rewriting and a workbench script editor remain outsi
 10. Close only after the approved UAT scorecard, frozen-artifact evidence and standard exact
     GitHub Pages publication are recorded.
 
-Steps 1–8 and the amended step 9 implementation/focused tests pass; committed-source aggregate
-qualification and immutable replacement nomination remain pending. The prior read-only form of
-step 9 passed for source
+Steps 1–9 pass, including committed-source aggregate qualification and immutable replacement
+nomination. Exact product source `d8137543fecf4a09433471e16383db5069de0d41`, tree
+`031a8c95ddc99f1bf52847c0485ac857b0af1079`, passes the complete clean gate and focused
+architecture/API/interaction and predictive-terminal reviews. Its exact no-rebuild seven-file
+snapshot `/tmp/geosolve-m83-amendment-uat.AVC9ce` is frozen read-only with ordered-manifest
+aggregate `260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2` and is byte-verified at
+`http://100.94.63.83:8080/` under PID `1733554`; temporary and final eight-request ledgers are
+byte-identical at SHA-256
+`7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`. Step 10 remains blocked
+only on M83-U1–U12, explicit supervising-human acceptance and exact Pages publication.
+
+The prior read-only form of step 9 passed for source
 `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`. Its exact no-rebuild seven-file snapshot
-`/tmp/geosolve-m83-lineage-uat.1KL8gG` is byte-verified and served at
-`http://100.94.63.83:8080/`, but is withdrawn from current UAT. Step 10 remains blocked on human
-UAT. The pre-panel form
+`/tmp/geosolve-m83-lineage-uat.1KL8gG` is byte-verified but withdrawn from current UAT; historical
+PID `4152505` is retired after the replacement passed temporary verification. The pre-panel form
 previously passed for source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
 `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`; that snapshot is withdrawn and no longer served.
@@ -517,8 +525,9 @@ verified on GitHub Pages.
   from committed source.
 - Focused architecture/API/interaction review, editable-Lineage authority/presentation tests,
   predictive terminal-publication tests, replacement clean qualification and immutable
-  byte-verified Tailscale nomination must pass. Human UAT, explicit acceptance and exact GitHub
-  Pages publication are still required before M83 can be closed.
+  byte-verified Tailscale nomination pass at the exact replacement source recorded above. Human
+  UAT, explicit acceptance and exact GitHub Pages publication are still required before M83 can
+  be closed.
 
 ## Explicit non-goals
 

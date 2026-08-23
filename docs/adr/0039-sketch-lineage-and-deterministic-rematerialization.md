@@ -297,8 +297,18 @@ M83 implements and qualifies this decision only after proving:
 M83 remains in progress until immutable-candidate human UAT and standard exact GitHub Pages
 publication pass. The prior read-only Lineage candidate passed automated qualification and focused
 architecture/API review, but the approved editable-Lineage/predictive-drag amendment withdraws it
-from current UAT. Replacement qualification and focused review remain pending; acceptance of this
-ADR authorizes implementation and is still not milestone/product acceptance.
+from current UAT. Replacement exact source
+`d8137543fecf4a09433471e16383db5069de0d41`, tree
+`031a8c95ddc99f1bf52847c0485ac857b0af1079`, passed the complete clean gate and independent
+API/architecture and predictive-terminal audits without a blocker. Its frozen no-rebuild
+seven-file snapshot `/tmp/geosolve-m83-amendment-uat.AVC9ce` has ordered-manifest aggregate
+`260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`; temporary and final exact
+verification ledgers are byte-identical at SHA-256
+`7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`, and the final service
+serves those bytes at `http://100.94.63.83:8080/`. A future Point scene-seal symmetry cleanup is
+non-blocking defense in depth. Human M83-U1 through M83-U12, explicit approval and exact Pages
+publication remain pending; M81 remains public product authority and Pages is unchanged.
+Acceptance of this ADR authorizes implementation and is still not milestone/product acceptance.
 
 ## Consequences
 
