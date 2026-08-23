@@ -1934,7 +1934,7 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
         (GeometryRecipeKind::ThreePointCircle, 0, 1, 1, 1, 0, 3),
         (GeometryRecipeKind::CenterArc, 0, 1, 3, 1, 0, 3),
         (GeometryRecipeKind::ThreePointArc, 0, 1, 3, 1, 0, 3),
-        (GeometryRecipeKind::TangentArc, 0, 1, 3, 1, 0, 3),
+        (GeometryRecipeKind::TangentArc, 0, 1, 5, 1, 2, 3),
         (GeometryRecipeKind::CenterAxesEllipse, 0, 2, 1, 1, 0, 1),
         (GeometryRecipeKind::AxisEndpointsEllipse, 0, 2, 1, 1, 0, 2),
         (
@@ -2045,6 +2045,24 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
             contacts,
             "contact inventory for {recipe:?}"
         );
+        let intrinsic_relations = match recipe {
+            GeometryRecipeKind::MidpointLine | GeometryRecipeKind::TangentArc => 1,
+            GeometryRecipeKind::TwoPointAlignedRectangle => 4,
+            GeometryRecipeKind::ThreePointCornerRectangle => 3,
+            GeometryRecipeKind::CenterRectangle => 5,
+            GeometryRecipeKind::ThreePointCenterRectangle => 4,
+            _ => 0,
+        };
+        assert_eq!(
+            reservation_count(IntentNativeReservationKind::Constraint),
+            intrinsic_relations,
+            "intrinsic relation inventory for {recipe:?}"
+        );
+        assert_eq!(
+            reservation_count(IntentNativeReservationKind::ConstraintSource),
+            intrinsic_relations,
+            "intrinsic relation-source inventory for {recipe:?}"
+        );
         assert_eq!(
             node.ports
                 .values()
@@ -2070,6 +2088,121 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
             "port selectors must be unique for {recipe:?}"
         );
     }
+}
+
+#[test]
+fn compound_recipe_fields_generate_exact_topology_without_hidden_native_points() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8325_0001)).unwrap();
+    let rectangle = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::ThreePointCenterRectangle,
+        },
+        key("regularized rectangle"),
+    )
+    .with_field(
+        IntentFieldKey(key("regularized")),
+        IntentLiteral::Boolean(true),
+    )
+    .with_field(
+        IntentFieldKey(key("side_midpoint")),
+        IntentLiteral::Point([0.0, 1.0]),
+    );
+    let closed_polyline = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Polyline,
+        },
+        key("closed polyline"),
+    )
+    .with_dynamic_children(4)
+    .with_field(IntentFieldKey(key("closed")), IntentLiteral::Boolean(true));
+    let quadratic_nurbs = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::OpenControlNurbs,
+        },
+        key("quadratic NURBS"),
+    )
+    .with_dynamic_children(5)
+    .with_field(IntentFieldKey(key("degree")), IntentLiteral::Natural(2))
+    .with_field(
+        IntentFieldKey(key("gauge_index")),
+        IntentLiteral::Natural(1),
+    );
+    let periodic_nurbs = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::PeriodicControlNurbs,
+        },
+        key("periodic NURBS"),
+    )
+    .with_dynamic_children(5)
+    .with_field(IntentFieldKey(key("degree")), IntentLiteral::Natural(2));
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        [
+            ("rectangle", rectangle),
+            ("polyline", closed_polyline),
+            ("open-nurbs", quadratic_nurbs),
+            ("periodic-nurbs", periodic_nurbs),
+        ]
+        .into_iter()
+        .map(|(alias, draft)| IntentPatchOperation::CreateNode {
+            alias: key(alias),
+            draft: Box::new(draft),
+            cell: None,
+        })
+        .collect(),
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    let aliases = plan.aliases().clone();
+    session.commit_plan(plan).unwrap();
+
+    let rectangle = session
+        .graph()
+        .node(aliases.node(&key("rectangle")).unwrap())
+        .unwrap();
+    let reservation_count = |kind| {
+        rectangle
+            .reservations
+            .values()
+            .filter(|reservation| reservation.kind == kind)
+            .count()
+    };
+    assert_eq!(reservation_count(IntentNativeReservationKind::Point), 5);
+    assert_eq!(
+        reservation_count(IntentNativeReservationKind::Constraint),
+        5
+    );
+    assert_eq!(
+        reservation_count(IntentNativeReservationKind::ConstraintSource),
+        5
+    );
+    assert_eq!(
+        rectangle
+            .ports
+            .values()
+            .filter(|port| port.kind == IntentPortKind::HandlePoint)
+            .count(),
+        1,
+        "the side midpoint remains logical-only"
+    );
+    assert!(rectangle.reservations.values().all(|reservation| {
+        !matches!(reservation.kind, IntentNativeReservationKind::Constraint)
+            || reservation.paired_with.is_some()
+    }));
+
+    let span_count = |alias: &str| {
+        session
+            .graph()
+            .node(aliases.node(&key(alias)).unwrap())
+            .unwrap()
+            .ports
+            .values()
+            .filter(|port| port.kind == IntentPortKind::CurveSpan)
+            .count()
+    };
+    assert_eq!(span_count("polyline"), 4);
+    assert_eq!(span_count("open-nurbs"), 3);
+    assert_eq!(span_count("periodic-nurbs"), 5);
 }
 
 #[test]

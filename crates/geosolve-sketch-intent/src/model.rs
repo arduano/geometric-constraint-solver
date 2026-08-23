@@ -1552,7 +1552,11 @@ const PARAMETER_LEAF: &[LeafField] = &[LeafField::Parameter];
     clippy::too_many_lines,
     reason = "one closed family table keeps native and logical output storage auditable"
 )]
-pub(crate) fn node_port_specs(kind: &IntentNodeKind) -> Vec<PortSpec> {
+pub(crate) fn node_port_specs(
+    kind: &IntentNodeKind,
+    fields: &BTreeMap<IntentFieldKey, IntentLiteral>,
+    dynamic_children: u16,
+) -> Vec<PortSpec> {
     let mut specs = Vec::new();
     let mut push = |role, index, port_kind, writable, native| {
         specs.push(PortSpec {
@@ -1564,7 +1568,9 @@ pub(crate) fn node_port_specs(kind: &IntentNodeKind) -> Vec<PortSpec> {
         });
     };
     match kind {
-        IntentNodeKind::Geometry { recipe } => return geometry_port_specs(*recipe),
+        IntentNodeKind::Geometry { recipe } => {
+            return geometry_port_specs(*recipe, fields, dynamic_children);
+        }
         IntentNodeKind::Constraint { constraint } => {
             for index in 0..constraint_contact_count(*constraint) {
                 push(
@@ -1787,7 +1793,13 @@ pub(crate) fn node_port_specs(kind: &IntentNodeKind) -> Vec<PortSpec> {
     specs
 }
 
-pub(crate) fn child_port_specs(schema: IntentChildSchema, ordinal: u16) -> Vec<PortSpec> {
+pub(crate) fn child_port_specs(
+    _kind: &IntentNodeKind,
+    schema: IntentChildSchema,
+    ordinal: u16,
+    dynamic_children: u16,
+    fields: &BTreeMap<IntentFieldKey, IntentLiteral>,
+) -> Vec<PortSpec> {
     let make = |role, kind, writable, native, alias_input| PortSpec {
         selector: IntentPortSelector::InitialChild {
             ordinal,
@@ -1801,22 +1813,26 @@ pub(crate) fn child_port_specs(schema: IntentChildSchema, ordinal: u16) -> Vec<P
     };
     match schema {
         IntentChildSchema::None => Vec::new(),
-        IntentChildSchema::PolylineVertex => vec![
-            make(
+        IntentChildSchema::PolylineVertex => {
+            let mut specs = vec![make(
                 IntentPortRole::Corner,
                 IntentPortKind::Point,
                 POINT_LEAVES,
                 Some(IntentNativeReservationKind::Point),
                 Some(InputSlot::new(InputRole::Point, ordinal)),
-            ),
-            make(
-                IntentPortRole::Span,
-                IntentPortKind::CurveSpan,
-                NO_LEAVES,
-                None,
-                None,
-            ),
-        ],
+            )];
+            let closed = definition_boolean(fields, "closed").unwrap_or(false);
+            if ordinal.saturating_add(1) < dynamic_children || closed {
+                specs.push(make(
+                    IntentPortRole::Span,
+                    IntentPortKind::CurveSpan,
+                    NO_LEAVES,
+                    None,
+                    None,
+                ));
+            }
+            specs
+        }
         IntentChildSchema::SplineControl => vec![
             make(
                 IntentPortRole::Control,
@@ -1854,7 +1870,11 @@ pub(crate) fn child_port_specs(schema: IntentChildSchema, ordinal: u16) -> Vec<P
     clippy::too_many_lines,
     reason = "one exhaustive table audits persistent native storage for all 25 authoring recipes"
 )]
-fn geometry_port_specs(recipe: GeometryRecipeKind) -> Vec<PortSpec> {
+fn geometry_port_specs(
+    recipe: GeometryRecipeKind,
+    fields: &BTreeMap<IntentFieldKey, IntentLiteral>,
+    dynamic_children: u16,
+) -> Vec<PortSpec> {
     use GeometryRecipeKind as G;
     use IntentPortRole as R;
 
@@ -2049,16 +2069,41 @@ fn geometry_port_specs(recipe: GeometryRecipeKind) -> Vec<PortSpec> {
             native: Some(IntentNativeReservationKind::Curve),
             alias_input: None,
         });
-        specs.push(PortSpec {
-            selector: IntentPortSelector::Node {
-                role: R::Span,
-                index,
-            },
-            kind: IntentPortKind::CurveSpan,
-            writable: NO_LEAVES,
-            native: None,
-            alias_input: None,
-        });
+        if !matches!(
+            recipe,
+            G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs
+        ) {
+            specs.push(PortSpec {
+                selector: IntentPortSelector::Node {
+                    role: R::Span,
+                    index,
+                },
+                kind: IntentPortKind::CurveSpan,
+                writable: NO_LEAVES,
+                native: None,
+                alias_input: None,
+            });
+        }
+    }
+    if matches!(recipe, G::OpenControlNurbs | G::PeriodicControlNurbs) {
+        let degree = definition_natural(fields, "degree").unwrap_or(3);
+        let span_count = match recipe {
+            G::OpenControlNurbs => u64::from(dynamic_children).saturating_sub(degree),
+            G::PeriodicControlNurbs => u64::from(dynamic_children),
+            _ => unreachable!("guarded NURBS recipe"),
+        };
+        for index in 0..u16::try_from(span_count).unwrap_or(u16::MAX) {
+            specs.push(PortSpec {
+                selector: IntentPortSelector::Node {
+                    role: R::Span,
+                    index,
+                },
+                kind: IntentPortKind::CurveSpan,
+                writable: NO_LEAVES,
+                native: None,
+                alias_input: None,
+            });
+        }
     }
     if matches!(recipe, G::Polyline) {
         specs.push(PortSpec {
@@ -2072,7 +2117,83 @@ fn geometry_port_specs(recipe: GeometryRecipeKind) -> Vec<PortSpec> {
             alias_input: None,
         });
     }
+    if recipe == G::TangentArc {
+        for index in 0..2 {
+            specs.push(PortSpec {
+                selector: IntentPortSelector::Node {
+                    role: R::Contact,
+                    index,
+                },
+                kind: IntentPortKind::Contact,
+                writable: NO_LEAVES,
+                native: Some(IntentNativeReservationKind::Contact),
+                alias_input: None,
+            });
+            specs.push(PortSpec {
+                selector: IntentPortSelector::Node {
+                    role: R::Parameter,
+                    index,
+                },
+                kind: IntentPortKind::Scalar,
+                writable: PARAMETER_LEAF,
+                native: Some(IntentNativeReservationKind::Scalar),
+                alias_input: None,
+            });
+        }
+    }
+    let regularized = definition_boolean(fields, "regularized").unwrap_or(false);
+    let relation_count = match recipe {
+        G::MidpointLine | G::TangentArc => 1,
+        G::TwoPointAlignedRectangle => 4 + u16::from(regularized),
+        G::ThreePointCornerRectangle => 3 + u16::from(regularized),
+        G::CenterRectangle => 5 + u16::from(regularized),
+        G::ThreePointCenterRectangle => 4 + u16::from(regularized),
+        _ => 0,
+    };
+    for index in 0..relation_count {
+        specs.push(PortSpec {
+            selector: IntentPortSelector::Node {
+                role: R::Constraint,
+                index,
+            },
+            kind: IntentPortKind::Constraint,
+            writable: NO_LEAVES,
+            native: Some(IntentNativeReservationKind::Constraint),
+            alias_input: None,
+        });
+        specs.push(PortSpec {
+            selector: IntentPortSelector::Node {
+                role: R::Source,
+                index,
+            },
+            kind: IntentPortKind::Source,
+            writable: NO_LEAVES,
+            native: Some(IntentNativeReservationKind::ConstraintSource),
+            alias_input: None,
+        });
+    }
     specs
+}
+
+fn definition_boolean(
+    fields: &BTreeMap<IntentFieldKey, IntentLiteral>,
+    name: &str,
+) -> Option<bool> {
+    fields.iter().find_map(|(field, value)| {
+        (field.0.as_str() == name).then(|| match value {
+            IntentLiteral::Boolean(value) => Some(*value),
+            _ => None,
+        })?
+    })
+}
+
+fn definition_natural(fields: &BTreeMap<IntentFieldKey, IntentLiteral>, name: &str) -> Option<u64> {
+    fields.iter().find_map(|(field, value)| {
+        (field.0.as_str() == name).then(|| match value {
+            IntentLiteral::Natural(value) => Some(*value),
+            _ => None,
+        })?
+    })
 }
 
 const fn constraint_contact_count(constraint: ConstraintKind) -> u16 {

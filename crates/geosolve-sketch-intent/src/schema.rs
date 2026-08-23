@@ -259,6 +259,24 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
     if matches!(recipe, G::Segment | G::MidpointLine) {
         fields.push(field("branch_direction", IntentLiteralSchema::Point, false));
     }
+    if recipe == G::Polyline {
+        fields.push(field("closed", IntentLiteralSchema::Boolean, false));
+    }
+    if matches!(
+        recipe,
+        G::TwoPointAlignedRectangle
+            | G::ThreePointCornerRectangle
+            | G::CenterRectangle
+            | G::ThreePointCenterRectangle
+    ) {
+        fields.push(field("regularized", IntentLiteralSchema::Boolean, false));
+    }
+    if recipe == G::ThreePointCenterRectangle {
+        // The side-midpoint click is an authoring sample rather than a
+        // persistent sketch point. Retaining it as typed recipe state avoids
+        // fabricating a native identity while keeping cold construction exact.
+        fields.push(field("side_midpoint", IntentLiteralSchema::Point, false));
+    }
     if matches!(
         recipe,
         G::CenterArc
@@ -274,6 +292,53 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
     }
     if recipe == G::Hyperbola {
         fields.push(field("branch", IntentLiteralSchema::Enum, false));
+    }
+    if recipe == G::TangentArc {
+        // These fields are the complete existing contact-cell state selected
+        // by M78 authoring. Optional fields have exact catalog defaults; the
+        // host validates the combinations for bounded/local/periodic forms.
+        fields.extend([
+            field(
+                "source_parameter",
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field("source_winding", IntentLiteralSchema::Integer, false),
+            field("source_domain", IntentLiteralSchema::Enum, false),
+            field(
+                "source_domain_lower",
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                "source_domain_upper",
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                "source_domain_period",
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field("source_neighborhood", IntentLiteralSchema::Enum, false),
+            field(
+                "source_neighborhood_lower",
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                "source_neighborhood_upper",
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field("orientation", IntentLiteralSchema::Enum, false),
+        ]);
+    }
+    if matches!(recipe, G::OpenControlNurbs | G::PeriodicControlNurbs) {
+        fields.extend([
+            field("degree", IntentLiteralSchema::Natural, false),
+            field("gauge_index", IntentLiteralSchema::Natural, false),
+        ]);
     }
     schema(inputs, Vec::new(), fields, child_bounds)
 }

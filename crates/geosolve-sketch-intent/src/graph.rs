@@ -904,11 +904,19 @@ impl IntentGraph {
             return Ok(false);
         }
 
-        let mut specs = node_port_specs(&target.kind);
+        let dynamic_children = u16::try_from(target.children.len())
+            .map_err(|_| IntentGraphError::InvalidPortSchema { node })?;
+        let mut specs = node_port_specs(&target.kind, &target.fields, dynamic_children);
         for (ordinal, child) in target.child_order.iter().enumerate() {
             let ordinal =
                 u16::try_from(ordinal).map_err(|_| IntentGraphError::InvalidPortSchema { node })?;
-            specs.extend(child_port_specs(target.children[child].schema, ordinal));
+            specs.extend(child_port_specs(
+                &target.kind,
+                target.children[child].schema,
+                ordinal,
+                dynamic_children,
+                &target.fields,
+            ));
         }
         for spec in specs
             .into_iter()
@@ -1278,7 +1286,7 @@ pub(crate) fn allocate_draft(
     let id = allocator.allocate_node()?;
     let mut ports = BTreeMap::new();
     let mut reservations = BTreeMap::new();
-    for spec in node_port_specs(&draft.kind) {
+    for spec in node_port_specs(&draft.kind, &draft.fields, draft.dynamic_children) {
         let reserve = spec.native.is_some()
             && !spec
                 .alias_input
@@ -1290,7 +1298,13 @@ pub(crate) fn allocate_draft(
     for ordinal in 0..draft.dynamic_children {
         let child_id = allocator.allocate_child()?;
         let mut child_ports = Vec::new();
-        for spec in child_port_specs(draft.kind.child_schema(), ordinal) {
+        for spec in child_port_specs(
+            &draft.kind,
+            draft.kind.child_schema(),
+            ordinal,
+            draft.dynamic_children,
+            &draft.fields,
+        ) {
             let reserve = spec.native.is_some()
                 && !spec
                     .alias_input
@@ -1496,27 +1510,38 @@ fn pair_native_reservations(
             IntentNativeReservationKind::DimensionSource,
         ),
     ] {
-        let reservation_for = |kind| {
+        let reservations_for = |kind| {
             ports
                 .values()
-                .find(|port| port.spec.native == Some(kind))
-                .and_then(|port| port.reservation)
+                .filter(|port| port.spec.native == Some(kind))
+                .filter_map(|port| port.reservation)
+                .collect::<Vec<_>>()
         };
-        match (reservation_for(owner), reservation_for(source)) {
-            (Some(owner_id), Some(source_id)) => {
-                reservations
-                    .get_mut(&owner_id)
-                    .expect("allocated owner reservation")
-                    .paired_with = Some(source_id);
-                reservations
-                    .get_mut(&source_id)
-                    .expect("allocated source reservation")
-                    .paired_with = Some(owner_id);
+        let owners = reservations_for(owner);
+        let sources = reservations_for(source);
+        if owners.len() != sources.len() {
+            let reservation = owners
+                .first()
+                .or_else(|| sources.first())
+                .copied()
+                .ok_or(IntentGraphError::InvalidPortSchema { node })?;
+            return Err(IntentGraphError::InvalidReservationPair { node, reservation });
+        }
+        for (owner_id, source_id) in owners.into_iter().zip(sources) {
+            if source_id.raw() != owner_id.raw().checked_add(1).unwrap_or_default() {
+                return Err(IntentGraphError::InvalidReservationPair {
+                    node,
+                    reservation: owner_id,
+                });
             }
-            (None, None) => {}
-            (Some(reservation), None) | (None, Some(reservation)) => {
-                return Err(IntentGraphError::InvalidReservationPair { node, reservation });
-            }
+            reservations
+                .get_mut(&owner_id)
+                .expect("allocated owner reservation")
+                .paired_with = Some(source_id);
+            reservations
+                .get_mut(&source_id)
+                .expect("allocated source reservation")
+                .paired_with = Some(owner_id);
         }
     }
     Ok(())
@@ -1730,12 +1755,20 @@ pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(),
     reason = "the identity-node schema is one explicit exception to ordinary generated output flow"
 )]
 fn validate_schema_ports(node: &IntentNode) -> Result<(), IntentGraphError> {
-    let mut specs = node_port_specs(&node.kind);
+    let dynamic_children = u16::try_from(node.children.len())
+        .map_err(|_| IntentGraphError::InvalidPortSchema { node: node.id })?;
+    let mut specs = node_port_specs(&node.kind, &node.fields, dynamic_children);
     for (ordinal, child) in node.child_order.iter().enumerate() {
         let ordinal = u16::try_from(ordinal)
             .map_err(|_| IntentGraphError::InvalidPortSchema { node: node.id })?;
         let value = &node.children[child];
-        specs.extend(child_port_specs(value.schema, ordinal));
+        specs.extend(child_port_specs(
+            &node.kind,
+            value.schema,
+            ordinal,
+            dynamic_children,
+            &node.fields,
+        ));
     }
     if specs.len() != node.ports.len() {
         return Err(IntentGraphError::InvalidPortSchema { node: node.id });
