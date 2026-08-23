@@ -17,6 +17,15 @@ use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater, ComputedFeatureDocument,
     ComputedFeatureLifecycleHighWater,
 };
+use geosolve_sketch_intent::{
+    ContentDigest, IntentSession, MAX_INTENT_SESSION_JSON_BYTES, intent_content_digest,
+};
+
+const PROJECTIONAL_WORKSPACE_VERSION: u32 = 8;
+const FLAT_WORKSPACE_VERSION: u32 = 6;
+const ABANDONED_WORKSPACE_VERSION: u32 = 7;
+const MAX_PROJECTIONAL_WORKSPACE_JSON_BYTES: usize =
+    2 * MAX_INTENT_SESSION_JSON_BYTES + 128 * 1024 * 1024;
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) const STORAGE_KEY: &str = "geosolve.workbench.session.v6";
@@ -49,6 +58,127 @@ pub(crate) struct WorkspaceSnapshot {
     )]
     annotation_layout_json: Option<String>,
     pub(crate) revisions: WorkspaceRevisions,
+    #[serde(skip)]
+    intent_session_json: Option<String>,
+    #[serde(skip)]
+    origin: WorkspaceSnapshotOrigin,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum WorkspaceSnapshotOrigin {
+    #[default]
+    FlatV6,
+    ProjectionalV8,
+    LegacyBootstrap {
+        source_version: u32,
+    },
+}
+
+/// Strictly decoded historical flat workspace awaiting one typed declaration
+/// per native object. The decoded documents remain data for normalization, not
+/// a second aggregate semantic authority beside the intent graph.
+pub(crate) struct WorkspaceLegacyBootstrap<'a> {
+    source_version: u32,
+    snapshot: &'a WorkspaceSnapshot,
+}
+
+#[allow(
+    dead_code,
+    reason = "consumed by the coordinator-owned per-object normalizer in the next M83 slice"
+)]
+impl WorkspaceLegacyBootstrap<'_> {
+    pub(crate) const fn source_version(&self) -> u32 {
+        self.source_version
+    }
+
+    pub(crate) fn design_document(&self) -> Result<SketchDocument, String> {
+        self.snapshot.design_document()
+    }
+
+    pub(crate) fn accepted_document(&self) -> Result<Option<SketchDocument>, String> {
+        self.snapshot.accepted_document()
+    }
+
+    pub(crate) fn feature_document(&self) -> Result<ComputedFeatureDocument, String> {
+        self.snapshot.feature_document()
+    }
+
+    pub(crate) const fn revisions(&self) -> SketchLifecycleRevisionHighWater {
+        self.snapshot.revisions()
+    }
+
+    pub(crate) const fn accepted_belongs_to_current_design(&self) -> bool {
+        self.snapshot.accepted_belongs_to_current_design
+    }
+
+    pub(crate) const fn sketch_identity_high_water(&self) -> &SketchPersistentIdentityHighWater {
+        &self.snapshot.sketch_identity_high_water
+    }
+
+    pub(crate) const fn feature_lifecycle_high_water(&self) -> ComputedFeatureLifecycleHighWater {
+        self.snapshot.feature_lifecycle_high_water
+    }
+
+    pub(crate) const fn computed_evaluation_high_water(
+        &self,
+    ) -> ComputedEvaluationAllocatorHighWater {
+        self.snapshot.computed_evaluation_high_water
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceMaterializationV8 {
+    design: WorkspaceDocumentPayload,
+    accepted: Option<WorkspaceDocumentPayload>,
+    accepted_belongs_to_current_design: bool,
+    sketch_identity_high_water: SketchPersistentIdentityHighWater,
+    features_json: String,
+    feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
+    computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
+    revisions: WorkspaceRevisions,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceSnapshotV8 {
+    version: u32,
+    intent_session_json: String,
+    materialization: WorkspaceMaterializationV8,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_annotation_layout_json",
+        skip_serializing_if = "Option::is_none"
+    )]
+    annotation_layout_json: Option<String>,
+    digest: ContentDigest,
+}
+
+impl WorkspaceMaterializationV8 {
+    fn from_snapshot(snapshot: &WorkspaceSnapshot) -> Self {
+        Self {
+            design: snapshot.design.clone(),
+            accepted: snapshot.accepted.clone(),
+            accepted_belongs_to_current_design: snapshot.accepted_belongs_to_current_design,
+            sketch_identity_high_water: snapshot.sketch_identity_high_water.clone(),
+            features_json: snapshot.features_json.clone(),
+            feature_lifecycle_high_water: snapshot.feature_lifecycle_high_water,
+            computed_evaluation_high_water: snapshot.computed_evaluation_high_water,
+            revisions: snapshot.revisions,
+        }
+    }
+}
+
+fn workspace_v8_digest(wire: &WorkspaceSnapshotV8) -> ContentDigest {
+    intent_content_digest(
+        &serde_json::to_vec(&(
+            wire.version,
+            &wire.intent_session_json,
+            &wire.materialization,
+            &wire.annotation_layout_json,
+        ))
+        .expect("workspace-v8 digest payload is infallibly serializable"),
+    )
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -370,13 +500,34 @@ impl WorkspaceSnapshot {
         ))
     }
 
+    /// Captures one projectional workspace with the complete canonical intent
+    /// authority and the exact independently restorable flat materialization.
+    pub(crate) fn from_intent_session_and_coordinator(
+        intent: &IntentSession,
+        coordinator: &RetainedEditorCoordinator,
+    ) -> Result<Self, String> {
+        let checkpoint = coordinator
+            .persistence_checkpoint()
+            .map_err(|error| error.to_string())?;
+        let mut snapshot =
+            Self::from_checkpoint(&checkpoint, coordinator.editor().annotation_layout());
+        snapshot.version = PROJECTIONAL_WORKSPACE_VERSION;
+        snapshot.intent_session_json = Some(
+            intent
+                .to_canonical_json()
+                .map_err(|error| error.to_string())?,
+        );
+        snapshot.origin = WorkspaceSnapshotOrigin::ProjectionalV8;
+        snapshot.validated()
+    }
+
     fn from_checkpoint(
         checkpoint: &RestoreCheckpoint,
         annotation_layout: &AnnotationLayoutState,
     ) -> Self {
         let revisions = checkpoint.revisions();
         Self {
-            version: 6,
+            version: FLAT_WORKSPACE_VERSION,
             design: WorkspaceDocumentPayload {
                 encoding: if checkpoint.design_uses_draft_v5() {
                     WorkspaceDocumentEncoding::DraftV5
@@ -408,6 +559,8 @@ impl WorkspaceSnapshot {
                     .accepted()
                     .map(geosolve_sketch::SketchAcceptedRevision::get),
             },
+            intent_session_json: None,
+            origin: WorkspaceSnapshotOrigin::FlatV6,
         }
     }
 
@@ -420,19 +573,58 @@ impl WorkspaceSnapshot {
     }
 
     pub(crate) fn encode(&self) -> Result<String, String> {
-        serde_json::to_string(self).map_err(|error| error.to_string())
+        match self.origin {
+            WorkspaceSnapshotOrigin::FlatV6 if self.version == FLAT_WORKSPACE_VERSION => {
+                serde_json::to_string(self).map_err(|error| error.to_string())
+            }
+            WorkspaceSnapshotOrigin::ProjectionalV8
+                if self.version == PROJECTIONAL_WORKSPACE_VERSION =>
+            {
+                self.clone().validated()?;
+                let intent_session_json = self
+                    .intent_session_json
+                    .clone()
+                    .ok_or_else(|| "workspace v8 requires a canonical intent session".to_owned())?;
+                let mut wire = WorkspaceSnapshotV8 {
+                    version: PROJECTIONAL_WORKSPACE_VERSION,
+                    intent_session_json,
+                    materialization: WorkspaceMaterializationV8::from_snapshot(self),
+                    annotation_layout_json: self.annotation_layout_json.clone(),
+                    digest: ContentDigest::zero(),
+                };
+                wire.digest = workspace_v8_digest(&wire);
+                let json = serde_json::to_string(&wire).map_err(|error| error.to_string())?;
+                if json.len() > MAX_PROJECTIONAL_WORKSPACE_JSON_BYTES {
+                    return Err(format!(
+                        "workspace v8 exceeds the {MAX_PROJECTIONAL_WORKSPACE_JSON_BYTES}-byte limit"
+                    ));
+                }
+                Ok(json)
+            }
+            WorkspaceSnapshotOrigin::LegacyBootstrap { source_version } => Err(format!(
+                "legacy workspace v{source_version} must be normalized into per-object bootstrap declarations before v8 encoding"
+            )),
+            _ => Err("workspace snapshot version/origin is inconsistent".into()),
+        }
     }
 
     #[allow(
         clippy::too_many_lines,
-        reason = "the closed five-version migration matrix is clearer when audited in one dispatch"
+        reason = "the closed workspace-version migration matrix is clearer when audited in one dispatch"
     )]
     pub(crate) fn decode(input: &str) -> Result<Self, String> {
+        if input.len() > MAX_PROJECTIONAL_WORKSPACE_JSON_BYTES {
+            return Err(format!(
+                "workbench snapshot exceeds the {MAX_PROJECTIONAL_WORKSPACE_JSON_BYTES}-byte limit"
+            ));
+        }
         let version = serde_json::from_str::<serde_json::Value>(input)
             .map_err(|error| error.to_string())?
             .get("version")
             .and_then(serde_json::Value::as_u64)
             .ok_or_else(|| "workbench snapshot version is missing".to_owned())?;
+        let version = u32::try_from(version)
+            .map_err(|_| "unsupported workbench snapshot version".to_owned())?;
         match version {
             1 => {
                 let legacy: LegacyWorkspaceSnapshotV1 =
@@ -455,7 +647,7 @@ impl WorkspaceSnapshot {
                 let sketch_identity_high_water =
                     derive_sketch_identity_high_water(&design, accepted.as_ref())?;
                 Self {
-                    version: 6,
+                    version: FLAT_WORKSPACE_VERSION,
                     design,
                     accepted,
                     accepted_belongs_to_current_design: false,
@@ -465,6 +657,8 @@ impl WorkspaceSnapshot {
                     computed_evaluation_high_water: default_evaluation_high_water(),
                     annotation_layout_json: None,
                     revisions: legacy.revisions,
+                    intent_session_json: None,
+                    origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 1 },
                 }
                 .validated()
             }
@@ -479,7 +673,7 @@ impl WorkspaceSnapshot {
                 let sketch_identity_high_water =
                     derive_sketch_identity_high_water(&legacy.design, legacy.accepted.as_ref())?;
                 Self {
-                    version: 6,
+                    version: FLAT_WORKSPACE_VERSION,
                     design: legacy.design,
                     accepted: legacy.accepted,
                     accepted_belongs_to_current_design: false,
@@ -489,6 +683,8 @@ impl WorkspaceSnapshot {
                     computed_evaluation_high_water: default_evaluation_high_water(),
                     annotation_layout_json: None,
                     revisions: legacy.revisions,
+                    intent_session_json: None,
+                    origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 2 },
                 }
                 .validated()
             }
@@ -508,7 +704,7 @@ impl WorkspaceSnapshot {
                 let sketch_identity_high_water =
                     derive_sketch_identity_high_water(&legacy.design, legacy.accepted.as_ref())?;
                 Self {
-                    version: 6,
+                    version: FLAT_WORKSPACE_VERSION,
                     design: legacy.design,
                     accepted: legacy.accepted,
                     accepted_belongs_to_current_design: legacy.accepted_belongs_to_current_design,
@@ -518,6 +714,8 @@ impl WorkspaceSnapshot {
                     computed_evaluation_high_water: default_evaluation_high_water(),
                     annotation_layout_json: None,
                     revisions: legacy.revisions,
+                    intent_session_json: None,
+                    origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 3 },
                 }
                 .validated()
             }
@@ -530,7 +728,7 @@ impl WorkspaceSnapshot {
                 let sketch_identity_high_water =
                     derive_sketch_identity_high_water(&legacy.design, legacy.accepted.as_ref())?;
                 Self {
-                    version: 6,
+                    version: FLAT_WORKSPACE_VERSION,
                     design: legacy.design,
                     accepted: legacy.accepted,
                     accepted_belongs_to_current_design: legacy.accepted_belongs_to_current_design,
@@ -540,27 +738,77 @@ impl WorkspaceSnapshot {
                     computed_evaluation_high_water: legacy.computed_evaluation_high_water,
                     annotation_layout_json: None,
                     revisions: legacy.revisions,
+                    intent_session_json: None,
+                    origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 4 },
                 }
                 .validated()
             }
             5 => {
                 let mut snapshot: Self =
                     serde_json::from_str(input).map_err(|error| error.to_string())?;
-                snapshot.version = 6;
+                snapshot.version = FLAT_WORKSPACE_VERSION;
                 snapshot.annotation_layout_json = None;
+                snapshot.intent_session_json = None;
+                snapshot.origin = WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 5 };
                 snapshot.validated()
             }
-            6 => {
-                let snapshot: Self =
+            FLAT_WORKSPACE_VERSION => {
+                let mut snapshot: Self =
                     serde_json::from_str(input).map_err(|error| error.to_string())?;
+                snapshot.intent_session_json = None;
+                snapshot.origin = WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 6 };
                 snapshot.validated()
             }
+            ABANDONED_WORKSPACE_VERSION => Err(
+                "workbench snapshot version 7 belongs to the abandoned chronological lineage format and is not supported"
+                    .into(),
+            ),
+            PROJECTIONAL_WORKSPACE_VERSION => Self::decode_v8(input),
             _ => Err("unsupported workbench snapshot version".into()),
         }
     }
 
+    fn decode_v8(input: &str) -> Result<Self, String> {
+        if input.len() > MAX_PROJECTIONAL_WORKSPACE_JSON_BYTES {
+            return Err(format!(
+                "workspace v8 exceeds the {MAX_PROJECTIONAL_WORKSPACE_JSON_BYTES}-byte limit"
+            ));
+        }
+        let wire: WorkspaceSnapshotV8 =
+            serde_json::from_str(input).map_err(|error| error.to_string())?;
+        if wire.version != PROJECTIONAL_WORKSPACE_VERSION {
+            return Err("unsupported workbench snapshot version".into());
+        }
+        if wire.digest != workspace_v8_digest(&wire) {
+            return Err("workspace v8 digest does not match its contents".into());
+        }
+        if serde_json::to_string(&wire).map_err(|error| error.to_string())? != input {
+            return Err("workspace v8 JSON is not canonical".into());
+        }
+        IntentSession::from_json(&wire.intent_session_json).map_err(|error| error.to_string())?;
+        let materialization = wire.materialization;
+        Self {
+            version: PROJECTIONAL_WORKSPACE_VERSION,
+            design: materialization.design,
+            accepted: materialization.accepted,
+            accepted_belongs_to_current_design: materialization.accepted_belongs_to_current_design,
+            sketch_identity_high_water: materialization.sketch_identity_high_water,
+            features_json: materialization.features_json,
+            feature_lifecycle_high_water: materialization.feature_lifecycle_high_water,
+            computed_evaluation_high_water: materialization.computed_evaluation_high_water,
+            annotation_layout_json: wire.annotation_layout_json,
+            revisions: materialization.revisions,
+            intent_session_json: Some(wire.intent_session_json),
+            origin: WorkspaceSnapshotOrigin::ProjectionalV8,
+        }
+        .validated()
+    }
+
     fn validated(self) -> Result<Self, String> {
-        if self.version != 6 {
+        if !matches!(
+            self.version,
+            FLAT_WORKSPACE_VERSION | PROJECTIONAL_WORKSPACE_VERSION
+        ) {
             return Err("unsupported workbench snapshot version".into());
         }
         if self.accepted_belongs_to_current_design && self.accepted.is_none() {
@@ -568,6 +816,26 @@ impl WorkspaceSnapshot {
         }
         let design = self.design_document()?;
         let accepted = self.accepted_document()?;
+        match self.origin {
+            WorkspaceSnapshotOrigin::FlatV6 | WorkspaceSnapshotOrigin::LegacyBootstrap { .. } => {
+                if self.version != FLAT_WORKSPACE_VERSION || self.intent_session_json.is_some() {
+                    return Err("flat workspace carries inconsistent intent authority".into());
+                }
+            }
+            WorkspaceSnapshotOrigin::ProjectionalV8 => {
+                if self.version != PROJECTIONAL_WORKSPACE_VERSION {
+                    return Err("projectional workspace carries an inconsistent version".into());
+                }
+                let intent = self
+                    .intent_session()?
+                    .ok_or_else(|| "workspace v8 requires a canonical intent session".to_owned())?;
+                validate_intent_accepted_materialization(
+                    &intent,
+                    self.accepted.as_ref(),
+                    self.accepted_belongs_to_current_design,
+                )?;
+            }
+        }
         validate_sketch_identity_high_water(
             &self.sketch_identity_high_water,
             &design,
@@ -589,6 +857,24 @@ impl WorkspaceSnapshot {
             return Err("computed-feature evaluation high-water must be nonzero".into());
         }
         Ok(self)
+    }
+
+    pub(crate) fn intent_session(&self) -> Result<Option<IntentSession>, String> {
+        self.intent_session_json
+            .as_deref()
+            .map(IntentSession::from_json)
+            .transpose()
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn legacy_bootstrap(&self) -> Option<WorkspaceLegacyBootstrap<'_>> {
+        let WorkspaceSnapshotOrigin::LegacyBootstrap { source_version } = self.origin else {
+            return None;
+        };
+        Some(WorkspaceLegacyBootstrap {
+            source_version,
+            snapshot: self,
+        })
     }
 
     pub(crate) fn annotation_layout(&self) -> AnnotationLayoutState {
@@ -672,6 +958,22 @@ pub(crate) fn coordinator_from_snapshot(
     let layout = compatible_annotation_layout(&coordinator, &cached_layout);
     coordinator.editor_mut().restore_annotation_layout(layout);
     Ok(coordinator)
+}
+
+/// Restores both authorities from workspace v8. Callers must publish this pair
+/// atomically; restoring only the flat coordinator would discard design intent.
+#[allow(
+    dead_code,
+    reason = "wired by the coordinator-owned projectional session slice"
+)]
+pub(crate) fn projectional_workspace_from_snapshot(
+    snapshot: &WorkspaceSnapshot,
+) -> Result<(IntentSession, RetainedEditorCoordinator), String> {
+    let intent = snapshot
+        .intent_session()?
+        .ok_or_else(|| "workspace does not contain projectional intent authority".to_owned())?;
+    let coordinator = coordinator_from_snapshot(snapshot)?;
+    Ok((intent, coordinator))
 }
 
 fn compatible_annotation_layout(
@@ -844,6 +1146,43 @@ fn default_evaluation_high_water() -> ComputedEvaluationAllocatorHighWater {
     ComputedEvaluationAllocator::default().high_water()
 }
 
+fn validate_intent_accepted_materialization(
+    intent: &IntentSession,
+    accepted: Option<&WorkspaceDocumentPayload>,
+    accepted_belongs_to_current_design: bool,
+) -> Result<(), String> {
+    let Some(authority) = intent.accepted() else {
+        if accepted.is_some() {
+            return Err(
+                "workspace v8 flat restoration has accepted geometry without intent authority"
+                    .into(),
+            );
+        }
+        if accepted_belongs_to_current_design {
+            return Err("workspace v8 accepted provenance has no intent authority".into());
+        }
+        return Ok(());
+    };
+    let accepted = accepted.ok_or_else(|| {
+        "workspace v8 intent authority has no exact flat accepted materialization".to_owned()
+    })?;
+    if (authority.target == intent.semantic_identity()) != accepted_belongs_to_current_design {
+        return Err("workspace v8 intent and flat accepted-current provenance disagree".into());
+    }
+
+    let evidence_json = std::str::from_utf8(&authority.evidence.materialization)
+        .map_err(|_| "workspace v8 intent materialization is not sketch JSON".to_owned())?;
+    let evidence_document = SketchDocument::from_draft_v5_json(evidence_json)
+        .or_else(|_| SketchDocument::from_json(evidence_json))
+        .map_err(|error| format!("workspace v8 intent materialization is invalid: {error}"))?;
+    if evidence_document != decode_document(accepted)? {
+        return Err(
+            "workspace v8 intent evidence and flat accepted materialization disagree".into(),
+        );
+    }
+    Ok(())
+}
+
 fn decode_document(payload: &WorkspaceDocumentPayload) -> Result<SketchDocument, String> {
     match payload.encoding {
         WorkspaceDocumentEncoding::CanonicalV4 => SketchDocument::from_json(&payload.json),
@@ -872,12 +1211,18 @@ mod tests {
         PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
         alpha_scenario,
     };
+    use geosolve_sketch_intent::{
+        GeometryRecipeKind, IntentEvaluation, IntentKey, IntentNodeDraft, IntentNodeKind,
+        IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentSession, IntentSessionId,
+        MaterializationEvidence,
+    };
 
     use super::{
-        WorkspaceSnapshot, annotation_kind_key, coordinator_from_reproduction_payload,
-        coordinator_from_snapshot, default_evaluation_high_water,
-        derive_sketch_identity_high_water, parse_annotation_kind,
-        reproduction_payload_from_coordinator,
+        WorkspaceSnapshot, WorkspaceSnapshotV8, annotation_kind_key,
+        coordinator_from_reproduction_payload, coordinator_from_snapshot,
+        default_evaluation_high_water, derive_sketch_identity_high_water, parse_annotation_kind,
+        projectional_workspace_from_snapshot, reproduction_payload_from_coordinator,
+        workspace_v8_digest,
     };
 
     fn restored_annotation_layout(
@@ -896,6 +1241,62 @@ mod tests {
             .editor()
             .annotation_layout()
             .entries()
+    }
+
+    fn m83_projectional_fixture() -> (WorkspaceSnapshot, IntentSession, SketchDocument) {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        document
+            .add_point("projectional point", [1.25, -2.5])
+            .expect("point");
+        let coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("accepted session"),
+        )
+        .expect("coordinator");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted state")
+            .document()
+            .clone();
+        let accepted_json = accepted.to_draft_v5_json().expect("draft-v5 evidence");
+
+        let mut intent =
+            IntentSession::with_id(IntentSessionId::from_raw(0x8308)).expect("intent session");
+        let patch = IntentPatch::new(
+            intent.identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![IntentPatchOperation::CreateNode {
+                alias: IntentKey::new("point").expect("alias"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    IntentKey::new("ProjectionalPoint").expect("symbol"),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = intent
+            .plan_patch(patch, |candidate| IntentEvaluation::Accepted {
+                evidence: MaterializationEvidence::new_host_artifacts(
+                    candidate.external_inputs().identity(),
+                    accepted_json.into_bytes(),
+                    br#"{"logical_native_ownership":"fixture"}"#.to_vec(),
+                    br#"{"hard_validity":"valid","maximum_normalized_hard_residual":0.0}"#.to_vec(),
+                )
+                .expect("materialization evidence"),
+            })
+            .expect("intent plan");
+        intent.commit_plan(plan).expect("intent commit");
+        let snapshot =
+            WorkspaceSnapshot::from_intent_session_and_coordinator(&intent, &coordinator)
+                .expect("workspace v8");
+        (snapshot, intent, accepted)
     }
 
     #[test]
@@ -2820,6 +3221,204 @@ mod tests {
                 "legacy M28 Fillet changed meaning in {encoded}"
             );
             assert!(migrated.feature_document().unwrap().features().is_empty());
+        }
+    }
+
+    #[test]
+    fn m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly() {
+        let (snapshot, intent, accepted) = m83_projectional_fixture();
+        assert_eq!(snapshot.version, 8);
+        assert!(snapshot.legacy_bootstrap().is_none());
+
+        let encoded = snapshot.encode().expect("canonical workspace v8");
+        let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode workspace v8");
+        assert_eq!(decoded.encode().expect("re-encode workspace v8"), encoded);
+        assert_eq!(
+            decoded
+                .intent_session()
+                .expect("decode intent")
+                .expect("v8 intent")
+                .to_canonical_json()
+                .expect("canonical restored intent"),
+            intent
+                .to_canonical_json()
+                .expect("canonical original intent")
+        );
+        assert_eq!(
+            decoded.accepted_document().expect("accepted flat state"),
+            Some(accepted)
+        );
+        let (restored_intent, restored) =
+            projectional_workspace_from_snapshot(&decoded).expect("restore both authorities");
+        assert_eq!(restored_intent.identity(), intent.identity());
+        assert!(
+            restored
+                .session()
+                .accepted_state_for_current_input()
+                .is_some(),
+            "v8 must retain exact accepted flat evidence needed for immediate canvas restoration",
+        );
+    }
+
+    #[test]
+    fn m83_workspace_v8_rejects_forged_or_noncanonical_intent_authority() {
+        let (snapshot, _, _) = m83_projectional_fixture();
+        let encoded = snapshot.encode().expect("canonical workspace v8");
+        let mut wire: WorkspaceSnapshotV8 =
+            serde_json::from_str(&encoded).expect("workspace-v8 wire");
+        let mut different = SketchDocument::new(1.0).expect("different document");
+        different
+            .add_point("different point", [9.0, 4.0])
+            .expect("different point");
+        wire.materialization
+            .accepted
+            .as_mut()
+            .expect("accepted materialization")
+            .json = different.to_canonical_json().expect("different JSON");
+        wire.digest = workspace_v8_digest(&wire);
+        let forged = serde_json::to_string(&wire).expect("forged canonical wire");
+        assert!(
+            WorkspaceSnapshot::decode(&forged)
+                .unwrap_err()
+                .contains("intent evidence and flat accepted materialization disagree")
+        );
+
+        let mut wire: WorkspaceSnapshotV8 =
+            serde_json::from_str(&encoded).expect("workspace-v8 wire");
+        wire.intent_session_json.push(' ');
+        wire.digest = workspace_v8_digest(&wire);
+        let noncanonical_intent =
+            serde_json::to_string(&wire).expect("noncanonical-intent workspace");
+        assert!(
+            WorkspaceSnapshot::decode(&noncanonical_intent)
+                .unwrap_err()
+                .contains("canonical")
+        );
+        assert_eq!(
+            WorkspaceSnapshot::decode(&format!("\n{encoded}"))
+                .expect_err("workspace-v8 outer JSON must also be canonical"),
+            "workspace v8 JSON is not canonical"
+        );
+    }
+
+    #[test]
+    fn m83_workspace_v7_is_explicitly_rejected_as_abandoned() {
+        let error = WorkspaceSnapshot::decode(r#"{"version":7}"#)
+            .expect_err("abandoned workspace v7 must reject");
+        assert_eq!(
+            error,
+            "workbench snapshot version 7 belongs to the abandoned chronological lineage format and is not supported"
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one six-version table proves every historical strict decoder feeds the same typed bootstrap boundary"
+    )]
+    fn m83_legacy_v1_through_v6_restore_as_structured_bootstrap_input() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let flat = WorkspaceSnapshot::from_coordinator(&coordinator).expect("flat workspace");
+        let design_json = flat.design.json.clone();
+        let accepted_json = flat.accepted.as_ref().map(|payload| payload.json.clone());
+        let revisions = serde_json::to_value(flat.revisions).expect("revisions");
+        let wires = vec![
+            serde_json::json!({
+                "version": 1,
+                "design_json": design_json.clone(),
+                "accepted_json": accepted_json.clone(),
+                "revisions": revisions.clone(),
+            })
+            .to_string(),
+            serde_json::json!({
+                "version": 2,
+                "design": flat.design.clone(),
+                "accepted": flat.accepted.clone(),
+                "revisions": revisions.clone(),
+            })
+            .to_string(),
+            serde_json::json!({
+                "version": 3,
+                "design": flat.design.clone(),
+                "accepted": flat.accepted.clone(),
+                "accepted_belongs_to_current_design": flat.accepted_belongs_to_current_design,
+                "revisions": revisions.clone(),
+            })
+            .to_string(),
+            serde_json::json!({
+                "version": 4,
+                "design": flat.design.clone(),
+                "accepted": flat.accepted.clone(),
+                "accepted_belongs_to_current_design": flat.accepted_belongs_to_current_design,
+                "features_json": flat.features_json.clone(),
+                "feature_lifecycle_high_water": flat.feature_lifecycle_high_water,
+                "computed_evaluation_high_water": flat.computed_evaluation_high_water,
+                "revisions": revisions.clone(),
+            })
+            .to_string(),
+            {
+                let mut value = serde_json::to_value(&flat).expect("flat workspace value");
+                value["version"] = serde_json::Value::from(5);
+                value
+                    .as_object_mut()
+                    .expect("workspace object")
+                    .remove("annotation_layout_json");
+                value.to_string()
+            },
+            flat.encode().expect("workspace v6"),
+        ];
+
+        for (index, wire) in wires.into_iter().enumerate() {
+            let source_version = u32::try_from(index + 1).expect("bounded source version");
+            let decoded = WorkspaceSnapshot::decode(&wire).expect("strict legacy decode");
+            assert!(decoded.intent_session().expect("intent absence").is_none());
+            let bootstrap = decoded
+                .legacy_bootstrap()
+                .expect("typed legacy bootstrap input");
+            assert_eq!(bootstrap.source_version(), source_version);
+            assert_eq!(
+                bootstrap.design_document().expect("bootstrap design"),
+                decoded.design_document().expect("decoded design")
+            );
+            assert_eq!(
+                bootstrap.accepted_document().expect("bootstrap accepted"),
+                decoded.accepted_document().expect("decoded accepted")
+            );
+            assert_eq!(
+                bootstrap.feature_document().expect("bootstrap features"),
+                decoded.feature_document().expect("decoded features")
+            );
+            assert_eq!(bootstrap.revisions(), decoded.revisions());
+            assert_eq!(
+                bootstrap.accepted_belongs_to_current_design(),
+                decoded.accepted_belongs_to_current_design
+            );
+            assert_eq!(
+                bootstrap.sketch_identity_high_water(),
+                &decoded.sketch_identity_high_water
+            );
+            assert_eq!(
+                bootstrap.feature_lifecycle_high_water(),
+                decoded.feature_lifecycle_high_water()
+            );
+            assert_eq!(
+                bootstrap.computed_evaluation_high_water(),
+                decoded.computed_evaluation_high_water()
+            );
+            assert_eq!(
+                decoded
+                    .encode()
+                    .expect_err("legacy aggregate is not v8 intent"),
+                format!(
+                    "legacy workspace v{source_version} must be normalized into per-object bootstrap declarations before v8 encoding"
+                )
+            );
         }
     }
 }
