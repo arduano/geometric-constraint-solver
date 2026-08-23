@@ -11,10 +11,11 @@ use geosolve_sketch::{
     DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
     DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
     DocumentExternalBindingId, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentId,
-    DocumentLineSide, DocumentParameterId, DocumentParameterKind, ExternalSnapshotDigest,
-    ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1,
-    ExternalSnapshotSet, FeatureEndpoint, GeometryRole, ParameterBatch, ParameterBatchEntry,
-    ParameterValue, PersistentId, TangentOrientation,
+    DocumentLineSide, DocumentParameterId, DocumentParameterKind, ExternalLineOrientationV1,
+    ExternalSnapshotDigest, ExternalSnapshotEntry, ExternalSnapshotFeatureV1,
+    ExternalSnapshotResourcesV1, ExternalSnapshotSet, ExternalTopologyDigest, FeatureEndpoint,
+    GeometryRole, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
+    TangentOrientation,
 };
 use geosolve_sketch_intent::{
     AggregateKind, BootstrapNativeKind, ConstraintKind, DeletePolicy, DimensionKind,
@@ -1092,6 +1093,184 @@ fn external_binding_and_snapshot_reference_require_exact_host_revision() {
         1
     );
     assert_independently_validated(&output);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one inventory fixture keeps both external relation families and their exact host evidence contiguous"
+)]
+fn external_relation_inventory_materializes_point_and_line_snapshot_constraints() {
+    struct Case {
+        raw: u128,
+        expected_kind: &'static str,
+        feature: ExternalSnapshotFeatureV1,
+        relation: ConstraintKind,
+    }
+    let cases = [
+        Case {
+            raw: 0x8300_1e21,
+            expected_kind: "point",
+            feature: ExternalSnapshotFeatureV1::Point {
+                position: [0.0, 0.0],
+                scale: 1.0,
+                resources: ExternalSnapshotResourcesV1 {
+                    point_count: 1,
+                    control_count: 0,
+                    span_count: 0,
+                },
+            },
+            relation: ConstraintKind::ExternalPointCoincident,
+        },
+        Case {
+            raw: 0x8300_1e22,
+            expected_kind: "line_segment",
+            feature: ExternalSnapshotFeatureV1::LineSegment {
+                start: [0.0, 0.0],
+                end: [2.0, 0.0],
+                domain: [0.0, 1.0],
+                orientation: ExternalLineOrientationV1::StartToEnd,
+                scale: 1.0,
+                topology_digest: ExternalTopologyDigest::from_bytes([0x83; 32]),
+                resources: ExternalSnapshotResourcesV1 {
+                    point_count: 2,
+                    control_count: 0,
+                    span_count: 1,
+                },
+            },
+            relation: ConstraintKind::ExternalLineCollinear,
+        },
+    ];
+
+    for case in cases {
+        let binding = DocumentExternalBindingId(PersistentId::from_u128((case.raw << 32) + 1));
+        let snapshots = ExternalSnapshotSet::new(
+            9,
+            vec![ExternalSnapshotEntry {
+                binding,
+                source_revision: 9,
+                source_digest: ExternalSnapshotDigest::from_bytes([9; 32]),
+                feature: case.feature,
+            }],
+        )
+        .unwrap();
+        let inputs = IntentExternalInputs::new(
+            ExternalInputRevision::from_raw(1),
+            ParameterBatch::default()
+                .to_canonical_json()
+                .unwrap()
+                .into_bytes(),
+            snapshots.to_canonical_json().unwrap().into_bytes(),
+        )
+        .unwrap();
+        let mut external = IntentNodeDraft::new(
+            IntentNodeKind::External {
+                external: ExternalIntentKind::Binding,
+            },
+            key("external_relation_binding"),
+        )
+        .with_field(
+            IntentFieldKey(key("feature_kind")),
+            IntentLiteral::Enum(key(case.expected_kind)),
+        );
+        if case.expected_kind == "line_segment" {
+            external = external.with_field(
+                IntentFieldKey(key("topology_digest")),
+                IntentLiteral::Text(key(&"83".repeat(32))),
+            );
+        }
+        let reference = IntentNodeDraft::new(
+            IntentNodeKind::External {
+                external: ExternalIntentKind::SnapshotReference,
+            },
+            key("external_relation_snapshot"),
+        )
+        .with_input(
+            InputSlot::new(InputRole::External, 0),
+            alias("binding", IntentPortRole::External),
+        )
+        .with_field(
+            IntentFieldKey(key("snapshot_revision")),
+            IntentLiteral::Natural(9),
+        );
+        let mut relation = IntentNodeDraft::new(
+            IntentNodeKind::Constraint {
+                constraint: case.relation,
+            },
+            key("external_relation"),
+        )
+        .with_input(
+            InputSlot::new(InputRole::External, 0),
+            alias("reference", IntentPortRole::External),
+        );
+        relation = match case.relation {
+            ConstraintKind::ExternalPointCoincident => relation.with_input(
+                InputSlot::new(InputRole::Point, 0),
+                alias("point", IntentPortRole::Primary),
+            ),
+            ConstraintKind::ExternalLineCollinear => relation
+                .with_input(
+                    InputSlot::new(InputRole::Span, 0),
+                    alias("line", IntentPortRole::Span),
+                )
+                .with_field(
+                    IntentFieldKey(key("direction")),
+                    IntentLiteral::Enum(key("forward")),
+                ),
+            _ => unreachable!(),
+        };
+        let session = IntentSession::with_id(IntentSessionId::from_raw(case.raw)).unwrap();
+        let materializer = ColdIntentMaterializer::with_default_policy(
+            DocumentId(PersistentId::from_u128(case.raw << 32)),
+            1.0,
+        )
+        .unwrap();
+        let captured = RefCell::new(None);
+        session
+            .plan_patch(
+                IntentPatch::new(
+                    session.identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![
+                        IntentPatchOperation::ReplaceExternalInputs { inputs },
+                        create("binding", external),
+                        create("reference", reference),
+                        create("point", point("point", [0.0, 0.0])),
+                        create("line", segment("line", [0.0, 0.0], [2.0, 0.0])),
+                        create("relation", relation),
+                    ],
+                ),
+                |candidate| {
+                    let output = materializer.materialize(candidate).unwrap();
+                    let evidence = output.evidence.clone();
+                    captured.replace(Some(output));
+                    IntentEvaluation::Accepted { evidence }
+                },
+            )
+            .unwrap();
+        let output = captured.into_inner().unwrap();
+        let document = output
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document();
+        assert_eq!(document.constraints().len(), 1, "{:?}", case.relation);
+        assert!(
+            matches!(
+                (&document.constraints()[0].definition, case.relation),
+                (
+                    DocumentConstraintDefinition::ExternalPointCoincident { .. },
+                    ConstraintKind::ExternalPointCoincident
+                ) | (
+                    DocumentConstraintDefinition::ExternalLineCollinear { .. },
+                    ConstraintKind::ExternalLineCollinear
+                )
+            ),
+            "{:?}",
+            case.relation
+        );
+        assert_independently_validated(&output);
+    }
 }
 
 #[test]
