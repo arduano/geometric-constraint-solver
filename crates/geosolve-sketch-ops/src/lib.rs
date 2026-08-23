@@ -571,8 +571,9 @@ impl SketchOperationProposal {
     /// The reservation sequence must match [`Self::output_plan`] in category and order. The
     /// operation still executes through its ordinary public document constructors; the sketch
     /// document merely substitutes the supplied never-reused identities for that scoped atomic
-    /// action. A mismatch, stale proposal, solve rejection, or incomplete consumption changes no
-    /// live session state.
+    /// action. A reservation mismatch, stale proposal, or incomplete consumption changes no live
+    /// session state. As with [`Self::apply`], an ordinary solve rejection remains retained design
+    /// intent, while Profile Offset requires fresh accepted publication and rejects atomically.
     ///
     /// # Errors
     ///
