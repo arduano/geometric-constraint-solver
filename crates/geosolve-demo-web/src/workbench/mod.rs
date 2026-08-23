@@ -321,7 +321,7 @@ fn projectional_design_markup(
         outline: design_projection::outline_markup(&projection, selection),
         source: design_projection::structured_source_markup(&projection, selection),
         history: design_projection::history_markup(&projection),
-        inspector: design_projection::inspector_markup(inspector.as_ref()),
+        inspector: design_projection::inspector_markup(inspector.as_ref(), projection.identity),
     }
 }
 
@@ -488,6 +488,349 @@ fn dispatch_projectional_authoring_application(
             error: Some(error.to_string()),
         },
     }
+}
+
+/// Exact durable-projection stamp copied onto one rendered Inspector.
+///
+/// The session digest covers every independently revisioned intent component,
+/// accepted authority, history cursor and allocator high-water. A detached or
+/// stale browser control therefore cannot be rebound to a freshly generated
+/// Inspector merely because its visible field strings still happen to match.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct ProjectionalInspectorStamp {
+    session: Option<String>,
+    revision: Option<String>,
+    digest: Option<String>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl ProjectionalInspectorStamp {
+    fn matches(&self, identity: geosolve_sketch_intent::IntentSessionIdentity) -> bool {
+        let session = identity.session.to_string();
+        let revision = identity.revision.to_string();
+        let digest = identity.digest.to_string();
+        self.session.as_deref() == Some(session.as_str())
+            && self.revision.as_deref() == Some(revision.as_str())
+            && self.digest.as_deref() == Some(digest.as_str())
+    }
+}
+
+/// Browser value carried by one terminal Inspector control event.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ProjectionalInspectorSubmission {
+    Text(String),
+    Checked(bool),
+    Point {
+        x: Option<String>,
+        y: Option<String>,
+    },
+}
+
+/// Untrusted DOM coordinate submitted by one schema-generated Inspector form.
+///
+/// Every string is deliberately retained until it is compared against the
+/// current Rust projection. DOM attributes never become arbitrary graph
+/// addresses and never choose a literal kind or unit by themselves.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProjectionalInspectorControl {
+    stamp: ProjectionalInspectorStamp,
+    edit: Option<String>,
+    node: Option<String>,
+    field: Option<String>,
+    port: Option<String>,
+    leaf: Option<String>,
+    port_kind: Option<String>,
+    schema: Option<String>,
+    unit: Option<String>,
+    component: Option<String>,
+    submission: ProjectionalInspectorSubmission,
+}
+
+/// Publication policy for a browser Inspector terminal.
+///
+/// Only `Committed` may save the v8 workspace or rebuild durable panels as a
+/// new transaction. Retained-invalid intent is still a committed transaction;
+/// its disposition truthfully preserves the prior accepted canvas authority.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ProjectionalInspectorDispatch {
+    Unchanged,
+    Committed(geosolve_sketch_intent::IntentPlanDisposition),
+    Rejected(String),
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl ProjectionalInspectorDispatch {
+    const fn saves_workspace(&self) -> bool {
+        matches!(self, Self::Committed(_))
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn dispatch_projectional_inspector_control(
+    editor: &mut geosolve_constraint_editor::ProjectionalEditorSession,
+    control: &ProjectionalInspectorControl,
+) -> ProjectionalInspectorDispatch {
+    let projection = editor.workbench_projection();
+    if !control.stamp.matches(projection.identity) {
+        return ProjectionalInspectorDispatch::Rejected(
+            "the Inspector control belongs to a stale design projection".into(),
+        );
+    }
+    let Some(inspector) = editor.selected_inspector(&projection) else {
+        return ProjectionalInspectorDispatch::Rejected(
+            "the Inspector declaration is no longer selected".into(),
+        );
+    };
+    let decoded = match decode_projectional_inspector_control(&inspector, control) {
+        Ok(decoded) => decoded,
+        Err(error) => return ProjectionalInspectorDispatch::Rejected(error),
+    };
+    let Some((target, value)) = decoded else {
+        return ProjectionalInspectorDispatch::Unchanged;
+    };
+    match editor.edit_inspector(&inspector, &target, value) {
+        Ok(outcome) => ProjectionalInspectorDispatch::Committed(outcome.disposition),
+        Err(error) => ProjectionalInspectorDispatch::Rejected(error.to_string()),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive browser-boundary decoder keeps every authenticated Inspector coordinate family reviewable"
+)]
+fn decode_projectional_inspector_control(
+    inspector: &geosolve_constraint_editor::IntentInspectorProjection,
+    control: &ProjectionalInspectorControl,
+) -> Result<
+    Option<(
+        geosolve_constraint_editor::IntentInspectorEditTarget,
+        geosolve_constraint_editor::IntentInspectorEditValue,
+    )>,
+    String,
+> {
+    use geosolve_constraint_editor::{
+        IntentInspectorEditTarget, IntentInspectorEditValue, IntentInspectorField,
+    };
+    use geosolve_sketch_intent::{IntentFieldKey, IntentKey, LeafField, LeafRef, PortId};
+
+    let node = control
+        .node
+        .as_deref()
+        .ok_or_else(|| "the Inspector control is missing its declaration coordinate".to_owned())?
+        .parse()
+        .map_err(|_| "the Inspector declaration coordinate is malformed".to_owned())?;
+    if node != inspector.node {
+        return Err("the Inspector control addresses a different declaration".into());
+    }
+
+    match control.edit.as_deref() {
+        Some("suppressed") => {
+            if control.field.is_some()
+                || control.port.is_some()
+                || control.leaf.is_some()
+                || control.port_kind.is_some()
+                || control.component.is_some()
+                || control.unit.is_some()
+                || control.schema.as_deref() != Some("boolean")
+            {
+                return Err("the suppression control coordinate is malformed".into());
+            }
+            let ProjectionalInspectorSubmission::Checked(suppressed) = &control.submission else {
+                return Err("the suppression control did not submit a boolean".into());
+            };
+            if *suppressed == inspector.suppressed {
+                return Ok(None);
+            }
+            Ok(Some((
+                IntentInspectorEditTarget::Suppressed,
+                IntentInspectorEditValue::Suppressed {
+                    suppressed: *suppressed,
+                },
+            )))
+        }
+        Some("definition") => {
+            if control.port.is_some() || control.leaf.is_some() || control.port_kind.is_some() {
+                return Err("the definition control contains an instance coordinate".into());
+            }
+            let field = IntentFieldKey(
+                IntentKey::new(control.field.clone().ok_or_else(|| {
+                    "the definition control is missing its field coordinate".to_owned()
+                })?)
+                .map_err(|error| error.to_string())?,
+            );
+            let (schema, current) = inspector
+                .fields
+                .iter()
+                .find_map(|candidate| match candidate {
+                    IntentInspectorField::Definition { schema, value } if schema.field == field => {
+                        Some((schema.literal, value.as_ref()))
+                    }
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    "the definition control is not present in the current schema".to_owned()
+                })?;
+            let literal = decode_projectional_inspector_literal(schema, control)?;
+            if current == Some(&literal) {
+                return Ok(None);
+            }
+            Ok(Some((
+                IntentInspectorEditTarget::Definition { field },
+                IntentInspectorEditValue::Literal { literal },
+            )))
+        }
+        Some("instance") => {
+            if control.field.is_some() {
+                return Err("the instance control contains a definition coordinate".into());
+            }
+            let port: PortId = control
+                .port
+                .as_deref()
+                .ok_or_else(|| "the instance control is missing its port coordinate".to_owned())?
+                .parse()
+                .map_err(|_| "the instance port coordinate is malformed".to_owned())?;
+            let field = match control.leaf.as_deref() {
+                Some("x") => LeafField::X,
+                Some("y") => LeafField::Y,
+                Some("value") => LeafField::Value,
+                Some("angle") => LeafField::Angle,
+                Some("weight") => LeafField::Weight,
+                Some("parameter") => LeafField::Parameter,
+                _ => return Err("the instance leaf coordinate is malformed".into()),
+            };
+            let leaf = LeafRef { node, port, field };
+            let (port_kind, current) = inspector
+                .fields
+                .iter()
+                .find_map(|candidate| match candidate {
+                    IntentInspectorField::Instance {
+                        leaf: candidate,
+                        port_kind,
+                        value,
+                    } if *candidate == leaf => Some((*port_kind, value.as_ref())),
+                    _ => None,
+                })
+                .ok_or_else(|| "the instance control is not a current writable leaf".to_owned())?;
+            if control.port_kind.as_deref() != Some(format!("{port_kind:?}").as_str()) {
+                return Err("the instance control has the wrong port kind".into());
+            }
+            let schema = design_projection::literal_schema_for_instance(field, current);
+            let literal = decode_projectional_inspector_literal(schema, control)?;
+            if current == Some(&literal) {
+                return Ok(None);
+            }
+            Ok(Some((
+                IntentInspectorEditTarget::Instance { leaf },
+                IntentInspectorEditValue::Literal { literal },
+            )))
+        }
+        _ => Err("the Inspector control has an unknown edit owner".into()),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn decode_projectional_inspector_literal(
+    schema: geosolve_sketch_intent::IntentLiteralSchema,
+    control: &ProjectionalInspectorControl,
+) -> Result<geosolve_sketch_intent::IntentLiteral, String> {
+    use geosolve_sketch_intent::{IntentKey, IntentLiteral, IntentLiteralSchema};
+
+    if control.schema.as_deref() != Some(design_projection::literal_schema_key(schema).as_str()) {
+        return Err("the Inspector control has the wrong literal schema".into());
+    }
+    match schema {
+        IntentLiteralSchema::Boolean => {
+            if control.unit.is_some() || control.component.is_some() {
+                return Err("the boolean control contains scalar coordinates".into());
+            }
+            let ProjectionalInspectorSubmission::Checked(value) = &control.submission else {
+                return Err("the boolean control did not submit a checkbox value".into());
+            };
+            Ok(IntentLiteral::Boolean(*value))
+        }
+        IntentLiteralSchema::Integer => {
+            require_scalar_inspector_control(control, None)?;
+            let value = inspector_text_submission(control)?
+                .parse()
+                .map_err(|_| "the Inspector integer is invalid".to_owned())?;
+            Ok(IntentLiteral::Integer(value))
+        }
+        IntentLiteralSchema::Natural => {
+            require_scalar_inspector_control(control, None)?;
+            let value = inspector_text_submission(control)?
+                .parse()
+                .map_err(|_| "the Inspector natural number is invalid".to_owned())?;
+            Ok(IntentLiteral::Natural(value))
+        }
+        IntentLiteralSchema::Text => {
+            require_scalar_inspector_control(control, None)?;
+            IntentKey::new(inspector_text_submission(control)?.to_owned())
+                .map(IntentLiteral::Text)
+                .map_err(|error| error.to_string())
+        }
+        IntentLiteralSchema::Enum => {
+            require_scalar_inspector_control(control, None)?;
+            IntentKey::new(inspector_text_submission(control)?.to_owned())
+                .map(IntentLiteral::Enum)
+                .map_err(|error| error.to_string())
+        }
+        IntentLiteralSchema::Point => {
+            if control.unit.is_some() || !matches!(control.component.as_deref(), Some("x" | "y")) {
+                return Err("the point control coordinate is malformed".into());
+            }
+            let ProjectionalInspectorSubmission::Point { ref x, ref y } = control.submission else {
+                return Err("the point control did not submit both components".into());
+            };
+            Ok(IntentLiteral::Point([
+                parse_finite_inspector_number(x.as_deref())?,
+                parse_finite_inspector_number(y.as_deref())?,
+            ]))
+        }
+        IntentLiteralSchema::Quantity(unit) => {
+            require_scalar_inspector_control(
+                control,
+                Some(design_projection::intent_unit_key(unit)),
+            )?;
+            let value = parse_finite_inspector_number(Some(inspector_text_submission(control)?))?;
+            Ok(IntentLiteral::Quantity { value, unit })
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn require_scalar_inspector_control(
+    control: &ProjectionalInspectorControl,
+    unit: Option<&str>,
+) -> Result<(), String> {
+    if control.component.is_some() || control.unit.as_deref() != unit {
+        return Err("the Inspector scalar control coordinate is malformed".into());
+    }
+    Ok(())
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn inspector_text_submission(control: &ProjectionalInspectorControl) -> Result<&str, String> {
+    let ProjectionalInspectorSubmission::Text(value) = &control.submission else {
+        return Err("the Inspector control did not submit a text value".into());
+    };
+    Ok(value)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn parse_finite_inspector_number(value: Option<&str>) -> Result<f64, String> {
+    let value: f64 = value
+        .ok_or_else(|| "the Inspector numeric value is incomplete".to_owned())?
+        .parse()
+        .map_err(|_| "the Inspector numeric value is invalid".to_owned())?;
+    if !value.is_finite() {
+        return Err("the Inspector numeric value must be finite".into());
+    }
+    Ok(value)
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -4323,6 +4666,62 @@ pub(crate) mod wasm {
         element.get_attribute("data-intent-node")?.parse().ok()
     }
 
+    fn projectional_inspector_dom_control(
+        element: &Element,
+    ) -> Option<super::ProjectionalInspectorControl> {
+        let inspector = element
+            .closest("[data-intent-inspector-node]")
+            .ok()
+            .flatten()?;
+        let component = element.get_attribute("data-intent-component");
+        let submission = if component.is_some() {
+            let fieldset = element.closest("fieldset").ok().flatten();
+            let component_value = |name: &str| {
+                fieldset
+                    .as_ref()?
+                    .query_selector(&format!("[data-intent-component=\"{name}\"]"))
+                    .ok()
+                    .flatten()?
+                    .dyn_into::<HtmlInputElement>()
+                    .ok()
+                    .map(|input| input.value())
+            };
+            super::ProjectionalInspectorSubmission::Point {
+                x: component_value("x"),
+                y: component_value("y"),
+            }
+        } else if let Ok(input) = element.clone().dyn_into::<HtmlInputElement>() {
+            if input.type_() == "checkbox" {
+                super::ProjectionalInspectorSubmission::Checked(input.checked())
+            } else {
+                super::ProjectionalInspectorSubmission::Text(input.value())
+            }
+        } else if let Ok(select) = element.clone().dyn_into::<HtmlSelectElement>() {
+            super::ProjectionalInspectorSubmission::Text(select.value())
+        } else if let Ok(textarea) = element.clone().dyn_into::<HtmlTextAreaElement>() {
+            super::ProjectionalInspectorSubmission::Text(textarea.value())
+        } else {
+            return None;
+        };
+        Some(super::ProjectionalInspectorControl {
+            stamp: super::ProjectionalInspectorStamp {
+                session: inspector.get_attribute("data-intent-session"),
+                revision: inspector.get_attribute("data-intent-revision"),
+                digest: inspector.get_attribute("data-intent-digest"),
+            },
+            edit: element.get_attribute("data-intent-edit"),
+            node: element.get_attribute("data-intent-node"),
+            field: element.get_attribute("data-intent-field"),
+            port: element.get_attribute("data-intent-port"),
+            leaf: element.get_attribute("data-intent-leaf"),
+            port_kind: element.get_attribute("data-intent-port-kind"),
+            schema: element.get_attribute("data-intent-schema"),
+            unit: element.get_attribute("data-intent-unit"),
+            component,
+            submission,
+        })
+    }
+
     fn install_projectional_events(
         document: &Document,
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
@@ -4754,12 +5153,51 @@ pub(crate) mod wasm {
                 let _ = render_projectional(&change_document, &change_workbench);
                 return;
             }
+            let Some(edit) = target.get_attribute("data-intent-edit") else {
+                return;
+            };
+            let Some(control) = projectional_inspector_dom_control(&target) else {
+                return;
+            };
+            if edit != "name" {
+                let mut wb = change_workbench.borrow_mut();
+                let dispatch =
+                    super::dispatch_projectional_inspector_control(wb.editor_mut(), &control);
+                let committed = dispatch.saves_workspace();
+                match dispatch {
+                    super::ProjectionalInspectorDispatch::Unchanged => return,
+                    super::ProjectionalInspectorDispatch::Committed(disposition) => {
+                        wb.notice = match disposition {
+                            geosolve_sketch_intent::IntentPlanDisposition::Accepted => {
+                                "Inspector edit accepted".into()
+                            }
+                            geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed => {
+                                "Inspector edit retained; prior accepted scene remains visible"
+                                    .into()
+                            }
+                            geosolve_sketch_intent::IntentPlanDisposition::OrganizationOnly => {
+                                "Inspector organization edit accepted".into()
+                            }
+                        };
+                        reconcile_projectional_authoring(&mut wb);
+                        save_projectional(&wb);
+                    }
+                    super::ProjectionalInspectorDispatch::Rejected(error) => {
+                        wb.notice = error;
+                    }
+                }
+                let notice = wb.notice.clone();
+                drop(wb);
+                if committed {
+                    let _ = render_projectional(&change_document, &change_workbench);
+                } else if let Ok(status) = required(&change_document, "wb-status-message") {
+                    status.set_text_content(Some(&notice));
+                }
+                return;
+            }
             let Ok(input) = target.dyn_into::<HtmlInputElement>() else {
                 return;
             };
-            if input.get_attribute("data-intent-edit").as_deref() != Some("name") {
-                return;
-            }
             let Some(node) = input
                 .get_attribute("data-intent-node")
                 .and_then(|value| value.parse::<NodeId>().ok())
@@ -4767,6 +5205,16 @@ pub(crate) mod wasm {
                 return;
             };
             let mut wb = change_workbench.borrow_mut();
+            let projection = wb.editor().workbench_projection();
+            let current_inspector = wb.editor().selected_inspector(&projection);
+            if !control.stamp.matches(projection.identity)
+                || current_inspector.as_ref().map(|inspector| inspector.node) != Some(node)
+            {
+                wb.notice = "the Inspector name control belongs to a stale projection".into();
+                drop(wb);
+                let _ = render_projectional(&change_document, &change_workbench);
+                return;
+            }
             let name = match IntentKey::new(input.value()) {
                 Ok(name) => name,
                 Err(error) => {
@@ -4787,25 +5235,18 @@ pub(crate) mod wasm {
             if unchanged {
                 return;
             }
-            if let Ok(viewport) = required(&change_document, "wb-viewport") {
-                cancel_projectional_interaction(
-                    &viewport,
-                    &mut wb,
-                    None,
-                    true,
-                    "Active interaction canceled before the Inspector edit",
-                );
-            }
             let patch = IntentPatch::new(
                 wb.editor().coordinator().intent().identity(),
                 IntentPatchPolicy::RequireAccepted,
                 vec![IntentPatchOperation::RenameNode { node, name }],
             );
-            wb.notice = wb.editor_mut().apply_patch(patch).map_or_else(
-                |error| error.to_string(),
-                |_| "Design declaration renamed".into(),
-            );
-            save_projectional(&wb);
+            match wb.editor_mut().apply_patch(patch) {
+                Ok(_) => {
+                    wb.notice = "Design declaration renamed".into();
+                    save_projectional(&wb);
+                }
+                Err(error) => wb.notice = error.to_string(),
+            }
             drop(wb);
             let _ = render_projectional(&change_document, &change_workbench);
         });
@@ -11529,11 +11970,12 @@ mod tests {
         FeatureAuthoringPreviewMetadata, FeatureAuthoringStage, FeatureAuthoringState,
         FeatureAuthoringTool, GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus,
         GeometryInteractionPolicy, GeometryPickScope, GeometryToolVariant, GeometryVisibility,
-        Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
-        OffsetAuthoringWarningKind, PickTolerance, PointerInput, ProjectionalEditorSession,
-        ProjectionalIntentCoordinator, RetainedEditorCoordinator, SceneAnnotationGeometry,
-        SceneAnnotationKind, SceneAnnotationOccurrence, SceneAnnotationVisibility,
-        SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
+        IntentInspectorField, IntentInspectorProjection, Modifiers, OffsetAuthoringOutcome,
+        OffsetAuthoringState, OffsetAuthoringWarning, OffsetAuthoringWarningKind, PickTolerance,
+        PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator,
+        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
+        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneConstraintGlyph,
+        SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -11545,9 +11987,10 @@ mod tests {
         SketchAcceptedStateIdentity, SketchDocument,
     };
     use geosolve_sketch_intent::{
-        GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-        IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
-        IntentPortSelector, IntentSessionId, IntentUnit, LeafField,
+        GeometryRecipeKind, IntentDefinitionFieldSchema, IntentFieldKey, IntentKey, IntentLiteral,
+        IntentLiteralSchema, IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation,
+        IntentPatchPolicy, IntentPlanDisposition, IntentPortRole, IntentPortSelector,
+        IntentSessionId, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
     };
 
     use super::persistence::WorkspaceSnapshot;
@@ -11559,15 +12002,17 @@ mod tests {
         CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
         DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
         ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
-        PointerMoveQueue, ProjectionalConstructionDispatch, ProjectionalPointerMoveQueue,
-        ReproductionFocusReturn, WorkbenchDocumentAuthority, WorkbenchPresentationCounters,
-        WorkbenchPresentationEvent, WorkbenchRenderScope, annotation_family_name,
-        annotation_inspector_presentation, apply_native_fillet_profile,
+        PointerMoveQueue, ProjectionalConstructionDispatch, ProjectionalInspectorControl,
+        ProjectionalInspectorDispatch, ProjectionalInspectorStamp, ProjectionalInspectorSubmission,
+        ProjectionalPointerMoveQueue, ReproductionFocusReturn, WorkbenchDocumentAuthority,
+        WorkbenchPresentationCounters, WorkbenchPresentationEvent, WorkbenchRenderScope,
+        annotation_family_name, annotation_inspector_presentation, apply_native_fillet_profile,
         apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
         canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
         compose_editor_scene, coordinate_hud, current_problem_items,
         curve_control_inspector_detail, curve_control_inspector_markup,
-        dispatch_projectional_authoring_application, dispatch_projectional_construction_effects,
+        decode_projectional_inspector_control, dispatch_projectional_authoring_application,
+        dispatch_projectional_construction_effects, dispatch_projectional_inspector_control,
         draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
         foreground_overlay_escape_owner, geometry_sweep_flip_available,
         geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
@@ -11728,6 +12173,616 @@ mod tests {
             .expect("spawn projectional browser test")
             .join()
             .expect("projectional browser test thread");
+    }
+
+    fn projectional_inspector_stamp(identity: IntentSessionIdentity) -> ProjectionalInspectorStamp {
+        ProjectionalInspectorStamp {
+            session: Some(identity.session.to_string()),
+            revision: Some(identity.revision.to_string()),
+            digest: Some(identity.digest.to_string()),
+        }
+    }
+
+    fn instance_inspector_control(
+        editor: &ProjectionalEditorSession,
+        field: LeafField,
+        current: Option<f64>,
+        value: &str,
+    ) -> ProjectionalInspectorControl {
+        let projection = editor.workbench_projection();
+        let inspector = editor.selected_inspector(&projection).unwrap();
+        let (leaf, port_kind) = inspector
+            .fields
+            .iter()
+            .find_map(|candidate| match candidate {
+                IntentInspectorField::Instance {
+                    leaf,
+                    port_kind,
+                    value,
+                } if leaf.field == field
+                    && current.is_none_or(|expected| {
+                        matches!(
+                            value,
+                            Some(IntentLiteral::Quantity { value, .. })
+                                if value.to_bits() == expected.to_bits()
+                        )
+                    }) =>
+                {
+                    Some((*leaf, *port_kind))
+                }
+                _ => None,
+            })
+            .unwrap();
+        let current = inspector
+            .fields
+            .iter()
+            .find_map(|candidate| match candidate {
+                IntentInspectorField::Instance {
+                    leaf: candidate,
+                    value,
+                    ..
+                } if *candidate == leaf => value.as_ref(),
+                _ => None,
+            });
+        let schema = super::design_projection::literal_schema_for_instance(field, current);
+        let unit = match schema {
+            IntentLiteralSchema::Quantity(unit) => {
+                Some(super::design_projection::intent_unit_key(unit).to_owned())
+            }
+            _ => None,
+        };
+        ProjectionalInspectorControl {
+            stamp: projectional_inspector_stamp(projection.identity),
+            edit: Some("instance".into()),
+            node: Some(leaf.node.to_string()),
+            field: None,
+            port: Some(leaf.port.to_string()),
+            leaf: Some(
+                match leaf.field {
+                    LeafField::X => "x",
+                    LeafField::Y => "y",
+                    LeafField::Value => "value",
+                    LeafField::Angle => "angle",
+                    LeafField::Weight => "weight",
+                    LeafField::Parameter => "parameter",
+                }
+                .into(),
+            ),
+            port_kind: Some(format!("{port_kind:?}")),
+            schema: Some(super::design_projection::literal_schema_key(schema)),
+            unit,
+            component: None,
+            submission: ProjectionalInspectorSubmission::Text(value.into()),
+        }
+    }
+
+    fn current_definition_inspector_control(
+        editor: &ProjectionalEditorSession,
+        field: &str,
+        submission: ProjectionalInspectorSubmission,
+    ) -> ProjectionalInspectorControl {
+        let projection = editor.workbench_projection();
+        let inspector = editor.selected_inspector(&projection).unwrap();
+        let schema = inspector
+            .fields
+            .iter()
+            .find_map(|candidate| match candidate {
+                IntentInspectorField::Definition { schema, .. }
+                    if schema.field.0.as_str() == field =>
+                {
+                    Some(schema.literal)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let mut control = definition_inspector_control(inspector.node, field, schema, submission);
+        control.stamp = projectional_inspector_stamp(projection.identity);
+        control
+    }
+
+    fn suppression_inspector_control(
+        editor: &ProjectionalEditorSession,
+        suppressed: bool,
+    ) -> ProjectionalInspectorControl {
+        let projection = editor.workbench_projection();
+        let inspector = editor.selected_inspector(&projection).unwrap();
+        ProjectionalInspectorControl {
+            stamp: projectional_inspector_stamp(projection.identity),
+            edit: Some("suppressed".into()),
+            node: Some(inspector.node.to_string()),
+            field: None,
+            port: None,
+            leaf: None,
+            port_kind: None,
+            schema: Some("boolean".into()),
+            unit: None,
+            component: None,
+            submission: ProjectionalInspectorSubmission::Checked(suppressed),
+        }
+    }
+
+    fn definition_inspector_control(
+        node: NodeId,
+        field: &str,
+        schema: IntentLiteralSchema,
+        submission: ProjectionalInspectorSubmission,
+    ) -> ProjectionalInspectorControl {
+        ProjectionalInspectorControl {
+            stamp: ProjectionalInspectorStamp::default(),
+            edit: Some("definition".into()),
+            node: Some(node.to_string()),
+            field: Some(field.into()),
+            port: None,
+            leaf: None,
+            port_kind: None,
+            schema: Some(super::design_projection::literal_schema_key(schema)),
+            unit: match schema {
+                IntentLiteralSchema::Quantity(unit) => {
+                    Some(super::design_projection::intent_unit_key(unit).to_owned())
+                }
+                _ => None,
+            },
+            component: None,
+            submission,
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one table-driven browser regression reviews every closed Inspector literal family together"
+    )]
+    fn projectional_browser_inspector_decodes_every_schema_control_family() {
+        let node = NodeId::from_raw(0x8308_1101);
+        let schemas = [
+            ("enabled", IntentLiteralSchema::Boolean),
+            (
+                "distance",
+                IntentLiteralSchema::Quantity(IntentUnit::Length),
+            ),
+            ("winding", IntentLiteralSchema::Integer),
+            ("degree", IntentLiteralSchema::Natural),
+            ("branch", IntentLiteralSchema::Enum),
+            ("digest", IntentLiteralSchema::Text),
+            ("origin", IntentLiteralSchema::Point),
+        ];
+        let inspector = IntentInspectorProjection {
+            node,
+            symbol: IntentKey::new("fixture").unwrap(),
+            name: IntentKey::new("Fixture").unwrap(),
+            kind: IntentNodeKind::Annotation,
+            suppressed: false,
+            retained_failure: false,
+            inputs: Vec::new(),
+            fields: schemas
+                .iter()
+                .map(|(field, literal)| IntentInspectorField::Definition {
+                    schema: IntentDefinitionFieldSchema {
+                        field: IntentFieldKey(IntentKey::new(*field).unwrap()),
+                        literal: *literal,
+                        required: false,
+                    },
+                    value: None,
+                })
+                .collect(),
+        };
+        let cases = [
+            (
+                "enabled",
+                IntentLiteralSchema::Boolean,
+                ProjectionalInspectorSubmission::Checked(true),
+                IntentLiteral::Boolean(true),
+            ),
+            (
+                "distance",
+                IntentLiteralSchema::Quantity(IntentUnit::Length),
+                ProjectionalInspectorSubmission::Text("12.5".into()),
+                IntentLiteral::Quantity {
+                    value: 12.5,
+                    unit: IntentUnit::Length,
+                },
+            ),
+            (
+                "winding",
+                IntentLiteralSchema::Integer,
+                ProjectionalInspectorSubmission::Text("-3".into()),
+                IntentLiteral::Integer(-3),
+            ),
+            (
+                "degree",
+                IntentLiteralSchema::Natural,
+                ProjectionalInspectorSubmission::Text("4".into()),
+                IntentLiteral::Natural(4),
+            ),
+            (
+                "branch",
+                IntentLiteralSchema::Enum,
+                ProjectionalInspectorSubmission::Text("clockwise".into()),
+                IntentLiteral::Enum(IntentKey::new("clockwise").unwrap()),
+            ),
+            (
+                "digest",
+                IntentLiteralSchema::Text,
+                ProjectionalInspectorSubmission::Text("topology-8308".into()),
+                IntentLiteral::Text(IntentKey::new("topology-8308").unwrap()),
+            ),
+            (
+                "origin",
+                IntentLiteralSchema::Point,
+                ProjectionalInspectorSubmission::Point {
+                    x: Some("1.25".into()),
+                    y: Some("-2.5".into()),
+                },
+                IntentLiteral::Point([1.25, -2.5]),
+            ),
+        ];
+        for (field, schema, submission, expected) in cases {
+            let mut control = definition_inspector_control(node, field, schema, submission);
+            if schema == IntentLiteralSchema::Point {
+                control.component = Some("x".into());
+            }
+            let decoded = decode_projectional_inspector_control(&inspector, &control)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                decoded.0,
+                geosolve_constraint_editor::IntentInspectorEditTarget::Definition {
+                    field: IntentFieldKey(IntentKey::new(field).unwrap()),
+                }
+            );
+            assert_eq!(
+                decoded.1,
+                geosolve_constraint_editor::IntentInspectorEditValue::Literal { literal: expected }
+            );
+        }
+
+        let suppression = ProjectionalInspectorControl {
+            stamp: ProjectionalInspectorStamp::default(),
+            edit: Some("suppressed".into()),
+            node: Some(node.to_string()),
+            field: None,
+            port: None,
+            leaf: None,
+            port_kind: None,
+            schema: Some("boolean".into()),
+            unit: None,
+            component: None,
+            submission: ProjectionalInspectorSubmission::Checked(true),
+        };
+        assert!(
+            decode_projectional_inspector_control(&inspector, &suppression)
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    fn projectional_circle_inspector_fixture() -> ProjectionalEditorSession {
+        let document = DocumentId(PersistentId::from_u128(0x8308_1201_u128 << 64));
+        let mut coordinator = ProjectionalIntentCoordinator::empty(
+            IntentSessionId::from_raw(0x8308_1201),
+            ColdIntentMaterializer::with_default_policy(document, 1.0).unwrap(),
+        )
+        .unwrap();
+        let selector = |role| IntentPortSelector::Node { role, index: 0 };
+        let length = |value| IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Length,
+        };
+        let draft = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::CenterRadiusCircle,
+            },
+            IntentKey::new("circle.main").unwrap(),
+        )
+        .with_instance_leaf(selector(IntentPortRole::Center), LeafField::X, length(0.0))
+        .with_instance_leaf(selector(IntentPortRole::Center), LeafField::Y, length(0.0))
+        .with_instance_leaf(
+            selector(IntentPortRole::Target),
+            LeafField::Value,
+            length(2.0),
+        );
+        let outcome = coordinator
+            .apply_patch(IntentPatch::new(
+                coordinator.intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::CreateNode {
+                    alias: IntentKey::new("circle").unwrap(),
+                    draft: Box::new(draft),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+        let node = *coordinator.intent().graph().nodes().keys().next().unwrap();
+        let mut editor = ProjectionalEditorSession::new(coordinator);
+        assert!(editor.set_selected_declaration(Some(node)));
+        editor
+    }
+
+    fn accepted_circle_radius(editor: &ProjectionalEditorSession) -> f64 {
+        let document = editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document();
+        let CurveDefinition::Circle { radius, .. } = document.curves()[0].definition else {
+            panic!("Inspector fixture must materialize a circle");
+        };
+        document.scalar(radius).unwrap().value
+    }
+
+    #[test]
+    fn projectional_browser_inspector_commits_accepted_edits_once_and_undo_redo_restores_them() {
+        run_projectional_test_with_large_stack("projectional-browser-inspector-accepted", || {
+            let mut editor = projectional_circle_inspector_fixture();
+            let history_before = editor
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+
+            let unchanged = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "2.0");
+            assert_eq!(
+                dispatch_projectional_inspector_control(&mut editor, &unchanged),
+                ProjectionalInspectorDispatch::Unchanged
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before
+            );
+
+            let edit = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "3.5");
+            let dispatch = dispatch_projectional_inspector_control(&mut editor, &edit);
+            assert_eq!(
+                dispatch,
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
+            );
+            assert!(dispatch.saves_workspace());
+            assert_eq!(accepted_circle_radius(&editor).to_bits(), 3.5_f64.to_bits());
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before + 1
+            );
+
+            assert!(editor.undo().unwrap().is_some());
+            assert_eq!(accepted_circle_radius(&editor).to_bits(), 2.0_f64.to_bits());
+            assert!(editor.redo().unwrap().is_some());
+            assert_eq!(accepted_circle_radius(&editor).to_bits(), 3.5_f64.to_bits());
+
+            let suppression = suppression_inspector_control(&editor, true);
+            assert_eq!(
+                dispatch_projectional_inspector_control(&mut editor, &suppression),
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
+            );
+            assert!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node(editor.selected_declaration().unwrap())
+                    .unwrap()
+                    .suppressed
+            );
+            assert!(editor.undo().unwrap().is_some());
+            assert!(
+                !editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node(editor.selected_declaration().unwrap())
+                    .unwrap()
+                    .suppressed
+            );
+        });
+    }
+
+    #[test]
+    fn projectional_browser_inspector_definition_and_point_component_edits_are_typed() {
+        run_projectional_test_with_large_stack("projectional-browser-inspector-definition", || {
+            let mut editor = projectional_authoring_fixture();
+            let segment = editor
+                .coordinator()
+                .intent()
+                .graph()
+                .nodes()
+                .iter()
+                .find_map(|(node, declaration)| {
+                    matches!(
+                        declaration.kind,
+                        IntentNodeKind::Geometry {
+                            recipe: GeometryRecipeKind::Segment
+                        }
+                    )
+                    .then_some(*node)
+                })
+                .unwrap();
+            assert!(editor.set_selected_declaration(Some(segment)));
+            let mut branch = current_definition_inspector_control(
+                &editor,
+                "branch_direction",
+                ProjectionalInspectorSubmission::Point {
+                    x: Some("0".into()),
+                    y: Some("1".into()),
+                },
+            );
+            branch.component = Some("y".into());
+            assert_eq!(
+                dispatch_projectional_inspector_control(&mut editor, &branch),
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node(segment)
+                    .unwrap()
+                    .fields
+                    .get(&IntentFieldKey(IntentKey::new("branch_direction").unwrap())),
+                Some(&IntentLiteral::Point([0.0, 1.0]))
+            );
+
+            let role = current_definition_inspector_control(
+                &editor,
+                "role",
+                ProjectionalInspectorSubmission::Text("construction".into()),
+            );
+            assert_eq!(
+                dispatch_projectional_inspector_control(&mut editor, &role),
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node(segment)
+                    .unwrap()
+                    .fields
+                    .get(&IntentFieldKey(IntentKey::new("role").unwrap())),
+                Some(&IntentLiteral::Enum(
+                    IntentKey::new("construction").unwrap()
+                ))
+            );
+        });
+    }
+
+    #[test]
+    fn projectional_browser_inspector_retains_invalid_intent_over_accepted_scene() {
+        run_projectional_test_with_large_stack("projectional-browser-inspector-retained", || {
+            let mut editor = projectional_circle_inspector_fixture();
+            let accepted_before = editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .session
+                .design_document()
+                .clone();
+            let history_before = editor
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+            let invalid = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "0");
+            let dispatch = dispatch_projectional_inspector_control(&mut editor, &invalid);
+            assert_eq!(
+                dispatch,
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::RetainedFailed)
+            );
+            assert!(dispatch.saves_workspace());
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before + 1
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+                    .session
+                    .design_document(),
+                &accepted_before
+            );
+            assert!(editor.undo().unwrap().is_some());
+            assert_eq!(accepted_circle_radius(&editor).to_bits(), 2.0_f64.to_bits());
+            assert!(editor.redo().unwrap().is_some());
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+                    .session
+                    .design_document(),
+                &accepted_before
+            );
+        });
+    }
+
+    #[test]
+    fn projectional_browser_inspector_rejects_wrong_and_stale_controls_without_history() {
+        run_projectional_test_with_large_stack("projectional-browser-inspector-auth", || {
+            let mut editor = projectional_circle_inspector_fixture();
+            let stale = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "4");
+            let history_before = editor
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+
+            let mut wrong_unit = stale.clone();
+            wrong_unit.unit = Some("angle".into());
+            let rejected = dispatch_projectional_inspector_control(&mut editor, &wrong_unit);
+            assert!(matches!(
+                rejected,
+                ProjectionalInspectorDispatch::Rejected(_)
+            ));
+            assert!(!rejected.saves_workspace());
+
+            let mut wrong_node = stale.clone();
+            wrong_node.node = Some(NodeId::from_raw(0xdead).to_string());
+            let rejected = dispatch_projectional_inspector_control(&mut editor, &wrong_node);
+            assert!(matches!(
+                rejected,
+                ProjectionalInspectorDispatch::Rejected(_)
+            ));
+            assert!(!rejected.saves_workspace());
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before
+            );
+
+            let current = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "3");
+            assert!(matches!(
+                dispatch_projectional_inspector_control(&mut editor, &current),
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
+            ));
+            let history_after_current = editor
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+            let rejected = dispatch_projectional_inspector_control(&mut editor, &stale);
+            assert!(matches!(
+                rejected,
+                ProjectionalInspectorDispatch::Rejected(_)
+            ));
+            assert!(!rejected.saves_workspace());
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_after_current
+            );
+            assert_eq!(accepted_circle_radius(&editor).to_bits(), 3.0_f64.to_bits());
+        });
     }
 
     #[test]

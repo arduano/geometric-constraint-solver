@@ -15,7 +15,7 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch_intent::{
     IntentLiteral, IntentLiteralSchema, IntentNodeKind, IntentPatchOperationKind,
-    IntentPlanDisposition, LeafField, NodeId,
+    IntentPlanDisposition, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -246,20 +246,29 @@ fn push_history_row(
     );
 }
 
-pub(crate) fn inspector_markup(inspector: Option<&IntentInspectorProjection>) -> String {
+pub(crate) fn inspector_markup(
+    inspector: Option<&IntentInspectorProjection>,
+    identity: IntentSessionIdentity,
+) -> String {
     let Some(inspector) = inspector else {
         return String::new();
     };
     let mut markup = format!(
         concat!(
             "<section class=\"wb-intent-inspector\" data-intent-inspector-node=\"{}\" ",
+            "data-intent-session=\"{}\" data-intent-revision=\"{}\" ",
+            "data-intent-digest=\"{}\" ",
             "data-intent-state=\"{}\"><h3>{}</h3><p>{}</p>",
             "<label>Display name<input type=\"text\" data-intent-edit=\"name\" ",
             "data-intent-node=\"{}\" value=\"{}\"></label>",
             "<label class=\"wb-option-check\"><input type=\"checkbox\" ",
-            "data-intent-edit=\"suppressed\" data-intent-node=\"{}\"{}> Suppressed</label>"
+            "data-intent-edit=\"suppressed\" data-intent-node=\"{}\" ",
+            "data-intent-schema=\"boolean\"{}> Suppressed</label>"
         ),
         inspector.node,
+        identity.session,
+        identity.revision,
+        identity.digest,
         if inspector.retained_failure {
             "invalid"
         } else {
@@ -309,7 +318,7 @@ pub(crate) fn inspector_markup(inspector: Option<&IntentInspectorProjection>) ->
                     leaf_field_label(leaf.field),
                     "instance",
                     &identity,
-                    literal_schema_for_leaf(leaf.field),
+                    literal_schema_for_instance(leaf.field, value.as_ref()),
                     value.as_ref(),
                 );
             }
@@ -327,94 +336,134 @@ fn push_optional_literal_editor(
     schema: IntentLiteralSchema,
     literal: Option<&IntentLiteral>,
 ) {
-    let Some(literal) = literal else {
-        let _ = write!(
-            markup,
-            "<label>{}<input type=\"text\" data-intent-edit=\"{}\" {} data-intent-literal=\"{:?}\" value=\"\" placeholder=\"Not set\"></label>",
-            escape_html(label),
-            owner,
-            identity,
-            schema,
-        );
-        return;
-    };
-    match literal {
-        IntentLiteral::Quantity { value, unit } => {
+    let schema_key = literal_schema_key(schema);
+    match schema {
+        IntentLiteralSchema::Quantity(unit) => {
+            let value = match literal {
+                Some(IntentLiteral::Quantity { value, .. }) => value.to_string(),
+                _ => String::new(),
+            };
             let _ = write!(
                 markup,
-                "<label>{}<input type=\"number\" step=\"any\" data-intent-edit=\"{}\" {} data-intent-unit=\"{:?}\" value=\"{}\"></label>",
+                "<label>{}<input type=\"number\" step=\"any\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" data-intent-unit=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
                 escape_html(label),
                 owner,
                 identity,
-                unit,
+                schema_key,
+                intent_unit_key(unit),
                 value,
             );
         }
-        IntentLiteral::Boolean(value) => {
+        IntentLiteralSchema::Boolean => {
+            let checked = matches!(literal, Some(IntentLiteral::Boolean(true)));
             let _ = write!(
                 markup,
-                "<label class=\"wb-option-check\"><input type=\"checkbox\" data-intent-edit=\"{}\" {}{}> {}</label>",
+                "<label class=\"wb-option-check\"><input type=\"checkbox\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\"{}> {}</label>",
                 owner,
                 identity,
-                if *value { " checked" } else { "" },
+                schema_key,
+                if checked { " checked" } else { "" },
                 escape_html(label),
             );
         }
-        IntentLiteral::Enum(value) | IntentLiteral::Text(value) => {
+        IntentLiteralSchema::Enum | IntentLiteralSchema::Text => {
+            let value = match literal {
+                Some(IntentLiteral::Enum(value) | IntentLiteral::Text(value)) => value.as_str(),
+                _ => "",
+            };
             let _ = write!(
                 markup,
-                "<label>{}<input type=\"text\" data-intent-edit=\"{}\" {} value=\"{}\"></label>",
+                "<label>{}<input type=\"text\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
                 escape_html(label),
                 owner,
                 identity,
-                escape_attribute(value.as_str()),
+                schema_key,
+                escape_attribute(value),
             );
         }
-        IntentLiteral::Integer(value) => {
-            push_integer_editor(markup, owner, identity, label, *value);
+        IntentLiteralSchema::Integer => {
+            let value = match literal {
+                Some(IntentLiteral::Integer(value)) => value.to_string(),
+                _ => String::new(),
+            };
+            push_integer_editor(markup, owner, identity, label, &schema_key, &value);
         }
-        IntentLiteral::Natural(value) => {
-            push_integer_editor(markup, owner, identity, label, *value);
+        IntentLiteralSchema::Natural => {
+            let value = match literal {
+                Some(IntentLiteral::Natural(value)) => value.to_string(),
+                _ => String::new(),
+            };
+            push_integer_editor(markup, owner, identity, label, &schema_key, &value);
         }
-        IntentLiteral::Point([x, y]) => {
+        IntentLiteralSchema::Point => {
+            let [x, y] = match literal {
+                Some(IntentLiteral::Point(point)) => point.map(|value| value.to_string()),
+                _ => [String::new(), String::new()],
+            };
             let _ = write!(
                 markup,
                 concat!(
                     "<fieldset><legend>{}</legend><input type=\"number\" step=\"any\" ",
-                    "data-intent-edit=\"{}\" data-intent-component=\"x\" {} value=\"{}\">",
+                    "data-intent-edit=\"{}\" data-intent-component=\"x\" {} ",
+                    "data-intent-schema=\"{}\" value=\"{}\" placeholder=\"x\">",
                     "<input type=\"number\" step=\"any\" data-intent-edit=\"{}\" ",
-                    "data-intent-component=\"y\" {} value=\"{}\"></fieldset>"
+                    "data-intent-component=\"y\" {} data-intent-schema=\"{}\" ",
+                    "value=\"{}\" placeholder=\"y\"></fieldset>"
                 ),
                 escape_html(label),
                 owner,
                 identity,
+                schema_key,
                 x,
                 owner,
                 identity,
+                schema_key,
                 y,
             );
         }
     }
 }
 
-fn push_integer_editor<T: std::fmt::Display>(
+fn push_integer_editor(
     markup: &mut String,
     owner: &str,
     identity: &str,
     label: &str,
-    value: T,
+    schema_key: &str,
+    value: &str,
 ) {
     let _ = write!(
         markup,
-        "<label>{}<input type=\"number\" step=\"1\" data-intent-edit=\"{}\" {} value=\"{}\"></label>",
+        "<label>{}<input type=\"number\" step=\"1\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
         escape_html(label),
         owner,
         identity,
+        schema_key,
         value,
     );
 }
 
-const fn literal_schema_for_leaf(field: LeafField) -> IntentLiteralSchema {
+pub(crate) const fn intent_unit_key(unit: IntentUnit) -> &'static str {
+    match unit {
+        IntentUnit::Length => "length",
+        IntentUnit::Angle => "angle",
+        IntentUnit::Dimensionless => "dimensionless",
+    }
+}
+
+pub(crate) fn literal_schema_key(schema: IntentLiteralSchema) -> String {
+    match schema {
+        IntentLiteralSchema::Boolean => "boolean".to_owned(),
+        IntentLiteralSchema::Integer => "integer".to_owned(),
+        IntentLiteralSchema::Natural => "natural".to_owned(),
+        IntentLiteralSchema::Text => "text".to_owned(),
+        IntentLiteralSchema::Enum => "enum".to_owned(),
+        IntentLiteralSchema::Point => "point".to_owned(),
+        IntentLiteralSchema::Quantity(unit) => format!("quantity:{}", intent_unit_key(unit)),
+    }
+}
+
+pub(crate) const fn literal_schema_for_leaf(field: LeafField) -> IntentLiteralSchema {
     use geosolve_sketch_intent::IntentUnit;
     match field {
         LeafField::X | LeafField::Y => IntentLiteralSchema::Quantity(IntentUnit::Length),
@@ -424,6 +473,19 @@ const fn literal_schema_for_leaf(field: LeafField) -> IntentLiteralSchema {
             IntentLiteralSchema::Quantity(IntentUnit::Dimensionless)
         }
     }
+}
+
+pub(crate) fn literal_schema_for_instance(
+    field: LeafField,
+    value: Option<&IntentLiteral>,
+) -> IntentLiteralSchema {
+    value.map_or_else(
+        || literal_schema_for_leaf(field),
+        |value| match value {
+            IntentLiteral::Quantity { unit, .. } => IntentLiteralSchema::Quantity(*unit),
+            _ => literal_schema_for_leaf(field),
+        },
+    )
 }
 
 fn node_family_label(kind: &IntentNodeKind) -> &'static str {
@@ -595,7 +657,7 @@ mod tests {
         let source = structured_source_markup(&projection, selection);
         let history = history_markup(&projection);
         let inspector = projection.inspector(&session, node);
-        let inspector = inspector_markup(inspector.as_ref());
+        let inspector = inspector_markup(inspector.as_ref(), projection.identity);
         assert_eq!(declaration_count(&projection), 1);
         assert!(outline.contains(&format!("data-intent-node=\"{node}\"")));
         assert!(outline.contains("aria-selected=\"true\""));
@@ -606,6 +668,10 @@ mod tests {
         assert!(history.contains("Create"));
         assert!(!history.contains("data-wb-action"));
         assert!(inspector.contains("data-intent-edit=\"name\""));
+        assert!(inspector.contains(&format!(
+            "data-intent-digest=\"{}\"",
+            projection.identity.digest
+        )));
         assert_eq!(
             inspector.matches("data-intent-edit=\"instance\"").count(),
             2
