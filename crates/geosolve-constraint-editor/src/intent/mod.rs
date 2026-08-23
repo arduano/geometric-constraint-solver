@@ -10,20 +10,28 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch::{
-    CurveDefinition, CurveId, CurveSpan, DesignCurve, DesignPoint, DesignPointId, DesignScalarId,
-    DocumentConstraint, DocumentConstraintDefinition, DocumentConstraintId, DocumentError,
-    DocumentExternalBindingId, DocumentId, DocumentParameterId, DocumentSessionError,
-    DocumentSolveRequest, DocumentSourceId, PersistentId, RetainedSketchDocumentSession,
-    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchHardValidity, SketchMaterializationBatch,
-    SketchMaterializationReservationAllocator, SketchPersistentIdentityHighWater, SolverConfig,
+    ContactId, CurveDefinition, CurveId, CurveSpan, DesignCurve, DesignPoint, DesignPointId,
+    DesignScalar, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentCenterRef,
+    DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis, DocumentDimension,
+    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
+    DocumentDirectionSense, DocumentError, DocumentExternalBindingId, DocumentHyperbolaBranch,
+    DocumentId, DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef,
+    DocumentParameterId, DocumentSessionError, DocumentSolveRequest, DocumentSourceId,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PersistentId, RetainedSketchDocumentSession,
+    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarDomain, ScalarUnit, SketchHardValidity,
+    SketchMaterializationBatch, SketchMaterializationReservationAllocator,
+    SketchPersistentIdentityHighWater, SolverConfig,
 };
 use geosolve_sketch_intent::{
-    ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentCandidate, IntentEvaluation,
-    IntentEvaluationFailure, IntentEvaluationFailureKind, IntentGraphError, IntentIdentityFlow,
-    IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNode, IntentNodeKind, IntentPort,
-    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservationRecord,
-    IntentReservationState, IntentSemanticIdentity, IntentUnit, LeafField, LeafRef,
-    MaterializationEvidence, NodeId, ReservationId,
+    ConstraintKind, DimensionKind, GeometryRecipeKind, InputRole, InputSlot,
+    IntentAcceptedAuthority, IntentCandidate, IntentEvaluation, IntentEvaluationFailure,
+    IntentEvaluationFailureKind, IntentExternalInputs, IntentGraph, IntentGraphError,
+    IntentIdentityFlow, IntentInstanceState, IntentKey, IntentLiteral, IntentNativeReservationKind,
+    IntentNode, IntentNodeKind, IntentPort, IntentPortKind, IntentPortRef, IntentPortRole,
+    IntentPortSelector, IntentReservationLedger, IntentReservationRecord, IntentReservationState,
+    IntentSemanticIdentity, IntentUnit, LeafField, LeafRef, MaterializationEvidence, NodeId,
+    ReservationId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -41,7 +49,9 @@ pub enum IntentNativeBinding {
     Scalar(DesignScalarId),
     Curve(CurveId),
     CurveSpan(CurveSpan),
+    Contact(ContactId),
     Constraint(DocumentConstraintId),
+    Dimension(DocumentDimensionId),
     Source(DocumentSourceId),
     Parameter(DocumentParameterId),
     ExternalBinding(DocumentExternalBindingId),
@@ -132,6 +142,67 @@ pub struct ColdIntentMaterialization {
     pub evidence: MaterializationEvidence,
 }
 
+trait IntentMaterializationSource {
+    fn graph(&self) -> &IntentGraph;
+    fn instance(&self) -> &IntentInstanceState;
+    fn reservations(&self) -> &IntentReservationLedger;
+    fn external_inputs(&self) -> &IntentExternalInputs;
+    fn semantic_identity(&self) -> IntentSemanticIdentity;
+}
+
+impl IntentMaterializationSource for IntentCandidate {
+    fn graph(&self) -> &IntentGraph {
+        self.graph()
+    }
+
+    fn instance(&self) -> &IntentInstanceState {
+        self.instance()
+    }
+
+    fn reservations(&self) -> &IntentReservationLedger {
+        self.reservations()
+    }
+
+    fn external_inputs(&self) -> &IntentExternalInputs {
+        self.external_inputs()
+    }
+
+    fn semantic_identity(&self) -> IntentSemanticIdentity {
+        self.semantic_identity()
+    }
+}
+
+impl IntentMaterializationSource for IntentAcceptedAuthority {
+    fn graph(&self) -> &IntentGraph {
+        &self.graph
+    }
+
+    fn instance(&self) -> &IntentInstanceState {
+        &self.instance
+    }
+
+    fn reservations(&self) -> &IntentReservationLedger {
+        &self.reservations
+    }
+
+    fn external_inputs(&self) -> &IntentExternalInputs {
+        &self.external_inputs
+    }
+
+    fn semantic_identity(&self) -> IntentSemanticIdentity {
+        self.target
+    }
+}
+
+fn authority_semantic_identity(authority: &IntentAcceptedAuthority) -> IntentSemanticIdentity {
+    IntentSemanticIdentity {
+        graph: authority.graph.identity(),
+        instance: authority.instance.identity(),
+        reservations: authority.reservations.identity(),
+        external_inputs: authority.external_inputs.identity(),
+    }
+}
+
 /// Editor-owned cold materializer configuration.
 #[derive(Clone, Debug)]
 pub struct ColdIntentMaterializer {
@@ -180,8 +251,8 @@ impl ColdIntentMaterializer {
         )
     }
 
-    /// Cold-reconstructs Point, Segment and Horizontal declarations in canonical
-    /// dependency order and publishes only a currently accepted native session.
+    /// Cold-reconstructs declarations in canonical dependency order and
+    /// publishes only a currently accepted native session.
     ///
     /// # Errors
     ///
@@ -190,6 +261,47 @@ impl ColdIntentMaterializer {
     pub fn materialize(
         &self,
         candidate: &IntentCandidate,
+    ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
+        self.materialize_source(candidate)
+    }
+
+    /// Cold-reconstructs one persisted accepted authority without fabricating
+    /// a patch candidate. The complete semantic identity and every stored host
+    /// artifact are authenticated against the independently rebuilt output.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed identity, evidence, graph, lowering, document, or solver
+    /// rejection. No native state is published on failure.
+    pub fn materialize_accepted_authority(
+        &self,
+        authority: &IntentAcceptedAuthority,
+    ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
+        let identity = authority_semantic_identity(authority);
+        if identity != authority.target {
+            return Err(IntentMaterializationError::AcceptedAuthorityIdentityMismatch);
+        }
+        let authenticated = MaterializationEvidence::new_host_artifacts(
+            authority.evidence.external_inputs,
+            authority.evidence.materialization.clone(),
+            authority.evidence.ownership.clone(),
+            authority.evidence.host_validation.clone(),
+        )?;
+        if authenticated != authority.evidence
+            || authority.evidence.external_inputs != authority.external_inputs.identity()
+        {
+            return Err(IntentMaterializationError::AcceptedAuthorityEvidenceMismatch);
+        }
+        let output = self.materialize_source(authority)?;
+        if output.evidence != authority.evidence {
+            return Err(IntentMaterializationError::AcceptedAuthorityEvidenceMismatch);
+        }
+        Ok(output)
+    }
+
+    fn materialize_source(
+        &self,
+        candidate: &dyn IntentMaterializationSource,
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         candidate.graph().validate()?;
         preflight_supported(candidate)?;
@@ -221,16 +333,16 @@ impl ColdIntentMaterializer {
                 continue;
             }
             match &node.kind {
-                IntentNodeKind::Geometry {
-                    recipe: GeometryRecipeKind::SketchPoint,
-                } => lower_point(candidate, node, &mut batch, &mut state)?,
-                IntentNodeKind::Geometry {
-                    recipe: GeometryRecipeKind::Segment,
-                } => lower_segment(candidate, node, &mut batch, &mut state)?,
-                IntentNodeKind::Constraint {
-                    constraint: ConstraintKind::Horizontal,
-                } => lower_horizontal(node, &mut batch, &mut state)?,
-                _ => unreachable!("preflight admits only the focused cold-lowering slice"),
+                IntentNodeKind::Geometry { recipe } => {
+                    lower_geometry(candidate, node, *recipe, &mut batch, &mut state)?;
+                }
+                IntentNodeKind::Constraint { constraint } => {
+                    lower_constraint(node, *constraint, &mut batch, &mut state)?;
+                }
+                IntentNodeKind::Dimension { dimension } => {
+                    lower_dimension(candidate, node, *dimension, &mut batch, &mut state)?;
+                }
+                _ => unreachable!("preflight admits only implemented declaration families"),
             }
         }
         state.validate_declared_consumption(candidate)?;
@@ -322,7 +434,7 @@ pub enum IntentMaterializationError {
     Evidence(#[from] geosolve_sketch_intent::IntentModelError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-    #[error("intent node {node} is outside the focused Point/Segment/Horizontal materializer")]
+    #[error("intent node {node} is not materializable by this editor adapter")]
     UnsupportedNode { node: NodeId },
     #[error("the focused cold materializer does not yet decode non-empty host inputs")]
     UnsupportedHostInputs,
@@ -351,12 +463,18 @@ pub enum IntentMaterializationError {
     InvalidWritableLeaf { leaf: LeafRef },
     #[error("line node {node} has an invalid explicit branch direction")]
     InvalidBranchDirection { node: NodeId },
+    #[error("geometry node {node} has invalid or incomplete recipe state: {reason}")]
+    InvalidGeometry { node: NodeId, reason: &'static str },
     #[error("native solver rejected the cold materialization")]
     SolverRejected,
     #[error("native solver omitted stable acceptance evidence")]
     MissingValidationEvidence,
     #[error("native independent hard-residual validation did not pass")]
     IndependentValidationFailed,
+    #[error("persisted accepted intent authority has a stale or malformed semantic identity")]
+    AcceptedAuthorityIdentityMismatch,
+    #[error("persisted accepted intent authority does not match cold reconstructed evidence")]
+    AcceptedAuthorityEvidenceMismatch,
 }
 
 impl IntentMaterializationError {
@@ -369,6 +487,7 @@ impl IntentMaterializationError {
             | Self::NativeKindMismatch { node }
             | Self::MissingPointPosition { node, .. }
             | Self::InvalidBranchDirection { node }
+            | Self::InvalidGeometry { node, .. }
             | Self::UnknownNode(node) => Some(*node),
             _ => None,
         }
@@ -391,6 +510,8 @@ impl IntentMaterializationError {
             Self::IndependentValidationFailed | Self::MissingValidationEvidence => {
                 "native-validation-rejected"
             }
+            Self::AcceptedAuthorityIdentityMismatch => "accepted-authority-identity-mismatch",
+            Self::AcceptedAuthorityEvidenceMismatch => "accepted-authority-evidence-mismatch",
             Self::Graph(_) => "invalid-intent-graph",
             Self::Document(_) | Self::Session(_) => "native-materialization-rejected",
             Self::Evidence(_) | Self::Json(_) => "materialization-evidence-rejected",
@@ -410,21 +531,55 @@ impl SketchDocumentBuilder {
     }
 }
 
-fn preflight_supported(candidate: &IntentCandidate) -> Result<(), IntentMaterializationError> {
+fn preflight_supported(
+    candidate: &dyn IntentMaterializationSource,
+) -> Result<(), IntentMaterializationError> {
     if !candidate.external_inputs().parameter_batch.is_empty()
         || !candidate.external_inputs().external_snapshots.is_empty()
     {
         return Err(IntentMaterializationError::UnsupportedHostInputs);
     }
     for node in candidate.graph().nodes().values() {
-        if !matches!(
-            node.kind,
-            IntentNodeKind::Geometry {
-                recipe: GeometryRecipeKind::SketchPoint | GeometryRecipeKind::Segment
-            } | IntentNodeKind::Constraint {
-                constraint: ConstraintKind::Horizontal
-            }
-        ) {
+        let supported = match node.kind {
+            IntentNodeKind::Geometry { recipe } => matches!(
+                recipe,
+                GeometryRecipeKind::SketchPoint
+                    | GeometryRecipeKind::Segment
+                    | GeometryRecipeKind::CenterRadiusCircle
+                    | GeometryRecipeKind::TwoPointDiameterCircle
+                    | GeometryRecipeKind::ThreePointCircle
+                    | GeometryRecipeKind::CenterArc
+                    | GeometryRecipeKind::ThreePointArc
+                    | GeometryRecipeKind::CenterAxesEllipse
+                    | GeometryRecipeKind::AxisEndpointsEllipse
+                    | GeometryRecipeKind::CenterAxesEllipticalArc
+                    | GeometryRecipeKind::AxisEndpointsEllipticalArc
+                    | GeometryRecipeKind::QuadraticBezier
+                    | GeometryRecipeKind::CubicBezier
+                    | GeometryRecipeKind::RationalQuadraticConic
+                    | GeometryRecipeKind::Parabola
+                    | GeometryRecipeKind::Hyperbola
+            ),
+            IntentNodeKind::Constraint { constraint } => !matches!(
+                constraint,
+                ConstraintKind::ExternalPointCoincident
+                    | ConstraintKind::ExternalLineCollinear
+                    | ConstraintKind::PointOnCurve
+                    | ConstraintKind::LineCircleTangency
+                    | ConstraintKind::CircleArcTangency
+                    | ConstraintKind::LineCurveTangency
+                    | ConstraintKind::CurveCurveContact
+                    | ConstraintKind::CurveCurveTangency
+                    | ConstraintKind::CurveDirection
+                    | ConstraintKind::EqualCurvature
+                    | ConstraintKind::EndpointContinuity
+                    | ConstraintKind::LineLineFillet
+                    | ConstraintKind::CurveCurveFillet
+            ),
+            IntentNodeKind::Dimension { dimension } => dimension != DimensionKind::ProfileOffset,
+            _ => false,
+        };
+        if !supported {
             return Err(IntentMaterializationError::UnsupportedNode { node: node.id });
         }
     }
@@ -458,6 +613,9 @@ fn allocate_reservations(
             IntentNativeReservationKind::Curve => {
                 IntentNativeBinding::Curve(allocator.reserve_curve()?)
             }
+            IntentNativeReservationKind::Contact => {
+                IntentNativeBinding::Contact(allocator.reserve_contact()?)
+            }
             IntentNativeReservationKind::Constraint => {
                 let companion = require_pair(
                     *reservation,
@@ -483,20 +641,21 @@ fn allocate_reservations(
                     IntentNativeReservationKind::DimensionSource,
                 )?;
                 let native = allocator.reserve_dimension()?;
-                // The focused map has no dimension binding yet, but the source
-                // identity still cannot be silently reused.
                 bindings.insert(companion, IntentNativeBinding::Source(native.source));
                 paired.insert(companion);
-                return Err(IntentMaterializationError::UnsupportedNode {
-                    node: record.owner_node,
-                });
+                IntentNativeBinding::Dimension(native.dimension)
             }
-            IntentNativeReservationKind::DimensionSource
-            | IntentNativeReservationKind::Contact
-            | IntentNativeReservationKind::Parameter
-            | IntentNativeReservationKind::ExternalBinding
-            | IntentNativeReservationKind::SemanticCatalog
-            | IntentNativeReservationKind::SemanticSource => {
+            IntentNativeReservationKind::Parameter => {
+                IntentNativeBinding::Parameter(allocator.reserve_parameter()?)
+            }
+            IntentNativeReservationKind::ExternalBinding => {
+                IntentNativeBinding::ExternalBinding(allocator.reserve_external_binding()?)
+            }
+            IntentNativeReservationKind::SemanticCatalog => {
+                IntentNativeBinding::Source(allocator.reserve_semantic_catalog()?)
+            }
+            IntentNativeReservationKind::SemanticSource
+            | IntentNativeReservationKind::DimensionSource => {
                 return Err(IntentMaterializationError::UnsupportedNode {
                     node: record.owner_node,
                 });
@@ -626,7 +785,7 @@ impl LoweringState {
 
     fn validate_declared_consumption(
         &self,
-        candidate: &IntentCandidate,
+        candidate: &dyn IntentMaterializationSource,
     ) -> Result<(), IntentMaterializationError> {
         for (reservation, record) in candidate.reservations().entries() {
             if record.state == IntentReservationState::Declared
@@ -669,7 +828,7 @@ impl LoweringState {
 }
 
 fn lower_point(
-    candidate: &IntentCandidate,
+    candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,
     batch: &mut SketchMaterializationBatch,
     state: &mut LoweringState,
@@ -689,8 +848,617 @@ fn lower_point(
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive geometry lowering table keeps the closed recipe catalog auditable"
+)]
+fn lower_geometry(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    recipe: GeometryRecipeKind,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    use GeometryRecipeKind as G;
+    use IntentPortRole as R;
+
+    match recipe {
+        G::SketchPoint => lower_point(candidate, node, batch, state),
+        G::Segment => lower_segment(candidate, node, batch, state),
+        G::Polyline
+        | G::MidpointLine
+        | G::TwoPointAlignedRectangle
+        | G::ThreePointCornerRectangle
+        | G::CenterRectangle
+        | G::ThreePointCenterRectangle
+        | G::TangentArc
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => {
+            Err(IntentMaterializationError::UnsupportedNode { node: node.id })
+        }
+        G::CenterRadiusCircle | G::TwoPointDiameterCircle | G::ThreePointCircle => {
+            let (center, _) = materialize_point(
+                candidate,
+                node,
+                R::Center,
+                0,
+                [0.0, 0.0],
+                "center",
+                batch,
+                state,
+            )?;
+            let radius = materialize_scalar(
+                candidate,
+                node,
+                0,
+                LeafField::Value,
+                1.0,
+                IntentUnit::Length,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+                "radius",
+                batch,
+                state,
+            )?;
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::Circle { center, radius },
+                batch,
+                state,
+            )
+        }
+        G::CenterArc | G::ThreePointArc => {
+            let (center, _) = materialize_point(
+                candidate,
+                node,
+                R::Center,
+                0,
+                [0.0, 0.0],
+                "center",
+                batch,
+                state,
+            )?;
+            let radius = materialize_scalar(
+                candidate,
+                node,
+                0,
+                LeafField::Value,
+                1.0,
+                IntentUnit::Length,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+                "radius",
+                batch,
+                state,
+            )?;
+            let start_angle = materialize_scalar(
+                candidate,
+                node,
+                1,
+                LeafField::Angle,
+                0.0,
+                IntentUnit::Angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+                "start angle",
+                batch,
+                state,
+            )?;
+            let end_angle = materialize_scalar(
+                candidate,
+                node,
+                2,
+                LeafField::Angle,
+                std::f64::consts::FRAC_PI_2,
+                IntentUnit::Angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+                "end angle",
+                batch,
+                state,
+            )?;
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::CircularArc {
+                    center,
+                    radius,
+                    start_angle,
+                    end_angle,
+                    sweep: arc_sweep(node)?,
+                },
+                batch,
+                state,
+            )
+        }
+        G::CenterAxesEllipse | G::AxisEndpointsEllipse => {
+            let (center, _) = materialize_point(
+                candidate,
+                node,
+                R::Center,
+                0,
+                [0.0, 0.0],
+                "center",
+                batch,
+                state,
+            )?;
+            let (major_axis_point, _) = materialize_point(
+                candidate,
+                node,
+                R::MajorAxisPoint,
+                0,
+                [2.0, 0.0],
+                "major axis",
+                batch,
+                state,
+            )?;
+            let minor_axis_ratio = materialize_scalar(
+                candidate,
+                node,
+                0,
+                LeafField::Parameter,
+                0.5,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: f64::from_bits(1),
+                    upper: 1.0,
+                },
+                "minor-axis ratio",
+                batch,
+                state,
+            )?;
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::Ellipse {
+                    center,
+                    major_axis_point,
+                    minor_axis_ratio,
+                },
+                batch,
+                state,
+            )
+        }
+        G::CenterAxesEllipticalArc | G::AxisEndpointsEllipticalArc => {
+            let (center, _) = materialize_point(
+                candidate,
+                node,
+                R::Center,
+                0,
+                [0.0, 0.0],
+                "center",
+                batch,
+                state,
+            )?;
+            let (major_axis_point, _) = materialize_point(
+                candidate,
+                node,
+                R::MajorAxisPoint,
+                0,
+                [2.0, 0.0],
+                "major axis",
+                batch,
+                state,
+            )?;
+            let minor_axis_ratio = materialize_scalar(
+                candidate,
+                node,
+                0,
+                LeafField::Parameter,
+                0.5,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: f64::from_bits(1),
+                    upper: 1.0,
+                },
+                "minor-axis ratio",
+                batch,
+                state,
+            )?;
+            let start_angle = materialize_scalar(
+                candidate,
+                node,
+                1,
+                LeafField::Angle,
+                0.0,
+                IntentUnit::Angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+                "start angle",
+                batch,
+                state,
+            )?;
+            let end_angle = materialize_scalar(
+                candidate,
+                node,
+                2,
+                LeafField::Angle,
+                std::f64::consts::FRAC_PI_2,
+                IntentUnit::Angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+                "end angle",
+                batch,
+                state,
+            )?;
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::EllipticalArc {
+                    center,
+                    major_axis_point,
+                    minor_axis_ratio,
+                    start_angle,
+                    end_angle,
+                    sweep: arc_sweep(node)?,
+                },
+                batch,
+                state,
+            )
+        }
+        G::QuadraticBezier => {
+            let controls = [
+                materialize_point(
+                    candidate,
+                    node,
+                    R::Start,
+                    0,
+                    [0.0, 0.0],
+                    "start",
+                    batch,
+                    state,
+                )?
+                .0,
+                materialize_point(
+                    candidate,
+                    node,
+                    R::Control,
+                    0,
+                    [1.0, 1.0],
+                    "control",
+                    batch,
+                    state,
+                )?
+                .0,
+                materialize_point(candidate, node, R::End, 0, [2.0, 0.0], "end", batch, state)?.0,
+            ];
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::QuadraticBezier { controls },
+                batch,
+                state,
+            )
+        }
+        G::CubicBezier => {
+            let controls = [
+                materialize_point(
+                    candidate,
+                    node,
+                    R::Start,
+                    0,
+                    [0.0, 0.0],
+                    "start",
+                    batch,
+                    state,
+                )?
+                .0,
+                materialize_point(
+                    candidate,
+                    node,
+                    R::Control,
+                    0,
+                    [1.0, 1.0],
+                    "control 1",
+                    batch,
+                    state,
+                )?
+                .0,
+                materialize_point(
+                    candidate,
+                    node,
+                    R::Control,
+                    1,
+                    [2.0, 1.0],
+                    "control 2",
+                    batch,
+                    state,
+                )?
+                .0,
+                materialize_point(candidate, node, R::End, 0, [3.0, 0.0], "end", batch, state)?.0,
+            ];
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::CubicBezier { controls },
+                batch,
+                state,
+            )
+        }
+        G::RationalQuadraticConic => {
+            let start = materialize_point(
+                candidate,
+                node,
+                R::Start,
+                0,
+                [0.0, 0.0],
+                "start",
+                batch,
+                state,
+            )?
+            .0;
+            let end =
+                materialize_point(candidate, node, R::End, 0, [2.0, 0.0], "end", batch, state)?.0;
+            let middle_weight = materialize_scalar(
+                candidate,
+                node,
+                0,
+                LeafField::Weight,
+                1.0,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+                    upper: f64::MAX,
+                },
+                "middle weight",
+                batch,
+                state,
+            )?;
+            let weighted_middle = point_field(node, "weighted_middle")?.unwrap_or([1.0, 1.0]);
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::RationalQuadraticConic {
+                    start,
+                    weighted_middle,
+                    middle_weight,
+                    end,
+                },
+                batch,
+                state,
+            )
+        }
+        G::Parabola => {
+            let vertex = materialize_point(
+                candidate,
+                node,
+                R::Center,
+                0,
+                [0.0, 0.0],
+                "vertex",
+                batch,
+                state,
+            )?
+            .0;
+            let focus = materialize_point(
+                candidate,
+                node,
+                R::Control,
+                0,
+                [0.0, 1.0],
+                "focus",
+                batch,
+                state,
+            )?
+            .0;
+            let trim_start = materialize_scalar(
+                candidate,
+                node,
+                0,
+                LeafField::Parameter,
+                -1.0,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Finite,
+                "trim start",
+                batch,
+                state,
+            )?;
+            let trim_end = materialize_scalar(
+                candidate,
+                node,
+                1,
+                LeafField::Parameter,
+                1.0,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Finite,
+                "trim end",
+                batch,
+                state,
+            )?;
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::ParabolaSegment {
+                    vertex,
+                    focus,
+                    trim_start,
+                    trim_end,
+                },
+                batch,
+                state,
+            )
+        }
+        G::Hyperbola => {
+            let center = materialize_point(
+                candidate,
+                node,
+                R::Center,
+                0,
+                [0.0, 0.0],
+                "center",
+                batch,
+                state,
+            )?
+            .0;
+            let transverse_axis_point = materialize_point(
+                candidate,
+                node,
+                R::Control,
+                0,
+                [1.0, 0.0],
+                "transverse axis",
+                batch,
+                state,
+            )?
+            .0;
+            let semi_conjugate = materialize_scalar(
+                candidate,
+                node,
+                0,
+                LeafField::Value,
+                1.0,
+                IntentUnit::Length,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+                "semi-conjugate",
+                batch,
+                state,
+            )?;
+            let trim_start = materialize_scalar(
+                candidate,
+                node,
+                1,
+                LeafField::Parameter,
+                -1.0,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Finite,
+                "trim start",
+                batch,
+                state,
+            )?;
+            let trim_end = materialize_scalar(
+                candidate,
+                node,
+                2,
+                LeafField::Parameter,
+                1.0,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Finite,
+                "trim end",
+                batch,
+                state,
+            )?;
+            materialize_curve(
+                node,
+                0,
+                CurveDefinition::HyperbolaSegment {
+                    center,
+                    transverse_axis_point,
+                    semi_conjugate,
+                    branch: hyperbola_branch(node)?,
+                    trim_start,
+                    trim_end,
+                },
+                batch,
+                state,
+            )
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_point(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    role: IntentPortRole,
+    index: u16,
+    default: [f64; 2],
+    label: &str,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(DesignPointId, [f64; 2]), IntentMaterializationError> {
+    let port = require_port(node, role, index)?;
+    let point = require_point_binding(node.id, state.port_bindings.get(&port.as_ref(node.id)))?;
+    let position = resolve_point_position(candidate, node, port, point, default, state)?;
+    if matches!(port.flow, IntentIdentityFlow::Created { .. }) {
+        batch.push_point(DesignPoint {
+            id: point,
+            label: format!("{}.{}", node.symbol.as_str(), label),
+            position,
+        });
+        state.point_positions.insert(point, position);
+        state.consume_port(node, port);
+    }
+    Ok((point, position))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_scalar(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    index: u16,
+    field: LeafField,
+    default: f64,
+    intent_unit: IntentUnit,
+    unit: ScalarUnit,
+    domain: ScalarDomain,
+    label: &str,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<DesignScalarId, IntentMaterializationError> {
+    let port = require_port(node, IntentPortRole::Target, index)?;
+    let scalar = match state.port_bindings.get(&port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Scalar(scalar)) => *scalar,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    if matches!(port.flow, IntentIdentityFlow::Created { .. }) {
+        let value = leaf_quantity(candidate, node.id, port.id, field, default, intent_unit)?;
+        batch.push_scalar(DesignScalar {
+            id: scalar,
+            label: format!("{}.{}", node.symbol.as_str(), label),
+            value,
+            unit,
+            domain,
+        });
+        state.consume_port(node, port);
+    }
+    Ok(scalar)
+}
+
+fn materialize_curve(
+    node: &IntentNode,
+    index: u16,
+    definition: CurveDefinition,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let curve_port = require_port(node, IntentPortRole::Curve, index)?;
+    let curve = match state.port_bindings.get(&curve_port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Curve(curve)) => *curve,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    batch.push_curve(DesignCurve {
+        id: curve,
+        label: if index == 0 {
+            node.symbol.as_str().to_owned()
+        } else {
+            format!("{}.curve{}", node.symbol.as_str(), index + 1)
+        },
+        definition,
+    });
+    state.consume_port(node, curve_port);
+    if let Some(span_port) = node.port_by_selector(IntentPortSelector::Node {
+        role: IntentPortRole::Span,
+        index,
+    }) {
+        state.port_bindings.insert(
+            span_port.as_ref(node.id),
+            IntentNativeBinding::CurveSpan(CurveSpan::line(curve)),
+        );
+    }
+    Ok(())
+}
+
 fn lower_segment(
-    candidate: &IntentCandidate,
+    candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,
     batch: &mut SketchMaterializationBatch,
     state: &mut LoweringState,
@@ -796,6 +1564,340 @@ fn lower_horizontal(
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive relation table keeps intent operands and native definitions aligned"
+)]
+fn lower_constraint(
+    node: &IntentNode,
+    kind: ConstraintKind,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    use ConstraintKind as C;
+
+    if kind == C::Horizontal {
+        return lower_horizontal(node, batch, state);
+    }
+    let definition = match kind {
+        C::FixedPoint => {
+            let point = input_point(node, state, 0)?;
+            let target = point_field(node, "target")?
+                .or_else(|| state.point_positions.get(&point).copied())
+                .ok_or(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "fixed-point target is unavailable",
+                })?;
+            DocumentConstraintDefinition::FixedPoint { point, target }
+        }
+        C::FixedCoordinate => DocumentConstraintDefinition::FixedCoordinate {
+            point: input_point(node, state, 0)?,
+            axis: coordinate_axis(node, "axis")?,
+            target: field_quantity(node, "target", IntentUnit::Length)?.unwrap_or(0.0),
+        },
+        C::CoincidentWithOrigin => DocumentConstraintDefinition::CoincidentWithOrigin {
+            point: input_point(node, state, 0)?,
+        },
+        C::PointOnDatumAxis => DocumentConstraintDefinition::PointOnDatumAxis {
+            point: input_point(node, state, 0)?,
+            axis: coordinate_axis(node, "axis")?,
+        },
+        C::Coincident => DocumentConstraintDefinition::Coincident {
+            first: input_point(node, state, 0)?,
+            second: input_point(node, state, 1)?,
+        },
+        C::Vertical => DocumentConstraintDefinition::Vertical {
+            line: input_span(node, state, 0)?,
+        },
+        C::HorizontalPoints => DocumentConstraintDefinition::HorizontalPoints {
+            first: input_point(node, state, 0)?,
+            second: input_point(node, state, 1)?,
+        },
+        C::VerticalPoints => DocumentConstraintDefinition::VerticalPoints {
+            first: input_point(node, state, 0)?,
+            second: input_point(node, state, 1)?,
+        },
+        C::HorizontalPointToMidpoint => DocumentConstraintDefinition::HorizontalPointToMidpoint {
+            point: input_point(node, state, 0)?,
+            line: input_span(node, state, 0)?,
+        },
+        C::VerticalPointToMidpoint => DocumentConstraintDefinition::VerticalPointToMidpoint {
+            point: input_point(node, state, 0)?,
+            line: input_span(node, state, 0)?,
+        },
+        C::Parallel => DocumentConstraintDefinition::Parallel {
+            first: input_span(node, state, 0)?,
+            second: input_span(node, state, 1)?,
+        },
+        C::Perpendicular => DocumentConstraintDefinition::Perpendicular {
+            first: input_span(node, state, 0)?,
+            second: input_span(node, state, 1)?,
+        },
+        C::CollinearWithDatumAxis => DocumentConstraintDefinition::CollinearWithDatumAxis {
+            line: DocumentLineSupportRef {
+                span: input_span(node, state, 0)?,
+                direction: direction_sense(node, "direction")?,
+            },
+            axis: coordinate_axis(node, "axis")?,
+        },
+        C::Concentric => DocumentConstraintDefinition::Concentric {
+            first: DocumentCenterRef {
+                curve: input_curve(node, state, 0)?,
+            },
+            second: DocumentCenterRef {
+                curve: input_curve(node, state, 1)?,
+            },
+        },
+        C::Collinear => DocumentConstraintDefinition::Collinear {
+            first: DocumentLineSupportRef {
+                span: input_span(node, state, 0)?,
+                direction: direction_sense(node, "first_direction")?,
+            },
+            second: DocumentLineSupportRef {
+                span: input_span(node, state, 1)?,
+                direction: direction_sense(node, "second_direction")?,
+            },
+        },
+        C::EqualLength => DocumentConstraintDefinition::EqualLength {
+            first: input_span(node, state, 0)?,
+            second: input_span(node, state, 1)?,
+        },
+        C::EqualRadius => DocumentConstraintDefinition::EqualRadius {
+            first: input_curve(node, state, 0)?,
+            second: input_curve(node, state, 1)?,
+        },
+        C::Midpoint => DocumentConstraintDefinition::Midpoint {
+            point: input_point(node, state, 0)?,
+            line: input_span(node, state, 0)?,
+        },
+        C::SymmetricAboutLine => DocumentConstraintDefinition::SymmetricAboutLine {
+            first: input_point(node, state, 0)?,
+            second: input_point(node, state, 1)?,
+            line: input_span(node, state, 0)?,
+        },
+        C::SymmetricAboutDatumAxis => DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+            first: input_point(node, state, 0)?,
+            second: input_point(node, state, 1)?,
+            axis: coordinate_axis(node, "axis")?,
+        },
+        C::CircleCircleTangency => DocumentConstraintDefinition::CircleCircleTangency {
+            first: input_curve(node, state, 0)?,
+            second: input_curve(node, state, 1)?,
+            mode: circle_tangency_mode(node)?,
+            center_direction: point_field(node, "center_direction")?.unwrap_or([1.0, 0.0]),
+        },
+        C::Horizontal
+        | C::ExternalPointCoincident
+        | C::ExternalLineCollinear
+        | C::PointOnCurve
+        | C::LineCircleTangency
+        | C::CircleArcTangency
+        | C::LineCurveTangency
+        | C::CurveCurveContact
+        | C::CurveCurveTangency
+        | C::CurveDirection
+        | C::EqualCurvature
+        | C::EndpointContinuity
+        | C::LineLineFillet
+        | C::CurveCurveFillet => {
+            return Err(IntentMaterializationError::UnsupportedNode { node: node.id });
+        }
+    };
+    materialize_constraint(node, definition, batch, state)
+}
+
+fn materialize_constraint(
+    node: &IntentNode,
+    definition: DocumentConstraintDefinition,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let constraint_port = require_port(node, IntentPortRole::Constraint, 0)?;
+    let source_port = require_port(node, IntentPortRole::Source, 0)?;
+    let constraint = match state.port_bindings.get(&constraint_port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Constraint(id)) => *id,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    let source_id = match state.port_bindings.get(&source_port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Source(id)) => *id,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    batch.push_constraint(DocumentConstraint {
+        id: constraint,
+        source_id,
+        label: node.symbol.as_str().to_owned(),
+        suppressed: false,
+        definition,
+    });
+    batch.push_source(source_id);
+    state.consume_port(node, constraint_port);
+    Ok(())
+}
+
+fn input_binding<'a>(
+    node: &IntentNode,
+    state: &'a LoweringState,
+    role: InputRole,
+    index: u16,
+) -> Result<&'a IntentNativeBinding, IntentMaterializationError> {
+    let slot = InputSlot::new(role, index);
+    let source = node
+        .inputs
+        .get(&slot)
+        .ok_or(IntentMaterializationError::MissingInput {
+            node: node.id,
+            slot,
+        })?;
+    state
+        .port_bindings
+        .get(source)
+        .ok_or(IntentMaterializationError::UnboundInput {
+            node: node.id,
+            slot,
+        })
+}
+
+fn input_point(
+    node: &IntentNode,
+    state: &LoweringState,
+    index: u16,
+) -> Result<DesignPointId, IntentMaterializationError> {
+    match input_binding(node, state, InputRole::Point, index)? {
+        IntentNativeBinding::Point(point) => Ok(*point),
+        _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    }
+}
+
+fn input_span(
+    node: &IntentNode,
+    state: &LoweringState,
+    index: u16,
+) -> Result<CurveSpan, IntentMaterializationError> {
+    let binding = input_binding(node, state, InputRole::Span, index)
+        .or_else(|_| input_binding(node, state, InputRole::Curve, index))?;
+    match binding {
+        IntentNativeBinding::CurveSpan(span) => Ok(*span),
+        IntentNativeBinding::Curve(curve) => Ok(CurveSpan::line(*curve)),
+        _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    }
+}
+
+fn input_curve(
+    node: &IntentNode,
+    state: &LoweringState,
+    index: u16,
+) -> Result<CurveId, IntentMaterializationError> {
+    let binding = input_binding(node, state, InputRole::Curve, index)
+        .or_else(|_| input_binding(node, state, InputRole::Span, index))?;
+    match binding {
+        IntentNativeBinding::Curve(curve) => Ok(*curve),
+        IntentNativeBinding::CurveSpan(span) => Ok(span.curve),
+        _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    }
+}
+
+fn lower_dimension(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    kind: DimensionKind,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let (intent_unit, scalar_unit, default, domain) = if kind == DimensionKind::OrientedAngle {
+        (
+            IntentUnit::Angle,
+            ScalarUnit::Angle,
+            std::f64::consts::FRAC_PI_2,
+            ScalarDomain::Positive,
+        )
+    } else {
+        (
+            IntentUnit::Length,
+            ScalarUnit::Length,
+            1.0,
+            ScalarDomain::Positive,
+        )
+    };
+    let target = materialize_scalar(
+        candidate,
+        node,
+        0,
+        LeafField::Value,
+        default,
+        intent_unit,
+        scalar_unit,
+        domain,
+        "target",
+        batch,
+        state,
+    )?;
+    let definition = match kind {
+        DimensionKind::PointDistance => DocumentDimensionDefinition::PointDistance {
+            first: input_point(node, state, 0)?,
+            second: input_point(node, state, 1)?,
+            target,
+        },
+        DimensionKind::CurveLength => DocumentDimensionDefinition::CurveLength {
+            curve: input_span(node, state, 0)?,
+            target,
+        },
+        DimensionKind::Radius => DocumentDimensionDefinition::Radius {
+            curve: input_curve(node, state, 0)?,
+            target,
+        },
+        DimensionKind::Diameter => DocumentDimensionDefinition::Diameter {
+            curve: input_curve(node, state, 0)?,
+            target,
+        },
+        DimensionKind::OrientedAngle => DocumentDimensionDefinition::OrientedAngle {
+            first: input_span(node, state, 0)?,
+            second: input_span(node, state, 1)?,
+            target,
+            orientation: angle_orientation(node)?,
+        },
+        DimensionKind::SupportingLineOffset => DocumentDimensionDefinition::SupportingLineOffset {
+            source: input_span(node, state, 0)?,
+            target_segment: input_span(node, state, 1)?,
+            target,
+            side: line_side(node)?,
+            orientation: line_offset_orientation(node)?,
+        },
+        DimensionKind::ExactTranslatedSegmentOffset => {
+            DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                source: input_span(node, state, 0)?,
+                target_segment: input_span(node, state, 1)?,
+                target,
+                side: line_side(node)?,
+                orientation: line_offset_orientation(node)?,
+            }
+        }
+        DimensionKind::ProfileOffset => {
+            return Err(IntentMaterializationError::UnsupportedNode { node: node.id });
+        }
+    };
+    let dimension_port = require_port(node, IntentPortRole::Dimension, 0)?;
+    let source_port = require_port(node, IntentPortRole::Source, 0)?;
+    let dimension = match state.port_bindings.get(&dimension_port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Dimension(id)) => *id,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    let source_id = match state.port_bindings.get(&source_port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Source(id)) => *id,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    batch.push_dimension(DocumentDimension {
+        id: dimension,
+        source_id,
+        label: node.symbol.as_str().to_owned(),
+        mode: dimension_mode(node)?,
+        suppressed: false,
+        definition,
+    });
+    batch.push_source(source_id);
+    state.consume_port(node, dimension_port);
+    Ok(())
+}
+
 fn require_port(
     node: &IntentNode,
     role: IntentPortRole,
@@ -820,7 +1922,7 @@ fn require_point_binding(
 }
 
 fn point_position(
-    candidate: &IntentCandidate,
+    candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,
     port: &IntentPort,
     default: [f64; 2],
@@ -832,7 +1934,7 @@ fn point_position(
 }
 
 fn resolve_point_position(
-    candidate: &IntentCandidate,
+    candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,
     port: &IntentPort,
     point: DesignPointId,
@@ -852,11 +1954,22 @@ fn resolve_point_position(
 }
 
 fn leaf_value(
-    candidate: &IntentCandidate,
+    candidate: &dyn IntentMaterializationSource,
     node: NodeId,
     port: geosolve_sketch_intent::PortId,
     field: LeafField,
     default: f64,
+) -> Result<f64, IntentMaterializationError> {
+    leaf_quantity(candidate, node, port, field, default, IntentUnit::Length)
+}
+
+fn leaf_quantity(
+    candidate: &dyn IntentMaterializationSource,
+    node: NodeId,
+    port: geosolve_sketch_intent::PortId,
+    field: LeafField,
+    default: f64,
+    expected_unit: IntentUnit,
 ) -> Result<f64, IntentMaterializationError> {
     let leaf = LeafRef { node, port, field };
     let Some(value) = candidate.instance().values().get(&leaf) else {
@@ -865,9 +1978,192 @@ fn leaf_value(
     match value {
         IntentLiteral::Quantity {
             value,
-            unit: IntentUnit::Length,
-        } if value.is_finite() => Ok(*value),
+            unit: actual_unit,
+        } if *actual_unit == expected_unit && value.is_finite() => Ok(*value),
         _ => Err(IntentMaterializationError::InvalidWritableLeaf { leaf }),
+    }
+}
+
+fn field_value<'a>(node: &'a IntentNode, name: &str) -> Option<&'a IntentLiteral> {
+    node.fields
+        .iter()
+        .find_map(|(key, value)| (key.0.as_str() == name).then_some(value))
+}
+
+fn point_field(
+    node: &IntentNode,
+    name: &str,
+) -> Result<Option<[f64; 2]>, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Point(point)) if point.iter().copied().all(f64::is_finite) => {
+            Ok(Some(*point))
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "point-valued recipe field is invalid",
+        }),
+        None => Ok(None),
+    }
+}
+
+fn field_quantity(
+    node: &IntentNode,
+    name: &str,
+    expected_unit: IntentUnit,
+) -> Result<Option<f64>, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Quantity { value, unit })
+            if *unit == expected_unit && value.is_finite() =>
+        {
+            Ok(Some(*value))
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "quantity-valued definition field is invalid",
+        }),
+        None => Ok(None),
+    }
+}
+
+fn enum_field<'a>(
+    node: &'a IntentNode,
+    name: &str,
+) -> Result<Option<&'a str>, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Enum(value)) => Ok(Some(value.as_str())),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "enum-valued definition field is invalid",
+        }),
+        None => Ok(None),
+    }
+}
+
+fn coordinate_axis(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentCoordinateAxis, IntentMaterializationError> {
+    match enum_field(node, name)? {
+        None | Some("x") => Ok(DocumentCoordinateAxis::X),
+        Some("y") => Ok(DocumentCoordinateAxis::Y),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "coordinate axis must be x or y",
+        }),
+    }
+}
+
+fn direction_sense(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentDirectionSense, IntentMaterializationError> {
+    match enum_field(node, name)? {
+        None | Some("forward") => Ok(DocumentDirectionSense::Forward),
+        Some("reverse") => Ok(DocumentDirectionSense::Reverse),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "direction sense must be forward or reverse",
+        }),
+    }
+}
+
+fn circle_tangency_mode(
+    node: &IntentNode,
+) -> Result<DocumentCircleTangencyMode, IntentMaterializationError> {
+    match enum_field(node, "mode")? {
+        None | Some("external") => Ok(DocumentCircleTangencyMode::External),
+        Some("first_contains_second") => Ok(DocumentCircleTangencyMode::Internal {
+            containment: DocumentCircleContainment::FirstContainsSecond,
+        }),
+        Some("second_contains_first") => Ok(DocumentCircleTangencyMode::Internal {
+            containment: DocumentCircleContainment::SecondContainsFirst,
+        }),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "circle tangency mode is invalid",
+        }),
+    }
+}
+
+fn dimension_mode(node: &IntentNode) -> Result<DocumentDimensionMode, IntentMaterializationError> {
+    match enum_field(node, "mode")? {
+        None | Some("driving") => Ok(DocumentDimensionMode::Driving),
+        Some("reference") => Ok(DocumentDimensionMode::Reference),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "dimension mode must be driving or reference",
+        }),
+    }
+}
+
+fn angle_orientation(
+    node: &IntentNode,
+) -> Result<DocumentAngleOrientation, IntentMaterializationError> {
+    match enum_field(node, "orientation")? {
+        None | Some("counter_clockwise") => Ok(DocumentAngleOrientation::CounterClockwise),
+        Some("clockwise") => Ok(DocumentAngleOrientation::Clockwise),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "angle orientation must be counter_clockwise or clockwise",
+        }),
+    }
+}
+
+fn line_side(node: &IntentNode) -> Result<DocumentLineSide, IntentMaterializationError> {
+    match enum_field(node, "side")? {
+        None | Some("left") => Ok(DocumentLineSide::Left),
+        Some("right") => Ok(DocumentLineSide::Right),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "line side must be left or right",
+        }),
+    }
+}
+
+fn line_offset_orientation(
+    node: &IntentNode,
+) -> Result<DocumentLineOffsetOrientation, IntentMaterializationError> {
+    match enum_field(node, "orientation")? {
+        None | Some("same") => Ok(DocumentLineOffsetOrientation::Same),
+        Some("reversed") => Ok(DocumentLineOffsetOrientation::Reversed),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "line-offset orientation must be same or reversed",
+        }),
+    }
+}
+
+fn arc_sweep(node: &IntentNode) -> Result<DocumentArcSweep, IntentMaterializationError> {
+    match field_value(node, "sweep") {
+        None => Ok(DocumentArcSweep::CounterClockwise),
+        Some(IntentLiteral::Enum(value)) if value.as_str() == "counter_clockwise" => {
+            Ok(DocumentArcSweep::CounterClockwise)
+        }
+        Some(IntentLiteral::Enum(value)) if value.as_str() == "clockwise" => {
+            Ok(DocumentArcSweep::Clockwise)
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "arc sweep must be counter_clockwise or clockwise",
+        }),
+    }
+}
+
+fn hyperbola_branch(
+    node: &IntentNode,
+) -> Result<DocumentHyperbolaBranch, IntentMaterializationError> {
+    match field_value(node, "branch") {
+        None => Ok(DocumentHyperbolaBranch::Positive),
+        Some(IntentLiteral::Enum(value)) if value.as_str() == "positive" => {
+            Ok(DocumentHyperbolaBranch::Positive)
+        }
+        Some(IntentLiteral::Enum(value)) if value.as_str() == "negative" => {
+            Ok(DocumentHyperbolaBranch::Negative)
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "hyperbola branch must be positive or negative",
+        }),
     }
 }
 
