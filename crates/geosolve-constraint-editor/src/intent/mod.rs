@@ -12,17 +12,20 @@ use std::collections::{BTreeMap, BTreeSet};
 use geosolve_sketch::{
     ContactDomain, ContactId, ContactNeighborhood, ContactSlot, CurveDefinition, CurveId,
     CurveSpan, DesignCurve, DesignPoint, DesignPointId, DesignScalar, DesignScalarId,
-    DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentCenterRef,
-    DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis, DocumentDimension,
-    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
-    DocumentDirectionSense, DocumentError, DocumentExternalBindingId, DocumentHyperbolaBranch,
-    DocumentId, DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef,
-    DocumentParameterId, DocumentSessionError, DocumentSolveRequest, DocumentSourceId,
-    GeometryRole, GeometryRoleEdit, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl,
-    OperationOutcome, PersistentId, RetainedSketchDocumentSession,
-    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarDomain, ScalarUnit, SketchHardValidity,
-    SketchMaterializationBatch, SketchMaterializationReservationAllocator,
+    DocumentAngleOrientation, DocumentArcSweep, DocumentArcTangencySide, DocumentBSplineForm,
+    DocumentCenterRef, DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
+    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentError,
+    DocumentExternalBindingId, DocumentExternalLineSupportRef, DocumentExternalPointRef,
+    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId,
+    DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef, DocumentParameterId,
+    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentTrimBoundary,
+    DocumentTrimParameter, FeatureEndpoint, GeometryRole, GeometryRoleEdit,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationOutcome, PersistentId,
+    RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarDomain, ScalarUnit,
+    SketchHardValidity, SketchMaterializationBatch, SketchMaterializationReservationAllocator,
     SketchPersistentIdentityHighWater, SolverConfig, TangentOrientation,
 };
 use geosolve_sketch_intent::{
@@ -381,7 +384,7 @@ impl ColdIntentMaterializer {
                     lower_geometry(candidate, node, *recipe, &mut batch, &mut state)?;
                 }
                 IntentNodeKind::Constraint { constraint } => {
-                    lower_constraint(node, *constraint, &mut batch, &mut state)?;
+                    lower_constraint(candidate, node, *constraint, &mut batch, &mut state)?;
                 }
                 IntentNodeKind::Dimension { dimension } => {
                     lower_dimension(candidate, node, *dimension, &mut batch, &mut state)?;
@@ -641,24 +644,8 @@ fn preflight_supported(
                     | GeometryRecipeKind::OpenControlNurbs
                     | GeometryRecipeKind::PeriodicControlNurbs
             ),
-            IntentNodeKind::Constraint { constraint } => !matches!(
-                constraint,
-                ConstraintKind::ExternalPointCoincident
-                    | ConstraintKind::ExternalLineCollinear
-                    | ConstraintKind::PointOnCurve
-                    | ConstraintKind::LineCircleTangency
-                    | ConstraintKind::CircleArcTangency
-                    | ConstraintKind::LineCurveTangency
-                    | ConstraintKind::CurveCurveContact
-                    | ConstraintKind::CurveCurveTangency
-                    | ConstraintKind::CurveDirection
-                    | ConstraintKind::EqualCurvature
-                    | ConstraintKind::EndpointContinuity
-                    | ConstraintKind::LineLineFillet
-                    | ConstraintKind::CurveCurveFillet
-            ),
+            IntentNodeKind::Constraint { .. } | IntentNodeKind::Aggregate { .. } => true,
             IntentNodeKind::Dimension { dimension } => dimension != DimensionKind::ProfileOffset,
-            IntentNodeKind::Aggregate { .. } => true,
             _ => false,
         };
         if !supported {
@@ -826,6 +813,7 @@ struct LoweringState {
     reverse_leaves: BTreeMap<IntentNativeWritableLeaf, LeafRef>,
     point_positions: BTreeMap<DesignPointId, [f64; 2]>,
     aggregate_bindings: BTreeMap<IntentPortRef, IntentAggregateMaterialization>,
+    contact_states: BTreeMap<ContactId, (CurveSpan, i32, ContactDomain)>,
     topology_aggregate_nodes: BTreeMap<IntentPortRef, NodeId>,
     consumed_reservations: BTreeSet<ReservationId>,
 }
@@ -842,6 +830,7 @@ impl LoweringState {
             reverse_leaves: BTreeMap::new(),
             point_positions: BTreeMap::new(),
             aggregate_bindings: BTreeMap::new(),
+            contact_states: BTreeMap::new(),
             topology_aggregate_nodes: BTreeMap::new(),
             consumed_reservations: BTreeSet::new(),
         }
@@ -2277,7 +2266,7 @@ fn materialize_tangent_arc_relation(
         source_domain,
         source_winding,
         source_neighborhood,
-        orientation,
+        Some(orientation),
         batch,
         state,
     )?;
@@ -2293,7 +2282,7 @@ fn materialize_tangent_arc_relation(
         },
         0,
         ContactNeighborhood::Start,
-        orientation,
+        Some(orientation),
         batch,
         state,
     )?;
@@ -2360,7 +2349,7 @@ fn materialize_recipe_contact(
     domain: ContactDomain,
     winding: i32,
     neighborhood: ContactNeighborhood,
-    orientation: TangentOrientation,
+    orientation: Option<TangentOrientation>,
     batch: &mut SketchMaterializationBatch,
     state: &mut LoweringState,
 ) -> Result<ContactId, IntentMaterializationError> {
@@ -2401,8 +2390,11 @@ fn materialize_recipe_contact(
         domain,
         winding,
         neighborhood,
-        tangent_orientation: Some(orientation),
+        tangent_orientation: orientation,
     });
+    state
+        .contact_states
+        .insert(contact, (curve, winding, domain));
     state.consume_port(node, contact_port);
     Ok(contact)
 }
@@ -2971,11 +2963,208 @@ fn lower_horizontal(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+struct RelationContactDefaults {
+    parameter: f64,
+    domain: ContactDomain,
+    winding: i32,
+    neighborhood: ContactNeighborhood,
+    orientation: Option<TangentOrientation>,
+}
+
+impl RelationContactDefaults {
+    const fn bounded(parameter: f64) -> Self {
+        Self {
+            parameter,
+            domain: ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            },
+            winding: 0,
+            neighborhood: ContactNeighborhood::Interior,
+            orientation: None,
+        }
+    }
+
+    const fn periodic(parameter: f64) -> Self {
+        Self {
+            parameter,
+            domain: ContactDomain::Periodic {
+                period: std::f64::consts::TAU,
+            },
+            winding: 0,
+            neighborhood: ContactNeighborhood::Interior,
+            orientation: None,
+        }
+    }
+
+    const fn oriented(mut self, orientation: TangentOrientation) -> Self {
+        self.orientation = Some(orientation);
+        self
+    }
+
+    const fn neighborhood(mut self, neighborhood: ContactNeighborhood) -> Self {
+        self.neighborhood = neighborhood;
+        self
+    }
+}
+
+fn relation_contact_domain(
+    node: &IntentNode,
+    prefix: &str,
+    default: ContactDomain,
+) -> Result<ContactDomain, IntentMaterializationError> {
+    let domain_field = format!("{prefix}_domain");
+    match enum_field(node, &domain_field)? {
+        None => Ok(default),
+        Some("supporting_line") => Ok(ContactDomain::SupportingLine),
+        Some("bounded") => {
+            let (default_lower, default_upper) = match default {
+                ContactDomain::Bounded { lower, upper } => (lower, upper),
+                ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => (0.0, 1.0),
+            };
+            let lower = field_quantity(
+                node,
+                &format!("{prefix}_domain_lower"),
+                IntentUnit::Dimensionless,
+            )?
+            .unwrap_or(default_lower);
+            let upper = field_quantity(
+                node,
+                &format!("{prefix}_domain_upper"),
+                IntentUnit::Dimensionless,
+            )?
+            .unwrap_or(default_upper);
+            Ok(ContactDomain::Bounded { lower, upper })
+        }
+        Some("periodic") => {
+            let default_period = match default {
+                ContactDomain::Periodic { period } => period,
+                ContactDomain::SupportingLine | ContactDomain::Bounded { .. } => {
+                    std::f64::consts::TAU
+                }
+            };
+            let period = field_quantity(
+                node,
+                &format!("{prefix}_domain_period"),
+                IntentUnit::Dimensionless,
+            )?
+            .unwrap_or(default_period);
+            Ok(ContactDomain::Periodic { period })
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "contact domain is invalid",
+        }),
+    }
+}
+
+fn relation_contact_neighborhood(
+    node: &IntentNode,
+    prefix: &str,
+    default: ContactNeighborhood,
+) -> Result<ContactNeighborhood, IntentMaterializationError> {
+    let neighborhood_field = format!("{prefix}_neighborhood");
+    match enum_field(node, &neighborhood_field)? {
+        None => Ok(default),
+        Some("interior") => Ok(ContactNeighborhood::Interior),
+        Some("start") => Ok(ContactNeighborhood::Start),
+        Some("end") => Ok(ContactNeighborhood::End),
+        Some("local") => {
+            let (default_lower, default_upper) = match default {
+                ContactNeighborhood::Local { lower, upper } => (lower, upper),
+                ContactNeighborhood::Interior
+                | ContactNeighborhood::Start
+                | ContactNeighborhood::End => (0.0, 1.0),
+            };
+            let lower = field_quantity(
+                node,
+                &format!("{prefix}_neighborhood_lower"),
+                IntentUnit::Dimensionless,
+            )?
+            .unwrap_or(default_lower);
+            let upper = field_quantity(
+                node,
+                &format!("{prefix}_neighborhood_upper"),
+                IntentUnit::Dimensionless,
+            )?
+            .unwrap_or(default_upper);
+            Ok(ContactNeighborhood::Local { lower, upper })
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "contact neighborhood is invalid",
+        }),
+    }
+}
+
+fn relation_contact_orientation(
+    node: &IntentNode,
+    prefix: &str,
+    default: Option<TangentOrientation>,
+) -> Result<Option<TangentOrientation>, IntentMaterializationError> {
+    match enum_field(node, &format!("{prefix}_orientation"))? {
+        None => Ok(default),
+        Some("none" | "unoriented") => Ok(None),
+        Some("aligned") => Ok(Some(TangentOrientation::Aligned)),
+        Some("opposed") => Ok(Some(TangentOrientation::Opposed)),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "contact tangent orientation is invalid",
+        }),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_relation_contact(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    index: u16,
+    prefix: &str,
+    curve: CurveSpan,
+    defaults: RelationContactDefaults,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<ContactId, IntentMaterializationError> {
+    let parameter = field_quantity(
+        node,
+        &format!("{prefix}_parameter"),
+        IntentUnit::Dimensionless,
+    )?
+    .unwrap_or(defaults.parameter);
+    let winding = i32::try_from(field_integer(
+        node,
+        &format!("{prefix}_winding"),
+        i64::from(defaults.winding),
+    )?)
+    .map_err(|_| IntentMaterializationError::InvalidGeometry {
+        node: node.id,
+        reason: "contact winding exceeds persistent limits",
+    })?;
+    let domain = relation_contact_domain(node, prefix, defaults.domain)?;
+    let neighborhood = relation_contact_neighborhood(node, prefix, defaults.neighborhood)?;
+    let orientation = relation_contact_orientation(node, prefix, defaults.orientation)?;
+    materialize_recipe_contact(
+        candidate,
+        node,
+        index,
+        curve,
+        parameter,
+        domain,
+        winding,
+        neighborhood,
+        orientation,
+        batch,
+        state,
+    )
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "one exhaustive relation table keeps intent operands and native definitions aligned"
 )]
 fn lower_constraint(
+    candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,
     kind: ConstraintKind,
     batch: &mut SketchMaterializationBatch,
@@ -3013,6 +3202,12 @@ fn lower_constraint(
             first: input_point(node, state, 0)?,
             second: input_point(node, state, 1)?,
         },
+        C::ExternalPointCoincident => DocumentConstraintDefinition::ExternalPointCoincident {
+            point: input_point(node, state, 0)?,
+            external: DocumentExternalPointRef {
+                binding: input_external(node, state, 0)?,
+            },
+        },
         C::Vertical => DocumentConstraintDefinition::Vertical {
             line: input_span(node, state, 0)?,
         },
@@ -3039,6 +3234,16 @@ fn lower_constraint(
         C::Perpendicular => DocumentConstraintDefinition::Perpendicular {
             first: input_span(node, state, 0)?,
             second: input_span(node, state, 1)?,
+        },
+        C::ExternalLineCollinear => DocumentConstraintDefinition::ExternalLineCollinear {
+            line: DocumentLineSupportRef {
+                span: input_span(node, state, 0)?,
+                direction: direction_sense(node, "direction")?,
+            },
+            external: DocumentExternalLineSupportRef {
+                binding: input_external(node, state, 0)?,
+                direction: DocumentDirectionSense::Forward,
+            },
         },
         C::CollinearWithDatumAxis => DocumentConstraintDefinition::CollinearWithDatumAxis {
             line: DocumentLineSupportRef {
@@ -3093,22 +3298,240 @@ fn lower_constraint(
             mode: circle_tangency_mode(node)?,
             center_direction: point_field(node, "center_direction")?.unwrap_or([1.0, 0.0]),
         },
-        C::Horizontal
-        | C::ExternalPointCoincident
-        | C::ExternalLineCollinear
-        | C::PointOnCurve
-        | C::LineCircleTangency
-        | C::CircleArcTangency
-        | C::LineCurveTangency
-        | C::CurveCurveContact
-        | C::CurveCurveTangency
-        | C::CurveDirection
-        | C::EqualCurvature
-        | C::EndpointContinuity
-        | C::LineLineFillet
-        | C::CurveCurveFillet => {
-            return Err(IntentMaterializationError::UnsupportedNode { node: node.id });
-        }
+        C::PointOnCurve => DocumentConstraintDefinition::PointOnCurve {
+            point: input_point(node, state, 0)?,
+            contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+        },
+        C::LineCircleTangency => DocumentConstraintDefinition::LineCircleTangency {
+            line_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(0.5).oriented(TangentOrientation::Aligned),
+                batch,
+                state,
+            )?,
+            circle_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                CurveSpan::line(input_curve(node, state, 0)?),
+                RelationContactDefaults::periodic(0.0).oriented(TangentOrientation::Aligned),
+                batch,
+                state,
+            )?,
+            side: line_side(node)?,
+        },
+        C::CircleArcTangency => DocumentConstraintDefinition::CircleArcTangency {
+            circle_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                CurveSpan::line(input_curve(node, state, 0)?),
+                RelationContactDefaults::periodic(0.0).oriented(TangentOrientation::Aligned),
+                batch,
+                state,
+            )?,
+            arc_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                CurveSpan::line(input_curve(node, state, 1)?),
+                RelationContactDefaults::bounded(0.5).oriented(TangentOrientation::Aligned),
+                batch,
+                state,
+            )?,
+            side: arc_tangency_side(node)?,
+        },
+        C::LineCurveTangency => DocumentConstraintDefinition::LineCurveTangency {
+            line: input_span(node, state, 0)?,
+            endpoint: feature_endpoint(node, "endpoint")?,
+            curve_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.0)
+                    .neighborhood(ContactNeighborhood::Start)
+                    .oriented(TangentOrientation::Aligned),
+                batch,
+                state,
+            )?,
+        },
+        C::CurveCurveContact => DocumentConstraintDefinition::CurveCurveContact {
+            first_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            second_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+        },
+        C::CurveCurveTangency => DocumentConstraintDefinition::CurveCurveTangency {
+            first_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(0.5).oriented(TangentOrientation::Aligned),
+                batch,
+                state,
+            )?,
+            second_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.5).oriented(TangentOrientation::Aligned),
+                batch,
+                state,
+            )?,
+        },
+        C::CurveDirection => DocumentConstraintDefinition::CurveDirection {
+            line: input_span(node, state, 0)?,
+            curve_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            relation: curve_direction_relation(node)?,
+        },
+        C::EqualCurvature => DocumentConstraintDefinition::EqualCurvature {
+            first_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            second_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            relation: curvature_relation(node)?,
+        },
+        C::EndpointContinuity => DocumentConstraintDefinition::EndpointContinuity {
+            first_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(1.0).neighborhood(ContactNeighborhood::End),
+                batch,
+                state,
+            )?,
+            second_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.0).neighborhood(ContactNeighborhood::Start),
+                batch,
+                state,
+            )?,
+            continuity: curve_continuity(node)?,
+        },
+        C::LineLineFillet => DocumentConstraintDefinition::LineLineFillet {
+            arc: input_curve(node, state, 0)?,
+            first_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            first_side: curve_normal_side(node, "first_side")?,
+            second_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            second_side: curve_normal_side(node, "second_side")?,
+            endpoint_order: fillet_endpoint_order(node)?,
+        },
+        C::CurveCurveFillet => DocumentConstraintDefinition::CurveCurveFillet {
+            arc: input_curve(node, state, 0)?,
+            first_contact: materialize_relation_contact(
+                candidate,
+                node,
+                0,
+                "first_contact",
+                input_span(node, state, 0)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            first_side: curve_normal_side(node, "first_side")?,
+            first_trim_endpoint: fillet_trim_endpoint(node, "first_trim_endpoint")?,
+            second_contact: materialize_relation_contact(
+                candidate,
+                node,
+                1,
+                "second_contact",
+                input_span(node, state, 1)?,
+                RelationContactDefaults::bounded(0.5),
+                batch,
+                state,
+            )?,
+            second_side: curve_normal_side(node, "second_side")?,
+            second_trim_endpoint: fillet_trim_endpoint(node, "second_trim_endpoint")?,
+            endpoint_order: fillet_endpoint_order(node)?,
+        },
+        C::Horizontal => unreachable!("horizontal is lowered through its dual-input adapter"),
     };
     materialize_constraint(node, definition, batch, state)
 }
@@ -3139,6 +3562,52 @@ fn materialize_indexed_constraint(
         Some(IntentNativeBinding::Source(id)) => *id,
         _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
     };
+    if let DocumentConstraintDefinition::CurveCurveFillet {
+        first_contact,
+        first_trim_endpoint,
+        second_contact,
+        second_trim_endpoint,
+        ..
+    } = &definition
+    {
+        for (contact, endpoint) in [
+            (*first_contact, *first_trim_endpoint),
+            (*second_contact, *second_trim_endpoint),
+        ] {
+            let (support, winding, domain) = state.contact_states.get(&contact).copied().ok_or(
+                IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "fillet contact state is unavailable",
+                },
+            )?;
+            if matches!(domain, ContactDomain::Periodic { .. }) {
+                return Err(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "periodic fillet parents require an explicit trim anchor",
+                });
+            }
+            let fixed = DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                parameter: match endpoint {
+                    DocumentFilletTrimEndpoint::Start => 1.0,
+                    DocumentFilletTrimEndpoint::End => 0.0,
+                },
+                winding,
+            });
+            let owned = DocumentTrimBoundary::FilletContact {
+                owner: constraint,
+                contact,
+            };
+            let (start, end) = match endpoint {
+                DocumentFilletTrimEndpoint::Start => (owned, fixed),
+                DocumentFilletTrimEndpoint::End => (fixed, owned),
+            };
+            batch.push_trim_view(DocumentCurveTrimView {
+                support,
+                start,
+                end,
+            });
+        }
+    }
     batch.push_constraint(DocumentConstraint {
         id: constraint,
         source_id,
@@ -3209,6 +3678,17 @@ fn input_curve(
     match binding {
         IntentNativeBinding::Curve(curve) => Ok(*curve),
         IntentNativeBinding::CurveSpan(span) => Ok(span.curve),
+        _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    }
+}
+
+fn input_external(
+    node: &IntentNode,
+    state: &LoweringState,
+    index: u16,
+) -> Result<DocumentExternalBindingId, IntentMaterializationError> {
+    match input_binding(node, state, InputRole::External, index)? {
+        IntentNativeBinding::ExternalBinding(binding) => Ok(*binding),
         _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
     }
 }
@@ -3591,6 +4071,143 @@ fn line_offset_orientation(
         Some(_) => Err(IntentMaterializationError::InvalidGeometry {
             node: node.id,
             reason: "line-offset orientation must be same or reversed",
+        }),
+    }
+}
+
+fn arc_tangency_side(
+    node: &IntentNode,
+) -> Result<DocumentArcTangencySide, IntentMaterializationError> {
+    match enum_field(node, "side")? {
+        None | Some("outside_arc") => Ok(DocumentArcTangencySide::OutsideArc),
+        Some("inside_arc") => Ok(DocumentArcTangencySide::InsideArc),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "arc tangency side must be outside_arc or inside_arc",
+        }),
+    }
+}
+
+fn feature_endpoint(
+    node: &IntentNode,
+    name: &str,
+) -> Result<FeatureEndpoint, IntentMaterializationError> {
+    match enum_field(node, name)? {
+        None | Some("start") => Ok(FeatureEndpoint::Start),
+        Some("end") => Ok(FeatureEndpoint::End),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "feature endpoint must be start or end",
+        }),
+    }
+}
+
+fn tangent_orientation(
+    node: &IntentNode,
+    name: &str,
+) -> Result<TangentOrientation, IntentMaterializationError> {
+    match enum_field(node, name)? {
+        None | Some("aligned") => Ok(TangentOrientation::Aligned),
+        Some("opposed") => Ok(TangentOrientation::Opposed),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "tangent orientation must be aligned or opposed",
+        }),
+    }
+}
+
+fn curve_normal_side(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentCurveNormalSide, IntentMaterializationError> {
+    match enum_field(node, name)? {
+        None | Some("left") => Ok(DocumentCurveNormalSide::Left),
+        Some("right") => Ok(DocumentCurveNormalSide::Right),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "curve normal side must be left or right",
+        }),
+    }
+}
+
+fn curve_direction_relation(
+    node: &IntentNode,
+) -> Result<DocumentCurveDirectionRelation, IntentMaterializationError> {
+    match enum_field(node, "relation")? {
+        None | Some("tangent") => Ok(DocumentCurveDirectionRelation::Tangent {
+            orientation: tangent_orientation(node, "orientation")?,
+        }),
+        Some("normal") => Ok(DocumentCurveDirectionRelation::Normal {
+            side: curve_normal_side(node, "side")?,
+        }),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "curve direction relation must be tangent or normal",
+        }),
+    }
+}
+
+fn curvature_relation(
+    node: &IntentNode,
+) -> Result<DocumentCurveCurvatureRelation, IntentMaterializationError> {
+    match enum_field(node, "relation")? {
+        None | Some("signed") => Ok(DocumentCurveCurvatureRelation::Signed),
+        Some("magnitude_same_sign") => Ok(DocumentCurveCurvatureRelation::MagnitudeSameSign),
+        Some("magnitude_opposite_sign") => {
+            Ok(DocumentCurveCurvatureRelation::MagnitudeOppositeSign)
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "curve curvature relation is invalid",
+        }),
+    }
+}
+
+fn curve_continuity(
+    node: &IntentNode,
+) -> Result<DocumentCurveContinuity, IntentMaterializationError> {
+    match enum_field(node, "continuity")? {
+        None | Some("g0") => Ok(DocumentCurveContinuity::G0),
+        Some("g1") => Ok(DocumentCurveContinuity::G1),
+        Some("g2") => Ok(DocumentCurveContinuity::G2),
+        Some("parametric_c2") => {
+            let ratio =
+                field_quantity(node, "parameter_ratio", IntentUnit::Dimensionless)?.unwrap_or(1.0);
+            Ok(DocumentCurveContinuity::ParametricC2 {
+                first_rate: ratio,
+                second_rate: 1.0,
+            })
+        }
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "curve continuity must be g0, g1, g2, or parametric_c2",
+        }),
+    }
+}
+
+fn fillet_endpoint_order(
+    node: &IntentNode,
+) -> Result<DocumentFilletEndpointOrder, IntentMaterializationError> {
+    match enum_field(node, "endpoint_order")? {
+        None | Some("first_then_second") => Ok(DocumentFilletEndpointOrder::FirstThenSecond),
+        Some("second_then_first") => Ok(DocumentFilletEndpointOrder::SecondThenFirst),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "fillet endpoint order is invalid",
+        }),
+    }
+}
+
+fn fillet_trim_endpoint(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentFilletTrimEndpoint, IntentMaterializationError> {
+    match enum_field(node, name)? {
+        None | Some("start") => Ok(DocumentFilletTrimEndpoint::Start),
+        Some("end") => Ok(DocumentFilletTrimEndpoint::End),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "fillet trim endpoint must be start or end",
         }),
     }
 }

@@ -6,7 +6,13 @@ use geosolve_constraint_editor::{
     ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
     IntentNativeBinding, IntentNativeWritableLeaf,
 };
-use geosolve_sketch::{DocumentId, ExternalSnapshotSet, ParameterBatch, PersistentId};
+use geosolve_sketch::{
+    ContactDomain, ContactNeighborhood, CurveDefinition, DocumentArcTangencySide,
+    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
+    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentId, DocumentLineSide, ExternalSnapshotSet, FeatureEndpoint,
+    ParameterBatch, PersistentId, TangentOrientation,
+};
 use geosolve_sketch_intent::{
     AggregateKind, BootstrapNativeKind, ConstraintKind, DimensionKind, ExternalInputRevision,
     GeometryRecipeKind, InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation,
@@ -24,6 +30,10 @@ fn selector(role: IntentPortRole) -> IntentPortSelector {
     IntentPortSelector::Node { role, index: 0 }
 }
 
+fn indexed_selector(role: IntentPortRole, index: u16) -> IntentPortSelector {
+    IntentPortSelector::Node { role, index }
+}
+
 fn alias(node: &str, role: IntentPortRole) -> PatchPortRef {
     PatchPortRef::Alias {
         node: key(node),
@@ -35,6 +45,20 @@ fn coordinate(value: f64) -> IntentLiteral {
     IntentLiteral::Quantity {
         value,
         unit: IntentUnit::Length,
+    }
+}
+
+fn parameter(value: f64) -> IntentLiteral {
+    IntentLiteral::Quantity {
+        value,
+        unit: IntentUnit::Dimensionless,
+    }
+}
+
+fn angle(value: f64) -> IntentLiteral {
+    IntentLiteral::Quantity {
+        value,
+        unit: IntentUnit::Angle,
     }
 }
 
@@ -108,6 +132,116 @@ fn circle(name: &str, center: [f64; 2], radius: f64) -> IntentNodeDraft {
         LeafField::Value,
         coordinate(radius),
     )
+}
+
+fn circular_arc(
+    name: &str,
+    center: [f64; 2],
+    radius: f64,
+    start: f64,
+    end: f64,
+) -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::CenterArc,
+        },
+        key(name),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Center),
+        LeafField::X,
+        coordinate(center[0]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Center),
+        LeafField::Y,
+        coordinate(center[1]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Target),
+        LeafField::Value,
+        coordinate(radius),
+    )
+    .with_instance_leaf(
+        indexed_selector(IntentPortRole::Target, 1),
+        LeafField::Angle,
+        angle(start),
+    )
+    .with_instance_leaf(
+        indexed_selector(IntentPortRole::Target, 2),
+        LeafField::Angle,
+        angle(end),
+    )
+}
+
+fn quadratic_bezier(
+    name: &str,
+    start: [f64; 2],
+    control: [f64; 2],
+    end: [f64; 2],
+) -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::QuadraticBezier,
+        },
+        key(name),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Start),
+        LeafField::X,
+        coordinate(start[0]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Start),
+        LeafField::Y,
+        coordinate(start[1]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Control),
+        LeafField::X,
+        coordinate(control[0]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Control),
+        LeafField::Y,
+        coordinate(control[1]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::End),
+        LeafField::X,
+        coordinate(end[0]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::End),
+        LeafField::Y,
+        coordinate(end[1]),
+    )
+}
+
+fn create(alias_name: &str, draft: IntentNodeDraft) -> IntentPatchOperation {
+    IntentPatchOperation::CreateNode {
+        alias: key(alias_name),
+        draft: Box::new(draft),
+        cell: None,
+    }
+}
+
+fn relation(
+    kind: ConstraintKind,
+    inputs: impl IntoIterator<Item = (InputSlot, PatchPortRef)>,
+    fields: impl IntoIterator<Item = (&'static str, IntentLiteral)>,
+) -> IntentNodeDraft {
+    let mut draft = IntentNodeDraft::new(
+        IntentNodeKind::Constraint { constraint: kind },
+        key("relation"),
+    );
+    for (slot, source) in inputs {
+        draft = draft.with_input(slot, source);
+    }
+    for (name, value) in fields {
+        draft = draft.with_field(IntentFieldKey(key(name)), value);
+    }
+    draft
 }
 
 fn shared_horizontal_segment_patch(session: &IntentSession, end: [f64; 2]) -> IntentPatch {
@@ -191,6 +325,32 @@ fn cold_materialize_ops(
         )
         .unwrap();
     captured.into_inner().unwrap()
+}
+
+fn assert_independently_validated(output: &ColdIntentMaterialization) {
+    let accepted = output.session.accepted_state_for_current_input().unwrap();
+    assert!(
+        accepted
+            .document()
+            .points()
+            .iter()
+            .flat_map(|point| point.position)
+            .all(f64::is_finite)
+    );
+    assert!(
+        accepted
+            .document()
+            .scalars()
+            .iter()
+            .all(|scalar| scalar.value.is_finite())
+    );
+    assert!(output.validation.hard_residuals_validated);
+    assert!(
+        output
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+    );
 }
 
 #[test]
@@ -1053,6 +1213,747 @@ fn cold_relation_inventory_uses_exact_native_constraint_source_pairs() {
             case.kind
         );
     }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one focused table keeps the contact-owning relation branches exact and reviewable"
+)]
+fn contact_relations_materialize_exact_parameters_domains_and_orientations() {
+    let point_on_curve = cold_materialize_ops(
+        0x8300_3800,
+        vec![
+            create("point", point("point", [0.0, 0.0])),
+            create("line", segment("line", [-1.0, 0.0], [1.0, 0.0])),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::PointOnCurve,
+                    [
+                        (
+                            InputSlot::new(InputRole::Point, 0),
+                            alias("point", IntentPortRole::Primary),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("line", IntentPortRole::Span),
+                        ),
+                    ],
+                    [
+                        ("contact_parameter", parameter(0.5)),
+                        ("contact_domain", IntentLiteral::Enum(key("bounded"))),
+                        ("contact_neighborhood", IntentLiteral::Enum(key("local"))),
+                        ("contact_neighborhood_lower", parameter(0.25)),
+                        ("contact_neighborhood_upper", parameter(0.75)),
+                        ("contact_orientation", IntentLiteral::Enum(key("none"))),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&point_on_curve);
+    let accepted = point_on_curve
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 1);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert_eq!(document.scalars().len(), 1);
+    assert_eq!(
+        document.contacts()[0].domain,
+        ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0
+        }
+    );
+    assert_eq!(
+        document.contacts()[0].neighborhood,
+        ContactNeighborhood::Local {
+            lower: 0.25,
+            upper: 0.75
+        }
+    );
+    assert_eq!(document.contacts()[0].tangent_orientation, None);
+    assert!(
+        (document
+            .scalar(document.contacts()[0].parameter)
+            .unwrap()
+            .value
+            - 0.5)
+            .abs()
+            <= f64::EPSILON
+    );
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::PointOnCurve { .. }
+    ));
+
+    let line_circle = cold_materialize_ops(
+        0x8300_3801,
+        vec![
+            create("line", segment("line", [-2.0, 0.0], [2.0, 0.0])),
+            create("circle", circle("circle", [0.0, 1.0], 1.0)),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::LineCircleTangency,
+                    [
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("line", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Curve, 0),
+                            alias("circle", IntentPortRole::Curve),
+                        ),
+                    ],
+                    [
+                        ("side", IntentLiteral::Enum(key("left"))),
+                        ("first_contact_parameter", parameter(0.5)),
+                        (
+                            "first_contact_domain",
+                            IntentLiteral::Enum(key("supporting_line")),
+                        ),
+                        (
+                            "first_contact_orientation",
+                            IntentLiteral::Enum(key("aligned")),
+                        ),
+                        (
+                            "second_contact_parameter",
+                            parameter(3.0 * std::f64::consts::FRAC_PI_2),
+                        ),
+                        (
+                            "second_contact_domain",
+                            IntentLiteral::Enum(key("periodic")),
+                        ),
+                        (
+                            "second_contact_domain_period",
+                            parameter(std::f64::consts::TAU),
+                        ),
+                        ("second_contact_winding", IntentLiteral::Integer(2)),
+                        (
+                            "second_contact_orientation",
+                            IntentLiteral::Enum(key("aligned")),
+                        ),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&line_circle);
+    let accepted = line_circle
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 2);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert_eq!(document.scalars().len(), 3);
+    assert_eq!(document.contacts()[0].domain, ContactDomain::SupportingLine);
+    assert_eq!(
+        document.contacts()[1].domain,
+        ContactDomain::Periodic {
+            period: std::f64::consts::TAU
+        }
+    );
+    assert_eq!(document.contacts()[1].winding, 2);
+    assert!(
+        document
+            .contacts()
+            .iter()
+            .all(|contact| contact.tangent_orientation == Some(TangentOrientation::Aligned))
+    );
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::LineCircleTangency {
+            side: DocumentLineSide::Left,
+            ..
+        }
+    ));
+
+    let circle_arc = cold_materialize_ops(
+        0x8300_3802,
+        vec![
+            create("circle", circle("circle", [3.0, 0.0], 1.0)),
+            create(
+                "arc",
+                circular_arc(
+                    "arc",
+                    [0.0, 0.0],
+                    2.0,
+                    -std::f64::consts::FRAC_PI_2,
+                    std::f64::consts::FRAC_PI_2,
+                ),
+            ),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::CircleArcTangency,
+                    [
+                        (
+                            InputSlot::new(InputRole::Curve, 0),
+                            alias("circle", IntentPortRole::Curve),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Curve, 1),
+                            alias("arc", IntentPortRole::Curve),
+                        ),
+                    ],
+                    [
+                        ("side", IntentLiteral::Enum(key("outside_arc"))),
+                        ("first_contact_parameter", parameter(std::f64::consts::PI)),
+                        (
+                            "first_contact_orientation",
+                            IntentLiteral::Enum(key("opposed")),
+                        ),
+                        ("second_contact_parameter", parameter(0.5)),
+                        (
+                            "second_contact_orientation",
+                            IntentLiteral::Enum(key("opposed")),
+                        ),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&circle_arc);
+    let accepted = circle_arc
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 2);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::CircleArcTangency {
+            side: DocumentArcTangencySide::OutsideArc,
+            ..
+        }
+    ));
+    assert!(
+        document
+            .contacts()
+            .iter()
+            .all(|contact| contact.tangent_orientation == Some(TangentOrientation::Opposed))
+    );
+
+    let line_curve = cold_materialize_ops(
+        0x8300_3803,
+        vec![
+            create("line", segment("line", [0.0, 0.0], [1.0, 0.0])),
+            create(
+                "bezier",
+                quadratic_bezier("bezier", [0.0, 0.0], [1.0, 0.0], [2.0, 1.0]),
+            ),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::LineCurveTangency,
+                    [
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("line", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 1),
+                            alias("bezier", IntentPortRole::Span),
+                        ),
+                    ],
+                    [
+                        ("endpoint", IntentLiteral::Enum(key("start"))),
+                        ("contact_parameter", parameter(0.0)),
+                        ("contact_neighborhood", IntentLiteral::Enum(key("start"))),
+                        ("contact_orientation", IntentLiteral::Enum(key("aligned"))),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&line_curve);
+    let accepted = line_curve
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 1);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert_eq!(
+        document.contacts()[0].neighborhood,
+        ContactNeighborhood::Start
+    );
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::LineCurveTangency {
+            endpoint: FeatureEndpoint::Start,
+            ..
+        }
+    ));
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the differential relation inventory is clearest as exact accepted fixtures"
+)]
+fn curve_pair_and_differential_relations_preserve_their_explicit_branch_state() {
+    let curve_contact = cold_materialize_ops(
+        0x8300_3810,
+        vec![
+            create("first", segment("first", [-1.0, 0.0], [1.0, 0.0])),
+            create("second", segment("second", [0.0, -1.0], [0.0, 1.0])),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::CurveCurveContact,
+                    [
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("first", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 1),
+                            alias("second", IntentPortRole::Span),
+                        ),
+                    ],
+                    [
+                        ("first_contact_parameter", parameter(0.5)),
+                        ("second_contact_parameter", parameter(0.5)),
+                        (
+                            "first_contact_orientation",
+                            IntentLiteral::Enum(key("none")),
+                        ),
+                        (
+                            "second_contact_orientation",
+                            IntentLiteral::Enum(key("none")),
+                        ),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&curve_contact);
+    let accepted = curve_contact
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 2);
+    assert_eq!(document.scalars().len(), 2);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert!(
+        document
+            .contacts()
+            .iter()
+            .all(|contact| contact.tangent_orientation.is_none())
+    );
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::CurveCurveContact { .. }
+    ));
+
+    let curve_tangency = cold_materialize_ops(
+        0x8300_3811,
+        vec![
+            create(
+                "first",
+                quadratic_bezier("first", [0.0, 0.0], [1.0, 0.0], [2.0, 1.0]),
+            ),
+            create(
+                "second",
+                quadratic_bezier("second", [0.0, 0.0], [1.0, 0.0], [2.0, -1.0]),
+            ),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::CurveCurveTangency,
+                    [
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("first", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 1),
+                            alias("second", IntentPortRole::Span),
+                        ),
+                    ],
+                    [
+                        ("first_contact_parameter", parameter(0.0)),
+                        (
+                            "first_contact_neighborhood",
+                            IntentLiteral::Enum(key("start")),
+                        ),
+                        (
+                            "first_contact_orientation",
+                            IntentLiteral::Enum(key("aligned")),
+                        ),
+                        ("second_contact_parameter", parameter(0.0)),
+                        (
+                            "second_contact_neighborhood",
+                            IntentLiteral::Enum(key("start")),
+                        ),
+                        (
+                            "second_contact_orientation",
+                            IntentLiteral::Enum(key("aligned")),
+                        ),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&curve_tangency);
+    let accepted = curve_tangency
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 2);
+    assert!(
+        document
+            .contacts()
+            .iter()
+            .all(|contact| contact.tangent_orientation == Some(TangentOrientation::Aligned))
+    );
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::CurveCurveTangency { .. }
+    ));
+
+    let curve_direction = cold_materialize_ops(
+        0x8300_3812,
+        vec![
+            create("line", segment("line", [0.0, 2.0], [1.0, 2.0])),
+            create(
+                "curve",
+                quadratic_bezier("curve", [0.0, 0.0], [1.0, 0.0], [2.0, 1.0]),
+            ),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::CurveDirection,
+                    [
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("line", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 1),
+                            alias("curve", IntentPortRole::Span),
+                        ),
+                    ],
+                    [
+                        ("relation", IntentLiteral::Enum(key("tangent"))),
+                        ("orientation", IntentLiteral::Enum(key("aligned"))),
+                        ("contact_parameter", parameter(0.0)),
+                        ("contact_neighborhood", IntentLiteral::Enum(key("start"))),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&curve_direction);
+    let accepted = curve_direction
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 1);
+    assert_eq!(document.contacts()[0].tangent_orientation, None);
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::CurveDirection {
+            relation: DocumentCurveDirectionRelation::Tangent {
+                orientation: TangentOrientation::Aligned
+            },
+            ..
+        }
+    ));
+
+    let equal_curvature = cold_materialize_ops(
+        0x8300_3813,
+        vec![
+            create("first", segment("first", [-1.0, 0.0], [1.0, 0.0])),
+            create("second", segment("second", [-1.0, 1.0], [1.0, 1.0])),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::EqualCurvature,
+                    [
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("first", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 1),
+                            alias("second", IntentPortRole::Span),
+                        ),
+                    ],
+                    [
+                        ("relation", IntentLiteral::Enum(key("signed"))),
+                        ("first_contact_parameter", parameter(0.25)),
+                        ("second_contact_parameter", parameter(0.75)),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&equal_curvature);
+    let accepted = equal_curvature
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    assert!(matches!(
+        accepted.document().constraints()[0].definition,
+        DocumentConstraintDefinition::EqualCurvature {
+            relation: DocumentCurveCurvatureRelation::Signed,
+            ..
+        }
+    ));
+
+    let endpoint_continuity = cold_materialize_ops(
+        0x8300_3814,
+        vec![
+            create("incoming", segment("incoming", [0.0, 0.0], [2.0, 0.0])),
+            create("outgoing", segment("outgoing", [2.0, 0.0], [6.0, 0.0])),
+            create(
+                "relation",
+                relation(
+                    ConstraintKind::EndpointContinuity,
+                    [
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("incoming", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 1),
+                            alias("outgoing", IntentPortRole::Span),
+                        ),
+                    ],
+                    [
+                        ("continuity", IntentLiteral::Enum(key("parametric_c2"))),
+                        ("parameter_ratio", parameter(2.0)),
+                        ("first_contact_parameter", parameter(1.0)),
+                        (
+                            "first_contact_neighborhood",
+                            IntentLiteral::Enum(key("end")),
+                        ),
+                        ("second_contact_parameter", parameter(0.0)),
+                        (
+                            "second_contact_neighborhood",
+                            IntentLiteral::Enum(key("start")),
+                        ),
+                    ],
+                ),
+            ),
+        ],
+    );
+    assert_independently_validated(&endpoint_continuity);
+    let accepted = endpoint_continuity
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 2);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::EndpointContinuity {
+            continuity: DocumentCurveContinuity::ParametricC2 {
+                first_rate: 2.0,
+                second_rate: 1.0
+            },
+            ..
+        }
+    ));
+}
+
+fn fillet_fixture(kind: ConstraintKind) -> ColdIntentMaterialization {
+    let arc = circular_arc(
+        "arc",
+        [1.0, 1.0],
+        1.0,
+        -std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+    )
+    .with_field(
+        IntentFieldKey(key("sweep")),
+        IntentLiteral::Enum(key("clockwise")),
+    );
+    let mut fields = vec![
+        ("first_side", IntentLiteral::Enum(key("left"))),
+        ("second_side", IntentLiteral::Enum(key("left"))),
+        (
+            "endpoint_order",
+            IntentLiteral::Enum(key("first_then_second")),
+        ),
+        ("first_contact_parameter", parameter(0.75)),
+        ("first_contact_domain", IntentLiteral::Enum(key("bounded"))),
+        (
+            "first_contact_neighborhood",
+            IntentLiteral::Enum(key("interior")),
+        ),
+        ("second_contact_parameter", parameter(0.25)),
+        ("second_contact_domain", IntentLiteral::Enum(key("bounded"))),
+        (
+            "second_contact_neighborhood",
+            IntentLiteral::Enum(key("interior")),
+        ),
+    ];
+    if kind == ConstraintKind::CurveCurveFillet {
+        fields.extend([
+            ("first_trim_endpoint", IntentLiteral::Enum(key("end"))),
+            ("second_trim_endpoint", IntentLiteral::Enum(key("start"))),
+        ]);
+    }
+    cold_materialize_ops(
+        if kind == ConstraintKind::LineLineFillet {
+            0x8300_3820
+        } else {
+            0x8300_3821
+        },
+        vec![
+            create("first", segment("first", [-2.0, 0.0], [2.0, 0.0])),
+            create("second", segment("second", [0.0, 2.0], [0.0, -2.0])),
+            create("arc", arc),
+            create(
+                "relation",
+                relation(
+                    kind,
+                    [
+                        (
+                            InputSlot::new(InputRole::Curve, 0),
+                            alias("arc", IntentPortRole::Curve),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 0),
+                            alias("first", IntentPortRole::Span),
+                        ),
+                        (
+                            InputSlot::new(InputRole::Span, 1),
+                            alias("second", IntentPortRole::Span),
+                        ),
+                    ],
+                    fields,
+                ),
+            ),
+        ],
+    )
+}
+
+#[test]
+fn native_fillet_declarations_lower_without_reconstructing_or_inferring_their_branch() {
+    let line_line = fillet_fixture(ConstraintKind::LineLineFillet);
+    assert_independently_validated(&line_line);
+    let accepted = line_line
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 2);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert!(document.contacts().iter().all(|contact| {
+        contact.domain
+            == (ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            })
+            && contact.neighborhood == ContactNeighborhood::Interior
+            && contact.tangent_orientation.is_none()
+    }));
+    let DocumentConstraintDefinition::LineLineFillet {
+        arc,
+        first_side,
+        second_side,
+        endpoint_order,
+        ..
+    } = document.constraints()[0].definition
+    else {
+        panic!("expected native line-line fillet")
+    };
+    assert_eq!(first_side, DocumentCurveNormalSide::Left);
+    assert_eq!(second_side, DocumentCurveNormalSide::Left);
+    assert_eq!(endpoint_order, DocumentFilletEndpointOrder::FirstThenSecond);
+    assert!(matches!(
+        document.curve(arc).unwrap().definition,
+        CurveDefinition::CircularArc { .. }
+    ));
+
+    let curve_curve = fillet_fixture(ConstraintKind::CurveCurveFillet);
+    assert_independently_validated(&curve_curve);
+    let accepted = curve_curve
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document = accepted.document();
+    assert_eq!(document.contacts().len(), 2);
+    assert_eq!(document.constraints().len(), 1);
+    assert_eq!(document.source_order().len(), 1);
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::CurveCurveFillet {
+            first_side: DocumentCurveNormalSide::Left,
+            first_trim_endpoint: DocumentFilletTrimEndpoint::End,
+            second_side: DocumentCurveNormalSide::Left,
+            second_trim_endpoint: DocumentFilletTrimEndpoint::Start,
+            endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn malformed_contact_branch_rejects_without_graph_or_accepted_publication() {
+    let raw = 0x8300_3830;
+    let session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+    let materializer = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(raw << 32)),
+        1.0,
+    )
+    .unwrap();
+    let invalid = relation(
+        ConstraintKind::PointOnCurve,
+        [
+            (
+                InputSlot::new(InputRole::Point, 0),
+                alias("point", IntentPortRole::Primary),
+            ),
+            (
+                InputSlot::new(InputRole::Span, 0),
+                alias("line", IntentPortRole::Span),
+            ),
+        ],
+        [
+            ("contact_parameter", parameter(0.5)),
+            ("contact_orientation", IntentLiteral::Enum(key("aligned"))),
+        ],
+    );
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            create("point", point("point", [0.0, 0.0])),
+            create("line", segment("line", [-1.0, 0.0], [1.0, 0.0])),
+            create("relation", invalid),
+        ],
+    );
+    assert!(
+        session
+            .plan_patch(patch, |candidate| materializer.evaluate(candidate))
+            .is_err()
+    );
+    assert!(session.graph().nodes().is_empty());
+    assert!(session.accepted().is_none());
+    assert_eq!(session.undo_len(), 0);
+    assert_eq!(session.redo_len(), 0);
 }
 
 #[test]
