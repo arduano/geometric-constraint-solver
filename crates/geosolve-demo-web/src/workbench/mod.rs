@@ -32,6 +32,86 @@ const CANVAS_POINTER_TERMINAL_EVENTS: [&str; 3] =
 #[cfg(any(target_arch = "wasm32", test))]
 const CANVAS_PAN_POINTER_EVENTS: [&str; 3] = ["pointerdown", "pointermove", "pointerup"];
 
+/// Browser presentation work admitted after one exact pointer lifecycle event.
+///
+/// Pointer motion is intentionally transient: it republishes the exact current
+/// canvas and status surfaces, but cannot serialize the workspace or rebuild
+/// panels backed by durable scene state. The authenticated terminal release is
+/// the single durable presentation boundary for that gesture.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkbenchPresentationEvent {
+    PointerMoveFrame,
+    PointerRelease,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl WorkbenchPresentationEvent {
+    const fn policy(self) -> WorkbenchPresentationPolicy {
+        match self {
+            Self::PointerMoveFrame => WorkbenchPresentationPolicy {
+                render_scope: WorkbenchRenderScope::Transient,
+                saves_workspace: false,
+            },
+            Self::PointerRelease => WorkbenchPresentationPolicy {
+                render_scope: WorkbenchRenderScope::Durable,
+                saves_workspace: true,
+            },
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkbenchRenderScope {
+    Transient,
+    Durable,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl WorkbenchRenderScope {
+    const fn rebuilds_durable_panels(self) -> bool {
+        matches!(self, Self::Durable)
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct WorkbenchPresentationPolicy {
+    render_scope: WorkbenchRenderScope,
+    saves_workspace: bool,
+}
+
+/// Deterministic audit counters for the browser presentation policy.
+///
+/// These counters intentionally model admitted work rather than wall-clock
+/// timing, so the regression remains stable on native and WASM builders.
+#[cfg(test)]
+#[derive(Default, Debug, Eq, PartialEq)]
+struct WorkbenchPresentationCounters {
+    transient_renders: usize,
+    durable_renders: usize,
+    workspace_saves: usize,
+    durable_panel_rebuilds: usize,
+}
+
+#[cfg(test)]
+impl WorkbenchPresentationCounters {
+    fn record(&mut self, event: WorkbenchPresentationEvent) {
+        let policy = event.policy();
+        if policy.saves_workspace {
+            self.workspace_saves += 1;
+        }
+        match policy.render_scope {
+            WorkbenchRenderScope::Transient => self.transient_renders += 1,
+            WorkbenchRenderScope::Durable => self.durable_renders += 1,
+        }
+        if policy.render_scope.rebuilds_durable_panels() {
+            self.durable_panel_rebuilds += 1;
+        }
+    }
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CanvasPointerCaptureKind {
@@ -3388,9 +3468,12 @@ pub(crate) mod wasm {
                 }
             };
             dispatch_effects(&mut wb, effects);
-            save(&wb);
             drop(wb);
-            let _ = render(&frame_document, &frame_workbench);
+            let _ = present_pointer_event(
+                &frame_document,
+                &frame_workbench,
+                super::WorkbenchPresentationEvent::PointerMoveFrame,
+            );
         });
         let scheduled = super::platform::window()
             .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
@@ -3417,7 +3500,11 @@ pub(crate) mod wasm {
                 let mut wb = callback_workbench.borrow_mut();
                 if clear_canvas_pointer_ownership(&mut wb) {
                     drop(wb);
-                    let _ = render(&callback_document, &callback_workbench);
+                    let _ = present_pointer_event(
+                        &callback_document,
+                        &callback_workbench,
+                        super::WorkbenchPresentationEvent::PointerMoveFrame,
+                    );
                 }
                 return;
             }
@@ -3457,7 +3544,11 @@ pub(crate) mod wasm {
                                 dispatch_effects(&mut wb, effects);
                             }
                             drop(wb);
-                            let _ = render(&callback_document, &callback_workbench);
+                            let _ = present_pointer_event(
+                                &callback_document,
+                                &callback_workbench,
+                                super::WorkbenchPresentationEvent::PointerMoveFrame,
+                            );
                         }
                         return;
                     }
@@ -3506,7 +3597,11 @@ pub(crate) mod wasm {
                     let mut wb = callback_workbench.borrow_mut();
                     if clear_unmapped_canvas_pointer(&mut wb) {
                         drop(wb);
-                        let _ = render(&callback_document, &callback_workbench);
+                        let _ = present_pointer_event(
+                            &callback_document,
+                            &callback_workbench,
+                            super::WorkbenchPresentationEvent::PointerMoveFrame,
+                        );
                     }
                 }
                 return;
@@ -3628,9 +3723,12 @@ pub(crate) mod wasm {
             let effects = coordinator.editor_mut().pointer_up(&scene, expected, input);
             dispatch_effects(&mut wb, effects);
             release_canvas_pointer_capture(&callback_viewport, &mut wb, event.pointer_id());
-            save(&wb);
             drop(wb);
-            let _ = render(&callback_document, &callback_workbench);
+            let _ = present_pointer_event(
+                &callback_document,
+                &callback_workbench,
+                super::WorkbenchPresentationEvent::PointerRelease,
+            );
         });
         viewport.add_event_listener_with_callback(
             super::CANVAS_POINTER_TERMINAL_EVENTS[0],
@@ -3790,7 +3888,11 @@ pub(crate) mod wasm {
                         wb.camera
                             .pan_from(gesture.origin_center, gesture.origin, current);
                         drop(wb);
-                        let _ = render(&callback_document, &callback_workbench);
+                        let _ = present_pointer_event(
+                            &callback_document,
+                            &callback_workbench,
+                            super::WorkbenchPresentationEvent::PointerMoveFrame,
+                        );
                     }
                     "pointerup"
                         if wb
@@ -6662,11 +6764,44 @@ pub(crate) mod wasm {
         wb.camera.fit_scene_or_reset(scene.as_ref())
     }
 
+    /// Applies the presentation policy shared by the real RAF and authenticated
+    /// pointer-release paths. A move frame cannot reach `save`; a release keeps
+    /// the established save-before-full-render terminal behavior.
+    fn present_pointer_event(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        event: super::WorkbenchPresentationEvent,
+    ) -> Result<(), JsValue> {
+        let policy = event.policy();
+        if policy.saves_workspace {
+            save(&workbench.borrow());
+        }
+        match policy.render_scope {
+            super::WorkbenchRenderScope::Transient => render_transient(document, workbench),
+            super::WorkbenchRenderScope::Durable => render(document, workbench),
+        }
+    }
+
+    fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
+        render_with_scope(document, workbench, super::WorkbenchRenderScope::Durable)
+    }
+
+    fn render_transient(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+    ) -> Result<(), JsValue> {
+        render_with_scope(document, workbench, super::WorkbenchRenderScope::Transient)
+    }
+
     #[allow(
         clippy::too_many_lines,
-        reason = "one render pass synchronizes the complete retained workbench snapshot"
+        reason = "one scoped render pass synchronizes either exact transient paint or the complete retained workbench snapshot"
     )]
-    fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
+    fn render_with_scope(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        scope: super::WorkbenchRenderScope,
+    ) -> Result<(), JsValue> {
         let scene = editor_scene(&workbench.borrow());
         if let Some(scene) = scene.as_ref() {
             let mut wb = workbench.borrow_mut();
@@ -6681,11 +6816,16 @@ pub(crate) mod wasm {
                 .as_ref()
                 .and_then(|scene| scene.computed_input.as_ref()),
         );
-        let problem_identity = super::ProblemSetIdentity::current(&workbench.borrow().coordinator);
-        let show_problems = workbench
-            .borrow_mut()
-            .problems
-            .reconcile(problem_identity.as_ref());
+        let show_problems = if scope.rebuilds_durable_panels() {
+            let problem_identity =
+                super::ProblemSetIdentity::current(&workbench.borrow().coordinator);
+            workbench
+                .borrow_mut()
+                .problems
+                .reconcile(problem_identity.as_ref())
+        } else {
+            false
+        };
         let wb = workbench.borrow();
         let coordinator = &wb.coordinator;
         required(document, "workbench-root")?.set_attribute(
@@ -6804,6 +6944,54 @@ pub(crate) mod wasm {
                 wb.camera.viewport(),
             ),
         );
+        required(document, "workbench-root")?.set_attribute(
+            "data-render-scope",
+            if scope.rebuilds_durable_panels() {
+                "durable"
+            } else {
+                "transient"
+            },
+        )?;
+        if !scope.rebuilds_durable_panels() {
+            required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
+            let coordinate = super::coordinate_hud(
+                wb.camera.viewport(),
+                wb.pointer_moves.borrow().last_input,
+                coordinator.editor().draft_inference_resolution(),
+            );
+            let coordinate_element = required(document, "wb-pointer-coordinate")?;
+            coordinate_element.set_text_content(Some(&coordinate.text));
+            coordinate_element.set_attribute("title", &coordinate.title)?;
+            coordinate_element.set_attribute(
+                "data-inference-adjusted",
+                if coordinate.adjusted { "true" } else { "false" },
+            )?;
+            required(document, "wb-selection")?
+                .set_text_content(Some(&format!("{} selected", selection.len())));
+            render_canvas_authoring_status(document, &wb, coordinator)?;
+            if wb.offset_authoring.is_active() {
+                render_offset_options(document, coordinator, &wb.offset_authoring)?;
+            }
+            render_fillet_action_panel(
+                document,
+                scene.as_ref(),
+                fillet_action_stamp,
+                coordinator.editor().geometry_interaction_policy(),
+            )?;
+            required(document, "workbench-root")?.set_attribute(
+                "data-canvas-cursor",
+                super::canvas_cursor_key_with_curve_control(
+                    coordinator.editor().tool(),
+                    wb.authoring.active_tool().is_some(),
+                    wb.feature_authoring.active_tool().is_some(),
+                    wb.offset_authoring.is_active(),
+                    wb.pan_gesture.is_some(),
+                    coordinator.editor().hover_state(),
+                    coordinator.editor().active_pointer_gesture(),
+                ),
+            )?;
+            return Ok(());
+        }
         let design = coordinator.session().design_document();
         let constraint_entries = geosolve_constraint_editor::constraint_entries(design);
         required(document, "wb-tree")?.set_inner_html(&super::panels::tree_markup_with_features(
@@ -6855,93 +7043,7 @@ pub(crate) mod wasm {
         } else {
             problems.set_attribute("hidden", "")?;
         }
-        let guide = required(document, "wb-draft-guide")?;
-        if wb.authoring.active_tool().is_some()
-            || wb.feature_authoring.active_tool().is_some()
-            || wb.offset_authoring.is_active()
-            || coordinator.editor().tool() != EditorTool::Select
-        {
-            guide.remove_attribute("hidden")?;
-        } else {
-            guide.set_attribute("hidden", "")?;
-        }
-        let guide_text = if wb.offset_authoring.is_active() {
-            wb.offset_authoring
-                .hover()
-                .and_then(|hover| hover.availability.message())
-                .unwrap_or(wb.offset_authoring.guidance().message)
-                .to_owned()
-        } else if wb.feature_authoring.active_tool().is_some() {
-            wb.feature_authoring.guidance().message.to_owned()
-        } else {
-            wb.authoring.active_tool().map_or_else(
-                || {
-                    coordinator.editor().geometry_draft_status().map_or_else(
-                        || {
-                            draft_guide_text(
-                                coordinator.editor().tool(),
-                                coordinator.editor().conic_options().middle_weight,
-                            )
-                            .to_owned()
-                        },
-                        |status| super::geometry_palette::status_text(&status),
-                    )
-                },
-                |tool| {
-                    format!(
-                        "{} · {} pending · Escape clears/exits",
-                        authoring_tool_label(tool),
-                        wb.authoring.pending().len()
-                    )
-                },
-            )
-        };
-        required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
-        if wb.authoring.active_tool().is_some()
-            || wb.feature_authoring.active_tool().is_some()
-            || wb.offset_authoring.is_active()
-            || !coordinator.editor().can_complete_draft()
-        {
-            required(document, "wb-guide-finish")?.set_attribute("hidden", "")?;
-        } else {
-            required(document, "wb-guide-finish")?.remove_attribute("hidden")?;
-        }
-        let complete_feature_candidate = wb.feature_candidate.is_some()
-            && wb.feature_authoring.guidance().stage == FeatureAuthoringStage::PreviewReady;
-        let apply = required(document, "wb-guide-apply")?;
-        set_hidden(&apply, !complete_feature_candidate)?;
-        set_disabled(&apply, !complete_feature_candidate)?;
-        let native_presentation = super::native_fillet_apply_presentation(
-            coordinator,
-            wb.feature_candidate.as_ref(),
-            wb.feature_authoring.guidance().stage,
-        );
-        let native_apply = required(document, "wb-guide-apply-native")?;
-        set_hidden(&native_apply, !native_presentation.visible)?;
-        set_disabled(&native_apply, native_presentation.disabled)?;
-        native_apply.set_attribute(
-            "data-native-fillet-availability",
-            if !native_presentation.visible {
-                "inactive"
-            } else if native_presentation.disabled {
-                "unavailable"
-            } else {
-                "applicable"
-            },
-        )?;
-        let native_reason = required(document, "wb-guide-apply-native-reason")?;
-        if let Some(reason) = native_presentation.reason.as_deref() {
-            let message = format!("Native output unavailable: {reason}");
-            if native_reason.text_content().as_deref() != Some(message.as_str()) {
-                native_reason.set_text_content(Some(&message));
-            }
-            native_reason.remove_attribute("hidden")?;
-            native_apply.set_attribute("title", reason)?;
-        } else {
-            native_reason.set_text_content(None);
-            native_reason.set_attribute("hidden", "")?;
-            native_apply.remove_attribute("title")?;
-        }
+        render_canvas_authoring_status(document, &wb, coordinator)?;
         required(document, "wb-tool-select")?.set_attribute(
             "aria-pressed",
             if coordinator.editor().tool() == EditorTool::Select
@@ -7034,6 +7136,104 @@ pub(crate) mod wasm {
                 coordinator.editor().active_pointer_gesture(),
             ),
         )?;
+        Ok(())
+    }
+
+    /// Synchronizes the lightweight authoring surfaces layered over the canvas.
+    /// These are transient gesture feedback, unlike the tree, Problems card,
+    /// property inspectors, and other durable panels below the render boundary.
+    fn render_canvas_authoring_status(
+        document: &Document,
+        wb: &Workbench,
+        coordinator: &RetainedEditorCoordinator,
+    ) -> Result<(), JsValue> {
+        let guide = required(document, "wb-draft-guide")?;
+        if wb.authoring.active_tool().is_some()
+            || wb.feature_authoring.active_tool().is_some()
+            || wb.offset_authoring.is_active()
+            || coordinator.editor().tool() != EditorTool::Select
+        {
+            guide.remove_attribute("hidden")?;
+        } else {
+            guide.set_attribute("hidden", "")?;
+        }
+        let guide_text = if wb.offset_authoring.is_active() {
+            wb.offset_authoring
+                .hover()
+                .and_then(|hover| hover.availability.message())
+                .unwrap_or(wb.offset_authoring.guidance().message)
+                .to_owned()
+        } else if wb.feature_authoring.active_tool().is_some() {
+            wb.feature_authoring.guidance().message.to_owned()
+        } else {
+            wb.authoring.active_tool().map_or_else(
+                || {
+                    coordinator.editor().geometry_draft_status().map_or_else(
+                        || {
+                            draft_guide_text(
+                                coordinator.editor().tool(),
+                                coordinator.editor().conic_options().middle_weight,
+                            )
+                            .to_owned()
+                        },
+                        |status| super::geometry_palette::status_text(&status),
+                    )
+                },
+                |tool| {
+                    format!(
+                        "{} · {} pending · Escape clears/exits",
+                        authoring_tool_label(tool),
+                        wb.authoring.pending().len()
+                    )
+                },
+            )
+        };
+        required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
+        if wb.authoring.active_tool().is_some()
+            || wb.feature_authoring.active_tool().is_some()
+            || wb.offset_authoring.is_active()
+            || !coordinator.editor().can_complete_draft()
+        {
+            required(document, "wb-guide-finish")?.set_attribute("hidden", "")?;
+        } else {
+            required(document, "wb-guide-finish")?.remove_attribute("hidden")?;
+        }
+        let complete_feature_candidate = wb.feature_candidate.is_some()
+            && wb.feature_authoring.guidance().stage == FeatureAuthoringStage::PreviewReady;
+        let apply = required(document, "wb-guide-apply")?;
+        set_hidden(&apply, !complete_feature_candidate)?;
+        set_disabled(&apply, !complete_feature_candidate)?;
+        let native_presentation = super::native_fillet_apply_presentation(
+            coordinator,
+            wb.feature_candidate.as_ref(),
+            wb.feature_authoring.guidance().stage,
+        );
+        let native_apply = required(document, "wb-guide-apply-native")?;
+        set_hidden(&native_apply, !native_presentation.visible)?;
+        set_disabled(&native_apply, native_presentation.disabled)?;
+        native_apply.set_attribute(
+            "data-native-fillet-availability",
+            if !native_presentation.visible {
+                "inactive"
+            } else if native_presentation.disabled {
+                "unavailable"
+            } else {
+                "applicable"
+            },
+        )?;
+        let native_reason = required(document, "wb-guide-apply-native-reason")?;
+        if let Some(reason) = native_presentation.reason.as_deref() {
+            let message = format!("Native output unavailable: {reason}");
+            if native_reason.text_content().as_deref() != Some(message.as_str()) {
+                native_reason.set_text_content(Some(&message));
+            }
+            native_reason.remove_attribute("hidden")?;
+            native_apply.set_attribute("title", reason)?;
+        } else {
+            native_reason.set_text_content(None);
+            native_reason.set_attribute("hidden", "")?;
+            native_apply.remove_attribute("title")?;
+        }
         Ok(())
     }
 
@@ -8535,7 +8735,8 @@ mod tests {
         CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
         DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
         ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
-        PointerMoveQueue, ReproductionFocusReturn, annotation_family_name,
+        PointerMoveQueue, ReproductionFocusReturn, WorkbenchPresentationCounters,
+        WorkbenchPresentationEvent, WorkbenchRenderScope, annotation_family_name,
         annotation_inspector_presentation, apply_native_fillet_profile,
         apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
         canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
@@ -11586,6 +11787,42 @@ mod tests {
             queue.take_for_frame(foreign_frame),
             Some(sample(12.0)),
             "Tab outside geometry drafting must not consume another owner's movement",
+        );
+    }
+
+    #[test]
+    fn transient_pointer_frames_do_no_durable_presentation_work_until_release() {
+        let mut counters = WorkbenchPresentationCounters::default();
+        for _ in 0..5 {
+            counters.record(WorkbenchPresentationEvent::PointerMoveFrame);
+        }
+        assert_eq!(
+            counters,
+            WorkbenchPresentationCounters {
+                transient_renders: 5,
+                durable_renders: 0,
+                workspace_saves: 0,
+                durable_panel_rebuilds: 0,
+            },
+            "exact move previews must remain persistence- and durable-panel-neutral",
+        );
+        assert_eq!(
+            WorkbenchPresentationEvent::PointerMoveFrame
+                .policy()
+                .render_scope,
+            WorkbenchRenderScope::Transient,
+        );
+
+        counters.record(WorkbenchPresentationEvent::PointerRelease);
+        assert_eq!(
+            counters,
+            WorkbenchPresentationCounters {
+                transient_renders: 5,
+                durable_renders: 1,
+                workspace_saves: 1,
+                durable_panel_rebuilds: 1,
+            },
+            "authenticated release is exactly one durable save/render boundary",
         );
     }
 
