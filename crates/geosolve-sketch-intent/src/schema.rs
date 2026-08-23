@@ -59,7 +59,11 @@ impl IntentLiteralSchema {
     }
 }
 
-/// Contiguous indexed cardinality for one typed dependency role.
+/// Indexed cardinality for one typed dependency role.
+///
+/// Repeated relation/operation operands are contiguous. Geometry point inputs
+/// retain their authored semantic slot and may be sparse when only a subset
+/// aliases existing stable points.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IntentInputCardinality {
@@ -232,16 +236,16 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
         | G::Parabola
         | G::Hyperbola
         | G::TwoPointAlignedRectangle
-        | G::CenterRectangle => 2,
-        G::ThreePointCornerRectangle
+        | G::CenterRectangle
         | G::ThreePointCenterRectangle
+        | G::RationalQuadraticConic => 2,
+        G::ThreePointCornerRectangle
         | G::ThreePointCircle
         | G::CenterArc
         | G::ThreePointArc
         | G::CenterAxesEllipse
         | G::AxisEndpointsEllipse
-        | G::QuadraticBezier
-        | G::RationalQuadraticConic => 3,
+        | G::QuadraticBezier => 3,
         G::CubicBezier => 4,
         G::CenterAxesEllipticalArc | G::AxisEndpointsEllipticalArc => 5,
         G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs => dynamic_children,
@@ -344,6 +348,10 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
             field("gauge_index", IntentLiteralSchema::Natural, false),
         ]);
     }
+    // Every geometry recipe may declare its persistent sketch role. Omitting
+    // the field preserves the ordinary profile default; the materializer owns
+    // the closed `profile` / `construction` interpretation.
+    fields.push(field("role", IntentLiteralSchema::Enum, false));
     schema(inputs, Vec::new(), fields, child_bounds)
 }
 
@@ -566,6 +574,10 @@ fn dimension_schema(kind: DimensionKind) -> IntentNodeSchema {
         D::ProfileOffset => vec![
             input(InputRole::Profile, 0, 1),
             input(InputRole::Chain, 0, 1),
+            // The target support is explicit. The current declaration can
+            // reconstruct one-junction-free edge pair exactly; richer topology
+            // remains fail-closed until its owner/branch schema is present.
+            input(InputRole::Span, 0, 1),
         ],
     };
     let mut choices = Vec::new();
@@ -586,6 +598,8 @@ fn dimension_schema(kind: DimensionKind) -> IntentNodeSchema {
         D::ProfileOffset => fields.extend([
             field("direction", IntentLiteralSchema::Enum, false),
             field("side", IntentLiteralSchema::Enum, false),
+            field("source_traversal", IntentLiteralSchema::Enum, false),
+            field("target_traversal", IntentLiteralSchema::Enum, false),
         ]),
         D::PointDistance | D::CurveLength | D::Radius | D::Diameter => {}
     }
@@ -779,14 +793,24 @@ fn parameter_schema(kind: ParameterIntentKind) -> IntentNodeSchema {
         ParameterIntentKind::Binding => schema(
             vec![
                 input(InputRole::Parameter, 1, 1),
+                input(InputRole::Point, 0, 1),
+                input(InputRole::Contact, 0, 1),
+                input(InputRole::Curve, 0, 1),
                 input(InputRole::Dimension, 0, 1),
                 input(InputRole::Scalar, 0, 1),
+                input(InputRole::Constraint, 0, 1),
+                input(InputRole::External, 0, 1),
                 input(InputRole::Source, 0, 1),
             ],
             vec![choice(
                 &[
+                    (InputRole::Point, 0),
+                    (InputRole::Contact, 0),
+                    (InputRole::Curve, 0),
                     (InputRole::Dimension, 0),
                     (InputRole::Scalar, 0),
+                    (InputRole::Constraint, 0),
+                    (InputRole::External, 0),
                     (InputRole::Source, 0),
                 ],
                 1,
@@ -812,7 +836,10 @@ fn external_schema(kind: ExternalIntentKind) -> IntentNodeSchema {
         ExternalIntentKind::Binding => schema(
             Vec::new(),
             Vec::new(),
-            vec![field("codec", IntentLiteralSchema::Text, true)],
+            vec![
+                field("feature_kind", IntentLiteralSchema::Enum, true),
+                field("topology_digest", IntentLiteralSchema::Text, false),
+            ],
             (0, 0),
         ),
         ExternalIntentKind::SnapshotReference => schema(

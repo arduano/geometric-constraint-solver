@@ -17,26 +17,32 @@ use geosolve_sketch::{
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
     DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
     DocumentCurveNormalSide, DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentError,
+    DocumentDimensionId, DocumentDimensionMode, DocumentDirectedProfileOffsetCurve,
+    DocumentDirectionSense, DocumentElementId, DocumentError, DocumentExternalBinding,
     DocumentExternalBindingId, DocumentExternalLineSupportRef, DocumentExternalPointRef,
-    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId,
-    DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef, DocumentParameterId,
-    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentTrimBoundary,
-    DocumentTrimParameter, FeatureEndpoint, GeometryRole, GeometryRoleEdit,
+    DocumentFaceOffsetDirection, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+    DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation, DocumentLineSide,
+    DocumentLineSupportRef, DocumentOffsetTraversal, DocumentParameter, DocumentParameterBinding,
+    DocumentParameterId, DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget,
+    DocumentProfileOffsetChain, DocumentProfileOffsetEdgePair, DocumentProfileOffsetLoop,
+    DocumentProfileOffsetOperand, DocumentProfileOffsetTerminalPolicy, DocumentScalarBranch,
+    DocumentScalarPropertyRef, DocumentScalarUnit, DocumentSessionError, DocumentSolveRequest,
+    DocumentSourceId, DocumentTrimBoundary, DocumentTrimParameter, ExternalFeatureKindV1,
+    ExternalSnapshotSet, ExternalTopologyDigest, FeatureEndpoint, GeometryRole, GeometryRoleEdit,
     MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationOutcome, PersistentId,
     RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarDomain, ScalarUnit,
     SketchHardValidity, SketchMaterializationBatch, SketchMaterializationReservationAllocator,
     SketchPersistentIdentityHighWater, SolverConfig, TangentOrientation,
 };
 use geosolve_sketch_intent::{
-    AggregateKind, ConstraintKind, DimensionKind, GeometryRecipeKind, InputRole, InputSlot,
-    IntentAcceptedAuthority, IntentCandidate, IntentEvaluation, IntentEvaluationFailure,
-    IntentEvaluationFailureKind, IntentExternalInputs, IntentGraph, IntentGraphError,
-    IntentIdentityFlow, IntentInstanceState, IntentKey, IntentLiteral, IntentNativeReservationKind,
-    IntentNode, IntentNodeKind, IntentPort, IntentPortKind, IntentPortRef, IntentPortRole,
-    IntentPortSelector, IntentReservationLedger, IntentReservationRecord, IntentReservationState,
-    IntentSemanticIdentity, IntentUnit, LeafField, LeafRef, MaterializationEvidence, NodeId,
-    ReservationId,
+    AggregateKind, ConstraintKind, DimensionKind, ExternalIntentKind, GeometryRecipeKind,
+    InputRole, InputSlot, IntentAcceptedAuthority, IntentCandidate, IntentEvaluation,
+    IntentEvaluationFailure, IntentEvaluationFailureKind, IntentExternalInputs, IntentGraph,
+    IntentGraphError, IntentIdentityFlow, IntentInstanceState, IntentKey, IntentLiteral,
+    IntentNativeReservationKind, IntentNode, IntentNodeKind, IntentPort, IntentPortKind,
+    IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservationLedger,
+    IntentReservationRecord, IntentReservationState, IntentSemanticIdentity, IntentUnit, LeafField,
+    LeafRef, MaterializationEvidence, NodeId, ParameterIntentKind, ReservationId,
 };
 use geosolve_sketch_topology::{
     OffsetEndpointRef, OffsetEndpointRole, OffsetOperandIndex, OffsetOperandRequest,
@@ -66,6 +72,9 @@ pub enum IntentNativeBinding {
     Source(DocumentSourceId),
     Parameter(DocumentParameterId),
     ExternalBinding(DocumentExternalBindingId),
+    /// Stable equation-free output identity retained entirely by the intent
+    /// graph (annotations, aggregates, declarations and identity transitions).
+    Logical(IntentPortRef),
 }
 
 /// Native variable leaf that may route an accepted direct-manipulation result
@@ -343,6 +352,10 @@ impl ColdIntentMaterializer {
         Ok(output)
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one auditable cold transaction retains validation and evidence publication in one scope"
+    )]
     fn materialize_source(
         &self,
         candidate: &dyn IntentMaterializationSource,
@@ -391,6 +404,19 @@ impl ColdIntentMaterializer {
                 }
                 IntentNodeKind::Aggregate { aggregate } => {
                     lower_aggregate(node, *aggregate, &mut state)?;
+                }
+                IntentNodeKind::Parameter { parameter } => {
+                    lower_parameter(node, *parameter, &mut batch, &mut state)?;
+                }
+                IntentNodeKind::External { external } => lower_external(
+                    node,
+                    *external,
+                    &host_inputs.external_snapshots,
+                    &mut batch,
+                    &mut state,
+                )?,
+                IntentNodeKind::Annotation | IntentNodeKind::Identity { .. } => {
+                    lower_logical_declaration(node, &mut state)?;
                 }
                 _ => unreachable!("preflight admits only implemented declaration families"),
             }
@@ -644,8 +670,13 @@ fn preflight_supported(
                     | GeometryRecipeKind::OpenControlNurbs
                     | GeometryRecipeKind::PeriodicControlNurbs
             ),
-            IntentNodeKind::Constraint { .. } | IntentNodeKind::Aggregate { .. } => true,
-            IntentNodeKind::Dimension { dimension } => dimension != DimensionKind::ProfileOffset,
+            IntentNodeKind::Constraint { .. }
+            | IntentNodeKind::Aggregate { .. }
+            | IntentNodeKind::Parameter { .. }
+            | IntentNodeKind::External { .. }
+            | IntentNodeKind::Annotation
+            | IntentNodeKind::Identity { .. }
+            | IntentNodeKind::Dimension { .. } => true,
             _ => false,
         };
         if !supported {
@@ -812,6 +843,8 @@ struct LoweringState {
     port_bindings: BTreeMap<IntentPortRef, IntentNativeBinding>,
     reverse_leaves: BTreeMap<IntentNativeWritableLeaf, LeafRef>,
     point_positions: BTreeMap<DesignPointId, [f64; 2]>,
+    scalar_domains: BTreeMap<DesignScalarId, ScalarDomain>,
+    parameter_kinds: BTreeMap<DocumentParameterId, DocumentParameterKind>,
     aggregate_bindings: BTreeMap<IntentPortRef, IntentAggregateMaterialization>,
     contact_states: BTreeMap<ContactId, (CurveSpan, i32, ContactDomain)>,
     topology_aggregate_nodes: BTreeMap<IntentPortRef, NodeId>,
@@ -829,6 +862,8 @@ impl LoweringState {
             port_bindings: BTreeMap::new(),
             reverse_leaves: BTreeMap::new(),
             point_positions: BTreeMap::new(),
+            scalar_domains: BTreeMap::new(),
+            parameter_kinds: BTreeMap::new(),
             aggregate_bindings: BTreeMap::new(),
             contact_states: BTreeMap::new(),
             topology_aggregate_nodes: BTreeMap::new(),
@@ -850,7 +885,8 @@ impl LoweringState {
                 | IntentIdentityFlow::Continued { source, .. } => {
                     self.port_bindings.get(&source).copied()
                 }
-                IntentIdentityFlow::OwnedLogical | IntentIdentityFlow::Retired { .. } => None,
+                IntentIdentityFlow::OwnedLogical => Some(IntentNativeBinding::Logical(reference)),
+                IntentIdentityFlow::Retired { .. } => None,
             };
             if let Some(binding) = binding {
                 self.port_bindings.insert(reference, binding);
@@ -1671,6 +1707,7 @@ fn materialize_scalar_port(
             unit,
             domain,
         });
+        state.scalar_domains.insert(scalar, domain);
         state.consume_port(node, port);
         value
     } else {
@@ -2046,6 +2083,7 @@ fn materialize_rectangle_curves(
     batch: &mut SketchMaterializationBatch,
     state: &mut LoweringState,
 ) -> Result<(), IntentMaterializationError> {
+    let role = geometry_role(node)?;
     for index in 0..4 {
         let next = (index + 1) % 4;
         let branch_direction = finite_direction(node.id, corners[index].1, corners[next].1)?;
@@ -2057,7 +2095,7 @@ fn materialize_rectangle_curves(
                 end: corners[next].0,
                 branch_direction,
             },
-            GeometryRole::Profile,
+            role,
             batch,
             state,
         )?;
@@ -2604,6 +2642,7 @@ fn materialize_scalar(
             unit,
             domain,
         });
+        state.scalar_domains.insert(scalar, domain);
         state.consume_port(node, port);
     }
     Ok(scalar)
@@ -2616,7 +2655,7 @@ fn materialize_curve(
     batch: &mut SketchMaterializationBatch,
     state: &mut LoweringState,
 ) -> Result<(), IntentMaterializationError> {
-    materialize_curve_with_role(node, index, definition, GeometryRole::Profile, batch, state)
+    materialize_curve_with_role(node, index, definition, geometry_role(node)?, batch, state)
 }
 
 fn curve_binding(
@@ -2750,6 +2789,10 @@ fn lower_segment(
             branch_direction,
         },
     });
+    let role = geometry_role(node)?;
+    if role == GeometryRole::Construction {
+        batch.push_geometry_role(GeometryRoleEdit::new(curve, role));
+    }
     state.consume_port(node, curve_port);
     let span_port = require_port(node, IntentPortRole::Span, 0)?;
     state.port_bindings.insert(
@@ -3693,6 +3736,375 @@ fn input_external(
     }
 }
 
+fn input_parameter(
+    node: &IntentNode,
+    state: &LoweringState,
+) -> Result<DocumentParameterId, IntentMaterializationError> {
+    match input_binding(node, state, InputRole::Parameter, 0)? {
+        IntentNativeBinding::Parameter(parameter) => Ok(*parameter),
+        _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    }
+}
+
+fn parameter_kind(node: &IntentNode) -> Result<DocumentParameterKind, IntentMaterializationError> {
+    match enum_field(node, "kind")? {
+        Some("length") => Ok(DocumentParameterKind::Length),
+        Some("angle") => Ok(DocumentParameterKind::Angle),
+        Some("dimensionless") => Ok(DocumentParameterKind::Dimensionless),
+        Some("activation") => Ok(DocumentParameterKind::Activation),
+        Some(_) | None => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "parameter kind must be length, angle, dimensionless, or activation",
+        }),
+    }
+}
+
+fn input_activation_element(
+    node: &IntentNode,
+    state: &LoweringState,
+) -> Result<DocumentElementId, IntentMaterializationError> {
+    let candidates = [
+        InputRole::Point,
+        InputRole::Contact,
+        InputRole::Curve,
+        InputRole::Scalar,
+        InputRole::Constraint,
+        InputRole::Dimension,
+        InputRole::External,
+        InputRole::Source,
+    ];
+    for role in candidates {
+        let slot = InputSlot::new(role, 0);
+        if !node.inputs.contains_key(&slot) {
+            continue;
+        }
+        return match input_binding(node, state, role, 0)? {
+            IntentNativeBinding::Point(id) => Ok(DocumentElementId::Point(*id)),
+            IntentNativeBinding::Contact(id) => Ok(DocumentElementId::Contact(*id)),
+            IntentNativeBinding::Curve(id) => Ok(DocumentElementId::Curve(*id)),
+            IntentNativeBinding::CurveSpan(span) => Ok(DocumentElementId::Curve(span.curve)),
+            IntentNativeBinding::Scalar(id) => Ok(DocumentElementId::Scalar(*id)),
+            IntentNativeBinding::Constraint(id) => Ok(DocumentElementId::Constraint(*id)),
+            IntentNativeBinding::Dimension(id) => Ok(DocumentElementId::Dimension(*id)),
+            IntentNativeBinding::ExternalBinding(id) => Ok(DocumentElementId::ExternalBinding(*id)),
+            IntentNativeBinding::Source(id) => Ok(DocumentElementId::Source(*id)),
+            _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+        };
+    }
+    Err(IntentMaterializationError::MissingInput {
+        node: node.id,
+        slot: InputSlot::new(InputRole::Source, 0),
+    })
+}
+
+fn lower_parameter(
+    node: &IntentNode,
+    kind: ParameterIntentKind,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    match kind {
+        ParameterIntentKind::Parameter => {
+            let port = require_port(node, IntentPortRole::Parameter, 0)?;
+            let parameter = match state.port_bindings.get(&port.as_ref(node.id)) {
+                Some(IntentNativeBinding::Parameter(parameter)) => *parameter,
+                _ => {
+                    return Err(IntentMaterializationError::NativeKindMismatch { node: node.id });
+                }
+            };
+            let kind = parameter_kind(node)?;
+            batch.push_parameter(DocumentParameter {
+                id: parameter,
+                label: node.symbol.as_str().to_owned(),
+                kind,
+            });
+            state.parameter_kinds.insert(parameter, kind);
+            state.consume_port(node, port);
+        }
+        ParameterIntentKind::Binding => {
+            let parameter = input_parameter(node, state)?;
+            let parameter_kind = state
+                .parameter_kinds
+                .get(&parameter)
+                .copied()
+                .ok_or(IntentMaterializationError::NativeKindMismatch { node: node.id })?;
+            let target = match parameter_kind {
+                DocumentParameterKind::Length | DocumentParameterKind::Angle => {
+                    match input_binding(node, state, InputRole::Dimension, 0)? {
+                        IntentNativeBinding::Dimension(dimension) => {
+                            DocumentParameterTarget::DrivingDimension(*dimension)
+                        }
+                        _ => {
+                            return Err(IntentMaterializationError::NativeKindMismatch {
+                                node: node.id,
+                            });
+                        }
+                    }
+                }
+                DocumentParameterKind::Dimensionless => {
+                    let scalar = match input_binding(node, state, InputRole::Scalar, 0)? {
+                        IntentNativeBinding::Scalar(scalar) => *scalar,
+                        _ => {
+                            return Err(IntentMaterializationError::NativeKindMismatch {
+                                node: node.id,
+                            });
+                        }
+                    };
+                    let domain =
+                        state.scalar_domains.get(&scalar).copied().ok_or(
+                            IntentMaterializationError::NativeKindMismatch { node: node.id },
+                        )?;
+                    DocumentParameterTarget::DimensionlessFixedScalar(DocumentScalarPropertyRef {
+                        scalar,
+                        unit: DocumentScalarUnit::Dimensionless,
+                        domain,
+                        branch: DocumentScalarBranch::Dimensionless,
+                    })
+                }
+                DocumentParameterKind::Activation => {
+                    DocumentParameterTarget::Activation(input_activation_element(node, state)?)
+                }
+            };
+            batch.push_parameter_binding(DocumentParameterBinding { parameter, target });
+        }
+        ParameterIntentKind::Output => {
+            let parameter = input_parameter(node, state)?;
+            let dimension = match input_binding(node, state, InputRole::Dimension, 0)? {
+                IntentNativeBinding::Dimension(dimension) => *dimension,
+                _ => {
+                    return Err(IntentMaterializationError::NativeKindMismatch { node: node.id });
+                }
+            };
+            batch.push_parameter_output(DocumentParameterOutput {
+                parameter,
+                dimension,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn external_feature_kind(
+    node: &IntentNode,
+) -> Result<ExternalFeatureKindV1, IntentMaterializationError> {
+    match enum_field(node, "feature_kind")? {
+        Some("point") => Ok(ExternalFeatureKindV1::Point),
+        Some("line_segment") => Ok(ExternalFeatureKindV1::LineSegment),
+        Some(_) | None => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "external feature kind must be point or line_segment",
+        }),
+    }
+}
+
+fn external_topology_digest(
+    node: &IntentNode,
+) -> Result<Option<ExternalTopologyDigest>, IntentMaterializationError> {
+    let Some(encoded) = text_field(node, "topology_digest")? else {
+        return Ok(None);
+    };
+    if encoded.len() != 64
+        || !encoded
+            .as_bytes()
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+    {
+        return Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "external topology digest must be exactly 64 lowercase hexadecimal digits",
+        });
+    }
+    let mut bytes = [0_u8; 32];
+    for (index, pair) in encoded.as_bytes().chunks_exact(2).enumerate() {
+        let high = hex_nibble(pair[0]);
+        let low = hex_nibble(pair[1]);
+        bytes[index] = high * 16 + low;
+    }
+    Ok(Some(ExternalTopologyDigest::from_bytes(bytes)))
+}
+
+const fn hex_nibble(byte: u8) -> u8 {
+    match byte {
+        b'0'..=b'9' => byte - b'0',
+        b'a'..=b'f' => byte - b'a' + 10,
+        _ => 0,
+    }
+}
+
+fn lower_external(
+    node: &IntentNode,
+    kind: ExternalIntentKind,
+    snapshots: &ExternalSnapshotSet,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    match kind {
+        ExternalIntentKind::Binding => {
+            let port = require_port(node, IntentPortRole::External, 0)?;
+            let binding = match state.port_bindings.get(&port.as_ref(node.id)) {
+                Some(IntentNativeBinding::ExternalBinding(binding)) => *binding,
+                _ => {
+                    return Err(IntentMaterializationError::NativeKindMismatch { node: node.id });
+                }
+            };
+            let expected_kind = external_feature_kind(node)?;
+            let expected_topology = external_topology_digest(node)?;
+            match (expected_kind, expected_topology) {
+                (ExternalFeatureKindV1::Point, Some(_))
+                | (ExternalFeatureKindV1::LineSegment, None) => {
+                    return Err(IntentMaterializationError::InvalidGeometry {
+                        node: node.id,
+                        reason: "point externals forbid topology and line externals require it",
+                    });
+                }
+                (ExternalFeatureKindV1::Point, None)
+                | (ExternalFeatureKindV1::LineSegment, Some(_)) => {}
+            }
+            batch.push_external_binding(DocumentExternalBinding {
+                id: binding,
+                label: node.symbol.as_str().to_owned(),
+                expected_kind,
+                expected_topology,
+            });
+            state.consume_port(node, port);
+        }
+        ExternalIntentKind::SnapshotReference => {
+            let binding = input_external(node, state, 0)?;
+            let revision = field_natural(node, "snapshot_revision", 0)?;
+            if revision != snapshots.revision()
+                || !snapshots
+                    .entries()
+                    .iter()
+                    .any(|entry| entry.binding == binding)
+            {
+                return Err(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "snapshot reference must name an entry at the exact supplied set revision",
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn lower_logical_declaration(
+    node: &IntentNode,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    if matches!(node.kind, IntentNodeKind::Annotation) {
+        let _ = point_field(node, "offset")?;
+    }
+    for (slot, source) in &node.inputs {
+        if !state.port_bindings.contains_key(source) {
+            return Err(IntentMaterializationError::UnboundInput {
+                node: node.id,
+                slot: *slot,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn input_aggregate<'a>(
+    node: &IntentNode,
+    state: &'a LoweringState,
+) -> Result<&'a IntentAggregateMaterialization, IntentMaterializationError> {
+    let source = [InputRole::Profile, InputRole::Chain]
+        .into_iter()
+        .find_map(|role| node.inputs.get(&InputSlot::new(role, 0)).copied())
+        .ok_or(IntentMaterializationError::MissingInput {
+            node: node.id,
+            slot: InputSlot::new(InputRole::Chain, 0),
+        })?;
+    state
+        .aggregate_bindings
+        .get(&source)
+        .ok_or(IntentMaterializationError::UnboundInput {
+            node: node.id,
+            slot: InputSlot::new(InputRole::Chain, 0),
+        })
+}
+
+fn offset_traversal(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentOffsetTraversal, IntentMaterializationError> {
+    match enum_field(node, name)? {
+        Some("forward") => Ok(DocumentOffsetTraversal::Forward),
+        Some("reverse") => Ok(DocumentOffsetTraversal::Reverse),
+        Some(_) | None => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "profile-offset traversal must be explicitly forward or reverse",
+        }),
+    }
+}
+
+fn profile_offset_operand(
+    node: &IntentNode,
+    state: &LoweringState,
+) -> Result<DocumentProfileOffsetOperand, IntentMaterializationError> {
+    let aggregate = input_aggregate(node, state)?;
+    if aggregate.spans.len() != 1 {
+        return Err(IntentMaterializationError::InvalidAggregate {
+            node: node.id,
+            reason: "multi-edge profile offsets require explicit junction owners and branches",
+        });
+    }
+    let source = DocumentDirectedProfileOffsetCurve {
+        curve: aggregate.spans[0],
+        traversal: offset_traversal(node, "source_traversal")?,
+    };
+    let target = DocumentDirectedProfileOffsetCurve {
+        curve: input_span(node, state, 0)?,
+        traversal: offset_traversal(node, "target_traversal")?,
+    };
+    let edge = DocumentProfileOffsetEdgePair { source, target };
+    if aggregate.closed {
+        let direction = match enum_field(node, "direction")? {
+            Some("outward") => DocumentFaceOffsetDirection::Outward,
+            Some("inward") => DocumentFaceOffsetDirection::Inward,
+            Some(_) | None => {
+                return Err(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "closed profile offset direction must be explicitly outward or inward",
+                });
+            }
+        };
+        Ok(DocumentProfileOffsetOperand::Face {
+            direction,
+            outer: DocumentProfileOffsetLoop {
+                edges: vec![edge],
+                junctions: Vec::new(),
+            },
+            holes: Vec::new(),
+        })
+    } else {
+        let side = match enum_field(node, "side")? {
+            Some("left") => DocumentLineSide::Left,
+            Some("right") => DocumentLineSide::Right,
+            Some(_) | None => {
+                return Err(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "open-chain profile offset side must be explicitly left or right",
+                });
+            }
+        };
+        Ok(DocumentProfileOffsetOperand::OpenChain {
+            side,
+            chain: DocumentProfileOffsetChain {
+                edges: vec![edge],
+                junctions: Vec::new(),
+                start_terminal: DocumentProfileOffsetTerminalPolicy::NormalTranslation,
+                end_terminal: DocumentProfileOffsetTerminalPolicy::NormalTranslation,
+            },
+        })
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the closed native dimension catalog stays auditable in one lowering dispatcher"
+)]
 fn lower_dimension(
     candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,
@@ -3769,7 +4181,16 @@ fn lower_dimension(
             }
         }
         DimensionKind::ProfileOffset => {
-            return Err(IntentMaterializationError::UnsupportedNode { node: node.id });
+            if dimension_mode(node)? != DocumentDimensionMode::Driving {
+                return Err(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "profile offset dimensions must be driving",
+                });
+            }
+            DocumentDimensionDefinition::ProfileOffset {
+                target,
+                operand: profile_offset_operand(node, state)?,
+            }
         }
     };
     let dimension_port = require_port(node, IntentPortRole::Dimension, 0)?;
@@ -3887,6 +4308,20 @@ fn field_value<'a>(node: &'a IntentNode, name: &str) -> Option<&'a IntentLiteral
         .find_map(|(key, value)| (key.0.as_str() == name).then_some(value))
 }
 
+fn text_field<'a>(
+    node: &'a IntentNode,
+    name: &str,
+) -> Result<Option<&'a str>, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Text(value)) => Ok(Some(value.as_str())),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "text-valued declaration field is invalid",
+        }),
+        None => Ok(None),
+    }
+}
+
 fn point_field(
     node: &IntentNode,
     name: &str,
@@ -3978,6 +4413,17 @@ fn enum_field<'a>(
             reason: "enum-valued definition field is invalid",
         }),
         None => Ok(None),
+    }
+}
+
+fn geometry_role(node: &IntentNode) -> Result<GeometryRole, IntentMaterializationError> {
+    match enum_field(node, "role")? {
+        None | Some("profile") => Ok(GeometryRole::Profile),
+        Some("construction") => Ok(GeometryRole::Construction),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "geometry role must be profile or construction",
+        }),
     }
 }
 

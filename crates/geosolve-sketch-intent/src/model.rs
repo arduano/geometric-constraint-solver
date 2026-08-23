@@ -643,7 +643,15 @@ impl IntentNodeKind {
             Self::Aggregate { .. } => role == InputRole::Span,
             Self::Parameter { .. } => matches!(
                 role,
-                InputRole::Scalar | InputRole::Dimension | InputRole::Parameter | InputRole::Source
+                InputRole::Point
+                    | InputRole::Contact
+                    | InputRole::Curve
+                    | InputRole::Scalar
+                    | InputRole::Constraint
+                    | InputRole::Dimension
+                    | InputRole::Parameter
+                    | InputRole::External
+                    | InputRole::Source
             ),
             Self::External { .. } => matches!(role, InputRole::External | InputRole::Source),
             Self::Bootstrap { object } => object.kind.accepts_input(role),
@@ -1699,13 +1707,25 @@ pub(crate) fn node_port_specs(
             };
             push(IntentPortRole::Parameter, 0, port_kind, NO_LEAVES, native);
         }
-        IntentNodeKind::External { .. } => push(
-            IntentPortRole::External,
-            0,
-            IntentPortKind::ExternalBinding,
-            NO_LEAVES,
-            Some(IntentNativeReservationKind::ExternalBinding),
-        ),
+        IntentNodeKind::External { external } => match external {
+            ExternalIntentKind::Binding => push(
+                IntentPortRole::External,
+                0,
+                IntentPortKind::ExternalBinding,
+                NO_LEAVES,
+                Some(IntentNativeReservationKind::ExternalBinding),
+            ),
+            ExternalIntentKind::SnapshotReference => specs.push(PortSpec {
+                selector: IntentPortSelector::Node {
+                    role: IntentPortRole::External,
+                    index: 0,
+                },
+                kind: IntentPortKind::ExternalBinding,
+                writable: NO_LEAVES,
+                native: None,
+                alias_input: Some(InputSlot::new(InputRole::External, 0)),
+            }),
+        },
         IntentNodeKind::Bootstrap { object } => {
             use BootstrapNativeKind as B;
             let (role, port_kind, native) = match object.kind {
@@ -1974,7 +1994,7 @@ fn geometry_port_specs(
             point(R::Center, 0, Some(0));
         }
         G::ThreePointCenterRectangle => {
-            point(R::Corner, 0, Some(2));
+            point(R::Corner, 0, Some(1));
             point(R::Corner, 1, None);
             point(R::Corner, 2, None);
             point(R::Corner, 3, None);
@@ -2065,7 +2085,7 @@ fn geometry_port_specs(
         G::RationalQuadraticConic => {
             point(R::Start, 0, Some(0));
             handle(R::Control, 0);
-            point(R::End, 0, Some(2));
+            point(R::End, 0, Some(1));
             scalar(0, WEIGHT_LEAF);
         }
         G::Parabola => {

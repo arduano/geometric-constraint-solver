@@ -9,16 +9,20 @@ use geosolve_constraint_editor::{
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, DocumentArcTangencySide,
     DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
-    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentFilletEndpointOrder,
-    DocumentFilletTrimEndpoint, DocumentId, DocumentLineSide, ExternalSnapshotSet, FeatureEndpoint,
-    ParameterBatch, PersistentId, TangentOrientation,
+    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentExternalBindingId, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentId,
+    DocumentLineSide, DocumentParameterId, DocumentParameterKind, ExternalSnapshotDigest,
+    ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1,
+    ExternalSnapshotSet, FeatureEndpoint, GeometryRole, ParameterBatch, ParameterBatchEntry,
+    ParameterValue, PersistentId, TangentOrientation,
 };
 use geosolve_sketch_intent::{
     AggregateKind, BootstrapNativeKind, ConstraintKind, DimensionKind, ExternalInputRevision,
-    GeometryRecipeKind, InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation,
-    IntentExternalInputs, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft,
-    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole,
-    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField, OperationKind,
+    ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind, InputRole, InputSlot,
+    IntentBootstrapObject, IntentEvaluation, IntentExternalInputs, IntentFieldKey, IntentKey,
+    IntentLiteral, IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentPatch,
+    IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRole, IntentPortSelector,
+    IntentSession, IntentSessionId, IntentUnit, LeafField, OperationKind, ParameterIntentKind,
     PatchPortRef,
 };
 
@@ -224,6 +228,16 @@ fn create(alias_name: &str, draft: IntentNodeDraft) -> IntentPatchOperation {
         draft: Box::new(draft),
         cell: None,
     }
+}
+
+fn parameter_declaration(name: &str, kind: &str) -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Parameter {
+            parameter: ParameterIntentKind::Parameter,
+        },
+        key(name),
+    )
+    .with_field(IntentFieldKey(key("kind")), IntentLiteral::Enum(key(kind)))
 }
 
 fn relation(
@@ -599,6 +613,565 @@ fn cold_geometry_inventory_materializes_every_exactly_reconstructible_recipe() {
             "{recipe:?}"
         );
     }
+}
+
+#[test]
+fn geometry_role_is_exact_for_profile_and_construction_recipes() {
+    for (index, role) in [GeometryRole::Profile, GeometryRole::Construction]
+        .into_iter()
+        .enumerate()
+    {
+        let role_literal = match role {
+            GeometryRole::Profile => "profile",
+            GeometryRole::Construction => "construction",
+        };
+        let draft = segment("edge", [0.0, 0.0], [2.0, 0.0]).with_field(
+            IntentFieldKey(key("role")),
+            IntentLiteral::Enum(key(role_literal)),
+        );
+        let output = cold_materialize_ops(
+            0x8300_1e00 + u128::try_from(index).unwrap(),
+            vec![create("edge", draft)],
+        );
+        let document = output
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document();
+        assert_eq!(document.geometry_role(document.curves()[0].id), Some(role));
+        assert_independently_validated(&output);
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the focused test constructs and checks both compact alias recipes end to end"
+)]
+fn compact_two_point_recipes_alias_contiguous_existing_operands() {
+    let raw = 0x8300_1e05_u128;
+    let session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+    let materializer = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(raw << 32)),
+        1.0,
+    )
+    .unwrap();
+    let rectangle = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::ThreePointCenterRectangle,
+        },
+        key("rectangle"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 0),
+        alias("center", IntentPortRole::Primary),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 1),
+        alias("corner", IntentPortRole::Primary),
+    );
+    let conic = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::RationalQuadraticConic,
+        },
+        key("conic"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 0),
+        alias("center", IntentPortRole::Primary),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 1),
+        alias("end", IntentPortRole::Primary),
+    );
+    let captured = RefCell::new(None);
+    let plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![
+                    create("center", point("center", [0.0, 0.0])),
+                    create("corner", point("corner", [1.0, 1.0])),
+                    create("end", point("end", [2.0, 0.0])),
+                    create("rectangle", rectangle),
+                    create("conic", conic),
+                ],
+            ),
+            |candidate| {
+                let output = materializer.materialize(candidate).unwrap();
+                let evidence = output.evidence.clone();
+                captured.replace(Some(output));
+                IntentEvaluation::Accepted { evidence }
+            },
+        )
+        .unwrap();
+    let center = plan
+        .aliases()
+        .port(&key("center"), selector(IntentPortRole::Primary))
+        .unwrap();
+    let corner = plan
+        .aliases()
+        .port(&key("corner"), selector(IntentPortRole::Primary))
+        .unwrap();
+    let end = plan
+        .aliases()
+        .port(&key("end"), selector(IntentPortRole::Primary))
+        .unwrap();
+    let output = captured.into_inner().unwrap();
+    assert_eq!(
+        output.ownership.port(center),
+        output.ownership.port(
+            plan.aliases()
+                .port(
+                    &key("rectangle"),
+                    indexed_selector(IntentPortRole::Center, 0)
+                )
+                .unwrap()
+        )
+    );
+    assert_eq!(
+        output.ownership.port(corner),
+        output.ownership.port(
+            plan.aliases()
+                .port(
+                    &key("rectangle"),
+                    indexed_selector(IntentPortRole::Corner, 0)
+                )
+                .unwrap()
+        )
+    );
+    assert_eq!(
+        output.ownership.port(center),
+        output.ownership.port(
+            plan.aliases()
+                .port(&key("conic"), selector(IntentPortRole::Start))
+                .unwrap()
+        )
+    );
+    assert_eq!(
+        output.ownership.port(end),
+        output.ownership.port(
+            plan.aliases()
+                .port(&key("conic"), selector(IntentPortRole::End))
+                .unwrap()
+        )
+    );
+    assert_independently_validated(&output);
+}
+
+#[test]
+fn parameter_annotation_and_identity_declarations_lower_without_new_equations() {
+    let point_draft = point("point", [1.0, 2.0]);
+    let activation = parameter_declaration("active", "activation");
+    let annotation = IntentNodeDraft::new(IntentNodeKind::Annotation, key("annotation"))
+        .with_input(
+            InputSlot::new(InputRole::Point, 0),
+            alias("point", IntentPortRole::Primary),
+        )
+        .with_field(
+            IntentFieldKey(key("offset")),
+            IntentLiteral::Point([12.0, -4.0]),
+        );
+    let identity = IntentNodeDraft::new(
+        IntentNodeKind::Identity {
+            transition: IdentityTransitionKind::Alias,
+            port_kind: IntentPortKind::Point,
+        },
+        key("point_alias"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Identity, 0),
+        alias("point", IntentPortRole::Primary),
+    );
+    let output = cold_materialize_ops(
+        0x8300_1e10,
+        vec![
+            create("point", point_draft),
+            create("active", activation),
+            create("annotation", annotation),
+            create("point_alias", identity),
+        ],
+    );
+    let document = output
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    assert_eq!(
+        document.parameters()[0].kind,
+        DocumentParameterKind::Activation
+    );
+    assert!(document.parameter_bindings().is_empty());
+    assert_eq!(document.constraints().len(), 0);
+    assert_eq!(document.dimensions().len(), 0);
+    assert_independently_validated(&output);
+}
+
+#[test]
+fn external_binding_and_snapshot_reference_require_exact_host_revision() {
+    // Native IDs are allocated from the document namespace in deterministic
+    // reservation order; use the first post-document identity in the host set.
+    let raw = 0x8300_1e20_u128;
+    let binding = DocumentExternalBindingId(PersistentId::from_u128((raw << 32) + 1));
+    let snapshots = ExternalSnapshotSet::new(
+        7,
+        vec![ExternalSnapshotEntry {
+            binding,
+            source_revision: 7,
+            source_digest: ExternalSnapshotDigest::from_bytes([7; 32]),
+            feature: ExternalSnapshotFeatureV1::Point {
+                position: [3.0, 4.0],
+                scale: 1.0,
+                resources: ExternalSnapshotResourcesV1 {
+                    point_count: 1,
+                    control_count: 0,
+                    span_count: 0,
+                },
+            },
+        }],
+    )
+    .unwrap();
+    let inputs = IntentExternalInputs::new(
+        ExternalInputRevision::from_raw(1),
+        ParameterBatch::default()
+            .to_canonical_json()
+            .unwrap()
+            .into_bytes(),
+        snapshots.to_canonical_json().unwrap().into_bytes(),
+    )
+    .unwrap();
+    let external = IntentNodeDraft::new(
+        IntentNodeKind::External {
+            external: ExternalIntentKind::Binding,
+        },
+        key("host_point"),
+    )
+    .with_field(
+        IntentFieldKey(key("feature_kind")),
+        IntentLiteral::Enum(key("point")),
+    );
+    let reference = IntentNodeDraft::new(
+        IntentNodeKind::External {
+            external: ExternalIntentKind::SnapshotReference,
+        },
+        key("snapshot"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::External, 0),
+        alias("host_point", IntentPortRole::External),
+    )
+    .with_field(
+        IntentFieldKey(key("snapshot_revision")),
+        IntentLiteral::Natural(7),
+    );
+    let session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+    let materializer = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(raw << 32)),
+        1.0,
+    )
+    .unwrap();
+    let captured = RefCell::new(None);
+    session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![
+                    IntentPatchOperation::ReplaceExternalInputs { inputs },
+                    create("host_point", external),
+                    create("snapshot", reference),
+                ],
+            ),
+            |candidate| {
+                let output = materializer.materialize(candidate).unwrap();
+                let evidence = output.evidence.clone();
+                captured.replace(Some(output));
+                IntentEvaluation::Accepted { evidence }
+            },
+        )
+        .unwrap();
+    let output = captured.into_inner().unwrap();
+    assert_eq!(
+        output
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .external_bindings()
+            .len(),
+        1
+    );
+    assert_independently_validated(&output);
+}
+
+#[test]
+fn activation_parameter_binding_consumes_the_exact_native_host_input() {
+    let raw = 0x8300_1e30_u128;
+    let document_raw = raw << 32;
+    let session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+    let materializer = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(document_raw)),
+        1.0,
+    )
+    .unwrap();
+    let declarations = || {
+        let binding = IntentNodeDraft::new(
+            IntentNodeKind::Parameter {
+                parameter: ParameterIntentKind::Binding,
+            },
+            key("binding"),
+        )
+        .with_input(
+            InputSlot::new(InputRole::Parameter, 0),
+            alias("active", IntentPortRole::Parameter),
+        )
+        .with_input(
+            InputSlot::new(InputRole::Point, 0),
+            alias("point", IntentPortRole::Primary),
+        );
+        vec![
+            create("point", point("point", [1.0, 2.0])),
+            create("active", parameter_declaration("active", "activation")),
+            create("binding", binding),
+        ]
+    };
+
+    let predicted = RefCell::new(None);
+    assert!(
+        session
+            .plan_patch(
+                IntentPatch::new(
+                    session.identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    declarations(),
+                ),
+                |candidate| {
+                    let offset = candidate
+                        .reservations()
+                        .entries()
+                        .values()
+                        .position(|record| record.kind == IntentNativeReservationKind::Parameter)
+                        .unwrap();
+                    predicted.replace(Some(DocumentParameterId(PersistentId::from_u128(
+                        document_raw + u128::try_from(offset).unwrap() + 1,
+                    ))));
+                    materializer.evaluate(candidate)
+                },
+            )
+            .is_err()
+    );
+    let parameter = predicted.into_inner().unwrap();
+    let inputs = IntentExternalInputs::new(
+        ExternalInputRevision::from_raw(1),
+        ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Activation(true),
+            }],
+        )
+        .unwrap()
+        .to_canonical_json()
+        .unwrap()
+        .into_bytes(),
+        ExternalSnapshotSet::default()
+            .to_canonical_json()
+            .unwrap()
+            .into_bytes(),
+    )
+    .unwrap();
+    let captured = RefCell::new(None);
+    session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                std::iter::once(IntentPatchOperation::ReplaceExternalInputs { inputs })
+                    .chain(declarations())
+                    .collect(),
+            ),
+            |candidate| {
+                let output = materializer.materialize(candidate).unwrap();
+                let evidence = output.evidence.clone();
+                captured.replace(Some(output));
+                IntentEvaluation::Accepted { evidence }
+            },
+        )
+        .unwrap();
+    let output = captured.into_inner().unwrap();
+    let accepted = output.session.accepted_state_for_current_input().unwrap();
+    assert_eq!(accepted.document().parameter_bindings().len(), 1);
+    assert_eq!(
+        output.session.parameter_batch().entries()[0].parameter,
+        parameter
+    );
+    assert_independently_validated(&output);
+}
+
+#[test]
+fn all_parameter_kinds_and_reference_output_are_exactly_persistent() {
+    let reference = IntentNodeDraft::new(
+        IntentNodeKind::Dimension {
+            dimension: DimensionKind::Radius,
+        },
+        key("radius_reference"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Curve, 0),
+        alias("circle", IntentPortRole::Curve),
+    )
+    .with_field(
+        IntentFieldKey(key("mode")),
+        IntentLiteral::Enum(key("reference")),
+    );
+    let output_declaration = IntentNodeDraft::new(
+        IntentNodeKind::Parameter {
+            parameter: ParameterIntentKind::Output,
+        },
+        key("radius_output"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Parameter, 0),
+        alias("length", IntentPortRole::Parameter),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Dimension, 0),
+        alias("reference", IntentPortRole::Dimension),
+    );
+    let result = cold_materialize_ops(
+        0x8300_1e40,
+        vec![
+            create("circle", circle("circle", [0.0, 0.0], 1.0)),
+            create("reference", reference),
+            create("length", parameter_declaration("length", "length")),
+            create("angle", parameter_declaration("angle", "angle")),
+            create(
+                "dimensionless",
+                parameter_declaration("dimensionless", "dimensionless"),
+            ),
+            create(
+                "activation",
+                parameter_declaration("activation", "activation"),
+            ),
+            create("radius_output", output_declaration),
+        ],
+    );
+    let document = result
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    let kinds = document
+        .parameters()
+        .iter()
+        .map(|parameter| parameter.kind)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        kinds,
+        [
+            DocumentParameterKind::Length,
+            DocumentParameterKind::Angle,
+            DocumentParameterKind::Dimensionless,
+            DocumentParameterKind::Activation,
+        ]
+        .into_iter()
+        .collect()
+    );
+    assert_eq!(document.parameter_outputs().len(), 1);
+    assert_independently_validated(&result);
+}
+
+#[test]
+fn one_edge_profile_offset_dimension_reconstructs_exact_source_target_pair() {
+    let aggregate = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::OpenChain,
+        },
+        key("source_chain"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("source", IntentPortRole::Span),
+    );
+    let offset = IntentNodeDraft::new(
+        IntentNodeKind::Dimension {
+            dimension: DimensionKind::ProfileOffset,
+        },
+        key("offset"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Chain, 0),
+        alias("source_chain", IntentPortRole::Chain),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("target", IntentPortRole::Span),
+    )
+    .with_field(
+        IntentFieldKey(key("mode")),
+        IntentLiteral::Enum(key("driving")),
+    )
+    .with_field(
+        IntentFieldKey(key("side")),
+        IntentLiteral::Enum(key("left")),
+    )
+    .with_field(
+        IntentFieldKey(key("source_traversal")),
+        IntentLiteral::Enum(key("forward")),
+    )
+    .with_field(
+        IntentFieldKey(key("target_traversal")),
+        IntentLiteral::Enum(key("forward")),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Target),
+        LeafField::Value,
+        coordinate(2.0),
+    );
+    let result = cold_materialize_ops(
+        0x8300_1e50,
+        vec![
+            create("source", segment("source", [0.0, 0.0], [4.0, 0.0])),
+            create("target", segment("target", [0.0, 2.0], [4.0, 2.0])),
+            create("source_chain", aggregate),
+            create("offset", offset),
+        ],
+    );
+    let document = result
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    let DocumentDimensionDefinition::ProfileOffset { operand, .. } =
+        &document.dimensions()[0].definition
+    else {
+        panic!("expected profile offset dimension");
+    };
+    let geosolve_sketch::DocumentProfileOffsetOperand::OpenChain { side, chain } = operand else {
+        panic!("expected open-chain operand");
+    };
+    assert_eq!(*side, DocumentLineSide::Left);
+    assert_eq!(chain.edges.len(), 1);
+    let source = document
+        .curves()
+        .iter()
+        .find(|curve| curve.label == "source")
+        .unwrap();
+    let target = document
+        .curves()
+        .iter()
+        .find(|curve| curve.label == "target")
+        .unwrap();
+    assert_eq!(
+        chain.edges[0].source.curve,
+        document.curve_spans(source.id).unwrap()[0]
+    );
+    assert_eq!(
+        chain.edges[0].target.curve,
+        document.curve_spans(target.id).unwrap()[0]
+    );
+    assert_independently_validated(&result);
 }
 
 #[test]
