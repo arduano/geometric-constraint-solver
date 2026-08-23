@@ -89,10 +89,9 @@ changing architecture consolidation. M83 implements accepted ADR 0039: authorita
 full-workbench sketch lineage, stable typed identity flow, deterministic strict/local
 rematerialization, atomic owner-step reconciliation, workspace v7 and a DOM-free stateful
 TypeScript/WASM boundary. `docs/M83_GOALS.md` owns the scope and `docs/M83_IMPLEMENTATION.md` owns
-the current evidence. The requested read-only Lineage-panel amendment is implemented and focused
-qualification passes; it supersedes the earlier immutable candidate, so replacement clean
-qualification and Tailscale nomination are pending. M83 is still not accepted, and M81 remains
-product authority until focused human UAT and explicit approval pass.
+the current evidence. The requested read-only Lineage-panel amendment, replacement clean
+qualification and immutable byte-verified Tailscale nomination pass. M83 is still not accepted,
+and M81 remains product authority until focused human UAT and explicit approval pass.
 M76's
 implementation,
 feature refinements,
@@ -5604,8 +5603,8 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: authoritative sketch lineage and deterministic rematerialization
 
-Status: **Lineage-panel amendment implemented; replacement clean qualification and human UAT
-pending; not accepted**.
+Status: **replacement clean-qualified immutable candidate nominated; human UAT pending; not
+accepted**.
 `docs/M83_GOALS.md` owns the complete scope and ADR 0039 is accepted for M83 implementation. This
 plan supersedes commit `56d1eda`'s narrow architecture slice; that commit remains historical
 evidence, not an active acceptance contract. ADR number 0038 stays with the inactive archived M82
@@ -5684,12 +5683,27 @@ workbench honestly to workspace v7 and expose the same stateful engine through
   authoritative Undo/Redo cursor/availability without a browser mirror or row mutation controls.
   Keep the panels adjacent on wide desktop, stacked on compact desktop and hidden together at the
   existing narrow-workbench cutoff.
-- [ ] Pass the replacement complete clean release gate from committed source, receive focused
+- [x] Pass the replacement complete clean release gate from committed source, receive focused
   architecture/API review and nominate an immutable byte-verified Tailscale candidate.
 - [ ] Pass and record M83-W12 human UAT, freeze the accepted artifact, publish it to GitHub Pages
   and verify the exact public bytes before closing M83.
 
-Superseded nomination evidence: exact product source
+Replacement nomination evidence: exact product source
+`bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
+`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate. Its
+304,480-byte log `/tmp/geosolve-m83-lineage-release-gate.log` has SHA-256
+`945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`. Without rebuilding, the
+gate-produced seven-file distribution is frozen read-only at
+`/tmp/geosolve-m83-lineage-uat.1KL8gG`; its C-locale ordered-manifest aggregate is
+`d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Eight proxy-disabled,
+identity-encoded requests for `/` plus all seven files pass exact status/media/length/body checks
+first on temporary `:18080` and then at `http://100.94.63.83:8080/`; both result ledgers have
+SHA-256 `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`. The temporary listener
+is retired and `geosolve-m83-lineage-uat.service`, nomination PID `4152505`, serves only the frozen
+replacement bytes for M83-W12. GitHub Pages and milestone closure remain blocked on explicit
+human approval.
+
+Superseded pre-panel nomination evidence: exact product source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
 `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, passed
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from a clean worktree on
@@ -5701,11 +5715,9 @@ ordered-manifest aggregate is
 `ee2695ca55e803cbdeb8f6cd5a1ff632e59fe583428807f36e29ad5f2fbebd51`. Proxy-disabled identity
 requests for `/` plus all seven files passed exact status/media/length/encoding/body checks first
 on `:18080` and then at `http://100.94.63.83:8080/`; both result ledgers have SHA-256
-`3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`. The retained service
-continues to serve only those frozen historical bytes for continuity while the replacement is
-qualified. That candidate is withdrawn from current M83-W12 because it does not contain the
-requested Lineage panel. GitHub Pages and milestone closure remain blocked on a replacement
-immutable candidate and explicit human approval.
+`3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`. That candidate is
+withdrawn from current M83-W12 because it does not contain the requested Lineage panel, and its
+service is retired.
 
 Gate: every current workbench action survives cold lineage rematerialization with exact typed
 identity flow; direct editing rewrites every owner atomically; all current native operations and

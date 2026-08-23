@@ -4304,12 +4304,11 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 M83 adds no solver equation or geometry family. Its scenarios exercise declarative authority,
 identity, rematerialization and adapter parity above the unchanged owning-domain oracles.
 
-Pre-panel qualification status: exact source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
-`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, passes the complete clean release gate and focused
-architecture/publication review. Its exact no-rebuild seven-file snapshot is byte-verified at
-`http://100.94.63.83:8080/`. That candidate is superseded by the requested read-only Lineage panel
-and remains live only for continuity. The amendment passes focused tests; replacement clean
-qualification/nomination, M83-W12 human UAT and explicit approval remain pending.
+Replacement qualification status: exact source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
+`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate and focused
+authority/UX review. Its exact no-rebuild seven-file snapshot is byte-verified at
+`http://100.94.63.83:8080/`. Earlier source `d378f7b3` is superseded because it predates the
+read-only Lineage panel. M83-W12 human UAT and explicit approval remain pending.
 
 ### M83-L1 — complete typed action catalog
 
@@ -4436,9 +4435,9 @@ Rows are noninteractive list items: no browser-side lineage collection, JSON rec
 selection, delete, reorder or rewrite path exists. Focused pure-markup and real-coordinator
 Create/Undo/Redo regressions, escaping/empty-state checks, the M83-W11 source sentinel, responsive
 HTML/CSS contract, breakpoint/contrast review, complete 172-test demo library and warnings-denied
-demo Clippy pass. Replacement
-clean qualification and immutable nomination remain pending; no golden row is added because this
-is a presentation of already-qualified authority, not a new geometry/authoring family.
+demo Clippy pass. Replacement clean qualification and immutable nomination pass; no golden row is
+added because this is a presentation of already-qualified authority, not a new
+geometry/authoring family.
 
 ### M83-F026 — projected editing preserves host-owned scalar fallbacks
 

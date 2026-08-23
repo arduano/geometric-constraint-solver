@@ -40,9 +40,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   imported baselines, and `geosolve.lineage.rpc.v0` exposes the stateful engine without a DOM.
   The ordinary workbench additionally presents the current program through a direct read-only
   Lineage panel; it introduces no peer browser authority. `docs/M83_GOALS.md` owns the full scope.
-  Exact source `d378f7b3`, tree `25a47e8`, passed clean qualification, focused review and immutable
-  byte-verified Tailscale nomination but is superseded because it predates the panel. Replacement
-  clean nomination, human UAT and explicit approval remain required; M81 remains the product
+  Replacement exact source `bb888cc`, tree `dff5ebe`, passes clean qualification, focused review
+  and immutable byte-verified Tailscale nomination. Earlier source `d378f7b3` is superseded because
+  it predates the panel. Human UAT and explicit approval remain required; M81 remains the product
   baseline.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and

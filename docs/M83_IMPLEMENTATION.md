@@ -2,11 +2,10 @@
 
 # M83 implementation — Authoritative sketch lineage and deterministic rematerialization
 
-Status: **architecture implementation and read-only Lineage-panel amendment complete; replacement
-clean qualification and human UAT pending; not accepted**. ADR 0039 and `docs/M83_GOALS.md` own the
-scope. M81 remains accepted product authority until a replacement immutable M83 candidate passes
-focused human UAT and receives explicit supervising-human approval. GitHub Pages publication is
-deliberately deferred until that approval.
+Status: **replacement clean-qualified immutable candidate nominated; human UAT pending; not
+accepted**. ADR 0039 and `docs/M83_GOALS.md` own the scope. M81 remains accepted product authority
+until the replacement immutable M83 candidate passes focused human UAT and receives explicit
+supervising-human approval. GitHub Pages publication is deliberately deferred until that approval.
 
 ## Product boundary
 
@@ -917,8 +916,66 @@ Only after that pass, `geosolve-m83-uat.service`, PID `1273798`, began serving t
 directory at `http://100.94.63.83:8080/`. The independent eight-request final ledger at
 `/tmp/geosolve-m83-final-verify.yMsi3f/results.tsv` is byte-identical and has the same SHA-256; its
 fetched manifest matches the frozen aggregate above. The temporary listener was then retired.
-The retained service remains live only for continuity while the L7 replacement is qualified. These
-evidence-only documentation changes are descendants of the nominated source/tree and do not
+That service is now retired. These evidence-only documentation changes are descendants of the
+historical source/tree and did not rebuild or replace its product bytes.
+
+### Replacement Lineage-panel qualification and immutable nomination
+
+Exact product source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
+`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, ran the complete release gate from a clean worktree
+on 2026-08-23 and exited zero:
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The 304,480-byte log `/tmp/geosolve-m83-lineage-release-gate.log` has SHA-256
+`945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`. The gate passed Cargo
+metadata/offline resolution, formatting and diff hygiene, warnings-denied all-target/all-feature
+workspace Clippy, locked all-feature workspace tests, the unchanged clean 271-row golden oracle,
+native/WASM M70/M71/M74/M75/M76/M77/M79/M83 parity, demo WASM and TypeScript checks,
+warnings-denied Rustdoc, benchmark compilation, M14/M32 budgets, the ignored 256-moving-body
+sparse crossover in 125.35 seconds, licence/package checks and Trunk 0.21.14 release assembly. The
+only diagnostics were the existing non-failing Cargo notices for packages declaring both
+`license` and `license-file`.
+
+The independent authority/UX review first found and then verified repairs for three layout edges:
+the compact outer grid now has an exact 58rem minimum before the unchanged 58rem panel-hide cutoff;
+the maximum retained-history presentation `1025 / 2049` uses a bounded two-row grid; and the
+Lineage count has measured 6.24:1 contrast. Headless Chrome reports zero root/Inspector overflow at
+1600, 1100, 952, 940, 929 and 928px, zero history overflow at wide/compact sizes, and no remaining
+review blocker. Direct authority, cursor semantics, hostile-string escaping, lifecycle/order,
+rewrite and Create/Undo/Redo tests also pass.
+
+Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m83-lineage-uat.1KL8gG`, byte-compared before and after freezing and made read-only:
+directory `0555`, seven regular non-symlink files `0444`. The C-locale ordered manifest has
+aggregate SHA-256 `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 35,307 | `b81b2c03fce26f78f3dca7702543fd6d0c63d98e09b4605071d512d4d2395389` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-a087917fcb2978ce.js` | 33,750 | `ac84a1858b8062c4644c07a65eb4322f3e4d18ee739d5133df5bf51653c4f5b7` |
+| `geosolve-demo-web-a087917fcb2978ce_bg.wasm` | 9,927,391 | `113328e1cea7d83126485df35e48d343073e93dc42ee771025773f8a9b8c12e9` |
+| `index.html` | 31,526 | `a37f341ba0a334c1fcb210948c495ce52028369f5cecfafdc77ffc8340b2b5cb` |
+| `styles-30b1fc750696602c.css` | 41,388 | `b8600d4e01a26c2a519f30990ae02d446a7b27137cee5a5c5c5654d077ecf8a8` |
+
+Temporary service `geosolve-m83-lineage-temp-uat.service` first served only that snapshot at
+`100.94.63.83:18080`. Eight proxy-disabled, cache-bypassed identity requests for `/` plus every
+file returned HTTP 200 with the direct Tailscale address, zero redirects, no `Location` or
+`Content-Encoding`, exact media type, `Content-Length`, downloaded length, SHA-256 and bytes;
+`/` equals `index.html`. Evidence is
+`/tmp/geosolve-m83-lineage-temp-verify.jbCyQE/results.tsv`.
+
+Only after that pass, the superseded retained service was stopped and
+`geosolve-m83-lineage-uat.service`, nomination PID `4152505`, began serving the identical frozen
+directory at `http://100.94.63.83:8080/`. Independent final evidence is
+`/tmp/geosolve-m83-lineage-final-verify.2LxtXE/results.tsv`; both ledgers are byte-identical with
+SHA-256 `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`.
+The temporary listener was then retired and a final root request still byte-matched the snapshot.
+These evidence-only documentation changes are descendants of the nominated source/tree and do not
 rebuild or replace its product bytes.
 
 ## Known limitations and next gate
@@ -927,9 +984,8 @@ M83 intentionally does not add arbitrary-curve/computed Offset, topology-changin
 computed-on-computed features, B-rep/PDM naming, formulas/configurations/units, collaboration,
 TypeScript source rewriting, a browser script editor or npm publication.
 
-The immediate gate is clean committed-source qualification and immutable replacement nomination
-for L7. The remaining product gate is then the focused scorecard in `docs/M83_UAT.md` and explicit
+The remaining product gate is the focused scorecard in `docs/M83_UAT.md` and explicit
 supervising-human acceptance. M83 must not close or deploy to GitHub Pages before that decision. If
 UAT opens a finding, the immutable candidate is withdrawn and the exact owning-layer defect
-workflow applies; otherwise those replacement nominated semantics proceed through the standard
-Pages build and exact hosted-byte verification.
+workflow applies; otherwise these nominated semantics proceed through the standard Pages build and
+exact hosted-byte verification.

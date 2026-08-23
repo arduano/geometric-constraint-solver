@@ -265,10 +265,10 @@ fresh accepted revision, same-byte reload cannot skip a higher saved lifecycle, 
 acknowledgement follows every fallible lineage operation, and public construction results report
 the final strict-cold accepted identity. The workbench now presents that retained program directly
 beside Sketch Tree, with distinct program-revision and Undo/Redo-history state and no browser-owned
-lineage mirror or mutation path. The earlier exact source `d378f7b3`, tree `25a47e8`, passed the
-clean gate, focused review and immutable byte-verified Tailscale nomination but is superseded
-because it predates the panel. Replacement clean qualification/nomination and human UAT remain
-pending.
+lineage mirror or mutation path. Replacement exact source `bb888cc`, tree `dff5ebe`, passes the
+complete clean gate, focused review and immutable byte-verified Tailscale nomination at
+`http://100.94.63.83:8080/`. The earlier `d378f7b3` candidate is superseded because it predates the
+panel. Human UAT remains pending.
 M81 remains accepted product authority until M83 closes.
 
 ## Read first

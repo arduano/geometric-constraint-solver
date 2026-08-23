@@ -2,15 +2,41 @@
 
 # M83 focused UAT — Authoritative sketch lineage
 
-Status: **Lineage-panel amendment implemented; replacement immutable candidate pending**. The
-previous clean-gate source, no-rebuild snapshot and byte-verified Tailscale endpoint below are
-superseded because they predate the requested panel. M81 remains accepted public product authority
-meanwhile.
+Status: **replacement clean-qualified immutable candidate nominated; human UAT pending**. The
+scorecard is bound to the exact replacement source, no-rebuild snapshot and byte-verified Tailscale
+endpoint below. M81 remains accepted public product authority meanwhile.
 
 M83 deliberately preserves existing sketch mathematics and visible authoring behavior while
 replacing persistent workbench authority. The amendment now exposes a read-only projection of that
 real retained program, so human review should cover both end-to-end editing/history/reload behavior
 and whether the panel makes program/history changes legible without implying row editability.
+
+## Replacement candidate authority
+
+- Product source: `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`.
+- Product tree: `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`.
+- Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 on
+  2026-08-23; 304,480-byte log `/tmp/geosolve-m83-lineage-release-gate.log`, SHA-256
+  `945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`.
+- Immutable no-rebuild snapshot: `/tmp/geosolve-m83-lineage-uat.1KL8gG` (directory `0555`; seven
+  regular non-symlink files `0444`).
+- Ordered file-manifest aggregate:
+  `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`.
+- Tailscale endpoint: `http://100.94.63.83:8080/`, served only from that snapshot by
+  `geosolve-m83-lineage-uat.service` (nomination PID `4152505`).
+- Exact served-byte verification: temporary
+  `/tmp/geosolve-m83-lineage-temp-verify.jbCyQE/results.tsv` and retained
+  `/tmp/geosolve-m83-lineage-final-verify.2LxtXE/results.tsv`, each SHA-256
+  `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`.
+
+Both verification passes cover `/` plus all seven files with HTTP 200, direct Tailscale address,
+zero redirects, no `Location` or `Content-Encoding`, exact media type/length/SHA/body and root
+equality with `index.html`. The temporary `:18080` listener is retired; the retained endpoint stays
+live through this UAT. GitHub Pages is intentionally unchanged until approval.
+
+Independent browser review reports zero root/Inspector overflow at the 1600, 1100, 952, 940, 929
+and 928px boundary cases, zero bounded-history overflow for `1025 / 2049`, and 6.24:1 Lineage-count
+contrast. This is qualification evidence, not a substitute for the scorecard below.
 
 ## Superseded pre-panel candidate
 
@@ -30,14 +56,9 @@ and whether the panel makes program/history changes legible without implying row
   `/tmp/geosolve-m83-final-verify.yMsi3f/results.tsv`, each SHA-256
   `3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`.
 
-Both historical verification passes cover `/` plus all seven files with HTTP 200, direct Tailscale address,
-zero redirects, no `Location` or `Content-Encoding`, exact media type/length/SHA/body, and root
-equality with `index.html`. The temporary `:18080` listener is retired; the retained endpoint stays
-live only for continuity until replacement. These bytes are withdrawn from current UAT because
-they do not contain the Lineage panel. GitHub Pages is intentionally unchanged until approval.
-
-Replacement product source, frozen snapshot and exact served-byte evidence will be recorded here
-after the amended committed source passes the complete clean release gate.
+Both historical verification passes covered `/` plus all seven files exactly. Those bytes are
+withdrawn from current UAT because they do not contain the Lineage panel, and their service is
+retired.
 
 ## Focused scorecard
 

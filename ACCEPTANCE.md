@@ -2928,8 +2928,8 @@ M82's mechanical qualification as product evidence.
 
 ## M83 acceptance: authoritative sketch lineage and deterministic rematerialization
 
-Status: **mechanical criteria and the read-only Lineage-panel amendment pass focused qualification;
-replacement clean nomination and human UAT remain pending**. `docs/M83_GOALS.md` is the
+Status: **replacement mechanical qualification, focused review and immutable Tailscale nomination
+pass; human UAT remains pending**. `docs/M83_GOALS.md` is the
 authoritative scope and ADR 0039 is accepted for implementation. This section supersedes commit
 `56d1eda`'s narrow proof criteria without claiming that the expanded product has received
 supervising-human acceptance.
@@ -3057,7 +3057,7 @@ supervising-human acceptance.
   current revision, history position and Undo/Redo availability. Rows expose no selection,
   deletion or browser-owned mutation path; markup escaping, direct rewrite-without-append, actual
   coordinator Create/Undo/Redo, responsive layout and source-route sentinels pass.
-- [ ] Replacement focused M83-W1–W11 tests pass with unchanged
+- [x] Replacement focused M83-W1–W11 tests pass with unchanged
   sketch/operation/topology/feature/editor/
   persistence suites and reviewed 271-row golden authority. Formatting/diff hygiene,
   warnings-denied workspace Clippy/Rustdoc, locked all-feature tests, native/WASM parity,
@@ -3070,6 +3070,21 @@ supervising-human acceptance.
   direct editing, failure recovery, Undo/Redo and workspace reload/migration. Findings are closed
   or explicitly dispositioned, and the accepted frozen bytes are deployed and exactly verified on
   GitHub Pages before milestone closure.
+
+Replacement exact source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
+`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate with
+304,480-byte log SHA-256 `945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`.
+The unchanged 271-row golden, full native/WASM/TypeScript/workspace qualification, warnings-denied
+Clippy/Rustdoc, 125.35-second sparse crossover, licence/package checks and Trunk 0.21.14 assembly
+pass. The no-rebuild seven-file output is frozen at `/tmp/geosolve-m83-lineage-uat.1KL8gG` with
+directory mode `0555`, file modes `0444` and ordered-manifest aggregate
+`d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Temporary and retained
+Tailscale verification each pass eight exact HTTP checks; both result ledgers have SHA-256
+`5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`. The temporary listener is
+retired; `geosolve-m83-lineage-uat.service`, nomination PID `4152505`, serves the frozen snapshot
+at `http://100.94.63.83:8080/`. Independent responsive review additionally proves zero root,
+Inspector and bounded-history overflow across the breakpoint boundaries and 6.24:1 header
+contrast. No Pages or milestone-acceptance claim is made before explicit human approval.
 
 The following is superseded pre-panel evidence. Exact source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
@@ -3087,10 +3102,8 @@ retained `http://100.94.63.83:8080/` verification each pass eight proxy-disabled
 identity-encoded HTTP checks with exact body/media/length and no redirect, `Location` or
 `Content-Encoding`; `/` equals `index.html`. Both result ledgers have SHA-256
 `3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`. Two independent focused
-reviews found no release blocker. Its retained service remains live only for continuity while the
-replacement is qualified; those bytes are withdrawn from current M83-W12 because they do not
-contain the requested Lineage panel. No Pages or milestone-acceptance claim is made before a
-replacement nomination and explicit human approval.
+reviews found no release blocker. Those bytes are withdrawn from current M83-W12 because they do
+not contain the requested Lineage panel, and their service is retired.
 
 M83 explicitly excludes new geometry/constraint families, arbitrary-curve/computed Offset,
 topology-changing Offset construction, computed-on-computed feature chains, false persistent

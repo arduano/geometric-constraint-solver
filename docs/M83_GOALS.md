@@ -2,19 +2,20 @@
 
 # M83 — authoritative sketch lineage and deterministic rematerialization
 
-Status: **read-only Lineage-panel amendment implemented; replacement clean qualification and human
-UAT pending; not accepted**. M83 is a full-workbench architecture and migration milestone.
-`LineageDocument` becomes the authoritative editable source for the GeoSolve demo workbench; flat `SketchDocument`,
-`ComputedFeatureDocument` and evaluated feature geometry are derived materializations. ADR 0039 is
-accepted for M83 implementation.
+Status: **replacement clean-qualified immutable candidate nominated; human UAT pending; not
+accepted**. M83 is a full-workbench architecture and migration milestone. `LineageDocument`
+becomes the authoritative editable source for the GeoSolve demo workbench; flat `SketchDocument`,
+`ComputedFeatureDocument` and evaluated feature geometry are derived materializations. ADR 0039
+is accepted for M83 implementation.
 
 This document supersedes the narrower M83 proof planned in commit `56d1eda`. That commit remains
 in Git history as the original design record, but its line/Horizontal/rectangle/Profile Offset
 slice, host-side sidecar posture, opaque flat-document root, and exclusion of the ordinary
 workbench and computed features are not the active M83 contract. The expanded architecture
-implementation and requested Lineage-panel amendment pass focused qualification. The earlier
-clean-gated Tailscale candidate is superseded because it predates the panel; no criterion below is
-accepted product behavior until a replacement frozen candidate passes explicit human UAT.
+implementation and requested Lineage-panel amendment pass clean qualification, focused review and
+immutable Tailscale nomination. The earlier candidate is superseded because it predates the panel;
+no criterion below is accepted product behavior until the replacement frozen candidate passes
+explicit human UAT.
 
 M81 remains the accepted product baseline while M83 is in progress. M82 remains a closed,
 archived exploration; M83 does not restore its computed arbitrary-curve Offset prototype.
@@ -367,12 +368,13 @@ Arbitrary TypeScript source rewriting and a workbench script editor remain outsi
 10. Close only after the approved UAT scorecard, frozen-artifact evidence and standard exact
     GitHub Pages publication are recorded.
 
-The pre-panel form of steps 1–9 passed for source
+Steps 1–9 pass for replacement source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
+`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`. Its exact no-rebuild seven-file snapshot
+`/tmp/geosolve-m83-lineage-uat.1KL8gG` is byte-verified and served at
+`http://100.94.63.83:8080/`; step 10 remains blocked on human UAT. The pre-panel form previously
+passed for source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
-`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`. Its exact no-rebuild seven-file snapshot remains
-byte-verified at `http://100.94.63.83:8080/` for continuity but is withdrawn from current UAT. The
-panel amendment and focused tests pass; replacement clean qualification/nomination and step 10
-remain pending.
+`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`; that snapshot is withdrawn and no longer served.
 
 ## Acceptance scenarios
 
@@ -486,10 +488,9 @@ verified on GitHub Pages.
 - Formatting/diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature tests,
   native/WASM parity, performance, licence/package checks, Trunk and the complete release gate pass
   from committed source.
-- Focused architecture/API review and the Lineage-panel authority/presentation tests pass. The
-  earlier immutable byte-verified Tailscale nomination is superseded by the panel amendment;
-  replacement clean qualification/nomination, human UAT, explicit acceptance and exact GitHub
-  Pages publication are still required before M83 can be closed.
+- Focused architecture/API review, Lineage-panel authority/presentation tests, replacement clean
+  qualification and immutable byte-verified Tailscale nomination pass. Human UAT, explicit
+  acceptance and exact GitHub Pages publication are still required before M83 can be closed.
 
 ## Explicit non-goals
 

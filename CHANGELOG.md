@@ -20,8 +20,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   stateful `geosolve.lineage.rpc.v0` protocol, with a private data-only TypeScript
   client. A secondary read-only workbench panel now renders the current retained
   action program and its separate Undo/Redo cursor directly from coordinator
-  authority. M81 remains accepted product authority until replacement clean
-  qualification and focused M83 human UAT approve an immutable candidate.
+  authority. Replacement clean qualification and immutable Tailscale nomination
+  pass; M81 remains accepted product authority until focused M83 human UAT approval.
 - M83 authority hardening recompiles complete editor-action manifests—inputs, outputs, identity
   flows, persistent reservations and writable leaves—for current, accepted and historical
   programs before load or evaluation. Imported deletion now appends explicit `Retired` lineage,
