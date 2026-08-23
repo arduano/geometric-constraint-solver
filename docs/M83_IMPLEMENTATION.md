@@ -193,11 +193,12 @@ panel source plus action count/cursor/availability against current Rust authorit
 The M83-W11 source sentinel requires direct lineage/history accessors and rejects JSON parsing or a
 browser-side `Vec<LineageStep>`. Static HTML/CSS tests cover unique accessible ownership, wide
 adjacency, compact stacking and narrow hiding. Review moved the split/stack breakpoint to 96rem so
-the canvas HUD keeps its ordinary width, advances the compact outer grid at 80rem so the Inspector
-cannot clip in the intervening viewport band, and gives the bounded four-digit history cursor a
-two-row layout. It also removes whole-row opacity from retained non-live steps, raises small-text
-contrast/size and makes the durable developer key visible. The complete demo library passes
-172/172 and focused warnings-denied demo Clippy passes on the amendment worktree.
+the canvas HUD keeps its ordinary width, advances a 58rem-minimum compact outer grid at 80rem so
+the Inspector cannot clip before the unchanged 58rem narrow cutoff, and gives the bounded
+four-digit history cursor a two-row layout. It also removes whole-row opacity from retained
+non-live steps, raises small-text contrast/size and makes the durable developer key visible. The
+complete demo library passes 172/172 and focused warnings-denied demo Clippy passes on the
+amendment worktree.
 
 ## Finding ledger
 

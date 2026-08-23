@@ -8755,6 +8755,7 @@ mod tests {
         assert!(css.contains("@media (max-width: 96rem)"));
         assert!(css.contains("grid-template-rows: repeat(2, minmax(0, 1fr));"));
         assert!(css.contains("@media (max-width: 80rem)"));
+        assert!(css.contains("grid-template-columns: 9.5rem 10.5rem minmax(20rem, 1fr) 18rem;"));
         assert!(css.contains("grid-template-rows: auto auto minmax(0, 1fr);"));
         assert!(css.contains("grid-template-columns: repeat(2, max-content);"));
         assert!(css.contains(".wb-lineage-history-cursor { grid-column: 1 / -1; }"));
