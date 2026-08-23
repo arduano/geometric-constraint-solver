@@ -12,10 +12,11 @@ use crate::ids::{
 use crate::model::{
     BootstrapNativeKind, InputRole, InputSlot, IntentChildSchema, IntentFieldKey,
     IntentGraphIdentity, IntentIdentityFlow, IntentInstanceState, IntentLiteral,
-    IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentPortKind, IntentPortRef,
-    IntentPortSelector, IntentReservationLedgerIdentity, LeafField, LeafRef,
-    MAX_INTENT_NODE_FIELDS, MAX_INTENT_NODE_INPUTS, PatchPortRef, PortSpec, checked_child_count,
-    child_port_specs, literal_matches_leaf, node_port_specs,
+    IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentOperationOutput,
+    IntentOperationOutputKind, IntentPortKind, IntentPortRef, IntentPortSelector,
+    IntentReservationLedgerIdentity, LeafField, LeafRef, MAX_INTENT_NODE_FIELDS,
+    MAX_INTENT_NODE_INPUTS, MAX_INTENT_OPERATION_OUTPUTS, PatchPortRef, PortSpec,
+    checked_child_count, child_port_specs, literal_matches_leaf, node_port_specs,
 };
 
 /// Strict canonical graph wire version.
@@ -493,6 +494,10 @@ pub struct IntentNode {
     pub suppressed: bool,
     pub inputs: BTreeMap<crate::InputSlot, IntentPortRef>,
     pub fields: BTreeMap<IntentFieldKey, IntentLiteral>,
+    /// Untrusted operation output shape authenticated against the existing
+    /// Rust operation proposal before any reservation is consumed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operation_outputs: Vec<IntentOperationOutput>,
     pub ports: BTreeMap<PortId, IntentPort>,
     pub reservations: BTreeMap<ReservationId, IntentReservation>,
     pub child_order: Vec<ChildId>,
@@ -681,6 +686,7 @@ impl IntentGraph {
             for value in node.fields.values() {
                 value.validate()?;
             }
+            validate_operation_outputs(*id, &node.kind, &node.operation_outputs)?;
             if let IntentNodeKind::Bootstrap { object } = &node.kind {
                 object.validate()?;
             }
@@ -906,7 +912,12 @@ impl IntentGraph {
 
         let dynamic_children = u16::try_from(target.children.len())
             .map_err(|_| IntentGraphError::InvalidPortSchema { node })?;
-        let mut specs = node_port_specs(&target.kind, &target.fields, dynamic_children);
+        let mut specs = node_port_specs(
+            &target.kind,
+            &target.fields,
+            dynamic_children,
+            &target.operation_outputs,
+        );
         for (ordinal, child) in target.child_order.iter().enumerate() {
             let ordinal =
                 u16::try_from(ordinal).map_err(|_| IntentGraphError::InvalidPortSchema { node })?;
@@ -1267,6 +1278,7 @@ pub(crate) fn allocate_draft(
     for value in draft.fields.values() {
         value.validate()?;
     }
+    validate_operation_outputs(allocator.next_node, &draft.kind, &draft.operation_outputs)?;
     if let IntentNodeKind::Bootstrap { object } = &draft.kind {
         object.validate()?;
     }
@@ -1286,7 +1298,12 @@ pub(crate) fn allocate_draft(
     let id = allocator.allocate_node()?;
     let mut ports = BTreeMap::new();
     let mut reservations = BTreeMap::new();
-    for spec in node_port_specs(&draft.kind, &draft.fields, draft.dynamic_children) {
+    for spec in node_port_specs(
+        &draft.kind,
+        &draft.fields,
+        draft.dynamic_children,
+        &draft.operation_outputs,
+    ) {
         let reserve = spec.native.is_some()
             && !spec
                 .alias_input
@@ -1394,6 +1411,61 @@ fn validate_declaration_schema<T>(
                 field: field.field.clone(),
             });
         }
+    }
+    Ok(())
+}
+
+fn validate_operation_outputs(
+    node: NodeId,
+    kind: &IntentNodeKind,
+    outputs: &[IntentOperationOutput],
+) -> Result<(), IntentGraphError> {
+    let IntentNodeKind::Operation { operation } = kind else {
+        if outputs.is_empty() {
+            return Ok(());
+        }
+        return Err(IntentGraphError::InvalidPortSchema { node });
+    };
+    if outputs.len() > MAX_INTENT_OPERATION_OUTPUTS {
+        return Err(IntentGraphError::ResourceLimit {
+            resource: "operation outputs",
+            actual: outputs.len(),
+            limit: MAX_INTENT_OPERATION_OUTPUTS,
+        });
+    }
+    if matches!(
+        operation,
+        crate::OperationKind::Split
+            | crate::OperationKind::Break
+            | crate::OperationKind::Trim
+            | crate::OperationKind::Extend
+    ) && !outputs.is_empty()
+    {
+        return Err(IntentGraphError::InvalidPortSchema { node });
+    }
+    let mut spans = 0_usize;
+    for output in outputs {
+        match output.kind {
+            IntentOperationOutputKind::Curve if output.curve_span_count == 0 => {
+                return Err(IntentGraphError::InvalidPortSchema { node });
+            }
+            IntentOperationOutputKind::Curve => {
+                spans = spans
+                    .checked_add(usize::from(output.curve_span_count))
+                    .ok_or(IntentGraphError::InvalidPortSchema { node })?;
+            }
+            _ if output.curve_span_count != 0 => {
+                return Err(IntentGraphError::InvalidPortSchema { node });
+            }
+            _ => {}
+        }
+    }
+    if spans > usize::from(u16::MAX) {
+        return Err(IntentGraphError::ResourceLimit {
+            resource: "operation curve spans",
+            actual: spans,
+            limit: usize::from(u16::MAX),
+        });
     }
     Ok(())
 }
@@ -1685,6 +1757,7 @@ pub(crate) fn finish_allocated_draft(
         suppressed: allocated.draft.suppressed,
         inputs,
         fields: allocated.draft.fields,
+        operation_outputs: allocated.draft.operation_outputs,
         ports,
         reservations: allocated.reservations,
         child_order: allocated.child_order,
@@ -1768,7 +1841,12 @@ pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(),
 fn validate_schema_ports(node: &IntentNode) -> Result<(), IntentGraphError> {
     let dynamic_children = u16::try_from(node.children.len())
         .map_err(|_| IntentGraphError::InvalidPortSchema { node: node.id })?;
-    let mut specs = node_port_specs(&node.kind, &node.fields, dynamic_children);
+    let mut specs = node_port_specs(
+        &node.kind,
+        &node.fields,
+        dynamic_children,
+        &node.operation_outputs,
+    );
     for (ordinal, child) in node.child_order.iter().enumerate() {
         let ordinal = u16::try_from(ordinal)
             .map_err(|_| IntentGraphError::InvalidPortSchema { node: node.id })?;

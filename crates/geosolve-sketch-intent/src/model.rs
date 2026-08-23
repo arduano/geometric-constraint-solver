@@ -21,6 +21,8 @@ pub const MAX_INTENT_NODE_CHILDREN: usize = 4_096;
 pub const MAX_INTENT_NODE_INPUTS: usize = 4_096;
 /// Maximum definition literals owned by one declaration.
 pub const MAX_INTENT_NODE_FIELDS: usize = 4_096;
+/// Maximum authenticated native output slots cached by one operation.
+pub const MAX_INTENT_OPERATION_OUTPUTS: usize = 4_096;
 
 /// Invalid typed value or bounded opaque component.
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -305,6 +307,72 @@ impl OperationKind {
         Self::LinearPattern,
         Self::ProfileOffset,
     ];
+}
+
+/// One native output category claimed by a persisted operation declaration.
+///
+/// This is an untrusted, reconstructible shape cache rather than operation
+/// authority. The editor must prepare the existing Rust operation against the
+/// exact accepted input and require its authenticated output plan to agree
+/// before any reserved identity can be consumed.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IntentOperationOutputKind {
+    Point,
+    Scalar,
+    Curve,
+    Contact,
+    Constraint,
+    Dimension,
+    Parameter,
+    ExternalBinding,
+}
+
+impl IntentOperationOutputKind {
+    /// Returns the native reservation kind owned by this authenticated slot.
+    #[must_use]
+    pub const fn reservation_kind(self) -> IntentNativeReservationKind {
+        match self {
+            Self::Point => IntentNativeReservationKind::Point,
+            Self::Scalar => IntentNativeReservationKind::Scalar,
+            Self::Curve => IntentNativeReservationKind::Curve,
+            Self::Contact => IntentNativeReservationKind::Contact,
+            Self::Constraint => IntentNativeReservationKind::Constraint,
+            Self::Dimension => IntentNativeReservationKind::Dimension,
+            Self::Parameter => IntentNativeReservationKind::Parameter,
+            Self::ExternalBinding => IntentNativeReservationKind::ExternalBinding,
+        }
+    }
+}
+
+/// One ordered output slot cached beside an operation declaration.
+///
+/// `curve_span_count` publishes stable logical span ports for a curve result.
+/// It must be positive only for a Curve slot. Both category order and the
+/// materialized span count are independently authenticated by the editor.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentOperationOutput {
+    pub kind: IntentOperationOutputKind,
+    pub curve_span_count: u16,
+}
+
+impl IntentOperationOutput {
+    #[must_use]
+    pub const fn native(kind: IntentOperationOutputKind) -> Self {
+        Self {
+            kind,
+            curve_span_count: 0,
+        }
+    }
+
+    #[must_use]
+    pub const fn curve(span_count: u16) -> Self {
+        Self {
+            kind: IntentOperationOutputKind::Curve,
+            curve_span_count: span_count,
+        }
+    }
 }
 
 /// Existing computed feature catalog.
@@ -1227,6 +1295,10 @@ pub struct IntentNodeDraft {
     pub inputs: BTreeMap<InputSlot, PatchPortRef>,
     pub fields: BTreeMap<IntentFieldKey, IntentLiteral>,
     pub initial_instance: BTreeMap<IntentPortSelector, BTreeMap<LeafField, IntentLiteral>>,
+    /// Reconstructible, untrusted native-output shape for an operation. Rust's
+    /// prepared operation output plan remains the sole consumption authority.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operation_outputs: Vec<IntentOperationOutput>,
     pub dynamic_children: u16,
     pub suppressed: bool,
 }
@@ -1241,6 +1313,7 @@ impl IntentNodeDraft {
             inputs: BTreeMap::new(),
             fields: BTreeMap::new(),
             initial_instance: BTreeMap::new(),
+            operation_outputs: Vec::new(),
             dynamic_children: 0,
             suppressed: false,
         }
@@ -1283,6 +1356,14 @@ impl IntentNodeDraft {
             .entry(port)
             .or_default()
             .insert(field, value);
+        self
+    }
+
+    /// Supplies the reconstructible output shape which the native Rust
+    /// operation proposal must authenticate exactly during materialization.
+    #[must_use]
+    pub fn with_operation_outputs(mut self, outputs: Vec<IntentOperationOutput>) -> Self {
+        self.operation_outputs = outputs;
         self
     }
 }
@@ -1596,6 +1677,7 @@ pub(crate) fn node_port_specs(
     kind: &IntentNodeKind,
     fields: &BTreeMap<IntentFieldKey, IntentLiteral>,
     dynamic_children: u16,
+    operation_outputs: &[IntentOperationOutput],
 ) -> Vec<PortSpec> {
     let mut specs = Vec::new();
     let mut push = |role, index, port_kind, writable, native| {
@@ -1681,6 +1763,49 @@ pub(crate) fn node_port_specs(
                 NO_LEAVES,
                 None,
             );
+            let mut span_index = 0_u16;
+            for (ordinal, output) in operation_outputs.iter().copied().enumerate() {
+                let Ok(index) = u16::try_from(ordinal) else {
+                    break;
+                };
+                let native = output.kind.reservation_kind();
+                push(
+                    IntentPortRole::Result,
+                    index,
+                    native.port_kind(),
+                    NO_LEAVES,
+                    Some(native),
+                );
+                if output.kind == IntentOperationOutputKind::Constraint {
+                    push(
+                        IntentPortRole::Source,
+                        index,
+                        IntentPortKind::Source,
+                        NO_LEAVES,
+                        Some(IntentNativeReservationKind::ConstraintSource),
+                    );
+                } else if output.kind == IntentOperationOutputKind::Dimension {
+                    push(
+                        IntentPortRole::Source,
+                        index,
+                        IntentPortKind::Source,
+                        NO_LEAVES,
+                        Some(IntentNativeReservationKind::DimensionSource),
+                    );
+                }
+                if output.kind == IntentOperationOutputKind::Curve {
+                    for _ in 0..output.curve_span_count {
+                        push(
+                            IntentPortRole::Span,
+                            span_index,
+                            IntentPortKind::CurveSpan,
+                            NO_LEAVES,
+                            None,
+                        );
+                        span_index = span_index.saturating_add(1);
+                    }
+                }
+            }
         }
         IntentNodeKind::ComputedFeature { .. } => push(
             IntentPortRole::Feature,

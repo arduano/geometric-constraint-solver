@@ -8,45 +8,55 @@
 //! [`RetainedSketchDocumentSession`].
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use geosolve_sketch::{
-    ContactDomain, ContactId, ContactNeighborhood, ContactSlot, CurveDefinition, CurveId,
-    CurveSpan, DesignCurve, DesignPoint, DesignPointId, DesignScalar, DesignScalarId,
-    DocumentAngleOrientation, DocumentArcSweep, DocumentArcTangencySide, DocumentBSplineForm,
-    DocumentCenterRef, DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
-    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
-    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentDirectedProfileOffsetCurve,
-    DocumentDirectionSense, DocumentElementId, DocumentError, DocumentExternalBinding,
-    DocumentExternalBindingId, DocumentExternalLineSupportRef, DocumentExternalPointRef,
-    DocumentFaceOffsetDirection, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
-    DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation, DocumentLineSide,
-    DocumentLineSupportRef, DocumentOffsetTraversal, DocumentParameter, DocumentParameterBinding,
-    DocumentParameterId, DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget,
+    ContactDomain, ContactId, ContactNeighborhood, ContactSlot, CurveCurveFilletRequest,
+    CurveDefinition, CurveFilletParentRequest, CurveId, CurveSpan, DesignCurve, DesignPoint,
+    DesignPointId, DesignScalar, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
+    DocumentArcTangencySide, DocumentBSplineForm, DocumentCenterRef, DocumentCircleContainment,
+    DocumentCircleTangencyMode, DocumentConstraint, DocumentConstraintDefinition,
+    DocumentConstraintId, DocumentCoordinateAxis, DocumentCurveContinuity,
+    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveNormalSide,
+    DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentDirectedProfileOffsetCurve, DocumentDirectionSense,
+    DocumentElementId, DocumentError, DocumentExternalBinding, DocumentExternalBindingId,
+    DocumentExternalLineSupportRef, DocumentExternalPointRef, DocumentFaceOffsetDirection,
+    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId,
+    DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef,
+    DocumentOffsetTraversal, DocumentParameter, DocumentParameterBinding, DocumentParameterId,
+    DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget,
     DocumentProfileOffsetChain, DocumentProfileOffsetEdgePair, DocumentProfileOffsetLoop,
     DocumentProfileOffsetOperand, DocumentProfileOffsetTerminalPolicy, DocumentScalarBranch,
     DocumentScalarPropertyRef, DocumentScalarUnit, DocumentSessionError, DocumentSolveRequest,
     DocumentSourceId, DocumentTrimBoundary, DocumentTrimParameter, ExternalFeatureKindV1,
     ExternalSnapshotSet, ExternalTopologyDigest, FeatureEndpoint, GeometryRole, GeometryRoleEdit,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationOutcome, PersistentId,
-    RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarDomain, ScalarUnit,
-    SketchHardValidity, SketchMaterializationBatch, SketchMaterializationReservationAllocator,
-    SketchPersistentIdentityHighWater, SolverConfig, TangentOrientation,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationOutcome, ParameterBatch,
+    PersistentId, RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE,
+    ScalarDomain, ScalarUnit, SketchHardValidity, SketchMaterializationBatch,
+    SketchMaterializationConstraintReservation, SketchMaterializationDimensionReservation,
+    SketchMaterializationIdentityKind, SketchMaterializationIdentityReservation,
+    SketchMaterializationReservationAllocator, SketchPersistentIdentityHighWater, SolverConfig,
+    TangentOrientation,
 };
 use geosolve_sketch_intent::{
     AggregateKind, ConstraintKind, DimensionKind, ExternalIntentKind, GeometryRecipeKind,
     InputRole, InputSlot, IntentAcceptedAuthority, IntentCandidate, IntentEvaluation,
     IntentEvaluationFailure, IntentEvaluationFailureKind, IntentExternalInputs, IntentGraph,
     IntentGraphError, IntentIdentityFlow, IntentInstanceState, IntentKey, IntentLiteral,
-    IntentNativeReservationKind, IntentNode, IntentNodeKind, IntentPort, IntentPortKind,
-    IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservationLedger,
+    IntentNativeReservationKind, IntentNode, IntentNodeKind, IntentOperationOutputKind, IntentPort,
+    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservationLedger,
     IntentReservationRecord, IntentReservationState, IntentSemanticIdentity, IntentUnit, LeafField,
-    LeafRef, MaterializationEvidence, NodeId, ParameterIntentKind, ReservationId,
+    LeafRef, MaterializationEvidence, NodeId, OperationKind as IntentOperationKind,
+    ParameterIntentKind, ReservationId,
+};
+use geosolve_sketch_ops::{
+    LineEndpoint, SketchOperationKind, SketchOperationRequest, SketchOperationResult,
+    SketchOperationSnapshot, SketchProfileOffsetOperand, SplitRetainedPiece, TrimRetainedSide,
 };
 use geosolve_sketch_topology::{
-    OffsetEndpointRef, OffsetEndpointRole, OffsetOperandIndex, OffsetOperandRequest,
-    PreparedOffsetOperandQuery,
+    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetOperandIndex,
+    OffsetOperandRequest, OffsetTraversal, PreparedOffsetOperandQuery,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -365,33 +375,85 @@ impl ColdIntentMaterializer {
         let host_inputs = decode_intent_external_inputs(candidate.external_inputs())
             .map_err(|error| IntentMaterializationError::HostInput(error.to_string()))?;
 
-        let mut document = SketchDocumentBuilder::empty(self.document, self.model_scale)?;
-        let (reservation_set, reservation_bindings) = allocate_reservations(
-            document.persistent_identity_high_water().clone(),
+        let document = SketchDocumentBuilder::empty(self.document, self.model_scale)?;
+        let desired_parameters = host_inputs.parameters;
+        let desired_snapshots = host_inputs.external_snapshots;
+        let mut session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
+            self.request,
+            self.config,
+        )?;
+        require_current_acceptance(&session)?;
+        let schedule = candidate.graph().canonical_schedule()?;
+        validate_live_reservation_owner_order(
+            &schedule,
             candidate.reservations().entries(),
             candidate.graph(),
         )?;
-        let retains_unused = candidate
+        let ordered_records = candidate
             .reservations()
             .entries()
-            .values()
-            .any(|record| record.state != IntentReservationState::Declared);
-        let mut batch = if retains_unused {
-            SketchMaterializationBatch::retaining_unused_reservations(reservation_set)
-        } else {
-            SketchMaterializationBatch::new(reservation_set)
-        };
-        let mut state = LoweringState::new(candidate.semantic_identity(), reservation_bindings);
+            .iter()
+            .map(|(id, record)| (*id, *record))
+            .collect::<Vec<_>>();
+        let mut record_cursor = 0_usize;
+        let mut state = LoweringState::new(candidate.semantic_identity(), BTreeMap::new());
 
-        for node_id in candidate.graph().canonical_schedule()? {
+        for node_id in schedule {
+            retire_tombstone_prefix(
+                &mut session,
+                &ordered_records,
+                &mut record_cursor,
+                &mut state,
+            )?;
             let node = candidate
                 .graph()
                 .node(node_id)
                 .ok_or(IntentMaterializationError::UnknownNode(node_id))?;
+            let reservation_stage = allocate_live_node_stage(
+                session
+                    .design_document()
+                    .persistent_identity_high_water()
+                    .clone(),
+                &ordered_records,
+                &mut record_cursor,
+                node,
+                &state.reservation_bindings,
+            )?;
+            state
+                .reservation_bindings
+                .extend(reservation_stage.bindings);
             state.bind_schema_ports(node)?;
             if node.suppressed {
+                apply_materialization_stage(
+                    &mut session,
+                    SketchMaterializationBatch::retaining_unused_reservations(
+                        reservation_stage.reservations,
+                    ),
+                )?;
+                try_publish_host_inputs(
+                    &mut session,
+                    &desired_parameters,
+                    &desired_snapshots,
+                    self.request,
+                )?;
                 continue;
             }
+            if let IntentNodeKind::Operation { operation } = node.kind {
+                retire_operation_stage(&mut session, reservation_stage.reservations)?;
+                try_publish_host_inputs(
+                    &mut session,
+                    &desired_parameters,
+                    &desired_snapshots,
+                    self.request,
+                )?;
+                lower_operation(candidate, node, operation, &mut session, &mut state)?;
+                continue;
+            }
+            let mut batch = SketchMaterializationBatch::new(reservation_stage.reservations);
+            let mut apply_batch = true;
             match &node.kind {
                 IntentNodeKind::Geometry { recipe } => {
                     lower_geometry(candidate, node, *recipe, &mut batch, &mut state)?;
@@ -404,6 +466,7 @@ impl ColdIntentMaterializer {
                 }
                 IntentNodeKind::Aggregate { aggregate } => {
                     lower_aggregate(node, *aggregate, &mut state)?;
+                    apply_batch = false;
                 }
                 IntentNodeKind::Parameter { parameter } => {
                     lower_parameter(node, *parameter, &mut batch, &mut state)?;
@@ -411,26 +474,37 @@ impl ColdIntentMaterializer {
                 IntentNodeKind::External { external } => lower_external(
                     node,
                     *external,
-                    &host_inputs.external_snapshots,
+                    session.external_snapshot_set(),
                     &mut batch,
                     &mut state,
                 )?,
                 IntentNodeKind::Annotation | IntentNodeKind::Identity { .. } => {
                     lower_logical_declaration(node, &mut state)?;
+                    apply_batch = false;
                 }
                 _ => unreachable!("preflight admits only implemented declaration families"),
             }
+            if apply_batch {
+                apply_materialization_stage(&mut session, batch)?;
+            }
+            try_publish_host_inputs(
+                &mut session,
+                &desired_parameters,
+                &desired_snapshots,
+                self.request,
+            )?;
         }
-        state.validate_declared_consumption(candidate)?;
-        document.apply_materialization_batch(&batch)?;
-
-        let session = RetainedSketchDocumentSession::new_with_inputs(
-            document,
-            host_inputs.parameters,
-            host_inputs.external_snapshots,
-            self.request,
-            self.config,
+        retire_tombstone_prefix(
+            &mut session,
+            &ordered_records,
+            &mut record_cursor,
+            &mut state,
         )?;
+        if record_cursor != ordered_records.len() {
+            return Err(IntentMaterializationError::InvalidReservationOrder);
+        }
+        require_exact_host_inputs(&session, &desired_parameters, &desired_snapshots)?;
+        state.validate_declared_consumption(candidate)?;
         let accepted = session
             .accepted_state_for_current_input()
             .ok_or(IntentMaterializationError::SolverRejected)?;
@@ -508,17 +582,36 @@ impl ColdIntentMaterializer {
                 };
                 (evaluation, Some(materialized))
             }
-            Err(error) => (
-                IntentEvaluation::Failed {
-                    failure: IntentEvaluationFailure {
-                        kind: error.failure_kind(),
-                        failed_nodes: error.failed_node().into_iter().collect(),
-                        diagnostic: IntentKey::new(error.diagnostic_key())
-                            .expect("static intent materialization diagnostics are valid keys"),
+            Err(error) => {
+                let mut failed_nodes = error.failed_node().into_iter().collect::<BTreeSet<_>>();
+                if failed_nodes.is_empty() {
+                    failed_nodes.extend(
+                        candidate
+                            .diff()
+                            .affected_nodes()
+                            .into_iter()
+                            .filter(|node| candidate.graph().node(*node).is_some()),
+                    );
+                }
+                if failed_nodes.is_empty() && !candidate.graph().nodes().is_empty() {
+                    // A global native solve/validation or host-input rejection
+                    // has no lowerer's local node. Attribute it to the bounded
+                    // live declaration set so retained diagnostics remain
+                    // structurally valid and never invent a non-graph owner.
+                    failed_nodes.extend(candidate.graph().nodes().keys().copied());
+                }
+                (
+                    IntentEvaluation::Failed {
+                        failure: IntentEvaluationFailure {
+                            kind: error.failure_kind(),
+                            failed_nodes,
+                            diagnostic: IntentKey::new(error.diagnostic_key())
+                                .expect("static intent materialization diagnostics are valid keys"),
+                        },
                     },
-                },
-                None,
-            ),
+                    None,
+                )
+            }
         }
     }
 }
@@ -560,6 +653,8 @@ pub enum IntentMaterializationError {
     InvalidReservationPair { reservation: ReservationId },
     #[error("reservation {reservation} has no translated native identity")]
     MissingReservation { reservation: ReservationId },
+    #[error("intent reservation owner order does not match the canonical dependency schedule")]
+    InvalidReservationOrder,
     #[error("declared reservation {reservation} was not materialized")]
     UnconsumedReservation { reservation: ReservationId },
     #[error("writable leaf {leaf} must be a finite length quantity")]
@@ -568,6 +663,8 @@ pub enum IntentMaterializationError {
     InvalidBranchDirection { node: NodeId },
     #[error("geometry node {node} has invalid or incomplete recipe state: {reason}")]
     InvalidGeometry { node: NodeId, reason: &'static str },
+    #[error("operation node {node} rejected deterministic lowering: {reason}")]
+    InvalidOperation { node: NodeId, reason: &'static str },
     #[error("aggregate node {node} has invalid topology: {reason}")]
     InvalidAggregate { node: NodeId, reason: &'static str },
     #[error("native solver rejected the cold materialization")]
@@ -593,6 +690,7 @@ impl IntentMaterializationError {
             | Self::MissingPointPosition { node, .. }
             | Self::InvalidBranchDirection { node }
             | Self::InvalidGeometry { node, .. }
+            | Self::InvalidOperation { node, .. }
             | Self::InvalidAggregate { node, .. }
             | Self::UnknownNode(node) => Some(*node),
             _ => None,
@@ -672,6 +770,7 @@ fn preflight_supported(
             ),
             IntentNodeKind::Constraint { .. }
             | IntentNodeKind::Aggregate { .. }
+            | IntentNodeKind::Operation { .. }
             | IntentNodeKind::Parameter { .. }
             | IntentNodeKind::External { .. }
             | IntentNodeKind::Annotation
@@ -686,17 +785,45 @@ fn preflight_supported(
     Ok(())
 }
 
+struct AllocatedReservationStage {
+    reservations: geosolve_sketch::SketchMaterializationReservationSet,
+    bindings: BTreeMap<ReservationId, IntentNativeBinding>,
+}
+
+fn validate_live_reservation_owner_order(
+    schedule: &[NodeId],
+    records: &BTreeMap<ReservationId, IntentReservationRecord>,
+    graph: &IntentGraph,
+) -> Result<(), IntentMaterializationError> {
+    let expected = schedule
+        .iter()
+        .copied()
+        .filter(|node| {
+            graph
+                .node(*node)
+                .is_some_and(|node| !node.reservations.is_empty())
+        })
+        .collect::<Vec<_>>();
+    let mut actual = Vec::new();
+    for record in records.values() {
+        if record.state == IntentReservationState::Tombstoned {
+            continue;
+        }
+        if actual.last().copied() != Some(record.owner_node) {
+            actual.push(record.owner_node);
+        }
+    }
+    if actual != expected {
+        return Err(IntentMaterializationError::InvalidReservationOrder);
+    }
+    Ok(())
+}
+
 fn allocate_reservations(
     high_water: SketchPersistentIdentityHighWater,
     records: &BTreeMap<ReservationId, IntentReservationRecord>,
-    graph: &IntentGraph,
-) -> Result<
-    (
-        geosolve_sketch::SketchMaterializationReservationSet,
-        BTreeMap<ReservationId, IntentNativeBinding>,
-    ),
-    IntentMaterializationError,
-> {
+    spline_node: Option<&IntentNode>,
+) -> Result<AllocatedReservationStage, IntentMaterializationError> {
     let mut allocator = SketchMaterializationReservationAllocator::new(high_water)?;
     let mut bindings = BTreeMap::new();
     let mut paired = BTreeSet::new();
@@ -764,18 +891,22 @@ fn allocate_reservations(
         };
         bindings.insert(*reservation, binding);
     }
-    reserve_spline_span_cursors(&mut allocator, &bindings, graph)?;
-    Ok((allocator.finish()?, bindings))
+    reserve_spline_span_cursors(&mut allocator, &bindings, records, spline_node)?;
+    Ok(AllocatedReservationStage {
+        reservations: allocator.finish()?,
+        bindings,
+    })
 }
 
 fn reserve_spline_span_cursors(
     allocator: &mut SketchMaterializationReservationAllocator,
     bindings: &BTreeMap<ReservationId, IntentNativeBinding>,
-    graph: &IntentGraph,
+    stage_records: &BTreeMap<ReservationId, IntentReservationRecord>,
+    node: Option<&IntentNode>,
 ) -> Result<(), IntentMaterializationError> {
-    for node in graph.nodes().values() {
+    if let Some(node) = node {
         let IntentNodeKind::Geometry { recipe } = node.kind else {
-            continue;
+            return Ok(());
         };
         if node.suppressed
             || !matches!(
@@ -783,7 +914,7 @@ fn reserve_spline_span_cursors(
                 GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
             )
         {
-            continue;
+            return Ok(());
         }
         let control_count = node.child_order.len();
         let degree = field_natural(node, "degree", 3)?;
@@ -793,12 +924,15 @@ fn reserve_spline_span_cursors(
                 reason: "NURBS degree exceeds platform limits",
             })?;
         if degree == 0 || control_count <= degree {
-            continue;
+            return Ok(());
         }
         let curve_port = require_port(node, IntentPortRole::Curve, 0)?;
         let IntentIdentityFlow::Created { reservation } = curve_port.flow else {
             return Err(IntentMaterializationError::NativeKindMismatch { node: node.id });
         };
+        if !stage_records.contains_key(&reservation) {
+            return Ok(());
+        }
         let Some(IntentNativeBinding::Curve(curve)) = bindings.get(&reservation).copied() else {
             return Err(IntentMaterializationError::MissingReservation { reservation });
         };
@@ -835,6 +969,149 @@ fn require_pair(
         return Err(IntentMaterializationError::InvalidReservationPair { reservation });
     }
     Ok(companion)
+}
+
+fn allocate_live_node_stage(
+    high_water: SketchPersistentIdentityHighWater,
+    ordered: &[(ReservationId, IntentReservationRecord)],
+    cursor: &mut usize,
+    node: &IntentNode,
+    _prior_bindings: &BTreeMap<ReservationId, IntentNativeBinding>,
+) -> Result<AllocatedReservationStage, IntentMaterializationError> {
+    let start = *cursor;
+    while ordered
+        .get(*cursor)
+        .is_some_and(|(_, record)| record.owner_node == node.id)
+    {
+        if ordered[*cursor].1.state == IntentReservationState::Tombstoned {
+            return Err(IntentMaterializationError::InvalidReservationOrder);
+        }
+        *cursor += 1;
+    }
+    let records = ordered[start..*cursor]
+        .iter()
+        .copied()
+        .collect::<BTreeMap<_, _>>();
+    if records.keys().copied().collect::<BTreeSet<_>>()
+        != node.reservations.keys().copied().collect::<BTreeSet<_>>()
+    {
+        return Err(IntentMaterializationError::InvalidReservationOrder);
+    }
+    allocate_reservations(high_water, &records, Some(node))
+}
+
+fn retire_tombstone_prefix(
+    session: &mut RetainedSketchDocumentSession,
+    ordered: &[(ReservationId, IntentReservationRecord)],
+    cursor: &mut usize,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let start = *cursor;
+    while ordered
+        .get(*cursor)
+        .is_some_and(|(_, record)| record.state == IntentReservationState::Tombstoned)
+    {
+        *cursor += 1;
+    }
+    if start == *cursor {
+        return Ok(());
+    }
+    let records = ordered[start..*cursor]
+        .iter()
+        .copied()
+        .collect::<BTreeMap<_, _>>();
+    let allocated = allocate_reservations(
+        session
+            .design_document()
+            .persistent_identity_high_water()
+            .clone(),
+        &records,
+        None,
+    )?;
+    state.reservation_bindings.extend(allocated.bindings);
+    apply_materialization_stage(
+        session,
+        SketchMaterializationBatch::retaining_unused_reservations(allocated.reservations),
+    )
+}
+
+fn retire_operation_stage(
+    session: &mut RetainedSketchDocumentSession,
+    reservations: geosolve_sketch::SketchMaterializationReservationSet,
+) -> Result<(), IntentMaterializationError> {
+    if reservations.reservations().is_empty() {
+        return Ok(());
+    }
+    apply_materialization_stage(
+        session,
+        SketchMaterializationBatch::retaining_unused_reservations(reservations),
+    )
+}
+
+fn apply_materialization_stage(
+    session: &mut RetainedSketchDocumentSession,
+    batch: SketchMaterializationBatch,
+) -> Result<(), IntentMaterializationError> {
+    session.transact(session.design_identity(), move |document| {
+        document.apply_materialization_batch(&batch)
+    })?;
+    Ok(())
+}
+
+fn require_current_acceptance(
+    session: &RetainedSketchDocumentSession,
+) -> Result<(), IntentMaterializationError> {
+    session
+        .accepted_state_for_current_input()
+        .filter(|accepted| accepted.design_identity() == session.design_identity())
+        .ok_or(IntentMaterializationError::SolverRejected)?;
+    Ok(())
+}
+
+fn try_publish_host_inputs(
+    session: &mut RetainedSketchDocumentSession,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+    request: DocumentSolveRequest,
+) -> Result<(), IntentMaterializationError> {
+    if session.parameter_batch() != parameters {
+        let mut candidate = session.clone();
+        candidate.update_parameter_batch(
+            candidate.design_identity(),
+            parameters.clone(),
+            request,
+        )?;
+        if candidate.accepted_state_for_current_input().is_some() {
+            *session = candidate;
+        }
+    }
+    if session.external_snapshot_set() != snapshots {
+        let mut candidate = session.clone();
+        candidate.update_external_snapshot_set(
+            candidate.design_identity(),
+            snapshots.clone(),
+            request,
+        )?;
+        if candidate.accepted_state_for_current_input().is_some()
+            && candidate.external_snapshot_set() == snapshots
+        {
+            *session = candidate;
+        }
+    }
+    Ok(())
+}
+
+fn require_exact_host_inputs(
+    session: &RetainedSketchDocumentSession,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+) -> Result<(), IntentMaterializationError> {
+    if session.parameter_batch() != parameters || session.external_snapshot_set() != snapshots {
+        return Err(IntentMaterializationError::HostInput(
+            "exact host inputs never became valid for the canonical declaration prefix".into(),
+        ));
+    }
+    require_current_acceptance(session)
 }
 
 struct LoweringState {
@@ -2953,6 +3230,671 @@ fn validate_aggregate_topology(
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive adapter keeps the closed existing operation request catalog auditable"
+)]
+fn operation_request(
+    node: &IntentNode,
+    operation: IntentOperationKind,
+    session: &RetainedSketchDocumentSession,
+    state: &LoweringState,
+) -> Result<SketchOperationRequest, IntentMaterializationError> {
+    use IntentOperationKind as O;
+    let label = node.symbol.as_str().to_owned();
+    Ok(match operation {
+        O::Split => SketchOperationRequest::Split {
+            support: input_span(node, state, 0)?,
+            parameter: required_quantity(node, "parameter", IntentUnit::Dimensionless)?,
+            retained: split_retained_piece(node, "retained")?,
+        },
+        O::Break => SketchOperationRequest::Break {
+            support: input_span(node, state, 0)?,
+            start: required_quantity(node, "start", IntentUnit::Dimensionless)?,
+            end: required_quantity(node, "end", IntentUnit::Dimensionless)?,
+            retained: split_retained_piece(node, "retained")?,
+        },
+        O::Trim => SketchOperationRequest::Trim {
+            support: input_span(node, state, 0)?,
+            parameter: required_quantity(node, "parameter", IntentUnit::Dimensionless)?,
+            retained: trim_retained_side(node, "retained")?,
+        },
+        O::Extend => SketchOperationRequest::ExtendLineToLine {
+            line: input_span(node, state, 0)?,
+            endpoint: line_endpoint(node, "endpoint")?,
+            target: input_span(node, state, 1)?,
+        },
+        O::Mirror => SketchOperationRequest::Mirror {
+            label,
+            source: input_curve(node, state, 0)?,
+            axis: input_binding(node, state, InputRole::Span, 0).and_then(
+                |binding| match binding {
+                    IntentNativeBinding::CurveSpan(span) => Ok(*span),
+                    IntentNativeBinding::Curve(curve) => Ok(CurveSpan::line(*curve)),
+                    _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+                },
+            )?,
+        },
+        O::Chamfer => SketchOperationRequest::Chamfer {
+            label,
+            first: input_span(node, state, 0)?,
+            second: input_span(node, state, 1)?,
+            first_distance: required_quantity(node, "first_distance", IntentUnit::Length)?,
+            second_distance: required_quantity(node, "second_distance", IntentUnit::Length)?,
+        },
+        O::AssociativeFillet => SketchOperationRequest::AssociativeFillet {
+            label,
+            request: CurveCurveFilletRequest {
+                first: operation_fillet_parent(node, state, "first", 0)?,
+                second: operation_fillet_parent(node, state, "second", 1)?,
+                endpoint_order: required_fillet_endpoint_order(node)?,
+                sweep: required_arc_sweep(node)?,
+                radius: required_quantity(node, "radius", IntentUnit::Length)?,
+                radius_mode: required_dimension_mode(node, "radius_mode")?,
+            },
+        },
+        O::Rectangle => SketchOperationRequest::Rectangle {
+            label,
+            origin: required_point(node, "origin")?,
+            width: required_quantity(node, "width", IntentUnit::Length)?,
+            height: required_quantity(node, "height", IntentUnit::Length)?,
+        },
+        O::RegularPolygon => SketchOperationRequest::RegularPolygon {
+            label,
+            center: required_point(node, "center")?,
+            radius: required_quantity(node, "radius", IntentUnit::Length)?,
+            sides: required_usize(node, "sides")?,
+            rotation: required_quantity(node, "rotation", IntentUnit::Angle)?,
+        },
+        O::Slot => SketchOperationRequest::Slot {
+            label,
+            first_center: required_point(node, "first_center")?,
+            second_center: required_point(node, "second_center")?,
+            radius: required_quantity(node, "radius", IntentUnit::Length)?,
+        },
+        O::LinearPattern => {
+            let source_count = node
+                .inputs
+                .keys()
+                .filter(|slot| slot.role == InputRole::Curve)
+                .count();
+            let sources = (0..source_count)
+                .map(|index| {
+                    u16::try_from(index)
+                        .map_err(|_| {
+                            invalid_operation(node, "linear-pattern source count exceeds limits")
+                        })
+                        .and_then(|index| input_curve(node, state, index))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            SketchOperationRequest::LinearPattern {
+                label,
+                sources,
+                instances: required_usize(node, "instances")?,
+                step: required_point(node, "step")?,
+            }
+        }
+        O::ProfileOffset => {
+            let (operand, operand_index) = operation_profile_offset_operand(node, session, state)?;
+            SketchOperationRequest::ProfileOffset {
+                label,
+                distance: required_quantity(node, "distance", IntentUnit::Length)?,
+                operand,
+                operand_index,
+            }
+        }
+    })
+}
+
+fn lower_operation(
+    _candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    operation: IntentOperationKind,
+    session: &mut RetainedSketchDocumentSession,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let request = operation_request(node, operation, session, state)?;
+    let source_free = match operation {
+        IntentOperationKind::Rectangle
+        | IntentOperationKind::RegularPolygon
+        | IntentOperationKind::Slot => required_geometry_role(node)?,
+        _ => GeometryRole::Profile,
+    };
+    let prepared = SketchOperationSnapshot::capture(session)
+        .prepare_with_geometry_role(request, source_free)
+        .execute(OperationControl::unlimited())
+        .map_err(|_| invalid_operation(node, "native operation preparation failed"))?;
+    let result = match prepared {
+        OperationOutcome::Completed { value, .. } => value,
+        OperationOutcome::Cancelled { .. } | OperationOutcome::WorkExhausted { .. } => {
+            return Err(invalid_operation(
+                node,
+                "native operation preparation did not complete",
+            ));
+        }
+        _ => {
+            return Err(invalid_operation(
+                node,
+                "native operation returned an unknown outcome",
+            ));
+        }
+    };
+    let SketchOperationResult::Proposed(proposal) = result else {
+        return Err(invalid_operation(
+            node,
+            "native operation is unsupported or incomplete for the exact accepted prefix",
+        ));
+    };
+    if proposal.output_plan().kind != sketch_operation_kind(operation) {
+        return Err(invalid_operation(
+            node,
+            "native operation kind authentication failed",
+        ));
+    }
+    let reservations = operation_output_reservations(node, state)?;
+    let claimed = node
+        .operation_outputs
+        .iter()
+        .map(|output| operation_output_native_kind(output.kind))
+        .collect::<Vec<_>>();
+    let authenticated = proposal
+        .output_plan()
+        .slots
+        .iter()
+        .map(|slot| slot.kind)
+        .collect::<Vec<_>>();
+    if claimed != authenticated {
+        return Err(invalid_operation(
+            node,
+            "persisted output shape disagrees with native proposal",
+        ));
+    }
+    let outcome = proposal
+        .apply_with_reserved_outputs(session, &reservations)
+        .map_err(|_| invalid_operation(node, "reserved native operation application failed"))?;
+    if outcome.published_accepted_identity().is_none() {
+        return Err(IntentMaterializationError::SolverRejected);
+    }
+    require_current_acceptance(session)?;
+    bind_operation_outputs(node, session.design_document(), state)
+}
+
+const fn sketch_operation_kind(operation: IntentOperationKind) -> SketchOperationKind {
+    match operation {
+        IntentOperationKind::Split => SketchOperationKind::Split,
+        IntentOperationKind::Break => SketchOperationKind::Break,
+        IntentOperationKind::Trim => SketchOperationKind::Trim,
+        IntentOperationKind::Extend => SketchOperationKind::Extend,
+        IntentOperationKind::Mirror => SketchOperationKind::Mirror,
+        IntentOperationKind::Chamfer => SketchOperationKind::Chamfer,
+        IntentOperationKind::AssociativeFillet => SketchOperationKind::AssociativeFillet,
+        IntentOperationKind::Rectangle => SketchOperationKind::Rectangle,
+        IntentOperationKind::RegularPolygon => SketchOperationKind::RegularPolygon,
+        IntentOperationKind::Slot => SketchOperationKind::Slot,
+        IntentOperationKind::LinearPattern => SketchOperationKind::LinearPattern,
+        IntentOperationKind::ProfileOffset => SketchOperationKind::ProfileOffset,
+    }
+}
+
+const fn operation_output_native_kind(
+    kind: IntentOperationOutputKind,
+) -> SketchMaterializationIdentityKind {
+    match kind {
+        IntentOperationOutputKind::Point => SketchMaterializationIdentityKind::Point,
+        IntentOperationOutputKind::Scalar => SketchMaterializationIdentityKind::Scalar,
+        IntentOperationOutputKind::Curve => SketchMaterializationIdentityKind::Curve,
+        IntentOperationOutputKind::Contact => SketchMaterializationIdentityKind::Contact,
+        IntentOperationOutputKind::Constraint => SketchMaterializationIdentityKind::Constraint,
+        IntentOperationOutputKind::Dimension => SketchMaterializationIdentityKind::Dimension,
+        IntentOperationOutputKind::Parameter => SketchMaterializationIdentityKind::Parameter,
+        IntentOperationOutputKind::ExternalBinding => {
+            SketchMaterializationIdentityKind::ExternalBinding
+        }
+    }
+}
+
+fn operation_output_reservations(
+    node: &IntentNode,
+    state: &LoweringState,
+) -> Result<Vec<SketchMaterializationIdentityReservation>, IntentMaterializationError> {
+    node.operation_outputs
+        .iter()
+        .enumerate()
+        .map(|(ordinal, output)| {
+            let index = u16::try_from(ordinal)
+                .map_err(|_| invalid_operation(node, "operation output count exceeds limits"))?;
+            let result = require_port(node, IntentPortRole::Result, index)?;
+            let binding = state
+                .port_bindings
+                .get(&result.as_ref(node.id))
+                .copied()
+                .ok_or(IntentMaterializationError::NativeKindMismatch { node: node.id })?;
+            match (output.kind, binding) {
+                (IntentOperationOutputKind::Point, IntentNativeBinding::Point(id)) => {
+                    Ok(SketchMaterializationIdentityReservation::Point { id })
+                }
+                (IntentOperationOutputKind::Scalar, IntentNativeBinding::Scalar(id)) => {
+                    Ok(SketchMaterializationIdentityReservation::Scalar { id })
+                }
+                (IntentOperationOutputKind::Curve, IntentNativeBinding::Curve(id)) => {
+                    Ok(SketchMaterializationIdentityReservation::Curve { id })
+                }
+                (IntentOperationOutputKind::Contact, IntentNativeBinding::Contact(id)) => {
+                    Ok(SketchMaterializationIdentityReservation::Contact { id })
+                }
+                (IntentOperationOutputKind::Constraint, IntentNativeBinding::Constraint(id)) => {
+                    let source = require_port(node, IntentPortRole::Source, index)?;
+                    let Some(IntentNativeBinding::Source(source)) =
+                        state.port_bindings.get(&source.as_ref(node.id)).copied()
+                    else {
+                        return Err(IntentMaterializationError::NativeKindMismatch {
+                            node: node.id,
+                        });
+                    };
+                    Ok(SketchMaterializationIdentityReservation::Constraint {
+                        reservation: SketchMaterializationConstraintReservation {
+                            constraint: id,
+                            source,
+                        },
+                    })
+                }
+                (IntentOperationOutputKind::Dimension, IntentNativeBinding::Dimension(id)) => {
+                    let source = require_port(node, IntentPortRole::Source, index)?;
+                    let Some(IntentNativeBinding::Source(source)) =
+                        state.port_bindings.get(&source.as_ref(node.id)).copied()
+                    else {
+                        return Err(IntentMaterializationError::NativeKindMismatch {
+                            node: node.id,
+                        });
+                    };
+                    Ok(SketchMaterializationIdentityReservation::Dimension {
+                        reservation: SketchMaterializationDimensionReservation {
+                            dimension: id,
+                            source,
+                        },
+                    })
+                }
+                (IntentOperationOutputKind::Parameter, IntentNativeBinding::Parameter(id)) => {
+                    Ok(SketchMaterializationIdentityReservation::Parameter { id })
+                }
+                (
+                    IntentOperationOutputKind::ExternalBinding,
+                    IntentNativeBinding::ExternalBinding(id),
+                ) => Ok(SketchMaterializationIdentityReservation::ExternalBinding { id }),
+                _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+            }
+        })
+        .collect()
+}
+
+fn bind_operation_outputs(
+    node: &IntentNode,
+    document: &geosolve_sketch::SketchDocument,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let mut span_index = 0_u16;
+    for (ordinal, output) in node.operation_outputs.iter().enumerate() {
+        let index = u16::try_from(ordinal)
+            .map_err(|_| invalid_operation(node, "operation output count exceeds limits"))?;
+        let port = require_port(node, IntentPortRole::Result, index)?;
+        let binding = state
+            .port_bindings
+            .get(&port.as_ref(node.id))
+            .copied()
+            .ok_or(IntentMaterializationError::NativeKindMismatch { node: node.id })?;
+        match (output.kind, binding) {
+            (IntentOperationOutputKind::Point, IntentNativeBinding::Point(id)) => {
+                let point = document.point(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved point output was not materialized")
+                })?;
+                state.point_positions.insert(id, point.position);
+            }
+            (IntentOperationOutputKind::Scalar, IntentNativeBinding::Scalar(id)) => {
+                let scalar = document.scalar(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved scalar output was not materialized")
+                })?;
+                state.scalar_domains.insert(id, scalar.domain);
+            }
+            (IntentOperationOutputKind::Curve, IntentNativeBinding::Curve(id)) => {
+                document.curve(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved curve output was not materialized")
+                })?;
+                let spans = document.curve_spans(id)?;
+                if spans.len() != usize::from(output.curve_span_count) {
+                    return Err(invalid_operation(
+                        node,
+                        "materialized curve span count disagrees with persisted output shape",
+                    ));
+                }
+                for span in spans {
+                    let span_port = require_port(node, IntentPortRole::Span, span_index)?;
+                    state.port_bindings.insert(
+                        span_port.as_ref(node.id),
+                        IntentNativeBinding::CurveSpan(span),
+                    );
+                    span_index = span_index
+                        .checked_add(1)
+                        .ok_or_else(|| invalid_operation(node, "operation span count overflow"))?;
+                }
+            }
+            (IntentOperationOutputKind::Contact, IntentNativeBinding::Contact(id)) => {
+                let contact = document.contact(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved contact output was not materialized")
+                })?;
+                state
+                    .contact_states
+                    .insert(id, (contact.curve, contact.winding, contact.domain));
+            }
+            (IntentOperationOutputKind::Constraint, IntentNativeBinding::Constraint(id)) => {
+                document.constraint(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved constraint output was not materialized")
+                })?;
+            }
+            (IntentOperationOutputKind::Dimension, IntentNativeBinding::Dimension(id)) => {
+                document.dimension(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved dimension output was not materialized")
+                })?;
+            }
+            (IntentOperationOutputKind::Parameter, IntentNativeBinding::Parameter(id)) => {
+                let parameter = document.parameter(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved parameter output was not materialized")
+                })?;
+                state.parameter_kinds.insert(id, parameter.kind);
+            }
+            (
+                IntentOperationOutputKind::ExternalBinding,
+                IntentNativeBinding::ExternalBinding(id),
+            ) => {
+                document.external_binding(id).ok_or_else(|| {
+                    invalid_operation(node, "reserved external output was not materialized")
+                })?;
+            }
+            _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+        }
+        state.consume_port(node, port);
+    }
+    Ok(())
+}
+
+fn operation_fillet_parent(
+    node: &IntentNode,
+    state: &LoweringState,
+    prefix: &'static str,
+    index: u16,
+) -> Result<CurveFilletParentRequest, IntentMaterializationError> {
+    let parameter_name = format!("{prefix}_parameter");
+    let winding_name = format!("{prefix}_winding");
+    let neighborhood_name = format!("{prefix}_neighborhood");
+    let lower_name = format!("{prefix}_local_lower");
+    let upper_name = format!("{prefix}_local_upper");
+    let side_name = format!("{prefix}_normal_side");
+    let endpoint_name = format!("{prefix}_trim_endpoint");
+    let periodic_name = format!("{prefix}_periodic_anchor");
+    let anchor_parameter_name = format!("{prefix}_anchor_parameter");
+    let anchor_winding_name = format!("{prefix}_anchor_winding");
+    let parameter = required_quantity(node, &parameter_name, IntentUnit::Dimensionless)?;
+    let neighborhood = match required_enum(node, &neighborhood_name)? {
+        "interior" => {
+            require_absent(node, &[&lower_name, &upper_name])?;
+            ContactNeighborhood::Interior
+        }
+        "local" => ContactNeighborhood::Local {
+            lower: required_quantity(node, &lower_name, IntentUnit::Dimensionless)?,
+            upper: required_quantity(node, &upper_name, IntentUnit::Dimensionless)?,
+        },
+        "start" => {
+            require_absent(node, &[&lower_name, &upper_name])?;
+            ContactNeighborhood::Start
+        }
+        "end" => {
+            require_absent(node, &[&lower_name, &upper_name])?;
+            ContactNeighborhood::End
+        }
+        _ => return Err(invalid_operation(node, "fillet neighborhood is invalid")),
+    };
+    let periodic_anchor = if required_boolean(node, &periodic_name)? {
+        Some(DocumentTrimParameter {
+            parameter: required_quantity(node, &anchor_parameter_name, IntentUnit::Dimensionless)?,
+            winding: required_i32(node, &anchor_winding_name)?,
+        })
+    } else {
+        require_absent(node, &[&anchor_parameter_name, &anchor_winding_name])?;
+        None
+    };
+    Ok(CurveFilletParentRequest {
+        curve: input_span(node, state, index)?,
+        parameter,
+        winding: required_i32(node, &winding_name)?,
+        neighborhood,
+        side: required_curve_normal_side(node, &side_name)?,
+        trim_endpoint: required_fillet_trim_endpoint(node, &endpoint_name)?,
+        periodic_anchor,
+    })
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "face matching and explicit open-chain traversal form one fail-closed topology adapter"
+)]
+fn operation_profile_offset_operand(
+    node: &IntentNode,
+    session: &RetainedSketchDocumentSession,
+    state: &LoweringState,
+) -> Result<(SketchProfileOffsetOperand, Arc<OffsetOperandIndex>), IntentMaterializationError> {
+    let query = PreparedOffsetOperandQuery::capture(session, OffsetOperandRequest::default())
+        .map_err(|_| invalid_operation(node, "accepted Profile Offset topology is unavailable"))?;
+    let outcome = query
+        .execute(OperationControl::unlimited())
+        .map_err(|_| invalid_operation(node, "Profile Offset topology analysis failed"))?;
+    let result = match outcome {
+        OperationOutcome::Completed { value, .. } => value,
+        OperationOutcome::Cancelled { .. } | OperationOutcome::WorkExhausted { .. } => {
+            return Err(invalid_operation(
+                node,
+                "Profile Offset topology analysis did not complete",
+            ));
+        }
+        _ => {
+            return Err(invalid_operation(
+                node,
+                "Profile Offset topology returned an unknown outcome",
+            ));
+        }
+    };
+    let index = result
+        .operand_index
+        .ok_or_else(|| invalid_operation(node, "Profile Offset topology index is incomplete"))?;
+    let profile_count = node
+        .inputs
+        .keys()
+        .filter(|slot| slot.role == InputRole::Profile)
+        .count();
+    let operand = if profile_count > 0 {
+        if node
+            .inputs
+            .contains_key(&InputSlot::new(InputRole::Chain, 0))
+        {
+            return Err(invalid_operation(
+                node,
+                "Profile Offset mixes face and chain operands",
+            ));
+        }
+        let mut aggregates = Vec::with_capacity(profile_count);
+        for ordinal in 0..profile_count {
+            let ordinal = u16::try_from(ordinal).map_err(|_| {
+                invalid_operation(node, "Profile Offset profile count exceeds limits")
+            })?;
+            let aggregate = operation_input_aggregate(node, state, InputRole::Profile, ordinal)?;
+            if !aggregate.closed {
+                return Err(invalid_operation(
+                    node,
+                    "Profile Offset face operand must be closed",
+                ));
+            }
+            validate_aggregate_topology(node.id, aggregate, &index)?;
+            aggregates.push(aggregate);
+        }
+        let outer = undirected_span_key(&aggregates[0].spans);
+        let mut holes = aggregates
+            .iter()
+            .skip(1)
+            .map(|aggregate| undirected_span_key(&aggregate.spans))
+            .collect::<Vec<_>>();
+        holes.sort();
+        let mut matches = index.faces().iter().filter(|candidate| {
+            let candidate_outer = undirected_directed_span_key(&candidate.key.outer.spans);
+            let mut candidate_holes = candidate
+                .key
+                .holes
+                .iter()
+                .map(|hole| undirected_directed_span_key(&hole.spans))
+                .collect::<Vec<_>>();
+            candidate_holes.sort();
+            candidate_outer == outer && candidate_holes == holes
+        });
+        let face = matches.next().ok_or_else(|| {
+            invalid_operation(node, "Profile Offset face operands match no accepted face")
+        })?;
+        if matches.next().is_some() {
+            return Err(invalid_operation(
+                node,
+                "Profile Offset face operands are ambiguous",
+            ));
+        }
+        let direction = match required_enum(node, "direction")? {
+            "outward" => DocumentFaceOffsetDirection::Outward,
+            "inward" => DocumentFaceOffsetDirection::Inward,
+            _ => {
+                return Err(invalid_operation(
+                    node,
+                    "Profile Offset face direction is invalid",
+                ));
+            }
+        };
+        require_absent(node, &["side", "first_traversal"])?;
+        SketchProfileOffsetOperand::Face {
+            key: face.key.clone(),
+            direction,
+        }
+    } else {
+        let aggregate = operation_input_aggregate(node, state, InputRole::Chain, 0)?;
+        if aggregate.closed {
+            return Err(invalid_operation(
+                node,
+                "Profile Offset chain operand must be open",
+            ));
+        }
+        validate_aggregate_topology(node.id, aggregate, &index)?;
+        require_absent(node, &["direction"])?;
+        let side = match required_enum(node, "side")? {
+            "left" => DocumentLineSide::Left,
+            "right" => DocumentLineSide::Right,
+            _ => {
+                return Err(invalid_operation(
+                    node,
+                    "Profile Offset chain side is invalid",
+                ));
+            }
+        };
+        let first = match required_enum(node, "first_traversal")? {
+            "forward" => OffsetTraversal::Forward,
+            "reverse" => OffsetTraversal::Reverse,
+            _ => {
+                return Err(invalid_operation(
+                    node,
+                    "Profile Offset first traversal is invalid",
+                ));
+            }
+        };
+        let spans = directed_open_chain(node, aggregate, &index, first)?;
+        SketchProfileOffsetOperand::OpenChain { spans, side }
+    };
+    Ok((operand, Arc::new(index)))
+}
+
+fn operation_input_aggregate<'a>(
+    node: &IntentNode,
+    state: &'a LoweringState,
+    role: InputRole,
+    index: u16,
+) -> Result<&'a IntentAggregateMaterialization, IntentMaterializationError> {
+    let slot = InputSlot::new(role, index);
+    let source = node
+        .inputs
+        .get(&slot)
+        .ok_or(IntentMaterializationError::MissingInput {
+            node: node.id,
+            slot,
+        })?;
+    state
+        .aggregate_bindings
+        .get(source)
+        .ok_or(IntentMaterializationError::UnboundInput {
+            node: node.id,
+            slot,
+        })
+}
+
+fn undirected_span_key(spans: &[CurveSpan]) -> Vec<CurveSpan> {
+    let mut value = spans.to_vec();
+    value.sort_unstable();
+    value
+}
+
+fn undirected_directed_span_key(spans: &[OffsetDirectedSpan]) -> Vec<CurveSpan> {
+    undirected_span_key(
+        &spans
+            .iter()
+            .map(|directed| directed.span)
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn directed_open_chain(
+    node: &IntentNode,
+    aggregate: &IntentAggregateMaterialization,
+    index: &OffsetOperandIndex,
+    first: OffsetTraversal,
+) -> Result<Vec<OffsetDirectedSpan>, IntentMaterializationError> {
+    let Some(first_span) = aggregate.spans.first().copied() else {
+        return Err(invalid_operation(node, "Profile Offset chain is empty"));
+    };
+    let mut directed = vec![OffsetDirectedSpan {
+        span: first_span,
+        traversal: first,
+    }];
+    for next_span in aggregate.spans.iter().copied().skip(1) {
+        let previous = *directed.last().expect("open chain starts nonempty");
+        let exit = OffsetEndpointRef {
+            span: previous.span,
+            endpoint: match previous.traversal {
+                OffsetTraversal::Forward => OffsetEndpointRole::End,
+                OffsetTraversal::Reverse => OffsetEndpointRole::Start,
+            },
+        };
+        let mut matches = index
+            .adjacent_endpoints(exit)
+            .filter(|endpoint| endpoint.span == next_span);
+        let entry = matches.next().ok_or_else(|| {
+            invalid_operation(node, "Profile Offset chain has a disconnected ordered join")
+        })?;
+        if matches.next().is_some() {
+            return Err(invalid_operation(
+                node,
+                "Profile Offset chain traversal is ambiguous",
+            ));
+        }
+        directed.push(OffsetDirectedSpan {
+            span: next_span,
+            traversal: match entry.endpoint {
+                OffsetEndpointRole::Start => OffsetTraversal::Forward,
+                OffsetEndpointRole::End => OffsetTraversal::Reverse,
+            },
+        });
+    }
+    Ok(directed)
+}
+
 fn lower_horizontal(
     node: &IntentNode,
     batch: &mut SketchMaterializationBatch,
@@ -4306,6 +5248,196 @@ fn field_value<'a>(node: &'a IntentNode, name: &str) -> Option<&'a IntentLiteral
     node.fields
         .iter()
         .find_map(|(key, value)| (key.0.as_str() == name).then_some(value))
+}
+
+const fn invalid_operation(node: &IntentNode, reason: &'static str) -> IntentMaterializationError {
+    IntentMaterializationError::InvalidOperation {
+        node: node.id,
+        reason,
+    }
+}
+
+fn required_point(node: &IntentNode, name: &str) -> Result<[f64; 2], IntentMaterializationError> {
+    point_field(node, name)?
+        .ok_or_else(|| invalid_operation(node, "required operation point field is missing"))
+}
+
+fn required_quantity(
+    node: &IntentNode,
+    name: &str,
+    unit: IntentUnit,
+) -> Result<f64, IntentMaterializationError> {
+    field_quantity(node, name, unit)?
+        .ok_or_else(|| invalid_operation(node, "required operation quantity field is missing"))
+}
+
+fn required_enum<'a>(
+    node: &'a IntentNode,
+    name: &str,
+) -> Result<&'a str, IntentMaterializationError> {
+    enum_field(node, name)?
+        .ok_or_else(|| invalid_operation(node, "required operation enum field is missing"))
+}
+
+fn required_boolean(node: &IntentNode, name: &str) -> Result<bool, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Boolean(value)) => Ok(*value),
+        Some(_) => Err(invalid_operation(
+            node,
+            "operation boolean field has the wrong type",
+        )),
+        None => Err(invalid_operation(
+            node,
+            "required operation boolean field is missing",
+        )),
+    }
+}
+
+fn required_i32(node: &IntentNode, name: &str) -> Result<i32, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Integer(value)) => i32::try_from(*value)
+            .map_err(|_| invalid_operation(node, "operation integer exceeds i32 limits")),
+        Some(_) => Err(invalid_operation(
+            node,
+            "operation integer field has the wrong type",
+        )),
+        None => Err(invalid_operation(
+            node,
+            "required operation integer field is missing",
+        )),
+    }
+}
+
+fn required_usize(node: &IntentNode, name: &str) -> Result<usize, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Natural(value)) => usize::try_from(*value)
+            .map_err(|_| invalid_operation(node, "operation natural exceeds platform limits")),
+        Some(_) => Err(invalid_operation(
+            node,
+            "operation natural field has the wrong type",
+        )),
+        None => Err(invalid_operation(
+            node,
+            "required operation natural field is missing",
+        )),
+    }
+}
+
+fn require_absent(node: &IntentNode, names: &[&str]) -> Result<(), IntentMaterializationError> {
+    if names.iter().any(|name| field_value(node, name).is_some()) {
+        return Err(invalid_operation(
+            node,
+            "operation carries fields which are invalid for its explicit branch",
+        ));
+    }
+    Ok(())
+}
+
+fn split_retained_piece(
+    node: &IntentNode,
+    name: &str,
+) -> Result<SplitRetainedPiece, IntentMaterializationError> {
+    match required_enum(node, name)? {
+        "before" => Ok(SplitRetainedPiece::Before),
+        "after" => Ok(SplitRetainedPiece::After),
+        _ => Err(invalid_operation(node, "split retained piece is invalid")),
+    }
+}
+
+fn trim_retained_side(
+    node: &IntentNode,
+    name: &str,
+) -> Result<TrimRetainedSide, IntentMaterializationError> {
+    match required_enum(node, name)? {
+        "before" => Ok(TrimRetainedSide::Before),
+        "after" => Ok(TrimRetainedSide::After),
+        _ => Err(invalid_operation(node, "trim retained side is invalid")),
+    }
+}
+
+fn line_endpoint(
+    node: &IntentNode,
+    name: &str,
+) -> Result<LineEndpoint, IntentMaterializationError> {
+    match required_enum(node, name)? {
+        "start" => Ok(LineEndpoint::Start),
+        "end" => Ok(LineEndpoint::End),
+        _ => Err(invalid_operation(node, "line endpoint is invalid")),
+    }
+}
+
+fn required_dimension_mode(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentDimensionMode, IntentMaterializationError> {
+    match required_enum(node, name)? {
+        "driving" => Ok(DocumentDimensionMode::Driving),
+        "reference" => Ok(DocumentDimensionMode::Reference),
+        _ => Err(invalid_operation(
+            node,
+            "operation dimension mode is invalid",
+        )),
+    }
+}
+
+fn required_arc_sweep(node: &IntentNode) -> Result<DocumentArcSweep, IntentMaterializationError> {
+    match required_enum(node, "sweep")? {
+        "counter_clockwise" => Ok(DocumentArcSweep::CounterClockwise),
+        "clockwise" => Ok(DocumentArcSweep::Clockwise),
+        _ => Err(invalid_operation(node, "operation arc sweep is invalid")),
+    }
+}
+
+fn required_fillet_endpoint_order(
+    node: &IntentNode,
+) -> Result<DocumentFilletEndpointOrder, IntentMaterializationError> {
+    match required_enum(node, "endpoint_order")? {
+        "first_then_second" => Ok(DocumentFilletEndpointOrder::FirstThenSecond),
+        "second_then_first" => Ok(DocumentFilletEndpointOrder::SecondThenFirst),
+        _ => Err(invalid_operation(
+            node,
+            "operation fillet endpoint order is invalid",
+        )),
+    }
+}
+
+fn required_curve_normal_side(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentCurveNormalSide, IntentMaterializationError> {
+    match required_enum(node, name)? {
+        "left" => Ok(DocumentCurveNormalSide::Left),
+        "right" => Ok(DocumentCurveNormalSide::Right),
+        _ => Err(invalid_operation(
+            node,
+            "operation curve normal side is invalid",
+        )),
+    }
+}
+
+fn required_fillet_trim_endpoint(
+    node: &IntentNode,
+    name: &str,
+) -> Result<DocumentFilletTrimEndpoint, IntentMaterializationError> {
+    match required_enum(node, name)? {
+        "start" => Ok(DocumentFilletTrimEndpoint::Start),
+        "end" => Ok(DocumentFilletTrimEndpoint::End),
+        _ => Err(invalid_operation(
+            node,
+            "operation fillet trim endpoint is invalid",
+        )),
+    }
+}
+
+fn required_geometry_role(node: &IntentNode) -> Result<GeometryRole, IntentMaterializationError> {
+    match required_enum(node, "role")? {
+        "profile" => Ok(GeometryRole::Profile),
+        "construction" => Ok(GeometryRole::Construction),
+        _ => Err(invalid_operation(
+            node,
+            "source-free operation geometry role is invalid",
+        )),
+    }
 }
 
 fn text_field<'a>(

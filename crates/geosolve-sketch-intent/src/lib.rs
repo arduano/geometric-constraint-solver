@@ -35,10 +35,11 @@ pub use model::{
     IntentBootstrapObject, IntentChildSchema, IntentExternalInputs, IntentExternalInputsIdentity,
     IntentFieldKey, IntentGraphIdentity, IntentIdentityFlow, IntentInstanceIdentity,
     IntentInstanceState, IntentLiteral, IntentModelError, IntentNativeReservationKind,
-    IntentNodeDraft, IntentNodeKind, IntentOrganization, IntentOrganizationIdentity,
-    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
-    IntentReservationLedgerIdentity, IntentSemanticIdentity, IntentUnit, LeafField, LeafRef,
-    MaterializationEvidence, OperationKind, OrganizationCell, ParameterIntentKind, PatchPortRef,
+    IntentNodeDraft, IntentNodeKind, IntentOperationOutput, IntentOperationOutputKind,
+    IntentOrganization, IntentOrganizationIdentity, IntentPortKind, IntentPortRef, IntentPortRole,
+    IntentPortSelector, IntentReservationLedgerIdentity, IntentSemanticIdentity, IntentUnit,
+    LeafField, LeafRef, MaterializationEvidence, OperationKind, OrganizationCell,
+    ParameterIntentKind, PatchPortRef,
 };
 pub use patch::{
     CellTarget, DeletePolicy, IntentAliasMap, IntentPatch, IntentPatchOperation,

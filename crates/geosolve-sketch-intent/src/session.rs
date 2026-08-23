@@ -6,9 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::graph::{
-    AllocatedDraft, IntentAllocatorHighWater, IntentGraph, IntentGraphError,
-    IntentReservationLedger, allocate_draft, allocated_alias_ports, assign_identity_generations,
-    finish_allocated_draft,
+    IntentAllocatorHighWater, IntentGraph, IntentGraphError, IntentReservationLedger,
+    allocate_draft, allocated_alias_ports, assign_identity_generations, finish_allocated_draft,
 };
 use crate::ids::{
     CellId, ContentDigest, IntentKey, IntentSessionId, NodeId, PlanToken, Revision, digest_bytes,
@@ -698,6 +697,63 @@ impl IntentSession {
         Ok(self.identity())
     }
 
+    /// Installs independently validated host evidence for the pristine empty
+    /// graph without creating a declaration or user-visible Undo entry.
+    ///
+    /// This is the sole initialization path for a fresh projectional editor:
+    /// it establishes an accepted empty native canvas before the first authored
+    /// patch while keeping revision zero and the built-in empty organization.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a session with any retained semantic state, allocation, attempt,
+    /// accepted authority or history, and rejects evidence stamped for different
+    /// external inputs.
+    pub fn install_pristine_empty_acceptance(
+        &mut self,
+        evidence: MaterializationEvidence,
+    ) -> Result<IntentSessionIdentity, IntentSessionError> {
+        let pristine = self.revision.raw() == 0
+            && self.graph.nodes().is_empty()
+            && self.instance.values().is_empty()
+            && self.reservations.entries().is_empty()
+            && self.organization.node_names().is_empty()
+            && self.external_inputs == IntentExternalInputs::default()
+            && self.latest_attempt.is_none()
+            && self.accepted.is_none()
+            && self.undo.is_empty()
+            && self.redo.is_empty()
+            && self.allocator == IntentAllocatorHighWater::initial();
+        if !pristine || evidence.external_inputs != self.external_inputs.identity() {
+            return Err(IntentSessionError::InvalidEmptyInitialization);
+        }
+        let mut staged = self.clone();
+        let target = semantic_identity(
+            &staged.graph,
+            &staged.instance,
+            staged.reservations.identity(),
+            &staged.external_inputs,
+        );
+        staged.latest_attempt = Some(IntentLatestAttempt {
+            target,
+            disposition: IntentAttemptDisposition::Accepted,
+            materialization_digest: Some(evidence.digest),
+            failed_nodes: BTreeSet::new(),
+            diagnostic: None,
+        });
+        staged.accepted = Some(IntentAcceptedAuthority {
+            target,
+            graph: staged.graph.clone(),
+            instance: staged.instance.clone(),
+            reservations: staged.reservations.clone(),
+            external_inputs: staged.external_inputs.clone(),
+            evidence,
+        });
+        staged.validate()?;
+        *self = staged;
+        Ok(self.identity())
+    }
+
     /// Restores the preceding complete transaction checkpoint with a fresh
     /// overall exact-CAS revision. Stable IDs and allocator high-water remain
     /// exact and never regress.
@@ -1307,15 +1363,43 @@ fn apply_patch_operations(
         diff.organization_changed = true;
     }
 
-    let mut create_nodes = create_nodes.into_iter().collect::<Vec<_>>();
-    create_nodes.sort_by(|(left_alias, (left, _)), (right_alias, (right, _))| {
-        left.0
-            .symbol
-            .cmp(&right.0.symbol)
-            .then_with(|| left_alias.cmp(right_alias))
-    });
-    let mut allocated = Vec::<(AllocatedDraft, Option<CellTarget>)>::new();
-    for (alias, (draft, cell)) in create_nodes {
+    let known_aliases = create_nodes.keys().cloned().collect::<BTreeSet<_>>();
+    for (draft, _) in create_nodes.values() {
+        for source in draft.0.inputs.values() {
+            if let PatchPortRef::Alias { node, .. } = source
+                && !known_aliases.contains(node)
+            {
+                return Err(IntentPlanError::UnknownAlias(node.clone()));
+            }
+        }
+    }
+
+    // Allocate and finish in dependency order so persistent native
+    // reservations are available before a dependent declaration is lowered.
+    // Symbol and alias are only deterministic ready-set tie-breaks; patch-array
+    // and presentation order remain non-semantic.
+    while !create_nodes.is_empty() {
+        let alias = create_nodes
+            .iter()
+            .filter(|(_, (draft, _))| {
+                draft.0.inputs.values().all(|source| match source {
+                    PatchPortRef::Stable { .. } => true,
+                    PatchPortRef::Alias { node, .. } => aliases.nodes.contains_key(node),
+                })
+            })
+            .min_by(|(left_alias, (left, _)), (right_alias, (right, _))| {
+                left.0
+                    .symbol
+                    .cmp(&right.0.symbol)
+                    .then_with(|| left_alias.cmp(right_alias))
+            })
+            .map(|(alias, _)| alias.clone())
+            .ok_or(IntentPlanError::Graph(IntentGraphError::DependencyCycle {
+                node: allocator.next_node,
+            }))?;
+        let (draft, cell) = create_nodes
+            .remove(&alias)
+            .expect("ready alias remains pending");
         let value = allocate_draft(draft.0, allocator)?;
         aliases.nodes.insert(alias.clone(), value.id);
         for (selector, port) in allocated_alias_ports(&value) {
@@ -1325,9 +1409,6 @@ fn apply_patch_operations(
                 .or_default()
                 .insert(selector, port);
         }
-        allocated.push((value, cell));
-    }
-    for (value, cell) in allocated {
         let inputs = value
             .draft
             .inputs
@@ -1869,6 +1950,10 @@ pub enum IntentSessionError {
     InvalidPlanToken,
     #[error("initial session publication requires one accepted declaration-only plan")]
     InvalidInitializationPlan,
+    #[error(
+        "empty accepted initialization requires one pristine revision-zero session and matching host inputs"
+    )]
+    InvalidEmptyInitialization,
     #[error("intent revision exhausted")]
     RevisionExhausted,
     #[error("invalid intent organization")]

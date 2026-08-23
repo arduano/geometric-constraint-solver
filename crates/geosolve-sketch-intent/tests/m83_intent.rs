@@ -9,9 +9,10 @@ use geosolve_sketch_intent::{
     InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentEvaluationFailure,
     IntentEvaluationFailureKind, IntentFieldKey, IntentGraphError, IntentIdentityFlow, IntentKey,
     IntentLiteral, IntentLiteralSchema, IntentNativeReservationKind, IntentNodeDraft,
-    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind, IntentPatchPolicy,
-    IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRef, IntentPortRole,
-    IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId, IntentUnit,
+    IntentNodeKind, IntentOperationOutput, IntentOperationOutputKind, IntentPatch,
+    IntentPatchOperation, IntentPatchOperationKind, IntentPatchPolicy, IntentPlanDisposition,
+    IntentPlanError, IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
+    IntentReservationState, IntentSession, IntentSessionId, IntentSessionIdentity, IntentUnit,
     LeafField, LeafRef, MaterializationEvidence, NodeId, OperationKind, ParameterIntentKind,
     PatchPortRef, PortId,
 };
@@ -799,8 +800,14 @@ fn every_closed_declaration_rejects_malformed_operands_and_children_atomically()
             let slot = InputSlot::new(cardinality.role, 1);
             draft.inputs.insert(slot, dummy_input(&case.kind, slot));
             let error = atomic_schema_rejection(&case.label, draft);
-            if matches!(case.kind, IntentNodeKind::Geometry { .. })
-                && cardinality.role == InputRole::Point
+            if (matches!(case.kind, IntentNodeKind::Geometry { .. })
+                && cardinality.role == InputRole::Point)
+                || (matches!(
+                    case.kind,
+                    IntentNodeKind::Operation {
+                        operation: OperationKind::ProfileOffset
+                    }
+                ) && cardinality.role == InputRole::Profile)
             {
                 // The schema intentionally admits this sparse authored slot;
                 // the dummy source then fails at ordinary dependency lookup.
@@ -1445,6 +1452,10 @@ fn ordinary_geometry_reuse_is_a_schema_derived_alias_without_duplicate_native_id
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one inventory test keeps native operation handles and logical-only ports visibly distinct"
+)]
 fn authored_curve_handles_and_logical_ports_never_masquerade_as_native_sketch_ids() {
     let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8321)).unwrap();
     let patch = IntentPatch::new(
@@ -1487,6 +1498,10 @@ fn authored_curve_handles_and_logical_ports_never_masquerade_as_native_sketch_id
                             value: 1.0,
                             unit: IntentUnit::Length,
                         },
+                    )
+                    .with_field(
+                        IntentFieldKey(key("role")),
+                        IntentLiteral::Enum(key("profile")),
                     ),
                 ),
                 cell: None,
@@ -1547,6 +1562,175 @@ fn authored_curve_handles_and_logical_ports_never_masquerade_as_native_sketch_id
                 .values()
                 .all(|port| port.flow == IntentIdentityFlow::OwnedLogical)
         );
+    }
+}
+
+#[test]
+fn operation_output_shape_round_trips_with_stable_native_and_span_ports() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_2101)).unwrap();
+    let outputs = vec![
+        IntentOperationOutput::native(IntentOperationOutputKind::Point),
+        IntentOperationOutput::curve(2),
+        IntentOperationOutput::native(IntentOperationOutputKind::Constraint),
+        IntentOperationOutput::native(IntentOperationOutputKind::Dimension),
+    ];
+    let patch = operation_output_shape_patch(session.identity(), outputs.clone());
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    let operation = plan.aliases().node(&key("operation")).unwrap();
+    session.commit_plan(plan).unwrap();
+
+    let node = session.graph().node(operation).unwrap();
+    assert_eq!(node.operation_outputs, outputs);
+    assert_eq!(
+        node.ports
+            .values()
+            .filter(|port| matches!(
+                port.selector,
+                IntentPortSelector::Node {
+                    role: IntentPortRole::Result,
+                    ..
+                }
+            ))
+            .count(),
+        4
+    );
+    assert_eq!(
+        node.ports
+            .values()
+            .filter(|port| matches!(
+                port.selector,
+                IntentPortSelector::Node {
+                    role: IntentPortRole::Span,
+                    ..
+                }
+            ))
+            .count(),
+        2
+    );
+    assert_eq!(
+        node.reservations
+            .values()
+            .filter(|reservation| matches!(
+                reservation.kind,
+                IntentNativeReservationKind::ConstraintSource
+                    | IntentNativeReservationKind::DimensionSource
+            ))
+            .count(),
+        2
+    );
+
+    let canonical = session.to_canonical_json().unwrap();
+    let restored = IntentSession::from_json(&canonical).unwrap();
+    assert_eq!(restored.to_canonical_json().unwrap(), canonical);
+    assert_eq!(
+        restored.graph().node(operation).unwrap().operation_outputs,
+        outputs
+    );
+}
+
+fn operation_output_shape_patch(
+    session_id: IntentSessionIdentity,
+    outputs: Vec<IntentOperationOutput>,
+) -> IntentPatch {
+    IntentPatch::new(
+        session_id,
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("source"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    },
+                    key("source"),
+                )),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("axis"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    },
+                    key("axis"),
+                )),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("operation"),
+                draft: Box::new(
+                    IntentNodeDraft::new(
+                        IntentNodeKind::Operation {
+                            operation: OperationKind::Mirror,
+                        },
+                        key("operation"),
+                    )
+                    .with_input(
+                        InputSlot::new(InputRole::Curve, 0),
+                        alias_port("source", IntentPortRole::Curve, 0),
+                    )
+                    .with_input(
+                        InputSlot::new(InputRole::Span, 0),
+                        alias_port("axis", IntentPortRole::Span, 0),
+                    )
+                    .with_operation_outputs(outputs),
+                ),
+                cell: None,
+            },
+        ],
+    )
+}
+
+#[test]
+fn malformed_operation_output_shapes_reject_before_identity_allocation() {
+    let cases = [
+        (
+            "non-operation output",
+            point_draft("point").with_operation_outputs(vec![IntentOperationOutput::native(
+                IntentOperationOutputKind::Point,
+            )]),
+        ),
+        (
+            "zero-span curve",
+            IntentNodeDraft::new(
+                IntentNodeKind::Operation {
+                    operation: OperationKind::Rectangle,
+                },
+                key("rectangle"),
+            )
+            .with_operation_outputs(vec![IntentOperationOutput::curve(0)]),
+        ),
+        (
+            "span count on point",
+            IntentNodeDraft::new(
+                IntentNodeKind::Operation {
+                    operation: OperationKind::Rectangle,
+                },
+                key("rectangle"),
+            )
+            .with_operation_outputs(vec![IntentOperationOutput {
+                kind: IntentOperationOutputKind::Point,
+                curve_span_count: 1,
+            }]),
+        ),
+        (
+            "edit-only output",
+            IntentNodeDraft::new(
+                IntentNodeKind::Operation {
+                    operation: OperationKind::Split,
+                },
+                key("split"),
+            )
+            .with_operation_outputs(vec![IntentOperationOutput::native(
+                IntentOperationOutputKind::Point,
+            )]),
+        ),
+    ];
+    for (label, draft) in cases {
+        assert!(matches!(
+            atomic_schema_rejection(label, draft),
+            IntentPlanError::Graph(IntentGraphError::InvalidPortSchema { .. })
+        ));
     }
 }
 
@@ -1948,6 +2132,83 @@ fn initialization_publication_rejects_a_nonempty_session() {
     let plan = session.plan_patch(patch, accepted).unwrap();
     assert!(session.commit_initialization_plan(plan).is_err());
     assert_eq!(session.graph().nodes().len(), 1);
+}
+
+#[test]
+fn pristine_empty_acceptance_is_history_free_exact_and_canonical() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_b003)).unwrap();
+    let evidence = MaterializationEvidence::new_host_artifacts(
+        session.external_inputs().identity(),
+        b"accepted-empty-sketch".to_vec(),
+        b"empty-ownership".to_vec(),
+        b"independently-validated-empty".to_vec(),
+    )
+    .unwrap();
+    let before = session.identity();
+    let installed = session
+        .install_pristine_empty_acceptance(evidence.clone())
+        .unwrap();
+
+    assert_ne!(installed, before);
+    assert!(session.graph().nodes().is_empty());
+    assert_eq!(session.undo_len(), 0);
+    assert_eq!(session.redo_len(), 0);
+    assert!(session.undo().unwrap().is_none());
+    assert_eq!(session.accepted().unwrap().evidence, evidence);
+    assert!(session.install_pristine_empty_acceptance(evidence).is_err());
+
+    let canonical = session.to_canonical_json().unwrap();
+    let restored = IntentSession::from_json(&canonical).unwrap();
+    assert_eq!(restored.to_canonical_json().unwrap(), canonical);
+    assert_eq!(restored.identity(), session.identity());
+    assert!(restored.graph().nodes().is_empty());
+    assert_eq!(restored.undo_len(), 0);
+}
+
+#[test]
+fn pristine_empty_acceptance_rejects_wrong_inputs_and_retained_state() {
+    let mut wrong_inputs = IntentSession::with_id(IntentSessionId::from_raw(0x83_b004)).unwrap();
+    let other = IntentSession::with_id(IntentSessionId::from_raw(0x83_b005)).unwrap();
+    let mut evidence = MaterializationEvidence::new_host_artifacts(
+        other.external_inputs().identity(),
+        b"empty".to_vec(),
+        b"owners".to_vec(),
+        b"validated".to_vec(),
+    )
+    .unwrap();
+    // Session IDs are deliberately absent from external-input identity, so
+    // authenticate a genuinely different opaque input stamp.
+    evidence.external_inputs.revision = geosolve_sketch_intent::ExternalInputRevision::from_raw(1);
+    assert!(
+        wrong_inputs
+            .install_pristine_empty_acceptance(evidence)
+            .is_err()
+    );
+
+    let mut nonempty = IntentSession::with_id(IntentSessionId::from_raw(0x83_b006)).unwrap();
+    let patch = IntentPatch::new(
+        nonempty.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("point"),
+            draft: Box::new(point_draft("point")),
+            cell: None,
+        }],
+    );
+    let plan = nonempty.plan_patch(patch, accepted).unwrap();
+    nonempty.commit_plan(plan).unwrap();
+    let evidence = MaterializationEvidence::new_host_artifacts(
+        nonempty.external_inputs().identity(),
+        b"empty".to_vec(),
+        b"owners".to_vec(),
+        b"validated".to_vec(),
+    )
+    .unwrap();
+    assert!(
+        nonempty
+            .install_pristine_empty_acceptance(evidence)
+            .is_err()
+    );
 }
 
 #[test]
