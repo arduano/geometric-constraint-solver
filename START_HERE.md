@@ -239,6 +239,15 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 `archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
+M83 is the active projectional design-intent milestone. ADR 0040 replaces the rejected
+chronological snapshot/JSON-owner-rewrite candidate with an order-independent typed dependency
+graph, separate writable instance and presentation organization state, deterministic Rust
+materialization into the unchanged native solver, one composite history and prepared reverse-
+binding drag routes. The discarded candidate remains on
+`archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; do not restore it wholesale. M83 is
+not accepted product behavior until clean qualification, a frozen Tailscale candidate and explicit
+human UAT pass. Pages therefore remains on accepted M81 product bytes.
+
 ## Read first
 
 1. `AGENTS.md`
@@ -247,7 +256,7 @@ retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this cl
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, plus active ADR 0040.
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
@@ -270,6 +279,8 @@ retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this cl
     accepted focused scorecard and exact public closeout.
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
+19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — active projectional
+    intent contract, implementation ledger and pending focused scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -641,7 +652,7 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M82 are complete. M82 closes by explicit deferral rather than feature acceptance: `fa54f30`
+M1-M82 are complete. M83 is active and not yet accepted. M82 closes by explicit deferral rather than feature acceptance: `fa54f30`
 restores the exact M81 product tree and the complete discarded prototype is archived at
 `archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
 qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
@@ -746,6 +757,10 @@ Durable milestone and cleanup records:
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
+- `docs/adr/0040-projectional-design-intent-graph.md` (active replacement architecture)
+- `docs/M83_GOALS.md` (active projectional intent contract)
+- `docs/M83_IMPLEMENTATION.md` (active implementation and qualification ledger)
+- `docs/M83_UAT.md` (pending focused candidate scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

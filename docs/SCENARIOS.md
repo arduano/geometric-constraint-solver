@@ -4299,6 +4299,97 @@ Former UAT PID `3024723` is retired and port `8080` is free. No M82 feature UAT 
 is claimed; existing accepted M81 Pages bytes remain public authority. See
 `docs/M82_DEFERRED.md`.
 
+## M83 projectional design-intent fixtures
+
+M83 adds no residual equation and does not reinterpret any earlier geometric oracle. The corpus
+qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
+existing solver.
+
+### M83-G1 — schema, alias and order independence
+
+Enumerate all 25 M78 geometry recipes, every current persistent relation/dimension, every M58
+operation, computed `FilletSet`, parameter/binding/output and external-reference declaration.
+For each node, compare its Rust-generated logical ports, writable leaves, children and typed
+native reservations with the reviewed catalog. Existing-point operands must alias the exact stable
+point port and allocate no point reservation. Constraint/source and dimension/source reservations
+are contiguous owner-first pairs. Curve handles which are not persistent `DesignPointId` values
+remain logical-only.
+
+Create the same dependency graph from several patch-array, alias-name, cell, declaration and
+source-display orders. Canonical dependency scheduling, semantic identity, native reservations,
+materialized sketch bytes, accepted geometry, branch state, source order, rank and DOF agree.
+Only organization identity changes under cell/name/order edits.
+
+### M83-G2 — stable identity, continuation and tombstones
+
+Create a shared-point polyline, a constraint, a dimension, a computed Fillet and a Profile Offset.
+Exercise alias, identity continuation and exact dependent-closure deletion. Stable ports survive
+instance edits and organization moves. Retired native identities produce typed never-reused
+tombstones; divergent work after Undo allocates above prior high-water. Undo/Redo restores semantic
+owners and accepted geometry without lowering any node/port/child/reservation/native cursor.
+
+Malformed ports, wrong kinds, cycles, identity forks, use-after-retire, stale CAS, incomplete
+cascades, duplicate unordered targets and resource exhaustion reject without changing graph,
+instance, organization, external inputs, accepted evidence, allocator or history.
+
+### M83-G3 — accepted, retained-failed and cold authority
+
+Materialize representative affine, circular, conic, Bezier, spline/NURBS, native-Fillet and
+Profile-Offset graphs under ordinary, parameter-bound and external-reference inputs. Every success
+has finite geometry, `HardValidity::Valid`, independent normalized hard residual at most `1e-9`,
+the exact persisted branch/domain state and a complete logical/native ownership map. A canonical
+cold reconstruction agrees with the warm accepted result on document semantics, accepted
+measurements, rank/DOF, diagnostics and ownership.
+
+Submit structurally valid but incompatible explicit intent with retain-failure policy. The graph
+and typed failed-node diagnostic advance, while canvas authority remains the exact previous
+accepted materialization and cannot be rebound as current inference publication authority.
+Cancellation, work exhaustion and stale output retain both intent and accepted authority exactly.
+
+### M83-G4 — free-leaf drag and exact release
+
+For a free point, constrained line endpoint, circular/conic control, Fillet radius and Profile
+Offset distance, prepare one route from exact accepted semantic/native ownership. Ordinary point
+movement may write only the genuinely free instance leaves returned by that route; a fixed target,
+driving dimension and explicit branch remain bit-exact. Dedicated Fillet/Offset gestures edit only
+their existing property owner.
+
+Queue several pointer samples around one animation frame, include one invalid target and release
+at a final valid target. Pointer frames perform no intent/session JSON encoding, workspace save,
+durable panel rebuild or history mutation. Pointer-up drains and authenticates the newest sample,
+independently validates it, commits one composite transaction and makes one Undo restore the exact
+pre-gesture graph/instance/accepted state. A stale or cancelled release publishes nothing.
+
+### M83-G5 — source, panel and unified history
+
+Create equivalent typed patches through canvas, Inspector, structured-source token edit and
+DOM-free RPC. The target semantic identities and outcomes agree. Rename/reorder cells and source
+rows, including drag/drop stress after dependent geometry exists; materialized document and
+accepted evidence stay exact. A structural source edit follows typed schema validation, while
+arbitrary syntax/execution is unavailable.
+
+The `Outline | Structured source | History` projection selects the same stable declaration.
+Inspector fields are schema-derived, retained invalid intent stays inspectable and History is
+read-only. A mixed sequence across all projections produces exactly one bounded composite
+Undo/Redo stream with no mirrored coordinator entry.
+
+### M83-G6 — workspace, WASM and TypeScript parity
+
+Workspace v8 round-trips current/accepted graph and instance identities, organization, external
+inputs, reservation/tombstone high-water and bounded history byte-identically. Abandoned version 7
+rejects. Every frozen v1-v6 workspace restores through its historical strict decoder and becomes
+one honest opaque native bootstrap declaration; no recipe grouping or ownership is invented.
+Explicit supported ejection preserves accepted sketch semantics.
+
+Native and WASM/RPC transition transcripts match for valid, retained-invalid, stale, malformed and
+resource-exhausted patches. Branded TypeScript builders reject cross-session or wrong-port kinds at
+compile time where representable and at runtime otherwise. Neither generated source nor the
+package contains a curve equation, residual evaluator, expression graph or solver.
+
+The exact no-rebuild release output is frozen and served over Tailscale for the human scorecard in
+`docs/M83_UAT.md`. GitHub Pages remains on accepted M81 bytes until that candidate is explicitly
+approved.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

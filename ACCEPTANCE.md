@@ -3232,6 +3232,46 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   and release Trunk build pass before UAT begins.
 - `docs/M64_UAT.md` was explicitly approved by the supervising human on 2026-07-30.
 
+### M83: projectional sketch design intent
+
+Status: implementation in progress. ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own
+the active acceptance contract; no candidate is nominated yet.
+
+- The canonical design is an unordered typed dependency graph with stable never-reused
+  declarations, ports, children and native reservations. Instance values, presentation
+  organization and external inputs have separate exact identities.
+- All existing geometry recipes, relations, dimensions, operations, computed Fillets, host
+  declarations and external references are represented without introducing a new residual,
+  formula, expression, priority or JavaScript solver.
+- Existing-point operands alias the existing stable output. Constraint/source and dimension/source
+  reservations preserve exact paired allocation order. Derived handles remain logical rather than
+  fabricated persistent points, and deleted identities retain typed tombstones.
+- Materialization follows the dependency DAG with stable-ID ties, consumes existing public
+  sketch/feature/operation APIs and exact host inputs, records logical/native ownership and reverse
+  writable-free-leaf bindings, and can publish accepted state only after the existing independent
+  finite/residual/domain/branch checks pass.
+- Invalid explicit intent remains retained and inspectable while the previous accepted scene stays
+  visible. Cancelled, exhausted and stale evaluations publish nothing.
+- Ordinary drag previews reuse one prepared retained native solver session. Pointer frames do not
+  save, serialize/replay intent or rebuild durable panels; exact pointer-up commits only the newest
+  authenticated sample as one instance/property transaction and never silently rewrites a driver
+  or fixed property.
+- One composite Undo/Redo history covers graph, instance, organization and external-input edits.
+  History presentation is read-only; declaration/cell ordering, aliases, names and structured-
+  source row order cannot affect geometry or native allocation.
+- Structured source is a deterministic TypeScript-shaped Rust projection with typed token edits,
+  not arbitrary TypeScript execution. Native, DOM-free WASM/RPC and branded TypeScript builders
+  produce the same patch identities and typed outcomes.
+- Workspace v8 round-trips intent, accepted evidence, reservations, tombstones and bounded history.
+  Abandoned v7 rejects. Strict v1-v6 restoration remains available and is bootstrapped honestly as
+  opaque native content rather than assigned fictional recipe history.
+- Inventory-driven schema/materializer tests, cold/warm differential reconstruction, order/
+  identity/failure/deletion/persistence coverage, native/WASM/RPC/TypeScript parity, drag
+  performance, unchanged milestone-neutral golden, locked workspace tests, Clippy/Rustdoc/WASM and
+  the complete clean release gate all pass before nomination.
+- The exact no-rebuild release artifact is frozen and byte-verified on Tailscale for M83 UAT.
+  GitHub Pages remains on the accepted M81 product until explicit supervising-human approval.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.
