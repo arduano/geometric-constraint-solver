@@ -7,8 +7,8 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DesignPointId, DocumentId, PersistentId};
 use geosolve_sketch_intent::{
-    GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
+    GeometryRecipeKind, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
     IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
 };
 
@@ -28,6 +28,51 @@ fn coordinate(value: f64) -> IntentLiteral {
         value,
         unit: IntentUnit::Length,
     }
+}
+
+fn invalid_segment() -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("invalid.segment"),
+    )
+    .with_instance_leaf(
+        IntentPortSelector::Node {
+            role: IntentPortRole::Start,
+            index: 0,
+        },
+        LeafField::X,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        IntentPortSelector::Node {
+            role: IntentPortRole::Start,
+            index: 0,
+        },
+        LeafField::Y,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        IntentPortSelector::Node {
+            role: IntentPortRole::End,
+            index: 0,
+        },
+        LeafField::X,
+        coordinate(1.0),
+    )
+    .with_instance_leaf(
+        IntentPortSelector::Node {
+            role: IntentPortRole::End,
+            index: 0,
+        },
+        LeafField::Y,
+        coordinate(0.0),
+    )
+    .with_field(
+        IntentFieldKey(key("branch_direction")),
+        IntentLiteral::Point([f64::MAX, f64::MAX]),
+    )
 }
 
 fn fixture() -> (ProjectionalEditorSession, DesignPointId, Viewport) {
@@ -230,10 +275,7 @@ fn retained_invalid_intent_keeps_the_prior_scene_and_transient_selection() {
             IntentPatchPolicy::RetainFailedIntent,
             vec![IntentPatchOperation::CreateNode {
                 alias: key("unsupported"),
-                draft: Box::new(IntentNodeDraft::new(
-                    IntentNodeKind::Annotation,
-                    key("unsupported.annotation"),
-                )),
+                draft: Box::new(invalid_segment()),
                 cell: None,
             }],
         ))

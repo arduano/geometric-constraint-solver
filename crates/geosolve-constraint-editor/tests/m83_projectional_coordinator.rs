@@ -6,8 +6,8 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, OperationControl, PersistentId};
 use geosolve_sketch_intent::{
-    GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
+    GeometryRecipeKind, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
     IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
 };
 
@@ -42,6 +42,39 @@ fn point(position: [f64; 2]) -> IntentNodeDraft {
         selector(IntentPortRole::Primary),
         LeafField::Y,
         coordinate(position[1]),
+    )
+}
+
+fn invalid_segment() -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("invalid.segment"),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Start),
+        LeafField::X,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Start),
+        LeafField::Y,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::End),
+        LeafField::X,
+        coordinate(1.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::End),
+        LeafField::Y,
+        coordinate(0.0),
+    )
+    .with_field(
+        IntentFieldKey(key("branch_direction")),
+        IntentLiteral::Point([f64::MAX, f64::MAX]),
     )
 }
 
@@ -196,10 +229,7 @@ fn retained_failure_and_organization_keep_the_exact_accepted_scene() {
         IntentPatchPolicy::RetainFailedIntent,
         vec![IntentPatchOperation::CreateNode {
             alias: key("annotation"),
-            draft: Box::new(IntentNodeDraft::new(
-                IntentNodeKind::Annotation,
-                key("annotation.unsupported"),
-            )),
+            draft: Box::new(invalid_segment()),
             cell: None,
         }],
     );
@@ -251,10 +281,7 @@ fn deleting_one_retained_invalid_declaration_restores_accepted_current_authority
         IntentPatchPolicy::RetainFailedIntent,
         vec![IntentPatchOperation::CreateNode {
             alias: key("invalid"),
-            draft: Box::new(IntentNodeDraft::new(
-                IntentNodeKind::Annotation,
-                key("unsupported.annotation"),
-            )),
+            draft: Box::new(invalid_segment()),
             cell: None,
         }],
     );
