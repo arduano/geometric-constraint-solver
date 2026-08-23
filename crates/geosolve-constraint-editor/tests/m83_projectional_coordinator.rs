@@ -241,3 +241,37 @@ fn point_preview_rejects_stale_samples_and_cancellation_adds_no_history() {
     assert_eq!(coordinator.intent().history_projection(), history);
     assert_pair(accepted_position(&coordinator, point), [0.0, 0.0]);
 }
+
+#[test]
+fn deleting_one_retained_invalid_declaration_restores_accepted_current_authority() {
+    let mut coordinator = coordinator(0x8300_2004);
+    let point = create_point(&mut coordinator, [6.0, -2.0]);
+    let patch = IntentPatch::new(
+        coordinator.intent().identity(),
+        IntentPatchPolicy::RetainFailedIntent,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("invalid"),
+            draft: Box::new(IntentNodeDraft::new(
+                IntentNodeKind::Annotation,
+                key("unsupported.annotation"),
+            )),
+            cell: None,
+        }],
+    );
+    let invalid = coordinator
+        .apply_patch(patch)
+        .unwrap()
+        .aliases
+        .node(&key("invalid"))
+        .unwrap();
+    assert_eq!(coordinator.intent().graph().nodes().len(), 2);
+    assert_pair(accepted_position(&coordinator, point), [6.0, -2.0]);
+
+    let deleted = coordinator.delete_declaration(invalid).unwrap();
+    assert_eq!(deleted.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(coordinator.intent().graph().nodes().len(), 1);
+    assert_pair(accepted_position(&coordinator, point), [6.0, -2.0]);
+    coordinator.undo().unwrap().unwrap();
+    assert!(coordinator.intent().graph().node(invalid).is_some());
+    assert_pair(accepted_position(&coordinator, point), [6.0, -2.0]);
+}

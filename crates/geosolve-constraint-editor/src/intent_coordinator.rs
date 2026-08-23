@@ -12,9 +12,9 @@ use geosolve_sketch::{
     OperationControl, OperationOutcome, RetainedSketchDocumentSession,
 };
 use geosolve_sketch_intent::{
-    IntentAliasMap, IntentLiteral, IntentPatch, IntentPatchOperation, IntentPatchPlan,
-    IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentSession, IntentSessionError,
-    IntentSessionId, IntentSessionIdentity, IntentUnit, LeafRef,
+    DeletePolicy, IntentAliasMap, IntentLiteral, IntentPatch, IntentPatchOperation,
+    IntentPatchPlan, IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentSession,
+    IntentSessionError, IntentSessionId, IntentSessionIdentity, IntentUnit, LeafRef, NodeId,
 };
 use thiserror::Error;
 
@@ -152,6 +152,33 @@ impl ProjectionalIntentCoordinator {
         self.cancel_point_drag();
         let (plan, materialized) = self.plan_patch(patch)?;
         self.commit_planned(plan, materialized)
+    }
+
+    /// Deletes one declaration and its exact Rust-computed dependent closure
+    /// as a single accepted transaction. Callers never enumerate generated
+    /// native objects or guess dependency ownership.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary graph, materialization, or publication error and
+    /// leaves intent plus accepted scene unchanged on rejection.
+    pub fn delete_declaration(
+        &mut self,
+        node: NodeId,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        let closure = self.intent.graph().dependent_closure([node])?;
+        let policy = if closure.len() == 1 {
+            DeletePolicy::RejectDependents
+        } else {
+            DeletePolicy::Cascade {
+                exact_nodes: closure,
+            }
+        };
+        self.apply_patch(IntentPatch::new(
+            self.intent.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::DeleteNode { node, policy }],
+        ))
     }
 
     fn plan_patch(
@@ -487,6 +514,8 @@ pub enum ProjectionalCoordinatorError {
     Plan(#[from] IntentPlanError),
     #[error(transparent)]
     Intent(#[from] IntentSessionError),
+    #[error(transparent)]
+    Graph(#[from] geosolve_sketch_intent::IntentGraphError),
     #[error(transparent)]
     Materialization(#[from] IntentMaterializationError),
     #[error(transparent)]
