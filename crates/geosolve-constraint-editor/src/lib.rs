@@ -17,6 +17,7 @@ mod geometry_tools;
 mod inference;
 mod intent;
 mod intent_coordinator;
+mod intent_editor;
 mod intent_projection;
 mod intent_rpc;
 mod offset_authoring;
@@ -92,6 +93,9 @@ pub use intent::{
 pub use intent_coordinator::{
     ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
     ProjectionalPointDragPreview,
+};
+pub use intent_editor::{
+    ProjectionalEditorError, ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
 };
 pub use intent_projection::{
     IntentInspectorField, IntentInspectorProjection, IntentOutlineCell, IntentOutlineDeclaration,
@@ -3106,6 +3110,17 @@ pub enum ActivePointerGestureKind {
 pub struct ActivePointerGesture {
     pub pointer_id: u64,
     pub kind: ActivePointerGestureKind,
+}
+
+/// Exact native point route prepared by a Select pointer-down.
+///
+/// Projectional hosts use this read-only route to prepare native continuation
+/// before the first move frame. It is transient interaction state, not a
+/// durable document or history item.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PreparedPointDragRoute {
+    pub pointer_id: u64,
+    pub point: DesignPointId,
 }
 
 /// Host work requested by one state transition.
@@ -7474,6 +7489,18 @@ impl ConstraintEditor {
     pub(crate) fn point_gesture_snapshot(&self) -> Option<PointGestureSnapshot> {
         self.point_gesture.map(|gesture| PointGestureSnapshot {
             epoch: gesture.epoch,
+            pointer_id: gesture.pointer_id,
+            point: gesture.point,
+        })
+    }
+
+    /// Returns the native point route prepared by the current Select press.
+    ///
+    /// The route exists before the drag threshold is crossed, allowing a host
+    /// to authenticate writable intent ownership once at pointer-down.
+    #[must_use]
+    pub fn prepared_point_drag_route(&self) -> Option<PreparedPointDragRoute> {
+        self.point_gesture.map(|gesture| PreparedPointDragRoute {
             pointer_id: gesture.pointer_id,
             point: gesture.point,
         })
