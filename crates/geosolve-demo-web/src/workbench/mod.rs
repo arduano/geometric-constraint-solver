@@ -442,6 +442,53 @@ fn dispatch_projectional_construction_effects(
     outcome
 }
 
+/// Browser-side result of one complete relation or dimension application.
+///
+/// Operand collection and hover remain disposable [`AuthoringState`] state.
+/// Only a complete application can reach the projectional coordinator, where
+/// both an accepted declaration and retained-invalid explicit intent become
+/// exactly one durable history transaction.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct ProjectionalAuthoringDispatch {
+    disposition: Option<geosolve_sketch_intent::IntentPlanDisposition>,
+    error: Option<String>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl ProjectionalAuthoringDispatch {
+    const fn committed(&self) -> bool {
+        self.disposition.is_some()
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn dispatch_projectional_authoring_application(
+    editor: &mut geosolve_constraint_editor::ProjectionalEditorSession,
+    authoring: &mut geosolve_constraint_editor::AuthoringState,
+    application: &geosolve_constraint_editor::AuthoringApplication,
+) -> ProjectionalAuthoringDispatch {
+    let result = editor.apply_authoring_application(application);
+    authoring.transaction_finished();
+    if let Some(document) = editor
+        .coordinator()
+        .presentation_session()
+        .map(geosolve_sketch::RetainedSketchDocumentSession::design_document)
+    {
+        let _ = authoring.reconcile(document);
+    }
+    match result {
+        Ok(outcome) => ProjectionalAuthoringDispatch {
+            disposition: Some(outcome.disposition),
+            error: None,
+        },
+        Err(error) => ProjectionalAuthoringDispatch {
+            disposition: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CanvasPointerCaptureKind {
@@ -2740,6 +2787,7 @@ pub(crate) mod wasm {
 
     struct ProjectionalWorkbench {
         authority: super::WorkbenchDocumentAuthority,
+        authoring: AuthoringState,
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
@@ -2869,6 +2917,7 @@ pub(crate) mod wasm {
     ) -> Result<(), JsValue> {
         let mut workbench = ProjectionalWorkbench {
             authority,
+            authoring: AuthoringState::default(),
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
             pointer_moves: Rc::new(RefCell::new(super::ProjectionalPointerMoveQueue::default())),
@@ -2894,7 +2943,7 @@ pub(crate) mod wasm {
 
     fn set_projectional_surface_availability(document: &Document) -> Result<(), JsValue> {
         // Selection, point direct manipulation, and the complete typed geometry
-        // catalog are projectional. Relations, dimensions, computed features,
+        // and relation/dimension catalogs are projectional. Computed features
         // and Offset stay visibly unavailable until their own intent bridges
         // are activated.
         set_disabled(&required(document, "wb-tool-select")?, false)?;
@@ -2908,14 +2957,14 @@ pub(crate) mod wasm {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
             {
-                set_disabled(&button, true)?;
+                set_disabled(&button, false)?;
             }
         }
         for (key, _, _) in super::action_surface::DIMENSION_ACTIONS {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
             {
-                set_disabled(&button, true)?;
+                set_disabled(&button, false)?;
             }
         }
         for (key, _, _) in super::action_surface::FEATURE_ACTIONS {
@@ -2927,6 +2976,17 @@ pub(crate) mod wasm {
         }
         set_disabled(&required(document, "wb-offset-trigger")?, true)?;
         set_disabled(&required(document, "wb-geometry-role")?, false)?;
+        for id in [
+            "wb-authoring-curvature",
+            "wb-authoring-tangent-orientation",
+            "wb-authoring-continuity",
+            "wb-authoring-first-rate",
+            "wb-authoring-second-rate",
+            "wb-authoring-dimension-mode",
+            "wb-authoring-angle-orientation",
+        ] {
+            set_disabled(&required(document, id)?, false)?;
+        }
         for action in [
             "new",
             "copy-repro",
@@ -2965,33 +3025,49 @@ pub(crate) mod wasm {
             && wb.editor().editor().tool() != EditorTool::Select
     }
 
+    fn projectional_ordinary_authoring_active(wb: &ProjectionalWorkbench) -> bool {
+        wb.authoring.active_tool().is_some()
+    }
+
     fn render_projectional_authoring_status(
         document: &Document,
         wb: &ProjectionalWorkbench,
     ) -> Result<(), JsValue> {
         let editor = wb.editor().editor();
-        let active = projectional_geometry_authoring_active(wb);
+        let geometry_active = projectional_geometry_authoring_active(wb);
+        let ordinary_active = projectional_ordinary_authoring_active(wb);
+        let active = geometry_active || ordinary_active;
         set_hidden(&required(document, "wb-draft-guide")?, !active)?;
         let status = editor.geometry_draft_status();
-        required(document, "wb-draft-guide-text")?.set_text_content(Some(
-            &status.as_ref().map_or_else(
-                || "Select a geometry recipe".to_owned(),
-                super::geometry_palette::status_text,
-            ),
-        ));
+        let guide_text = wb.authoring.active_tool().map_or_else(
+            || {
+                status.as_ref().map_or_else(
+                    || "Select a geometry recipe".to_owned(),
+                    super::geometry_palette::status_text,
+                )
+            },
+            |tool| {
+                format!(
+                    "{} · {} pending · Escape clears/exits",
+                    authoring_tool_label(tool),
+                    wb.authoring.pending().len(),
+                )
+            },
+        );
+        required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
         let finish = required(document, "wb-guide-finish")?;
         let can_finish = editor.can_complete_draft();
-        set_hidden(&finish, !active || !can_finish)?;
+        set_hidden(&finish, ordinary_active || !geometry_active || !can_finish)?;
         set_disabled(&finish, !can_finish)?;
         if let Some(button) =
             document.query_selector(".wb-palette-terminal [data-wb-action=\"finish\"]")?
         {
-            set_disabled(&button, !can_finish)?;
+            set_disabled(&button, ordinary_active || !can_finish)?;
         }
 
         required(document, "wb-tool-select")?.set_attribute(
             "aria-pressed",
-            if editor.tool() == EditorTool::Select {
+            if editor.tool() == EditorTool::Select && !ordinary_active {
                 "true"
             } else {
                 "false"
@@ -3023,6 +3099,34 @@ pub(crate) mod wasm {
                 icon.set_inner_html(&super::icons::geometry_variant_icon_markup(selected));
             }
         }
+        for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
+            {
+                button.set_attribute(
+                    "aria-pressed",
+                    if wb.authoring.active_tool() == Some(AuthoringTool::Constraint(intent)) {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )?;
+            }
+        }
+        for (key, _, kind) in super::action_surface::DIMENSION_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
+            {
+                button.set_attribute(
+                    "aria-pressed",
+                    if wb.authoring.active_tool() == Some(AuthoringTool::Dimension(kind)) {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )?;
+            }
+        }
 
         let role = editor.authoring_geometry_role();
         let role_button = required(document, "wb-geometry-role")?;
@@ -3051,7 +3155,7 @@ pub(crate) mod wasm {
             "data-canvas-cursor",
             super::canvas_cursor_key_with_curve_control(
                 editor.tool(),
-                false,
+                ordinary_active,
                 false,
                 false,
                 false,
@@ -3083,6 +3187,21 @@ pub(crate) mod wasm {
                 super::OptionOverlayKind::GeometryFamily(family),
                 open,
             )?;
+        }
+        for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
+            let tool = AuthoringTool::Constraint(intent);
+            if let Some(kind) = super::OptionOverlayKind::for_authoring_tool(tool) {
+                set_option_invoker_expanded(
+                    document,
+                    &format!("wb-authoring-{key}-tool"),
+                    kind,
+                    open,
+                )?;
+            }
+        }
+        for (key, _, dimension) in super::action_surface::DIMENSION_ACTIONS {
+            let kind = super::OptionOverlayKind::Dimension(dimension);
+            set_option_invoker_expanded(document, &format!("wb-authoring-{key}-tool"), kind, open)?;
         }
         let family = match open {
             Some(super::OptionOverlayKind::GeometryFamily(family)) => Some(family),
@@ -3118,17 +3237,39 @@ pub(crate) mod wasm {
             &required(document, "wb-option-panel-geometry-family")?,
             family.is_none(),
         )?;
-        for id in [
-            "wb-option-panel-equal",
-            "wb-option-panel-tangent",
-            "wb-option-panel-continuity",
-            "wb-option-panel-dimension",
-            "wb-option-panel-fillet",
-            "wb-option-panel-offset",
-            "wb-option-panel-construction-display",
+        for (id, visible) in [
+            (
+                "wb-option-panel-equal",
+                open == Some(super::OptionOverlayKind::Equal),
+            ),
+            (
+                "wb-option-panel-tangent",
+                open == Some(super::OptionOverlayKind::Tangent),
+            ),
+            (
+                "wb-option-panel-continuity",
+                open == Some(super::OptionOverlayKind::Continuity),
+            ),
+            (
+                "wb-option-panel-dimension",
+                matches!(open, Some(super::OptionOverlayKind::Dimension(_))),
+            ),
+            ("wb-option-panel-fillet", false),
+            ("wb-option-panel-offset", false),
+            ("wb-option-panel-construction-display", false),
         ] {
-            set_hidden(&required(document, id)?, true)?;
+            set_hidden(&required(document, id)?, !visible)?;
         }
+        let c2 = open == Some(super::OptionOverlayKind::Continuity)
+            && select_value(document, "wb-authoring-continuity").as_deref() == Some("c2");
+        set_hidden(&required(document, "wb-authoring-first-rate-field")?, !c2)?;
+        set_hidden(&required(document, "wb-authoring-second-rate-field")?, !c2)?;
+        set_hidden(
+            &required(document, "wb-authoring-angle-orientation-field")?,
+            open != Some(super::OptionOverlayKind::Dimension(
+                DimensionKind::OrientedAngle,
+            )),
+        )?;
 
         let editor = wb.editor().editor();
         let conic_tool = selected
@@ -3325,6 +3466,12 @@ pub(crate) mod wasm {
             geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
         );
         let selection = wb.editor().editor().selection();
+        let pending = wb
+            .authoring
+            .pending()
+            .iter()
+            .map(|operand| operand.item)
+            .collect::<Vec<_>>();
         let hover = wb.editor().editor().hover_state();
         required(document, "wb-viewport")?.set_inner_html(
             &super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
@@ -3332,7 +3479,7 @@ pub(crate) mod wasm {
                 accepted,
                 &[],
                 selection,
-                &[],
+                &pending,
                 &[],
                 hover,
                 wb.construction_preview.as_ref(),
@@ -3447,6 +3594,160 @@ pub(crate) mod wasm {
         outcome
     }
 
+    fn projectional_authoring_document(wb: &ProjectionalWorkbench) -> Option<SketchDocument> {
+        wb.editor()
+            .coordinator()
+            .presentation_session()
+            .map(|session| session.design_document().clone())
+    }
+
+    fn reconcile_projectional_authoring(wb: &mut ProjectionalWorkbench) {
+        if wb.authoring.active_tool().is_none() {
+            return;
+        }
+        let Some(document) = projectional_authoring_document(wb) else {
+            wb.authoring.deactivate();
+            wb.option_overlay.close();
+            return;
+        };
+        let _ = wb.authoring.reconcile(&document);
+    }
+
+    fn apply_projectional_authoring_application(
+        wb: &mut ProjectionalWorkbench,
+        application: &AuthoringApplication,
+    ) -> bool {
+        let result = {
+            let ProjectionalWorkbench {
+                authority,
+                authoring,
+                ..
+            } = wb;
+            super::dispatch_projectional_authoring_application(
+                authority
+                    .projectional_mut()
+                    .expect("projectional adapter owns projectional authority"),
+                authoring,
+                application,
+            )
+        };
+        let repeated = wb.authoring.active_tool().is_some();
+        let committed = result.committed();
+        wb.notice = match result.disposition {
+            Some(geosolve_sketch_intent::IntentPlanDisposition::Accepted) if repeated => {
+                format!(
+                    "{} accepted; select the next operands",
+                    authoring_tool_label(application.tool),
+                )
+            }
+            Some(geosolve_sketch_intent::IntentPlanDisposition::Accepted) => {
+                format!("{} accepted", authoring_tool_label(application.tool))
+            }
+            Some(geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed) => format!(
+                "{} retained, but the solve rejected; prior accepted geometry remains",
+                authoring_tool_label(application.tool),
+            ),
+            Some(geosolve_sketch_intent::IntentPlanDisposition::OrganizationOnly) => {
+                "Authoring produced an unexpected organization-only transaction".into()
+            }
+            None => result.error.unwrap_or_else(|| {
+                "The relation or dimension application was rejected before publication".into()
+            }),
+        };
+        committed
+    }
+
+    fn handle_projectional_authoring_outcome(
+        wb: &mut ProjectionalWorkbench,
+        outcome: AuthoringOutcome,
+    ) -> bool {
+        match outcome {
+            AuthoringOutcome::Apply(application) => {
+                apply_projectional_authoring_application(wb, &application)
+            }
+            AuthoringOutcome::ModeEntered { tool, expected } => {
+                wb.notice = format!(
+                    "{} mode: select {} · Escape exits",
+                    authoring_tool_label(tool),
+                    expected_labels(&expected),
+                );
+                false
+            }
+            AuthoringOutcome::Collecting {
+                tool,
+                operands,
+                expected,
+            } => {
+                wb.notice = format!(
+                    "{}: {} operand{} ready; select {}",
+                    authoring_tool_label(tool),
+                    operands.len(),
+                    if operands.len() == 1 { "" } else { "s" },
+                    expected_labels(&expected),
+                );
+                false
+            }
+            AuthoringOutcome::Warning(warning) => {
+                wb.notice = warning.message;
+                false
+            }
+            AuthoringOutcome::PendingCleared { tool, expected } => {
+                wb.notice = format!(
+                    "{} operands cleared; select {} or Escape again to exit",
+                    authoring_tool_label(tool),
+                    expected_labels(&expected),
+                );
+                false
+            }
+            AuthoringOutcome::ModeExited => {
+                wb.notice = "Constraint authoring exited; Select active".into();
+                false
+            }
+            AuthoringOutcome::Inactive => false,
+        }
+    }
+
+    fn activate_projectional_authoring(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+        tool: AuthoringTool,
+    ) -> bool {
+        if let Err(error) = update_authoring_options_for_tool(document, &mut wb.authoring, tool) {
+            wb.notice = error;
+            return false;
+        }
+        let Some(accepted) = projectional_authoring_document(wb) else {
+            wb.notice = "Relation authoring requires a current accepted projectional scene".into();
+            return false;
+        };
+        let snapshot = wb
+            .editor()
+            .editor()
+            .selection()
+            .iter()
+            .copied()
+            .map(|item| {
+                let parameter = match item {
+                    SelectionItem::Curve(span) => wb.editor().editor().curve_pick_parameter(span),
+                    SelectionItem::Point(_)
+                    | SelectionItem::Constraint(_)
+                    | SelectionItem::Dimension(_)
+                    | SelectionItem::Datum(_)
+                    | SelectionItem::Feature(_)
+                    | SelectionItem::FeatureCorner(_) => None,
+                };
+                AuthoringOperand::picked(item, parameter)
+            })
+            .collect::<Vec<_>>();
+        let outcome = wb.authoring.activate(&accepted, tool, &snapshot);
+        let effects = wb
+            .editor_mut()
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        let _ = dispatch_projectional_effects(wb, effects);
+        handle_projectional_authoring_outcome(wb, outcome)
+    }
+
     fn cancel_projectional_interaction(
         viewport: &Element,
         wb: &mut ProjectionalWorkbench,
@@ -3499,7 +3800,16 @@ pub(crate) mod wasm {
                     wb.notice = "Projectional pointer preview has no accepted scene".into();
                     return;
                 };
-                if projectional_geometry_authoring_active(&wb) {
+                if projectional_ordinary_authoring_active(&wb) {
+                    let authoring = wb.authoring.clone();
+                    let effects = wb.editor_mut().pointer_move_authoring(
+                        &authoring,
+                        &scene,
+                        sample.input,
+                        PickTolerance::default(),
+                    );
+                    let _ = dispatch_projectional_effects(&mut wb, effects);
+                } else if projectional_geometry_authoring_active(&wb) {
                     let effects = wb
                         .editor_mut()
                         .editor_mut()
@@ -3554,6 +3864,39 @@ pub(crate) mod wasm {
             };
             event.prevent_default();
             wb.pointer_moves.borrow_mut().invalidate();
+            if projectional_ordinary_authoring_active(&wb) {
+                let Some(document) = projectional_authoring_document(&wb) else {
+                    wb.notice =
+                        "Relation authoring requires a current accepted projectional scene".into();
+                    drop(wb);
+                    let _ = present_projectional_pointer_event(
+                        &down_document,
+                        &down_workbench,
+                        super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                    );
+                    return;
+                };
+                let policy = wb.editor().editor().geometry_interaction_policy();
+                let outcome = wb.authoring.pick_at_with_policy(
+                    &document,
+                    &scene,
+                    input.position,
+                    PickTolerance::default(),
+                    policy,
+                );
+                let committed = handle_projectional_authoring_outcome(&mut wb, outcome);
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &down_document,
+                    &down_workbench,
+                    if committed {
+                        super::WorkbenchPresentationEvent::PointerRelease
+                    } else {
+                        super::WorkbenchPresentationEvent::PointerMoveFrame
+                    },
+                );
+                return;
+            }
             if projectional_geometry_authoring_active(&wb) {
                 let sample = wb
                     .pointer_moves
@@ -3972,6 +4315,7 @@ pub(crate) mod wasm {
             },
             Err(error) => error.to_string(),
         };
+        reconcile_projectional_authoring(wb);
     }
 
     fn parse_intent_node(element: &Element) -> Option<NodeId> {
@@ -3996,7 +4340,8 @@ pub(crate) mod wasm {
             let target = origin
                 .closest(concat!(
                     "[data-wb-tool], [data-wb-geometry-family], ",
-                    "[data-wb-geometry-variant], [data-wb-action]"
+                    "[data-wb-geometry-variant], [data-wb-authoring], ",
+                    "[data-editor-item], [data-wb-action]"
                 ))
                 .ok()
                 .flatten()
@@ -4013,6 +4358,7 @@ pub(crate) mod wasm {
                         "Geometry authoring canceled",
                     );
                 }
+                wb.authoring.deactivate();
                 wb.option_overlay.close();
                 let effects = wb
                     .editor_mut()
@@ -4040,6 +4386,7 @@ pub(crate) mod wasm {
                     );
                 }
                 let variant = wb.geometry_palette.selected(family);
+                wb.authoring.deactivate();
                 wb.option_overlay
                     .open(super::OptionOverlayKind::GeometryFamily(family));
                 match update_construction_options_for_variant(
@@ -4079,6 +4426,7 @@ pub(crate) mod wasm {
                         "Active interaction canceled before changing geometry variants",
                     );
                 }
+                wb.authoring.deactivate();
                 wb.geometry_palette.remember(variant);
                 wb.option_overlay
                     .open(super::OptionOverlayKind::GeometryFamily(variant.family()));
@@ -4101,6 +4449,85 @@ pub(crate) mod wasm {
                 drop(wb);
                 let _ = render_projectional(&click_document, &click_workbench);
                 focus_by_id(&click_document, &focus);
+                return;
+            }
+            if let Some(tool) = target
+                .get_attribute("data-wb-authoring")
+                .and_then(|key| super::action_surface::authoring_tool_from_key(&key))
+            {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before relation authoring",
+                    );
+                }
+                if let Some(kind) = super::OptionOverlayKind::for_authoring_tool(tool) {
+                    wb.option_overlay.open(kind);
+                } else {
+                    wb.option_overlay.close();
+                }
+                let committed = activate_projectional_authoring(&click_document, &mut wb, tool);
+                if committed {
+                    save_projectional(&wb);
+                }
+                let focus = super::OptionOverlayKind::for_authoring_tool(tool)
+                    .map(|kind| kind.first_control_id().to_owned());
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                if let Some(focus) = focus {
+                    focus_by_id(&click_document, &focus);
+                }
+                return;
+            }
+            if target.has_attribute("data-editor-item")
+                && let Some(item) = selection_item(&target)
+            {
+                let is_canvas_item = target
+                    .closest("#wb-viewport")
+                    .is_ok_and(|viewport| viewport.is_some());
+                let is_pointer_click = event
+                    .dyn_ref::<MouseEvent>()
+                    .is_some_and(|event| event.detail() > 0);
+                let mut wb = click_workbench.borrow_mut();
+                if projectional_ordinary_authoring_active(&wb) {
+                    let input = if is_canvas_item {
+                        super::AuthoringItemInput::CanvasClick
+                    } else {
+                        super::AuthoringItemInput::TreeClick
+                    };
+                    if super::owns_authoring_pick(input)
+                        && let Some(document) = projectional_authoring_document(&wb)
+                    {
+                        let outcome = wb
+                            .authoring
+                            .pick(&document, AuthoringOperand::selected(item));
+                        let committed = handle_projectional_authoring_outcome(&mut wb, outcome);
+                        if committed {
+                            save_projectional(&wb);
+                        }
+                        drop(wb);
+                        let _ = render_projectional(&click_document, &click_workbench);
+                    }
+                    return;
+                }
+                if !is_canvas_item || !is_pointer_click {
+                    let modifiers = event
+                        .dyn_ref::<MouseEvent>()
+                        .map(|event| Modifiers {
+                            shift: event.shift_key(),
+                            control: event.ctrl_key(),
+                            command: event.meta_key(),
+                        })
+                        .unwrap_or_default();
+                    wb.editor_mut().select_item(item, modifiers);
+                    wb.notice = "Sketch item selected".into();
+                    drop(wb);
+                    let _ = render_projectional(&click_document, &click_workbench);
+                }
                 return;
             }
 
@@ -4175,6 +4602,7 @@ pub(crate) mod wasm {
                         |error| error.to_string(),
                         |_| "Design declaration and dependent closure deleted".into(),
                     );
+                    reconcile_projectional_authoring(&mut wb);
                     durable = true;
                 }
                 Some("finish") => {
@@ -4192,18 +4620,34 @@ pub(crate) mod wasm {
                 }
                 Some("cancel") => {
                     wb.pointer_moves.borrow_mut().invalidate();
-                    let effects = wb.editor_mut().editor_mut().escape_geometry_tool();
-                    let _ = dispatch_projectional_effects(&mut wb, effects);
-                    if wb.editor().editor().tool() == EditorTool::Select {
-                        wb.option_overlay.close();
-                        wb.notice = "Select active".into();
+                    if projectional_ordinary_authoring_active(&wb) {
+                        if let Some(document) = projectional_authoring_document(&wb) {
+                            let outcome = wb.authoring.cancel(&document);
+                            let exited = matches!(outcome, AuthoringOutcome::ModeExited);
+                            let _ = handle_projectional_authoring_outcome(&mut wb, outcome);
+                            if exited {
+                                wb.option_overlay.close();
+                            }
+                        } else {
+                            wb.authoring.deactivate();
+                            wb.option_overlay.close();
+                            wb.notice = "Constraint authoring exited; Select active".into();
+                        }
                     } else {
-                        wb.notice =
-                            "Current shape canceled; geometry variant remains active".into();
+                        let effects = wb.editor_mut().editor_mut().escape_geometry_tool();
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
+                        if wb.editor().editor().tool() == EditorTool::Select {
+                            wb.option_overlay.close();
+                            wb.notice = "Select active".into();
+                        } else {
+                            wb.notice =
+                                "Current shape canceled; geometry variant remains active".into();
+                        }
                     }
                 }
                 Some("options-close") => {
                     wb.pointer_moves.borrow_mut().invalidate();
+                    wb.authoring.deactivate();
                     let effects = wb
                         .editor_mut()
                         .editor_mut()
@@ -4254,23 +4698,57 @@ pub(crate) mod wasm {
                 .is_ok_and(|owner| owner.is_some())
             {
                 let mut wb = change_workbench.borrow_mut();
-                let Some(variant) = wb.editor().editor().geometry_tool_variant() else {
-                    return;
-                };
-                wb.notice = update_construction_options_for_variant(
-                    &change_document,
-                    wb.editor_mut().editor_mut(),
-                    variant,
-                )
-                .map_or_else(
-                    |error| error,
-                    |()| {
-                        format!(
-                            "{} options updated",
-                            super::geometry_palette::variant_label(variant),
+                let result = match wb.option_overlay.open {
+                    Some(super::OptionOverlayKind::GeometryFamily(family)) => {
+                        let variant = wb.geometry_palette.selected(family);
+                        update_construction_options_for_variant(
+                            &change_document,
+                            wb.editor_mut().editor_mut(),
+                            variant,
                         )
-                    },
-                );
+                        .map(|()| {
+                            format!(
+                                "{} options updated",
+                                super::geometry_palette::variant_label(variant),
+                            )
+                        })
+                    }
+                    Some(super::OptionOverlayKind::Equal) => update_authoring_options_for_tool(
+                        &change_document,
+                        &mut wb.authoring,
+                        AuthoringTool::Constraint(ConstraintIntent::Equal),
+                    )
+                    .map(|()| "Equal options updated".to_owned()),
+                    Some(super::OptionOverlayKind::Tangent) => update_authoring_options_for_tool(
+                        &change_document,
+                        &mut wb.authoring,
+                        AuthoringTool::Constraint(ConstraintIntent::Tangent),
+                    )
+                    .map(|()| "Tangent options updated".to_owned()),
+                    Some(super::OptionOverlayKind::Continuity) => {
+                        update_authoring_options_for_tool(
+                            &change_document,
+                            &mut wb.authoring,
+                            AuthoringTool::Constraint(ConstraintIntent::Continuity),
+                        )
+                        .map(|()| "Continuity options updated".to_owned())
+                    }
+                    Some(super::OptionOverlayKind::Dimension(kind)) => {
+                        update_authoring_options_for_tool(
+                            &change_document,
+                            &mut wb.authoring,
+                            AuthoringTool::Dimension(kind),
+                        )
+                        .map(|()| "Dimension options updated".to_owned())
+                    }
+                    Some(
+                        super::OptionOverlayKind::Fillet
+                        | super::OptionOverlayKind::Offset
+                        | super::OptionOverlayKind::ConstructionDisplay,
+                    ) => Err("This projectional tool is not active yet".to_owned()),
+                    None => Ok("Tool options closed".to_owned()),
+                };
+                wb.notice = result.unwrap_or_else(|error| error);
                 drop(wb);
                 let _ = render_projectional(&change_document, &change_workbench);
                 return;
@@ -4562,14 +5040,29 @@ pub(crate) mod wasm {
                     );
                 } else {
                     wb.pointer_moves.borrow_mut().invalidate();
-                    let effects = wb.editor_mut().editor_mut().escape_geometry_tool();
-                    let _ = dispatch_projectional_effects(&mut wb, effects);
-                    if wb.editor().editor().tool() == EditorTool::Select {
-                        wb.option_overlay.close();
-                        wb.notice = "Select active".into();
+                    if projectional_ordinary_authoring_active(&wb) {
+                        if let Some(document) = projectional_authoring_document(&wb) {
+                            let outcome = wb.authoring.cancel(&document);
+                            let exited = matches!(outcome, AuthoringOutcome::ModeExited);
+                            let _ = handle_projectional_authoring_outcome(&mut wb, outcome);
+                            if exited {
+                                wb.option_overlay.close();
+                            }
+                        } else {
+                            wb.authoring.deactivate();
+                            wb.option_overlay.close();
+                            wb.notice = "Constraint authoring exited; Select active".into();
+                        }
                     } else {
-                        wb.notice =
-                            "Current shape canceled; geometry variant remains active".into();
+                        let effects = wb.editor_mut().editor_mut().escape_geometry_tool();
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
+                        if wb.editor().editor().tool() == EditorTool::Select {
+                            wb.option_overlay.close();
+                            wb.notice = "Select active".into();
+                        } else {
+                            wb.notice =
+                                "Current shape canceled; geometry variant remains active".into();
+                        }
                     }
                 }
                 drop(wb);
@@ -11028,31 +11521,32 @@ mod tests {
     use geosolve_constraint_editor::{
         ActivePointerGesture, ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome,
         AuthoringState, AuthoringTool, ColdIntentMaterializer, ComputedSceneState,
-        ConstraintEditor, ConstraintIntent, DraftInferenceCandidateId, DraftInferenceCompleteness,
-        DraftInferenceResolution, DraftInferenceStatus, EditorHoverState, EditorHoverTarget,
-        EditorProblemScope, EditorScene, EditorTool, FeatureAuthoringCandidate,
-        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPreviewMetadata,
-        FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool, GeometryDraftBranch,
-        GeometryDraftStage, GeometryDraftStatus, GeometryInteractionPolicy, GeometryPickScope,
-        GeometryToolVariant, GeometryVisibility, Modifiers, OffsetAuthoringOutcome,
-        OffsetAuthoringState, OffsetAuthoringWarning, OffsetAuthoringWarningKind, PickTolerance,
-        PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator,
-        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
-        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneConstraintGlyph,
-        SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
+        ConstraintEditor, ConstraintIntent, DimensionKind, DraftInferenceCandidateId,
+        DraftInferenceCompleteness, DraftInferenceResolution, DraftInferenceStatus,
+        EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene, EditorTool,
+        FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        FeatureAuthoringPreviewMetadata, FeatureAuthoringStage, FeatureAuthoringState,
+        FeatureAuthoringTool, GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus,
+        GeometryInteractionPolicy, GeometryPickScope, GeometryToolVariant, GeometryVisibility,
+        Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
+        OffsetAuthoringWarningKind, PickTolerance, PointerInput, ProjectionalEditorSession,
+        ProjectionalIntentCoordinator, RetainedEditorCoordinator, SceneAnnotationGeometry,
+        SceneAnnotationKind, SceneAnnotationOccurrence, SceneAnnotationVisibility,
+        SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep, DocumentBSplineForm,
-        DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionDefinition,
-        DocumentDimensionMode, DocumentEdit, DocumentId, DocumentSolveRequest, GeometryRole,
-        MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PersistentId, RetainedSketchDocumentSession,
-        ScalarDomain, ScalarUnit, SketchAcceptedStateIdentity, SketchDocument,
+        ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DesignPointId,
+        DocumentArcSweep, DocumentBSplineForm, DocumentConstraintDefinition,
+        DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit,
+        DocumentId, DocumentSolveRequest, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+        PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+        SketchAcceptedStateIdentity, SketchDocument,
     };
     use geosolve_sketch_intent::{
         GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-        IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector,
-        IntentSessionId, IntentUnit, LeafField,
+        IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
+        IntentPortSelector, IntentSessionId, IntentUnit, LeafField,
     };
 
     use super::persistence::WorkspaceSnapshot;
@@ -11072,18 +11566,18 @@ mod tests {
         canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
         compose_editor_scene, coordinate_hud, current_problem_items,
         curve_control_inspector_detail, curve_control_inspector_markup,
-        dispatch_projectional_construction_effects, draft_inference_preference_is_stale,
-        feature_apply_returns_focus_to_select, foreground_overlay_escape_owner,
-        geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
-        native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
-        offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
-        offset_target_for_selection, owns_authoring_pick, projectional_design_markup,
-        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
-        reproduction_focus_target_after_action, reproduction_overlay_presentation,
-        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
-        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
-        should_route_stationary_draft_inference,
+        dispatch_projectional_authoring_application, dispatch_projectional_construction_effects,
+        draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
+        foreground_overlay_escape_owner, geometry_sweep_flip_available,
+        geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
+        observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
+        offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
+        owns_authoring_pick, projectional_design_markup, rational_conic_construction_copy,
+        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
 
     #[test]
@@ -11171,6 +11665,58 @@ mod tests {
             WorkbenchDocumentAuthority::from_snapshot(&decoded).unwrap(),
             node,
         )
+    }
+
+    fn projectional_authoring_fixture() -> ProjectionalEditorSession {
+        let document = DocumentId(PersistentId::from_u128(0x8308_2001_u128 << 64));
+        let mut coordinator = ProjectionalIntentCoordinator::empty(
+            IntentSessionId::from_raw(0x8308_2001),
+            ColdIntentMaterializer::with_default_policy(document, 1.0).unwrap(),
+        )
+        .unwrap();
+        let selector = |role| IntentPortSelector::Node { role, index: 0 };
+        let length = |value| IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Length,
+        };
+        let point = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            IntentKey::new("contact point").unwrap(),
+        )
+        .with_instance_leaf(selector(IntentPortRole::Primary), LeafField::X, length(1.0))
+        .with_instance_leaf(selector(IntentPortRole::Primary), LeafField::Y, length(2.0));
+        let segment = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            IntentKey::new("edge").unwrap(),
+        )
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::X, length(0.0))
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::Y, length(0.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(4.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(0.0));
+        let outcome = coordinator
+            .apply_patch(IntentPatch::new(
+                coordinator.intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![
+                    IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new("point").unwrap(),
+                        draft: Box::new(point),
+                        cell: None,
+                    },
+                    IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new("edge").unwrap(),
+                        draft: Box::new(segment),
+                        cell: None,
+                    },
+                ],
+            ))
+            .unwrap();
+        assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+        ProjectionalEditorSession::new(coordinator)
     }
 
     fn run_projectional_test_with_large_stack(name: &str, test: impl FnOnce() + Send + 'static) {
@@ -11363,6 +11909,302 @@ mod tests {
             assert_eq!(
                 design.geometry_role(design.curves()[0].id),
                 Some(GeometryRole::Construction)
+            );
+        });
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one browser-boundary regression keeps collection, exact hover/pick metadata, terminal publication and retained native output together"
+    )]
+    fn projectional_browser_relation_collection_preserves_exact_pick_and_repeated_history() {
+        run_projectional_test_with_large_stack("projectional-browser-relation-authoring", || {
+            let mut editor = projectional_authoring_fixture();
+            let viewport = test_viewport();
+            let document = editor
+                .coordinator()
+                .presentation_session()
+                .unwrap()
+                .design_document()
+                .clone();
+            let point = document.points()[0].id;
+            let span = document.curve_spans(document.curves()[0].id).unwrap()[0];
+            let mut authoring = AuthoringState::default();
+            assert!(matches!(
+                authoring.activate(
+                    &document,
+                    AuthoringTool::Constraint(ConstraintIntent::Coincident),
+                    &[],
+                ),
+                AuthoringOutcome::ModeEntered { .. }
+            ));
+            let history_before = editor
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+            let scene = editor.scene(viewport, 0.5).unwrap();
+            let point_position = scene.viewport.model_to_screen([1.0, 2.0]);
+            assert!(matches!(
+                authoring.pick_at_with_policy(
+                    &document,
+                    &scene,
+                    point_position,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                ),
+                AuthoringOutcome::Collecting { .. }
+            ));
+            assert_eq!(authoring.pending()[0].item, SelectionItem::Point(point));
+
+            let picked_parameter = 0.75;
+            let curve_position = scene
+                .viewport
+                .model_to_screen([4.0 * picked_parameter, 0.0]);
+            let hover_effects = editor.pointer_move_authoring(
+                &authoring,
+                &scene,
+                PointerInput {
+                    pointer_id: 832,
+                    position: curve_position,
+                    modifiers: Modifiers::default(),
+                },
+                PickTolerance::default(),
+            );
+            assert!(!hover_effects.is_empty());
+            assert_eq!(editor.editor().hovered(), Some(SelectionItem::Curve(span)));
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before,
+                "an authoring hover frame must not serialize intent",
+            );
+
+            let application = match authoring.pick_at_with_policy(
+                &document,
+                &scene,
+                curve_position,
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ) {
+                AuthoringOutcome::Apply(application) => application,
+                outcome => panic!("expected a complete point/curve application, got {outcome:?}"),
+            };
+            assert_eq!(application.operands[1].item, SelectionItem::Curve(span));
+            assert!(
+                (application.operands[1].curve_parameter.unwrap() - picked_parameter).abs()
+                    <= f64::EPSILON
+            );
+            let dispatch = dispatch_projectional_authoring_application(
+                &mut editor,
+                &mut authoring,
+                &application,
+            );
+            assert_eq!(dispatch.disposition, Some(IntentPlanDisposition::Accepted));
+            assert!(dispatch.error.is_none());
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before + 1,
+            );
+            assert_eq!(
+                authoring.active_tool(),
+                Some(AuthoringTool::Constraint(ConstraintIntent::Coincident)),
+            );
+            assert!(authoring.pending().is_empty());
+
+            let accepted = editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .session
+                .design_document();
+            let DocumentConstraintDefinition::PointOnCurve {
+                point: actual,
+                contact,
+            } = accepted.constraints()[0].definition
+            else {
+                panic!("browser point/curve application must lower to point-on-curve");
+            };
+            assert_eq!(actual, point);
+            let contact = accepted.contact(contact).unwrap();
+            assert_eq!(contact.curve, span);
+            assert_eq!(
+                contact.domain,
+                ContactDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                }
+            );
+            assert_eq!(contact.neighborhood, ContactNeighborhood::Interior);
+        });
+    }
+
+    #[test]
+    fn projectional_browser_dimension_application_uses_accepted_measurement_once() {
+        run_projectional_test_with_large_stack("projectional-browser-dimension-authoring", || {
+            let mut editor = projectional_authoring_fixture();
+            let document = editor
+                .coordinator()
+                .presentation_session()
+                .unwrap()
+                .design_document()
+                .clone();
+            let span = document.curve_spans(document.curves()[0].id).unwrap()[0];
+            let mut authoring = AuthoringState::default();
+            let mut options = authoring.options();
+            options.dimension_mode = DocumentDimensionMode::Reference;
+            authoring.set_options(options);
+            let outcome = authoring.activate(
+                &document,
+                AuthoringTool::Dimension(DimensionKind::SegmentLength),
+                &[AuthoringOperand::picked(
+                    SelectionItem::Curve(span),
+                    Some(0.625),
+                )],
+            );
+            let AuthoringOutcome::Apply(application) = outcome else {
+                panic!("a selected segment must complete length authoring");
+            };
+            let history_before = editor
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+            let dispatch = dispatch_projectional_authoring_application(
+                &mut editor,
+                &mut authoring,
+                &application,
+            );
+            assert_eq!(dispatch.disposition, Some(IntentPlanDisposition::Accepted));
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before + 1,
+            );
+            let accepted = editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .session
+                .design_document();
+            assert_eq!(accepted.dimensions().len(), 1);
+            assert_eq!(
+                accepted.dimensions()[0].mode,
+                DocumentDimensionMode::Reference
+            );
+            let DocumentDimensionDefinition::CurveLength { curve, target } =
+                accepted.dimensions()[0].definition
+            else {
+                panic!("segment length authoring must retain a curve-length dimension");
+            };
+            assert_eq!(curve, span);
+            assert_eq!(
+                accepted.scalar(target).unwrap().value.to_bits(),
+                4.0_f64.to_bits(),
+                "the target comes from the accepted native scene measurement",
+            );
+        });
+    }
+
+    #[test]
+    fn projectional_browser_retained_invalid_relation_is_a_single_durable_terminal() {
+        run_projectional_test_with_large_stack("projectional-browser-retained-relation", || {
+            let mut editor = projectional_authoring_fixture();
+            let document = editor
+                .coordinator()
+                .presentation_session()
+                .unwrap()
+                .design_document()
+                .clone();
+            let span = document.curve_spans(document.curves()[0].id).unwrap()[0];
+            let CurveDefinition::Line { start, end, .. } =
+                document.curve(span.curve).unwrap().definition
+            else {
+                panic!("fixture curve must be a line");
+            };
+            let mut authoring = AuthoringState::default();
+            for point in [start, end] {
+                let AuthoringOutcome::Apply(application) = authoring.activate(
+                    &document,
+                    AuthoringTool::Constraint(ConstraintIntent::Lock),
+                    &[AuthoringOperand::selected(SelectionItem::Point(point))],
+                ) else {
+                    panic!("fixture endpoint must accept Lock");
+                };
+                assert_eq!(
+                    dispatch_projectional_authoring_application(
+                        &mut editor,
+                        &mut authoring,
+                        &application,
+                    )
+                    .disposition,
+                    Some(IntentPlanDisposition::Accepted),
+                );
+            }
+            let accepted_before = editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .session
+                .design_document()
+                .clone();
+            let history_before = editor
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+            let AuthoringOutcome::Apply(application) = authoring.activate(
+                &accepted_before,
+                AuthoringTool::Constraint(ConstraintIntent::Vertical),
+                &[AuthoringOperand::selected(SelectionItem::Curve(span))],
+            ) else {
+                panic!("the explicit vertical relation is applicable before solving");
+            };
+            let dispatch = dispatch_projectional_authoring_application(
+                &mut editor,
+                &mut authoring,
+                &application,
+            );
+            assert!(dispatch.committed());
+            assert_eq!(
+                dispatch.disposition,
+                Some(IntentPlanDisposition::RetainedFailed)
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before + 1,
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+                    .session
+                    .design_document(),
+                &accepted_before,
+                "retained invalid intent must not replace accepted browser geometry",
             );
         });
     }
