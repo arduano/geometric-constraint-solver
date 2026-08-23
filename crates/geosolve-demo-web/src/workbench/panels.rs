@@ -68,7 +68,8 @@ pub(crate) fn lineage_history_markup(
             "<div class=\"wb-lineage-history-position\" ",
             "aria-label=\"Undo history position {position} of {history_len}; ",
             "Undo {undo_availability}; Redo {redo_availability}\">",
-            "History <strong>{position} / {history_len}</strong>",
+            "<span class=\"wb-lineage-history-cursor\">",
+            "History <strong>{position} / {history_len}</strong></span>",
             "<span data-available=\"{can_undo}\">Undo {undo_mark}</span>",
             "<span data-available=\"{can_redo}\">Redo {redo_mark}</span>",
             "</div>"
@@ -850,6 +851,9 @@ mod tests {
         assert!(history.contains("History <strong>2 / 4</strong>"));
         assert!(history.contains("data-available=\"true\">Undo"));
         assert!(history.contains("data-available=\"true\">Redo"));
+        let bounded_history = lineage_history_markup(1_024, 2_049, true, true);
+        assert!(bounded_history.contains("History <strong>1025 / 2049</strong>"));
+        assert!(bounded_history.contains("class=\"wb-lineage-history-cursor\""));
         assert!(markup.contains("Point &lt;script&gt; &amp; guide"));
         assert!(markup.contains(
             "data-lineage-schema=\"geosolve.geometry.v1.sketch-point&quot;&lt;unsafe&gt;\""
