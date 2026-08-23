@@ -55,7 +55,7 @@ impl ProjectionalEditorSession {
         Self::with_editor_and_control(
             coordinator,
             ConstraintEditor::default(),
-            OperationControl::unlimited(),
+            crate::coordinator::bounded_geometry_control(),
         )
     }
 
