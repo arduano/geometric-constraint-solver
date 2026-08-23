@@ -324,6 +324,23 @@ pub(crate) fn tree_markup_with_features(
     output
 }
 
+/// Sketch-tree projection for a projectional workspace whose accepted native
+/// document was cold-reconstructed by the editor authority. Computed features
+/// are intentionally absent until their declaration lowering is authenticated.
+pub(crate) fn projectional_tree_markup(
+    document: &SketchDocument,
+    constraint_entries: &[SceneConstraintEntry],
+    selection: &[SelectionItem],
+) -> String {
+    tree_markup_with_pending_and_implicit(
+        document,
+        constraint_entries,
+        selection,
+        &[],
+        &BTreeSet::new(),
+    )
+}
+
 fn group_label(output: &mut String, label: &str, count: usize) {
     let _ = write!(
         output,

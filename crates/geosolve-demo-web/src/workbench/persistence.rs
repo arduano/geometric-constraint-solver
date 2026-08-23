@@ -903,6 +903,10 @@ impl WorkspaceSnapshot {
             .map_err(|error| error.to_string())
     }
 
+    #[allow(
+        dead_code,
+        reason = "consumed by the pending per-object legacy normalization activation slice"
+    )]
     pub(crate) fn legacy_bootstrap(&self) -> Option<WorkspaceLegacyBootstrap<'_>> {
         let WorkspaceSnapshotOrigin::LegacyBootstrap { source_version } = self.origin else {
             return None;

@@ -132,6 +132,164 @@ impl WorkbenchRenderScope {
     }
 }
 
+/// Exactly one durable document/history authority installed in the workbench.
+///
+/// Flat v1-v6 workspaces and samples retain the accepted M81 coordinator. A
+/// canonical v8 workspace installs only the projectional editor session whose
+/// native materialization was independently cold-authenticated.
+#[cfg(any(target_arch = "wasm32", test))]
+enum WorkbenchDocumentAuthority {
+    Flat(Box<geosolve_constraint_editor::RetainedEditorCoordinator>),
+    Projectional(Box<geosolve_constraint_editor::ProjectionalEditorSession>),
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl WorkbenchDocumentAuthority {
+    fn from_snapshot(snapshot: &persistence::WorkspaceSnapshot) -> Result<Self, String> {
+        if snapshot.intent_session()?.is_some() {
+            persistence::projectional_editor_from_snapshot(snapshot)
+                .map(Box::new)
+                .map(Self::Projectional)
+        } else {
+            persistence::coordinator_from_snapshot(snapshot)
+                .map(Box::new)
+                .map(Self::Flat)
+        }
+    }
+
+    #[cfg_attr(test, allow(dead_code, reason = "used by the WASM startup adapter"))]
+    fn flat(coordinator: geosolve_constraint_editor::RetainedEditorCoordinator) -> Self {
+        Self::Flat(Box::new(coordinator))
+    }
+
+    const fn is_projectional(&self) -> bool {
+        matches!(self, Self::Projectional(_))
+    }
+
+    const fn flat_ref(&self) -> Option<&geosolve_constraint_editor::RetainedEditorCoordinator> {
+        match self {
+            Self::Flat(coordinator) => Some(coordinator),
+            Self::Projectional(_) => None,
+        }
+    }
+
+    fn projectional_mut(
+        &mut self,
+    ) -> Option<&mut geosolve_constraint_editor::ProjectionalEditorSession> {
+        match self {
+            Self::Flat(_) => None,
+            Self::Projectional(projectional) => Some(projectional),
+        }
+    }
+
+    const fn projectional_ref(
+        &self,
+    ) -> Option<&geosolve_constraint_editor::ProjectionalEditorSession> {
+        match self {
+            Self::Flat(_) => None,
+            Self::Projectional(projectional) => Some(projectional),
+        }
+    }
+
+    fn snapshot(&self) -> Result<persistence::WorkspaceSnapshot, String> {
+        match self {
+            Self::Flat(coordinator) => {
+                persistence::WorkspaceSnapshot::from_coordinator(coordinator)
+            }
+            Self::Projectional(projectional) => {
+                persistence::WorkspaceSnapshot::from_projectional_editor(projectional)
+            }
+        }
+    }
+
+    fn scene(
+        &self,
+        viewport: geosolve_constraint_editor::Viewport,
+        chord_tolerance_pixels: f64,
+    ) -> Option<geosolve_constraint_editor::EditorScene> {
+        match self {
+            Self::Flat(coordinator) => {
+                compose_editor_scene(coordinator, viewport, chord_tolerance_pixels)
+            }
+            Self::Projectional(projectional) => {
+                projectional.scene(viewport, chord_tolerance_pixels).ok()
+            }
+        }
+    }
+
+    fn step_history(&mut self, undo: bool) -> Result<bool, String> {
+        match self {
+            Self::Flat(coordinator) => if undo {
+                coordinator.undo()
+            } else {
+                coordinator.redo()
+            }
+            .map(|()| true)
+            .map_err(|error| error.to_string()),
+            Self::Projectional(projectional) => if undo {
+                projectional.undo()
+            } else {
+                projectional.redo()
+            }
+            .map(|moved| moved.is_some())
+            .map_err(|error| error.to_string()),
+        }
+    }
+}
+
+/// The established flat workbench remains intentionally unchanged behind its
+/// own listener installation. Dereferencing is therefore available only to
+/// that flat-only adapter; projectional startup installs a disjoint event path.
+#[cfg(target_arch = "wasm32")]
+impl std::ops::Deref for WorkbenchDocumentAuthority {
+    type Target = geosolve_constraint_editor::RetainedEditorCoordinator;
+
+    fn deref(&self) -> &Self::Target {
+        self.flat_ref()
+            .expect("flat-only workbench adapter received projectional authority")
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::ops::DerefMut for WorkbenchDocumentAuthority {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Self::Flat(coordinator) => coordinator,
+            Self::Projectional(_) => {
+                panic!("flat-only workbench adapter received projectional authority")
+            }
+        }
+    }
+}
+
+/// Browser-ready markup derived only from editor-owned projection DTOs.
+#[cfg(any(target_arch = "wasm32", test))]
+struct ProjectionalDesignMarkup {
+    declaration_count: usize,
+    outline: String,
+    source: String,
+    history: String,
+    inspector: String,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_design_markup(
+    projectional: &geosolve_constraint_editor::ProjectionalEditorSession,
+) -> ProjectionalDesignMarkup {
+    let projection = projectional.workbench_projection();
+    let selection = projectional
+        .selected_declaration()
+        .map(|node| design_projection::DesignProjectionSelection { node });
+    let inspector = projectional.selected_inspector(&projection);
+    ProjectionalDesignMarkup {
+        declaration_count: design_projection::declaration_count(&projection),
+        outline: design_projection::outline_markup(&projection, selection),
+        source: design_projection::structured_source_markup(&projection, selection),
+        history: design_projection::history_markup(&projection),
+        inspector: design_projection::inspector_markup(inspector.as_ref()),
+    }
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct WorkbenchPresentationPolicy {
@@ -903,6 +1061,15 @@ fn history_shortcut(
     }
     (modifiers.control && !modifiers.shift && key.eq_ignore_ascii_case("y"))
         .then_some(HistoryShortcut::Redo)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn projectional_history_shortcut(
+    key: &str,
+    modifiers: geosolve_constraint_editor::Modifiers,
+    alt: bool,
+) -> Option<HistoryShortcut> {
+    history_shortcut(key, modifiers, alt)
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -2313,11 +2480,11 @@ pub(crate) mod wasm {
         FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringPointerDownOutcome,
         FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
         FeatureAuthoringTransaction, GeometryInteractionPolicy, GeometryPickScope,
-        GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility, Modifiers,
-        NurbsConstructionOptions, OffsetAuthoringOutcome, OffsetAuthoringStage,
+        GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility, IntentSourceTokenId,
+        Modifiers, NurbsConstructionOptions, OffsetAuthoringOutcome, OffsetAuthoringStage,
         OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
-        RetainedEditorCoordinator, SceneCurveOrigin, SceneFilletActionInput,
-        SceneFilletActionTarget, ScreenPoint, SelectionItem,
+        ProjectionalEditorSession, RetainedEditorCoordinator, SceneCurveOrigin,
+        SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -2329,6 +2496,9 @@ pub(crate) mod wasm {
         TangentOrientation,
     };
     use geosolve_sketch_features::{ComputedCornerRef, ComputedFeatureCornerId, ComputedFeatureId};
+    use geosolve_sketch_intent::{
+        IntentKey, IntentPatch, IntentPatchOperation, IntentPatchPolicy, NodeId,
+    };
     use wasm_bindgen::JsCast;
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::prelude::JsValue;
@@ -2341,12 +2511,11 @@ pub(crate) mod wasm {
     use super::persistence::{
         LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, OLDER_V3_STORAGE_KEY,
         PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
-        coordinator_from_reproduction_payload, coordinator_from_snapshot,
-        reproduction_payload_from_coordinator,
+        coordinator_from_reproduction_payload, reproduction_payload_from_coordinator,
     };
 
     struct Workbench {
-        coordinator: RetainedEditorCoordinator,
+        coordinator: super::WorkbenchDocumentAuthority,
         authoring: AuthoringState,
         feature_authoring: FeatureAuthoringState,
         offset_authoring: OffsetAuthoringState,
@@ -2368,6 +2537,27 @@ pub(crate) mod wasm {
         construction_preview: Option<ConstructionPreview>,
         notice: String,
         problems: super::DismissibleDisclosure<super::ProblemSetIdentity>,
+    }
+
+    struct ProjectionalWorkbench {
+        authority: super::WorkbenchDocumentAuthority,
+        camera: super::scene::CanvasCamera,
+        grid_visible: bool,
+        notice: String,
+    }
+
+    impl ProjectionalWorkbench {
+        fn editor(&self) -> &ProjectionalEditorSession {
+            self.authority
+                .projectional_ref()
+                .expect("projectional adapter owns projectional authority")
+        }
+
+        fn editor_mut(&mut self) -> &mut ProjectionalEditorSession {
+            self.authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+        }
     }
 
     impl Workbench {
@@ -2408,17 +2598,31 @@ pub(crate) mod wasm {
                 .or_else(|| storage.get_item(LEGACY_STORAGE_KEY).ok().flatten())
         });
         let restored = if let Some(snapshot) = snapshot.as_deref() {
-            WorkspaceSnapshot::decode(snapshot).and_then(|value| coordinator_from_snapshot(&value))
+            WorkspaceSnapshot::decode(snapshot)
+                .and_then(|value| super::WorkbenchDocumentAuthority::from_snapshot(&value))
         } else {
-            empty_coordinator()
+            empty_coordinator().map(super::WorkbenchDocumentAuthority::flat)
         };
-        let (coordinator, notice) = match restored {
-            Ok(value) => (value, "Ready".to_owned()),
-            Err(error) => (
-                empty_coordinator().map_err(|error| JsValue::from_str(&error))?,
+        match restored {
+            Ok(authority) if authority.is_projectional() => {
+                install_projectional(document, authority, "Projectional workspace ready".into())
+            }
+            Ok(authority) => install_flat(document, authority, "Ready".to_owned()),
+            Err(error) => install_flat(
+                document,
+                super::WorkbenchDocumentAuthority::flat(
+                    empty_coordinator().map_err(|error| JsValue::from_str(&error))?,
+                ),
                 format!("Stored workbench could not be restored: {error}"),
             ),
-        };
+        }
+    }
+
+    fn install_flat(
+        document: &Document,
+        coordinator: super::WorkbenchDocumentAuthority,
+        notice: String,
+    ) -> Result<(), JsValue> {
         let workbench = Rc::new(RefCell::new(Workbench {
             coordinator,
             authoring: AuthoringState::default(),
@@ -2451,6 +2655,446 @@ pub(crate) mod wasm {
         install_canvas(document, &workbench)?;
         install_draft_inference_modifier_listeners(document, &workbench)?;
         install_keyboard(document, &workbench)?;
+        Ok(())
+    }
+
+    fn install_projectional(
+        document: &Document,
+        authority: super::WorkbenchDocumentAuthority,
+        notice: String,
+    ) -> Result<(), JsValue> {
+        let mut workbench = ProjectionalWorkbench {
+            authority,
+            camera: super::scene::CanvasCamera::default(),
+            grid_visible: true,
+            notice,
+        };
+        let scene = workbench.authority.scene(
+            workbench.camera.viewport(),
+            super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+        );
+        let _ = workbench.camera.fit_scene_or_reset(scene.as_ref());
+        let workbench = Rc::new(RefCell::new(workbench));
+        install_palette_icons(document)?;
+        install_design_projection_tabs(document)?;
+        set_projectional_surface_availability(document)?;
+        render_projectional(document, &workbench)?;
+        install_projectional_events(document, &workbench)?;
+        Ok(())
+    }
+
+    fn set_projectional_surface_availability(document: &Document) -> Result<(), JsValue> {
+        set_disabled(&required(document, "wb-tool-select")?, true)?;
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            set_disabled(
+                &required(document, &format!("wb-tool-family-{}", family.key()))?,
+                true,
+            )?;
+        }
+        for (key, _, _) in super::action_surface::CONSTRAINT_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
+            {
+                set_disabled(&button, true)?;
+            }
+        }
+        for (key, _, _) in super::action_surface::DIMENSION_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
+            {
+                set_disabled(&button, true)?;
+            }
+        }
+        for (key, _, _) in super::action_surface::FEATURE_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-feature=\"{key}\"]"))?
+            {
+                set_disabled(&button, true)?;
+            }
+        }
+        for id in ["wb-offset-trigger", "wb-geometry-role"] {
+            set_disabled(&required(document, id)?, true)?;
+        }
+        for action in [
+            "new",
+            "cancel",
+            "finish",
+            "geometry-role",
+            "copy-repro",
+            "reproduction-open",
+            "problems",
+            "zoom-fit",
+            "zoom-origin",
+        ] {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
+            {
+                set_disabled(&button, true)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn projectional_scene(wb: &ProjectionalWorkbench) -> Option<EditorScene> {
+        wb.editor()
+            .scene(
+                wb.camera.viewport(),
+                super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            )
+            .ok()
+    }
+
+    fn render_projectional(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+    ) -> Result<(), JsValue> {
+        let wb = workbench.borrow();
+        let mut scene = projectional_scene(&wb);
+        if let Some(scene) = scene.as_mut() {
+            scene.set_show_all_constraint_annotations(false);
+        }
+        let source = wb.editor().coordinator().presentation_session();
+        let accepted = source.and_then(
+            geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
+        );
+        let selection = wb.editor().editor().selection();
+        let hover = wb.editor().editor().hover_state();
+        required(document, "wb-viewport")?.set_inner_html(
+            &super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
+                scene.as_ref(),
+                accepted,
+                &[],
+                selection,
+                &[],
+                &[],
+                hover,
+                None,
+                None,
+                None,
+                None,
+                None,
+                wb.editor().editor().geometry_interaction_policy(),
+                super::scene::CanvasDisplayOptions {
+                    grid_visible: wb.grid_visible,
+                },
+                None,
+                wb.camera.viewport(),
+            ),
+        );
+
+        let design_markup = super::projectional_design_markup(wb.editor());
+        required(document, "wb-design-count")?.set_text_content(Some(&format!(
+            "{} declaration{}",
+            design_markup.declaration_count,
+            if design_markup.declaration_count == 1 {
+                ""
+            } else {
+                "s"
+            },
+        )));
+        required(document, "wb-design-outline")?.set_inner_html(&design_markup.outline);
+        required(document, "wb-design-source")?.set_inner_html(&design_markup.source);
+        required(document, "wb-design-history")?.set_inner_html(&design_markup.history);
+        let intent_inspector = required(document, "wb-intent-inspector")?;
+        intent_inspector.set_inner_html(&design_markup.inspector);
+        set_hidden(&intent_inspector, design_markup.inspector.is_empty())?;
+
+        let design = source.map(geosolve_sketch::RetainedSketchDocumentSession::design_document);
+        if let Some(design) = design {
+            let constraints = geosolve_constraint_editor::constraint_entries(design);
+            required(document, "wb-tree")?.set_inner_html(
+                &super::panels::projectional_tree_markup(design, &constraints, selection),
+            );
+            required(document, "wb-status-count")?.set_text_content(Some(&format!(
+                "{} points / {} curves",
+                design.points().len(),
+                design.curves().len(),
+            )));
+        } else {
+            required(document, "wb-tree")?
+                .set_inner_html("<p class=\"wb-empty\">No accepted projectional scene</p>");
+            required(document, "wb-status-count")?.set_text_content(Some("0 points / 0 curves"));
+        }
+        let selected_declarations = usize::from(wb.editor().selected_declaration().is_some());
+        required(document, "wb-selection")?.set_text_content(Some(&format!(
+            "{} declaration{} selected",
+            selected_declarations,
+            if selected_declarations == 1 { "" } else { "s" },
+        )));
+        let lifecycle = required(document, "wb-lifecycle")?;
+        let retained_failure = wb
+            .editor()
+            .coordinator()
+            .intent()
+            .latest_attempt()
+            .is_some_and(|attempt| {
+                attempt.disposition
+                    == geosolve_sketch_intent::IntentAttemptDisposition::RetainedFailed
+            });
+        lifecycle.set_attribute(
+            "data-state",
+            if retained_failure {
+                "rejected-attempt"
+            } else {
+                "accepted"
+            },
+        )?;
+        lifecycle.set_text_content(Some(if retained_failure {
+            "Intent retained · prior accepted scene"
+        } else {
+            "Accepted"
+        }));
+        required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
+        required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
+            "{:.1} px / unit",
+            wb.camera.pixels_per_model_unit,
+        )));
+        required(document, "wb-draft-guide")?.set_attribute("hidden", "")?;
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-editor-adapter", "projectional-intent")?;
+        root.set_attribute(
+            "data-history-length",
+            &wb.editor()
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len()
+                .to_string(),
+        )?;
+        root.set_attribute("data-render-scope", "durable")?;
+        Ok(())
+    }
+
+    fn save_projectional(wb: &ProjectionalWorkbench) {
+        let Ok(snapshot) = wb.authority.snapshot() else {
+            return;
+        };
+        let Ok(json) = snapshot.encode() else {
+            return;
+        };
+        let Ok(window) = super::platform::window() else {
+            return;
+        };
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.set_item(STORAGE_KEY, &json);
+        }
+    }
+
+    fn projectional_history_action(wb: &mut ProjectionalWorkbench, action: super::HistoryShortcut) {
+        let outcome = wb
+            .authority
+            .step_history(matches!(action, super::HistoryShortcut::Undo));
+        wb.notice = match outcome {
+            Ok(true) => match action {
+                super::HistoryShortcut::Undo => "Design intent undone".into(),
+                super::HistoryShortcut::Redo => "Design intent redone".into(),
+            },
+            Ok(false) => match action {
+                super::HistoryShortcut::Undo => "Nothing to undo".into(),
+                super::HistoryShortcut::Redo => "Nothing to redo".into(),
+            },
+            Err(error) => error.to_string(),
+        };
+    }
+
+    fn parse_intent_node(element: &Element) -> Option<NodeId> {
+        element.get_attribute("data-intent-node")?.parse().ok()
+    }
+
+    fn install_projectional_events(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+    ) -> Result<(), JsValue> {
+        let root = required(document, "workbench-root")?;
+        let click_document = document.clone();
+        let click_workbench = Rc::clone(workbench);
+        let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let Some(target) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+            else {
+                return;
+            };
+            let owns_inline_edit = target
+                .closest("[data-intent-edit], [data-intent-source-token]")
+                .is_ok_and(|owner| owner.is_some());
+            if !owns_inline_edit {
+                if let Some(node) = target
+                    .closest(".wb-intent-row, .wb-intent-source-line")
+                    .ok()
+                    .flatten()
+                    .as_ref()
+                    .and_then(parse_intent_node)
+                {
+                    let mut wb = click_workbench.borrow_mut();
+                    wb.editor_mut().set_selected_declaration(Some(node));
+                    wb.notice = "Design declaration selected".into();
+                    drop(wb);
+                    let _ = render_projectional(&click_document, &click_workbench);
+                    return;
+                }
+            }
+            let action = target
+                .closest("[data-wb-action]")
+                .ok()
+                .flatten()
+                .and_then(|target| target.get_attribute("data-wb-action"));
+            let mut wb = click_workbench.borrow_mut();
+            match action.as_deref() {
+                Some("undo") => projectional_history_action(&mut wb, super::HistoryShortcut::Undo),
+                Some("redo") => projectional_history_action(&mut wb, super::HistoryShortcut::Redo),
+                Some("clear-selection") => {
+                    wb.editor_mut().set_selected_declaration(None);
+                    wb.notice = "Design declaration selection cleared".into();
+                }
+                Some("delete") => {
+                    let Some(node) = wb.editor().selected_declaration() else {
+                        wb.notice = "Select a design declaration to delete".into();
+                        drop(wb);
+                        let _ = render_projectional(&click_document, &click_workbench);
+                        return;
+                    };
+                    wb.notice = wb.editor_mut().delete_declaration(node).map_or_else(
+                        |error| error.to_string(),
+                        |_| "Design declaration and dependent closure deleted".into(),
+                    );
+                }
+                Some(_) | None => return,
+            }
+            save_projectional(&wb);
+            drop(wb);
+            let _ = render_projectional(&click_document, &click_workbench);
+        });
+        root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
+        click.forget();
+
+        let change_document = document.clone();
+        let change_workbench = Rc::clone(workbench);
+        let change = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let Some(input) = event
+                .target()
+                .and_then(|target| target.dyn_into::<HtmlInputElement>().ok())
+            else {
+                return;
+            };
+            if input.get_attribute("data-intent-edit").as_deref() != Some("name") {
+                return;
+            }
+            let Some(node) = input
+                .get_attribute("data-intent-node")
+                .and_then(|value| value.parse::<NodeId>().ok())
+            else {
+                return;
+            };
+            let mut wb = change_workbench.borrow_mut();
+            let name = match IntentKey::new(input.value()) {
+                Ok(name) => name,
+                Err(error) => {
+                    wb.notice = error.to_string();
+                    drop(wb);
+                    let _ = render_projectional(&change_document, &change_workbench);
+                    return;
+                }
+            };
+            let unchanged = wb
+                .editor()
+                .coordinator()
+                .intent()
+                .organization()
+                .node_names()
+                .get(&node)
+                == Some(&name);
+            if unchanged {
+                return;
+            }
+            let patch = IntentPatch::new(
+                wb.editor().coordinator().intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::RenameNode { node, name }],
+            );
+            wb.notice = wb.editor_mut().apply_patch(patch).map_or_else(
+                |error| error.to_string(),
+                |_| "Design declaration renamed".into(),
+            );
+            save_projectional(&wb);
+            drop(wb);
+            let _ = render_projectional(&change_document, &change_workbench);
+        });
+        root.add_event_listener_with_callback("change", change.as_ref().unchecked_ref())?;
+        change.forget();
+
+        let source_document = document.clone();
+        let source_workbench = Rc::clone(workbench);
+        let source = Closure::<dyn FnMut(FocusEvent)>::new(move |event: FocusEvent| {
+            let Some(token_element) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-intent-source-token]").ok().flatten())
+            else {
+                return;
+            };
+            let Some(token) = token_element
+                .get_attribute("data-intent-source-token")
+                .and_then(|value| value.parse::<u32>().ok())
+                .map(IntentSourceTokenId)
+            else {
+                return;
+            };
+            let replacement = token_element.text_content().unwrap_or_default();
+            let mut wb = source_workbench.borrow_mut();
+            let projection = wb.editor().workbench_projection();
+            let unchanged = projection
+                .structured_source
+                .tokens
+                .iter()
+                .find(|candidate| candidate.id == token)
+                .is_some_and(|candidate| {
+                    projection.structured_source.text[candidate.range()] == replacement
+                });
+            if unchanged {
+                return;
+            }
+            wb.notice = wb
+                .editor_mut()
+                .edit_source_token(&projection, token, &replacement)
+                .map_or_else(
+                    |error| error.to_string(),
+                    |_| "Recognized structured-source token updated".into(),
+                );
+            save_projectional(&wb);
+            drop(wb);
+            let _ = render_projectional(&source_document, &source_workbench);
+        });
+        root.add_event_listener_with_callback("focusout", source.as_ref().unchecked_ref())?;
+        source.forget();
+
+        let keyboard_document = document.clone();
+        let keyboard_workbench = Rc::clone(workbench);
+        let keyboard = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if keyboard_target_is_editable_or_dialog(&event) {
+                return;
+            }
+            let Some(action) = super::projectional_history_shortcut(
+                &event.key(),
+                Modifiers {
+                    shift: event.shift_key(),
+                    control: event.ctrl_key(),
+                    command: event.meta_key(),
+                },
+                event.alt_key(),
+            ) else {
+                return;
+            };
+            event.prevent_default();
+            let mut wb = keyboard_workbench.borrow_mut();
+            projectional_history_action(&mut wb, action);
+            save_projectional(&wb);
+            drop(wb);
+            let _ = render_projectional(&keyboard_document, &keyboard_workbench);
+        });
+        document.add_event_listener_with_callback("keydown", keyboard.as_ref().unchecked_ref())?;
+        keyboard.forget();
         Ok(())
     }
 
@@ -5255,7 +5899,7 @@ pub(crate) mod wasm {
         let result = match action {
             "new" => cancel_before_camera_change(document, wb).and_then(|()| {
                 let coordinator = empty_coordinator()?;
-                wb.coordinator = coordinator;
+                wb.coordinator = super::WorkbenchDocumentAuthority::flat(coordinator);
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
                 clear_offset_authoring(wb);
@@ -5270,7 +5914,7 @@ pub(crate) mod wasm {
             "undo" => {
                 let effects = wb.coordinator.editor_mut().step_back_draft();
                 if effects.is_empty() {
-                    wb.coordinator.undo().map_err(|error| error.to_string())
+                    wb.coordinator.step_history(true).map(|_| ())
                 } else {
                     dispatch_effects(wb, effects);
                     stepped_geometry_draft = true;
@@ -5278,7 +5922,7 @@ pub(crate) mod wasm {
                     Ok(())
                 }
             }
-            "redo" => wb.coordinator.redo().map_err(|error| error.to_string()),
+            "redo" => wb.coordinator.step_history(false).map(|_| ()),
             "cancel" => cancel_before_camera_change(document, wb).map(|()| {
                 if wb.offset_authoring.is_active() {
                     let outcome = wb.offset_authoring.cancel();
@@ -5765,7 +6409,7 @@ pub(crate) mod wasm {
         coordinator: RetainedEditorCoordinator,
     ) -> Result<(), String> {
         cancel_before_camera_change(document, wb)?;
-        wb.coordinator = coordinator;
+        wb.coordinator = super::WorkbenchDocumentAuthority::flat(coordinator);
         wb.authoring = AuthoringState::default();
         wb.feature_authoring = FeatureAuthoringState::default();
         clear_offset_authoring(wb);
@@ -5915,13 +6559,10 @@ pub(crate) mod wasm {
             .coordinator
             .selected_dimension_target_metadata()
             .ok_or_else(|| "select exactly one dimension".to_owned())?;
+        let expected = wb.coordinator.session().design_identity();
         let outcome = wb
             .coordinator
-            .set_dimension_display_target(
-                wb.coordinator.session().design_identity(),
-                metadata.dimension,
-                value,
-            )
+            .set_dimension_display_target(expected, metadata.dimension, value)
             .map_err(|error| error.to_string())?;
         wb.notice = if outcome.published_accepted.is_some() {
             "Dimension target updated and accepted".into()
@@ -6041,7 +6682,7 @@ pub(crate) mod wasm {
         }
         match wb.samples.open_key(key) {
             Ok(coordinator) => {
-                wb.coordinator = coordinator;
+                wb.coordinator = super::WorkbenchDocumentAuthority::flat(coordinator);
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
                 clear_offset_authoring(wb);
@@ -6815,8 +7456,7 @@ pub(crate) mod wasm {
     }
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
-        let mut scene = super::compose_editor_scene(
-            &wb.coordinator,
+        let mut scene = wb.coordinator.scene(
             wb.camera.viewport(),
             super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
         )?;
@@ -8382,7 +9022,7 @@ pub(crate) mod wasm {
     }
 
     fn save(wb: &Workbench) {
-        let Ok(snapshot) = WorkspaceSnapshot::from_coordinator(&wb.coordinator) else {
+        let Ok(snapshot) = wb.coordinator.snapshot() else {
             return;
         };
         let Ok(json) = snapshot.encode() else {
@@ -8828,28 +9468,35 @@ pub(crate) mod wasm {
 mod tests {
     use geosolve_constraint_editor::{
         ActivePointerGesture, ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome,
-        AuthoringState, AuthoringTool, ComputedSceneState, ConstraintEditor, ConstraintIntent,
-        DraftInferenceCandidateId, DraftInferenceCompleteness, DraftInferenceResolution,
-        DraftInferenceStatus, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
-        EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-        FeatureAuthoringPreviewMetadata, FeatureAuthoringStage, FeatureAuthoringState,
-        FeatureAuthoringTool, GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus,
-        GeometryInteractionPolicy, GeometryPickScope, GeometryToolVariant, GeometryVisibility,
-        Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
-        OffsetAuthoringWarningKind, PickTolerance, PointerInput, RetainedEditorCoordinator,
-        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationOccurrence,
-        SceneAnnotationVisibility, SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint,
-        SelectionItem, Viewport,
+        AuthoringState, AuthoringTool, ColdIntentMaterializer, ComputedSceneState,
+        ConstraintEditor, ConstraintIntent, DraftInferenceCandidateId, DraftInferenceCompleteness,
+        DraftInferenceResolution, DraftInferenceStatus, EditorHoverState, EditorHoverTarget,
+        EditorProblemScope, EditorScene, EditorTool, FeatureAuthoringCandidate,
+        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPreviewMetadata,
+        FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool, GeometryDraftBranch,
+        GeometryDraftStage, GeometryDraftStatus, GeometryInteractionPolicy, GeometryPickScope,
+        GeometryToolVariant, GeometryVisibility, Modifiers, OffsetAuthoringOutcome,
+        OffsetAuthoringState, OffsetAuthoringWarning, OffsetAuthoringWarningKind, PickTolerance,
+        PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator,
+        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
+        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneConstraintGlyph,
+        SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep, DocumentBSplineForm,
         DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionDefinition,
-        DocumentDimensionMode, DocumentEdit, DocumentSolveRequest, GeometryRole,
-        MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession, ScalarDomain,
-        ScalarUnit, SketchAcceptedStateIdentity, SketchDocument,
+        DocumentDimensionMode, DocumentEdit, DocumentId, DocumentSolveRequest, GeometryRole,
+        MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PersistentId, RetainedSketchDocumentSession,
+        ScalarDomain, ScalarUnit, SketchAcceptedStateIdentity, SketchDocument,
+    };
+    use geosolve_sketch_intent::{
+        GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
+        IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector,
+        IntentSessionId, IntentUnit, LeafField,
     };
 
+    use super::persistence::WorkspaceSnapshot;
     use super::{
         AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
         CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
@@ -8858,9 +9505,9 @@ mod tests {
         CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
         DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
         ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
-        PointerMoveQueue, ReproductionFocusReturn, WorkbenchPresentationCounters,
-        WorkbenchPresentationEvent, WorkbenchRenderScope, annotation_family_name,
-        annotation_inspector_presentation, apply_native_fillet_profile,
+        PointerMoveQueue, ReproductionFocusReturn, WorkbenchDocumentAuthority,
+        WorkbenchPresentationCounters, WorkbenchPresentationEvent, WorkbenchRenderScope,
+        annotation_family_name, annotation_inspector_presentation, apply_native_fillet_profile,
         apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
         canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
         compose_editor_scene, coordinate_hud, current_problem_items,
@@ -8870,7 +9517,7 @@ mod tests {
         geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
         observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
         offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
-        owns_authoring_pick, rational_conic_construction_copy,
+        owns_authoring_pick, projectional_design_markup, rational_conic_construction_copy,
         reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
         reproduction_overlay_presentation, reproduction_payload_size_label,
         resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
@@ -8903,6 +9550,153 @@ mod tests {
         assert_eq!(Outline.button_id(), "wb-design-tab-outline");
         assert_eq!(StructuredSource.panel_id(), "wb-design-source");
         assert_eq!(History.panel_id(), "wb-design-history");
+    }
+
+    fn test_viewport() -> Viewport {
+        Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).unwrap()
+    }
+
+    fn projectional_workbench_fixture()
+    -> (WorkbenchDocumentAuthority, geosolve_sketch_intent::NodeId) {
+        let document = DocumentId(PersistentId::from_u128(0x8308_1001_u128 << 64));
+        let mut coordinator = ProjectionalIntentCoordinator::empty(
+            IntentSessionId::from_raw(0x8308_1001),
+            ColdIntentMaterializer::with_default_policy(document, 1.0).unwrap(),
+        )
+        .unwrap();
+        let primary = IntentPortSelector::Node {
+            role: IntentPortRole::Primary,
+            index: 0,
+        };
+        let draft = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            IntentKey::new("point.main").unwrap(),
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::X,
+            IntentLiteral::Quantity {
+                value: 2.0,
+                unit: IntentUnit::Length,
+            },
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::Y,
+            IntentLiteral::Quantity {
+                value: 3.0,
+                unit: IntentUnit::Length,
+            },
+        );
+        coordinator
+            .apply_patch(IntentPatch::new(
+                coordinator.intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::CreateNode {
+                    alias: IntentKey::new("point").unwrap(),
+                    draft: Box::new(draft),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        let node = *coordinator.intent().graph().nodes().keys().next().unwrap();
+        let projectional = ProjectionalEditorSession::new(coordinator);
+        let snapshot = WorkspaceSnapshot::from_projectional_editor(&projectional).unwrap();
+        let encoded = snapshot.encode().unwrap();
+        let decoded = WorkspaceSnapshot::decode(&encoded).unwrap();
+        (
+            WorkbenchDocumentAuthority::from_snapshot(&decoded).unwrap(),
+            node,
+        )
+    }
+
+    #[test]
+    fn projectional_v8_routes_scene_save_history_and_design_markup_through_one_authority() {
+        let (mut authority, node) = projectional_workbench_fixture();
+        assert!(authority.is_projectional());
+        assert!(authority.flat_ref().is_none());
+        assert!(authority.scene(test_viewport(), 0.5).is_some());
+        assert!(
+            authority
+                .snapshot()
+                .unwrap()
+                .encode()
+                .unwrap()
+                .contains("\"version\":8")
+        );
+
+        let projectional = authority.projectional_mut().unwrap();
+        assert!(projectional.set_selected_declaration(Some(node)));
+        let markup = projectional_design_markup(projectional);
+        assert_eq!(markup.declaration_count, 1);
+        assert!(markup.outline.contains("aria-selected=\"true\""));
+        assert!(markup.source.contains("wb-intent-source-token"));
+        assert!(
+            markup
+                .history
+                .contains("data-intent-history-state=\"applied\"")
+        );
+        assert!(markup.inspector.contains("data-intent-edit=\"name\""));
+        let projection = projectional.workbench_projection();
+        let name_token = projection
+            .structured_source
+            .tokens
+            .iter()
+            .find(|token| {
+                matches!(
+                    token.target,
+                    geosolve_constraint_editor::IntentSourceTokenTarget::NodeName { .. }
+                )
+            })
+            .unwrap()
+            .id;
+        projectional
+            .edit_source_token(&projection, name_token, "\"renamed point\"")
+            .unwrap();
+        assert!(
+            projectional_design_markup(projectional)
+                .inspector
+                .contains("renamed point")
+        );
+
+        assert!(authority.step_history(true).unwrap());
+        assert!(authority.scene(test_viewport(), 0.5).is_some());
+        assert!(authority.step_history(true).unwrap());
+        assert!(authority.scene(test_viewport(), 0.5).is_none());
+        assert!(authority.step_history(false).unwrap());
+        assert!(authority.scene(test_viewport(), 0.5).is_some());
+        assert!(authority.step_history(false).unwrap());
+        assert!(authority.scene(test_viewport(), 0.5).is_some());
+    }
+
+    #[test]
+    fn flat_v6_routes_through_unchanged_retained_coordinator_authority() {
+        let coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                SketchDocument::new(1.0).unwrap(),
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).unwrap();
+        let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
+        let authority = WorkbenchDocumentAuthority::from_snapshot(&decoded).unwrap();
+        assert!(!authority.is_projectional());
+        assert!(authority.flat_ref().is_some());
+        assert!(authority.projectional_ref().is_none());
+        assert!(authority.scene(test_viewport(), 0.5).is_some());
+        assert!(
+            authority
+                .snapshot()
+                .unwrap()
+                .encode()
+                .unwrap()
+                .contains("\"version\":6")
+        );
     }
 
     fn rejected_constraint_fixture() -> (
@@ -10017,7 +10811,7 @@ mod tests {
         assert!(css.contains("overflow: auto;"));
         assert!(css.contains(".wb-problems-title > button"));
         assert!(css.contains(
-            "grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 15rem minmax(36rem, 1fr) 18rem;"
+            "grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 25rem minmax(36rem, 1fr) 18rem;"
         ));
     }
 
