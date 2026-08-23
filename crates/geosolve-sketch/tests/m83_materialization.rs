@@ -772,3 +772,132 @@ fn semantic_catalog_ownership_is_typed_and_atomic() {
         .expect("catalog extension");
     assert!(document.element(later.0).is_none());
 }
+
+#[test]
+fn reserved_materialization_actions_consume_retired_ids_exactly_and_atomically() {
+    let mut document = empty_document(DOCUMENT_ID + 60);
+    let mut allocator =
+        SketchMaterializationReservationAllocator::new(document.persistent_identity_high_water())
+            .expect("allocator");
+    let start = allocator.reserve_point().expect("start reservation");
+    let end = allocator.reserve_point().expect("end reservation");
+    let curve = allocator.reserve_curve().expect("curve reservation");
+    let reservations = allocator.finish().expect("reservations");
+    assert_eq!(
+        reservations
+            .reservations()
+            .iter()
+            .copied()
+            .map(geosolve_sketch::SketchMaterializationIdentityReservation::kind)
+            .collect::<Vec<_>>(),
+        vec![
+            geosolve_sketch::SketchMaterializationIdentityKind::Point,
+            geosolve_sketch::SketchMaterializationIdentityKind::Point,
+            geosolve_sketch::SketchMaterializationIdentityKind::Curve,
+        ]
+    );
+    document
+        .apply_materialization_batch(&SketchMaterializationBatch::retaining_unused_reservations(
+            reservations.clone(),
+        ))
+        .expect("retire exact operation outputs");
+    let retained_high_water = document.persistent_identity_high_water();
+
+    document
+        .apply_reserved_materialization_action(reservations.reservations(), |candidate| {
+            let actual_start = candidate.add_point("reserved start", [0.0, 0.0])?;
+            let actual_end = candidate.add_point("reserved end", [2.0, 0.0])?;
+            let actual_curve = candidate.add_curve(
+                "reserved line",
+                CurveDefinition::Line {
+                    start: actual_start,
+                    end: actual_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )?;
+            Ok((actual_start, actual_end, actual_curve))
+        })
+        .map(|actual| assert_eq!(actual, (start, end, curve)))
+        .expect("reserved action");
+    assert_eq!(
+        document.persistent_identity_high_water(),
+        retained_high_water
+    );
+    assert!(document.curve(curve).is_some());
+
+    let mut under_document = empty_document(DOCUMENT_ID + 61);
+    let mut allocator = SketchMaterializationReservationAllocator::new(
+        under_document.persistent_identity_high_water(),
+    )
+    .expect("allocator");
+    allocator.reserve_point().expect("first point");
+    allocator.reserve_point().expect("second point");
+    let reservations = allocator.finish().expect("reservations");
+    under_document
+        .apply_materialization_batch(&SketchMaterializationBatch::retaining_unused_reservations(
+            reservations.clone(),
+        ))
+        .expect("retire under-consumed outputs");
+    let before = under_document.clone();
+    assert!(
+        under_document
+            .apply_reserved_materialization_action(reservations.reservations(), |candidate| {
+                candidate.add_point("only one", [0.0, 0.0])
+            },)
+            .is_err()
+    );
+    assert_eq!(under_document, before);
+
+    let mut over_document = empty_document(DOCUMENT_ID + 62);
+    let mut allocator = SketchMaterializationReservationAllocator::new(
+        over_document.persistent_identity_high_water(),
+    )
+    .expect("allocator");
+    allocator.reserve_point().expect("only reservation");
+    let reservations = allocator.finish().expect("reservations");
+    over_document
+        .apply_materialization_batch(&SketchMaterializationBatch::retaining_unused_reservations(
+            reservations.clone(),
+        ))
+        .expect("retire over-consumed output");
+    let before = over_document.clone();
+    assert!(
+        over_document
+            .apply_reserved_materialization_action(reservations.reservations(), |candidate| {
+                candidate.add_point("first", [0.0, 0.0])?;
+                candidate.add_point("unreserved", [1.0, 0.0])
+            })
+            .is_err()
+    );
+    assert_eq!(over_document, before);
+}
+
+#[test]
+fn reserved_materialization_action_rejects_a_consumed_identity_of_the_wrong_kind() {
+    let mut wrong_kind_document = empty_document(DOCUMENT_ID + 63);
+    let mut allocator = SketchMaterializationReservationAllocator::new(
+        wrong_kind_document.persistent_identity_high_water(),
+    )
+    .expect("allocator");
+    allocator.reserve_point().expect("point reservation");
+    let reservations = allocator.finish().expect("reservations");
+    wrong_kind_document
+        .apply_materialization_batch(&SketchMaterializationBatch::retaining_unused_reservations(
+            reservations.clone(),
+        ))
+        .expect("retire wrong-kind output");
+    let before = wrong_kind_document.clone();
+    assert!(
+        wrong_kind_document
+            .apply_reserved_materialization_action(reservations.reservations(), |candidate| {
+                candidate.add_scalar(
+                    "wrong kind",
+                    1.0,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+            })
+            .is_err()
+    );
+    assert_eq!(wrong_kind_document, before);
+}

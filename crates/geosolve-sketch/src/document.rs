@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -17,9 +17,10 @@ mod query;
 pub use bootstrap::SketchObjectBootstrap;
 pub use materialization::{
     SketchMaterializationBatch, SketchMaterializationConstraintReservation,
-    SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
-    SketchMaterializationReservationAllocator, SketchMaterializationReservationConsumption,
-    SketchMaterializationReservationSet, SketchMaterializationSemanticCatalog,
+    SketchMaterializationDimensionReservation, SketchMaterializationIdentityKind,
+    SketchMaterializationIdentityReservation, SketchMaterializationReservationAllocator,
+    SketchMaterializationReservationConsumption, SketchMaterializationReservationSet,
+    SketchMaterializationSemanticCatalog,
 };
 use profile_offset::{document_profile_offset_edges, document_profile_offset_junctions};
 pub(crate) use query::{DocumentConicGeometryError, document_hyperbola_branch};
@@ -2383,6 +2384,9 @@ pub struct SketchDocument {
     /// Ownership for semantic catalogs persisted outside frozen sketch v1-v4.
     semantic_source_reservations: BTreeMap<DocumentSourceId, DocumentSourceId>,
     mutation_validation_deferred: bool,
+    /// Transient exact identities consumed only inside one authenticated materialization action.
+    /// This queue is never serialized and must be empty outside the scoped public adapter.
+    materialization_identity_queue: Option<VecDeque<PersistentId>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -3289,6 +3293,7 @@ impl From<SketchDocumentV1> for SketchDocument {
             host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
+            materialization_identity_queue: None,
         }
     }
 }
@@ -3591,6 +3596,7 @@ impl From<SketchDocumentV2> for SketchDocument {
             host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
+            materialization_identity_queue: None,
         }
     }
 }
@@ -3643,6 +3649,7 @@ impl From<SketchDocumentV3> for SketchDocument {
             host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
+            materialization_identity_queue: None,
         }
     }
 }
@@ -3737,6 +3744,7 @@ impl From<SketchDocumentV4> for SketchDocument {
             host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
+            materialization_identity_queue: None,
         }
     }
 }
@@ -4057,6 +4065,7 @@ impl SketchDocument {
             host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
+            materialization_identity_queue: None,
         })
     }
 
@@ -11742,6 +11751,15 @@ impl SketchDocument {
     }
 
     fn allocate_id(&mut self) -> Result<PersistentId, DocumentError> {
+        if let Some(queue) = &mut self.materialization_identity_queue {
+            return queue
+                .pop_front()
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "materialization identity reservation",
+                    message: "operation allocated more persistent identities than it reserved"
+                        .into(),
+                });
+        }
         let id = self.next_id;
         self.next_id = PersistentId(
             self.next_id

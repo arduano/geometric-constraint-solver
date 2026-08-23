@@ -10,8 +10,8 @@ use super::{
     DocumentDimension, DocumentDimensionId, DocumentElementId, DocumentError,
     DocumentExternalBinding, DocumentExternalBindingId, DocumentId, DocumentParameter,
     DocumentParameterBinding, DocumentParameterId, DocumentParameterOutput, DocumentSourceId,
-    GeometryRole, GeometryRoleEdit, HostConfigurationActivation, MAX_DOCUMENT_OBJECTS,
-    PersistentId, SketchDocument, SketchPersistentIdentityHighWater,
+    DocumentSourceOwner, GeometryRole, GeometryRoleEdit, HostConfigurationActivation,
+    MAX_DOCUMENT_OBJECTS, PersistentId, SketchDocument, SketchPersistentIdentityHighWater,
 };
 
 /// Exact persistent identities reserved for one materialized constraint and its audit source.
@@ -72,6 +72,26 @@ pub enum SketchMaterializationIdentityReservation {
 }
 
 impl SketchMaterializationIdentityReservation {
+    /// Returns the persistent object category represented by this reservation.
+    ///
+    /// Constraint and dimension categories each include their immediately following audit-source
+    /// identity. This grouping mirrors the atomic allocation contract of the public document API.
+    #[must_use]
+    pub const fn kind(self) -> SketchMaterializationIdentityKind {
+        match self {
+            Self::Point { .. } => SketchMaterializationIdentityKind::Point,
+            Self::Scalar { .. } => SketchMaterializationIdentityKind::Scalar,
+            Self::Curve { .. } => SketchMaterializationIdentityKind::Curve,
+            Self::Contact { .. } => SketchMaterializationIdentityKind::Contact,
+            Self::Constraint { .. } => SketchMaterializationIdentityKind::Constraint,
+            Self::Dimension { .. } => SketchMaterializationIdentityKind::Dimension,
+            Self::Parameter { .. } => SketchMaterializationIdentityKind::Parameter,
+            Self::ExternalBinding { .. } => SketchMaterializationIdentityKind::ExternalBinding,
+            Self::SemanticCatalog { .. } => SketchMaterializationIdentityKind::SemanticCatalog,
+            Self::SemanticSource { .. } => SketchMaterializationIdentityKind::SemanticSource,
+        }
+    }
+
     fn append_roles(self, roles: &mut Vec<(PersistentId, ReservedIdentityRole)>) {
         match self {
             Self::Point { id } => roles.push((id.0, ReservedIdentityRole::Point)),
@@ -118,6 +138,26 @@ impl SketchMaterializationIdentityReservation {
             }
         }
     }
+}
+
+/// Persistent object category owned by one typed materialization reservation.
+///
+/// This is deliberately equation-free. Operation companions use it to authenticate the exact
+/// native output inventory prepared by Rust before any reserved identity is consumed.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum SketchMaterializationIdentityKind {
+    Point,
+    Scalar,
+    Curve,
+    Contact,
+    Constraint,
+    Dimension,
+    Parameter,
+    ExternalBinding,
+    SemanticCatalog,
+    SemanticSource,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -691,6 +731,80 @@ impl SketchMaterializationBatch {
 }
 
 impl SketchDocument {
+    /// Applies one authenticated equation-free construction using exact already-retired IDs.
+    ///
+    /// The reservation interval must already be represented by this document's retained
+    /// persistent-identity high-water, and every supplied identity must still be unused. During
+    /// `apply`, ordinary public document constructors consume the supplied IDs in exact order
+    /// instead of allocating at the high-water cursor. The complete candidate is published only
+    /// when every identity was consumed and normal document validation succeeds.
+    ///
+    /// This narrowly scoped seam exists for deterministic materializers and operation companions.
+    /// It does not permit IDs to be reused: the caller must first have advanced high-water through
+    /// a validated [`SketchMaterializationReservationSet`], and a failed action changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a nested reservation action, an identity outside retained high-water, an already
+    /// materialized identity, under/over-consumption, or any error from the construction or final
+    /// independent document validation.
+    #[doc(hidden)]
+    pub fn apply_reserved_materialization_action<T>(
+        &mut self,
+        reservations: &[SketchMaterializationIdentityReservation],
+        apply: impl FnOnce(&mut SketchDocument) -> Result<T, DocumentError>,
+    ) -> Result<T, DocumentError> {
+        self.validate()?;
+        if self.materialization_identity_queue.is_some() {
+            return materialization_invalid("materialization reservation action is already active");
+        }
+
+        let mut ordered = Vec::new();
+        for reservation in reservations {
+            reservation.append_roles(&mut ordered);
+        }
+        let mut unique = BTreeSet::new();
+        for (id, _) in &ordered {
+            if !unique.insert(*id) {
+                return Err(DocumentError::DuplicateId(*id));
+            }
+            if *id <= self.id.0 || *id >= self.next_id {
+                return materialization_invalid(
+                    "reserved operation identity is outside retained allocator high-water",
+                );
+            }
+            if self.element(*id).is_some()
+                || self
+                    .semantic_source_reservations
+                    .contains_key(&DocumentSourceId(*id))
+            {
+                return Err(DocumentError::DuplicateId(*id));
+            }
+        }
+
+        let mut candidate = self.clone();
+        candidate.materialization_identity_queue = Some(
+            ordered
+                .iter()
+                .map(|(id, _)| *id)
+                .collect::<std::collections::VecDeque<_>>(),
+        );
+        let value = apply(&mut candidate)?;
+        let remaining = candidate
+            .materialization_identity_queue
+            .take()
+            .expect("scoped reservation queue remains installed");
+        if !remaining.is_empty() {
+            return materialization_invalid(
+                "operation consumed fewer persistent identities than it reserved",
+            );
+        }
+        validate_reserved_action_roles(&candidate, &ordered)?;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(value)
+    }
+
     /// Atomically inserts a reserved materialization batch and advances all allocator high-water.
     ///
     /// The method validates the live base, namespace, reservation kinds, duplicates, source order,
@@ -770,6 +884,76 @@ impl SketchDocument {
         *self = candidate;
         Ok(())
     }
+}
+
+fn validate_reserved_action_roles(
+    document: &SketchDocument,
+    ordered: &[(PersistentId, ReservedIdentityRole)],
+) -> Result<(), DocumentError> {
+    for (id, role) in ordered {
+        let matches = match role {
+            ReservedIdentityRole::Point => {
+                matches!(document.element(*id), Some(DocumentElementId::Point(_)))
+            }
+            ReservedIdentityRole::Scalar => {
+                matches!(document.element(*id), Some(DocumentElementId::Scalar(_)))
+            }
+            ReservedIdentityRole::Curve => {
+                matches!(document.element(*id), Some(DocumentElementId::Curve(_)))
+            }
+            ReservedIdentityRole::Contact => {
+                matches!(document.element(*id), Some(DocumentElementId::Contact(_)))
+            }
+            ReservedIdentityRole::Constraint { source } => {
+                matches!(
+                    document.element(*id),
+                    Some(DocumentElementId::Constraint(constraint))
+                        if document.constraint(constraint).is_some_and(|value| value.source_id == *source)
+                )
+            }
+            ReservedIdentityRole::ConstraintSource { owner } => {
+                matches!(
+                    document.element(*id),
+                    Some(DocumentElementId::Source(source))
+                        if document.source(source).is_some_and(|value| value.owner == DocumentSourceOwner::Constraint(*owner))
+                )
+            }
+            ReservedIdentityRole::Dimension { source } => {
+                matches!(
+                    document.element(*id),
+                    Some(DocumentElementId::Dimension(dimension))
+                        if document.dimension(dimension).is_some_and(|value| value.source_id == *source)
+                )
+            }
+            ReservedIdentityRole::DimensionSource { owner } => {
+                matches!(
+                    document.element(*id),
+                    Some(DocumentElementId::Source(source))
+                        if document.source(source).is_some_and(|value| value.owner == DocumentSourceOwner::Dimension(*owner))
+                )
+            }
+            ReservedIdentityRole::Parameter => {
+                matches!(document.element(*id), Some(DocumentElementId::Parameter(_)))
+            }
+            ReservedIdentityRole::ExternalBinding => matches!(
+                document.element(*id),
+                Some(DocumentElementId::ExternalBinding(_))
+            ),
+            ReservedIdentityRole::SemanticCatalog => {
+                let source = DocumentSourceId(*id);
+                document.semantic_reservation_owner(source) == Some(source)
+            }
+            ReservedIdentityRole::SemanticSource { catalog } => {
+                document.semantic_reservation_owner(DocumentSourceId(*id)) == Some(*catalog)
+            }
+        };
+        if !matches {
+            return materialization_invalid(
+                "materialized operation identity was reserved for a different kind or owner",
+            );
+        }
+    }
+    Ok(())
 }
 
 fn validate_base_high_water(

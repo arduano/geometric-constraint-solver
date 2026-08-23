@@ -135,10 +135,11 @@ pub use document::{
     MAX_PERSISTENT_SPLINE_SPAN_CURSORS, MAX_POLYLINE_POINTS, MirroredCurveIds, PersistentId,
     RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, ScalarValueEdit, SketchDatum,
     SketchDocument, SketchMaterializationBatch, SketchMaterializationConstraintReservation,
-    SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
-    SketchMaterializationReservationAllocator, SketchMaterializationReservationConsumption,
-    SketchMaterializationReservationSet, SketchMaterializationSemanticCatalog,
-    SketchObjectBootstrap, SketchPersistentIdentityHighWater, TangentOrientation,
+    SketchMaterializationDimensionReservation, SketchMaterializationIdentityKind,
+    SketchMaterializationIdentityReservation, SketchMaterializationReservationAllocator,
+    SketchMaterializationReservationConsumption, SketchMaterializationReservationSet,
+    SketchMaterializationSemanticCatalog, SketchObjectBootstrap, SketchPersistentIdentityHighWater,
+    TangentOrientation,
 };
 pub use document_lowering::{
     ContactRuntimeMapping, CurveRuntimeMapping, DocumentContactRole,
