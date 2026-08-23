@@ -2,6 +2,8 @@
 
 //! Atomic materialization of one branch-explicit line-line Fillet as ordinary native topology.
 
+use std::collections::BTreeSet;
+
 use crate::{
     ContactDefinition, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
     CurveSpan, DesignPointId, DesignScalarId, DocumentArcSweep, DocumentConstraintDefinition,
@@ -15,7 +17,8 @@ use geosolve_core::{OperationCheckpoint, OperationControl, OperationController, 
 const NATIVE_FILLET_GEOMETRY_EPSILON: f64 = 1.0e-9;
 
 /// One retained line and the exact endpoint replaced by a native Fillet contact.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentNativeLineFilletParent {
     pub curve: CurveSpan,
     pub endpoint: FeatureEndpoint,
@@ -25,7 +28,8 @@ pub struct DocumentNativeLineFilletParent {
 }
 
 /// Complete accepted-geometry request for one ordinary native line-line Fillet.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentNativeLineFilletCreationRequest {
     pub label: String,
     pub first: DocumentNativeLineFilletParent,
@@ -39,7 +43,8 @@ pub struct DocumentNativeLineFilletCreationRequest {
 }
 
 /// Opaque accepted-geometry-derived plan for one native line-line Fillet.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentPreparedNativeLineFilletGeometry {
     request: DocumentNativeLineFilletCreationRequest,
     source_definitions: [CurveDefinition; 2],
@@ -66,7 +71,8 @@ impl DocumentPreparedNativeLineFilletGeometry {
 }
 
 /// Persistent identities created or replaced by one native line-line Fillet transaction.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentNativeLineFilletIds {
     pub source_lines: [CurveId; 2],
     pub removed_corner: DesignPointId,
@@ -421,14 +427,14 @@ impl SketchDocument {
             GeometryRole::Profile,
         )?;
 
-        let arc_parameters = match request.endpoint_order {
+        let arc_parameters: [f64; 2] = match request.endpoint_order {
             DocumentFilletEndpointOrder::FirstThenSecond => [0.0, 1.0],
             DocumentFilletEndpointOrder::SecondThenFirst => [1.0, 0.0],
         };
         let mut contact_parameters = Vec::with_capacity(2);
         let mut contacts = Vec::with_capacity(2);
         let mut tangencies = Vec::with_capacity(2);
-        for index in 0..2 {
+        for (index, parent) in parents.iter().enumerate() {
             let parameter = arc_parameters[index];
             let parameter_id = candidate.add_scalar(
                 format!("{}.arc_contact_{}_parameter", request.label, index + 1),
@@ -463,8 +469,8 @@ impl SketchDocument {
             let tangency = candidate.add_constraint(
                 format!("{}.tangency_{}", request.label, index + 1),
                 DocumentConstraintDefinition::LineCurveTangency {
-                    line: parents[index].curve,
-                    endpoint: parents[index].endpoint,
+                    line: parent.curve,
+                    endpoint: parent.endpoint,
                     curve_contact: contact,
                 },
             )?;
@@ -533,6 +539,561 @@ impl SketchDocument {
         *self = candidate;
         Ok(ids)
     }
+
+    /// Reconstructs the exact accepted numerical seed for an already materialized
+    /// native Fillet action.
+    ///
+    /// `self` is the independently accepted upstream prefix and
+    /// `upstream_design` is its retained counterpart. The opaque prepared action
+    /// is reauthenticated against that upstream geometry while its exact reserved
+    /// output identities are checked against `materialized`. Only continuation
+    /// values are copied; no topology or identity is created or removed.
+    ///
+    /// The returned graph is a numerical seed, not accepted authority. Callers
+    /// must still certify it through the ordinary retained-session publication
+    /// boundary.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/forged prepared geometry, a foreign or differently
+    /// materialized output graph, missing identities, or invalid resulting state.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one domain boundary authenticates every native Fillet identity before changing any numerical seed"
+    )]
+    pub fn prepare_materialized_native_line_fillet_seed(
+        &self,
+        upstream_design: &Self,
+        materialized: &Self,
+        prepared: &DocumentPreparedNativeLineFilletGeometry,
+    ) -> Result<Self, DocumentError> {
+        if self.id() != upstream_design.id() || self.id() != materialized.id() {
+            return native_fillet_error(
+                "native fillet continuation",
+                "upstream and materialized graphs belong to different documents",
+            );
+        }
+        let authenticated = self.prepare_native_line_fillet_geometry(prepared.request.clone())?;
+        if authenticated.request != prepared.request
+            || authenticated.source_definitions != prepared.source_definitions
+            || authenticated.accepted_line_tangents != prepared.accepted_line_tangents
+            || authenticated.corner != prepared.corner
+            || authenticated.tangent_orientations != prepared.tangent_orientations
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "prepared action does not match the accepted upstream prefix",
+            );
+        }
+        let ids = prepared.expected_ids.as_ref().ok_or_else(|| {
+            native_fillet_error_value(
+                "native fillet continuation",
+                "prepared action has no reserved output identities",
+            )
+        })?;
+        // Session-global never-reuse cursors may be ahead of this historical
+        // action after Undo or divergence. Authenticate its prepared IDs
+        // against the owning intent reservations and complete materialized identity
+        // delta below, never against a fresh allocation from this prefix.
+        let request = &prepared.request;
+        if ids.source_lines != [request.first.curve.curve, request.second.curve.curve]
+            || materialized.point(ids.removed_corner).is_some()
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized source or retired-corner identity differs from the prepared action",
+            );
+        }
+        validate_materialized_native_line_fillet_metadata(
+            upstream_design,
+            materialized,
+            prepared,
+            ids,
+        )?;
+
+        let parents = [request.first, request.second];
+        for (index, (parent, source_definition)) in
+            parents.iter().zip(&prepared.source_definitions).enumerate()
+        {
+            let mut expected = source_definition.clone();
+            let CurveDefinition::Line { start, end, .. } = &mut expected else {
+                return native_fillet_error(
+                    "native fillet continuation",
+                    "prepared source is no longer a line",
+                );
+            };
+            let replaced = match parent.endpoint {
+                FeatureEndpoint::Start => std::mem::replace(start, ids.contact_points[index]),
+                FeatureEndpoint::End => std::mem::replace(end, ids.contact_points[index]),
+            };
+            let upstream_source =
+                upstream_design
+                    .curve(ids.source_lines[index])
+                    .ok_or_else(|| {
+                        native_fillet_error_value(
+                            "native fillet continuation",
+                            "retained upstream source is missing",
+                        )
+                    })?;
+            if replaced != ids.removed_corner
+                || materialized
+                    .curve(ids.source_lines[index])
+                    .is_none_or(|curve| {
+                        curve.label != upstream_source.label || curve.definition != expected
+                    })
+                || materialized.geometry_role(ids.source_lines[index])
+                    != Some(GeometryRole::Profile)
+            {
+                return native_fillet_error(
+                    "native fillet continuation",
+                    "materialized shortened source differs from the prepared action",
+                );
+            }
+        }
+
+        let expected_arc = CurveDefinition::CircularArc {
+            center: ids.center,
+            radius: ids.radius,
+            start_angle: ids.start_angle,
+            end_angle: ids.end_angle,
+            sweep: request.sweep,
+        };
+        if materialized
+            .curve(ids.arc)
+            .is_none_or(|curve| curve.definition != expected_arc)
+            || materialized.geometry_role(ids.arc) != Some(GeometryRole::Profile)
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized arc differs from the prepared action",
+            );
+        }
+
+        let arc_parameters: [f64; 2] = match request.endpoint_order {
+            DocumentFilletEndpointOrder::FirstThenSecond => [0.0, 1.0],
+            DocumentFilletEndpointOrder::SecondThenFirst => [1.0, 0.0],
+        };
+        for (index, parent) in parents.iter().enumerate() {
+            let parameter = materialized
+                .scalar(ids.contact_parameters[index])
+                .ok_or_else(|| {
+                    native_fillet_error_value(
+                        "native fillet continuation",
+                        "materialized contact parameter is missing",
+                    )
+                })?;
+            let contact = materialized
+                .contacts()
+                .iter()
+                .find(|contact| contact.id == ids.contacts[index]);
+            let tangency = materialized.constraint(ids.tangencies[index]);
+            if parameter.value.to_bits() != arc_parameters[index].to_bits()
+                || contact.is_none_or(|contact| {
+                    contact.curve.curve != ids.arc
+                        || contact.parameter != ids.contact_parameters[index]
+                        || contact.tangent_orientation != Some(prepared.tangent_orientations[index])
+                })
+                || tangency.is_none_or(|constraint| {
+                    constraint.definition
+                        != DocumentConstraintDefinition::LineCurveTangency {
+                            line: parent.curve,
+                            endpoint: parent.endpoint,
+                            curve_contact: ids.contacts[index],
+                        }
+                })
+            {
+                return native_fillet_error(
+                    "native fillet continuation",
+                    "materialized contact or tangency differs from the prepared action",
+                );
+            }
+        }
+        if materialized
+            .dimension(ids.radius_dimension)
+            .is_none_or(|dimension| {
+                dimension.mode != DocumentDimensionMode::Driving
+                    || dimension.definition
+                        != DocumentDimensionDefinition::Radius {
+                            curve: ids.arc,
+                            target: ids.radius_target,
+                        }
+            })
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized radius dimension differs from the prepared action",
+            );
+        }
+
+        let mut seed = materialized.prepare_continuation_seed(upstream_design, self)?;
+        for (point, position) in [
+            (ids.contact_points[0], request.first.contact_position),
+            (ids.contact_points[1], request.second.contact_position),
+            (ids.center, request.center),
+        ] {
+            seed.point_mut(point)
+                .ok_or_else(|| {
+                    native_fillet_error_value(
+                        "native fillet continuation",
+                        "materialized Fillet point is missing",
+                    )
+                })?
+                .position = position;
+        }
+        for (scalar, value) in [
+            (ids.radius, request.radius),
+            (ids.start_angle, request.start_angle),
+            (ids.end_angle, request.end_angle),
+            (ids.radius_target, request.radius),
+        ] {
+            seed.scalar_mut(scalar)
+                .ok_or_else(|| {
+                    native_fillet_error_value(
+                        "native fillet continuation",
+                        "materialized Fillet scalar is missing",
+                    )
+                })?
+                .value = value;
+        }
+        seed.validate()?;
+        Ok(seed)
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "native Fillet replay authenticates its complete persistent topology and audit metadata at one domain boundary"
+)]
+fn validate_materialized_native_line_fillet_metadata(
+    upstream: &SketchDocument,
+    materialized: &SketchDocument,
+    prepared: &DocumentPreparedNativeLineFilletGeometry,
+    ids: &DocumentNativeLineFilletIds,
+) -> Result<(), DocumentError> {
+    let request = &prepared.request;
+    let expected_point_ids = upstream
+        .points()
+        .iter()
+        .map(|point| point.id)
+        .filter(|point| *point != ids.removed_corner)
+        .chain(ids.contact_points)
+        .chain([ids.center])
+        .collect::<BTreeSet<_>>();
+    let actual_point_ids = materialized
+        .points()
+        .iter()
+        .map(|point| point.id)
+        .collect::<BTreeSet<_>>();
+    let expected_scalar_ids = upstream
+        .scalars()
+        .iter()
+        .map(|scalar| scalar.id)
+        .chain([
+            ids.radius,
+            ids.start_angle,
+            ids.end_angle,
+            ids.contact_parameters[0],
+            ids.contact_parameters[1],
+            ids.radius_target,
+        ])
+        .collect::<BTreeSet<_>>();
+    let actual_scalar_ids = materialized
+        .scalars()
+        .iter()
+        .map(|scalar| scalar.id)
+        .collect::<BTreeSet<_>>();
+    let expected_curve_ids = upstream
+        .curves()
+        .iter()
+        .map(|curve| curve.id)
+        .chain([ids.arc])
+        .collect::<BTreeSet<_>>();
+    let actual_curve_ids = materialized
+        .curves()
+        .iter()
+        .map(|curve| curve.id)
+        .collect::<BTreeSet<_>>();
+    let expected_contact_ids = upstream
+        .contacts()
+        .iter()
+        .map(|contact| contact.id)
+        .chain(ids.contacts)
+        .collect::<BTreeSet<_>>();
+    let actual_contact_ids = materialized
+        .contacts()
+        .iter()
+        .map(|contact| contact.id)
+        .collect::<BTreeSet<_>>();
+    let expected_constraint_ids = upstream
+        .constraints()
+        .iter()
+        .map(|constraint| constraint.id)
+        .chain(ids.tangencies)
+        .collect::<BTreeSet<_>>();
+    let actual_constraint_ids = materialized
+        .constraints()
+        .iter()
+        .map(|constraint| constraint.id)
+        .collect::<BTreeSet<_>>();
+    let expected_dimension_ids = upstream
+        .dimensions()
+        .iter()
+        .map(|dimension| dimension.id)
+        .chain([ids.radius_dimension])
+        .collect::<BTreeSet<_>>();
+    let actual_dimension_ids = materialized
+        .dimensions()
+        .iter()
+        .map(|dimension| dimension.id)
+        .collect::<BTreeSet<_>>();
+    if actual_point_ids != expected_point_ids
+        || actual_scalar_ids != expected_scalar_ids
+        || actual_curve_ids != expected_curve_ids
+        || actual_contact_ids != expected_contact_ids
+        || actual_constraint_ids != expected_constraint_ids
+        || actual_dimension_ids != expected_dimension_ids
+    {
+        return native_fillet_error(
+            "native fillet continuation",
+            "materialized persistent identity delta differs from the prepared action",
+        );
+    }
+
+    for point in upstream
+        .points()
+        .iter()
+        .filter(|point| point.id != ids.removed_corner)
+    {
+        if materialized.point(point.id) != Some(point) {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized action changed an unrelated upstream point",
+            );
+        }
+    }
+    for scalar in upstream.scalars() {
+        if materialized.scalar(scalar.id) != Some(scalar) {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized action changed an unrelated upstream scalar",
+            );
+        }
+    }
+    for curve in upstream
+        .curves()
+        .iter()
+        .filter(|curve| !ids.source_lines.contains(&curve.id))
+    {
+        if materialized.curve(curve.id) != Some(curve)
+            || materialized.geometry_role(curve.id) != upstream.geometry_role(curve.id)
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized action changed an unrelated upstream curve",
+            );
+        }
+    }
+    if upstream.contacts() != &materialized.contacts()[..upstream.contacts().len()]
+        || upstream.constraints() != &materialized.constraints()[..upstream.constraints().len()]
+        || upstream.dimensions() != &materialized.dimensions()[..upstream.dimensions().len()]
+        || upstream.trim_views() != materialized.trim_views()
+        || upstream.parameters() != materialized.parameters()
+        || upstream.parameter_bindings() != materialized.parameter_bindings()
+        || upstream.parameter_outputs() != materialized.parameter_outputs()
+        || upstream.external_bindings() != materialized.external_bindings()
+    {
+        return native_fillet_error(
+            "native fillet continuation",
+            "materialized action changed unrelated persistent metadata",
+        );
+    }
+
+    let point_labels = [
+        format!("{}.first_contact_point", request.label),
+        format!("{}.second_contact_point", request.label),
+        format!("{}.center", request.label),
+    ];
+    for (point, label) in ids
+        .contact_points
+        .into_iter()
+        .chain([ids.center])
+        .zip(point_labels)
+    {
+        if materialized
+            .point(point)
+            .is_none_or(|point| point.label != label)
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized Fillet point metadata differs from the prepared action",
+            );
+        }
+    }
+    let scalar_metadata = [
+        (
+            ids.radius,
+            format!("{}.radius", request.label),
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        ),
+        (
+            ids.start_angle,
+            format!("{}.start_angle", request.label),
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        ),
+        (
+            ids.end_angle,
+            format!("{}.end_angle", request.label),
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        ),
+        (
+            ids.contact_parameters[0],
+            format!("{}.arc_contact_1_parameter", request.label),
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            },
+        ),
+        (
+            ids.contact_parameters[1],
+            format!("{}.arc_contact_2_parameter", request.label),
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            },
+        ),
+        (
+            ids.radius_target,
+            format!("{}.radius_target", request.label),
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        ),
+    ];
+    for (id, label, unit, domain) in scalar_metadata {
+        if materialized.scalar(id).is_none_or(|scalar| {
+            scalar.label != label || scalar.unit != unit || scalar.domain != domain
+        }) {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized Fillet scalar metadata differs from the prepared action",
+            );
+        }
+    }
+    if materialized
+        .curve(ids.arc)
+        .is_none_or(|curve| curve.label != format!("{}.arc", request.label))
+    {
+        return native_fillet_error(
+            "native fillet continuation",
+            "materialized Fillet arc metadata differs from the prepared action",
+        );
+    }
+
+    let parents = [request.first, request.second];
+    let arc_parameters: [f64; 2] = match request.endpoint_order {
+        DocumentFilletEndpointOrder::FirstThenSecond => [0.0, 1.0],
+        DocumentFilletEndpointOrder::SecondThenFirst => [1.0, 0.0],
+    };
+    for (index, parent) in parents.iter().enumerate() {
+        let parameter = arc_parameters[index];
+        let expected_neighborhood = if parameter == 0.0 {
+            ContactNeighborhood::Start
+        } else {
+            ContactNeighborhood::End
+        };
+        if materialized
+            .contact(ids.contacts[index])
+            .is_none_or(|contact| {
+                contact.label != format!("{}.arc_contact_{}", request.label, index + 1)
+                    || contact.curve != CurveSpan::line(ids.arc)
+                    || contact.parameter != ids.contact_parameters[index]
+                    || contact.domain
+                        != ContactDomain::Bounded {
+                            lower: 0.0,
+                            upper: 1.0,
+                        }
+                    || contact.winding != 0
+                    || contact.neighborhood != expected_neighborhood
+                    || contact.tangent_orientation != Some(prepared.tangent_orientations[index])
+            })
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized Fillet contact metadata differs from the prepared action",
+            );
+        }
+        if materialized
+            .constraint(ids.tangencies[index])
+            .is_none_or(|constraint| {
+                constraint.label != format!("{}.tangency_{}", request.label, index + 1)
+                    || constraint.suppressed
+                    || constraint.definition
+                        != DocumentConstraintDefinition::LineCurveTangency {
+                            line: parent.curve,
+                            endpoint: parent.endpoint,
+                            curve_contact: ids.contacts[index],
+                        }
+            })
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized Fillet tangency metadata differs from the prepared action",
+            );
+        }
+    }
+    if materialized
+        .dimension(ids.radius_dimension)
+        .is_none_or(|dimension| {
+            dimension.label != format!("{}.radius_dimension", request.label)
+                || dimension.suppressed
+                || dimension.mode != DocumentDimensionMode::Driving
+                || dimension.definition
+                    != DocumentDimensionDefinition::Radius {
+                        curve: ids.arc,
+                        target: ids.radius_target,
+                    }
+        })
+    {
+        return native_fillet_error(
+            "native fillet continuation",
+            "materialized Fillet dimension metadata differs from the prepared action",
+        );
+    }
+
+    let upstream_source_count = upstream.source_order().len();
+    if materialized.source_order().len() != upstream_source_count.saturating_add(3)
+        || materialized.source_order()[..upstream_source_count] != *upstream.source_order()
+    {
+        return native_fillet_error(
+            "native fillet continuation",
+            "materialized Fillet source order differs from the prepared action",
+        );
+    }
+    let source_owners = [
+        crate::DocumentSourceOwner::Constraint(ids.tangencies[0]),
+        crate::DocumentSourceOwner::Constraint(ids.tangencies[1]),
+        crate::DocumentSourceOwner::Dimension(ids.radius_dimension),
+    ];
+    for (source, owner) in materialized.source_order()[upstream_source_count..]
+        .iter()
+        .copied()
+        .zip(source_owners)
+    {
+        if materialized
+            .source(source)
+            .is_none_or(|source| source.owner != owner || source.suppressed)
+        {
+            return native_fillet_error(
+                "native fillet continuation",
+                "materialized Fillet source ownership differs from the prepared action",
+            );
+        }
+    }
+    Ok(())
 }
 
 /// A prepared native edit can be replayed against retained design coordinates that differ from
