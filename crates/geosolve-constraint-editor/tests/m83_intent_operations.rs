@@ -925,6 +925,7 @@ fn constructive_operations_authenticate_exact_outputs_and_downstream_ports() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn malformed_unsupported_and_span_count_mismatches_fail_closed() {
     let unsupported_mirror = operation("mirror", OperationKind::Mirror)
         .with_input(

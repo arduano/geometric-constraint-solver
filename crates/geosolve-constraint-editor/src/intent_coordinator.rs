@@ -570,9 +570,8 @@ impl ProjectionalIntentCoordinator {
             operations,
         );
         let (plan, materialized) = self.plan_patch(patch)?;
-        let materialized = materialized
-            .as_ref()
-            .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
+        let materialized =
+            materialized.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
         let preview_document = latest
             .session
             .accepted_state_for_current_input()
@@ -588,7 +587,7 @@ impl ProjectionalIntentCoordinator {
         if cold_document != preview_document {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
-        self.commit_planned(plan, Some(materialized.clone()))
+        self.commit_planned(plan, Some(materialized))
     }
 
     /// Cancels any active gesture without changing intent, accepted authority,
@@ -889,9 +888,8 @@ impl ProjectionalIntentCoordinator {
             latest.operations,
         );
         let (plan, materialized) = self.plan_patch(patch)?;
-        let materialized = materialized
-            .as_ref()
-            .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
+        let materialized =
+            materialized.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
         let preview_document = latest
             .patch
             .preview()
@@ -907,8 +905,7 @@ impl ProjectionalIntentCoordinator {
         if cold_document != preview_document {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
-        self.commit_planned(plan, Some(materialized.clone()))
-            .map(Some)
+        self.commit_planned(plan, Some(materialized)).map(Some)
     }
 
     /// Cancels any prepared selected-curve control route without touching

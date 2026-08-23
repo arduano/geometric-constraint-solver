@@ -849,7 +849,8 @@ fn all_twenty_constraint_glyph_families_publish_native_wasm_geometry() {
         alpha_scene(AlphaScenarioKind::NurbsDifferential),
         alpha_scene(AlphaScenarioKind::M28TrimmedFillet),
         supplemental_constraint_scene(),
-    ];
+    ]
+    .into_boxed_slice();
     let annotations = scenes
         .iter()
         .flat_map(|scene| &scene.annotations)

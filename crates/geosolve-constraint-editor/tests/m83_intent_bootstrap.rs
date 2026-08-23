@@ -299,6 +299,7 @@ fn accepted_computed_fillet_fixture() -> (
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn bootstrap_materialization_map_binds_exact_native_ports_and_reservations() {
     let (mut document, features, lifecycle) = fixture();
     let spline_points = [[6.0, 0.0], [7.0, 1.0], [8.0, 0.0]]
@@ -418,6 +419,7 @@ fn bootstrap_materialization_map_binds_exact_native_ports_and_reservations() {
 }
 
 #[test]
+#[allow(clippy::float_cmp, clippy::too_many_lines)]
 fn mixed_bootstrap_cold_rebuilds_new_declarations_and_edits_historical_free_leaves() {
     let mut document = SketchDocument::new(1.0).expect("document");
     let historical = document
@@ -578,6 +580,7 @@ fn mixed_bootstrap_cold_rebuilds_new_declarations_and_edits_historical_free_leav
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn mixed_bootstrap_preserves_authenticated_computed_sidecars() {
     let (document, features, lifecycle) = accepted_computed_fillet_fixture();
     let intent = normalize_flat_sketch_intent(
@@ -1055,7 +1058,6 @@ fn bootstrap_codecs_remain_closed_and_do_not_admit_annotation_or_recipe_payloads
     let annotation = session_from_drafts(vec![("annotation", draft("annotation", object))]);
     assert!(matches!(
         decode_flat_intent_bootstrap(&annotation),
-        Err(IntentBootstrapError::InvalidPayload)
-            | Err(IntentBootstrapError::InvalidDocumentHeader)
+        Err(IntentBootstrapError::InvalidPayload | IntentBootstrapError::InvalidDocumentHeader)
     ));
 }
