@@ -404,18 +404,37 @@ impl ColdIntentMaterializer {
     /// satisfying [`IntentKey`]'s bounded key contract.
     #[must_use]
     pub fn evaluate(&self, candidate: &IntentCandidate) -> IntentEvaluation {
+        self.evaluate_with_materialization(candidate).0
+    }
+
+    /// Evaluates one candidate once while retaining the independently validated
+    /// native result for an atomic coordinator publication.
+    ///
+    /// Rejected candidates return no native state. Keeping this seam crate-local
+    /// prevents the coordinator from repeating an expensive cold solve merely
+    /// to translate the materializer-owned typed failure.
+    pub(crate) fn evaluate_with_materialization(
+        &self,
+        candidate: &IntentCandidate,
+    ) -> (IntentEvaluation, Option<ColdIntentMaterialization>) {
         match self.materialize(candidate) {
-            Ok(materialized) => IntentEvaluation::Accepted {
-                evidence: materialized.evidence,
-            },
-            Err(error) => IntentEvaluation::Failed {
-                failure: IntentEvaluationFailure {
-                    kind: error.failure_kind(),
-                    failed_nodes: error.failed_node().into_iter().collect(),
-                    diagnostic: IntentKey::new(error.diagnostic_key())
-                        .expect("static intent materialization diagnostics are valid keys"),
+            Ok(materialized) => {
+                let evaluation = IntentEvaluation::Accepted {
+                    evidence: materialized.evidence.clone(),
+                };
+                (evaluation, Some(materialized))
+            }
+            Err(error) => (
+                IntentEvaluation::Failed {
+                    failure: IntentEvaluationFailure {
+                        kind: error.failure_kind(),
+                        failed_nodes: error.failed_node().into_iter().collect(),
+                        diagnostic: IntentKey::new(error.diagnostic_key())
+                            .expect("static intent materialization diagnostics are valid keys"),
+                    },
                 },
-            },
+                None,
+            ),
         }
     }
 }

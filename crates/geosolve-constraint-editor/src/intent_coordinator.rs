@@ -12,9 +12,9 @@ use geosolve_sketch::{
     OperationControl, OperationOutcome, RetainedSketchDocumentSession,
 };
 use geosolve_sketch_intent::{
-    IntentAliasMap, IntentEvaluation, IntentLiteral, IntentPatch, IntentPatchOperation,
-    IntentPatchPlan, IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentSession,
-    IntentSessionError, IntentSessionId, IntentSessionIdentity, IntentUnit, LeafRef,
+    IntentAliasMap, IntentLiteral, IntentPatch, IntentPatchOperation, IntentPatchPlan,
+    IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentSession, IntentSessionError,
+    IntentSessionId, IntentSessionIdentity, IntentUnit, LeafRef,
 };
 use thiserror::Error;
 
@@ -161,17 +161,10 @@ impl ProjectionalIntentCoordinator {
     {
         let mut captured = None;
         let plan = self.intent.plan_patch(patch, |candidate| {
-            match self.materializer.materialize(candidate) {
-                Ok(materialized) => {
-                    let evidence = materialized.evidence.clone();
-                    captured = Some(materialized);
-                    IntentEvaluation::Accepted { evidence }
-                }
-                // The typed failure conversion remains owned by the materializer.
-                // A deterministic second cold pass occurs only on rejection and
-                // therefore never enters the interactive preview path.
-                Err(_) => self.materializer.evaluate(candidate),
-            }
+            let (evaluation, materialized) =
+                self.materializer.evaluate_with_materialization(candidate);
+            captured = materialized;
+            evaluation
         })?;
         if plan.disposition() == IntentPlanDisposition::Accepted && captured.is_none() {
             return Err(ProjectionalCoordinatorError::MissingAcceptedMaterialization);
@@ -230,17 +223,12 @@ impl ProjectionalIntentCoordinator {
             return Ok(None);
         };
         let mut refreshed = None;
-        let current_was_refreshed =
-            staged.refresh_current_accepted_evidence(|candidate| {
-                match self.materializer.materialize(candidate) {
-                    Ok(materialized) => {
-                        let evidence = materialized.evidence.clone();
-                        refreshed = Some(materialized);
-                        IntentEvaluation::Accepted { evidence }
-                    }
-                    Err(_) => self.materializer.evaluate(candidate),
-                }
-            })?;
+        let current_was_refreshed = staged.refresh_current_accepted_evidence(|candidate| {
+            let (evaluation, materialized) =
+                self.materializer.evaluate_with_materialization(candidate);
+            refreshed = materialized;
+            evaluation
+        })?;
         let accepted = if current_was_refreshed {
             Some(refreshed.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?)
         } else {
