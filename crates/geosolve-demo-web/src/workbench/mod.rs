@@ -444,7 +444,8 @@ fn dispatch_projectional_construction_effects(
 
 /// Browser-side result of one complete relation or dimension application.
 ///
-/// Operand collection and hover remain disposable [`AuthoringState`] state.
+/// Operand collection and hover remain disposable
+/// [`geosolve_constraint_editor::AuthoringState`] state.
 /// Only a complete application can reach the projectional coordinator, where
 /// both an accepted declaration and retained-invalid explicit intent become
 /// exactly one durable history transaction.
