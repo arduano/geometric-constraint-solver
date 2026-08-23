@@ -138,8 +138,9 @@ consolidation is complete and publicly verified. M82's computed arbitrary-curve 
 was explicitly rejected, archived and fully removed from `main`; M81 remains accepted product
 authority. M83 is in progress under ADR 0039: it adds authoritative full-workbench action lineage,
 stable typed identity flow, deterministic rematerialization, workspace v7 and a DOM-free stateful
-Rust/WASM/TypeScript boundary. Its clean-qualified immutable Tailscale candidate is nominated for
-human UAT; the implementation is not yet accepted or published.
+Rust/WASM/TypeScript boundary. Its editable-Lineage and predictive-drag amendment is committed;
+replacement clean qualification and immutable Tailscale nomination are pending. The implementation
+is not yet accepted or published.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here

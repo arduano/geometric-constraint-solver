@@ -18,10 +18,20 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   baselines and treats flat scene/feature/map data as authenticated disposable
   caches. A separate DOM-free `geosolve-sketch-lineage-wasm` crate exposes the
   stateful `geosolve.lineage.rpc.v0` protocol, with a private data-only TypeScript
-  client. A secondary read-only workbench panel now renders the current retained
+  client. A secondary selectable workbench panel now renders the current retained
   action program and its separate Undo/Redo cursor directly from coordinator
-  authority. Replacement clean qualification and immutable Tailscale nomination
-  pass; M81 remains accepted product authority until focused M83 human UAT approval.
+  authority. Its authority-derived Inspector supports dependency-valid exact-CAS
+  reorder and compatible raw action rewrite without a browser-side program mirror.
+  Presentation-only prediction coalesces expensive point/control dragging while
+  exact terminal publication remains coordinator-owned. Replacement clean
+  qualification and immutable Tailscale nomination are pending; M81 remains
+  accepted product authority until focused M83 human UAT approval.
+- M83's editable-lineage amendment additively exposes action schema/version queries;
+  authority snapshot, reorder-lane/reason/outcome and rewrite-outcome DTOs; exact-CAS
+  coordinator inspection/reorder/rewrite methods; and the strict
+  `ConstraintEditor::pointer_up_current_sample` terminal seam. Existing
+  `ConstraintEditor::pointer_up` retains its ordinary last-valid-preview fallback.
+  These pre-1.0 APIs add no solver equation or canonical sketch-wire syntax.
 - M83 authority hardening recompiles complete editor-action manifests—inputs, outputs, identity
   flows, persistent reservations and writable leaves—for current, accepted and historical
   programs before load or evaluation. Imported deletion now appends explicit `Retired` lineage,

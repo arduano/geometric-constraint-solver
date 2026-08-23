@@ -2,12 +2,13 @@
 
 ## Release line
 
-GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The
-eight library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
+GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. That
+release contains eight library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
 `geosolve-linkage`, `geosolve-sketch-ops`, `geosolve-sketch-topology`,
-`geosolve-sketch-features` and `geosolve-constraint-editor`) version and release in lockstep.
-`geosolve-demo-web` is a
-non-published diagnostic consumer.
+`geosolve-sketch-features` and `geosolve-constraint-editor`) that version and release in lockstep.
+M83 adds the unreleased publishable `geosolve-sketch-lineage` and
+`geosolve-sketch-lineage-wasm` crates to the next lockstep release, for ten publishable crates in
+the current workspace. `geosolve-demo-web` is a non-published diagnostic consumer.
 
 Before `1.0`, a minor version may contain source-breaking changes. Patch releases
 must remain source-compatible except where retaining behavior would preserve a
@@ -311,6 +312,38 @@ when its accepted sketch bytes match; a different cold graph causes scratch repl
 computed reevaluation before the atomic swap. No public type, signature, wire field, solver rule or
 successful caller-visible feature identity changes.
 
+The M83 editable-Lineage amendment is an additive pre-1.0 editor/orchestration surface.
+`LineageActionDefinition::{schema, schema_version}` provide read-only access to the stable schema
+identity already carried by each action. `LineageStepInspection` is a detached authority snapshot,
+not an editable document or publication token. `LineageReorderBlockReason`, `LineageReorderLane`,
+`LineageReorderAvailability`, `LineageReorderOutcome` and `LineageStepRewriteOutcome` expose the
+coordinator's current dependency/chronology decision and resulting exact transaction; callers that
+exhaustively match these provisional enums must handle additive variants under the documented
+pre-1.0 minor-release policy.
+
+`RetainedEditorCoordinator::{lineage_step_inspection, lineage_reorder_availability,
+reorder_lineage_step, rewrite_lineage_step_json}` are the supported host seam for the demo's
+Inspector. Inspection and availability are read-only. Reorder and rewrite require the exact
+`LineageDocumentIdentity`, stage strict-cold owning-domain evaluation and publish atomically into
+the one lineage history. Reorder may directionally clamp a blocked request to the furthest legal
+lane and reports that result; imported baselines and tombstones are pinned, while suppression does
+not itself pin a step. Raw JSON accepts only `LineageStepRewrite`: action kind/schema/version and
+all stable step/output/reservation ownership remain immutable. Stale, malformed, oversized,
+schema-changing or semantically invalid requests leave retained lineage, accepted geometry and
+history unchanged. Hosts must refresh the inspection after any publication rather than treating a
+snapshot or browser drag payload as continuing authority.
+
+`ConstraintEditor::pointer_up_current_sample` is an additive strict terminal adapter for a host
+that coalesces captured Point or CurveControl motion. It commits only when the latest accepted
+preview was requested at the bitwise-exact terminal model position and is authenticated by the
+terminal scene. An unsampled or rejected terminal coordinate clears the preview instead of
+borrowing an older accepted sample. Existing `ConstraintEditor::pointer_up` remains source- and
+behavior-compatible and deliberately retains its ordinary last-valid-preview fallback. Predictive
+timing, cursor intent, Lineage selection, dirty debug drafts and drag authentication are private
+demo presentation state; none enters workspace v7, generic lineage/RPC schemas or canonical sketch
+v1-v4. This amendment changes no residual, Jacobian, rank/DOF rule, hard/soft priority, branch
+policy or accepted-state validation requirement.
+
 Generic caller-authored action payloads remain a structural lineage extension point, but M83 does
 not promise that a registered schema alone is executable workbench intent. Only editor-compiled
 actions carrying authenticated private materialization data can cold-materialize through the
@@ -369,7 +402,7 @@ The supported domain entry points are:
   workflows;
 - `geosolve-sketch-ops` immutable snapshots, controlled prepared proposals and exact-input
   application for equation-free sketch operations;
-- `geosolve-sketch-topology` complete accepted-input production-wire and region profiles; and
+- `geosolve-sketch-topology` complete accepted-input production-wire and region profiles;
 - `geosolve-sketch-features` persistent computed-feature intent plus independently validated,
   exact-stamped revision-local output;
 - `geosolve-sketch-lineage` canonical declarative sketch-action authority, stable typed identity
@@ -377,6 +410,10 @@ The supported domain entry points are:
 - `geosolve-constraint-editor` state, scene, normalized input and typed effect APIs for
   presentation-independent constraint, dimension and computed-feature authoring over those sketch
   workflows.
+
+`geosolve-sketch-lineage-wasm` is the DOM-free binding tier for the provisional versioned lineage
+RPC contract. It delegates validation and authority to the Rust domain/editor APIs above and is
+publishable with them, but is not an additional geometry or document-semantics owner.
 
 Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain supported
 compatibility facades in the `0.2` line.
