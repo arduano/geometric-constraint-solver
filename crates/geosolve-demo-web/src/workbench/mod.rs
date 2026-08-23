@@ -1663,6 +1663,17 @@ fn projectional_history_shortcut(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+const fn projectional_direct_gesture_is_capturable(
+    kind: geosolve_constraint_editor::ActivePointerGestureKind,
+) -> bool {
+    matches!(
+        kind,
+        geosolve_constraint_editor::ActivePointerGestureKind::Point
+            | geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
+    )
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 #[allow(clippy::fn_params_excessive_bools)]
 const fn canvas_cursor_key(
     tool: geosolve_constraint_editor::EditorTool,
@@ -4292,15 +4303,22 @@ pub(crate) mod wasm {
             let presentation = match active {
                 Some(active)
                     if active.pointer_id == input.pointer_id
-                        && active.kind
-                            == geosolve_constraint_editor::ActivePointerGestureKind::Point =>
+                        && super::projectional_direct_gesture_is_capturable(active.kind) =>
                 {
                     if down_viewport
                         .set_pointer_capture(event.pointer_id())
                         .is_ok()
                     {
                         wb.captured_pointer = Some(event.pointer_id());
-                        wb.notice = "Projectional point gesture prepared".into();
+                        wb.notice = match active.kind {
+                            geosolve_constraint_editor::ActivePointerGestureKind::Point => {
+                                "Projectional point gesture prepared".into()
+                            }
+                            geosolve_constraint_editor::ActivePointerGestureKind::CurveControl => {
+                                "Projectional curve-control gesture prepared".into()
+                            }
+                            _ => unreachable!("guarded projectional direct gesture kind"),
+                        };
                         super::WorkbenchPresentationEvent::PointerMoveFrame
                     } else {
                         wb.editor_mut().cancel_interaction();
@@ -4313,8 +4331,7 @@ pub(crate) mod wasm {
                 Some(_) => {
                     wb.editor_mut().cancel_interaction();
                     wb.notice =
-                        "This projectional build currently supports direct point movement only"
-                            .into();
+                        "This property gesture is not available in projectional mode".into();
                     super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
                 }
                 None => {
@@ -4447,7 +4464,7 @@ pub(crate) mod wasm {
                 Ok(outcome) => {
                     release_projectional_pointer_capture(&up_viewport, &mut wb, true);
                     if outcome.transaction.is_some() {
-                        wb.notice = "Projectional point movement accepted".into();
+                        wb.notice = "Projectional direct movement accepted".into();
                         super::WorkbenchPresentationEvent::PointerRelease
                     } else {
                         wb.notice = "Canvas selection updated".into();
@@ -12018,12 +12035,13 @@ mod tests {
         geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
         observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
         offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
-        owns_authoring_pick, projectional_design_markup, rational_conic_construction_copy,
-        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
-        reproduction_overlay_presentation, reproduction_payload_size_label,
-        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
-        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
-        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
+        owns_authoring_pick, projectional_design_markup, projectional_direct_gesture_is_capturable,
+        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
+        reproduction_focus_target_after_action, reproduction_overlay_presentation,
+        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
+        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
+        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
+        should_route_stationary_draft_inference,
     };
 
     #[test]
@@ -12051,6 +12069,24 @@ mod tests {
         assert_eq!(Outline.button_id(), "wb-design-tab-outline");
         assert_eq!(StructuredSource.panel_id(), "wb-design-source");
         assert_eq!(History.panel_id(), "wb-design-history");
+    }
+
+    #[test]
+    fn projectional_browser_captures_every_supported_direct_manipulation_route() {
+        assert!(projectional_direct_gesture_is_capturable(
+            ActivePointerGestureKind::Point,
+        ));
+        assert!(projectional_direct_gesture_is_capturable(
+            ActivePointerGestureKind::CurveControl,
+        ));
+        for unsupported in [
+            ActivePointerGestureKind::Annotation,
+            ActivePointerGestureKind::FilletRadius,
+            ActivePointerGestureKind::FilletContact,
+            ActivePointerGestureKind::OffsetDistance,
+        ] {
+            assert!(!projectional_direct_gesture_is_capturable(unsupported));
+        }
     }
 
     fn test_viewport() -> Viewport {
