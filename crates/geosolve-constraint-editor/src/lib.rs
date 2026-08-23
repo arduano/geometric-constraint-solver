@@ -23,6 +23,7 @@ mod intent_coordinator;
 mod intent_editor;
 mod intent_feature_authoring;
 mod intent_inputs;
+mod intent_offset_authoring;
 mod intent_projection;
 mod intent_rpc;
 mod offset_authoring;
@@ -123,6 +124,11 @@ pub use intent_editor::{
 pub use intent_feature_authoring::{
     ProjectionalFilletAuthoringError, ProjectionalFilletPatch, projectional_fillet_patch,
     projectional_fillet_radius_patch,
+};
+pub use intent_offset_authoring::{
+    ProjectionalProfileOffsetError, ProjectionalProfileOffsetPatch,
+    projectional_profile_offset_delete_patch, projectional_profile_offset_direction_patch,
+    projectional_profile_offset_distance_patch, projectional_profile_offset_patch,
 };
 pub use intent_projection::{
     IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,

@@ -8,7 +8,7 @@
 //! disposable selection, hover and pointer-gesture state.
 
 use geosolve_sketch::{
-    DesignPointId, DocumentCurveControlId, DocumentId, OperationControl,
+    DesignPointId, DocumentCurveControlId, DocumentDimensionId, DocumentId, OperationControl,
     RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity,
     SketchHardValidity,
 };
@@ -26,11 +26,14 @@ use crate::{
     IntentBootstrapError, IntentInspectorEditError, IntentInspectorEditTarget,
     IntentInspectorEditValue, IntentInspectorProjection, IntentSourceEditError,
     IntentSourceTokenId, IntentValidationEvidence, IntentWorkbenchProjection, Modifiers,
-    PickTolerance, PointerInput, ProjectionalAuthoringError, ProjectionalCoordinatorError,
-    ProjectionalFilletAuthoringError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
+    OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
+    ProjectionalAuthoringError, ProjectionalCoordinatorError, ProjectionalFilletAuthoringError,
+    ProjectionalIntentCoordinator, ProjectionalPatchOutcome, ProjectionalProfileOffsetError,
     SelectionItem, Viewport, decode_flat_intent_bootstrap,
     flat_intent_bootstrap_materialization_map, projectional_application_patch,
     projectional_construction_patch, projectional_fillet_patch, projectional_fillet_radius_patch,
+    projectional_profile_offset_delete_patch, projectional_profile_offset_direction_patch,
+    projectional_profile_offset_distance_patch, projectional_profile_offset_patch,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -447,6 +450,128 @@ impl ProjectionalEditorSession {
                 &accepted.ownership,
                 feature,
                 radius,
+            )?
+        };
+        self.apply_patch(patch)
+    }
+
+    /// Publishes one complete topology-authenticated native Profile Offset as
+    /// aggregate operands plus one operation declaration through the sole
+    /// intent history.
+    ///
+    /// Native operation preparation authenticates the exact output inventory
+    /// before any intent reservation is created. A successful publication
+    /// clears the consumed operand while retaining the collector's distance
+    /// memory; the host may reactivate it with a fresh topology index.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/incomplete collection, topology or native preparation,
+    /// missing logical source ownership, or ordinary projectional publication
+    /// failure without changing the collector or history.
+    pub fn apply_profile_offset(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        symbol: IntentKey,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        self.cancel_interaction();
+        let patch = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            projectional_profile_offset_patch(
+                self.coordinator.intent().identity(),
+                self.coordinator.intent(),
+                &accepted.ownership,
+                &accepted.session,
+                state,
+                symbol,
+            )?
+            .patch
+        };
+        let outcome = self.apply_patch(patch)?;
+        if outcome.disposition == IntentPlanDisposition::Accepted {
+            state.clear_after_apply();
+        }
+        Ok(outcome)
+    }
+
+    /// Edits the positive distance property owned by one accepted native
+    /// Profile Offset declaration.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid distance, stale/ambiguous ownership, a non-Offset
+    /// declaration, or ordinary projectional publication failure.
+    pub fn edit_profile_offset_distance(
+        &mut self,
+        dimension: DocumentDimensionId,
+        distance: f64,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            projectional_profile_offset_distance_patch(
+                self.coordinator.intent(),
+                &accepted.ownership,
+                dimension,
+                distance,
+            )?
+        };
+        self.apply_patch(patch)
+    }
+
+    /// Edits the explicit direction property owned by one accepted native
+    /// Profile Offset declaration without changing operand topology.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a face/chain direction-family mismatch, stale ownership, or
+    /// ordinary projectional publication failure.
+    pub fn edit_profile_offset_direction(
+        &mut self,
+        dimension: DocumentDimensionId,
+        direction: ProfileOffsetDirectionState,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            projectional_profile_offset_direction_patch(
+                self.coordinator.intent(),
+                &accepted.ownership,
+                dimension,
+                direction,
+            )?
+        };
+        self.apply_patch(patch)
+    }
+
+    /// Deletes the operation which owns one accepted native Profile Offset
+    /// dimension plus its exact downstream dependency closure in one history
+    /// transaction.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/ambiguous ownership or a changed dependency closure
+    /// without publishing a partial deletion.
+    pub fn delete_profile_offset(
+        &mut self,
+        dimension: DocumentDimensionId,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            projectional_profile_offset_delete_patch(
+                self.coordinator.intent(),
+                &accepted.ownership,
+                dimension,
             )?
         };
         self.apply_patch(patch)
@@ -1076,6 +1201,8 @@ pub enum ProjectionalEditorError {
     Authoring(#[from] ProjectionalAuthoringError),
     #[error(transparent)]
     FilletAuthoring(#[from] ProjectionalFilletAuthoringError),
+    #[error(transparent)]
+    ProfileOffset(#[from] ProjectionalProfileOffsetError),
     #[error("the editor effect is not a terminal construction plan")]
     UnexpectedConstructionEffect,
     #[error("the construction token, plan, input, or active geometry variant is not current")]
