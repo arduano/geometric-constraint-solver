@@ -18,6 +18,7 @@ mod inference;
 mod intent;
 mod intent_coordinator;
 mod intent_editor;
+mod intent_inputs;
 mod intent_projection;
 mod intent_rpc;
 mod offset_authoring;
