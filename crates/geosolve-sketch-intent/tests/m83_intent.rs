@@ -1862,6 +1862,79 @@ fn normalized_bootstrap_is_per_object_typed_and_canonical_without_an_aggregate_b
 }
 
 #[test]
+fn bootstrap_membership_uses_one_logical_document_root_without_native_aliasing() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_b001)).unwrap();
+    let root = bootstrap_draft(BootstrapNativeKind::Document, "document");
+    let point = bootstrap_draft(BootstrapNativeKind::Point, "point").with_input(
+        InputSlot::new(InputRole::Identity, 0),
+        alias_port("document", IntentPortRole::Result, 0),
+    );
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("point"),
+                draft: Box::new(point),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("document"),
+                draft: Box::new(root),
+                cell: None,
+            },
+        ],
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    session.commit_initialization_plan(plan).unwrap();
+
+    assert_eq!(session.graph().nodes().len(), 2);
+    assert_eq!(session.undo_len(), 0);
+    assert_eq!(session.redo_len(), 0);
+    assert!(session.undo().unwrap().is_none());
+    let point = session
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| node.symbol.as_str() == "point")
+        .unwrap();
+    let source = point.inputs[&InputSlot::new(InputRole::Identity, 0)];
+    assert_eq!(source.kind, IntentPortKind::Collection);
+    let primary = point
+        .port_by_selector(point_selector())
+        .expect("bootstrap point output");
+    assert!(matches!(primary.flow, IntentIdentityFlow::Created { .. }));
+}
+
+#[test]
+fn initialization_publication_rejects_a_nonempty_session() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_b002)).unwrap();
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("first"),
+            draft: Box::new(point_draft("first")),
+            cell: None,
+        }],
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    session.commit_plan(plan).unwrap();
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("second"),
+            draft: Box::new(point_draft("second")),
+            cell: None,
+        }],
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    assert!(session.commit_initialization_plan(plan).is_err());
+    assert_eq!(session.graph().nodes().len(), 1);
+}
+
+#[test]
 fn semantic_source_bootstrap_requires_its_typed_catalog_before_materialization() {
     let session = IntentSession::with_id(IntentSessionId::from_raw(0x8324)).unwrap();
     let identity = session.identity();

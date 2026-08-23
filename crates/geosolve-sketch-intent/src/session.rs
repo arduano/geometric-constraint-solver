@@ -659,6 +659,45 @@ impl IntentSession {
         Ok(actual)
     }
 
+    /// Commits the sole accepted initialization of a new session without
+    /// presenting migration/bootstrap construction as a user Undo step.
+    ///
+    /// The plan must start at revision zero on a completely empty semantic
+    /// session and contain only declaration creation. Normal interactive and
+    /// code-authored patches must use [`Self::commit_plan`] instead.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a non-empty session, a non-accepted plan, any non-creation
+    /// operation, or the ordinary stale/token/session validation failures.
+    pub fn commit_initialization_plan(
+        &mut self,
+        plan: IntentPatchPlan,
+    ) -> Result<IntentSessionIdentity, IntentSessionError> {
+        let is_empty = self.revision.raw() == 0
+            && self.graph.nodes().is_empty()
+            && self.instance.values().is_empty()
+            && self.accepted.is_none()
+            && self.latest_attempt.is_none()
+            && self.undo.is_empty()
+            && self.redo.is_empty();
+        let is_initialization = plan.disposition == IntentPlanDisposition::Accepted
+            && !plan.descriptor.operation_kinds.is_empty()
+            && plan
+                .descriptor
+                .operation_kinds
+                .iter()
+                .all(|kind| *kind == IntentPatchOperationKind::CreateNode);
+        if !is_empty || !is_initialization {
+            return Err(IntentSessionError::InvalidInitializationPlan);
+        }
+        self.commit_plan(plan)?;
+        self.undo.clear();
+        self.redo.clear();
+        self.validate()?;
+        Ok(self.identity())
+    }
+
     /// Restores the preceding complete transaction checkpoint with a fresh
     /// overall exact-CAS revision. Stable IDs and allocator high-water remain
     /// exact and never regress.
@@ -1828,6 +1867,8 @@ pub enum IntentSessionError {
     },
     #[error("invalid or altered intent plan token")]
     InvalidPlanToken,
+    #[error("initial session publication requires one accepted declaration-only plan")]
+    InvalidInitializationPlan,
     #[error("intent revision exhausted")]
     RevisionExhausted,
     #[error("invalid intent organization")]

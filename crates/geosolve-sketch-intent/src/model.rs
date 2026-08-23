@@ -406,8 +406,30 @@ impl BootstrapNativeKind {
     ];
 
     const fn accepts_input(self, role: InputRole) -> bool {
+        // Every normalized historical object may name the one document-header
+        // root through the kind-agnostic Identity role. The root is a logical
+        // membership dependency only; it never aliases or continues the
+        // object's native identity.
+        if matches!(role, InputRole::Identity) {
+            return true;
+        }
         match self {
-            Self::Document | Self::Point | Self::Scalar | Self::SemanticCatalog => false,
+            Self::Point | Self::Scalar | Self::SemanticCatalog => false,
+            Self::Document => matches!(
+                role,
+                InputRole::Point
+                    | InputRole::Contact
+                    | InputRole::Curve
+                    | InputRole::Span
+                    | InputRole::Scalar
+                    | InputRole::Constraint
+                    | InputRole::Dimension
+                    | InputRole::Feature
+                    | InputRole::Parameter
+                    | InputRole::External
+                    | InputRole::Source
+                    | InputRole::Catalog
+            ),
             Self::Curve => matches!(
                 role,
                 InputRole::Point | InputRole::Scalar | InputRole::External
@@ -446,12 +468,22 @@ impl BootstrapNativeKind {
                 role,
                 InputRole::Catalog | InputRole::Scalar | InputRole::Parameter | InputRole::Source
             ),
-            Self::CurveTrimView | Self::GeometryRole => {
-                matches!(role, InputRole::Curve | InputRole::Span)
-            }
+            Self::CurveTrimView => matches!(
+                role,
+                InputRole::Curve | InputRole::Span | InputRole::Constraint | InputRole::Contact
+            ),
+            Self::GeometryRole => matches!(role, InputRole::Curve | InputRole::Span),
             Self::ParameterBinding | Self::ParameterOutput => matches!(
                 role,
-                InputRole::Parameter | InputRole::Dimension | InputRole::Scalar
+                InputRole::Point
+                    | InputRole::Contact
+                    | InputRole::Curve
+                    | InputRole::Scalar
+                    | InputRole::Constraint
+                    | InputRole::Dimension
+                    | InputRole::Parameter
+                    | InputRole::External
+                    | InputRole::Source
             ),
             Self::ComputedFeature => matches!(
                 role,
