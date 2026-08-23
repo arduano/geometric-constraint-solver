@@ -585,12 +585,9 @@ version = "0.2.0"
 dependencies = [
  "geosolve-sketch",
  "geosolve-sketch-features",
- "geosolve-sketch-lineage",
  "geosolve-sketch-ops",
  "geosolve-sketch-topology",
  "proptest",
- "serde",
- "serde_json",
  "thiserror 2.0.18",
  "wasm-bindgen-test",
 ]
@@ -622,7 +619,6 @@ dependencies = [
  "geosolve-core",
  "geosolve-sketch",
  "geosolve-sketch-features",
- "geosolve-sketch-lineage",
  "miniz_oxide",
  "serde",
  "serde_json",
@@ -678,28 +674,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "geosolve-sketch-lineage"
-version = "0.2.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "geosolve-sketch-lineage-wasm"
-version = "0.2.0"
-dependencies = [
- "geosolve-constraint-editor",
- "geosolve-sketch",
- "geosolve-sketch-lineage",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-test",
 ]
 
 [[package]]

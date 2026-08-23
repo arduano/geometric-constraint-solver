@@ -239,61 +239,6 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 `archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
-M83's authoritative-lineage architecture and approved editable-Lineage/predictive-drag amendment
-are implemented, clean-qualified and immutably nominated, but the milestone is not accepted.
-Under accepted ADR 0039,
-`LineageDocument` becomes the authoritative source for the complete demo workbench; flat sketch
-and feature state are derived.
-The milestone covers all 25 geometry variants, the complete current relation/dimension/property/
-branch surface, every current sketch operation, native and computed Fillet/Offset intent,
-strict-versus-dependency-local evaluation, workspace v7 with honest v1-v6 migration, atomic
-multi-owner direct editing and stateful DOM-free `geosolve.lineage.rpc.v0`. `docs/M83_GOALS.md` is
-the authoritative scope. Completion hardening adds genuine cold direct-edit witnesses,
-accepted-prefix native-Fillet continuation, a frozen honest v1-v6 migration corpus and correlated
-TypeScript/RPC response validation. M83-F031 additionally binds TypeScript parameters/results to
-their method and immutable serialized request, authenticates retained-CAS/result/lifecycle identity
-and bounded evaluation-plan cross-fields, and enforces the shared request byte bound without
-changing sketch equations. M83-F032/F033 make strict cold replay the publication authority in both
-directions: its exact accepted graph replaces or promotes provisional live materialization, while
-a strict cold rejection can never be hidden by a live success. M83-F034/F035 finish the late-
-failure audit by restoring auxiliary lineage high-water on post-refresh checkpoint failure and
-staging legacy flat reload through final lineage import before one live swap. M83-F036 closes the
-feature-only publication seam: exact held computed previews publish unchanged when their sketch
-bytes already equal strict-cold authority, while a different cold underconstrained witness rebuilds
-computed output and publishes both owners atomically. M83-F037 through F040 finish accepted-
-identity and inferred-construction publication hardening: canonical byte changes always allocate a
-fresh accepted revision, same-byte reload cannot skip a higher saved lifecycle, construction
-acknowledgement follows every fallible lineage operation, and public construction results report
-the final strict-cold accepted identity. The workbench presents that retained program directly
-beside Sketch Tree, with distinct program-revision and Undo/Redo-history state and no browser-owned
-lineage mirror. The amendment makes rows selectable, exposes coordinator-owned inspection,
-reorder and compatible raw rewrite, authenticates desktop drag/drop, and coalesces only
-presentation for expensive Point/CurveControl drags while requiring an exact terminal owner
-rewrite. Prior exact source `bb888cc`, tree `dff5ebe`, remains historical clean-gate evidence but
-is withdrawn from current UAT because it predates these editable and predictive surfaces; its old
-Tailscale bytes are not the replacement candidate. The earlier `d378f7b3` candidate predates the
-Lineage panel entirely. Replacement exact source
-`d8137543fecf4a09433471e16383db5069de0d41`, tree
-`031a8c95ddc99f1bf52847c0485ac857b0af1079`, passed the complete clean gate from
-2026-08-23T09:52:01Z through 10:17:36Z with exit 0. The 308,679-byte log
-`/tmp/geosolve-m83-amendment-release-gate.log` has SHA-256
-`015af2b3fea2c64677920b3c590df8c5812b7662900a11e4ba156633845cbd17`.
-
-Without rebuilding, its seven regular non-symlink files were frozen read-only at
-`/tmp/geosolve-m83-amendment-uat.AVC9ce` (directory `0555`, files `0444`) with C-locale ordered
-manifest aggregate `260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`.
-Temporary PID `1728899` first passed all eight exact requests at `100.94.63.83:18080` and was
-retired. Only then was old PID `4152505` retired and `geosolve-m83-lineage-uat.service`, PID
-`1733554`, started the identical snapshot at `http://100.94.63.83:8080/`. Temporary ledger
-`/tmp/geosolve-m83-amendment-temp-verify.8Z630V/results.tsv` and final ledger
-`/tmp/geosolve-m83-amendment-final-verify.BK5m0F/results.tsv` are byte-identical with SHA-256
-`7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`; root exactly equals
-`index.html`. Independent API/architecture and predictive-terminal audits found no blocker. A
-future Point scene-seal symmetry cleanup is non-blocking defense in depth, not missing M83
-authority. Human M83-U1 through M83-U12, explicit acceptance and Pages publication remain
-pending; Pages is unchanged.
-M81 remains accepted product authority until M83 closes.
-
 ## Read first
 
 1. `AGENTS.md`
@@ -302,8 +247,7 @@ M81 remains accepted product authority until M83 closes.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, plus accepted-for-M83-implementation
-   `docs/adr/0039-sketch-lineage-and-deterministic-rematerialization.md`.
+7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
@@ -326,12 +270,6 @@ M81 remains accepted product authority until M83 closes.
     accepted focused scorecard and exact public closeout.
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
-19. `docs/M83_GOALS.md` — in-progress, mechanically nominated authoritative full-workbench
-    lineage, complete catalog, deterministic evaluation, workspace-v7 migration and stateful RPC
-    contract.
-20. `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — implementation/finding/qualification
-    ledger and the frozen replacement-candidate scorecard with M83-U1 through M83-U12 pending.
-    They are pre-UAT evidence, not a milestone-close claim.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -709,13 +647,6 @@ restores the exact M81 product tree and the complete discarded prototype is arch
 qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
 descendant `b582b82` passes exact Pages publication. Do not route Offset through computed features,
 admit a topology-changing fallback or treat M81's private module moves as new behavior.
-M83 is the current in-progress milestone. Its implementation, complete clean gate, focused audits
-and immutable Tailscale nomination pass at exact source
-`d8137543fecf4a09433471e16383db5069de0d41`; resume with M83-U1 through M83-U12 and explicit
-supervising-human acceptance, then publish and exact-verify Pages before closure. Commit
-`56d1eda`'s narrow proof remains superseded: do not use it to defer full catalog, computed-feature
-or workbench-v7 migration. Continue to exclude arbitrary B-rep naming, M82's rejected arbitrary-
-curve Offset and TypeScript source rewriting.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -815,11 +746,6 @@ Durable milestone and cleanup records:
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
-- `docs/M83_GOALS.md` (authoritative full-workbench lineage, migration and editable panel contract)
-- `docs/M83_IMPLEMENTATION.md` (implementation, findings and replacement-qualification ledger)
-- `docs/M83_UAT.md` (frozen replacement-candidate scorecard; human M83-U1 through M83-U12 pending)
-- `docs/adr/0039-sketch-lineage-and-deterministic-rematerialization.md` (accepted M83 authority,
-  typed identity, strict/local rebuild, workspace-v7 and stateful RPC decision)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -431,7 +431,7 @@ fn radial_normal_is_commutative_and_uses_an_external_line_projection() {
 }
 
 #[test]
-fn radial_normal_uses_strict_cold_accepted_geometry_beneath_a_divergent_design() {
+fn radial_normal_uses_historical_accepted_geometry_beneath_a_rejected_design() {
     let (mut coordinator, line, circle) = external_segment_reproduction();
     let center = match &coordinator
         .session()
@@ -451,12 +451,14 @@ fn radial_normal_uses_strict_cold_accepted_geometry_beneath_a_divergent_design()
                 position: [100.0, 0.0],
             },
         )
-        .expect("strict-cold promoted fixed-point move");
-    let promoted = coordinator
-        .session()
-        .accepted_state_for_current_input()
-        .expect("strict-cold current accepted state");
-    assert_eq!(rejected.published_accepted, Some(promoted.identity()));
+        .expect("retained rejected fixed-point move");
+    assert!(rejected.published_accepted.is_none());
+    assert!(
+        coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .is_none()
+    );
     assert_eq!(
         coordinator
             .session()
@@ -470,8 +472,8 @@ fn radial_normal_uses_strict_cold_accepted_geometry_beneath_a_divergent_design()
     assert_eq!(
         coordinator
             .session()
-            .accepted_state_for_current_input()
-            .expect("strict-cold accepted state")
+            .accepted_state()
+            .expect("historical accepted state")
             .document()
             .point(center)
             .expect("accepted center")
@@ -491,7 +493,7 @@ fn radial_normal_uses_strict_cold_accepted_geometry_beneath_a_divergent_design()
         },
     ] = choices.as_slice()
     else {
-        panic!("strict-cold accepted radial choice");
+        panic!("historical accepted radial choice");
     };
     assert_eq!(default_parameter.to_bits(), (-2.0_f64).to_bits());
 

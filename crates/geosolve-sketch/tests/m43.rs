@@ -614,7 +614,7 @@ fn topology_mismatch_is_typed_atomic_and_requires_rebind_before_recovery() {
     session
         .update_external_snapshot_set(
             session.design_identity(),
-            incompatible.clone(),
+            incompatible,
             DocumentSolveRequest::default(),
         )
         .unwrap();
@@ -627,11 +627,6 @@ fn topology_mismatch_is_typed_atomic_and_requires_rebind_before_recovery() {
             if *actual == binding
     ));
     assert_eq!(session.external_snapshot_set(), &initial_set);
-    assert_eq!(
-        session.latest_attempt_external_snapshot_set(),
-        &incompatible
-    );
-    assert_eq!(session.accepted_external_snapshot_set(), Some(&initial_set));
     assert_eq!(
         session.accepted_state().unwrap().identity(),
         retained_identity
@@ -810,7 +805,6 @@ fn external_input_failures_are_typed_and_atomic_and_rebind_is_explicit() {
         )
         .unwrap(),
     ] {
-        let expected_candidate = candidate.clone();
         session
             .update_external_snapshot_set(
                 session.design_identity(),
@@ -824,14 +818,6 @@ fn external_input_failures_are_typed_and_atomic_and_rebind_is_explicit() {
             geometry
         );
         assert_eq!(session.external_snapshot_set(), &accepted_set);
-        assert_eq!(
-            session.latest_attempt_external_snapshot_set(),
-            &expected_candidate
-        );
-        assert_eq!(
-            session.accepted_external_snapshot_set(),
-            Some(&accepted_set)
-        );
         assert!(matches!(
             session
                 .last_attempt()

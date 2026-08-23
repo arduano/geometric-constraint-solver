@@ -133,11 +133,7 @@ pub use document::{
     LineLineFilletIds, LineLineFilletRequest, MAX_BSPLINE_CONTROLS, MAX_DOCUMENT_JSON_BYTES,
     MAX_DOCUMENT_OBJECTS, MAX_DOCUMENT_PARAMETERS, MAX_EXTERNAL_BINDINGS, MAX_LABEL_BYTES,
     MAX_PERSISTENT_SPLINE_SPAN_CURSORS, MAX_POLYLINE_POINTS, MirroredCurveIds, PersistentId,
-    RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, ScalarValueEdit, SketchDatum,
-    SketchDocument, SketchMaterializationBatch, SketchMaterializationConstraintReservation,
-    SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
-    SketchMaterializationReservationAllocator, SketchMaterializationReservationConsumption,
-    SketchMaterializationReservationSet, SketchMaterializationSemanticCatalog,
+    RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDatum, SketchDocument,
     SketchPersistentIdentityHighWater, TangentOrientation,
 };
 pub use document_lowering::{
@@ -154,8 +150,7 @@ pub use document_session::{
     ExternalSnapshotResourcesV1, ExternalSnapshotSet, ExternalSnapshotSetDigest,
     ExternalSnapshotSetV1, MAX_EXTERNAL_SNAPSHOT_CONTROLS, MAX_EXTERNAL_SNAPSHOT_ENTRIES,
     MAX_EXTERNAL_SNAPSHOT_POINTS, MAX_EXTERNAL_SNAPSHOT_SPANS, MAX_PARAMETER_BATCH_ENTRIES,
-    MAX_PARAMETER_BATCH_JSON_BYTES, PARAMETER_BATCH_VERSION_V1, ParameterBatch,
-    ParameterBatchEntry, ParameterDigest, ParameterValue, PreparedSketchCommit,
+    ParameterBatch, ParameterBatchEntry, ParameterDigest, ParameterValue, PreparedSketchCommit,
     PreparedSketchInput, PreparedSketchJob, PreparedSketchOperation, PreparedSketchOperationKind,
     PreparedSketchPatch, PreparedSketchPreview, PreparedSketchSnapshot,
     RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession,

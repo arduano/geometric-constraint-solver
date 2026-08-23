@@ -7,8 +7,6 @@ members = [
     "crates/geosolve-linkage",
     "crates/geosolve-sketch",
     "crates/geosolve-sketch-features",
-    "crates/geosolve-sketch-lineage",
-    "crates/geosolve-sketch-lineage-wasm",
     "crates/geosolve-sketch-ops",
     "crates/geosolve-sketch-topology",
 ]

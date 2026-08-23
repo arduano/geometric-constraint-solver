@@ -17,24 +17,21 @@ const MAX_PROFILE_OFFSET_EDGES: usize = 256;
 const GEOMETRY_EPSILON: f64 = 1.0e-10;
 
 /// Source-only ordered path authenticated by the topology owner before construction.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DocumentProfileOffsetCreationPath {
     pub edges: Vec<DocumentDirectedProfileOffsetCurve>,
     pub junctions: Vec<DocumentProfileOffsetCreationJunction>,
 }
 
 /// Source-owned join and retained local branch used while constructing target topology.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DocumentProfileOffsetCreationJunction {
     pub source_owner: DocumentProfileOffsetJunctionOwner,
     pub branch: DocumentProfileOffsetJunctionBranch,
 }
 
 /// One exact source operand for atomic target construction.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DocumentProfileOffsetCreationOperand {
     Face {
         direction: DocumentFaceOffsetDirection,
@@ -48,8 +45,7 @@ pub enum DocumentProfileOffsetCreationOperand {
 }
 
 /// Complete deterministic native Offset construction request.
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DocumentProfileOffsetCreationRequest {
     pub label: String,
     pub distance: f64,
@@ -62,16 +58,14 @@ pub struct DocumentProfileOffsetCreationRequest {
 /// to authenticate it again at application time. It is deliberately not persistent sketch state:
 /// successful application stores ordinary target geometry plus the grouped association, while a
 /// rejected or stale plan changes nothing.
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DocumentPreparedProfileOffsetGeometry {
     label: String,
     distance: f64,
     operand: PreparedCreationOperand,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 enum PreparedCreationOperand {
     Face {
         direction: DocumentFaceOffsetDirection,
@@ -84,15 +78,13 @@ enum PreparedCreationOperand {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum OffsetSupport {
     Line { point: [f64; 2], tangent: [f64; 2] },
     Circle { center: [f64; 2], radius: f64 },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum TargetFamily {
     Line,
     CircularArc {
@@ -106,8 +98,7 @@ enum TargetFamily {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 struct PreparedEdge {
     source: DocumentDirectedProfileOffsetCurve,
     source_definition: CurveDefinition,
@@ -120,8 +111,7 @@ struct PreparedEdge {
     source_end_tangent: [f64; 2],
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 struct PreparedPath {
     edges: Vec<PreparedEdge>,
     junctions: Vec<DocumentProfileOffsetCreationJunction>,

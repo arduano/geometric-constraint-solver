@@ -515,14 +515,9 @@ fn parameter_digest(revision: u64, entries: &[ParameterBatchEntry]) -> Parameter
 
 /// Defensive bound for one immutable host parameter batch.
 pub const MAX_PARAMETER_BATCH_ENTRIES: usize = crate::MAX_DOCUMENT_PARAMETERS;
-/// Current canonical immutable host-parameter batch wire version.
-pub const PARAMETER_BATCH_VERSION_V1: u32 = 1;
-/// Defensive byte limit applied before host-parameter JSON deserialization.
-pub const MAX_PARAMETER_BATCH_JSON_BYTES: usize = 16 * 1024 * 1024;
 
 /// One closed typed canonical host parameter value.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ParameterValue {
     Length(f64),
     Angle(f64),
@@ -551,16 +546,14 @@ impl ParameterValue {
 }
 
 /// One canonical immutable host parameter entry.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ParameterBatchEntry {
     pub parameter: DocumentParameterId,
     pub value: ParameterValue,
 }
 
 /// Canonical deterministic identity of one immutable parameter batch.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
-#[serde(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct ParameterDigest([u8; 32]);
 
 impl ParameterDigest {
@@ -573,15 +566,6 @@ impl ParameterDigest {
 /// Immutable ordered, revisioned host parameter input captured by one attempt.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParameterBatch {
-    revision: u64,
-    digest: ParameterDigest,
-    entries: Vec<ParameterBatchEntry>,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ParameterBatchWireV1 {
-    version: u32,
     revision: u64,
     digest: ParameterDigest,
     entries: Vec<ParameterBatchEntry>,
@@ -646,94 +630,6 @@ impl ParameterBatch {
             digest: parameter_digest(revision, &entries),
             entries,
         })
-    }
-
-    /// Reconstructs a batch only when its version, contents, and canonical
-    /// digest agree exactly. Revision zero is reserved for the empty default
-    /// input and cannot certify non-empty values.
-    ///
-    /// # Errors
-    ///
-    /// Rejects unsupported versions, invalid entries, or a digest mismatch.
-    pub fn from_digest(
-        version: u32,
-        revision: u64,
-        digest: ParameterDigest,
-        entries: Vec<ParameterBatchEntry>,
-    ) -> Result<Self, DocumentError> {
-        if version != PARAMETER_BATCH_VERSION_V1 {
-            return Err(DocumentError::InvalidField {
-                field: "parameter batch version",
-                message: format!(
-                    "unsupported version {version}; expected {PARAMETER_BATCH_VERSION_V1}"
-                ),
-            });
-        }
-        let candidate = if revision == 0 && entries.is_empty() {
-            Self::default()
-        } else {
-            Self::new(revision, entries)?
-        };
-        if candidate.digest != digest {
-            return Err(DocumentError::InvalidField {
-                field: "parameter batch digest",
-                message: "claimed digest does not match canonical parameter bytes".into(),
-            });
-        }
-        Ok(candidate)
-    }
-
-    /// Encodes this independently revalidated input as strict canonical JSON.
-    ///
-    /// # Errors
-    ///
-    /// Rejects internally inconsistent evidence, resource overflow, or JSON
-    /// serialization failure.
-    pub fn to_canonical_json(&self) -> Result<String, DocumentError> {
-        let validated = Self::from_digest(
-            PARAMETER_BATCH_VERSION_V1,
-            self.revision,
-            self.digest,
-            self.entries.clone(),
-        )?;
-        let json = serde_json::to_string(&ParameterBatchWireV1 {
-            version: PARAMETER_BATCH_VERSION_V1,
-            revision: validated.revision,
-            digest: validated.digest,
-            entries: validated.entries,
-        })?;
-        if json.len() > MAX_PARAMETER_BATCH_JSON_BYTES {
-            return Err(DocumentError::ResourceLimit {
-                resource: "parameter batch JSON bytes",
-                actual: json.len(),
-                limit: MAX_PARAMETER_BATCH_JSON_BYTES,
-            });
-        }
-        Ok(json)
-    }
-
-    /// Decodes strict bounded JSON and independently validates its canonical
-    /// digest and typed entries.
-    ///
-    /// # Errors
-    ///
-    /// Rejects oversized or malformed JSON, unknown fields, unsupported
-    /// versions, invalid values, or inconsistent digest evidence.
-    pub fn from_json(json: &str) -> Result<Self, DocumentError> {
-        if json.len() > MAX_PARAMETER_BATCH_JSON_BYTES {
-            return Err(DocumentError::ResourceLimit {
-                resource: "parameter batch JSON bytes",
-                actual: json.len(),
-                limit: MAX_PARAMETER_BATCH_JSON_BYTES,
-            });
-        }
-        let decoded: ParameterBatchWireV1 = serde_json::from_str(json)?;
-        Self::from_digest(
-            decoded.version,
-            decoded.revision,
-            decoded.digest,
-            decoded.entries,
-        )
     }
 
     #[must_use]
@@ -1861,7 +1757,7 @@ impl SketchLifecycleRevisionHighWater {
 }
 
 /// One typed document edit. IDs for created objects are returned in [`DocumentCommandEffect`].
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum DocumentEdit {
     CreatePoint {
@@ -2074,67 +1970,6 @@ pub enum DocumentEdit {
     },
 }
 
-impl DocumentEdit {
-    /// Stable closed semantic key for host-side lineage/action compilers.
-    ///
-    /// This describes authored intent, not a command's revision-local effect.
-    #[must_use]
-    pub const fn semantic_key(&self) -> &'static str {
-        match self {
-            Self::CreatePoint { .. } => "create-point",
-            Self::CreateScalar { .. } => "create-scalar",
-            Self::CreateCurve { .. } => "create-curve",
-            Self::CreateContact { .. } => "create-contact",
-            Self::CreateConstraint { .. } => "create-constraint",
-            Self::CreateDimension { .. } => "create-dimension",
-            Self::CreateProfileOffset { .. } => "create-profile-offset",
-            Self::CreateProfileOffsetGeometry { .. } => "create-profile-offset-geometry",
-            Self::CreatePreparedProfileOffsetGeometry { .. } => {
-                "create-prepared-profile-offset-geometry"
-            }
-            Self::CreatePreparedNativeLineFilletGeometry { .. } => {
-                "create-prepared-native-line-fillet-geometry"
-            }
-            Self::CreateParameter { .. } => "create-parameter",
-            Self::AddParameterBinding { .. } => "add-parameter-binding",
-            Self::RemoveParameterBinding { .. } => "remove-parameter-binding",
-            Self::AddParameterOutput { .. } => "add-parameter-output",
-            Self::RemoveParameterOutput { .. } => "remove-parameter-output",
-            Self::CreateRectangle { .. } => "create-rectangle",
-            Self::CreateMirroredCurve { .. } => "create-mirrored-curve",
-            Self::CreateLineLineFillet { .. } => "create-line-line-fillet",
-            Self::CreateCurveCurveFillet { .. } => "create-curve-curve-fillet",
-            Self::SetPointPosition { .. } => "set-point-position",
-            Self::SetScalarValue { .. } => "set-scalar-value",
-            Self::SetCurveBranch { .. } => "set-curve-branch",
-            Self::SetArcSweep { .. } => "set-arc-sweep",
-            Self::SetLineLineFilletBranch { .. } => "set-line-line-fillet-branch",
-            Self::SetCurveCurveFilletBranch { .. } => "set-curve-curve-fillet-branch",
-            Self::SetConicWeightedMiddle { .. } => "set-conic-weighted-middle",
-            Self::SetRationalConicControl { .. } => "set-rational-conic-control",
-            Self::SetHyperbolaBranch { .. } => "set-hyperbola-branch",
-            Self::InsertBSplineKnot { .. } => "insert-b-spline-knot",
-            Self::InsertMirroredBSplineKnot { .. } => "insert-mirrored-b-spline-knot",
-            Self::TransitionBSplineContact { .. } => "transition-b-spline-contact",
-            Self::InsertNurbsKnot { .. } => "insert-nurbs-knot",
-            Self::TransitionNurbsContact { .. } => "transition-nurbs-contact",
-            Self::SetNurbsWeightGauge { .. } => "set-nurbs-weight-gauge",
-            Self::SetContactStates { .. } => "set-contact-states",
-            Self::SetContactBranches { .. } => "set-contact-branches",
-            Self::SetCircleTangencyBranch { .. } => "set-circle-tangency-branch",
-            Self::SetDimensionMode { .. } => "set-dimension-mode",
-            Self::SetProfileOffsetOperand { .. } => "set-profile-offset-operand",
-            Self::SetOrientedAngleOrientation { .. } => "set-oriented-angle-orientation",
-            Self::SetSourceSuppressed { .. } => "set-source-suppressed",
-            Self::SetGeometryRole { .. } => "set-geometry-role",
-            Self::SetGeometryRoles { .. } => "set-geometry-roles",
-            Self::SetElementUserSuppressed { .. } => "set-element-user-suppressed",
-            Self::SetHostConfigurationActivation { .. } => "set-host-configuration-activation",
-            Self::Delete { .. } => "delete",
-        }
-    }
-}
-
 /// Revision-checked command input.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DocumentCommand {
@@ -2334,58 +2169,6 @@ mod exact_preview_release_tests {
     use super::*;
 
     #[test]
-    fn exact_canonical_evidence_can_promote_a_live_rejected_attempt() {
-        let mut document = SketchDocument::new(1.0).unwrap();
-        let point = document.add_point("free", [0.0, 0.0]).unwrap();
-        let mut session = RetainedSketchDocumentSession::new(
-            document,
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .unwrap();
-        let prior_accepted = session
-            .accepted_state_for_current_input()
-            .unwrap()
-            .identity();
-        let input = session.last_attempt.input;
-        let attempt = session.next_attempt_identity().unwrap();
-        let (rejected, published) = publish_retained_attempt(
-            &session.design,
-            &input,
-            attempt,
-            Some(prior_accepted),
-            next_accepted_revision(session.accepted_revision_high_water),
-            RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::Solve,
-                "synthetic live rejection before independent cold acceptance".into(),
-            ),
-        );
-        assert!(published.is_none());
-        session.last_attempt = rejected;
-        assert!(session.accepted_state_for_current_input().is_none());
-        let expected = session.prepared_input();
-        let revisions = session.revision_high_water();
-        let mut canonical = session.design.clone();
-        canonical.set_point_position(point, [3.0, 4.0]).unwrap();
-
-        session
-            .replace_current_accepted_materialization(expected, canonical.clone())
-            .unwrap();
-
-        assert_eq!(session.design_identity.revision(), revisions.design());
-        assert_eq!(session.last_attempt.identity, attempt);
-        assert_eq!(session.last_attempt.input, input);
-        assert_eq!(session.last_attempt.parent_accepted, Some(prior_accepted));
-        let promoted = session.accepted_state_for_current_input().unwrap();
-        assert_eq!(promoted.document(), &canonical);
-        assert_eq!(promoted.originating_attempt(), attempt);
-        assert_eq!(
-            promoted.identity().revision().get(),
-            prior_accepted.revision().get() + 1
-        );
-    }
-
-    #[test]
     fn bounded_dense_exhaustion_is_a_typed_exact_release_error() {
         let completed_controller = OperationController::new(OperationControl::unlimited());
         assert_eq!(
@@ -2507,9 +2290,6 @@ pub struct RetainedSketchDocumentSession {
     config: SolverConfig,
     parameter_batch: ParameterBatch,
     external_snapshots: ExternalSnapshotSet,
-    external_snapshot_attempt_candidate: Option<ExternalSnapshotSet>,
-    accepted_parameter_batch: Option<ParameterBatch>,
-    accepted_external_snapshots: Option<ExternalSnapshotSet>,
     persistent_identity_high_water: SketchPersistentIdentityHighWater,
     prepared_state_epoch: u32,
 }
@@ -3893,8 +3673,6 @@ impl RetainedSketchDocumentSession {
         );
         let accepted_revision_high_water =
             accepted.as_ref().map(|accepted| accepted.identity.revision);
-        let accepted_parameter_batch = accepted.as_ref().map(|_| parameter_batch.clone());
-        let accepted_external_snapshots = accepted.as_ref().map(|_| external_snapshots.clone());
         let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(controller.outcome(Self {
             design: document,
@@ -3906,9 +3684,6 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
-            external_snapshot_attempt_candidate: None,
-            accepted_parameter_batch,
-            accepted_external_snapshots,
             persistent_identity_high_water,
             prepared_state_epoch,
         }))
@@ -4027,8 +3802,6 @@ impl RetainedSketchDocumentSession {
             .as_ref()
             .map(|accepted| accepted.identity.revision)
             .or(prior_accepted_high_water);
-        let accepted_parameter_batch = accepted.as_ref().map(|_| parameter_batch.clone());
-        let accepted_external_snapshots = accepted.as_ref().map(|_| external_snapshots.clone());
         let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(Self {
             design: document,
@@ -4040,9 +3813,6 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
-            external_snapshot_attempt_candidate: None,
-            accepted_parameter_batch,
-            accepted_external_snapshots,
             persistent_identity_high_water,
             prepared_state_epoch,
         })
@@ -4103,8 +3873,6 @@ impl RetainedSketchDocumentSession {
         if accepted.is_none() {
             return Err(DocumentSessionError::InvalidAcceptedSnapshot);
         }
-        let accepted_parameter_batch = Some(parameter_batch.clone());
-        let accepted_external_snapshots = Some(external_snapshots.clone());
         let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(Self {
             design: document,
@@ -4116,9 +3884,6 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
-            external_snapshot_attempt_candidate: None,
-            accepted_parameter_batch,
-            accepted_external_snapshots,
             persistent_identity_high_water,
             prepared_state_epoch,
         })
@@ -4209,86 +3974,6 @@ impl RetainedSketchDocumentSession {
             session.reattempt(identity, request)?;
         } else if !same_design {
             session.retain_candidate(design, (), None)?;
-        }
-        Ok(session)
-    }
-
-    /// Restores separate retained and accepted graphs with distinct current
-    /// and last-accepted host-input payloads.
-    ///
-    /// This is the retained-failure recovery path used by authoritative
-    /// workspace persistence. The accepted graph is first independently
-    /// certified under its exact historical inputs. The retained graph is then
-    /// attempted once under the exact current inputs; rejection preserves the
-    /// older accepted graph and its input provenance.
-    ///
-    /// # Errors
-    ///
-    /// Rejects invalid graphs, foreign identities, invalid accepted provenance,
-    /// exhausted lifecycle revisions, or malformed current host inputs.
-    #[allow(clippy::too_many_arguments)]
-    pub fn restore_design_with_accepted_and_distinct_inputs(
-        design: SketchDocument,
-        accepted: SketchDocument,
-        revisions: SketchLifecycleRevisionHighWater,
-        current_parameters: ParameterBatch,
-        current_snapshots: ExternalSnapshotSet,
-        accepted_parameters: ParameterBatch,
-        accepted_snapshots: ExternalSnapshotSet,
-        request: DocumentSolveRequest,
-        config: SolverConfig,
-    ) -> Result<Self, DocumentSessionError> {
-        design.validate()?;
-        accepted.validate()?;
-        if design.id() != accepted.id() {
-            return Err(DocumentSessionError::ForeignDesign {
-                expected: accepted.id(),
-                actual: design.id(),
-            });
-        }
-        let same_design = design == accepted;
-        let accepted_design_revision = next_revision(revisions.design.0, "design")?;
-        let accepted_attempt_revision = next_revision(revisions.attempt.0, "attempt")?;
-        let accepted_revision = revisions
-            .accepted
-            .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
-        let certification_request = if same_design && request.drag.is_none() {
-            request
-        } else {
-            DocumentSolveRequest::default()
-        };
-        let accepted_snapshot_fallback = accepted_snapshots.clone();
-        let mut session = Self::new_at_from_exact_accepted(
-            accepted,
-            accepted_parameters,
-            accepted_snapshots,
-            certification_request,
-            config,
-            accepted_design_revision,
-            accepted_attempt_revision,
-            revisions.accepted,
-            accepted_revision,
-        )?;
-        session.request = request;
-        let inputs_changed = session.parameter_batch != current_parameters
-            || session.external_snapshots != current_snapshots;
-        let snapshots_changed = session.external_snapshots != current_snapshots;
-        let attempted_snapshots = snapshots_changed.then(|| current_snapshots.clone());
-        session.parameter_batch = current_parameters;
-        session.external_snapshots = current_snapshots;
-        if same_design {
-            if inputs_changed || request.drag.is_some() {
-                let identity = session.design_identity;
-                session.reattempt(identity, request)?;
-            }
-        } else {
-            session.retain_candidate(design, (), None)?;
-        }
-        if session.accepted_state_for_current_input().is_none()
-            && let Some(attempted_snapshots) = attempted_snapshots
-        {
-            session.external_snapshot_attempt_candidate = Some(attempted_snapshots);
-            session.external_snapshots = accepted_snapshot_fallback;
         }
         Ok(session)
     }
@@ -4412,53 +4097,6 @@ impl RetainedSketchDocumentSession {
         Ok(session)
     }
 
-    /// Restores current-design accepted authority under its historical inputs,
-    /// then attempts the same retained design under distinct current inputs.
-    ///
-    /// # Errors
-    ///
-    /// Returns the same validation and certification failures as
-    /// [`Self::restore_current_design_with_accepted_and_inputs`], plus any
-    /// lifecycle failure from the exact current-input reattempt.
-    #[allow(clippy::too_many_arguments)]
-    pub fn restore_current_design_with_accepted_and_distinct_inputs(
-        design: SketchDocument,
-        accepted: SketchDocument,
-        revisions: SketchLifecycleRevisionHighWater,
-        current_parameters: ParameterBatch,
-        current_snapshots: ExternalSnapshotSet,
-        accepted_parameters: ParameterBatch,
-        accepted_snapshots: ExternalSnapshotSet,
-        request: DocumentSolveRequest,
-        config: SolverConfig,
-    ) -> Result<Self, DocumentSessionError> {
-        let accepted_snapshot_fallback = accepted_snapshots.clone();
-        let mut session = Self::restore_current_design_with_accepted_and_inputs(
-            design,
-            accepted,
-            revisions,
-            accepted_parameters,
-            accepted_snapshots,
-            request,
-            config,
-        )?;
-        let snapshots_changed = session.external_snapshots != current_snapshots;
-        let attempted_snapshots = snapshots_changed.then(|| current_snapshots.clone());
-        if session.parameter_batch != current_parameters || snapshots_changed {
-            session.parameter_batch = current_parameters;
-            session.external_snapshots = current_snapshots;
-            let identity = session.design_identity;
-            session.reattempt(identity, request)?;
-        }
-        if session.accepted_state_for_current_input().is_none()
-            && let Some(attempted_snapshots) = attempted_snapshots
-        {
-            session.external_snapshot_attempt_candidate = Some(attempted_snapshots);
-            session.external_snapshots = accepted_snapshot_fallback;
-        }
-        Ok(session)
-    }
-
     #[must_use]
     pub const fn design_identity(&self) -> SketchDesignIdentity {
         self.design_identity
@@ -4480,43 +4118,6 @@ impl RetainedSketchDocumentSession {
     #[must_use]
     pub const fn external_snapshot_set(&self) -> &ExternalSnapshotSet {
         &self.external_snapshots
-    }
-
-    /// Returns the exact external snapshot payload evaluated by the latest
-    /// attempt. This may differ from [`Self::external_snapshot_set`] after a
-    /// rejected candidate, because the active set remains the prior accepted
-    /// input while attempt provenance must retain the rejected payload exactly.
-    #[must_use]
-    pub fn latest_attempt_external_snapshot_set(&self) -> &ExternalSnapshotSet {
-        if let Some(candidate) = self.external_snapshot_attempt_candidate.as_ref()
-            && candidate.revision() == self.last_attempt.input().external_snapshot_set_revision()
-            && candidate.digest() == self.last_attempt.input().external_snapshot_set_digest()
-        {
-            candidate
-        } else {
-            &self.external_snapshots
-        }
-    }
-
-    /// Returns the exact parameter payload that produced the retained accepted
-    /// authority, even when a newer host-input attempt has failed.
-    #[must_use]
-    pub const fn accepted_parameter_batch(&self) -> Option<&ParameterBatch> {
-        self.accepted_parameter_batch.as_ref()
-    }
-
-    /// Returns the exact external snapshot payload that produced the retained
-    /// accepted authority, even when a newer host-input attempt has failed.
-    #[must_use]
-    pub const fn accepted_external_snapshot_set(&self) -> Option<&ExternalSnapshotSet> {
-        self.accepted_external_snapshots.as_ref()
-    }
-
-    fn replace_accepted_state(&mut self, accepted: SketchAcceptedDocumentState) {
-        self.accepted_revision_high_water = Some(accepted.identity.revision);
-        self.accepted_parameter_batch = Some(self.parameter_batch.clone());
-        self.accepted_external_snapshots = Some(self.external_snapshots.clone());
-        self.accepted = Some(accepted);
     }
 
     /// Returns field-opaque never-reuse cursors for this complete retained lifecycle.
@@ -4845,148 +4446,6 @@ impl RetainedSketchDocumentSession {
         let commit = patch.commit;
         *self = patch.candidate;
         Ok(commit)
-    }
-
-    /// Replaces only the current accepted materialization with an exact,
-    /// independently certifiable graph while preserving every lifecycle
-    /// identity and the retained attempt's candidate-guidance provenance.
-    ///
-    /// This is the publication seam for an owning host whose canonical
-    /// evaluator rematerializes the same retained design independently after
-    /// the ordinary transaction has already allocated its design, attempt and
-    /// accepted identities. The supplied graph is never trusted by inspection:
-    /// it is certified without optimization under the current publication
-    /// request and exact attempted host inputs, projected back through the
-    /// current retained topology, and published only through the existing
-    /// accepted attempt machinery. For a rejected external-snapshot update,
-    /// successful certification also promotes that exact attempted snapshot
-    /// set to the active accepted set.
-    ///
-    /// No design or attempt revision advances. Exact evidence that is already
-    /// byte-for-byte represented by the current accepted document is a true
-    /// no-op and preserves that complete accepted state. Any changed accepted
-    /// document allocates exactly the next accepted revision, as does promotion
-    /// of a live-rejected attempt, only after the graph passes the same exact
-    /// certification. No history or persistent allocator revision advances.
-    /// Changed publication advances the process-local prepared-state epoch so
-    /// work captured against the superseded accepted evidence cannot later pass
-    /// compare-and-swap. Historical accepted authority beneath a different
-    /// current design is never modified unless this exact current attempt is
-    /// independently promoted.
-    ///
-    /// # Errors
-    ///
-    /// Rejects stale complete prepared input, a foreign or topology-incompatible
-    /// graph, or any graph that cannot be independently certified exactly under
-    /// the current inputs. A current rejected attempt may be promoted only by
-    /// such exact evidence; callers cannot promote an older design or attempt.
-    pub fn replace_current_accepted_materialization(
-        &mut self,
-        expected: PreparedSketchInput,
-        mut accepted: SketchDocument,
-    ) -> Result<(), DocumentSessionError> {
-        let actual = self.current_prepared_input();
-        if actual != expected {
-            return Err(DocumentSessionError::StalePreparedPatch {
-                expected: Box::new(expected),
-                actual: Box::new(actual),
-            });
-        }
-        let current_accepted_identity = self
-            .accepted_state_for_current_input()
-            .map(SketchAcceptedDocumentState::identity);
-        if accepted.id() != self.design.id() {
-            return Err(DocumentSessionError::ForeignDesign {
-                expected: self.design.id(),
-                actual: accepted.id(),
-            });
-        }
-        accepted.retain_persistent_identity_high_water(&self.persistent_identity_high_water)?;
-        if accepted.effective_activity().activation_digest()
-            != self.design.effective_activity().activation_digest()
-        {
-            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
-        }
-
-        let publication_snapshots = self.latest_attempt_external_snapshot_set().clone();
-        let resolved =
-            resolve_attempt_inputs(&self.design, &self.parameter_batch, &publication_snapshots)
-                .map_err(|_| DocumentSessionError::InvalidAcceptedSnapshot)?;
-        let design_mappings = self
-            .design
-            .lower_with_resolved_parameters(&resolved)?
-            .into_parts()
-            .1;
-        let input = self.last_attempt.input;
-        let mut execution = certify_exact_retained_snapshot(
-            &accepted,
-            &self.parameter_batch,
-            &publication_snapshots,
-            input.publication_request(),
-            self.config,
-        )
-        .map_err(|_| DocumentSessionError::InvalidAcceptedSnapshot)?;
-        let (_, accepted_runtime, accepted_mappings, _) = execution
-            .accepted
-            .as_ref()
-            .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
-        if !accepted_mappings.has_compatible_runtime_topology(&design_mappings) {
-            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
-        }
-        let mut projected = self.design.clone();
-        projected.project_accepted_state(accepted_runtime.sketch(), accepted_mappings)?;
-        let accepted_json = accepted.to_draft_v5_json()?;
-        if projected.to_draft_v5_json()? != accepted_json {
-            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
-        }
-        // Semantic catalog reservations deliberately live outside the frozen
-        // sketch JSON schema. Canonical cold evidence therefore cannot carry
-        // them, but the current retained design still owns them. Publish the
-        // independently projected graph so those host-side ownership guards
-        // survive without changing any canonical accepted bytes.
-        execution
-            .accepted
-            .as_mut()
-            .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?
-            .0 = projected;
-
-        let current_accepted_json = self
-            .accepted_state_for_current_input()
-            .map(|current| current.document().to_draft_v5_json())
-            .transpose()?;
-        if current_accepted_json.as_deref() == Some(accepted_json.as_str()) {
-            return Ok(());
-        }
-
-        let attempt_identity = self.last_attempt.identity;
-        let parent_accepted = self.last_attempt.parent_accepted;
-        let continuation_parent_input = self.last_attempt.continuation_parent_input;
-        let accepted_revision = next_accepted_revision(self.accepted_revision_high_water);
-        let (mut attempt, published) = publish_retained_attempt(
-            &self.design,
-            &input,
-            attempt_identity,
-            parent_accepted,
-            accepted_revision,
-            execution,
-        );
-        let published = published.ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
-        let published_identity = published.identity();
-        if attempt.identity() != attempt_identity
-            || attempt.accepted_state_identity() != Some(published_identity)
-            || current_accepted_identity.is_some_and(|identity| identity == published_identity)
-        {
-            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
-        }
-        let prepared_state_epoch = next_prepared_state_epoch()?;
-        attempt.continuation_parent_input = continuation_parent_input;
-        self.external_snapshots = publication_snapshots;
-        self.external_snapshot_attempt_candidate = None;
-        self.last_attempt = attempt;
-        self.replace_accepted_state(published);
-        self.prepared_state_epoch = prepared_state_epoch;
-        debug_assert_ne!(self.current_prepared_input(), expected);
-        Ok(())
     }
 
     /// Retains one valid typed edit even when its solve attempt rejects.
@@ -5368,7 +4827,8 @@ impl RetainedSketchDocumentSession {
         let mut attempt = attempt;
         attempt.continuation_parent_input = Some(preview.prepared_input());
         self.last_attempt = attempt;
-        self.replace_accepted_state(accepted);
+        self.accepted_revision_high_water = Some(published_accepted.revision);
+        self.accepted = Some(accepted);
         Ok(controller.outcome(RetainedDocumentTransactionOutcome {
             value: DocumentCommandEffect::UpdatedPoint(point),
             design: design_identity,
@@ -5600,7 +5060,8 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt.clone();
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -5789,7 +5250,8 @@ impl RetainedSketchDocumentSession {
         attempt.continuation_parent_input = Some(preview.prepared_input());
         self.last_attempt = attempt.clone();
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -5955,7 +5417,8 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(&self.last_attempt)
     }
@@ -6023,7 +5486,8 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(&self.last_attempt)
     }
@@ -6134,7 +5598,8 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt.clone();
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -6204,10 +5669,10 @@ impl RetainedSketchDocumentSession {
         );
         self.request = request;
         self.last_attempt = attempt;
-        self.external_snapshot_attempt_candidate = Some(snapshots.clone());
         if let Some(accepted) = accepted {
             self.external_snapshots = snapshots;
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(&self.last_attempt)
     }
@@ -6286,7 +5751,6 @@ impl RetainedSketchDocumentSession {
                 }
                 self.request = request;
                 self.last_attempt = attempt.clone();
-                self.external_snapshot_attempt_candidate = Some(snapshots);
                 debug_assert!(accepted.is_none());
                 return Ok(controller.outcome(attempt));
             }
@@ -6319,10 +5783,10 @@ impl RetainedSketchDocumentSession {
         }
         self.request = request;
         self.last_attempt = attempt.clone();
-        self.external_snapshot_attempt_candidate = Some(snapshots.clone());
         if let Some(accepted) = accepted {
             self.external_snapshots = snapshots;
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -6615,7 +6079,8 @@ impl RetainedSketchDocumentSession {
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(RetainedDocumentTransactionOutcome {
             value,
@@ -6688,7 +6153,8 @@ impl RetainedSketchDocumentSession {
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(RetainedDocumentTransactionOutcome {
             value,
@@ -6854,7 +6320,8 @@ impl RetainedSketchDocumentSession {
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.replace_accepted_state(accepted);
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
         }
         Ok(Some(RetainedDocumentTransactionOutcome {
             value,
@@ -8060,110 +7527,73 @@ fn seed_from_accepted_parent(
     let Some(parent) = parent else {
         return Ok(design.clone());
     };
-    design.prepare_continuation_seed(&parent.solved_design, &parent.document)
-}
-
-impl SketchDocument {
-    /// Prepares a numerical continuation seed from one exact retained/accepted
-    /// upstream pair without treating either graph as publication authority.
-    ///
-    /// Values are copied only when the downstream retained value still matches
-    /// the upstream retained value bit-for-bit. Newly authored or explicitly
-    /// rewritten values therefore remain downstream intent. Callers must still
-    /// solve and independently validate the returned document before accepting
-    /// it.
-    ///
-    /// # Errors
-    ///
-    /// Rejects foreign document namespaces or an invalid copied value.
-    pub fn prepare_continuation_seed(
-        &self,
-        upstream_design: &Self,
-        upstream_accepted: &Self,
-    ) -> Result<Self, DocumentError> {
-        if self.id() != upstream_design.id() || self.id() != upstream_accepted.id() {
-            return Err(DocumentError::InvalidField {
-                field: "continuation seed",
-                message: "retained and accepted prefixes must share one document namespace".into(),
-            });
+    let mut seed = design.clone();
+    for point in design.points() {
+        let Some(parent_design) = parent.solved_design.point(point.id) else {
+            continue;
+        };
+        let Some(parent_accepted) = parent.document.point(point.id) else {
+            continue;
+        };
+        if pair_bits(point.position) == pair_bits(parent_design.position) {
+            seed.set_point_position(point.id, parent_accepted.position)?;
         }
-        let design = self;
-        let mut seed = design.clone();
-        for point in design.points() {
-            let Some(parent_design) = upstream_design.point(point.id) else {
-                continue;
-            };
-            let Some(parent_accepted) = upstream_accepted.point(point.id) else {
-                continue;
-            };
-            if pair_bits(point.position) == pair_bits(parent_design.position) {
-                seed.set_point_position(point.id, parent_accepted.position)?;
-            }
-        }
-        for scalar in design.scalars() {
-            let Some(parent_design) = upstream_design.scalar(scalar.id) else {
-                continue;
-            };
-            let Some(parent_accepted) = upstream_accepted.scalar(scalar.id) else {
-                continue;
-            };
-            if scalar.value.to_bits() == parent_design.value.to_bits() {
-                let seed_scalar =
-                    seed.scalar_mut(scalar.id)
-                        .ok_or_else(|| DocumentError::InvalidField {
-                            field: "continuation seed",
-                            message: "a retained scalar disappeared from its cloned seed".into(),
-                        })?;
-                seed_scalar.value = parent_accepted.value;
-            }
-        }
-        for contact in design.contacts() {
-            let Some(parent_accepted) = upstream_accepted.contact(contact.id) else {
-                continue;
-            };
-            if contact_winding_matches_parent_design(design, upstream_design, contact.id) {
-                let seed_contact =
-                    seed.contact_mut(contact.id)
-                        .ok_or_else(|| DocumentError::InvalidField {
-                            field: "continuation seed",
-                            message: "a retained contact disappeared from its cloned seed".into(),
-                        })?;
-                seed_contact.winding = parent_accepted.winding;
-            }
-        }
-        for curve in design.curves() {
-            let CurveDefinition::RationalQuadraticConic {
-                weighted_middle, ..
-            } = curve.definition
-            else {
-                continue;
-            };
-            let Some(parent_design) = upstream_design.curve(curve.id) else {
-                continue;
-            };
-            let CurveDefinition::RationalQuadraticConic {
-                weighted_middle: parent_design_middle,
-                ..
-            } = parent_design.definition
-            else {
-                continue;
-            };
-            let Some(parent_accepted) = upstream_accepted.curve(curve.id) else {
-                continue;
-            };
-            let CurveDefinition::RationalQuadraticConic {
-                weighted_middle: parent_accepted_middle,
-                ..
-            } = parent_accepted.definition
-            else {
-                continue;
-            };
-            if pair_bits(weighted_middle) == pair_bits(parent_design_middle) {
-                seed.set_conic_weighted_middle(curve.id, parent_accepted_middle)?;
-            }
-        }
-        Ok(seed)
     }
+    for scalar in design.scalars() {
+        let Some(parent_design) = parent.solved_design.scalar(scalar.id) else {
+            continue;
+        };
+        let Some(parent_accepted) = parent.document.scalar(scalar.id) else {
+            continue;
+        };
+        if scalar.value.to_bits() == parent_design.value.to_bits() {
+            seed.scalar_mut(scalar.id)
+                .expect("scalar came from this document")
+                .value = parent_accepted.value;
+        }
+    }
+    for contact in design.contacts() {
+        let Some(parent_accepted) = parent.document.contact(contact.id) else {
+            continue;
+        };
+        if contact_winding_matches_parent_design(design, &parent.solved_design, contact.id) {
+            seed.contact_mut(contact.id)
+                .expect("contact came from this document")
+                .winding = parent_accepted.winding;
+        }
+    }
+    for curve in design.curves() {
+        let CurveDefinition::RationalQuadraticConic {
+            weighted_middle, ..
+        } = curve.definition
+        else {
+            continue;
+        };
+        let Some(parent_design) = parent.solved_design.curve(curve.id) else {
+            continue;
+        };
+        let CurveDefinition::RationalQuadraticConic {
+            weighted_middle: parent_design_middle,
+            ..
+        } = parent_design.definition
+        else {
+            continue;
+        };
+        let Some(parent_accepted) = parent.document.curve(curve.id) else {
+            continue;
+        };
+        let CurveDefinition::RationalQuadraticConic {
+            weighted_middle: parent_accepted_middle,
+            ..
+        } = parent_accepted.definition
+        else {
+            continue;
+        };
+        if pair_bits(weighted_middle) == pair_bits(parent_design_middle) {
+            seed.set_conic_weighted_middle(curve.id, parent_accepted_middle)?;
+        }
+    }
+    Ok(seed)
 }
 
 #[allow(

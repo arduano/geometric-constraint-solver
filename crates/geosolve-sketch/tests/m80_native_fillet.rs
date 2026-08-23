@@ -570,65 +570,6 @@ fn stale_prepared_source_rejects_atomically() {
 }
 
 #[test]
-fn native_fillet_continuation_reauthenticates_reserved_ids_and_source_labels() {
-    let fixture = native_fillet_fixture();
-    let upstream = fixture.document;
-    let prepared = upstream
-        .prepare_native_line_fillet_geometry(fixture.request)
-        .expect("genuine prepared native Fillet");
-    let mut materialized = upstream.clone();
-    materialized
-        .create_prepared_native_line_fillet_geometry(prepared.clone())
-        .expect("genuine materialized native Fillet");
-    let materialized_before = materialized.clone();
-    upstream
-        .prepare_materialized_native_line_fillet_seed(&upstream, &materialized, &prepared)
-        .expect("genuine continuation seed");
-
-    let mut forged_ids = serde_json::to_value(&prepared).expect("prepared Fillet value");
-    forged_ids["expected_ids"]["arc"] = forged_ids["expected_ids"]["source_lines"][0].clone();
-    let forged_ids: geosolve_sketch::DocumentPreparedNativeLineFilletGeometry =
-        serde_json::from_value(forged_ids).expect("structurally valid forged reserved IDs");
-    let forged_error = upstream
-        .prepare_materialized_native_line_fillet_seed(&upstream, &materialized, &forged_ids)
-        .expect_err("caller-supplied IDs cannot replace the materialized identity delta");
-    let geosolve_sketch::DocumentError::InvalidField { field, message } = forged_error else {
-        panic!("forged IDs reached the wrong rejection boundary: {forged_error}");
-    };
-    assert_eq!(field, "native fillet continuation");
-    assert_eq!(
-        message, "materialized persistent identity delta differs from the prepared action",
-        "forged IDs must fail at the complete materialized-identity authentication boundary"
-    );
-    assert_eq!(materialized, materialized_before);
-
-    let mut forged_label: serde_json::Value = serde_json::from_str(
-        &materialized
-            .to_canonical_json()
-            .expect("materialized native Fillet JSON"),
-    )
-    .expect("materialized native Fillet value");
-    let source = forged_label["curves"]
-        .as_array_mut()
-        .expect("curve array")
-        .iter_mut()
-        .find(|curve| curve["id"] == serde_json::json!(fixture.first_line))
-        .expect("first shortened source");
-    source["label"] = serde_json::json!("forged shortened source");
-    let forged_label = SketchDocument::from_json(
-        &serde_json::to_string(&forged_label).expect("forged source-label JSON"),
-    )
-    .expect("independently valid source-label materialization");
-    assert!(
-        upstream
-            .prepare_materialized_native_line_fillet_seed(&upstream, &forged_label, &prepared,)
-            .is_err(),
-        "a native Fillet transition cannot rewrite a continued source label"
-    );
-    assert_eq!(materialized, materialized_before);
-}
-
-#[test]
 fn native_fillet_is_one_history_step_and_undo_redo_preserve_identities() {
     let fixture = native_fillet_fixture();
     let mut session = SketchDocumentSession::new(

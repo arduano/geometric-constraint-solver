@@ -31,32 +31,6 @@ construction/NURBS UAT and certified all-family visual profiles.
   model, inverse controls, tests, ADR and evidence for a future redesign. No prototype API,
   persistence v2, golden expansion or UI remains on `main`. `docs/M82_DEFERRED.md` owns the
   disposition.
-- **In-progress target:** M83 makes `LineageDocument` the authoritative editable source for the
-  complete demo workbench under accepted ADR 0039. Flat sketch and computed-feature state are
-  independently validated materializations. Stable typed ports cover all current recipes,
-  relations, dimensions, properties, branches, operations and native/computed Fillet/Offset
-  intent; direct editing atomically rewrites every owner. Strict chronological evaluation is the
-  oracle for dependency-local evaluation, workspace v7 strictly migrates v1-v6 through honest
-  imported baselines, and `geosolve.lineage.rpc.v0` exposes the stateful engine without a DOM.
-  The ordinary workbench additionally presents the current program through a directly derived,
-  selectable Lineage panel and authority-validated Inspector. Reorder and compatible debug
-  rewrite requests carry the exact document/revision/digest and return through strict-cold
-  coordinator publication; transient browser selection, drafts and authenticated desktop drag
-  state never become a peer authority or workspace state. The prior read-only candidate
-  `bb888cc` is superseded by this approved amendment and is withdrawn from UAT. Replacement exact
-  source `d8137543fecf4a09433471e16383db5069de0d41`, tree
-  `031a8c95ddc99f1bf52847c0485ac857b0af1079`, passes the complete clean gate and independent
-  API/architecture and predictive-terminal audits without a blocker. Its no-rebuild seven-file
-  snapshot `/tmp/geosolve-m83-amendment-uat.AVC9ce` is frozen `0555`/`0444` at ordered-manifest
-  aggregate `260445142878a35c4e5cfed3934438c58c1e47b09a462cec4030e34f68da11e2`. Temporary exact
-  verification passed before old PID `4152505` was retired; `geosolve-m83-lineage-uat.service`,
-  PID `1733554`, now serves the same bytes at `http://100.94.63.83:8080/`, with temporary/final
-  ledgers byte-identical at SHA-256
-  `7f7f1f3fa813dca1ee99e5a9fe4f6d622babbf65bfb342a6a1a37470874b34ee`. The optional future
-  Point scene-seal symmetry cleanup is defense in depth, not an acceptance blocker. Human
-  M83-U1 through M83-U12, explicit approval and exact Pages publication remain required; M81
-  remains the public product baseline and Pages is unchanged. `docs/M83_GOALS.md` owns the full
-  scope.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -361,105 +335,6 @@ Offset residual registration/path/incidence/audit assembly remains behind the co
 independent candidate validation deliberately stays separate in `compiler.rs`. Public paths,
 canonical wire DTOs, error strings, registration/incidence/audit order and equations do not change.
 
-### `geosolve-sketch-lineage`
-
-M83 adds a pure safe-Rust orchestration/data crate above the solver domains. It owns canonical
-versioned action documents, stable typed input/output ports, explicit owned/aliased and
-created/continued/retired identity flow, exact-CAS mutations, retained/latest/accepted authority,
-revision-stamped materialization maps and one bounded Undo/Redo history. It owns no sketch or
-feature equation, nonlinear solve, branch search, independent-validation shortcut, renderer or
-browser state. `geosolve-core`, `geosolve-sketch` and `geosolve-linkage` do not depend on it.
-
-The crate validates structural programs and identity flow without knowing private workbench
-recipes. `geosolve-constraint-editor` is the downward consumer/compiler that authenticates its own
-schema-specific materialization intent, reconstructs exact owning-domain checkpoints and performs
-projected multi-owner reconciliation. This split keeps the public lineage model small while
-preventing a caller-editable port manifest from self-certifying editor authority.
-
-Cold checkpoint evaluation is chronological, not a bag of independent fresh solves. Each accepted
-prefix can seed the next topology-sensitive action; native Fillet reauthenticates its prepared plan,
-reserved identities and complete materialized topology against that accepted upstream prefix before
-ordinary solve and independent validation. Projected owner reconciliation consumes genuine cold
-accepted evidence rather than treating a staged flat accepted cache as its own witness. For flat
-sketch replay, a serialized action's complete global `source_order` snapshot is compatibility
-and ordering state, not a collection of lineage operand edges. Each prefix retains currently
-ordered source IDs that still exist, prunes removed IDs and appends sources newly materialized by
-the current action. Only typed action operands create reorder dependencies, so independent
-constraints and dimensions may exchange chronology without retargeting stable native identities.
-For ordinary mutations, the provisional live solve is never a competing authority: exact strict-cold
-acceptance replaces an already accepted live graph or promotes the same live-rejected attempt, and
-strict-cold rejection either retains the failed lineage position or rolls a provisional live
-success back atomically. Projected manipulation keeps its narrower exact caller/cold equality gate.
-Feature-only mutations also authenticate strict-cold accepted sketch bytes. They retain the exact
-already-evaluated preview snapshot and allocator when those bytes match, but replace accepted sketch
-authority and rebuild computed output when cold replay selects a different valid underconstrained
-materialization; either branch publishes sketch, feature, allocator and history state together.
-The lower accepted-materialization seam treats only exact canonical accepted bytes as an identity-
-preserving no-op. Any byte change, including a signed-zero change that ordinary floating-point
-equality would hide, allocates the next accepted revision. Legacy flat reload may preserve a same-
-byte live session only when its revision lifecycle already covers the saved high-water.
-Authenticated inferred construction is prepared completely in clones: strict replay, accepted-
-graph replacement, computed refresh, final checkpoint and lineage high-water all succeed before
-the editor token is marked published and one infallible live swap occurs. Its public result is
-derived from that final canonical session, never the provisional trial solve.
-Every fallible post-refresh checkpoint restores the prior lineage auxiliary high-water with the
-flat and feature owners. The public legacy flat-reload compatibility seam likewise prepares its
-session, feature sidecar, allocator, computed evidence, final checkpoint and imported lineage
-entirely off to the side before one publication.
-
-The workbench's editable Lineage projection remains a thin client of that authority. A selected
-row is identified only by stable `LineageStepId`; its Inspector snapshot is freshly obtained from
-`RetainedEditorCoordinator::lineage_step_inspection`. Reorder availability is a complete set of
-coordinator-approved insertion lanes, including typed dependency, chronology and pinning reasons.
-Buttons, the position selector, `Alt+Arrow` keys and desktop drag-and-drop all submit the same
-exact-CAS reorder request. A blocked request clamps only in the requested direction to the furthest
-legal boundary. Imported baselines and tombstones are pinned; suppressed steps remain ordinary
-retained intent and may move when their dependency interval permits it. The collapsed raw editor
-accepts only a `LineageStepRewrite`; stable step/output/reservation identity plus action
-kind/schema/version are immutable, and malformed, stale or semantically invalid replacements fail
-atomically. Browser selection, JSON drafts, notices and a session-random drag nonce are transient
-and are deliberately omitted from workspace v7.
-
-Slow point and curve-control manipulation uses a presentation-only predictive adapter. Exact
-headless preview timing enables it only for an already captured Point/CurveControl gesture. During
-continuous slow motion the browser paints the latest pointer intent and coalesces an idle exact
-verification; no lineage reconciliation, history publication, workspace save or durable panel
-rebuild occurs on those intent frames. Gesture/context changes revoke queued work, and pointer-up
-must reconstruct the exact terminal scene and pass the newest retained valid Point/CurveControl
-request through the strict current-sample boundary before the existing coordinator may publish one
-owner rewrite. Rejection cannot borrow an older preview and causes no unchanged workspace save.
-The intent marker is explicitly not solver-projected geometry.
-
-### `geosolve-sketch-lineage-wasm`
-
-The separate M83 WASM crate consumes `geosolve-sketch-lineage`, `geosolve-constraint-editor` and
-`geosolve-sketch` through public audit/evaluation seams. It exposes the stateful JSON-string
-`geosolve.lineage.rpc.v0` protocol with no DOM, `web-sys`, storage, renderer, JavaScript solve
-callback or start hook. RPC `rewrite_owners` is an atomic exact-CAS structural batch, not the
-editor's inverse-derived projected-drag transaction. Editor-compiled actions can be cold-evaluated;
-generic caller-authored actions remain structural and fail with
-`workbench_materialization_unsupported` when private materialization intent is absent.
-
-Standalone RPC load strips caller-certified current and historical accepted authority until a
-fresh cold evaluation succeeds. The workbench workspace-v7 loader is deliberately different: it
-uses exact persisted current/accepted inputs, authenticated action provenance and a private bounded
-coordinator ledger for host-only historical pairs. A current accepted program is reconstructed by
-consuming canonical owning-domain accepted evidence from cold evaluation of its exact current
-lineage identity and inputs. A rejected current program uses the same evidence contract at its exact
-older accepted lineage identity and input pair. Neither route independently re-solves flattened
-intent after authenticating that evidence. Undo and Redo authorities are eagerly authenticated
-before any disposable flat cache is admitted. The ledger
-does not enter the generic lineage-session or RPC schema. Honest legacy imported roots may carry a
-distinct embedded older-accepted sketch/input pair; its independently reproduced digest, not
-payload-marker presence, selects that branch. The private TypeScript package is a data binding/
-request builder, not a geometry engine or an executable OpenSCAD-like authoring language in M83.
-It derives parameters and results from the selected RPC method, validates exact envelope and
-method-specific result shape, immutable serialized request and retained-CAS identity,
-envelope/result session and document identity, session-start lifecycle/authority postconditions,
-closed error codes and evaluation-plan/cross-field consistency before retaining session state, and
-rejects a serialized UTF-8 request above the shared 16 MiB Rust bound before transport. It does not
-duplicate action, lineage, geometry or acceptance validation.
-
 ### `geosolve-constraint-editor`
 
 Owns presentation-independent sketch interaction policy over public `geosolve-sketch` and
@@ -475,9 +350,8 @@ Owns presentation-independent sketch interaction policy over public `geosolve-sk
 - typed document-edit, preview, commit and cancellation effects; and
 - deterministic transition/replay fixtures for native and WASM qualification.
 
-It depends one way on `geosolve-sketch`, under ADR 0031 on `geosolve-sketch-features`, and under
-ADR 0039 on `geosolve-sketch-lineage` for authoritative workbench programs and ownership maps. The
-unreleased general ADR 0030 operation-authoring facade and its
+It depends one way on `geosolve-sketch` and, under ADR 0031, on
+`geosolve-sketch-features`. The unreleased general ADR 0030 operation-authoring facade and its
 dependency were removed when M66 closed. ADR 0037 narrowly reintroduces a direct
 `geosolve-sketch-ops` dependency for deterministic Profile Offset proposals; the editor still owns
 semantic authoring and the coordinator alone consumes an exact-stamped proposal. These dependencies do not own

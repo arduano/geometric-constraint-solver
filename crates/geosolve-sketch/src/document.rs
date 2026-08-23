@@ -9,16 +9,9 @@ use geosolve_core::{OperationCheckpoint, OperationController, OperationWorkCount
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
-mod materialization;
 mod profile_offset;
 mod query;
 
-pub use materialization::{
-    SketchMaterializationBatch, SketchMaterializationConstraintReservation,
-    SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
-    SketchMaterializationReservationAllocator, SketchMaterializationReservationConsumption,
-    SketchMaterializationReservationSet, SketchMaterializationSemanticCatalog,
-};
 use profile_offset::{document_profile_offset_edges, document_profile_offset_junctions};
 pub(crate) use query::{DocumentConicGeometryError, document_hyperbola_branch};
 use query::{
@@ -371,33 +364,8 @@ pub enum DocumentCurveControlKind {
     ConjugateAxis,
 }
 
-impl DocumentCurveControlKind {
-    /// Stable semantic family key used by host-side owner/write-back catalogs.
-    /// Ordinal controls retain their ordinal separately from this family key.
-    #[must_use]
-    pub const fn semantic_key(self) -> &'static str {
-        match self {
-            Self::Center => "center",
-            Self::StartPoint => "start-point",
-            Self::EndPoint => "end-point",
-            Self::ControlPoint { .. } => "control-point",
-            Self::Radius => "radius",
-            Self::TrimStart => "trim-start",
-            Self::TrimEnd => "trim-end",
-            Self::MajorAxisPoint => "major-axis-point",
-            Self::MinorAxis => "minor-axis",
-            Self::RationalMiddle => "rational-middle",
-            Self::Vertex => "vertex",
-            Self::Focus => "focus",
-            Self::TransverseAxisPoint => "transverse-axis-point",
-            Self::ConjugateAxis => "conjugate-axis",
-        }
-    }
-}
-
 /// Coordinate interpretation of the middle control of a rational quadratic conic.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DocumentRationalConicControlMode {
     /// Conventional Euclidean control `P1 = Qh / w`, valid only when `w != 0`.
     Euclidean,
@@ -409,8 +377,7 @@ pub enum DocumentRationalConicControlMode {
 ///
 /// The persistent definition continues to store `(Qh, w)`. Euclidean input is converted to
 /// `Qh = w * P1`; projective input is deliberately restricted to the zero-weight mode.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(tag = "mode", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum DocumentRationalConicControl {
     Euclidean {
@@ -638,8 +605,7 @@ pub enum DocumentBSplineForm {
 }
 
 /// Explicit adjacent B-spline span transition direction.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DocumentBSplineSpanDirection {
     Previous,
     Next,
@@ -1107,8 +1073,7 @@ pub struct ContactSlot {
 }
 
 /// Validated fields used to create one persistent contact slot.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ContactDefinition {
     pub curve: CurveSpan,
     pub parameter: DesignScalarId,
@@ -1119,8 +1084,7 @@ pub struct ContactDefinition {
 }
 
 /// One atomic accepted-state update for a persistent contact slot.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ContactStateEdit {
     pub contact: ContactId,
     pub value: f64,
@@ -1133,8 +1097,7 @@ pub struct ContactStateEdit {
 ///
 /// Unlike [`ContactStateEdit`], this form may change the selected semantic span
 /// and parameter-domain topology while retaining the contact and parameter IDs.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ContactBranchEdit {
     pub contact: ContactId,
     pub curve: CurveSpan,
@@ -1403,50 +1366,6 @@ pub enum DocumentConstraintDefinition {
     },
 }
 
-impl DocumentConstraintDefinition {
-    /// Stable closed semantic key for lineage and host audit catalogs.
-    #[must_use]
-    pub const fn semantic_key(&self) -> &'static str {
-        match self {
-            Self::FixedPoint { .. } => "fixed-point",
-            Self::FixedCoordinate { .. } => "fixed-coordinate",
-            Self::CoincidentWithOrigin { .. } => "coincident-with-origin",
-            Self::PointOnDatumAxis { .. } => "point-on-datum-axis",
-            Self::Coincident { .. } => "coincident",
-            Self::ExternalPointCoincident { .. } => "external-point-coincident",
-            Self::Horizontal { .. } => "horizontal",
-            Self::Vertical { .. } => "vertical",
-            Self::HorizontalPoints { .. } => "horizontal-points",
-            Self::VerticalPoints { .. } => "vertical-points",
-            Self::HorizontalPointToMidpoint { .. } => "horizontal-point-to-midpoint",
-            Self::VerticalPointToMidpoint { .. } => "vertical-point-to-midpoint",
-            Self::PointOnCurve { .. } => "point-on-curve",
-            Self::Parallel { .. } => "parallel",
-            Self::Perpendicular { .. } => "perpendicular",
-            Self::ExternalLineCollinear { .. } => "external-line-collinear",
-            Self::CollinearWithDatumAxis { .. } => "collinear-with-datum-axis",
-            Self::Concentric { .. } => "concentric",
-            Self::Collinear { .. } => "collinear",
-            Self::EqualLength { .. } => "equal-length",
-            Self::EqualRadius { .. } => "equal-radius",
-            Self::Midpoint { .. } => "midpoint",
-            Self::SymmetricAboutLine { .. } => "symmetric-about-line",
-            Self::SymmetricAboutDatumAxis { .. } => "symmetric-about-datum-axis",
-            Self::LineCircleTangency { .. } => "line-circle-tangency",
-            Self::CircleCircleTangency { .. } => "circle-circle-tangency",
-            Self::CircleArcTangency { .. } => "circle-arc-tangency",
-            Self::LineCurveTangency { .. } => "line-curve-tangency",
-            Self::CurveCurveContact { .. } => "curve-curve-contact",
-            Self::CurveCurveTangency { .. } => "curve-curve-tangency",
-            Self::CurveDirection { .. } => "curve-direction",
-            Self::EqualCurvature { .. } => "equal-curvature",
-            Self::EndpointContinuity { .. } => "endpoint-continuity",
-            Self::LineLineFillet { .. } => "line-line-fillet",
-            Self::CurveCurveFillet { .. } => "curve-curve-fillet",
-        }
-    }
-}
-
 /// One persistent geometric source and its independent audit identity.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1626,23 +1545,6 @@ pub enum DocumentDimensionDefinition {
     },
 }
 
-impl DocumentDimensionDefinition {
-    /// Stable closed semantic key for lineage and host audit catalogs.
-    #[must_use]
-    pub const fn semantic_key(&self) -> &'static str {
-        match self {
-            Self::PointDistance { .. } => "point-distance",
-            Self::CurveLength { .. } => "curve-length",
-            Self::Radius { .. } => "radius",
-            Self::Diameter { .. } => "diameter",
-            Self::OrientedAngle { .. } => "oriented-angle",
-            Self::SupportingLineOffset { .. } => "supporting-line-offset",
-            Self::ExactTranslatedSegmentOffset { .. } => "exact-translated-segment-offset",
-            Self::ProfileOffset { .. } => "profile-offset",
-        }
-    }
-}
-
 /// Persistent identities created by one atomic profile-offset declaration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DocumentProfileOffsetIds {
@@ -1708,8 +1610,7 @@ pub struct DocumentParameterOutput {
 }
 
 /// Any deletable persistent object identity.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentObjectId {
     Point(DesignPointId),
     Scalar(DesignScalarId),
@@ -1753,8 +1654,7 @@ pub enum GeometryRole {
 }
 
 /// One curve-scoped profile/construction role change in an atomic batch.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GeometryRoleEdit {
     pub curve: CurveId,
     pub role: GeometryRole,
@@ -1764,25 +1664,6 @@ impl GeometryRoleEdit {
     #[must_use]
     pub const fn new(curve: CurveId, role: GeometryRole) -> Self {
         Self { curve, role }
-    }
-}
-
-/// One scalar value replacement in an atomic validated batch.
-///
-/// The scalar identity and domain remain unchanged. Contact parameters, active
-/// associative-Fillet endpoint angles, and selected NURBS gauge weights retain
-/// their existing dedicated transaction requirements.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ScalarValueEdit {
-    pub scalar: DesignScalarId,
-    pub value: f64,
-}
-
-impl ScalarValueEdit {
-    #[must_use]
-    pub const fn new(scalar: DesignScalarId, value: f64) -> Self {
-        Self { scalar, value }
     }
 }
 
@@ -2056,8 +1937,7 @@ pub struct DocumentMirroredBSplineInsertion {
 }
 
 /// Validated input for one atomic associative line-line fillet construction.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineLineFilletRequest {
     pub first: CurveSpan,
     pub first_side: DocumentCurveNormalSide,
@@ -2085,8 +1965,7 @@ pub struct LineLineFilletIds {
 }
 
 /// One generic fillet parent request with explicit root and visible-endpoint state.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CurveFilletParentRequest {
     pub curve: CurveSpan,
     pub parameter: f64,
@@ -2098,8 +1977,7 @@ pub struct CurveFilletParentRequest {
 }
 
 /// Validated input for one atomic associative generic curve fillet construction.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CurveCurveFilletRequest {
     pub first: CurveFilletParentRequest,
     pub second: CurveFilletParentRequest,
@@ -9048,123 +8926,57 @@ impl SketchDocument {
         id: DesignScalarId,
         value: f64,
     ) -> Result<(), DocumentError> {
-        self.set_scalar_values(&[ScalarValueEdit::new(id, value)])
-    }
-
-    /// Atomically replaces several scalar values without changing identity or domain.
-    ///
-    /// The complete batch is bounded by [`MAX_DOCUMENT_OBJECTS`], clones the document once,
-    /// applies every validated value to that candidate, and validates the resulting graph once.
-    /// This permits coordinated edits whose intermediate scalar combinations would be invalid.
-    /// Each scalar may occur only once. All dedicated scalar-ownership guards are identical to
-    /// [`Self::set_scalar_value`]. A batch whose values are all bit-identical to retained state
-    /// succeeds without cloning or revalidating the unchanged document.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error for an empty or oversized batch, repeated or missing scalar identity,
-    /// contact-owned scalar, active associative-Fillet endpoint angle, selected NURBS gauge
-    /// weight, value outside its scalar domain, or invalid resulting graph. Rejection leaves the
-    /// complete document unchanged.
-    pub fn set_scalar_values(&mut self, edits: &[ScalarValueEdit]) -> Result<(), DocumentError> {
-        if edits.is_empty() {
-            return invalid("scalar edits", "batch must not be empty");
-        }
-        if edits.len() > MAX_DOCUMENT_OBJECTS {
-            return Err(DocumentError::ResourceLimit {
-                resource: "scalar edits",
-                actual: edits.len(),
-                limit: MAX_DOCUMENT_OBJECTS,
-            });
-        }
-
         let activity = self.compute_effective_activity();
-
-        let contact_owned = self
-            .contacts
-            .iter()
-            .map(|contact| contact.parameter)
-            .collect::<BTreeSet<_>>();
-        let active_fillet_arcs = self
-            .constraints
-            .iter()
-            .filter(|constraint| activity.is_active(constraint.id))
-            .filter_map(|constraint| match &constraint.definition {
-                DocumentConstraintDefinition::LineLineFillet { arc, .. }
-                | DocumentConstraintDefinition::CurveCurveFillet { arc, .. } => Some(*arc),
-                _ => None,
-            })
-            .collect::<BTreeSet<_>>();
-        let mut active_fillet_angles = BTreeSet::new();
-        let mut nurbs_gauge_weights = BTreeSet::new();
-        for curve in &self.curves {
-            match &curve.definition {
-                CurveDefinition::CircularArc {
-                    start_angle,
-                    end_angle,
-                    ..
-                } if active_fillet_arcs.contains(&curve.id) => {
-                    active_fillet_angles.insert(*start_angle);
-                    active_fillet_angles.insert(*end_angle);
-                }
-                CurveDefinition::Nurbs { gauge_weight, .. } => {
-                    nurbs_gauge_weights.insert(*gauge_weight);
-                }
-                _ => {}
-            }
+        if self.contacts.iter().any(|contact| contact.parameter == id) {
+            return invalid(
+                "scalar edit",
+                "contact-owned scalars require an atomic contact-state edit",
+            );
         }
-        let scalar_states = self
-            .scalars
-            .iter()
-            .map(|scalar| (scalar.id, (scalar.domain, scalar.value)))
-            .collect::<BTreeMap<_, _>>();
-        let mut requested_scalars = BTreeSet::new();
-        let mut replacements = BTreeMap::new();
-        for edit in edits {
-            if !requested_scalars.insert(edit.scalar) {
-                return invalid(
-                    "scalar edits",
-                    format!("scalar {} occurs more than once", edit.scalar),
-                );
-            }
-            if contact_owned.contains(&edit.scalar) {
-                return invalid(
-                    "scalar edit",
-                    "contact-owned scalars require an atomic contact-state edit",
-                );
-            }
-            if active_fillet_angles.contains(&edit.scalar) {
-                return invalid(
-                    "scalar edit",
-                    "active line-fillet endpoint angles are derived from parent contacts",
-                );
-            }
-            if nurbs_gauge_weights.contains(&edit.scalar) {
-                return invalid(
-                    "scalar edit",
-                    "the selected NURBS gauge weight requires an explicit gauge transaction",
-                );
-            }
-            let (domain, retained_value) = scalar_states
-                .get(&edit.scalar)
-                .copied()
-                .ok_or_else(|| unknown("scalar", edit.scalar.0))?;
-            validate_scalar_value(edit.value, domain)?;
-            if retained_value.to_bits() != edit.value.to_bits() {
-                replacements.insert(edit.scalar, edit.value);
-            }
+        if self.curves.iter().any(|curve| {
+            let CurveDefinition::CircularArc {
+                start_angle,
+                end_angle,
+                ..
+            } = &curve.definition
+            else {
+                return false;
+            };
+            (*start_angle == id || *end_angle == id)
+                && self.constraints.iter().any(|constraint| {
+                    activity.is_active(constraint.id)
+                        && matches!(
+                            constraint.definition,
+                            DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                                | DocumentConstraintDefinition::CurveCurveFillet { arc, .. }
+                                if arc == curve.id
+                        )
+                })
+        }) {
+            return invalid(
+                "scalar edit",
+                "active line-fillet endpoint angles are derived from parent contacts",
+            );
         }
-
-        if replacements.is_empty() {
-            return Ok(());
+        if self.curves.iter().any(|curve| {
+            matches!(
+                &curve.definition,
+                CurveDefinition::Nurbs { gauge_weight, .. } if *gauge_weight == id
+            )
+        }) {
+            return invalid(
+                "scalar edit",
+                "the selected NURBS gauge weight requires an explicit gauge transaction",
+            );
         }
-
         let mut candidate = self.clone();
-        for scalar in &mut candidate.scalars {
-            if let Some(value) = replacements.get(&scalar.id) {
-                scalar.value = *value;
-            }
-        }
+        let scalar = candidate
+            .scalars
+            .iter_mut()
+            .find(|scalar| scalar.id == id)
+            .ok_or_else(|| unknown("scalar", id.0))?;
+        validate_scalar_value(value, scalar.domain)?;
+        scalar.value = value;
         candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())

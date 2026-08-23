@@ -2,15 +2,11 @@
 
 use geosolve_constraint_editor::{
     FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
-    RetainedEditorCoordinator, SelectionItem, evaluate_lineage_session_cold,
+    RetainedEditorCoordinator, SelectionItem,
 };
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentEdit,
-    DocumentNativeLineFilletIds, DocumentSolveRequest, RetainedSketchDocumentSession,
-    SketchDocument, SolverConfig,
-};
-use geosolve_sketch_lineage::{
-    LineageEvaluationPolicy, LineageMutation, LineagePatch, LineageSession,
+    CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentNativeLineFilletIds,
+    DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument, SolverConfig,
 };
 
 fn assert_native_fillet_ids_exist(
@@ -290,55 +286,4 @@ fn native_fillet_publication_uses_the_accepted_preview_not_opposed_retained_seed
     assert_feature_semantics_match(&replayed, &coordinator);
     assert_native_fillet_ids_exist(&replayed, &published.value);
     assert_current_native_solution(&replayed);
-
-    // Keep the opposed-seed native topology inside a completely reusable
-    // dependency-local anchor, rather than as its terminal step. The local
-    // policy must still reconstruct the independently accepted prefix on both
-    // sides of the Fillet transition before it can certify the later point.
-    replayed
-        .apply_edit(
-            replayed.session().design_identity(),
-            DocumentEdit::CreatePoint {
-                label: "post-Fillet independent point".into(),
-                position: [7.0, 2.0],
-            },
-        )
-        .expect("ordinary action after native Fillet");
-    let strict = LineageSession::from_session_json(
-        &replayed
-            .lineage_session_json()
-            .expect("strict native-Fillet lineage"),
-    )
-    .expect("strict native-Fillet session");
-    let strict_evidence =
-        evaluate_lineage_session_cold(&strict).expect("strict native-Fillet cold evidence");
-    let mut local = strict.clone();
-    local
-        .apply_patch(LineagePatch::new(
-            local.identity(),
-            vec![LineageMutation::SetEvaluationPolicy {
-                policy: LineageEvaluationPolicy::DependencyLocal,
-            }],
-        ))
-        .expect("dependency-local policy");
-    let local_evidence = evaluate_lineage_session_cold(&local)
-        .expect("dependency-local native-Fillet anchor evidence");
-    assert_eq!(
-        local_evidence.sketch_digest(),
-        strict_evidence.sketch_digest()
-    );
-    assert_eq!(
-        local_evidence.feature_digest(),
-        strict_evidence.feature_digest()
-    );
-    assert_eq!(
-        local_evidence.strict_prefix_digest(),
-        strict_evidence.strict_prefix_digest()
-    );
-    assert_eq!(local_evidence.work().reusable_prefix_count(), 3);
-    assert_eq!(
-        local_evidence.work().policy_prefix_evaluation_count(),
-        3,
-        "baseline, native Fillet and the terminal reusable anchor must each be authenticated"
-    );
 }

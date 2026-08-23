@@ -2,13 +2,12 @@
 
 ## Release line
 
-GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. That
-release contains eight library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
+GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The
+eight library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
 `geosolve-linkage`, `geosolve-sketch-ops`, `geosolve-sketch-topology`,
-`geosolve-sketch-features` and `geosolve-constraint-editor`) that version and release in lockstep.
-M83 adds the unreleased publishable `geosolve-sketch-lineage` and
-`geosolve-sketch-lineage-wasm` crates to the next lockstep release, for ten publishable crates in
-the current workspace. `geosolve-demo-web` is a non-published diagnostic consumer.
+`geosolve-sketch-features` and `geosolve-constraint-editor`) version and release in lockstep.
+`geosolve-demo-web` is a
+non-published diagnostic consumer.
 
 Before `1.0`, a minor version may contain source-breaking changes. Patch releases
 must remain source-compatible except where retaining behavior would preserve a
@@ -273,119 +272,6 @@ M81-F001 changes rejected-mutation side effects only: a failed durable computed-
 no longer consumes a revision-local output allocator value. No public type, signature, error text,
 wire format, crate dependency or successful publication result changes.
 
-M83 is an additive pre-1.0 orchestration and application-persistence extension under ADR 0039.
-The new `geosolve-sketch-lineage` crate defines canonical versioned lineage-document/session/map
-DTOs, exact-CAS mutations, stable typed ports/reservations, retained/latest-attempt/last-accepted
-authority and one Undo/Redo history. Its public action payload is data-only; equations,
-independent validation and branch semantics remain in their existing domain owners. Public
-`LineageSession::accept_current` is a trusted host-materializer publication seam: decoding a
-self-consistent session does not independently verify its materialization digest. Workspace v7
-reconstructs a current accepted program by consuming canonical accepted sketch evidence from cold
-owning-domain evaluation of the exact current lineage/input pair. A rejected current program uses
-the same evidence contract for the exact older accepted lineage/input pair. Neither path
-independently solves flattened intent after that evidence is authenticated. The standalone
-`geosolve.lineage.rpc.v0` loader instead strips caller-certified current and historical acceptance
-while preserving declarative history, then requires an explicit ordinary cold evaluation before
-accepted authority can surface again.
-
-M83-F032 additively exposes
-`RetainedSketchDocumentSession::replace_current_accepted_materialization` for an owning host that
-has already produced canonical accepted geometry through an independent evaluator. It is not a
-general accepted-state injection API: the call requires the exact current `PreparedSketchInput`,
-independently certifies the supplied finite graph under the retained request and host inputs,
-requires compatible retained topology and either the current accepted publication or the exact
-current rejected attempt, and rejects atomically. Successful replacement preserves design and
-attempt identities, attempt/provenance and allocator high-waters. It preserves an existing current
-accepted identity only when the canonical accepted bytes are exactly unchanged. Any changed bytes
-allocate exactly the next accepted revision, as does promotion of a live-rejected attempt; numeric
-equality is deliberately insufficient because signed-zero bytes participate in canonical lineage
-authority. Only the process-local prepared-state epoch otherwise advances, deliberately making
-outstanding prepared jobs stale.
-Projected direct manipulation does not use this substitution policy: its caller witness must still
-equal genuine cold evidence exactly. Ordinary coordinator mutation results now report accepted
-identity after this canonical replacement/promotion boundary rather than echoing the provisional
-live attempt disposition.
-
-M83-F036 changes only private retained-coordinator publication ordering. Computed-feature-only
-mutations authenticate strict-cold sketch evidence and publish the exact already-evaluated preview
-when its accepted sketch bytes match; a different cold graph causes scratch replacement and
-computed reevaluation before the atomic swap. No public type, signature, wire field, solver rule or
-successful caller-visible feature identity changes.
-
-The M83 editable-Lineage amendment is an additive pre-1.0 editor/orchestration surface.
-`LineageActionDefinition::{schema, schema_version}` provide read-only access to the stable schema
-identity already carried by each action. `LineageStepInspection` is a detached authority snapshot,
-not an editable document or publication token. `LineageReorderBlockReason`, `LineageReorderLane`,
-`LineageReorderAvailability`, `LineageReorderOutcome` and `LineageStepRewriteOutcome` expose the
-coordinator's current dependency/chronology decision and resulting exact transaction; callers that
-exhaustively match these provisional enums must handle additive variants under the documented
-pre-1.0 minor-release policy.
-
-`RetainedEditorCoordinator::{lineage_step_inspection, lineage_reorder_availability,
-reorder_lineage_step, rewrite_lineage_step_json}` are the supported host seam for the demo's
-Inspector. Inspection and availability are read-only. Reorder and rewrite require the exact
-`LineageDocumentIdentity`, stage strict-cold owning-domain evaluation and publish atomically into
-the one lineage history. Reorder may directionally clamp a blocked request to the furthest legal
-lane and reports that result; imported baselines and tombstones are pinned, while suppression does
-not itself pin a step. Raw JSON accepts only `LineageStepRewrite`: action kind/schema/version and
-all stable step/output/reservation ownership remain immutable. Stale, malformed, oversized,
-schema-changing or semantically invalid requests leave retained lineage, accepted geometry and
-history unchanged. Hosts must refresh the inspection after any publication rather than treating a
-snapshot or browser drag payload as continuing authority.
-
-`ConstraintEditor::pointer_up_current_sample` is an additive strict terminal adapter for a host
-that coalesces captured Point or CurveControl motion. It commits only when the latest accepted
-preview was requested at the bitwise-exact terminal model position and is authenticated by the
-terminal scene. An unsampled or rejected terminal coordinate clears the preview instead of
-borrowing an older accepted sample. Existing `ConstraintEditor::pointer_up` remains source- and
-behavior-compatible and deliberately retains its ordinary last-valid-preview fallback. Predictive
-timing, cursor intent, Lineage selection, dirty debug drafts and drag authentication are private
-demo presentation state; none enters workspace v7, generic lineage/RPC schemas or canonical sketch
-v1-v4. This amendment changes no residual, Jacobian, rank/DOF rule, hard/soft priority, branch
-policy or accepted-state validation requirement.
-
-Generic caller-authored action payloads remain a structural lineage extension point, but M83 does
-not promise that a registered schema alone is executable workbench intent. Only editor-compiled
-actions carrying authenticated private materialization data can cold-materialize through the
-current evaluator; raw structural actions return `workbench_materialization_unsupported`. RPC
-`rewrite_owners` is an exact-CAS structural rewrite and is not the editor's inverse-derived
-projected multi-owner transaction. Deleting an imported persistent object appends an explicit
-`Retired` lifecycle action rather than changing the immutable imported-root payload/manifest.
-
-The new `geosolve-sketch-lineage-wasm` crate is a DOM-free stateful JSON-string RPC adapter. Its
-`geosolve.lineage.rpc.v0` discriminator is intentionally versioned as a pre-release protocol;
-opaque string IDs/revisions and closed method/result/error variants must be preserved within that
-protocol version. The private `@geosolve/lineage-bindings` TypeScript package is data-only and is
-not published to npm. Its provisional `LineageRpcClient.call` API is now method-indexed through
-closed parameter/result maps instead of accepting a caller-selected result type. Exact runtime
-decoders authenticate method-specific result shape, result/envelope identity and evaluation
-cross-fields, exact serialized request/CAS identity, session-start authority stripping and bounded
-lifecycle arrays; closed error unions mirror Rust. Undo and Redo return the same authoritative
-snapshot shape as inspection, including the restored policy and historical accepted authority,
-rather than an identity-only transition. The client also mirrors the bounded policy/accepted-
-authority history implied by successful mutations. On standalone load it parses each historical
-document policy from the exact serialized request while treating every accepted stamp as stripped,
-matching Rust's untrusted-load contract; Undo/Redo snapshots must match that retained checkpoint.
-An unchanged generic mutation that requests an evaluation-policy transition is rejected before it
-can alter the client's retained correlation state.
-`RPC_MAX_REQUEST_BYTES` and
-`LineageRpcRequestError` expose the matching 16 MiB UTF-8 preflight contract. These checks protect
-the data-binding boundary and do not make TypeScript a second lineage or geometry validator.
-Workspace v7 is demo-application persistence, not canonical sketch schema: it strictly migrates
-v1-v6 through `ImportedBaseline`, and its flat sketch/feature/map fields are disposable caches.
-Canonical sketch input/output remains v1-v4/v4 and draft v5 remains unsupported.
-The additive public coordinator string codecs are deliberately lower-level parts of that
-application bundle: `lineage_session_json()` carries generic declarative session/history authority,
-while `lineage_host_input_ledger_json()` carries the bounded exact host-only pairs needed by
-historical accepted positions. Both strings must be captured together with the same coordinator's
-current and accepted parameter/snapshot payloads. Paired restore requires those exact current and
-accepted payloads to be installed in the receiver before it cold-authenticates the session and
-ledger; neither string is a self-contained workspace envelope. The ledger remains outside the
-generic lineage-session and `geosolve.lineage.rpc.v0` schemas.
-The additive host-parameter JSON codec, exact accepted/current host-input accessors and Serde
-implementations used by the action compiler do not change any existing equation or wire language.
-M83 remains provisional until clean qualification and supervising-human UAT approval.
-
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 
@@ -402,18 +288,12 @@ The supported domain entry points are:
   workflows;
 - `geosolve-sketch-ops` immutable snapshots, controlled prepared proposals and exact-input
   application for equation-free sketch operations;
-- `geosolve-sketch-topology` complete accepted-input production-wire and region profiles;
+- `geosolve-sketch-topology` complete accepted-input production-wire and region profiles; and
 - `geosolve-sketch-features` persistent computed-feature intent plus independently validated,
-  exact-stamped revision-local output;
-- `geosolve-sketch-lineage` canonical declarative sketch-action authority, stable typed identity
-  flow, deterministic rematerialization evidence and one lineage history; and
+  exact-stamped revision-local output; and
 - `geosolve-constraint-editor` state, scene, normalized input and typed effect APIs for
   presentation-independent constraint, dimension and computed-feature authoring over those sketch
   workflows.
-
-`geosolve-sketch-lineage-wasm` is the DOM-free binding tier for the provisional versioned lineage
-RPC contract. It delegates validation and authority to the Rust domain/editor APIs above and is
-publishable with them, but is not an additional geometry or document-semantics owner.
 
 Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain supported
 compatibility facades in the `0.2` line.
@@ -454,7 +334,6 @@ candidate before publication. Unknown future versions reject atomically.
 | Sketch | v1, v2, v3, v4 | v4 | Frozen old languages migrate directly to v4 |
 | Planar linkage | v1 | v1 | None required |
 | Spatial assembly | v1 | v1 | None required |
-| Sketch lineage | v1 | v1 | None required; workbench v1-v6 migration enters through imported baselines |
 
 Canonical output is byte-stable for the same accepted document and schema version.
 Runtime generational IDs never form persisted identity. A schema language is never
@@ -495,14 +374,12 @@ The publishable crates are released in dependency order:
 2. `geosolve-core` after the matching geometry version is visible;
 3. `geosolve-sketch` and `geosolve-linkage` after the matching core version is
    visible;
-4. `geosolve-sketch-ops`, `geosolve-sketch-topology`, `geosolve-sketch-features` and
-   `geosolve-sketch-lineage` after the matching sketch version is visible;
-5. `geosolve-constraint-editor` after the matching sketch, features, operations, topology and
-   lineage versions are visible;
-6. `geosolve-sketch-lineage-wasm` after the matching editor and lineage versions are visible.
+4. `geosolve-sketch-ops`, `geosolve-sketch-topology` and `geosolve-sketch-features` after the
+   matching sketch version is visible;
+5. `geosolve-constraint-editor` after the matching sketch and sketch-features versions are visible.
 
 Cargo cannot create a registry-ready dependent archive before its path dependency
 version exists in the registry. The pre-publication gate therefore checks the exact
-archive file list for all ten crates and builds every workspace target from path
+archive file list for all eight crates and builds every workspace target from path
 dependencies. Each package includes `LICENSE` and `README.md`. Registry publication
 itself remains a maintainer action after a repository URL and release tag exist.

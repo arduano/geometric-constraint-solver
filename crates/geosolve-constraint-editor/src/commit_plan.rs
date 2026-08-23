@@ -31,8 +31,7 @@ pub const MAX_CONSTRUCTION_PLAN_RELATIONS: usize = 32;
 /// `Created` indexes [`ConstructionResult::points`] in allocation order.  It is an
 /// occurrence index, not a geometric-equality lookup: repeated coordinates remain distinct
 /// points unless the proposal explicitly reuses an `Existing` identity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DraftPointSlot {
     Existing(DesignPointId),
     Created { point_index: usize },
@@ -42,32 +41,28 @@ pub enum DraftPointSlot {
 ///
 /// `Created.curve_index` indexes [`ConstructionResult::curves`] in allocation order.  The
 /// segment remains explicit so individual live polyline spans can receive inference.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DraftSpanSlot {
     Existing(CurveSpan),
     Created { curve_index: usize, segment: u32 },
 }
 
 /// One curve operand available to a relation in the same construction transaction.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DraftCurveSlot {
     Existing(CurveId),
     Created { curve_index: usize },
 }
 
 /// One directed affine support available to a same-transaction relation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DraftLineSupportSlot {
     pub span: DraftSpanSlot,
     pub direction: DocumentDirectionSense,
 }
 
 /// Exact contact state retained when point-on-curve inference is committed.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DraftContactDescriptor {
     pub span: DraftSpanSlot,
     pub domain: ContactDomain,
@@ -82,8 +77,7 @@ pub struct DraftContactDescriptor {
 /// is already encoded by `ConstructionPoint::Existing` and must not create a redundant
 /// coincidence source. A standalone Point-tool confirmation of that existing identity is
 /// therefore a history-neutral no-op and emits no construction plan.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum InferredRelation {
     CoincidentWithOrigin {
         point: DraftPointSlot,
@@ -162,10 +156,7 @@ pub enum InferredRelation {
 /// Provenance is durable plan intent, not a label inferred after solving.  It
 /// determines deterministic lowering order and lets retained publication give
 /// recipe-owned relations precedence over ambient drafting suggestions.
-#[derive(
-    Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
-)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ConstructionRelationProvenance {
     RecipeIntrinsic,
     RecipeRegularization,
@@ -173,8 +164,7 @@ pub enum ConstructionRelationProvenance {
 }
 
 /// One relation definition together with its construction-time provenance.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConstructionRelationDefinition {
     pub provenance: ConstructionRelationProvenance,
     pub relation: InferredRelation,
@@ -231,8 +221,7 @@ pub struct ConstructionCommitResult {
 }
 
 /// A complete prospective construction and its exact inferred relations.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ConstructionCommitPlan {
     pub proposal: ConstructionProposal,
     /// Exact role for each created curve in allocation order.

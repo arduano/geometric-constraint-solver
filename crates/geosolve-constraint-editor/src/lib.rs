@@ -43,15 +43,11 @@ pub use coordinator::{
     EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
     EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
     FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
-    FeatureAuthoringTransaction, GeometryRoleSelectionState, LINEAGE_DOMAIN_EVALUATOR,
-    LifecycleDto, LifecycleStatus, LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure,
-    LineageEvaluationWorkEvidence, LineageReorderAvailability, LineageReorderBlockReason,
-    LineageReorderLane, LineageReorderOutcome, LineageStepInspection, LineageStepRewriteOutcome,
+    FeatureAuthoringTransaction, GeometryRoleSelectionState, LifecycleDto, LifecycleStatus,
     MeasurementPublication, MutationOutcome, ProblemsDto, ProfileOffsetDirectionMetadata,
     ProfileOffsetDirectionState, ProjectedDragRejectionStage, ProjectedDragWorkEvidence,
     RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
-    SelectedCurvePropertyMetadata, display_dimension_target, evaluate_lineage_session_cold,
-    evaluate_lineage_session_cold_with_inputs, lineage_external_input_stamp,
+    SelectedCurvePropertyMetadata, display_dimension_target,
 };
 pub use curve_controls::{
     SceneCurveControl, SceneCurveControlGripGeometry, SceneCurveControlGuide,
@@ -207,10 +203,7 @@ impl Viewport {
 }
 
 /// Selectable identity understood by the headless editor.
-#[derive(
-    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
-)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum SelectionItem {
     Point(DesignPointId),
     Curve(CurveSpan),
@@ -3262,13 +3255,7 @@ impl ConstructionCommitToken {
 }
 
 /// A point operand used by a construction proposal.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(
-    tag = "kind",
-    content = "value",
-    rename_all = "snake_case",
-    deny_unknown_fields
-)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ConstructionPoint {
     Existing {
         id: DesignPointId,
@@ -3283,8 +3270,7 @@ pub enum ConstructionPoint {
 /// Applying a proposal uses only public [`SketchDocument`] allocation APIs.  It is
 /// deliberately separate from [`geosolve_sketch::DocumentEdit`], whose single-edit shape cannot
 /// refer to identities allocated by preceding point/scalar creations.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ConstructionProposal {
     Point {
         point: ConstructionPoint,
@@ -3401,8 +3387,7 @@ pub enum ConstructionProposal {
 }
 
 /// Explicit authoring state for conic construction tools.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConicConstructionOptions {
     pub minor_axis_ratio: f64,
     /// Retained for source compatibility with hosts that store one common conic
@@ -3436,8 +3421,7 @@ impl Default for ConicConstructionOptions {
 }
 
 /// Explicit NURBS creation topology and homogeneous weights.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NurbsConstructionOptions {
     pub form: DocumentBSplineForm,
     pub degree: u32,
@@ -4351,7 +4335,6 @@ struct PointGesture {
     origin: ScreenPoint,
     model_offset: [f64; 2],
     moved: bool,
-    last_sampled_position: Option<[f64; 2]>,
     latest_request: Option<u64>,
 }
 
@@ -5916,7 +5899,6 @@ impl ConstraintEditor {
                             point_position[1] - pointer_position[1],
                         ],
                         moved: false,
-                        last_sampled_position: None,
                         latest_request: None,
                     });
                     self.last_valid_drag_preview = None;
@@ -6222,7 +6204,6 @@ impl ConstraintEditor {
                             point_position[1] - pointer_position[1],
                         ],
                         moved: false,
-                        last_sampled_position: None,
                         latest_request: None,
                     });
                     self.last_valid_drag_preview = None;
@@ -6836,19 +6817,17 @@ impl ConstraintEditor {
             return Vec::new();
         };
         self.next_projection_request = next_request;
-        let pointer_position = scene.viewport.screen_to_model(input.position);
-        let model_position = [
-            pointer_position[0] + gesture.model_offset[0],
-            pointer_position[1] + gesture.model_offset[1],
-        ];
-        gesture.last_sampled_position = Some(model_position);
         gesture.latest_request = Some(request_id);
         self.point_gesture = Some(gesture);
+        let pointer_position = scene.viewport.screen_to_model(input.position);
         vec![EditorEffect::RequestProjectedPointMove {
             pointer_id: input.pointer_id,
             request_id,
             point: gesture.point,
-            model_position,
+            model_position: [
+                pointer_position[0] + gesture.model_offset[0],
+                pointer_position[1] + gesture.model_offset[1],
+            ],
         }]
     }
 
@@ -7105,115 +7084,6 @@ impl ConstraintEditor {
             limit,
         });
         true
-    }
-
-    /// Completes a point or direct curve-control gesture only when the exact
-    /// terminal sample is the preview that the host most recently accepted.
-    ///
-    /// This is the strict release boundary for adapters that deliberately
-    /// coalesce intermediate pointer movement and synchronously resolve one
-    /// final sample before pointer-up. Unlike [`Self::pointer_up`], it never
-    /// falls back to an older valid preview after the latest request was
-    /// rejected. Other gesture families are outside this boundary and emit no
-    /// effects.
-    pub fn pointer_up_current_sample(
-        &mut self,
-        scene: &EditorScene,
-        expected: SketchDesignIdentity,
-        input: PointerInput,
-    ) -> Vec<EditorEffect> {
-        if self.tool != EditorTool::Select {
-            return Vec::new();
-        }
-        if let Some(gesture) = self.curve_control_gesture {
-            if gesture.pointer_id != input.pointer_id {
-                return Vec::new();
-            }
-            self.curve_control_gesture = None;
-            if !gesture.moved {
-                return Vec::new();
-            }
-            let current_request = (input.position.is_finite()
-                && expected == gesture.expected
-                && scene.accepts_curve_control_gesture(
-                    gesture.accepted_revision,
-                    gesture.expected,
-                    gesture.viewport,
-                    gesture.control,
-                    gesture.owner,
-                    gesture.last_valid_request,
-                ))
-            .then(|| {
-                match (
-                    gesture.latest_request,
-                    gesture.last_valid_request,
-                    gesture.last_sampled_position,
-                    Self::curve_control_sample(scene, &gesture, input.position),
-                ) {
-                    (
-                        Some(latest),
-                        Some((accepted, _)),
-                        Some(requested_position),
-                        Some(terminal_position),
-                    ) if latest == accepted
-                        && model_positions_bit_equal(requested_position, terminal_position) =>
-                    {
-                        Some(accepted)
-                    }
-                    _ => None,
-                }
-            })
-            .flatten();
-            return current_request.map_or_else(
-                || vec![EditorEffect::ClearCurveControlPreview],
-                |request_id| {
-                    vec![EditorEffect::CommitCurveControl {
-                        expected: gesture.expected,
-                        pointer_id: gesture.pointer_id,
-                        request_id,
-                        control: gesture.control,
-                    }]
-                },
-            );
-        }
-        let Some(gesture) = self.point_gesture else {
-            return Vec::new();
-        };
-        if gesture.pointer_id != input.pointer_id {
-            return Vec::new();
-        }
-        self.point_gesture = None;
-        if !gesture.moved {
-            return Vec::new();
-        }
-        let terminal_pointer = scene.viewport.screen_to_model(input.position);
-        let terminal_position = [
-            terminal_pointer[0] + gesture.model_offset[0],
-            terminal_pointer[1] + gesture.model_offset[1],
-        ];
-        let preview =
-            self.last_valid_drag_preview
-                .take()
-                .filter(|(request, epoch, pointer, point, _)| {
-                    Some(*request) == gesture.latest_request
-                        && *epoch == gesture.epoch
-                        && *pointer == input.pointer_id
-                        && *point == gesture.point
-                        && input.position.is_finite()
-                        && gesture.last_sampled_position.is_some_and(|sampled| {
-                            model_positions_bit_equal(sampled, terminal_position)
-                        })
-                });
-        preview.map_or_else(
-            || vec![EditorEffect::ClearPointPreview],
-            |(_, _, _, _, position)| {
-                vec![EditorEffect::CommitPointMove {
-                    expected,
-                    point: gesture.point,
-                    model_position: position,
-                }]
-            },
-        )
     }
 
     /// Completes an active point gesture. A click emits no geometry edit.
@@ -10070,8 +9940,7 @@ fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot>
 ///
 /// An intent is not an equation identity. The headless coordinator resolves it
 /// to one [`ResolvedConstraintKind`] from typed selected operands.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConstraintIntent {
     Lock,
     Coincident,
@@ -10086,28 +9955,6 @@ pub enum ConstraintIntent {
     Continuity,
     Concentric,
     Collinear,
-}
-
-impl ConstraintIntent {
-    /// Stable semantic key for the user's unresolved contextual intent.
-    #[must_use]
-    pub const fn semantic_key(self) -> &'static str {
-        match self {
-            Self::Lock => "lock",
-            Self::Coincident => "coincident",
-            Self::Horizontal => "horizontal",
-            Self::Vertical => "vertical",
-            Self::Parallel => "parallel",
-            Self::Perpendicular => "perpendicular",
-            Self::Equal => "equal",
-            Self::Midpoint => "midpoint",
-            Self::Symmetric => "symmetric",
-            Self::Tangent => "tangent",
-            Self::Continuity => "continuity",
-            Self::Concentric => "concentric",
-            Self::Collinear => "collinear",
-        }
-    }
 }
 
 /// Exact persistent constraint family selected by contextual dispatch.
@@ -10140,38 +9987,6 @@ pub enum ResolvedConstraintKind {
 }
 
 impl ResolvedConstraintKind {
-    /// Stable semantic key for the exact persistent relation selected by
-    /// contextual dispatch.
-    #[must_use]
-    pub const fn semantic_key(self) -> &'static str {
-        match self {
-            Self::FixedPoint => "fixed-point",
-            Self::CoincidentWithOrigin => "coincident-with-origin",
-            Self::PointOnDatumAxis => "point-on-datum-axis",
-            Self::CoincidentPoints => "coincident-points",
-            Self::PointOnCurve => "point-on-curve",
-            Self::CurveContact => "curve-contact",
-            Self::HorizontalLine => "horizontal-line",
-            Self::VerticalLine => "vertical-line",
-            Self::HorizontalPoints => "horizontal-points",
-            Self::VerticalPoints => "vertical-points",
-            Self::ConcentricCurves => "concentric-curves",
-            Self::CollinearSupports => "collinear-supports",
-            Self::CollinearWithDatumAxis => "collinear-with-datum-axis",
-            Self::ParallelLines => "parallel-lines",
-            Self::PerpendicularLines => "perpendicular-lines",
-            Self::RadialLine => "radial-line",
-            Self::EqualLength => "equal-length",
-            Self::EqualRadius => "equal-radius",
-            Self::EqualCurvature => "equal-curvature",
-            Self::Midpoint => "midpoint",
-            Self::SymmetricAboutLine => "symmetric-about-line",
-            Self::SymmetricAboutDatumAxis => "symmetric-about-datum-axis",
-            Self::CurveTangency => "curve-tangency",
-            Self::EndpointContinuity => "endpoint-continuity",
-        }
-    }
-
     /// Selection-specific presentation label; equations remain domain-owned.
     #[must_use]
     pub const fn label(self) -> &'static str {
@@ -10205,8 +10020,7 @@ impl ResolvedConstraintKind {
 }
 
 /// Complete M55 alpha dimension action vocabulary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DimensionKind {
     PointDistance,
     SegmentLength,
@@ -10215,23 +10029,8 @@ pub enum DimensionKind {
     OrientedAngle,
 }
 
-impl DimensionKind {
-    /// Stable semantic key for the exact manual dimension family.
-    #[must_use]
-    pub const fn semantic_key(self) -> &'static str {
-        match self {
-            Self::PointDistance => "point-distance",
-            Self::SegmentLength => "segment-length",
-            Self::Radius => "radius",
-            Self::Diameter => "diameter",
-            Self::OrientedAngle => "oriented-angle",
-        }
-    }
-}
-
 /// Explicit branch state for one newly constructed curve contact.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ContactActionChoice {
     pub support: DocumentCurveSpanRef,
     pub domain: ContactDomain,
@@ -10241,8 +10040,7 @@ pub struct ContactActionChoice {
 }
 
 /// Typed request for one relation action over the coordinator's current selection.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ConstraintActionRequest {
     pub intent: ConstraintIntent,
     pub label: String,
@@ -10251,16 +10049,14 @@ pub struct ConstraintActionRequest {
 }
 
 /// Explicit non-contact branch state for a contextual relation.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ConstraintRelationChoice {
     EqualCurvature(DocumentCurveCurvatureRelation),
     Continuity(DocumentCurveContinuity),
 }
 
 /// Typed request for one dimension action over the coordinator's current selection.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DimensionActionRequest {
     pub kind: DimensionKind,
     pub mode: DocumentDimensionMode,
@@ -21804,95 +21600,6 @@ mod tests {
             matches!(editor.pointer_up(&scene, scene.design_identity, pointer(8, endpoint.x + 5.0, endpoint.y, Modifiers::default())).as_slice(),
             [EditorEffect::CommitPointMove { model_position, .. }] if (model_position[0] - 7.0).abs() < 1.0e-12 && (model_position[1] - 8.0).abs() < 1.0e-12)
         );
-    }
-
-    #[test]
-    fn current_sample_point_release_never_commits_an_older_valid_preview() {
-        let (document, _, points) = line_document();
-        let scene = scene(&document);
-        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
-        let moved = pointer(81, endpoint.x + 3.0, endpoint.y, Modifiers::default());
-
-        let mut current = ConstraintEditor::default();
-        current.pointer_down(
-            &scene,
-            pointer(81, endpoint.x, endpoint.y, Modifiers::default()),
-        );
-        assert!(matches!(
-            current.pointer_move(&scene, moved).as_slice(),
-            [EditorEffect::RequestProjectedPointMove { request_id: 0, .. }]
-        ));
-        assert!(matches!(
-            current
-                .projected_drag_result(81, 0, points[0], Some([2.0, 3.0]))
-                .as_slice(),
-            [EditorEffect::PreviewPointMove { .. }]
-        ));
-        let mut unsampled = current.clone();
-        assert!(matches!(
-            current
-                .pointer_up_current_sample(&scene, scene.design_identity, moved)
-                .as_slice(),
-            [EditorEffect::CommitPointMove {
-                expected,
-                point,
-                model_position,
-            }] if *expected == scene.design_identity
-                && *point == points[0]
-                && model_position.map(f64::to_bits) == [2.0, 3.0].map(f64::to_bits)
-        ));
-        assert_eq!(current.active_pointer_gesture(), None);
-        assert_eq!(
-            unsampled.pointer_up_current_sample(
-                &scene,
-                scene.design_identity,
-                pointer(
-                    81,
-                    moved.position.x + 1.0,
-                    moved.position.y,
-                    Modifiers::default()
-                ),
-            ),
-            vec![EditorEffect::ClearPointPreview],
-            "release may not borrow an accepted preview from another pointer position",
-        );
-        assert_eq!(unsampled.active_pointer_gesture(), None);
-
-        let mut rejected = ConstraintEditor::default();
-        rejected.pointer_down(
-            &scene,
-            pointer(82, endpoint.x, endpoint.y, Modifiers::default()),
-        );
-        assert!(matches!(
-            rejected
-                .pointer_move(
-                    &scene,
-                    pointer(82, endpoint.x + 3.0, endpoint.y, Modifiers::default()),
-                )
-                .as_slice(),
-            [EditorEffect::RequestProjectedPointMove { request_id: 0, .. }]
-        ));
-        assert!(matches!(
-            rejected
-                .projected_drag_result(82, 0, points[0], Some([2.0, 3.0]))
-                .as_slice(),
-            [EditorEffect::PreviewPointMove { .. }]
-        ));
-        let rejected_terminal = pointer(82, endpoint.x + 5.0, endpoint.y, Modifiers::default());
-        assert!(matches!(
-            rejected.pointer_move(&scene, rejected_terminal).as_slice(),
-            [EditorEffect::RequestProjectedPointMove { request_id: 1, .. }]
-        ));
-        assert!(
-            rejected
-                .projected_drag_result(82, 1, points[0], None)
-                .is_empty()
-        );
-        assert_eq!(
-            rejected.pointer_up_current_sample(&scene, scene.design_identity, rejected_terminal),
-            vec![EditorEffect::ClearPointPreview],
-        );
-        assert_eq!(rejected.active_pointer_gesture(), None);
     }
 
     #[test]

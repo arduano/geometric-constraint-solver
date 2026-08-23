@@ -7,50 +7,6 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Added
 
-- M83's in-progress authoritative sketch-lineage layer: the new pure safe-Rust
-  `geosolve-sketch-lineage` crate provides canonical typed action programs, stable
-  owned/aliased/created/continued/retired identity flow, exact-CAS mutations,
-  retained/latest-attempt/last-accepted authority, deterministic strict/local
-  rematerialization evidence and one Undo/Redo history. The complete demo workbench
-  now routes its frozen 25 geometry recipes, existing constraints/dimensions,
-  curve properties/branches, all 12 native operations and computed `FilletSet`
-  intent through lineage; workspace v7 strictly migrates v1-v6 as honest imported
-  baselines and treats flat scene/feature/map data as authenticated disposable
-  caches. A separate DOM-free `geosolve-sketch-lineage-wasm` crate exposes the
-  stateful `geosolve.lineage.rpc.v0` protocol, with a private data-only TypeScript
-  client. A secondary selectable workbench panel now renders the current retained
-  action program and its separate Undo/Redo cursor directly from coordinator
-  authority. Its authority-derived Inspector supports dependency-valid exact-CAS
-  reorder and compatible raw action rewrite without a browser-side program mirror.
-  Presentation-only prediction coalesces expensive point/control dragging while
-  exact terminal publication remains coordinator-owned. Replacement clean
-  qualification, focused review and immutable Tailscale nomination pass; M81 remains
-  accepted product authority until focused M83 human UAT approval.
-- M83's editable-lineage amendment additively exposes action schema/version queries;
-  authority snapshot, reorder-lane/reason/outcome and rewrite-outcome DTOs; exact-CAS
-  coordinator inspection/reorder/rewrite methods; and the strict
-  `ConstraintEditor::pointer_up_current_sample` terminal seam. Existing
-  `ConstraintEditor::pointer_up` retains its ordinary last-valid-preview fallback.
-  These pre-1.0 APIs add no solver equation or canonical sketch-wire syntax.
-- M83 authority hardening recompiles complete editor-action manifests—inputs, outputs, identity
-  flows, persistent reservations and writable leaves—for current, accepted and historical
-  programs before load or evaluation. Imported deletion now appends explicit `Retired` lineage,
-  hostile RPC load is atomic, and cold validation uses deterministic scratch identities for
-  revision-local computed output while preserving the exact host allocator high-water separately.
-- M83 cold/history hardening authenticates truthful Current/Suppressed/Failed/Withheld computed
-  dispositions without rejecting independently accepted native intent, treats exact-position
-  releases as authored no-ops, rejects cross-history identity rebinding, cold-verifies asserted
-  accepted digests and rebuilds Undo/Redo authority without trusting disposable flat caches.
-  Final authority review additionally rejects consumed numeric identity reuse after divergent
-  Redo abandonment, cold-authenticates every historical accepted stamp during workspace load,
-  reconstructs serialized attempt metadata from exact workspace host inputs, and aligns RPC
-  wrong-document versus stale-revision errors. Tagged contact branch values retain one stable
-  atomic owner across shape changes; projected computed-feature transcript replay performs the
-  same drag-free promotion as the original release. A private bounded workspace-v7 ledger retains
-  exact stamp-authenticated host-only inputs needed solely by accepted authority in Undo/Redo,
-  without adding host concepts to the generic lineage or RPC schema. Projected direct
-  manipulation now reifies accepted geometry without converting effective host-supplied driving
-  dimensions or dimensionless properties into authored local fallback values.
 - Typed retained-design, solve-attempt and accepted-state identities/views for
   repairable unsolved sketch intent, optional finite candidate geometry and separate
   v1-v4 design/accepted persistence with host-owned revision high-water metadata.

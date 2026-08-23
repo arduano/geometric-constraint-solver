@@ -19,7 +19,6 @@ geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint
 geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
-geosolve-sketch-lineage = { version = "0.2.0", path = "../geosolve-sketch-lineage" }
 miniz_oxide.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -30,15 +29,12 @@ wasm-bindgen = "=0.2.121"
 wasm-bindgen-futures = "=0.4.71"
 web-sys = { version = "=0.3.98", features = [
     "Clipboard",
-    "Crypto",
-    "DataTransfer",
     "Document",
     "DomRect",
     "Element",
     "Event",
     "EventTarget",
     "FocusEvent",
-    "DragEvent",
     "HtmlElement",
     "HtmlInputElement",
     "HtmlSelectElement",
@@ -46,7 +42,6 @@ web-sys = { version = "=0.3.98", features = [
     "KeyboardEvent",
     "MouseEvent",
     "Navigator",
-    "Performance",
     "PointerEvent",
     "Storage",
     "WheelEvent",
