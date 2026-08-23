@@ -11,7 +11,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 
 .workbench {
   display: grid;
-  grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 15rem minmax(36rem, 1fr) 18rem;
+  grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 25rem minmax(36rem, 1fr) 18rem;
   width: 100vw;
   height: 100vh;
   margin: 0;
@@ -276,8 +276,20 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-palette-option-tool > button:first-child { width: 100%; }
 .wb-palette-terminal { padding-top: 0.2rem; border-top: 1px solid #3b4142; }
 
+.wb-document-panels {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .wb-tree-panel,
+.wb-design-panel,
 .wb-inspector { min-height: 0; border-right: 1px solid #353b3c; background: #202425; }
+.wb-design-panel {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
 .wb-inspector { overflow-y: auto; border-right: 0; border-left: 1px solid #353b3c; }
 .wb-panel-title {
   display: flex;
@@ -294,6 +306,49 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-panel-title span:last-child { color: #747e7c; font-size: 0.58rem; }
 .wb-tree { height: calc(100% - 2.4rem); overflow: auto; padding: 0.35rem; }
+.wb-design-tabs {
+  display: grid;
+  grid-template-columns: 0.85fr 1.5fr 0.85fr;
+  border-bottom: 1px solid #353b3c;
+}
+.wb-design-tabs button {
+  min-width: 0;
+  min-height: 1.95rem;
+  overflow: hidden;
+  padding: 0.25rem 0.3rem;
+  border: 0;
+  border-right: 1px solid #353b3c;
+  border-radius: 0;
+  color: #8f9a98;
+  background: #1d2122;
+  font-size: 0.61rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-design-tabs button:last-child { border-right: 0; }
+.wb-design-tabs button:hover { color: #c7d0ce; background: #272c2d; }
+.wb-design-tabs button[aria-selected="true"] {
+  color: #f0cf91;
+  background: #312c24;
+  box-shadow: inset 0 -2px #d29a45;
+}
+.wb-design-projection {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.35rem;
+}
+.wb-design-projection:empty::before {
+  display: block;
+  padding: 0.7rem 0.45rem;
+  color: #707977;
+  content: "No design declarations yet.";
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+.wb-design-source:empty::before { content: "Structured source will appear for the current design."; }
+.wb-design-history:empty::before { content: "Committed design transactions will appear here."; }
 .wb-tree-group-label {
   display: flex;
   align-items: center;
@@ -1335,9 +1390,20 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-project-links { display: flex; gap: 0.35rem; margin-left: auto; }
 .wb-project-links a { color: #9ebfc1; }
 
-@media (max-width: 68rem) {
+@media (max-width: 96rem) {
   .workbench {
-    grid-template-columns: 9.5rem 12rem minmax(20rem, 1fr) 18rem;
+    grid-template-columns: 10.5rem 15rem minmax(36rem, 1fr) 18rem;
+  }
+  .wb-document-panels {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+  .wb-tree-panel { border-bottom: 1px solid #353b3c; }
+}
+
+@media (max-width: 80rem) {
+  .workbench {
+    grid-template-columns: 9.5rem 10.5rem minmax(20rem, 1fr) 18rem;
   }
   .wb-command-bar { gap: 0.65rem; }
   .wb-sample-selector > summary strong { max-width: 10rem; }
@@ -1352,7 +1418,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   .workbench {
     grid-template-columns: 9.5rem minmax(20rem, 1fr) 18rem;
   }
-  .wb-tree-panel { display: none; }
+  .wb-document-panels { display: none; }
 }
 
 @media (max-width: 52rem) {

@@ -68,6 +68,62 @@ enum WorkbenchRenderScope {
     Durable,
 }
 
+/// Non-semantic projection selected in the Design panel.
+///
+/// This is deliberately presentation state: changing tabs cannot alter graph,
+/// instance, organization, external-input, or accepted-materialization identity.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DesignProjectionTab {
+    Outline,
+    StructuredSource,
+    History,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl DesignProjectionTab {
+    const ALL: [Self; 3] = [Self::Outline, Self::StructuredSource, Self::History];
+
+    const fn key(self) -> &'static str {
+        match self {
+            Self::Outline => "outline",
+            Self::StructuredSource => "source",
+            Self::History => "history",
+        }
+    }
+
+    fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|tab| tab.key() == key)
+    }
+
+    const fn button_id(self) -> &'static str {
+        match self {
+            Self::Outline => "wb-design-tab-outline",
+            Self::StructuredSource => "wb-design-tab-source",
+            Self::History => "wb-design-tab-history",
+        }
+    }
+
+    const fn panel_id(self) -> &'static str {
+        match self {
+            Self::Outline => "wb-design-outline",
+            Self::StructuredSource => "wb-design-source",
+            Self::History => "wb-design-history",
+        }
+    }
+
+    const fn adjacent(self, direction: i8) -> Self {
+        match (self, direction.signum()) {
+            (Self::Outline, -1) => Self::History,
+            (Self::History, 1) => Self::Outline,
+            (Self::Outline, 1) | (Self::History, -1) => Self::StructuredSource,
+            (Self::StructuredSource, -1) => Self::Outline,
+            (Self::StructuredSource, 1) => Self::History,
+            (_, _) => self,
+        }
+    }
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 impl WorkbenchRenderScope {
     const fn rebuilds_durable_panels(self) -> bool {
@@ -2389,6 +2445,7 @@ pub(crate) mod wasm {
         install_palette_icons(document)?;
         render(document, &workbench)?;
         install_clicks(document, &workbench)?;
+        install_design_projection_tabs(document)?;
         install_sample_flyout_state(document)?;
         install_canvas(document, &workbench)?;
         install_draft_inference_modifier_listeners(document, &workbench)?;
@@ -2436,6 +2493,71 @@ pub(crate) mod wasm {
             required(document, "wb-offset-trigger")?.query_selector(".wb-offset-icon")?
         {
             icon.set_inner_html(&super::icons::offset_icon_markup());
+        }
+        Ok(())
+    }
+
+    fn install_design_projection_tabs(document: &Document) -> Result<(), JsValue> {
+        let tablist = required(document, "wb-design-tab-outline")?
+            .closest("[role=\"tablist\"]")?
+            .ok_or_else(|| JsValue::from_str("missing Design projection tablist"))?;
+        let callback_document = document.clone();
+        let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let Some(tab) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-wb-design-tab]").ok().flatten())
+                .and_then(|target| target.get_attribute("data-wb-design-tab"))
+                .as_deref()
+                .and_then(super::DesignProjectionTab::from_key)
+            else {
+                return;
+            };
+            let _ = select_design_projection_tab(&callback_document, tab, false);
+        });
+        tablist.add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())?;
+        callback.forget();
+
+        let keyboard_document = document.clone();
+        let keyboard = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            let Some(current) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.get_attribute("data-wb-design-tab"))
+                .as_deref()
+                .and_then(super::DesignProjectionTab::from_key)
+            else {
+                return;
+            };
+            let next = match event.key().as_str() {
+                "ArrowLeft" => current.adjacent(-1),
+                "ArrowRight" => current.adjacent(1),
+                "Home" => super::DesignProjectionTab::Outline,
+                "End" => super::DesignProjectionTab::History,
+                _ => return,
+            };
+            event.prevent_default();
+            let _ = select_design_projection_tab(&keyboard_document, next, true);
+        });
+        tablist.add_event_listener_with_callback("keydown", keyboard.as_ref().unchecked_ref())?;
+        keyboard.forget();
+        Ok(())
+    }
+
+    fn select_design_projection_tab(
+        document: &Document,
+        selected: super::DesignProjectionTab,
+        focus: bool,
+    ) -> Result<(), JsValue> {
+        for tab in super::DesignProjectionTab::ALL {
+            let is_selected = tab == selected;
+            let button = required(document, tab.button_id())?;
+            button.set_attribute("aria-selected", if is_selected { "true" } else { "false" })?;
+            button.set_attribute("tabindex", if is_selected { "0" } else { "-1" })?;
+            set_hidden(&required(document, tab.panel_id())?, !is_selected)?;
+        }
+        if focus {
+            focus_by_id(document, selected.button_id());
         }
         Ok(())
     }
@@ -8754,6 +8876,33 @@ mod tests {
         revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
         route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
+
+    #[test]
+    fn design_projection_tabs_are_closed_and_presentation_only() {
+        use super::DesignProjectionTab::{History, Outline, StructuredSource};
+
+        assert_eq!(super::DesignProjectionTab::ALL.len(), 3);
+        assert_eq!(
+            super::DesignProjectionTab::from_key("outline"),
+            Some(Outline)
+        );
+        assert_eq!(
+            super::DesignProjectionTab::from_key("source"),
+            Some(StructuredSource)
+        );
+        assert_eq!(
+            super::DesignProjectionTab::from_key("history"),
+            Some(History)
+        );
+        assert_eq!(super::DesignProjectionTab::from_key("solver"), None);
+        assert_eq!(Outline.adjacent(-1), History);
+        assert_eq!(History.adjacent(1), Outline);
+        assert_eq!(StructuredSource.adjacent(-1), Outline);
+        assert_eq!(StructuredSource.adjacent(1), History);
+        assert_eq!(Outline.button_id(), "wb-design-tab-outline");
+        assert_eq!(StructuredSource.panel_id(), "wb-design-source");
+        assert_eq!(History.panel_id(), "wb-design-history");
+    }
 
     fn rejected_constraint_fixture() -> (
         RetainedEditorCoordinator,
