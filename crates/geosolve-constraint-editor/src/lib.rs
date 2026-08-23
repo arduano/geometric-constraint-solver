@@ -18,6 +18,7 @@ mod inference;
 mod intent;
 mod intent_coordinator;
 mod intent_projection;
+mod intent_rpc;
 mod offset_authoring;
 
 pub use annotations::{
@@ -96,6 +97,10 @@ pub use intent_projection::{
     IntentInspectorField, IntentInspectorProjection, IntentOutlineCell, IntentOutlineDeclaration,
     IntentSourceEditError, IntentSourceToken, IntentSourceTokenId, IntentSourceTokenTarget,
     IntentStructuredSource, IntentWorkbenchProjection,
+};
+pub use intent_rpc::{
+    IntentRpcFailure, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSnapshot,
+    IntentRpcSuccess,
 };
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
