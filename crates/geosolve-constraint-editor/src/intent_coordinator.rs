@@ -8,13 +8,17 @@
 //! command histories are never exposed or persisted.
 
 use geosolve_sketch::{
-    DesignPointId, DocumentDragLocalityPlan, DocumentSessionError, DocumentSolveRequest,
-    OperationControl, OperationOutcome, RetainedSketchDocumentSession,
+    CurveDefinition, CurveId, DesignPointId, DesignScalarId, DocumentCurveControlAvailability,
+    DocumentCurveControlId, DocumentCurveControlProjection, DocumentCurveControlTarget,
+    DocumentDragLocalityPlan, DocumentEdit, DocumentRationalConicControl, DocumentSessionError,
+    DocumentSolveRequest, OperationControl, OperationOutcome, PreparedSketchOperation,
+    PreparedSketchPatch, RetainedSketchDocumentSession, ScalarUnit, SketchDesignIdentity,
 };
 use geosolve_sketch_intent::{
-    DeletePolicy, IntentAliasMap, IntentLiteral, IntentPatch, IntentPatchOperation,
-    IntentPatchPlan, IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentSession,
-    IntentSessionError, IntentSessionId, IntentSessionIdentity, IntentUnit, LeafRef, NodeId,
+    DeletePolicy, GeometryRecipeKind, IntentAliasMap, IntentFieldKey, IntentKey, IntentLiteral,
+    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPlan, IntentPatchPolicy,
+    IntentPlanDisposition, IntentPlanError, IntentSession, IntentSessionError, IntentSessionId,
+    IntentSessionIdentity, IntentUnit, LeafRef, NodeId,
 };
 use thiserror::Error;
 
@@ -39,6 +43,14 @@ pub struct ProjectionalPointDragPreview {
     pub accepted_position: [f64; 2],
 }
 
+/// Latest independently accepted selected-curve control preview.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProjectionalCurveControlPreview {
+    pub request_id: u64,
+    pub control: DocumentCurveControlId,
+    pub accepted_position: [f64; 2],
+}
+
 #[derive(Clone, Debug)]
 struct AcceptedPointDragSample {
     preview: ProjectionalPointDragPreview,
@@ -59,6 +71,50 @@ struct ProjectionalPointDrag {
     latest: Option<AcceptedPointDragSample>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum ProjectionalCurveControlRoute {
+    Point {
+        point: DesignPointId,
+        x: LeafRef,
+        y: LeafRef,
+        origin: [f64; 2],
+    },
+    Scalar {
+        scalar: DesignScalarId,
+        leaf: LeafRef,
+        unit: IntentUnit,
+        origin: f64,
+    },
+    RationalMiddle {
+        curve: CurveId,
+        node: NodeId,
+        weight: LeafRef,
+        origin_weighted_middle: [f64; 2],
+        origin_weight: f64,
+    },
+}
+
+#[derive(Debug)]
+struct AcceptedCurveControlSample {
+    preview: ProjectionalCurveControlPreview,
+    patch: PreparedSketchPatch,
+    operations: Vec<IntentPatchOperation>,
+    changed: bool,
+}
+
+#[derive(Debug)]
+struct ProjectionalCurveControlDrag {
+    pointer_id: u64,
+    intent: IntentSessionIdentity,
+    expected: SketchDesignIdentity,
+    accepted_revision: u64,
+    control: DocumentCurveControlId,
+    route: ProjectionalCurveControlRoute,
+    origin: RetainedSketchDocumentSession,
+    latest_request_id: Option<u64>,
+    latest: Option<AcceptedCurveControlSample>,
+}
+
 /// Projectional authority over one intent session and its accepted native scene.
 ///
 /// The coordinator deliberately does not wrap `RetainedEditorCoordinator`: that
@@ -71,6 +127,7 @@ pub struct ProjectionalIntentCoordinator {
     materializer: ColdIntentMaterializer,
     accepted: Option<ColdIntentMaterialization>,
     point_drag: Option<ProjectionalPointDrag>,
+    curve_control_drag: Option<ProjectionalCurveControlDrag>,
 }
 
 impl ProjectionalIntentCoordinator {
@@ -88,6 +145,7 @@ impl ProjectionalIntentCoordinator {
             materializer,
             accepted: None,
             point_drag: None,
+            curve_control_drag: None,
         })
     }
 
@@ -112,6 +170,7 @@ impl ProjectionalIntentCoordinator {
             materializer,
             accepted,
             point_drag: None,
+            curve_control_drag: None,
         })
     }
 
@@ -142,6 +201,7 @@ impl ProjectionalIntentCoordinator {
             materializer,
             accepted: Some(accepted),
             point_drag: None,
+            curve_control_drag: None,
         })
     }
 
@@ -161,10 +221,16 @@ impl ProjectionalIntentCoordinator {
     /// preview temporarily outranks the durable accepted scene.
     #[must_use]
     pub fn presentation_session(&self) -> Option<&RetainedSketchDocumentSession> {
-        self.point_drag
+        self.curve_control_drag
             .as_ref()
             .and_then(|drag| drag.latest.as_ref())
-            .map(|sample| &sample.session)
+            .and_then(|sample| sample.patch.preview().accepted_session())
+            .or_else(|| {
+                self.point_drag
+                    .as_ref()
+                    .and_then(|drag| drag.latest.as_ref())
+                    .map(|sample| &sample.session)
+            })
             .or_else(|| self.accepted.as_ref().map(|accepted| &accepted.session))
     }
 
@@ -179,7 +245,7 @@ impl ProjectionalIntentCoordinator {
         &mut self,
         patch: IntentPatch,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
-        self.cancel_point_drag();
+        self.cancel_interaction();
         let (plan, materialized) = self.plan_patch(patch)?;
         self.commit_planned(plan, materialized)
     }
@@ -273,7 +339,7 @@ impl ProjectionalIntentCoordinator {
         &mut self,
         undo: bool,
     ) -> Result<Option<IntentSessionIdentity>, ProjectionalCoordinatorError> {
-        self.cancel_point_drag();
+        self.cancel_interaction();
         let mut staged = self.intent.clone();
         let moved = if undo { staged.undo()? } else { staged.redo()? };
         let Some(_) = moved else {
@@ -312,7 +378,7 @@ impl ProjectionalIntentCoordinator {
         pointer_id: u64,
         point: DesignPointId,
     ) -> Result<(), ProjectionalCoordinatorError> {
-        if self.point_drag.is_some() {
+        if self.point_drag.is_some() || self.curve_control_drag.is_some() {
             return Err(ProjectionalCoordinatorError::DragAlreadyActive);
         }
         let accepted = self
@@ -530,10 +596,545 @@ impl ProjectionalIntentCoordinator {
     pub fn cancel_point_drag(&mut self) {
         self.point_drag = None;
     }
+
+    /// Prepares one non-point selected-curve control route from the exact
+    /// accepted materialization. The route resolves the native target back to
+    /// its sole writable instance leaf or rational-conic definition owner
+    /// before any pointer-frame solve is allowed.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed stale scene, read-only/unowned target, or gesture-state
+    /// error without changing intent or accepted authority.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed reverse-ownership match keeps every native curve-control target explicit"
+    )]
+    pub fn begin_curve_control_drag(
+        &mut self,
+        pointer_id: u64,
+        accepted_revision: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+    ) -> Result<(), ProjectionalCoordinatorError> {
+        if self.point_drag.is_some() || self.curve_control_drag.is_some() {
+            return Err(ProjectionalCoordinatorError::DragAlreadyActive);
+        }
+        let accepted = self
+            .accepted
+            .as_ref()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?;
+        if accepted.session.design_identity() != expected {
+            return Err(ProjectionalCoordinatorError::StaleCurveControlRoute);
+        }
+        let accepted_state = accepted
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?;
+        if accepted_state.identity().revision().get() != accepted_revision {
+            return Err(ProjectionalCoordinatorError::StaleCurveControlRoute);
+        }
+        let view = accepted_state
+            .document()
+            .curve_controls(control.curve)?
+            .into_iter()
+            .find(|candidate| candidate.id == control)
+            .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+        if !matches!(
+            view.availability,
+            DocumentCurveControlAvailability::Editable
+        ) {
+            return Err(ProjectionalCoordinatorError::CurveControlNotWritable { control });
+        }
+        let route = match view.target {
+            DocumentCurveControlTarget::Point(point) => {
+                let x = accepted
+                    .ownership
+                    .writable_leaf(IntentNativeWritableLeaf::PointX { point })
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+                let y = accepted
+                    .ownership
+                    .writable_leaf(IntentNativeWritableLeaf::PointY { point })
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+                if x.node != y.node || x.port != y.port {
+                    return Err(ProjectionalCoordinatorError::SplitPointOwnership { point });
+                }
+                ProjectionalCurveControlRoute::Point {
+                    point,
+                    x,
+                    y,
+                    origin: view.position,
+                }
+            }
+            DocumentCurveControlTarget::Scalar(scalar) => {
+                let leaf = accepted
+                    .ownership
+                    .writable_leaf(IntentNativeWritableLeaf::ScalarValue { scalar })
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+                let scalar_value = accepted_state
+                    .document()
+                    .scalar(scalar)
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+                ProjectionalCurveControlRoute::Scalar {
+                    scalar,
+                    leaf,
+                    unit: intent_unit(scalar_value.unit),
+                    origin: scalar_value.value,
+                }
+            }
+            DocumentCurveControlTarget::RationalMiddle { weight, .. } => {
+                let weight_leaf = accepted
+                    .ownership
+                    .writable_leaf(IntentNativeWritableLeaf::ScalarValue { scalar: weight })
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+                let node = exact_owned_curve_node(&accepted.ownership, control.curve)
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+                let intent_node = self
+                    .intent
+                    .graph()
+                    .node(node)
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?;
+                if intent_node.kind
+                    != (IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::RationalQuadraticConic,
+                    })
+                    || weight_leaf.node != node
+                {
+                    return Err(ProjectionalCoordinatorError::CurveControlNotWritable { control });
+                }
+                let CurveDefinition::RationalQuadraticConic {
+                    weighted_middle,
+                    middle_weight,
+                    ..
+                } = accepted
+                    .session
+                    .design_document()
+                    .curve(control.curve)
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?
+                    .definition
+                else {
+                    return Err(ProjectionalCoordinatorError::CurveControlNotWritable { control });
+                };
+                let origin_weight = accepted
+                    .session
+                    .design_document()
+                    .scalar(middle_weight)
+                    .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?
+                    .value;
+                ProjectionalCurveControlRoute::RationalMiddle {
+                    curve: control.curve,
+                    node,
+                    weight: weight_leaf,
+                    origin_weighted_middle: weighted_middle,
+                    origin_weight,
+                }
+            }
+            _ => return Err(ProjectionalCoordinatorError::CurveControlNotWritable { control }),
+        };
+        self.curve_control_drag = Some(ProjectionalCurveControlDrag {
+            pointer_id,
+            intent: self.intent.identity(),
+            expected,
+            accepted_revision,
+            control,
+            route,
+            origin: accepted.session.clone(),
+            latest_request_id: None,
+            latest: None,
+        });
+        Ok(())
+    }
+
+    /// Solves one coalesced selected-curve control sample against the retained
+    /// pointer-down native snapshot. No intent replay, serialization, history,
+    /// or durable materialization occurs on this path. A rejected sample keeps
+    /// the preceding accepted preview available for release.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed stale route/sample, inverse-projection, or bounded native
+    /// operation error.
+    pub fn preview_curve_control_drag(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        target: [f64; 2],
+        operation_control: OperationControl,
+    ) -> Result<Option<ProjectionalCurveControlPreview>, ProjectionalCoordinatorError> {
+        if !target.iter().all(|value| value.is_finite()) {
+            return Err(ProjectionalCoordinatorError::NonFiniteDragTarget);
+        }
+        let mut drag = self
+            .curve_control_drag
+            .take()
+            .ok_or(ProjectionalCoordinatorError::NoActiveCurveControlDrag)?;
+        let result = (|| {
+            authenticate_curve_control_drag(
+                &drag,
+                pointer_id,
+                expected,
+                control,
+                self.intent.identity(),
+            )?;
+            if drag
+                .latest_request_id
+                .is_some_and(|latest| request_id <= latest)
+            {
+                return Err(ProjectionalCoordinatorError::StaleDragSample);
+            }
+            drag.latest_request_id = Some(request_id);
+            let accepted = drag
+                .origin
+                .accepted_state_for_current_input()
+                .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?;
+            let Ok(projection) = accepted.document().project_curve_control(control, target) else {
+                return Ok(None);
+            };
+            if !curve_control_projection_matches_route(projection, drag.route) {
+                return Err(ProjectionalCoordinatorError::CurveControlRouteMismatch);
+            }
+            let edit = curve_control_projection_edit(projection)
+                .ok_or(ProjectionalCoordinatorError::CurveControlRouteMismatch)?;
+            let Ok(outcome) = drag
+                .origin
+                .prepared_snapshot()
+                .prepare(PreparedSketchOperation::Apply(edit))
+                .execute(operation_control)
+            else {
+                return Ok(None);
+            };
+            let OperationOutcome::Completed { value: patch, .. } = outcome else {
+                return Ok(None);
+            };
+            let preview_session = patch
+                .preview()
+                .accepted_session()
+                .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?;
+            let preview_document = preview_session
+                .accepted_state_for_current_input()
+                .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?
+                .document();
+            let accepted_position = preview_document
+                .curve_controls(control.curve)?
+                .into_iter()
+                .find(|candidate| candidate.id == control)
+                .map(|candidate| candidate.position)
+                .filter(|position| position.iter().all(|value| value.is_finite()))
+                .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?;
+            let (operations, changed) = curve_control_intent_operations(
+                drag.route,
+                patch.preview().design_document(),
+                preview_document,
+            )?;
+            let preview = ProjectionalCurveControlPreview {
+                request_id,
+                control,
+                accepted_position,
+            };
+            drag.latest = Some(AcceptedCurveControlSample {
+                preview,
+                patch,
+                operations,
+                changed,
+            });
+            Ok(Some(preview))
+        })();
+        self.curve_control_drag = Some(drag);
+        result
+    }
+
+    /// Publishes the newest authenticated curve-control sample as one typed
+    /// intent patch. The cold materialization must exactly reproduce the native
+    /// preview document before either authority or history advances.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed stale/missing sample, cold mismatch, or patch failure.
+    pub fn finish_curve_control_drag(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+    ) -> Result<Option<ProjectionalPatchOutcome>, ProjectionalCoordinatorError> {
+        let drag = self
+            .curve_control_drag
+            .take()
+            .ok_or(ProjectionalCoordinatorError::NoActiveCurveControlDrag)?;
+        authenticate_curve_control_drag(
+            &drag,
+            pointer_id,
+            expected,
+            control,
+            self.intent.identity(),
+        )?;
+        let latest = drag
+            .latest
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?;
+        if latest.preview.request_id != request_id
+            || drag
+                .latest_request_id
+                .is_none_or(|latest_request_id| request_id > latest_request_id)
+        {
+            return Err(ProjectionalCoordinatorError::StaleDragSample);
+        }
+        if !latest.changed {
+            return Ok(None);
+        }
+        let patch = IntentPatch::new(
+            self.intent.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            latest.operations,
+        );
+        let (plan, materialized) = self.plan_patch(patch)?;
+        let materialized = materialized
+            .as_ref()
+            .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
+        let preview_document = latest
+            .patch
+            .preview()
+            .accepted_document()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?
+            .to_draft_v5_json()?;
+        let cold_document = materialized
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?
+            .document()
+            .to_draft_v5_json()?;
+        if cold_document != preview_document {
+            return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
+        }
+        self.commit_planned(plan, Some(materialized.clone()))
+            .map(Some)
+    }
+
+    /// Cancels any prepared selected-curve control route without touching
+    /// intent, accepted authority, native allocators, or history.
+    pub fn cancel_curve_control_drag(&mut self) {
+        self.curve_control_drag = None;
+    }
+
+    /// Exact pointer-down origin carried by the currently visible candidate.
+    #[must_use]
+    pub fn curve_control_preview_origin(
+        &self,
+    ) -> Option<(u64, SketchDesignIdentity, u64, [f64; 2])> {
+        let drag = self.curve_control_drag.as_ref()?;
+        let latest = drag.latest.as_ref()?;
+        Some((
+            drag.accepted_revision,
+            drag.expected,
+            latest.preview.request_id,
+            latest.preview.accepted_position,
+        ))
+    }
+
+    fn cancel_interaction(&mut self) {
+        self.cancel_point_drag();
+        self.cancel_curve_control_drag();
+    }
 }
 
 fn pair_bits(value: [f64; 2]) -> [u64; 2] {
     value.map(f64::to_bits)
+}
+
+const fn intent_unit(unit: ScalarUnit) -> IntentUnit {
+    match unit {
+        ScalarUnit::Length => IntentUnit::Length,
+        ScalarUnit::Angle => IntentUnit::Angle,
+        ScalarUnit::Parameter => IntentUnit::Dimensionless,
+    }
+}
+
+fn exact_owned_curve_node(
+    ownership: &crate::IntentMaterializationMap,
+    curve: CurveId,
+) -> Option<NodeId> {
+    let mut owners = ownership.nodes.iter().filter_map(|node| {
+        node.owned
+            .contains(&crate::IntentNativeBinding::Curve(curve))
+            .then_some(node.node)
+    });
+    let owner = owners.next()?;
+    owners.next().is_none().then_some(owner)
+}
+
+fn authenticate_curve_control_drag(
+    drag: &ProjectionalCurveControlDrag,
+    pointer_id: u64,
+    expected: SketchDesignIdentity,
+    control: DocumentCurveControlId,
+    intent: IntentSessionIdentity,
+) -> Result<(), ProjectionalCoordinatorError> {
+    if drag.pointer_id != pointer_id {
+        return Err(ProjectionalCoordinatorError::PointerMismatch {
+            expected: drag.pointer_id,
+            actual: pointer_id,
+        });
+    }
+    if drag.intent != intent || drag.expected != expected {
+        return Err(ProjectionalCoordinatorError::StaleCurveControlRoute);
+    }
+    if drag.control != control {
+        return Err(ProjectionalCoordinatorError::CurveControlRouteMismatch);
+    }
+    Ok(())
+}
+
+fn curve_control_projection_matches_route(
+    projection: DocumentCurveControlProjection,
+    route: ProjectionalCurveControlRoute,
+) -> bool {
+    match (projection, route) {
+        (
+            DocumentCurveControlProjection::Point { point: actual, .. },
+            ProjectionalCurveControlRoute::Point {
+                point: expected, ..
+            },
+        ) => actual == expected,
+        (
+            DocumentCurveControlProjection::Scalar { scalar: actual, .. },
+            ProjectionalCurveControlRoute::Scalar {
+                scalar: expected, ..
+            },
+        ) => actual == expected,
+        (
+            DocumentCurveControlProjection::RationalMiddle { curve: actual, .. },
+            ProjectionalCurveControlRoute::RationalMiddle {
+                curve: expected, ..
+            },
+        ) => actual == expected,
+        _ => false,
+    }
+}
+
+fn curve_control_projection_edit(
+    projection: DocumentCurveControlProjection,
+) -> Option<DocumentEdit> {
+    match projection {
+        DocumentCurveControlProjection::Point { point, position } => {
+            Some(DocumentEdit::SetPointPosition { point, position })
+        }
+        DocumentCurveControlProjection::Scalar { scalar, value } => {
+            Some(DocumentEdit::SetScalarValue { scalar, value })
+        }
+        DocumentCurveControlProjection::RationalMiddle { curve, control } => {
+            let weighted_middle = match control {
+                DocumentRationalConicControl::Euclidean { middle, weight } => {
+                    [middle[0] * weight, middle[1] * weight]
+                }
+                DocumentRationalConicControl::Projective {
+                    weighted_middle, ..
+                } => weighted_middle,
+                _ => return None,
+            };
+            weighted_middle
+                .iter()
+                .all(|value| value.is_finite())
+                .then_some(DocumentEdit::SetConicWeightedMiddle {
+                    curve,
+                    weighted_middle,
+                })
+        }
+        _ => None,
+    }
+}
+
+fn curve_control_intent_operations(
+    route: ProjectionalCurveControlRoute,
+    design: &geosolve_sketch::SketchDocument,
+    accepted: &geosolve_sketch::SketchDocument,
+) -> Result<(Vec<IntentPatchOperation>, bool), ProjectionalCoordinatorError> {
+    match route {
+        ProjectionalCurveControlRoute::Point {
+            point,
+            x,
+            y,
+            origin,
+        } => {
+            let position = accepted
+                .point(point)
+                .ok_or(ProjectionalCoordinatorError::CurveControlRouteMismatch)?
+                .position;
+            Ok((
+                [(x, position[0]), (y, position[1])]
+                    .into_iter()
+                    .map(|(leaf, value)| IntentPatchOperation::SetInstanceLeaf {
+                        leaf,
+                        value: IntentLiteral::Quantity {
+                            value,
+                            unit: IntentUnit::Length,
+                        },
+                    })
+                    .collect(),
+                pair_bits(position) != pair_bits(origin),
+            ))
+        }
+        ProjectionalCurveControlRoute::Scalar {
+            scalar,
+            leaf,
+            unit,
+            origin,
+        } => {
+            let value = accepted
+                .scalar(scalar)
+                .ok_or(ProjectionalCoordinatorError::CurveControlRouteMismatch)?
+                .value;
+            Ok((
+                vec![IntentPatchOperation::SetInstanceLeaf {
+                    leaf,
+                    value: IntentLiteral::Quantity { value, unit },
+                }],
+                value.to_bits() != origin.to_bits(),
+            ))
+        }
+        ProjectionalCurveControlRoute::RationalMiddle {
+            curve,
+            node,
+            weight,
+            origin_weighted_middle,
+            origin_weight,
+        } => {
+            let CurveDefinition::RationalQuadraticConic {
+                weighted_middle,
+                middle_weight,
+                ..
+            } = design
+                .curve(curve)
+                .ok_or(ProjectionalCoordinatorError::CurveControlRouteMismatch)?
+                .definition
+            else {
+                return Err(ProjectionalCoordinatorError::CurveControlRouteMismatch);
+            };
+            let current_weight = design
+                .scalar(middle_weight)
+                .ok_or(ProjectionalCoordinatorError::CurveControlRouteMismatch)?
+                .value;
+            let middle_changed = pair_bits(weighted_middle) != pair_bits(origin_weighted_middle);
+            let weight_changed = current_weight.to_bits() != origin_weight.to_bits();
+            let mut operations = vec![IntentPatchOperation::SetDefinitionField {
+                node,
+                field: IntentFieldKey(
+                    IntentKey::new("weighted_middle").expect("built-in intent field key is valid"),
+                ),
+                value: IntentLiteral::Point(weighted_middle),
+            }];
+            if weight_changed {
+                operations.push(IntentPatchOperation::SetInstanceLeaf {
+                    leaf: weight,
+                    value: IntentLiteral::Quantity {
+                        value: current_weight,
+                        unit: IntentUnit::Dimensionless,
+                    },
+                });
+            }
+            Ok((operations, middle_changed || weight_changed))
+        }
+    }
 }
 
 /// Projectional coordinator failure.
@@ -562,6 +1163,8 @@ pub enum ProjectionalCoordinatorError {
     DragAlreadyActive,
     #[error("there is no active point drag")]
     NoActiveDrag,
+    #[error("there is no active selected-curve control drag")]
+    NoActiveCurveControlDrag,
     #[error("native point {point} has no writable projectional owner")]
     PointNotWritable { point: DesignPointId },
     #[error("native point {point} has split Cartesian ownership")]
@@ -570,6 +1173,12 @@ pub enum ProjectionalCoordinatorError {
     PointerMismatch { expected: u64, actual: u64 },
     #[error("the point-drag route is stale")]
     StaleDragRoute,
+    #[error("the selected-curve control route is stale")]
+    StaleCurveControlRoute,
+    #[error("selected-curve control {control:?} has no exact writable projectional owner")]
+    CurveControlNotWritable { control: DocumentCurveControlId },
+    #[error("the selected-curve control projection differs from its prepared route")]
+    CurveControlRouteMismatch,
     #[error("the point-drag sample is stale")]
     StaleDragSample,
     #[error("the point-drag target must be finite")]
@@ -582,10 +1191,14 @@ pub enum ProjectionalCoordinatorError {
     UnknownDragOutcome,
     #[error("no independently accepted point-drag sample is available")]
     NoAcceptedDragSample,
+    #[error("no independently accepted selected-curve control sample is available")]
+    NoAcceptedCurveControlSample,
     #[error("the accepted point-drag sample did not move the point")]
     DragDidNotMove,
     #[error("cold intent reconstruction differs from the exact accepted drag preview")]
     PreviewColdMismatch,
+    #[error(transparent)]
+    CurveControl(#[from] geosolve_sketch::DocumentCurveControlError),
 }
 
 // Ensure temporary requests are never accidentally retained by helper changes.

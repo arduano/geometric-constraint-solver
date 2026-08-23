@@ -8,8 +8,9 @@
 //! disposable selection, hover and pointer-gesture state.
 
 use geosolve_sketch::{
-    DesignPointId, DocumentId, OperationControl, RetainedSketchDocumentSession,
-    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchHardValidity,
+    DesignPointId, DocumentCurveControlId, DocumentId, OperationControl,
+    RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity,
+    SketchHardValidity,
 };
 use geosolve_sketch_intent::{
     IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
@@ -30,6 +31,15 @@ use crate::{
 struct ActivePointDrag {
     pointer_id: u64,
     point: DesignPointId,
+    latest_request_id: Option<u64>,
+    latest_position: Option<[f64; 2]>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ActiveCurveControlDrag {
+    pointer_id: u64,
+    expected: SketchDesignIdentity,
+    control: DocumentCurveControlId,
     latest_request_id: Option<u64>,
     latest_position: Option<[f64; 2]>,
 }
@@ -64,6 +74,7 @@ pub struct ProjectionalEditorSession {
     editor: ConstraintEditor,
     selected_declaration: Option<NodeId>,
     point_drag: Option<ActivePointDrag>,
+    curve_control_drag: Option<ActiveCurveControlDrag>,
     preview_control: OperationControl,
 }
 
@@ -192,6 +203,7 @@ impl ProjectionalEditorSession {
             editor,
             selected_declaration: None,
             point_drag: None,
+            curve_control_drag: None,
             preview_control,
         }
     }
@@ -284,6 +296,16 @@ impl ProjectionalEditorSession {
         scene.apply_annotation_layout(&self.editor.annotation_layout_for_scene());
         let mut scene = scene.with_retained_session(session)?;
         self.editor.populate_curve_controls(&mut scene)?;
+        if let Some((accepted_revision, expected, request_id, model_position)) =
+            self.coordinator.curve_control_preview_origin()
+        {
+            scene.set_curve_control_interaction_origin(
+                accepted_revision,
+                expected,
+                request_id,
+                model_position,
+            );
+        }
         Ok(scene)
     }
 
@@ -384,6 +406,7 @@ impl ProjectionalEditorSession {
         };
         self.editor = accepted_editor;
         self.point_drag = None;
+        self.curve_control_drag = None;
         self.reconcile_declaration_selection();
         Ok(ProjectionalEditorConstructionOutcome {
             effects,
@@ -481,16 +504,26 @@ impl ProjectionalEditorSession {
         input: PointerInput,
     ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
         let effects = self.editor.pointer_down(scene, input);
-        let route = self.editor.prepared_point_drag_route();
-        match (self.point_drag, route) {
-            (Some(active), Some(route))
-                if active.pointer_id == route.pointer_id && active.point == route.point => {}
-            (Some(_), Some(_)) => {
-                self.cancel_point_drag();
+        let point_route = self.editor.prepared_point_drag_route();
+        let curve_route = self.editor.prepared_curve_control_drag_route();
+        if point_route.is_some() && curve_route.is_some() {
+            self.cancel_direct_manipulation();
+            let _ = self.editor.cancel();
+            return Err(ProjectionalEditorError::AmbiguousDirectManipulationRoute);
+        }
+        if let Some(route) = point_route {
+            if self.curve_control_drag.is_some() {
+                self.cancel_direct_manipulation();
                 let _ = self.editor.cancel();
                 return Err(ProjectionalEditorError::PointDragRouteMismatch);
             }
-            (None, Some(route)) => {
+            if let Some(active) = self.point_drag {
+                if active.pointer_id != route.pointer_id || active.point != route.point {
+                    self.cancel_point_drag();
+                    let _ = self.editor.cancel();
+                    return Err(ProjectionalEditorError::PointDragRouteMismatch);
+                }
+            } else {
                 if let Err(error) = self
                     .coordinator
                     .begin_point_drag(route.pointer_id, route.point)
@@ -505,8 +538,41 @@ impl ProjectionalEditorSession {
                     latest_position: None,
                 });
             }
-            (Some(_), None) => self.cancel_point_drag(),
-            (None, None) => {}
+        } else if let Some(route) = curve_route {
+            if self.point_drag.is_some() {
+                self.cancel_direct_manipulation();
+                let _ = self.editor.cancel();
+                return Err(ProjectionalEditorError::CurveControlDragRouteMismatch);
+            }
+            if let Some(active) = self.curve_control_drag {
+                if active.pointer_id != route.pointer_id
+                    || active.expected != route.expected
+                    || active.control != route.control
+                {
+                    self.cancel_curve_control_drag();
+                    let _ = self.editor.cancel();
+                    return Err(ProjectionalEditorError::CurveControlDragRouteMismatch);
+                }
+            } else {
+                if let Err(error) = self.coordinator.begin_curve_control_drag(
+                    route.pointer_id,
+                    route.accepted_revision,
+                    route.expected,
+                    route.control,
+                ) {
+                    let _ = self.editor.cancel();
+                    return Err(error.into());
+                }
+                self.curve_control_drag = Some(ActiveCurveControlDrag {
+                    pointer_id: route.pointer_id,
+                    expected: route.expected,
+                    control: route.control,
+                    latest_request_id: None,
+                    latest_position: None,
+                });
+            }
+        } else {
+            self.cancel_direct_manipulation();
         }
         Ok(effects)
     }
@@ -538,7 +604,10 @@ impl ProjectionalEditorSession {
         scene: &EditorScene,
         input: PointerInput,
     ) -> Result<ProjectionalEditorPointerOutcome, ProjectionalEditorError> {
-        let effects = self.editor.pointer_up(scene, scene.design_identity, input);
+        let expected = self
+            .curve_control_drag
+            .map_or(scene.design_identity, |drag| drag.expected);
+        let effects = self.editor.pointer_up(scene, expected, input);
         let mut presentation = Vec::new();
         let mut transaction = None;
         for effect in effects {
@@ -577,12 +646,41 @@ impl ProjectionalEditorSession {
                     self.cancel_point_drag();
                     presentation.push(EditorEffect::ClearPointPreview);
                 }
+                EditorEffect::CommitCurveControl {
+                    expected,
+                    pointer_id,
+                    request_id,
+                    control,
+                } => {
+                    let Some(drag) = self.curve_control_drag.take() else {
+                        self.coordinator.cancel_curve_control_drag();
+                        return Err(ProjectionalEditorError::MissingCurveControlDragRoute);
+                    };
+                    if drag.pointer_id != pointer_id
+                        || drag.pointer_id != input.pointer_id
+                        || drag.expected != expected
+                        || drag.control != control
+                    {
+                        self.coordinator.cancel_curve_control_drag();
+                        return Err(ProjectionalEditorError::CurveControlDragRouteMismatch);
+                    }
+                    if drag.latest_request_id != Some(request_id) || drag.latest_position.is_none()
+                    {
+                        self.coordinator.cancel_curve_control_drag();
+                        return Err(ProjectionalEditorError::MissingAcceptedCurveControlSample);
+                    }
+                    transaction = self
+                        .coordinator
+                        .finish_curve_control_drag(pointer_id, request_id, expected, control)?;
+                }
+                EditorEffect::ClearCurveControlPreview => {
+                    self.cancel_curve_control_drag();
+                    presentation.push(EditorEffect::ClearCurveControlPreview);
+                }
                 effect => presentation.push(effect),
             }
         }
-        if self.point_drag.is_some() {
-            self.cancel_point_drag();
-        }
+        self.cancel_direct_manipulation();
         Ok(ProjectionalEditorPointerOutcome {
             effects: presentation,
             transaction,
@@ -591,7 +689,7 @@ impl ProjectionalEditorSession {
 
     /// Cancels every active pointer/draft interaction without changing intent.
     pub fn cancel_interaction(&mut self) -> Vec<EditorEffect> {
-        self.cancel_point_drag();
+        self.cancel_direct_manipulation();
         self.editor.cancel()
     }
 
@@ -633,6 +731,41 @@ impl ProjectionalEditorSession {
                     self.cancel_point_drag();
                     presentation.push(EditorEffect::ClearPointPreview);
                 }
+                EditorEffect::RequestCurveControlPreview {
+                    pointer_id,
+                    request_id,
+                    expected,
+                    control,
+                    model_position,
+                } => {
+                    self.authenticate_curve_control_drag(pointer_id, expected, control)?;
+                    let preview = self.coordinator.preview_curve_control_drag(
+                        pointer_id,
+                        request_id,
+                        expected,
+                        control,
+                        model_position,
+                        self.preview_control.clone(),
+                    )?;
+                    let accepted_position = preview.map(|preview| preview.accepted_position);
+                    if let Some(preview) = preview
+                        && let Some(drag) = self.curve_control_drag.as_mut()
+                    {
+                        drag.latest_request_id = Some(preview.request_id);
+                        drag.latest_position = Some(preview.accepted_position);
+                    }
+                    presentation.extend(self.editor.curve_control_preview_result(
+                        pointer_id,
+                        request_id,
+                        expected,
+                        control,
+                        accepted_position,
+                    ));
+                }
+                EditorEffect::ClearCurveControlPreview => {
+                    self.cancel_curve_control_drag();
+                    presentation.push(EditorEffect::ClearCurveControlPreview);
+                }
                 effect => presentation.push(effect),
             }
         }
@@ -657,6 +790,33 @@ impl ProjectionalEditorSession {
     fn cancel_point_drag(&mut self) {
         self.point_drag = None;
         self.coordinator.cancel_point_drag();
+    }
+
+    fn authenticate_curve_control_drag(
+        &mut self,
+        pointer_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+    ) -> Result<(), ProjectionalEditorError> {
+        if let Some(drag) = self.curve_control_drag {
+            if drag.pointer_id == pointer_id && drag.expected == expected && drag.control == control
+            {
+                return Ok(());
+            }
+            self.cancel_curve_control_drag();
+            return Err(ProjectionalEditorError::CurveControlDragRouteMismatch);
+        }
+        Err(ProjectionalEditorError::MissingCurveControlDragRoute)
+    }
+
+    fn cancel_curve_control_drag(&mut self) {
+        self.curve_control_drag = None;
+        self.coordinator.cancel_curve_control_drag();
+    }
+
+    fn cancel_direct_manipulation(&mut self) {
+        self.cancel_point_drag();
+        self.cancel_curve_control_drag();
     }
 
     fn reject_construction_commit(&mut self, token: crate::ConstructionCommitToken) {
@@ -731,4 +891,12 @@ pub enum ProjectionalEditorError {
     MissingAcceptedPointSample,
     #[error("the terminal editor point differs from the accepted native preview")]
     PointPreviewMismatch,
+    #[error("the editor prepared both point and selected-curve mutation routes for one press")]
+    AmbiguousDirectManipulationRoute,
+    #[error("the terminal selected-curve sample has no prepared projectional route")]
+    MissingCurveControlDragRoute,
+    #[error("the terminal selected-curve sample does not match its prepared route")]
+    CurveControlDragRouteMismatch,
+    #[error("the terminal selected-curve sample has no independently accepted preview")]
+    MissingAcceptedCurveControlSample,
 }

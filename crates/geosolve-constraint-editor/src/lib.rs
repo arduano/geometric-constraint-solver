@@ -110,8 +110,8 @@ pub use intent_bootstrap::{
     normalize_flat_sketch_intent, normalize_flat_sketch_intent_with_accepted_materialization,
 };
 pub use intent_coordinator::{
-    ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
-    ProjectionalPointDragPreview,
+    ProjectionalCoordinatorError, ProjectionalCurveControlPreview, ProjectionalIntentCoordinator,
+    ProjectionalPatchOutcome, ProjectionalPointDragPreview,
 };
 pub use intent_editor::{
     ProjectionalEditorConstructionOutcome, ProjectionalEditorError,
@@ -3142,6 +3142,18 @@ pub struct ActivePointerGesture {
 pub struct PreparedPointDragRoute {
     pub pointer_id: u64,
     pub point: DesignPointId,
+}
+
+/// Exact selected-curve control route prepared by a Select press.
+///
+/// Projectional hosts use this stamp to authenticate reverse writable ownership
+/// once, before any pointer-frame inverse projection or native solve begins.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PreparedCurveControlDragRoute {
+    pub pointer_id: u64,
+    pub expected: SketchDesignIdentity,
+    pub accepted_revision: u64,
+    pub control: DocumentCurveControlId,
 }
 
 /// Host work requested by one state transition.
@@ -7526,6 +7538,21 @@ impl ConstraintEditor {
             pointer_id: gesture.pointer_id,
             point: gesture.point,
         })
+    }
+
+    /// Returns the native selected-curve control route prepared by the current
+    /// Select press. Point-alias controls intentionally use
+    /// [`Self::prepared_point_drag_route`] so one physical target never prepares
+    /// two mutation routes.
+    #[must_use]
+    pub fn prepared_curve_control_drag_route(&self) -> Option<PreparedCurveControlDragRoute> {
+        self.curve_control_gesture
+            .map(|gesture| PreparedCurveControlDragRoute {
+                pointer_id: gesture.pointer_id,
+                expected: gesture.expected,
+                accepted_revision: gesture.accepted_revision,
+                control: gesture.control,
+            })
     }
 
     /// Completes a variable-length polyline or NURBS draft.
