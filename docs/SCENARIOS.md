@@ -4378,8 +4378,9 @@ Undo/Redo stream with no mirrored coordinator entry.
 Workspace v8 round-trips current/accepted graph and instance identities, organization, external
 inputs, reservation/tombstone high-water and bounded history byte-identically. Abandoned version 7
 rejects. Every frozen v1-v6 workspace restores through its historical strict decoder and becomes
-one honest opaque native bootstrap declaration; no recipe grouping or ownership is invented.
-Explicit supported ejection preserves accepted sketch semantics.
+typed per-object bootstrap declarations whose ports bind the exact existing point/scalar/curve/
+contact/constraint/dimension/source identities; no aggregate flat peer authority, recipe grouping
+or ownership is invented. Explicit supported ejection preserves accepted sketch semantics.
 
 Native and WASM/RPC transition transcripts match for valid, retained-invalid, stale, malformed and
 resource-exhausted patches. Branded TypeScript builders reject cross-session or wrong-port kinds at

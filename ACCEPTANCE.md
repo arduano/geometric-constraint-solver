@@ -3263,8 +3263,9 @@ the active acceptance contract; no candidate is nominated yet.
   not arbitrary TypeScript execution. Native, DOM-free WASM/RPC and branded TypeScript builders
   produce the same patch identities and typed outcomes.
 - Workspace v8 round-trips intent, accepted evidence, reservations, tombstones and bounded history.
-  Abandoned v7 rejects. Strict v1-v6 restoration remains available and is bootstrapped honestly as
-  opaque native content rather than assigned fictional recipe history.
+  Abandoned v7 rejects. Strict v1-v6 restoration remains available and is normalized honestly as
+  typed per-object bootstrap declarations with exact native identity bindings rather than an
+  aggregate flat peer authority or fictional recipe history.
 - Inventory-driven schema/materializer tests, cold/warm differential reconstruction, order/
   identity/failure/deletion/persistence coverage, native/WASM/RPC/TypeScript parity, drag
   performance, unchanged milestone-neutral golden, locked workspace tests, Clippy/Rustdoc/WASM and

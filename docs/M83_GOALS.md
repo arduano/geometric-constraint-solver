@@ -68,8 +68,9 @@ validated flat accepted scene authoritative.
 - Add DOM-free WASM/RPC parity and a small branded TypeScript package over the closed patch
   vocabulary. Neither layer owns geometry equations.
 - Advance the application envelope to workspace v8. Reject the abandoned v7 format. Restore v1-v6
-  strictly, then represent their flat content honestly as an opaque native bootstrap declaration
-  until explicitly ejected into supported declarations.
+  strictly, then normalize their flat content honestly into typed per-object native bootstrap
+  declarations with exact existing identity bindings until explicitly ejected into supported
+  higher-level declarations.
 - Round-trip graph/instance/organization/external identities, accepted evidence, reservations,
   tombstones and bounded history canonically.
 

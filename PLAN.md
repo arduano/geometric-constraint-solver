@@ -5618,9 +5618,10 @@ contract. The rejected chronological owner-rewrite candidate remains archived at
   decoding and independently validated accepted/latest/retained authority.
 - [ ] Lower native Fillet and Profile Offset through their existing authenticated domain APIs;
   add no new constraint, residual, formula, priority or JavaScript solve path.
-- [ ] Bootstrap existing flat samples and v1-v6 workspaces honestly as an opaque native
-  declaration, with explicit supported ejection rather than an invented historical recipe or the
-  rejected `ImportedBaseline` ledger semantics.
+- [ ] Bootstrap existing flat samples and v1-v6 workspaces honestly as typed per-object native
+  declarations with exact identity bindings, with explicit supported ejection rather than an
+  aggregate flat peer authority, invented historical recipe or rejected `ImportedBaseline` ledger
+  semantics.
 - [ ] Route every persistent canvas, Inspector, source, operation and organization mutation
   through one intent session and one composite Undo/Redo history. Keep only authenticated gesture
   state transient.

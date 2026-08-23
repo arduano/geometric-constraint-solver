@@ -134,11 +134,13 @@ builders over that RPC. It contains no geometry equations or solver fallback.
 
 Workspace v8 stores the intent session and its exact accepted materialization. Version 7 belongs
 to the rejected chronological candidate and is never accepted. Existing v1-v6 flat workspaces and
-the current sample library restore through their ordinary strict path, then bootstrap as one
-explicit opaque native declaration. That declaration remains fully editable through the existing
-flat workbench. The user may explicitly eject/bootstrap supported objects into projectional
-declarations; M83 never pretends that arbitrary old geometry was authored by a recipe it cannot
-prove.
+the current sample library restore through their ordinary strict path, then normalize into one
+typed bootstrap declaration per persistent native object plus explicit source-order/side-table
+records. Bootstrap ports bind the exact existing native identities, so new declarations can refer
+to them without treating one serialized flat scene as a second aggregate authority. A bootstrap
+declaration states only the native object that was actually persisted; the user may explicitly
+eject a supported set into a higher-level recipe. M83 never pretends that arbitrary old geometry
+was authored by a recipe it cannot prove.
 
 This is intentionally a breaking experimental workspace boundary. Strict older migrations and
 malformed-input rejection remain tested, but compatibility cannot force the rejected ledger back
@@ -169,5 +171,7 @@ into the design.
 - **Rebuilding the graph on every pointer frame:** defeats the retained solver's interaction
   performance and weakens exact terminal publication.
 - **Treating organization order as execution order:** makes harmless UI sorting change geometry.
+- **One opaque aggregate baseline:** recreates the complete flat document as a peer authority and
+  prevents stable per-object dependencies.
 - **Silently inferring old recipe history:** invents semantic ownership that the flat document
   never recorded.
