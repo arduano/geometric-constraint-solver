@@ -16,6 +16,7 @@ mod feature_authoring;
 mod geometry_tools;
 mod inference;
 mod intent;
+mod intent_authoring;
 mod intent_bootstrap;
 mod intent_coordinator;
 mod intent_editor;
@@ -91,6 +92,9 @@ pub use intent::{
     ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
     IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf,
     IntentNodeMaterialization, IntentValidationEvidence,
+};
+pub use intent_authoring::{
+    ProjectionalAuthoringError, ProjectionalConstructionPatch, projectional_construction_patch,
 };
 pub use intent_bootstrap::{
     BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1, BOOTSTRAP_CONSTRAINT_CODEC_V1, BOOTSTRAP_CONTACT_CODEC_V1,

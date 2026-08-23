@@ -363,7 +363,9 @@ impl ConstructionCommitPlan {
     /// Returns the relations in deterministic provenance order, omitting
     /// ambient suggestions whose subject is already owned by recipe intent.
     /// Stable sorting retains authoring-stage order within each provenance.
-    fn ordered_effective_relations(&self) -> Vec<(usize, ConstructionRelationDefinition)> {
+    pub(crate) fn ordered_effective_relations(
+        &self,
+    ) -> Vec<(usize, ConstructionRelationDefinition)> {
         let recipe_relations = self
             .relations
             .iter()
