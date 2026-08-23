@@ -4095,6 +4095,16 @@ impl SketchDocument {
             .map(|_| self.geometry_roles.get(&curve).copied().unwrap_or_default())
     }
 
+    /// Iterates the explicit non-default curve-role side table in persistent-ID order.
+    ///
+    /// This is a persistence/audit seam for projectional hosts. Profile entries are
+    /// deliberately absent because Profile is the canonical default.
+    pub fn explicit_geometry_roles(&self) -> impl Iterator<Item = GeometryRoleEdit> + '_ {
+        self.geometry_roles
+            .iter()
+            .map(|(curve, role)| GeometryRoleEdit::new(*curve, *role))
+    }
+
     /// Atomically changes a curve role without changing any geometric or discrete state.
     ///
     /// # Errors
@@ -4151,6 +4161,14 @@ impl SketchDocument {
     #[must_use]
     pub const fn host_configuration_activation(&self) -> Option<&HostConfigurationActivation> {
         self.host_activation.as_ref()
+    }
+
+    /// Iterates exact user-owned suppression side-table entries in canonical order.
+    ///
+    /// Constraint and dimension suppression remains stored on those declarations;
+    /// this exposes only the separate side table used by all other element kinds.
+    pub fn user_inactive_elements(&self) -> impl Iterator<Item = DocumentElementId> + '_ {
+        self.user_inactive_elements.iter().copied()
     }
 
     /// Atomically installs a newer immutable host-configuration activation payload.
@@ -4884,6 +4902,18 @@ impl SketchDocument {
         self.source_order
             .iter()
             .filter_map(|source| self.source(*source))
+    }
+
+    /// Iterates non-element semantic source reservations and their owning catalogs.
+    ///
+    /// A catalog owns itself. Remaining entries are generated semantic sources;
+    /// neither category is an ordinary equation/audit source in [`Self::source_order`].
+    pub fn semantic_source_reservations(
+        &self,
+    ) -> impl Iterator<Item = (DocumentSourceId, DocumentSourceId)> + '_ {
+        self.semantic_source_reservations
+            .iter()
+            .map(|(source, owner)| (*source, *owner))
     }
 
     /// Returns whether one typed persistent element currently belongs to the document.
