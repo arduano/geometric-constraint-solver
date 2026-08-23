@@ -7631,73 +7631,102 @@ fn seed_from_accepted_parent(
     let Some(parent) = parent else {
         return Ok(design.clone());
     };
-    let mut seed = design.clone();
-    for point in design.points() {
-        let Some(parent_design) = parent.solved_design.point(point.id) else {
-            continue;
-        };
-        let Some(parent_accepted) = parent.document.point(point.id) else {
-            continue;
-        };
-        if pair_bits(point.position) == pair_bits(parent_design.position) {
-            seed.set_point_position(point.id, parent_accepted.position)?;
+    design.prepare_continuation_seed(&parent.solved_design, &parent.document)
+}
+
+impl SketchDocument {
+    /// Prepares a numerical continuation seed from one exact retained/accepted
+    /// upstream pair without treating either graph as publication authority.
+    ///
+    /// Values are copied only when the downstream retained value still matches
+    /// the upstream retained value bit-for-bit. Newly authored or explicitly
+    /// rewritten values therefore remain downstream intent. Callers must still
+    /// solve and independently validate the returned document before accepting
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// Rejects foreign document namespaces or an invalid copied value.
+    pub fn prepare_continuation_seed(
+        &self,
+        upstream_design: &Self,
+        upstream_accepted: &Self,
+    ) -> Result<Self, DocumentError> {
+        if self.id() != upstream_design.id() || self.id() != upstream_accepted.id() {
+            return Err(DocumentError::InvalidField {
+                field: "continuation seed",
+                message: "retained and accepted prefixes must share one document namespace".into(),
+            });
         }
-    }
-    for scalar in design.scalars() {
-        let Some(parent_design) = parent.solved_design.scalar(scalar.id) else {
-            continue;
-        };
-        let Some(parent_accepted) = parent.document.scalar(scalar.id) else {
-            continue;
-        };
-        if scalar.value.to_bits() == parent_design.value.to_bits() {
-            seed.scalar_mut(scalar.id)
-                .expect("scalar came from this document")
-                .value = parent_accepted.value;
+        let design = self;
+        let mut seed = design.clone();
+        for point in design.points() {
+            let Some(parent_design) = upstream_design.point(point.id) else {
+                continue;
+            };
+            let Some(parent_accepted) = upstream_accepted.point(point.id) else {
+                continue;
+            };
+            if pair_bits(point.position) == pair_bits(parent_design.position) {
+                seed.set_point_position(point.id, parent_accepted.position)?;
+            }
         }
-    }
-    for contact in design.contacts() {
-        let Some(parent_accepted) = parent.document.contact(contact.id) else {
-            continue;
-        };
-        if contact_winding_matches_parent_design(design, &parent.solved_design, contact.id) {
-            seed.contact_mut(contact.id)
-                .expect("contact came from this document")
-                .winding = parent_accepted.winding;
+        for scalar in design.scalars() {
+            let Some(parent_design) = upstream_design.scalar(scalar.id) else {
+                continue;
+            };
+            let Some(parent_accepted) = upstream_accepted.scalar(scalar.id) else {
+                continue;
+            };
+            if scalar.value.to_bits() == parent_design.value.to_bits() {
+                seed.scalar_mut(scalar.id)
+                    .expect("scalar came from this document")
+                    .value = parent_accepted.value;
+            }
         }
-    }
-    for curve in design.curves() {
-        let CurveDefinition::RationalQuadraticConic {
-            weighted_middle, ..
-        } = curve.definition
-        else {
-            continue;
-        };
-        let Some(parent_design) = parent.solved_design.curve(curve.id) else {
-            continue;
-        };
-        let CurveDefinition::RationalQuadraticConic {
-            weighted_middle: parent_design_middle,
-            ..
-        } = parent_design.definition
-        else {
-            continue;
-        };
-        let Some(parent_accepted) = parent.document.curve(curve.id) else {
-            continue;
-        };
-        let CurveDefinition::RationalQuadraticConic {
-            weighted_middle: parent_accepted_middle,
-            ..
-        } = parent_accepted.definition
-        else {
-            continue;
-        };
-        if pair_bits(weighted_middle) == pair_bits(parent_design_middle) {
-            seed.set_conic_weighted_middle(curve.id, parent_accepted_middle)?;
+        for contact in design.contacts() {
+            let Some(parent_accepted) = upstream_accepted.contact(contact.id) else {
+                continue;
+            };
+            if contact_winding_matches_parent_design(design, upstream_design, contact.id) {
+                seed.contact_mut(contact.id)
+                    .expect("contact came from this document")
+                    .winding = parent_accepted.winding;
+            }
         }
+        for curve in design.curves() {
+            let CurveDefinition::RationalQuadraticConic {
+                weighted_middle, ..
+            } = curve.definition
+            else {
+                continue;
+            };
+            let Some(parent_design) = upstream_design.curve(curve.id) else {
+                continue;
+            };
+            let CurveDefinition::RationalQuadraticConic {
+                weighted_middle: parent_design_middle,
+                ..
+            } = parent_design.definition
+            else {
+                continue;
+            };
+            let Some(parent_accepted) = upstream_accepted.curve(curve.id) else {
+                continue;
+            };
+            let CurveDefinition::RationalQuadraticConic {
+                weighted_middle: parent_accepted_middle,
+                ..
+            } = parent_accepted.definition
+            else {
+                continue;
+            };
+            if pair_bits(weighted_middle) == pair_bits(parent_design_middle) {
+                seed.set_conic_weighted_middle(curve.id, parent_accepted_middle)?;
+            }
+        }
+        Ok(seed)
     }
-    Ok(seed)
 }
 
 #[allow(
