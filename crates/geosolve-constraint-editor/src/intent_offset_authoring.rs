@@ -250,6 +250,10 @@ pub fn projectional_profile_offset_delete_patch(
         .graph()
         .node(node)
         .ok_or(ProjectionalProfileOffsetError::WrongDeclarationKind)?;
+    let operation_closure = intent
+        .graph()
+        .dependent_closure([node])
+        .map_err(|error| ProjectionalProfileOffsetError::PreparationRejected(error.to_string()))?;
     let mut roots = std::collections::BTreeSet::from([node]);
     for (slot, source) in &declaration.inputs {
         let owned_kind = match slot.role {
@@ -260,14 +264,25 @@ pub fn projectional_profile_offset_delete_patch(
         let Some(owned_kind) = owned_kind else {
             continue;
         };
-        if matches!(
+        if !matches!(
             intent.graph().node(source.node).map(|source| &source.kind),
             Some(IntentNodeKind::Aggregate { aggregate }) if *aggregate == owned_kind
         ) {
-            // Profile/Chain aggregate inputs are closed-schema helper
-            // declarations created as part of this operation transaction.
-            // This is typed ownership: mutable display names and symbols are
-            // deliberately not inspected.
+            continue;
+        }
+        let aggregate_closure = intent
+            .graph()
+            .dependent_closure([source.node])
+            .map_err(|error| {
+                ProjectionalProfileOffsetError::PreparationRejected(error.to_string())
+            })?;
+        let mut exclusively_owned = operation_closure.clone();
+        exclusively_owned.insert(source.node);
+        if aggregate_closure == exclusively_owned {
+            // Authoring-created Profile/Chain helpers have no consumer outside
+            // this operation's exact downstream closure. A shared aggregate is
+            // a reusable semantic declaration and must survive deleting only
+            // this Offset. Names and source order never participate.
             roots.insert(source.node);
         }
     }
