@@ -516,6 +516,10 @@ fn radius_drag_previews_without_history_then_publishes_one_undoable_transaction(
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one rollback matrix keeps cancel, stale, invalid-domain, and non-finite terminal invariants contiguous"
+)]
 fn radius_drag_cancel_and_invalid_release_preserve_authority_and_history() {
     let (mut session, viewport) = fixture();
     create_fillet(&mut session, viewport);
@@ -608,4 +612,18 @@ fn radius_drag_cancel_and_invalid_release_preserve_authority_and_history() {
             .to_bits(),
         1.0_f64.to_bits()
     );
+
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_down(&scene, pointer(75, rail.screen_grip))
+        .unwrap();
+    let nonfinite = ScreenPoint {
+        x: f64::NAN,
+        y: rail.screen_grip.y,
+    };
+    let outcome = session.pointer_up(&scene, pointer(75, nonfinite)).unwrap();
+    assert!(outcome.transaction.is_none());
+    assert!(session.editor().active_pointer_gesture().is_none());
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
 }

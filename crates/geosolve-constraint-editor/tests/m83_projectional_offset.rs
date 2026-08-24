@@ -871,4 +871,16 @@ fn accepted_offset_cancel_invalid_and_stale_releases_publish_nothing() {
         evidence_before
     );
     assert_independently_valid(&session);
+
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session.pointer_down(&scene, pointer(85, press)).unwrap();
+    let nonfinite = ScreenPoint {
+        x: press.x,
+        y: f64::INFINITY,
+    };
+    let outcome = session.pointer_up(&scene, pointer(85, nonfinite)).unwrap();
+    assert!(outcome.transaction.is_none());
+    assert!(session.editor().active_pointer_gesture().is_none());
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
 }

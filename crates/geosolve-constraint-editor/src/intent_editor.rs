@@ -1188,6 +1188,23 @@ impl ProjectionalEditorSession {
         scene: &EditorScene,
         input: PointerInput,
     ) -> Result<ProjectionalEditorPointerOutcome, ProjectionalEditorError> {
+        if !input.position.x.is_finite() || !input.position.y.is_finite() {
+            if self
+                .editor
+                .active_pointer_gesture()
+                .is_some_and(|gesture| gesture.pointer_id == input.pointer_id)
+            {
+                self.cancel_direct_manipulation();
+                return Ok(ProjectionalEditorPointerOutcome {
+                    effects: self.editor.cancel(),
+                    transaction: None,
+                });
+            }
+            return Ok(ProjectionalEditorPointerOutcome {
+                effects: Vec::new(),
+                transaction: None,
+            });
+        }
         let expected = self
             .curve_control_drag
             .map_or(scene.design_identity, |drag| drag.expected);
