@@ -35,8 +35,9 @@ pub const INTENT_SESSION_VERSION: u32 = 2;
 const LEGACY_INTENT_SESSION_VERSION: u32 = 1;
 /// User-visible Undo/Redo bound.
 pub const MAX_INTENT_HISTORY_ENTRIES: usize = 1_024;
-/// Maximum strict canonical session JSON, including bounded history.
-pub const MAX_INTENT_SESSION_JSON_BYTES: usize = 256 * 1024 * 1024;
+/// Maximum strict canonical session JSON, aligned with the public workspace
+/// and RPC response envelope.
+pub const MAX_INTENT_SESSION_JSON_BYTES: usize = 64 * 1024 * 1024;
 /// Maximum operations in one atomic unordered patch.
 pub const MAX_INTENT_PATCH_OPERATIONS: usize = 16_384;
 
@@ -1646,6 +1647,7 @@ impl IntentSession {
             return Err(IntentSessionError::InvalidAuthority.into());
         }
         latest.materialization_digest = Some(authority.evidence.digest);
+        staged.propagate_current_accepted_authority_into_redo()?;
         staged.refresh_cached_identities();
         staged.validate()?;
         *self = staged;
@@ -1871,6 +1873,34 @@ impl IntentSession {
             accepted.reservations.clone_from(&self.reservations);
         }
         self.restore_checkpoint(checkpoint);
+        self.propagate_current_accepted_authority_into_redo()?;
+        Ok(())
+    }
+
+    /// Carries history-neutral accepted-authority maintenance across the
+    /// chronological Redo prefix of retained-failed transactions.
+    ///
+    /// Undo may reconcile reservation/tombstone high-water for the restored
+    /// accepted state, and an explicit host refresh may replace its exact
+    /// materialization evidence. Neither operation changes the logical scene
+    /// retained beneath a failed intent. Keeping the exact authority equal on
+    /// both sides of every such edge lets canonical import reject a forged
+    /// authority instead of treating maintenance metadata as user history.
+    fn propagate_current_accepted_authority_into_redo(&mut self) -> Result<(), IntentSessionError> {
+        let mut accepted = self.accepted.clone();
+        for entry in self.redo.iter_mut().rev() {
+            if entry.descriptor.disposition == IntentPlanDisposition::RetainedFailed {
+                if !history_accepted_content_eq(
+                    accepted.as_ref(),
+                    entry.checkpoint.accepted.as_ref(),
+                ) {
+                    return Err(IntentSessionError::InvalidHistoryTransition);
+                }
+                entry.checkpoint.accepted.clone_from(&accepted);
+            } else {
+                accepted.clone_from(&entry.checkpoint.accepted);
+            }
+        }
         Ok(())
     }
 
@@ -3287,16 +3317,31 @@ mod tests {
     fn session_with_retained_failure() -> IntentSession {
         let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fa)).unwrap();
         commit_point(&mut session, "accepted", "wire.accepted");
+        commit_retained_failure(
+            &mut session,
+            "retained",
+            "wire.retained",
+            "retained-failure",
+        );
+        session
+    }
+
+    fn commit_retained_failure(
+        session: &mut IntentSession,
+        alias: &str,
+        symbol: &str,
+        diagnostic: &str,
+    ) {
         let patch = IntentPatch::new(
             session.identity(),
             IntentPatchPolicy::RetainFailedIntent,
             vec![IntentPatchOperation::CreateNode {
-                alias: key("retained"),
+                alias: key(alias),
                 draft: Box::new(IntentNodeDraft::new(
                     IntentNodeKind::Geometry {
                         recipe: GeometryRecipeKind::SketchPoint,
                     },
-                    key("wire.retained"),
+                    key(symbol),
                 )),
                 cell: None,
             }],
@@ -3311,7 +3356,7 @@ mod tests {
                         .keys()
                         .next_back()
                         .expect("retained declaration")]),
-                    diagnostic: key("retained-failure"),
+                    diagnostic: key(diagnostic),
                 },
             })
             .unwrap();
@@ -3320,7 +3365,6 @@ mod tests {
             session.latest_attempt().unwrap().disposition,
             IntentAttemptDisposition::RetainedFailed
         );
-        session
     }
 
     fn corrupt_accepted_graph(checkpoint: &mut SessionCheckpoint) {
@@ -4319,6 +4363,21 @@ mod tests {
     }
 
     #[test]
+    fn canonical_session_input_shares_the_public_sixty_four_mib_envelope() {
+        let hostile = " ".repeat(MAX_INTENT_SESSION_JSON_BYTES + 1);
+        assert!(matches!(
+            IntentSession::from_json(&hostile[..MAX_INTENT_SESSION_JSON_BYTES]),
+            Err(IntentSessionError::Json(_))
+        ));
+        assert!(matches!(
+            IntentSession::from_json(&hostile),
+            Err(IntentSessionError::JsonResourceLimit {
+                limit: MAX_INTENT_SESSION_JSON_BYTES
+            })
+        ));
+    }
+
+    #[test]
     fn oversized_decoded_components_reject_current_accepted_undo_and_redo_atomically() {
         let session = session_with_undo_and_redo();
         let canonical = session.to_canonical_json().unwrap();
@@ -4426,6 +4485,80 @@ mod tests {
             ))
         ));
         assert_eq!(forged_redo, before_redo);
+    }
+
+    #[test]
+    fn retained_failure_authority_maintenance_crosses_the_complete_redo_prefix() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fd_04)).unwrap();
+        commit_point(&mut session, "accepted", "wire.accepted");
+        commit_retained_failure(
+            &mut session,
+            "retained-a",
+            "wire.retained.a",
+            "retained-failure-a",
+        );
+        commit_retained_failure(
+            &mut session,
+            "retained-b",
+            "wire.retained.b",
+            "retained-failure-b",
+        );
+
+        session.undo().unwrap().expect("second failure is undoable");
+        session = IntentSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
+        session.undo().unwrap().expect("first failure is undoable");
+        session = IntentSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
+        let maintained = session
+            .accepted()
+            .expect("accepted authority is restored")
+            .clone();
+
+        session.redo().unwrap().expect("first failure is redoable");
+        session = IntentSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
+        assert_eq!(session.accepted(), Some(&maintained));
+        session.redo().unwrap().expect("second failure is redoable");
+        session = IntentSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
+        assert_eq!(session.accepted(), Some(&maintained));
+        assert_eq!(
+            session.latest_attempt().unwrap().disposition,
+            IntentAttemptDisposition::RetainedFailed
+        );
+    }
+
+    #[test]
+    fn accepted_evidence_refresh_crosses_a_redoable_retained_failure() {
+        let mut session = session_with_retained_failure();
+        session
+            .undo()
+            .unwrap()
+            .expect("retained failure is undoable");
+        let refreshed = MaterializationEvidence::new_host_artifacts(
+            session.external_inputs().identity(),
+            b"refreshed materialization".to_vec(),
+            b"refreshed ownership".to_vec(),
+            b"refreshed validation".to_vec(),
+        )
+        .unwrap();
+        assert!(
+            session
+                .refresh_current_accepted_evidence(|_| IntentEvaluation::Accepted {
+                    evidence: refreshed.clone(),
+                })
+                .unwrap()
+        );
+        session = IntentSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
+        assert_eq!(session.accepted().unwrap().evidence, refreshed);
+
+        session
+            .redo()
+            .unwrap()
+            .expect("retained failure is redoable");
+        session = IntentSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
+        assert_eq!(session.accepted().unwrap().evidence, refreshed);
+        assert_eq!(
+            session.latest_attempt().unwrap().disposition,
+            IntentAttemptDisposition::RetainedFailed
+        );
     }
 
     #[test]
