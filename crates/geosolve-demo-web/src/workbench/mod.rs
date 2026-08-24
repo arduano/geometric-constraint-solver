@@ -1213,6 +1213,21 @@ impl ProjectionalPointerMoveQueue {
     }
 }
 
+/// Replays a coalesced projectional sample, when present, and then always
+/// evaluates the exact terminal browser sample. A rejected intermediate frame
+/// is presentation-only and cannot veto a newer valid release.
+#[cfg(any(target_arch = "wasm32", test))]
+fn replay_projectional_terminal_samples<T, E>(
+    pending: Option<T>,
+    terminal: T,
+    mut apply: impl FnMut(T) -> Result<(), E>,
+) -> Result<(), E> {
+    if let Some(pending) = pending {
+        let _ = apply(pending);
+    }
+    apply(terminal)
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 impl PointerMoveQueue {
     #[cfg(test)]
@@ -5645,17 +5660,12 @@ pub(crate) mod wasm {
             let pending = up_pointer_moves.borrow_mut().drain_before_terminal();
             let feature_authoring_drag = wb.editor().feature_authoring_radius_drag_active();
             let offset_authoring_drag = wb.editor().offset_authoring_distance_drag_active();
-            let samples = pending
-                .into_iter()
+            let pending = pending
                 .filter(|sample| sample.input.pointer_id == input.pointer_id)
-                .map(|sample| sample.input)
-                .chain(std::iter::once(input))
-                .collect::<Vec<_>>();
-            let mut failure = None;
-            for sample in samples {
+                .map(|sample| sample.input);
+            let result = super::replay_projectional_terminal_samples(pending, input, |sample| {
                 let Some(scene) = projectional_scene(&wb) else {
-                    failure = Some("the accepted scene became unavailable".to_owned());
-                    break;
+                    return Err("the accepted scene became unavailable".to_owned());
                 };
                 let result = if feature_authoring_drag {
                     let ProjectionalWorkbench {
@@ -5680,16 +5690,10 @@ pub(crate) mod wasm {
                 } else {
                     wb.editor_mut().pointer_move(&scene, sample)
                 };
-                match result {
-                    Ok(_) => {}
-                    Err(error) => {
-                        failure = Some(error.to_string());
-                        break;
-                    }
-                }
-            }
+                result.map(|_| ()).map_err(|error| error.to_string())
+            });
             up_pointer_moves.borrow_mut().observe(input);
-            if let Some(error) = failure {
+            if let Err(error) = result {
                 cancel_projectional_interaction(
                     &up_viewport,
                     &mut wb,
@@ -15139,6 +15143,31 @@ mod tests {
         let invalidated = queue.push(input(150.0)).expect("cancelled RAF generation");
         assert!(queue.invalidate());
         assert_eq!(queue.take_for_frame(invalidated), None);
+    }
+
+    #[test]
+    fn projectional_terminal_sample_recovers_from_rejected_queued_preview_on_every_drag_route() {
+        for route in ["point", "pre-Apply Fillet", "pre-Apply Offset"] {
+            let mut visited = Vec::new();
+            let outcome = super::replay_projectional_terminal_samples(
+                Some("rejected queued sample"),
+                "exact valid release",
+                |sample| {
+                    visited.push(sample);
+                    if sample == "rejected queued sample" {
+                        Err(route)
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert_eq!(outcome, Ok(()), "{route}");
+            assert_eq!(
+                visited,
+                ["rejected queued sample", "exact valid release"],
+                "{route} must evaluate the exact release after preview rejection"
+            );
+        }
     }
 
     #[test]
