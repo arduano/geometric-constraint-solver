@@ -11704,7 +11704,11 @@ fn offset_distance_rail(
     let document = patch_preview
         .accepted_document()
         .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-    preview_profile_offset_edges(preview)?;
+    let edges = preview_profile_offset_edges(preview)?;
+    let mut matching_targets = edges.iter().filter(|edge| edge.target.curve == target);
+    if matching_targets.next().is_none() || matching_targets.next().is_some() {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    }
     crate::profile_offset_distance_rail(
         document,
         preview.metadata.dimension,
