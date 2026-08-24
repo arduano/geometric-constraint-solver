@@ -3408,11 +3408,12 @@ pub(crate) mod wasm {
         FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringPointerDownOutcome,
         FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
         FeatureAuthoringTransaction, GeometryInteractionPolicy, GeometryPickScope,
-        GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility, IntentSourceTokenId,
-        Modifiers, NurbsConstructionOptions, OffsetAuthoringOutcome, OffsetAuthoringStage,
-        OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
-        ProjectionalEditorSession, RetainedEditorCoordinator, SceneCurveOrigin,
-        SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint, SelectionItem,
+        GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility, IntentSourceEditError,
+        IntentSourceTokenId, Modifiers, NurbsConstructionOptions, OffsetAuthoringOutcome,
+        OffsetAuthoringStage, OffsetAuthoringState, PickTolerance, PointerInput,
+        ProfileOffsetDirectionState, ProjectionalEditorSession, RetainedEditorCoordinator,
+        SceneCurveOrigin, SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint,
+        SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -7599,8 +7600,21 @@ pub(crate) mod wasm {
             else {
                 return;
             };
+            let stamp = super::ProjectionalInspectorStamp {
+                session: token_element.get_attribute("data-intent-session"),
+                revision: token_element.get_attribute("data-intent-revision"),
+                digest: token_element.get_attribute("data-intent-digest"),
+            };
             let replacement = token_element.text_content().unwrap_or_default();
-            let mut wb = source_workbench.borrow_mut();
+            let Ok(mut wb) = source_workbench.try_borrow_mut() else {
+                return;
+            };
+            if !stamp.matches(wb.editor().coordinator().intent().identity()) {
+                wb.notice = IntentSourceEditError::StaleProjection.to_string();
+                drop(wb);
+                let _ = render_projectional(&source_document, &source_workbench);
+                return;
+            }
             let projection = wb.editor().workbench_projection();
             let unchanged = projection
                 .structured_source
@@ -14644,6 +14658,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one drop-slot regression proves adjacent, end, authority and Undo behavior together"
+    )]
     fn projectional_outline_drop_halves_resolve_adjacent_insertion_slots() {
         run_projectional_test_with_large_stack("projectional-outline-drop-slots", || {
             let mut editor = projectional_authoring_fixture();
@@ -16257,6 +16275,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one queued-drag regression keeps terminal commit, capture release and durable presentation counts together"
+    )]
     fn projectional_queued_drag_commits_only_the_exact_terminal_sample_once() {
         run_projectional_test_with_large_stack("projectional-queued-drag-commit", || {
             let (mut authority, _node) = projectional_workbench_fixture();

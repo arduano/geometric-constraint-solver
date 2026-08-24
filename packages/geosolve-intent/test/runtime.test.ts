@@ -273,6 +273,22 @@ test("client sends only the closed Rust apply_patch RPC payload", async () => {
   assert.doesNotMatch(calls[0] ?? "", /residual|jacobian|solve/u);
 });
 
+test("client stamps source-token edits with the originating exact session identity", async () => {
+  const calls: string[] = [];
+  const client = new IntentClient(fixture.expected.session, {
+    async apply(json) {
+      calls.push(json);
+      return "accepted-identity";
+    },
+  });
+  const expected = sessionIdentity(client.owner, fixture.expected);
+
+  assert.equal(await client.editSourceToken(expected, 7, "3.5"), "accepted-identity");
+  assert.deepEqual(calls, [
+    `{"method":"edit_source_token","expected":${JSON.stringify(fixture.expected)},"token":7,"replacement":"3.5"}`,
+  ]);
+});
+
 test("all DOM-free RPC requests use the closed Rust method tags", async () => {
   assert.equal(encodeIntentRpcRequest({ method: "snapshot" }), '{"method":"snapshot"}');
   assert.equal(encodeIntentRpcRequest({ method: "undo" }), '{"method":"undo"}');
@@ -282,8 +298,13 @@ test("all DOM-free RPC requests use the closed Rust method tags", async () => {
     '{"method":"inspector","node":"0000000000000042"}',
   );
   assert.equal(
-    encodeIntentRpcRequest({ method: "edit_source_token", token: 7, replacement: "3.5" }),
-    '{"method":"edit_source_token","token":7,"replacement":"3.5"}',
+    encodeIntentRpcRequest({
+      method: "edit_source_token",
+      expected: sessionIdentity(session(fixture.expected.session), fixture.expected),
+      token: 7,
+      replacement: "3.5",
+    }),
+    `{"method":"edit_source_token","expected":${JSON.stringify(fixture.expected)},"token":7,"replacement":"3.5"}`,
   );
 });
 

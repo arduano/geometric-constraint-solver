@@ -116,7 +116,7 @@ pub(super) fn failure_response(code: &str, message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        IntentRpcOutcome, IntentRpcRequest, MAX_INTENT_RPC_REQUEST_BYTES,
+        IntentRpcOutcome, IntentRpcRequest, IntentSourceTokenId, MAX_INTENT_RPC_REQUEST_BYTES,
     };
     use geosolve_sketch_intent::{IntentPatch, IntentPatchPolicy};
 
@@ -134,11 +134,17 @@ mod tests {
             )),
         })
         .unwrap();
+        let source_edit = serde_json::to_string(&IntentRpcRequest::EditSourceToken {
+            expected: Box::new(session.coordinator().intent().identity()),
+            token: IntentSourceTokenId(1),
+            replacement: "2".to_owned(),
+        })
+        .unwrap();
         for request in [
             patch.as_str(),
             r#"{"method":"undo"}"#,
             r#"{"method":"redo"}"#,
-            r#"{"method":"edit_source_token","token":1,"replacement":"2"}"#,
+            source_edit.as_str(),
         ] {
             assert!(request_may_change_identity(request), "{request}");
         }

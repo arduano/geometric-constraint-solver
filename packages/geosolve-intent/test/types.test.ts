@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import {
+  IntentClient,
   aliasPort,
   createNode,
   draft,
@@ -72,6 +73,11 @@ const segmentDraft = draft(first, "segment.main", {
 const operation = createNode(first, "segment", segmentDraft);
 patch(first, firstIdentity, "require_accepted", [operation]);
 ejectBootstrapPoint(first, stableNode(first, "0000000000000004"));
+
+const client = new IntentClient(first.id, { apply: () => "accepted" });
+client.editSourceToken(firstIdentity, 0, "1");
+// @ts-expect-error Source-token CAS identities are branded to the client's session namespace.
+client.editSourceToken(secondIdentity, 0, "1");
 
 // @ts-expect-error Bootstrap ejection cannot target another session namespace.
 ejectBootstrapPoint(first, stableNode(second, "0000000000000004"));

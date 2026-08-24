@@ -471,7 +471,12 @@ export type IntentRpcRequest<S extends string = string> =
   | { readonly method: "undo" }
   | { readonly method: "redo" }
   | { readonly method: "inspector"; readonly node: string }
-  | { readonly method: "edit_source_token"; readonly token: number; readonly replacement: string };
+  | {
+      readonly method: "edit_source_token";
+      readonly expected: IntentSessionIdentity<S>;
+      readonly token: number;
+      readonly replacement: string;
+    };
 
 /**
  * The exact single-string surface implemented by WASM `IntentRpcHandle.apply`
@@ -926,12 +931,18 @@ export class IntentClient<const S extends string> {
     return this.transport.apply(encodeIntentRpcRequest({ method: "inspector", node: node.id }));
   }
 
-  async editSourceToken(token: number, replacement: string): Promise<string> {
+  async editSourceToken(
+    expected: IntentSessionIdentity<NoInfer<S>>,
+    token: number,
+    replacement: string,
+  ): Promise<string> {
+    requireOwner(this.owner, expected);
     if (!Number.isInteger(token) || token < 0 || token > 0xffff_ffff) {
       throw new RangeError("source token must be an unsigned 32-bit integer");
     }
     return this.transport.apply(encodeIntentRpcRequest({
       method: "edit_source_token",
+      expected,
       token,
       replacement,
     }));
@@ -967,7 +978,7 @@ export function encodeIntentRpcRequest<S extends string>(value: IntentRpcRequest
       if (!Number.isInteger(value.token) || value.token < 0 || value.token > 0xffff_ffff) {
         throw new RangeError("source token must be an unsigned 32-bit integer");
       }
-      return `{"method":"edit_source_token","token":${value.token},"replacement":${quote(value.replacement)}}`;
+      return `{"method":"edit_source_token","expected":${encodeSessionIdentity(value.expected)},"token":${value.token},"replacement":${quote(value.replacement)}}`;
   }
 }
 

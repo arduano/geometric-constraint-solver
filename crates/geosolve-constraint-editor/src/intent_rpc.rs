@@ -12,9 +12,9 @@ use geosolve_sketch_intent::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    IntentInspectorProjection, IntentSourceTokenId, IntentValidationEvidence,
-    IntentWorkbenchProjection, ProjectionalEditorError, ProjectionalEditorSession,
-    ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
+    IntentInspectorProjection, IntentSourceEditError, IntentSourceTokenId,
+    IntentValidationEvidence, IntentWorkbenchProjection, ProjectionalEditorError,
+    ProjectionalEditorSession, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
 };
 
 /// Maximum accepted byte length for one DOM-free intent RPC request.
@@ -38,6 +38,7 @@ pub enum IntentRpcRequest {
         node: NodeId,
     },
     EditSourceToken {
+        expected: Box<IntentSessionIdentity>,
         token: IntentSourceTokenId,
         replacement: String,
     },
@@ -167,6 +168,7 @@ trait IntentRpcBackend {
 
     fn edit_source_token(
         &mut self,
+        expected: IntentSessionIdentity,
         token: IntentSourceTokenId,
         replacement: &str,
     ) -> Result<ProjectionalPatchOutcome, RpcError>;
@@ -197,14 +199,18 @@ impl IntentRpcBackend for IntentRpcSession {
 
     fn edit_source_token(
         &mut self,
+        expected: IntentSessionIdentity,
         token: IntentSourceTokenId,
         replacement: &str,
     ) -> Result<ProjectionalPatchOutcome, RpcError> {
+        if self.coordinator.intent().identity() != expected {
+            return Err(RpcError::Source(IntentSourceEditError::StaleProjection));
+        }
         let projection = IntentWorkbenchProjection::from_session(self.coordinator.intent());
         projection
             .structured_source
             .patch_for_edit(self.coordinator.intent(), token, replacement)
-            .map_err(|error| RpcError::Text(error.to_string()))
+            .map_err(RpcError::Source)
             .and_then(|patch| self.coordinator.apply_patch(patch).map_err(RpcError::from))
     }
 }
@@ -232,9 +238,13 @@ impl IntentRpcBackend for ProjectionalEditorSession {
 
     fn edit_source_token(
         &mut self,
+        expected: IntentSessionIdentity,
         token: IntentSourceTokenId,
         replacement: &str,
     ) -> Result<ProjectionalPatchOutcome, RpcError> {
+        if self.coordinator().intent().identity() != expected {
+            return Err(RpcError::Source(IntentSourceEditError::StaleProjection));
+        }
         let projection = self.workbench_projection();
         ProjectionalEditorSession::edit_source_token(self, &projection, token, replacement)
             .map_err(RpcError::from)
@@ -281,8 +291,12 @@ fn apply_to_backend(
                 .inspector(backend.coordinator().intent(), node),
             snapshot: Box::new(snapshot(backend.coordinator())),
         }),
-        IntentRpcRequest::EditSourceToken { token, replacement } => backend
-            .edit_source_token(token, &replacement)
+        IntentRpcRequest::EditSourceToken {
+            expected,
+            token,
+            replacement,
+        } => backend
+            .edit_source_token(*expected, token, &replacement)
             .map(|outcome| IntentRpcSuccess::Patch {
                 disposition: outcome.disposition,
                 aliases: outcome.aliases,
@@ -329,7 +343,7 @@ fn apply_json_to_backend(backend: &mut impl IntentRpcBackend, request: &str) -> 
 enum RpcError {
     Coordinator(crate::ProjectionalCoordinatorError),
     Editor(ProjectionalEditorError),
-    Text(String),
+    Source(IntentSourceEditError),
 }
 
 impl RpcError {
@@ -339,7 +353,7 @@ impl RpcError {
             | Self::Editor(ProjectionalEditorError::Coordinator(error)) => {
                 coordinator_error_code(error)
             }
-            Self::Editor(ProjectionalEditorError::SourceEdit(_)) | Self::Text(_) => {
+            Self::Editor(ProjectionalEditorError::SourceEdit(_)) | Self::Source(_) => {
                 "source_edit_rejected"
             }
             Self::Editor(_) => "editor_rejected",
@@ -375,7 +389,7 @@ impl std::fmt::Display for RpcError {
         match self {
             Self::Coordinator(error) => error.fmt(formatter),
             Self::Editor(error) => error.fmt(formatter),
-            Self::Text(error) => error.fmt(formatter),
+            Self::Source(error) => error.fmt(formatter),
         }
     }
 }

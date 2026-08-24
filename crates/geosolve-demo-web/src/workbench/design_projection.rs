@@ -262,6 +262,7 @@ pub(crate) fn structured_source_markup(
             line_start,
             &line_tokens,
             &grouped_helpers,
+            source.identity,
         );
         markup.push_str("</code></div>");
         line_start += inclusive.len();
@@ -275,6 +276,7 @@ fn push_source_line(
     line_start: usize,
     tokens: &[&IntentSourceToken],
     non_interactive_nodes: &BTreeSet<NodeId>,
+    identity: IntentSessionIdentity,
 ) {
     let mut cursor = line_start;
     for token in tokens {
@@ -291,10 +293,15 @@ fn push_source_line(
             markup,
             concat!(
                 "<span class=\"wb-intent-source-token\" ",
-                "data-intent-source-token=\"{}\"{} contenteditable=\"plaintext-only\" ",
+                "data-intent-source-token=\"{}\" data-intent-session=\"{}\" ",
+                "data-intent-revision=\"{}\" data-intent-digest=\"{}\"{} ",
+                "contenteditable=\"plaintext-only\" ",
                 "spellcheck=\"false\">{}</span>"
             ),
             token.id.0,
+            identity.session,
+            identity.revision,
+            identity.digest,
             if non_interactive_nodes.contains(&node) {
                 String::new()
             } else {
@@ -786,6 +793,10 @@ mod tests {
         assert!(outline.contains("aria-selected=\"true\""));
         assert!(source.contains("import { design } from &quot;@geosolve/intent&quot;;"));
         assert!(source.contains("data-intent-source-token=\"0\""));
+        assert!(source.contains(&format!(
+            "data-intent-digest=\"{}\"",
+            projection.identity.digest
+        )));
         assert!(source.contains("class=\"wb-intent-source-line selected\""));
         assert!(history.contains("Accepted"));
         assert!(history.contains("Create"));

@@ -8,9 +8,9 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_intent::{
-    GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSessionId,
-    IntentUnit, LeafField,
+    CellTarget, GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector,
+    IntentSessionId, IntentUnit, LeafField,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -46,6 +46,10 @@ fn editor() -> ProjectionalEditorSession {
 }
 
 fn point() -> IntentNodeDraft {
+    named_point("rpc.point", [1.0, 2.0])
+}
+
+fn named_point(symbol: &str, position: [f64; 2]) -> IntentNodeDraft {
     let selector = IntentPortSelector::Node {
         role: IntentPortRole::Primary,
         index: 0,
@@ -54,13 +58,13 @@ fn point() -> IntentNodeDraft {
         IntentNodeKind::Geometry {
             recipe: GeometryRecipeKind::SketchPoint,
         },
-        key("rpc.point"),
+        key(symbol),
     )
     .with_instance_leaf(
         selector,
         LeafField::X,
         IntentLiteral::Quantity {
-            value: 1.0,
+            value: position[0],
             unit: IntentUnit::Length,
         },
     )
@@ -68,7 +72,7 @@ fn point() -> IntentNodeDraft {
         selector,
         LeafField::Y,
         IntentLiteral::Quantity {
-            value: 2.0,
+            value: position[1],
             unit: IntentUnit::Length,
         },
     )
@@ -202,6 +206,121 @@ fn malformed_and_stale_rpc_are_fail_closed_and_preserve_authority() {
     };
     assert!(inspector.is_none());
     assert_eq!(rpc.coordinator().intent().identity(), identity);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact stale-token regression preserves source remapping, history and accepted evidence together"
+)]
+fn stale_source_token_after_reorder_preserves_identity_history_and_accepted_evidence() {
+    let mut rpc = rpc();
+    assert!(matches!(
+        rpc.apply(IntentRpcRequest::ApplyPatch {
+            patch: Box::new(IntentPatch::new(
+                rpc.coordinator().intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![
+                    IntentPatchOperation::CreateNode {
+                        alias: key("first"),
+                        draft: Box::new(named_point("rpc.first", [1.0, 2.0])),
+                        cell: None,
+                    },
+                    IntentPatchOperation::CreateNode {
+                        alias: key("second"),
+                        draft: Box::new(named_point("rpc.second", [3.0, 4.0])),
+                        cell: None,
+                    },
+                ],
+            )),
+        }),
+        IntentRpcOutcome::Success { .. }
+    ));
+
+    let stale_snapshot = rpc.snapshot();
+    let stale_token = stale_snapshot
+        .projection
+        .structured_source
+        .tokens
+        .iter()
+        .find(|token| {
+            matches!(
+                token.target,
+                geosolve_constraint_editor::IntentSourceTokenTarget::NodeName { .. }
+            )
+        })
+        .expect("first source name token")
+        .clone();
+    let geosolve_constraint_editor::IntentSourceTokenTarget::NodeName { node: stale_owner } =
+        stale_token.target
+    else {
+        unreachable!("filtered source token is a node name")
+    };
+    let default_cell = rpc.coordinator().intent().organization().cell_order()[0];
+    assert!(matches!(
+        rpc.apply(IntentRpcRequest::ApplyPatch {
+            patch: Box::new(IntentPatch::new(
+                rpc.coordinator().intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::MoveDeclaration {
+                    node: stale_owner,
+                    cell: CellTarget::Stable { cell: default_cell },
+                    before: None,
+                }],
+            )),
+        }),
+        IntentRpcOutcome::Success { .. }
+    ));
+    let current_snapshot = rpc.snapshot();
+    assert!(
+        current_snapshot
+            .projection
+            .structured_source
+            .tokens
+            .iter()
+            .find(|token| token.id == stale_token.id)
+            .is_some_and(|token| {
+                matches!(
+                    token.target,
+                    geosolve_constraint_editor::IntentSourceTokenTarget::NodeName { node }
+                        if node != stale_owner
+                )
+            }),
+        "the stale numeric token must now address the other declaration"
+    );
+
+    let identity_before = rpc.coordinator().intent().identity();
+    let history_before = current_snapshot.projection.history;
+    let accepted_evidence_before = rpc
+        .coordinator()
+        .accepted_materialization()
+        .expect("accepted native authority")
+        .evidence
+        .clone();
+    let stale_edit = IntentRpcRequest::EditSourceToken {
+        expected: Box::new(stale_snapshot.identity),
+        token: stale_token.id,
+        replacement: r#""must not rename the other declaration""#.to_owned(),
+    };
+    let stale_edit: IntentRpcOutcome = serde_json::from_str(
+        &rpc.apply_json(&serde_json::to_string(&stale_edit).expect("closed request serializes")),
+    )
+    .expect("closed response deserializes");
+    assert!(matches!(
+        stale_edit,
+        IntentRpcOutcome::Failure { ref failure }
+            if failure.code == "source_edit_rejected"
+                && failure.identity == Some(identity_before)
+    ));
+    assert_eq!(rpc.coordinator().intent().identity(), identity_before);
+    assert_eq!(rpc.snapshot().projection.history, history_before);
+    assert_eq!(
+        rpc.coordinator()
+            .accepted_materialization()
+            .expect("stale source rejection retains native authority")
+            .evidence,
+        accepted_evidence_before
+    );
 }
 
 #[test]
