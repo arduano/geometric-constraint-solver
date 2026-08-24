@@ -39,10 +39,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   rejected chronological JSON-owner-rewrite candidate. Canvas/tree and Design projections resolve
   one visible stable declaration owner, including closure deletion for retained-invalid Profile
   Offset. M76 annotation layout remains a disposable presentation-only workspace cache outside
-  graph, materialization and history identity. The initial `232b83a` nomination is withdrawn by
-  M83-F001 through M83-F005. Replacement source `a621cdd`, tree `f6d77b4`, passes the complete
-  clean gate, frozen browser checks and immutable no-rebuild Tailscale nomination; no M83
-  capability is accepted until explicit human UAT passes.
+  graph, materialization and history identity. The initial `232b83a` nomination and post-F005
+  source `a621cdd` are withdrawn by M83-F001 through M83-F007. Replacement source `fafea4e`, tree
+  `ff75c36`, passes the complete clean gate, 5/5 frozen browser checks and immutable no-rebuild
+  Tailscale nomination; no M83 capability is accepted until explicit human UAT passes.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -394,6 +394,14 @@ bindings read-only. Direct pointer previews reuse retained native solver state a
 authenticated gesture data transient; the latest accepted sample remains distinct from a later
 rejected attempt and owns exact-once terminal publication. They do not replay or serialize the
 graph per frame.
+
+M83-F006 keeps terminal preview/cold authority fail-closed without mistaking recomputable branch
+round-off for a semantic mismatch. Exact document equality remains the fast path. Only line-branch
+metadata owned by Polyline and the four rectangle schemas may be replaced with the cold value, and
+only after each finite preview/cold vector proves membership in the same positive branch cell;
+exact draft-v5 equality is then required for every other field. Segment and Midpoint Line branches
+remain explicit intent and are never normalized. Midpoint Line lowering reads that explicit field.
+This is coordinator comparison policy, not a solver equation, residual, priority or tolerance.
 
 M81 moves unchanged checkpoint encoding/decoding, restore and successful history publication into
 private `coordinator/history.rs`. Durable feature candidates evaluate and checkpoint against a
@@ -804,9 +812,11 @@ failed intent and Undo. Strict v1-v6 workspaces first restore through their hist
 then become per-object bootstrap declarations, while abandoned v7 rejects. The M76 annotation-
 layout field remains a disposable,
 compatibility-filtered presentation cache outside intent/materialization/history authority and is
-recomputed when absent or invalid. Post-F005 M83 source `a621cdd` is clean-nominated at the
-immutable Tailscale endpoint, but remains unaccepted until human UAT passes; public Pages still
-serves accepted M81.
+recomputed when absent or invalid. M83-F007 enables New through the same canonical empty
+projectional authority used by startup, clearing durable authored geometry/declarations/history
+and transient authoring state, returning to Select and autosaving workspace v8 without invoking
+the retired flat path. Post-F007 M83 source `fafea4e` is clean-nominated at the immutable Tailscale
+endpoint, but remains unaccepted until human UAT passes; public Pages still serves accepted M81.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is

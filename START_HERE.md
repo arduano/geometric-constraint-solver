@@ -245,8 +245,11 @@ typed dependency graph, separate writable instance and presentation organization
 deterministic Rust materialization into the unchanged native solver, one composite history and
 prepared reverse-binding drag routes. The discarded candidate remains on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; do not restore it wholesale. The
-initial immutable nomination recorded by `232b83a` is withdrawn by M83-F001 through M83-F005.
-Replacement source `a621cdd`, tree `f6d77b4`, passes the complete clean gate, frozen browser
+initial immutable nomination recorded by `232b83a` and post-F005 source `a621cdd` are withdrawn by
+M83-F001 through M83-F007. M83-F006 keeps preview/cold comparison exact while canonicalizing only
+same-cell recomputable Polyline/rectangle branch metadata; explicit Segment/Midpoint Line branches
+remain exact. M83-F007 restores New through the canonical empty projectional authority.
+Replacement source `fafea4e`, tree `ff75c36`, passes the complete clean gate, 5/5 frozen browser
 regressions and byte-verified no-rebuild Tailscale nomination at
 `http://100.94.63.83:8080/`. M83 is not accepted product behavior until explicit human UAT passes;
 Pages therefore remains on accepted M81 product bytes. The M76 annotation-layout cache stays
@@ -284,7 +287,7 @@ disposable presentation-only workspace state outside graph/materialization/histo
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
 19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — active projectional
-    intent contract, F001-F005 replacement qualification/nomination ledger and pending focused
+    intent contract, F001-F007 replacement qualification/nomination ledger and pending focused
     scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
@@ -657,7 +660,7 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M82 are complete. M83 implementation and post-F005 replacement candidate nomination are
+M1-M82 are complete. M83 implementation and post-F007 replacement candidate nomination are
 complete; human acceptance remains pending. M82 closes by explicit deferral rather than feature
 acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -766,8 +769,8 @@ Durable milestone and cleanup records:
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
 - `docs/adr/0040-projectional-design-intent-graph.md` (active replacement architecture)
 - `docs/M83_GOALS.md` (active projectional intent contract)
-- `docs/M83_IMPLEMENTATION.md` (withdrawn initial nomination, F001-F005 repairs and replacement
-  qualification ledger)
+- `docs/M83_IMPLEMENTATION.md` (withdrawn initial/post-F005 nominations, F001-F007 repairs and
+  replacement qualification ledger)
 - `docs/M83_UAT.md` (exact replacement-candidate authority and pending focused scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

@@ -2,7 +2,7 @@
 
 # M83 implementation ledger — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F005 repair, clean replacement qualification and
+Status: **implementation, M83-F001 through M83-F007 repair, clean post-F007 qualification and
 immutable Tailscale nomination complete; human UAT pending**. This ledger records implementation
 and qualification against ADR 0040 and `docs/M83_GOALS.md`. Accepted M81 GitHub Pages bytes remain
 public authority.
@@ -19,8 +19,10 @@ public authority.
   advertised product source `1b4f4558688e1bd32be075793e11885f892a3245`, tree
   `ce09e010dc74f2e97b19d52d15433eef8f2f78d3`. M83-F001 through M83-F005 make those bytes
   historical evidence only.
-- Replacement product source: `a621cddc0a3b8687d6b7686bc850619332c73779`; tree:
-  `f6d77b447552d0d120c48be4bfdeb96bc5f2da59`.
+- Post-F005 product source, since withdrawn by F006/F007: `a621cddc0a3b8687d6b7686bc850619332c73779`;
+  tree `f6d77b447552d0d120c48be4bfdeb96bc5f2da59`.
+- Current post-F007 product source: `fafea4ebeddc295ca898258ac604858bcdd4db5f`;
+  tree `ff75c36aacdabe601f34bb59baaba01f6c91687a`.
 
 ## Implementation slices
 
@@ -72,6 +74,13 @@ binding to an absent native object, and retained-invalid current intent rejects 
 pointer-down. M83-F003 cold-restores retained-invalid migrated/bootstrap v8 state from its exact
 authenticated accepted graph/prefix while retaining current failed intent, history and Undo.
 
+M83-F006 keeps exact preview/cold comparison while canonicalizing only recomputable derived line
+branch metadata for Polyline and the four rectangle recipes, and only within the same positive
+branch cell. Segment and Midpoint Line retain exact explicit branch intent; the Midpoint Line
+lowerer now reads that field instead of deriving a replacement from coordinates. Repeated shared-
+corner rectangle/diagonal drags publish the visible preview, validate residuals, preserve the
+explicit diagonal branch and Undo exactly.
+
 ### I5 — projections, RPC and workspace v8
 
 Complete. Commit `50d2ec6` installed the Design-panel shell; subsequent slices add Rust-backed
@@ -83,6 +92,12 @@ v1-v6 migrate through their original strict decoder before per-object bootstrap 
 The M76 annotation-layout cache remains an explicitly separate presentation-only workspace field:
 it is compatibility-filtered and recomputable, omitted from reproduction authority, and never
 enters intent identity, dependency scheduling, materialization, solver input or composite history.
+
+M83-F007 restores New on the projectional toolbar. Startup and New share one canonical empty
+projectional authority; the action clears durable authored geometry/declarations/history plus
+transient authoring, selection-adjacent preview, camera and disclosure state, returns to Select,
+and autosaves a canonical workspace-v8 snapshot. It does not fall back to the retired flat event
+authority.
 
 Final interaction hardening at `62378c9` projects a unique canvas/tree owner to the same stable
 declaration selected by Outline/source; ambiguous, protected, unowned or multi-owner native
@@ -100,18 +115,19 @@ Inspector; rebind updates both deterministically and Inspector references remain
 
 ### I6 — qualification and nomination
 
-Replacement mechanical qualification and nomination are complete. Inventory, order-independence,
+Post-F005 mechanical qualification and nomination completed. Inventory, order-independence,
 reservation/tombstone, retained-failure, cold/warm differential,
 construction/application/operation, Fillet/Offset, persistence, native/WASM RPC, TypeScript and
 split pointer/terminal performance suites pass. The exact clean-gate release output was frozen
 without rebuilding, verified first on a temporary Tailscale listener and independently verified
-again at the retained UAT endpoint. Human M83-U1 through M83-U8 review remains pending. Do not
-publish Pages before human approval. The initial nomination is withdrawn and supplies no current
-UAT authority.
+again at the retained UAT endpoint. F006/F007 subsequently withdraw that candidate. The clean
+post-F007 gate, no-rebuild freeze, 5/5 frozen-browser checks and temporary/retained served-byte
+verification pass; human M83-U1 through M83-U9 review remains pending. Do not publish Pages before
+human approval; neither earlier nomination supplies current UAT authority.
 
 ## Findings
 
-All five replacement findings are mechanically resolved; their human rechecks remain pending.
+All seven replacement findings are mechanically resolved; their human rechecks remain pending.
 
 - **M83-F001 — deterministic accepted drag identity and exact-once terminal capture.** The
   withdrawn candidate could let a rejected newer sample or duplicate capture terminal obscure the
@@ -130,9 +146,21 @@ All five replacement findings are mechanically resolved; their human rechecks re
 - **M83-F005 — complete stable-input projection.** Structured Source and Inspector expose each
   canonical input slot as its exact stable typed port reference and update on rebind; Inspector
   references carry no edit control.
+- **M83-F006 — shared recipe drag preview/cold parity.** A rectangle point shared with a diagonal
+  could solve and preview correctly, then snap back because native continuation retained a
+  round-off-different derived rectangle edge branch vector from cold materialization. Preview/cold
+  comparison now canonicalizes only schema-owned recomputable Polyline/rectangle branch metadata
+  after proving the same positive branch cell; all unrelated draft-v5 state remains exact. Segment
+  and Midpoint Line branches are never normalized, and Midpoint Line lowering preserves its
+  explicit branch field.
+- **M83-F007 — projectional New workspace reset.** New is enabled and builds the canonical fresh
+  projectional authority, clears populated authored geometry/declarations/history and transient
+  interaction state, returns to Select and persists workspace v8 instead of using the retired flat
+  path.
 
-No finding changes a solver equation, residual, priority, tolerance, branch rule or accepted M81
-public behavior.
+No finding changes a solver equation, residual, priority, tolerance or accepted M81 public
+behavior. F006 preserves existing explicit branch rules; it narrows comparison normalization to
+derived same-cell metadata and corrects Midpoint Line materialization to honor its stored branch.
 
 ## Withdrawn initial qualification record
 
@@ -273,7 +301,7 @@ against 750 ms. Fillet-radius, Offset-distance and relation-heavy-curve-control 
 were 4.918 ms, 6.931 ms and 16.639 ms, all within their independent 250/400/150 ms ceilings. The
 exact terminal values were 5.315 ms, 7.666 ms and 92.326 ms against 4000/6000/3000 ms ceilings.
 
-## Replacement immutable candidate and served-byte evidence
+## Post-F005 immutable candidate and served-byte evidence (withdrawn)
 
 Without rebuilding, the gate-produced `dist` was copied to
 `/tmp/geosolve-m83-f005-uat.ge07gw`, byte-compared before and after freezing, and made immutable for
@@ -320,8 +348,88 @@ with `index.html`. Evidence `/tmp/geosolve-m83-f005-temp-verify.YYwD99/results.t
 Only after that pass, `geosolve-m83-uat.service`, PID `3331431`, began serving the same directory at
 `http://100.94.63.83:8080/`. Independent final evidence
 `/tmp/geosolve-m83-f005-final-verify.EGsGQD/results.tsv` has the identical ledger SHA-256. Temporary
-Tailscale and loopback browser listeners are retired; `:8080` remains live for focused human UAT.
+Tailscale and loopback browser listeners were retired; at that checkpoint `:8080` remained live for
+focused human UAT. F006/F007 later retired and replaced that service.
 
-The documentation-only descendant recording this replacement evidence does not replace product
-source/tree or rebuild its artifact. GitHub Pages deliberately remains on accepted M81 bytes until
-explicit M83 human approval.
+The documentation-only descendant recording that evidence did not replace its product source/tree
+or rebuild its artifact. GitHub Pages deliberately remains on accepted M81 bytes until explicit
+M83 human approval.
+
+## Post-F007 qualification record
+
+Focused F006/F007 owner and collateral suites pass: materializer 27/27, projectional coordinator
+6/6, curve controls 5/5, projectional editor 10/10 and demo-web library 195/195, including the
+three derived-branch unit regressions. Focused warnings-denied Clippy, formatting/diff hygiene and
+the all-feature WASM check pass. No equation, residual, solver priority or tolerance changed.
+
+From clean committed source `fafea4ebeddc295ca898258ac604858bcdd4db5f`, tree
+`ff75c36aacdabe601f34bb59baaba01f6c91687a`, this exact command completed with exit 0:
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The gate ran from 2026-08-24 20:14:40 to 20:30:47 AEST in 967 seconds. Its 373,070-byte,
+5,530-line log is `/tmp/geosolve-m83-f007-gate.aGkBUu/release-gate.log`, SHA-256
+`20807697a2df8941d59c9033c1604063940284e7b89f10ad19b1aeddcf25a7f4`. It passed formatting,
+diff hygiene, warnings-denied locked all-target/all-feature workspace Clippy, locked all-feature
+workspace tests, the exact unchanged 271-row golden `--require-clean`, native/WASM parity,
+all-feature WASM, TypeScript clean install/build/runtime tests, warnings-denied Rustdoc, benchmark
+compilation, licence/package checks and Trunk 0.21.14 release assembly. The 256-moving-body sparse
+crossover passed in 107.98 seconds.
+
+M83 retained-preview p95 was 13.880 ms against 16 ms and exact terminal publication was 130.692 ms
+against 750 ms. Fillet-radius, Offset-distance and relation-heavy-curve-control frame p95 values
+were 4.827 ms, 6.654 ms and 17.961 ms; their exact terminal values were 5.680 ms, 8.143 ms and
+95.628 ms, all within their independent ceilings.
+
+Without rebuilding, the gate-produced `dist` was copied to
+`/tmp/geosolve-m83-f007-uat.52r7H7`, byte-compared and frozen. Freeze metadata is in
+`/tmp/geosolve-m83-f007-freeze-evidence.y5GbCJ`; the ordered manifest aggregate is
+`bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`. The directory is `0555`
+and all seven entries are regular non-symlink files at `0444`:
+
+```text
+7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+f8519fe21e7edc0229555df8c89f280840583bc72c2208f691ad9b6cba93d9dd  geosolve-demo-web-119c7106611e4e18.js
+112f69b748b8ba807f7a927dddcc64cbb34ade35260810442342582d111caa8a  geosolve-demo-web-119c7106611e4e18_bg.wasm
+879f052749c88707c26ae42b417ecac4923b42590d4ec8297efe7f6a50809697  index.html
+368d50605a0f14d4e67784e711cd5d920cd56a715fe82d09e68f2bd974caaf24  styles-4251c5b53d199c44.css
+```
+
+The existing 3/3 frozen Playwright suite passes against those bytes. Temporary served-byte
+verification passed at the replacement listener;
+`/tmp/geosolve-m83-f007-temp-verify.3CjjqM/results.tsv` has SHA-256
+`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`.
+
+The new external frozen-browser harness passes 2/2 on both the temporary and retained endpoints:
+six rectangle/shared-diagonal drops remain committed with exact Undo, and New clears populated
+durable/transient state, selects Select and persists the empty workspace. The retained run used:
+
+```bash
+set -o pipefail
+env -u FORCE_COLOR NO_COLOR=1 M83_BASE_URL=http://100.94.63.83:8080/ \
+  NODE_PATH=/home/arduano/.npm/_npx/420ff84f11983ee5/node_modules \
+  node /home/arduano/.npm/_npx/420ff84f11983ee5/node_modules/@playwright/test/cli.js \
+  test --config=/tmp/m83-f007-pw/playwright.config.js 2>&1 | \
+  tee /tmp/m83-f007-pw/final-artifact-run.log
+```
+
+The configuration SHA-256 is
+`bfdd1d9920e8bcd49f4fe9853085450f7365b2546220712fc6f50a4431c8e8ad`, the specification SHA-256
+is `7b36eaeef0600b07e6da410485ff8bbc8521da2da2a17984c6eeee1fd2df2b33`, and the final 554-byte,
+9-line log SHA-256 is `a97160b3b4e57f0c822454f318210798dadb41c0e804e216acba1dbb5f64e9b7`.
+Both rows passed in 6.2 seconds. A control run against the old F005 endpoint failed both rows with
+the reported defects, proving harness sensitivity. This remains thin frozen-adapter parity; Rust
+owner regressions are the semantic and solver oracle, and no repository E2E harness is restored.
+
+Only after the temporary byte and 2/2 browser passes, `geosolve-m83-uat.service`, PID `4006665`,
+began serving the frozen directory at `http://100.94.63.83:8080/`. Independent final evidence
+`/tmp/geosolve-m83-f007-final-verify.nHhejs/results.tsv` has the same SHA-256 as the temporary
+ledger, `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. Both ledgers cover `/`
+and all seven files with HTTP 200, zero redirects, no `Location` or `Content-Encoding`, exact media
+type/length/body, and root equality with `index.html`. Temporary services are retired; `:8080`
+remains live for focused human UAT. GitHub Pages remains on accepted M81.

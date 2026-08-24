@@ -4295,8 +4295,8 @@ M82 is closed by explicit deferral and adds no accepted geometry scenario. Its c
   and retains the complete unaccepted design for future study.
 
 The rejected frozen candidate and its seven M82 findings are historical archive evidence only.
-Former UAT PID `3024723` is retired and port `8080` is free. No M82 feature UAT or Pages publication
-is claimed; existing accepted M81 Pages bytes remain public authority. See
+Former UAT PID `3024723` was retired and port `8080` was free at M82 closeout. No M82 feature UAT or
+Pages publication is claimed; existing accepted M81 Pages bytes remain public authority. See
 `docs/M82_DEFERRED.md`.
 
 ## M83 projectional design-intent fixtures
@@ -4304,10 +4304,11 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 M83 adds no residual equation and does not reinterpret any earlier geometric oracle. The corpus
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
 existing solver. G1-G6 implementation and focused/proportional coverage are complete through
-M83-F001 through M83-F005. Initial nomination `232b83a` is withdrawn. Replacement product source
-`a621cdd`, tree `f6d77b4`, passes the final clean gate, 3/3 frozen browser checks and immutable
-no-rebuild Tailscale nomination; human UAT and targeted finding rechecks remain pending. M81 GitHub
-Pages bytes remain public authority.
+M83-F001 through M83-F007. Initial nomination `232b83a` and post-F005 source `a621cdd` are
+withdrawn. Replacement product source `fafea4e`, tree `ff75c36`, passes the final clean gate,
+no-rebuild freeze, existing 3/3 plus focused F006/F007 2/2 frozen browser checks, and independent
+temporary/retained Tailscale byte verification. Human UAT and targeted finding rechecks remain
+pending. M81 GitHub Pages bytes remain public authority.
 
 ### M83-G1 — schema, alias and order independence
 
@@ -4373,6 +4374,16 @@ reuses it, and delayed/foreign/duplicate capture terminals are inert. Suppressed
 and retained-invalid current intent cannot start a route. One Undo restores the exact pre-gesture
 graph/instance/accepted state; cancellation without an accepted sample publishes nothing.
 
+Create a two-point aligned rectangle, then create a Segment whose endpoints alias opposite
+rectangle corners. Drag the shared corner through six successive accepted targets. Each release
+must commit the visible preview, retain finite geometry and independently validated hard residuals,
+add exactly one history entry, preserve the Segment's explicit branch bit-for-bit and return to the
+origin after six Undo operations. Preview/cold comparison may canonicalize only recomputable
+Polyline and four-rectangle-recipe line branches, and only when preview/cold vectors have positive
+dot product. A flip, non-finite vector, unrelated draft-v5 difference, Segment branch or Midpoint
+Line branch must reject rather than be normalized. Cold Midpoint Line materialization must preserve
+its explicit stored branch even when its coordinates imply another finite direction.
+
 ### M83-G5 — source, panel and unified history
 
 Create equivalent typed patches through canvas, Inspector, structured-source token edit and
@@ -4401,6 +4412,12 @@ Profile Offset aggregate is grouped beneath its visible operation, cannot be sel
 as an invisible source row, and is removed with that operation even when explicit intent is
 retained-invalid over older accepted ownership. Recognized source tokens remain typed edit targets.
 
+Populate geometry and History, enter an authoring tool, then invoke New. The action is enabled,
+creates the same canonical empty projectional authority as startup, clears accepted/design geometry,
+intent Undo/Redo and transient authoring/feature/offset/pointer/outline/problem state, selects
+Select, resets the camera and autosaves workspace v8. Reload must remain projectional and empty;
+the retired flat event path is not an allowed fallback.
+
 ### M83-G6 — workspace, WASM and TypeScript parity
 
 Workspace v8 round-trips current/accepted graph and instance identities, organization, external
@@ -4426,12 +4443,14 @@ reproduction authority, never affects materialization or Undo/Redo and is discar
 placement can be recomputed when missing, stale or malformed.
 
 The exact replacement no-rebuild release output is frozen at
-`/tmp/geosolve-m83-f005-uat.ge07gw`, aggregate
-`720ea687a7002a9f1dbc818147263d9b003cc03bd79cefb2cf8e6aca2597b89b`, and independently
-byte-verified at `http://100.94.63.83:8080/`; both request ledgers have SHA-256
-`585aa1571a1bc4440fcce609afa17435382ad1ee8d8f9d60e128229f18313a87`.
-`docs/M83_UAT.md` owns the full source/tree/service evidence plus pending human scorecard. GitHub
-Pages remains on accepted M81 bytes until that candidate is explicitly approved.
+`/tmp/geosolve-m83-f007-uat.52r7H7`, aggregate
+`bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`. The existing 3/3 frozen
+browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Both served-
+byte ledgers have SHA-256
+`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`; the retained candidate is
+`http://100.94.63.83:8080/`, PID `4006665`. `docs/M83_UAT.md` owns the full source/tree/service
+evidence plus pending human scorecard. GitHub Pages remains on accepted M81 bytes until that
+candidate is explicitly approved.
 
 ### M83-F001 — deterministic accepted drag identity and exact-once terminal capture
 
@@ -4468,6 +4487,36 @@ Status: repaired, clean-qualified and replacement-nominated; human recheck pendi
 Source and Inspector deterministically show every canonical input slot and exact stable typed port.
 Rebind replaces the old reference in both projections. Inspector exposes no input, button,
 `contenteditable` or typed edit marker for these references.
+
+### M83-F006 — shared recipe drags commit deterministic preview/cold parity
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending.
+Reproduce by drawing a rectangle and a diagonal Segment which aliases two rectangle corners, then
+repeatedly dragging a shared corner. Before repair, each retained preview solved correctly but
+pointer-up could return `PreviewColdMismatch` and snap back: native continuation retained an edge's
+prior derived branch vector while cold rectangle materialization recomputed an equivalent vector
+with floating-point noise.
+
+The coordinator first preserves exact document equality, then permits a field-local canonical
+comparison only for Polyline and the four rectangle recipes. Every owned line branch must remain
+finite and in the same positive cell; only that recomputable metadata is substituted before exact
+draft-v5 equality. Segment and Midpoint Line are deliberately outside this set, unrelated state
+cannot be hidden, and an actual branch flip rejects. Midpoint Line cold lowering separately honors
+its explicit `branch_direction`. Unit regressions cover the closed recipe inventory, same-cell
+canonicalization, flips and unrelated differences; the owning projectional regression covers six
+accepted drops, exact history/Undo, residual validation and explicit diagonal branch preservation.
+No equation, residual, priority or tolerance changes.
+
+### M83-F007 — New creates a fresh projectional workspace
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. The
+projectional availability map had disabled New and supplied no event route, making it difficult to
+reset a populated sketch. Startup and New now share one canonical empty projectional authority.
+New clears durable authored geometry/declarations/history and transient interaction/authoring
+state, returns to Select, resets the camera and autosaves workspace v8. Native adapter tests prove
+the empty accepted and design documents, empty Undo/Redo, projectional v8 round trip, enabled
+action and durable event route. The frozen browser scenario additionally proves that both a
+populated scene and its History clear and remain empty after reload.
 
 ## Frozen near-singular fixtures
 

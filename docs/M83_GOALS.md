@@ -2,8 +2,8 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation and post-F005 replacement candidate nomination complete; focused human
-UAT pending**. ADR 0040 is the active architecture. The rejected
+Status: **implementation and post-F007 immutable Tailscale nomination complete; focused human UAT
+pending**. ADR 0040 is the active architecture. The rejected
 chronological candidate is preserved only on `archive/m83-chronological-lineage-2026-08-23` at
 `be62a1c`; it is not a compatibility target.
 
@@ -58,6 +58,11 @@ validated flat accepted scene authoritative.
   dimension, fixed target, branch or arbitrary former action.
 - Keep explicit Fillet-radius and Profile-Offset-distance gestures as property edits.
 - Pointer frames perform no workspace save, graph serialization/replay or durable panel rebuild.
+- Compare terminal preview with cold materialization exactly except for schema-owned recomputable
+  line-branch metadata on Polyline and the four rectangle recipes. That metadata may be
+  canonicalized only while it stays in the same positive branch cell; Segment and Midpoint Line
+  explicit branches, every unrelated field and the independently validated accepted geometry
+  remain exact.
 
 ### M83-G5 — projectional workbench
 
@@ -74,6 +79,9 @@ validated flat accepted scene authoritative.
   survive an ordinary workspace save, but it is neither declaration/instance state nor part of
   materialization, solver input or composite Undo/Redo history, and it is recomputed safely when
   absent or incompatible.
+- Keep New available on the projectional surface. It creates the same canonical empty workspace-v8
+  authority as fresh startup, clears authored geometry/declarations/history and transient
+  authoring state, returns to Select, resets the camera and saves the new workspace.
 
 ### M83-G6 — host surface and persistence
 
@@ -101,11 +109,11 @@ validated flat accepted scene authoritative.
 - The exact no-rebuild candidate is frozen and byte-verified over Tailscale. GitHub Pages remains
   on the accepted M81 product until explicit M83 human approval.
 
-The initial `232b83a` nomination is withdrawn by M83-F001 through M83-F005. Implementation, the
-complete clean replacement gate, frozen browser regressions, immutable no-rebuild freeze and exact
-served-byte record now satisfy the mechanical G1-G6 nomination contract at source `a621cdd`, tree
-`f6d77b4`. M83-U1 through M83-U8 and targeted finding rechecks remain pending human evidence;
-accepted M81 GitHub Pages bytes remain public authority.
+The initial `232b83a` nomination and post-F005 source `a621cdd` are withdrawn by M83-F001 through
+M83-F007. Implementation, the complete clean post-F007 replacement gate, exact no-rebuild freeze,
+5/5 frozen-browser checks and temporary/retained served-byte records satisfy the mechanical G1-G6
+nomination contract at source `fafea4e`, tree `ff75c36`. M83-U1 through M83-U9 and targeted finding
+rechecks remain pending human evidence; accepted M81 GitHub Pages bytes remain public authority.
 
 ## Non-goals
 

@@ -3234,7 +3234,7 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation, M83-F001 through M83-F005 repair, clean replacement qualification and
+Status: implementation, M83-F001 through M83-F007 repair, clean post-F007 qualification and
 immutable Tailscale nomination complete; focused human UAT pending. ADR 0040,
 `docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no human
 evidence or accepted product claim exists yet.
@@ -3261,6 +3261,10 @@ evidence or accepted product claim exists yet.
   stay distinct; exact pointer-up commits the newest authenticated accepted preview even after a
   later rejected attempt, retires capture exactly once and never silently rewrites a driver or
   fixed property.
+- Terminal preview/cold parity remains whole-document exact except for schema-owned recomputable
+  Polyline and rectangle line-branch metadata, which may be canonicalized only in the same positive
+  branch cell. Explicit Segment/Midpoint Line branches and every unrelated field remain exact;
+  repeated shared rectangle/diagonal drags commit their visible preview with exact Undo.
 - One composite Undo/Redo history covers graph, instance, organization and external-input edits.
   History presentation is read-only; declaration/cell ordering, aliases, names and structured-
   source row order cannot affect geometry or native allocation. Outline/cell upper and lower drop
@@ -3280,6 +3284,10 @@ evidence or accepted product claim exists yet.
   Abandoned v7 rejects. Strict v1-v6 restoration remains available and is normalized honestly as
   typed per-object bootstrap declarations with exact native identity bindings rather than an
   aggregate flat peer authority or fictional recipe history.
+- New is enabled on the projectional workbench and creates the canonical empty projectional
+  workspace-v8 authority used by startup. It clears durable authored geometry/declarations/history
+  and transient authoring/problem/camera state, returns to Select and autosaves; it cannot route
+  through the retired flat authority.
 - Compatible moved-annotation positions may round-trip only as the existing disposable
   presentation cache. They are outside intent/session identity, dependency scheduling,
   materialization, solver input and composite history; missing, stale or corrupt cache state is
@@ -3288,19 +3296,22 @@ evidence or accepted product claim exists yet.
   identity/failure/deletion/persistence coverage, native/WASM/RPC/TypeScript parity, drag
   performance, unchanged milestone-neutral golden, locked workspace tests, Clippy/Rustdoc/WASM and
   the complete clean release gate all pass before nomination.
-- The exact no-rebuild release artifact is frozen and byte-verified on Tailscale for M83 UAT.
-  GitHub Pages remains on the accepted M81 product until explicit supervising-human approval.
+- The exact no-rebuild release artifact passes the focused frozen-browser checks and independent
+  temporary/retained Tailscale byte verification for M83 UAT. GitHub Pages remains on the accepted
+  M81 product until explicit supervising-human approval.
 
-Exact nomination evidence: initial nomination commit `232b83a` and its advertised source/tree are
-withdrawn by F001-F005. Replacement source `a621cddc0a3b8687d6b7686bc850619332c73779`, tree
-`f6d77b447552d0d120c48be4bfdeb96bc5f2da59`, passes the complete clean gate recorded at log
-SHA-256 `1043356cb2480944314566eab7fb92e5d560f48ee606ce3ca15ea4753f16af1d`. Frozen no-rebuild
-snapshot `/tmp/geosolve-m83-f005-uat.ge07gw` has ordered-manifest aggregate
-`720ea687a7002a9f1dbc818147263d9b003cc03bd79cefb2cf8e6aca2597b89b`; all three browser
-regressions pass and temporary/retained served-byte ledgers independently exact-match it at result
-SHA-256 `585aa1571a1bc4440fcce609afa17435382ad1ee8d8f9d60e128229f18313a87`. The retained candidate is
-`http://100.94.63.83:8080/`. M83-U1 through M83-U8, targeted finding rechecks, Pages publication
-and milestone closure remain pending.
+Exact nomination evidence: initial nomination commit `232b83a` and post-F005 source `a621cdd`/tree
+`f6d77b4` are withdrawn by F001-F007. Replacement source
+`fafea4ebeddc295ca898258ac604858bcdd4db5f`, tree
+`ff75c36aacdabe601f34bb59baaba01f6c91687a`, passes the complete clean gate recorded at log
+SHA-256 `20807697a2df8941d59c9033c1604063940284e7b89f10ad19b1aeddcf25a7f4`. Frozen no-rebuild
+snapshot `/tmp/geosolve-m83-f007-uat.52r7H7` has ordered-manifest aggregate
+`bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`; the existing 3/3 frozen
+browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Temporary
+and final served-byte ledgers both have SHA-256
+`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`; the retained candidate is
+`http://100.94.63.83:8080/`, PID `4006665`. M83-U1 through M83-U9, targeted finding rechecks, Pages
+publication and milestone closure remain pending.
 
 ## Regression and oracle policy
 
