@@ -1801,6 +1801,10 @@ fn validate_checkpoint(
                 if attempt.failed_nodes.is_empty()
                     || attempt.diagnostic.is_none()
                     || attempt.materialization_digest.is_some()
+                    || checkpoint
+                        .accepted
+                        .as_ref()
+                        .is_some_and(|accepted| accepted.target == semantic)
                     || attempt
                         .failed_nodes
                         .iter()
@@ -2100,7 +2104,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_import_rejects_accepted_authority_without_its_attempt_record() {
+    fn canonical_import_rejects_inconsistent_accepted_attempt_provenance() {
         let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83fe)).unwrap();
         let create = IntentPatch::new(
             session.identity(),
@@ -2122,6 +2126,23 @@ mod tests {
         let canonical = session.to_canonical_json().unwrap();
         let mut wire: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
         wire.current.latest_attempt = None;
+        wire.digest = session_wire_digest(&wire);
+        let forged = serde_json::to_string(&wire).unwrap();
+        assert!(matches!(
+            IntentSession::from_json(&forged),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+
+        let mut wire: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        let target = wire.current.accepted.as_ref().unwrap().target;
+        let failed_node = *wire.current.graph.nodes().keys().next().unwrap();
+        wire.current.latest_attempt = Some(IntentLatestAttempt {
+            target,
+            disposition: IntentAttemptDisposition::RetainedFailed,
+            materialization_digest: None,
+            failed_nodes: BTreeSet::from([failed_node]),
+            diagnostic: Some(key("forged-retained-failure")),
+        });
         wire.digest = session_wire_digest(&wire);
         let forged = serde_json::to_string(&wire).unwrap();
         assert!(matches!(
