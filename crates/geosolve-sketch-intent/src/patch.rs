@@ -79,6 +79,11 @@ pub enum IntentPatchOperation {
         slot: crate::InputSlot,
         source: PatchPortRef,
     },
+    /// Explicitly promotes one exact historical native Point declaration to
+    /// the supported typed Sketch Point recipe in place.
+    EjectBootstrapPoint {
+        node: NodeId,
+    },
     RenameNode {
         node: NodeId,
         name: IntentKey,
@@ -116,6 +121,7 @@ pub enum IntentPatchOperationKind {
     SetDefinitionField,
     SetInstanceLeaf,
     RebindInput,
+    EjectBootstrapPoint,
     RenameNode,
     MoveDeclaration,
     CreateCell,
@@ -134,6 +140,7 @@ impl IntentPatchOperation {
             Self::SetDefinitionField { .. } => IntentPatchOperationKind::SetDefinitionField,
             Self::SetInstanceLeaf { .. } => IntentPatchOperationKind::SetInstanceLeaf,
             Self::RebindInput { .. } => IntentPatchOperationKind::RebindInput,
+            Self::EjectBootstrapPoint { .. } => IntentPatchOperationKind::EjectBootstrapPoint,
             Self::RenameNode { .. } => IntentPatchOperationKind::RenameNode,
             Self::MoveDeclaration { .. } => IntentPatchOperationKind::MoveDeclaration,
             Self::CreateCell { .. } => IntentPatchOperationKind::CreateCell,

@@ -948,14 +948,23 @@ fn validate_bootstrap_seed(
     candidate: &dyn IntentMaterializationSource,
     seed: &ColdIntentBootstrapSeed,
 ) -> Result<(), IntentMaterializationError> {
-    let declarations = candidate
-        .graph()
-        .nodes()
-        .iter()
-        .filter_map(|(id, node)| {
-            matches!(node.kind, IntentNodeKind::Bootstrap { .. }).then_some((*id, node.clone()))
-        })
-        .collect::<BTreeMap<_, _>>();
+    for (id, expected) in &seed.declarations {
+        let actual = candidate
+            .graph()
+            .node(*id)
+            .ok_or(IntentMaterializationError::BootstrapSeedMismatch)?;
+        if !crate::intent_bootstrap::bootstrap_declaration_matches_candidate(expected, actual)
+            .map_err(|_| IntentMaterializationError::BootstrapSeedMismatch)?
+        {
+            return Err(IntentMaterializationError::BootstrapSeedMismatch);
+        }
+    }
+    if candidate.graph().nodes().values().any(|node| {
+        (matches!(node.kind, IntentNodeKind::Bootstrap { .. }) || node.bootstrap_origin.is_some())
+            && !seed.declarations.contains_key(&node.id)
+    }) {
+        return Err(IntentMaterializationError::BootstrapSeedMismatch);
+    }
     let reservation_owners = seed.declarations.keys().copied().collect::<BTreeSet<_>>();
     let reservations = candidate
         .reservations()
@@ -964,7 +973,7 @@ fn validate_bootstrap_seed(
         .filter(|(_, record)| reservation_owners.contains(&record.owner_node))
         .map(|(id, record)| (*id, *record))
         .collect::<BTreeMap<_, _>>();
-    if declarations != seed.declarations || reservations != seed.reservations {
+    if reservations != seed.reservations {
         return Err(IntentMaterializationError::BootstrapSeedMismatch);
     }
     Ok(())

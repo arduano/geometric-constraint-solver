@@ -10,11 +10,11 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{
     ContactDefinition, ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan,
-    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentElementId, DocumentFilletEndpointOrder,
-    DocumentFilletTrimEndpoint, DocumentParameterKind, DocumentParameterTarget,
-    DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter, ExternalFeatureKindV1,
-    GeometryRole, HostActivationOverride, HostConfigurationActivation,
+    DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentCurveTrimView,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentElementId,
+    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentParameterKind,
+    DocumentParameterTarget, DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter,
+    ExternalFeatureKindV1, GeometryRole, HostActivationOverride, HostConfigurationActivation,
     RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
     SketchMaterializationBatch, SketchMaterializationReservationAllocator,
     SketchMaterializationSemanticCatalog, SolverConfig,
@@ -27,9 +27,10 @@ use geosolve_sketch_features::{
 };
 use geosolve_sketch_intent::{
     BootstrapNativeKind, GeometryRecipeKind, InputRole, InputSlot, IntentBootstrapObject,
-    IntentEvaluation, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSession,
-    IntentSessionId, IntentUnit, LeafField, MaterializationEvidence, PatchPortRef,
+    IntentEvaluation, IntentIdentityFlow, IntentKey, IntentLiteral, IntentNodeDraft,
+    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind, IntentPatchPolicy,
+    IntentPortRole, IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId,
+    IntentUnit, LeafField, MaterializationEvidence, PatchPortRef,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -577,6 +578,284 @@ fn mixed_bootstrap_cold_rebuilds_new_declarations_and_edits_historical_free_leav
         0.0
     );
     assert!(editor.redo().expect("redo historical edit").is_some());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn bootstrap_point_ejection_preserves_native_identity_history_dependencies_and_cold_reload() {
+    let mut document = SketchDocument::new(1.0).expect("document");
+    let start = document
+        .add_point("historical start", [1.0, 2.0])
+        .expect("start");
+    let end = document
+        .add_point("historical end", [5.0, 2.0])
+        .expect("end");
+    let line = document
+        .add_curve(
+            "dependent line",
+            CurveDefinition::Line {
+                start,
+                end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("line");
+    let fixed = document
+        .add_constraint(
+            "dependent fixed point",
+            DocumentConstraintDefinition::FixedPoint {
+                point: start,
+                target: [1.0, 2.0],
+            },
+        )
+        .expect("fixed point");
+    let native_high_water = document.persistent_identity_high_water();
+    let features = ComputedFeatureDocument::new(document.id());
+    let intent = normalize_flat_sketch_intent(
+        IntentSessionId::from_raw(0x83_b121),
+        &document,
+        &features,
+        features.lifecycle_high_water(),
+    )
+    .expect("normalized bootstrap");
+    let native = RetainedSketchDocumentSession::new(
+        document.clone(),
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("accepted native bootstrap");
+    let mut editor = ProjectionalEditorSession::restore_native_bootstrap(intent, native)
+        .expect("projectional bootstrap");
+    let node = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| node.symbol.as_str() == format!("legacy-point-{start}"))
+        .expect("start bootstrap declaration")
+        .id;
+    let before_node = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node(node)
+        .unwrap()
+        .clone();
+    let before_port = before_node
+        .port_by_selector(IntentPortSelector::Node {
+            role: IntentPortRole::Primary,
+            index: 0,
+        })
+        .expect("point port")
+        .clone();
+    let IntentIdentityFlow::Created { reservation } = before_port.flow else {
+        panic!("bootstrap Point must own one reservation")
+    };
+    let allocator = editor.coordinator().intent().allocator_high_water();
+    let reservation_ledger = editor.coordinator().intent().reservations().clone();
+    let accepted_before = editor
+        .coordinator()
+        .accepted_materialization()
+        .expect("accepted bootstrap")
+        .session
+        .design_document()
+        .clone();
+    let line_node = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| node.symbol.as_str() == format!("legacy-curve-{line}"))
+        .expect("line declaration")
+        .id;
+    let fixed_node = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| node.symbol.as_str() == format!("legacy-constraint-{fixed}"))
+        .expect("constraint declaration")
+        .id;
+    let line_dependency = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node(line_node)
+        .unwrap()
+        .inputs[&InputSlot::new(InputRole::Point, 0)];
+    let fixed_dependency = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node(fixed_node)
+        .unwrap()
+        .inputs[&InputSlot::new(InputRole::Point, 0)];
+    assert_eq!(line_dependency, before_port.as_ref(node));
+    assert_eq!(fixed_dependency, before_port.as_ref(node));
+
+    let outcome = editor
+        .eject_bootstrap_point(node)
+        .expect("supported Point ejection");
+    assert_eq!(
+        outcome.disposition,
+        geosolve_sketch_intent::IntentPlanDisposition::Accepted
+    );
+    assert_eq!(editor.coordinator().intent().undo_len(), 1);
+    assert_eq!(editor.coordinator().intent().redo_len(), 0);
+    assert_eq!(
+        editor.coordinator().intent().history_projection().applied[0].operation_kinds,
+        [IntentPatchOperationKind::EjectBootstrapPoint]
+    );
+    let ejected = editor.coordinator().intent().graph().node(node).unwrap();
+    assert!(matches!(
+        ejected.kind,
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::SketchPoint
+        }
+    ));
+    assert!(ejected.bootstrap_origin.is_some());
+    assert_eq!(
+        ejected
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            })
+            .unwrap(),
+        &before_port
+    );
+    assert_eq!(
+        editor.coordinator().intent().allocator_high_water(),
+        allocator
+    );
+    assert_eq!(
+        editor.coordinator().intent().reservations(),
+        &reservation_ledger
+    );
+    assert_eq!(
+        editor.coordinator().intent().reservations().entries()[&reservation].state,
+        IntentReservationState::Declared
+    );
+    let accepted = editor
+        .coordinator()
+        .accepted_materialization()
+        .expect("accepted ejection");
+    assert_eq!(accepted.session.design_document(), &accepted_before);
+    assert_eq!(
+        accepted.session.persistent_identity_high_water(),
+        &native_high_water
+    );
+    assert_eq!(
+        accepted.ownership.port(before_port.as_ref(node)),
+        Some(IntentNativeBinding::Point(start))
+    );
+    assert_eq!(
+        accepted.ownership.reservation(reservation),
+        Some(IntentNativeBinding::Point(start))
+    );
+    assert_eq!(
+        editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(line_node)
+            .unwrap()
+            .inputs[&InputSlot::new(InputRole::Point, 0)],
+        line_dependency
+    );
+    assert_eq!(
+        editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(fixed_node)
+            .unwrap()
+            .inputs[&InputSlot::new(InputRole::Point, 0)],
+        fixed_dependency
+    );
+
+    let canonical = editor
+        .coordinator()
+        .intent()
+        .to_canonical_json()
+        .expect("canonical ejected workspace-v8 intent");
+    let mut restored = ProjectionalEditorSession::restore_with_bootstrap_prefix(
+        IntentSession::from_json(&canonical).expect("canonical intent reload"),
+    )
+    .expect("cold workspace-v8 bootstrap-prefix reload");
+    assert_eq!(
+        restored
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document(),
+        &accepted_before
+    );
+    assert!(
+        restored
+            .undo()
+            .expect("undo ejection after reload")
+            .is_some()
+    );
+    assert_eq!(
+        restored.coordinator().intent().graph().node(node).unwrap(),
+        &before_node
+    );
+    assert_eq!(
+        restored
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document(),
+        &accepted_before
+    );
+    assert_eq!(
+        restored.coordinator().intent().allocator_high_water(),
+        allocator
+    );
+    assert_eq!(
+        restored.coordinator().intent().reservations().entries()[&reservation].state,
+        IntentReservationState::Declared
+    );
+    assert!(
+        restored
+            .redo()
+            .expect("redo ejection after reload")
+            .is_some()
+    );
+    assert!(matches!(
+        restored
+            .coordinator()
+            .intent()
+            .graph()
+            .node(node)
+            .unwrap()
+            .kind,
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::SketchPoint
+        }
+    ));
+    assert_eq!(
+        restored
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document(),
+        &accepted_before
+    );
+    assert_eq!(
+        restored.coordinator().intent().allocator_high_water(),
+        allocator
+    );
+    assert_eq!(
+        restored.coordinator().intent().reservations(),
+        &reservation_ledger
+    );
 }
 
 #[test]

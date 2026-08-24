@@ -2205,6 +2205,192 @@ fn bootstrap_membership_uses_one_logical_document_root_without_native_aliasing()
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
+fn bootstrap_point_ejection_is_an_in_place_atomic_typed_transition() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_b003)).unwrap();
+    let root = bootstrap_draft(BootstrapNativeKind::Document, "document");
+    let point = bootstrap_draft(BootstrapNativeKind::Point, "point").with_input(
+        InputSlot::new(InputRole::Identity, 0),
+        alias_port("document", IntentPortRole::Result, 0),
+    );
+    let alias = point_draft("dependent")
+        .with_input(InputSlot::new(InputRole::Point, 0), alias_point("point"));
+    let initialization = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("dependent"),
+                draft: Box::new(alias),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("point"),
+                draft: Box::new(point),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("document"),
+                draft: Box::new(root),
+                cell: None,
+            },
+        ],
+    );
+    let plan = session.plan_patch(initialization, accepted).unwrap();
+    let aliases = plan.aliases().clone();
+    session.commit_initialization_plan(plan).unwrap();
+    let point = aliases.nodes[&key("point")];
+    let dependent = aliases.nodes[&key("dependent")];
+    let original = session.graph().node(point).unwrap().clone();
+    let primary = original.port_by_selector(point_selector()).unwrap().clone();
+    let IntentIdentityFlow::Created { reservation } = primary.flow else {
+        panic!("bootstrap Point must own its native reservation")
+    };
+    let dependent_input =
+        session.graph().node(dependent).unwrap().inputs[&InputSlot::new(InputRole::Point, 0)];
+    let allocator = session.allocator_high_water();
+    let reservations = session.reservations().clone();
+
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::EjectBootstrapPoint { node: point }],
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    assert_eq!(
+        plan.descriptor().operation_kinds,
+        [IntentPatchOperationKind::EjectBootstrapPoint]
+    );
+    session.commit_plan(plan).unwrap();
+
+    let ejected = session.graph().node(point).unwrap();
+    assert_eq!(ejected.id, original.id);
+    assert_eq!(
+        ejected.port_by_selector(point_selector()).unwrap(),
+        &primary
+    );
+    assert_eq!(ejected.reservations, original.reservations);
+    assert!(matches!(
+        ejected.kind,
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::SketchPoint
+        }
+    ));
+    assert_eq!(
+        ejected.bootstrap_origin.as_ref(),
+        match &original.kind {
+            IntentNodeKind::Bootstrap { object } => Some(object),
+            _ => None,
+        }
+    );
+    assert!(ejected.inputs.is_empty());
+    assert_eq!(session.allocator_high_water(), allocator);
+    assert_eq!(session.reservations(), &reservations);
+    assert_eq!(
+        session.reservations().entries()[&reservation].state,
+        IntentReservationState::Declared
+    );
+    assert_eq!(
+        session.graph().node(dependent).unwrap().inputs[&InputSlot::new(InputRole::Point, 0)],
+        dependent_input
+    );
+    assert_eq!(session.undo_len(), 1);
+
+    let canonical = session.to_canonical_json().unwrap();
+    let restored = IntentSession::from_json(&canonical).unwrap();
+    assert_eq!(restored.to_canonical_json().unwrap(), canonical);
+    assert!(session.undo().unwrap().is_some());
+    assert_eq!(session.graph().node(point).unwrap(), &original);
+    assert_eq!(session.allocator_high_water(), allocator);
+    assert_eq!(
+        session.reservations().entries()[&reservation].state,
+        IntentReservationState::Declared
+    );
+    assert!(session.redo().unwrap().is_some());
+    assert!(
+        session
+            .graph()
+            .node(point)
+            .unwrap()
+            .bootstrap_origin
+            .is_some()
+    );
+}
+
+#[test]
+fn bootstrap_point_ejection_rejects_unsupported_and_incomplete_nodes_atomically() {
+    let mut supported = IntentSession::with_id(IntentSessionId::from_raw(0x83_b004)).unwrap();
+    let root = bootstrap_draft(BootstrapNativeKind::Document, "document");
+    let point = bootstrap_draft(BootstrapNativeKind::Point, "point").with_input(
+        InputSlot::new(InputRole::Identity, 0),
+        alias_port("document", IntentPortRole::Result, 0),
+    );
+    let initialization = IntentPatch::new(
+        supported.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("point"),
+                draft: Box::new(point),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("document"),
+                draft: Box::new(root),
+                cell: None,
+            },
+        ],
+    );
+    let plan = supported.plan_patch(initialization, accepted).unwrap();
+    let aliases = plan.aliases().clone();
+    supported.commit_initialization_plan(plan).unwrap();
+    let before = supported.to_canonical_json().unwrap();
+    let unsupported = IntentPatch::new(
+        supported.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::EjectBootstrapPoint {
+            node: aliases.nodes[&key("document")],
+        }],
+    );
+    assert!(matches!(
+        supported.plan_patch(unsupported, |_| panic!(
+            "unsupported ejection must not evaluate"
+        )),
+        Err(IntentPlanError::Graph(
+            IntentGraphError::UnsupportedBootstrapEjection { .. }
+        ))
+    ));
+    assert_eq!(supported.to_canonical_json().unwrap(), before);
+
+    let mut incomplete = IntentSession::with_id(IntentSessionId::from_raw(0x83_b005)).unwrap();
+    let initialization = IntentPatch::new(
+        incomplete.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("point"),
+            draft: Box::new(bootstrap_draft(BootstrapNativeKind::Point, "point")),
+            cell: None,
+        }],
+    );
+    let plan = incomplete.plan_patch(initialization, accepted).unwrap();
+    let point = plan.aliases().nodes[&key("point")];
+    incomplete.commit_initialization_plan(plan).unwrap();
+    let before = incomplete.to_canonical_json().unwrap();
+    let patch = IntentPatch::new(
+        incomplete.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::EjectBootstrapPoint { node: point }],
+    );
+    assert!(matches!(
+        incomplete.plan_patch(patch, |_| panic!("incomplete ejection must not evaluate")),
+        Err(IntentPlanError::Graph(
+            IntentGraphError::IncompleteBootstrapEjection { .. }
+        ))
+    ));
+    assert_eq!(incomplete.to_canonical_json().unwrap(), before);
+}
+
+#[test]
 fn initialization_publication_rejects_a_nonempty_session() {
     let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_b002)).unwrap();
     let patch = IntentPatch::new(

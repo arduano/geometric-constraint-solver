@@ -10,13 +10,13 @@ use crate::ids::{
     digest_bytes,
 };
 use crate::model::{
-    BootstrapNativeKind, InputRole, InputSlot, IntentChildSchema, IntentFieldKey,
-    IntentGraphIdentity, IntentIdentityFlow, IntentInstanceState, IntentLiteral,
-    IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentOperationOutput,
-    IntentOperationOutputKind, IntentPortKind, IntentPortRef, IntentPortSelector,
-    IntentReservationLedgerIdentity, LeafField, LeafRef, MAX_INTENT_NODE_FIELDS,
-    MAX_INTENT_NODE_INPUTS, MAX_INTENT_OPERATION_OUTPUTS, PatchPortRef, PortSpec,
-    checked_child_count, child_port_specs, literal_matches_leaf, node_port_specs,
+    BootstrapNativeKind, GeometryRecipeKind, InputRole, InputSlot, IntentBootstrapObject,
+    IntentChildSchema, IntentFieldKey, IntentGraphIdentity, IntentIdentityFlow,
+    IntentInstanceState, IntentLiteral, IntentNativeReservationKind, IntentNodeDraft,
+    IntentNodeKind, IntentOperationOutput, IntentOperationOutputKind, IntentPortKind,
+    IntentPortRef, IntentPortSelector, IntentReservationLedgerIdentity, LeafField, LeafRef,
+    MAX_INTENT_NODE_FIELDS, MAX_INTENT_NODE_INPUTS, MAX_INTENT_OPERATION_OUTPUTS, PatchPortRef,
+    PortSpec, checked_child_count, child_port_specs, literal_matches_leaf, node_port_specs,
 };
 
 /// Strict canonical graph wire version.
@@ -491,6 +491,13 @@ pub struct IntentNode {
     pub id: NodeId,
     pub symbol: crate::IntentKey,
     pub kind: IntentNodeKind,
+    /// Exact historical native object retained when a supported bootstrap
+    /// declaration is projectionally ejected into a typed declaration.
+    ///
+    /// This origin is host-decoded reconstruction evidence, not a second
+    /// geometry definition. Callers cannot set it through [`IntentNodeDraft`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bootstrap_origin: Option<IntentBootstrapObject>,
     pub suppressed: bool,
     pub inputs: BTreeMap<crate::InputSlot, IntentPortRef>,
     pub fields: BTreeMap<IntentFieldKey, IntentLiteral>,
@@ -562,6 +569,67 @@ impl IntentGraph {
     #[must_use]
     pub fn node_by_symbol(&self, symbol: &crate::IntentKey) -> Option<&IntentNode> {
         self.nodes.values().find(|node| &node.symbol == symbol)
+    }
+
+    /// Reclassifies one exact native Point bootstrap as the supported typed
+    /// Sketch Point declaration without allocating or renumbering anything.
+    ///
+    /// The node, port, reservation, writable leaves, symbol, organization and
+    /// every downstream reference retain their stable identities. The exact
+    /// bootstrap payload moves into `bootstrap_origin` so cold reconstruction
+    /// and canonical reload can continue to authenticate the native point.
+    pub(crate) fn eject_bootstrap_point(&mut self, node: NodeId) -> Result<(), IntentGraphError> {
+        let target = self
+            .nodes
+            .get_mut(&node)
+            .ok_or(IntentGraphError::UnknownNode(node))?;
+        let IntentNodeKind::Bootstrap { object } = &target.kind else {
+            return Err(IntentGraphError::UnsupportedBootstrapEjection { node });
+        };
+        if object.kind != BootstrapNativeKind::Point {
+            return Err(IntentGraphError::UnsupportedBootstrapEjection { node });
+        }
+        if target.bootstrap_origin.is_some()
+            || target.suppressed
+            || !target.fields.is_empty()
+            || !target.operation_outputs.is_empty()
+            || !target.child_order.is_empty()
+            || !target.children.is_empty()
+            || target.inputs.len() != 1
+            || !target
+                .inputs
+                .contains_key(&InputSlot::new(InputRole::Identity, 0))
+        {
+            return Err(IntentGraphError::IncompleteBootstrapEjection { node });
+        }
+        let primary = target
+            .port_by_selector(IntentPortSelector::Node {
+                role: crate::IntentPortRole::Primary,
+                index: 0,
+            })
+            .ok_or(IntentGraphError::IncompleteBootstrapEjection { node })?;
+        let IntentIdentityFlow::Created { reservation } = primary.flow else {
+            return Err(IntentGraphError::IncompleteBootstrapEjection { node });
+        };
+        if primary.kind != IntentPortKind::Point
+            || primary.writable != [LeafField::X, LeafField::Y]
+            || target.reservations.len() != 1
+            || target
+                .reservations
+                .get(&reservation)
+                .map(|entry| entry.kind)
+                != Some(IntentNativeReservationKind::Point)
+        {
+            return Err(IntentGraphError::IncompleteBootstrapEjection { node });
+        }
+
+        let origin = object.clone();
+        target.kind = IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::SketchPoint,
+        };
+        target.bootstrap_origin = Some(origin);
+        target.inputs.clear();
+        Ok(())
     }
 
     #[must_use]
@@ -689,6 +757,21 @@ impl IntentGraph {
             validate_operation_outputs(*id, &node.kind, &node.operation_outputs)?;
             if let IntentNodeKind::Bootstrap { object } = &node.kind {
                 object.validate()?;
+            }
+            if let Some(origin) = &node.bootstrap_origin {
+                origin.validate()?;
+                if origin.kind != BootstrapNativeKind::Point
+                    || !matches!(
+                        node.kind,
+                        IntentNodeKind::Geometry {
+                            recipe: GeometryRecipeKind::SketchPoint
+                        }
+                    )
+                    || node.suppressed
+                    || !node.inputs.is_empty()
+                {
+                    return Err(IntentGraphError::InvalidBootstrapEjection { node: *id });
+                }
             }
             let dynamic_children = u16::try_from(node.children.len())
                 .map_err(|_| IntentGraphError::InvalidChildSchema { node: *id })?;
@@ -1144,6 +1227,12 @@ pub enum IntentGraphError {
     },
     #[error("schema-generated ports do not match node {node}")]
     InvalidPortSchema { node: NodeId },
+    #[error("node {node} is not a supported native bootstrap Point declaration")]
+    UnsupportedBootstrapEjection { node: NodeId },
+    #[error("native bootstrap Point declaration {node} is incomplete or ambiguous")]
+    IncompleteBootstrapEjection { node: NodeId },
+    #[error("node {node} carries malformed bootstrap-ejection provenance")]
+    InvalidBootstrapEjection { node: NodeId },
     #[error("reservation {reservation} on node {node} is not owned by a created port")]
     UnusedReservation {
         node: NodeId,
@@ -1754,6 +1843,7 @@ pub(crate) fn finish_allocated_draft(
         id: allocated.id,
         symbol: allocated.draft.symbol,
         kind: allocated.draft.kind,
+        bootstrap_origin: None,
         suppressed: allocated.draft.suppressed,
         inputs,
         fields: allocated.draft.fields,

@@ -1476,6 +1476,11 @@ fn apply_patch_operations(
                     diff.graph_changed = true;
                 }
             }
+            IntentPatchOperation::EjectBootstrapPoint { node } => {
+                staged.graph.eject_bootstrap_point(node)?;
+                diff.definition_nodes.insert(node);
+                diff.graph_changed = true;
+            }
             IntentPatchOperation::DeleteNode { node, policy } => {
                 let roots = match &policy {
                     DeletePolicy::RejectDependents | DeletePolicy::Cascade { .. } => {
@@ -1659,6 +1664,9 @@ fn validate_patch_conflicts(operations: &[IntentPatchOperation]) -> Result<(), I
             IntentPatchOperation::RebindInput { node, slot, .. } => {
                 (format!("input:{node}:{slot:?}"), Some(*node))
             }
+            IntentPatchOperation::EjectBootstrapPoint { node } => {
+                (format!("eject-bootstrap-point:{node}"), Some(*node))
+            }
             IntentPatchOperation::RenameNode { node, .. } => (format!("name:{node}"), Some(*node)),
             IntentPatchOperation::MoveDeclaration { node, .. } => {
                 (format!("move:{node}"), Some(*node))
@@ -1697,6 +1705,7 @@ fn operation_targets_node(operation: &IntentPatchOperation, expected: NodeId) ->
         | IntentPatchOperation::SetSuppressed { node, .. }
         | IntentPatchOperation::SetDefinitionField { node, .. }
         | IntentPatchOperation::RebindInput { node, .. }
+        | IntentPatchOperation::EjectBootstrapPoint { node }
         | IntentPatchOperation::RenameNode { node, .. }
         | IntentPatchOperation::MoveDeclaration { node, .. } => *node == expected,
         IntentPatchOperation::SetInstanceLeaf { leaf, .. } => leaf.node == expected,

@@ -168,11 +168,8 @@ fn bootstrap_materialization_map(
     let mut writable_leaves = Vec::new();
 
     for node in session.graph().nodes().values() {
-        let IntentNodeKind::Bootstrap { object } = &node.kind else {
-            if allow_later_declarations {
-                continue;
-            }
-            return Err(IntentBootstrapError::MixedDeclarationGraph);
+        let Some(object) = bootstrap_object_for_node(node, allow_later_declarations)? else {
+            continue;
         };
         let exact = bootstrap_exact_bindings(node, object)?;
         let mut owned = bootstrap_exact_owned_bindings(object)?;
@@ -234,6 +231,140 @@ fn bootstrap_materialization_map(
         writable_leaves,
         aggregates: Vec::new(),
     })
+}
+
+fn bootstrap_object_for_node(
+    node: &geosolve_sketch_intent::IntentNode,
+    allow_later_declarations: bool,
+) -> Result<Option<&IntentBootstrapObject>, IntentBootstrapError> {
+    match (&node.kind, &node.bootstrap_origin) {
+        (IntentNodeKind::Bootstrap { object }, None) => Ok(Some(object)),
+        (
+            IntentNodeKind::Geometry {
+                recipe: geosolve_sketch_intent::GeometryRecipeKind::SketchPoint,
+            },
+            Some(object),
+        ) if allow_later_declarations => {
+            validate_ejected_point_origin(object)?;
+            Ok(Some(object))
+        }
+        (_, None) if allow_later_declarations => Ok(None),
+        (_, Some(_)) => Err(IntentBootstrapError::InvalidEjection),
+        _ => Err(IntentBootstrapError::MixedDeclarationGraph),
+    }
+}
+
+fn validate_ejected_point_origin(
+    object: &IntentBootstrapObject,
+) -> Result<DesignPoint, IntentBootstrapError> {
+    if object.kind != BootstrapNativeKind::Point
+        || object.codec.as_str() != BOOTSTRAP_POINT_CODEC_V1
+    {
+        return Err(IntentBootstrapError::InvalidEjection);
+    }
+    strict_payload::<DesignPoint>(&object.payload)
+        .map_err(|_| IntentBootstrapError::InvalidEjection)
+}
+
+/// Authenticates either an unchanged canonical bootstrap declaration or the
+/// one exact supported in-place Point ejection.
+pub(crate) fn bootstrap_declaration_matches_candidate(
+    expected: &geosolve_sketch_intent::IntentNode,
+    actual: &geosolve_sketch_intent::IntentNode,
+) -> Result<bool, IntentBootstrapError> {
+    if actual == expected {
+        return Ok(true);
+    }
+    let IntentNodeKind::Bootstrap { object } = &expected.kind else {
+        return Ok(false);
+    };
+    validate_ejected_point_origin(object)?;
+    let mut promoted = expected.clone();
+    promoted.kind = IntentNodeKind::Geometry {
+        recipe: geosolve_sketch_intent::GeometryRecipeKind::SketchPoint,
+    };
+    promoted.bootstrap_origin = Some(object.clone());
+    promoted.inputs.clear();
+    Ok(actual == &promoted)
+}
+
+/// Builds the one supported explicit bootstrap-ejection transaction.
+///
+/// The target must be an exact current Point bootstrap whose logical port,
+/// reservation and accepted native ownership all agree with its canonical
+/// payload. The patch changes only its declaration family in place; stable
+/// identities and downstream references are deliberately not rewritten.
+pub(crate) fn bootstrap_point_ejection_patch(
+    session: &IntentSession,
+    ownership: &IntentMaterializationMap,
+    document: &SketchDocument,
+    node: geosolve_sketch_intent::NodeId,
+) -> Result<IntentPatch, IntentBootstrapError> {
+    let declaration = session
+        .graph()
+        .node(node)
+        .ok_or(IntentBootstrapError::InvalidEjection)?;
+    let IntentNodeKind::Bootstrap { object } = &declaration.kind else {
+        return Err(IntentBootstrapError::InvalidEjection);
+    };
+    let payload = validate_ejected_point_origin(object)?;
+    let primary = declaration
+        .port_by_selector(IntentPortSelector::Node {
+            role: IntentPortRole::Primary,
+            index: 0,
+        })
+        .ok_or(IntentBootstrapError::InvalidEjection)?;
+    let geosolve_sketch_intent::IntentIdentityFlow::Created { reservation } = primary.flow else {
+        return Err(IntentBootstrapError::InvalidEjection);
+    };
+    if declaration.bootstrap_origin.is_some()
+        || declaration.suppressed
+        || declaration.reservations.len() != 1
+        || declaration
+            .reservations
+            .get(&reservation)
+            .map(|entry| entry.kind)
+            != Some(geosolve_sketch_intent::IntentNativeReservationKind::Point)
+        || document.point(payload.id).is_none()
+    {
+        return Err(IntentBootstrapError::InvalidEjection);
+    }
+    let mut port_bindings = ownership
+        .ports
+        .iter()
+        .filter(|(reference, _)| *reference == primary.as_ref(node));
+    let port_binding = port_bindings
+        .next()
+        .ok_or(IntentBootstrapError::InvalidEjection)?;
+    let mut reservation_bindings = ownership
+        .reservations
+        .iter()
+        .filter(|(candidate, _)| *candidate == reservation);
+    let reservation_binding = reservation_bindings
+        .next()
+        .ok_or(IntentBootstrapError::InvalidEjection)?;
+    if port_bindings.next().is_some()
+        || reservation_bindings.next().is_some()
+        || port_binding.1 != IntentNativeBinding::Point(payload.id)
+        || reservation_binding.1 != IntentNativeBinding::Point(payload.id)
+    {
+        return Err(IntentBootstrapError::InvalidEjection);
+    }
+    let mut owned_entries = ownership.nodes.iter().filter(|entry| entry.node == node);
+    let owned = owned_entries
+        .next()
+        .ok_or(IntentBootstrapError::InvalidEjection)?;
+    if owned_entries.next().is_some() {
+        return Err(IntentBootstrapError::InvalidEjection);
+    }
+    if owned.owned != [IntentNativeBinding::Point(payload.id)] {
+        return Err(IntentBootstrapError::InvalidEjection);
+    }
+    Ok(IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::EjectBootstrapPoint { node }],
+    ))
 }
 
 fn bootstrap_exact_owned_bindings(
@@ -378,6 +509,8 @@ pub enum IntentBootstrapError {
     InvalidPayload,
     #[error("bootstrap graph contains a non-bootstrap declaration")]
     MixedDeclarationGraph,
+    #[error("bootstrap Point ejection is malformed or unsupported")]
+    InvalidEjection,
     #[error("bootstrap graph contains duplicate side-table state")]
     DuplicateSideTableState,
     #[error("bootstrap dependency references an unknown native source")]
@@ -742,11 +875,8 @@ fn decode_flat_intent_bootstrap_impl(
     let mut semantic_reservations = BTreeMap::<DocumentSourceId, DocumentSourceId>::new();
 
     for node in session.graph().nodes().values() {
-        let IntentNodeKind::Bootstrap { object } = &node.kind else {
-            if allow_later_declarations {
-                continue;
-            }
-            return Err(IntentBootstrapError::MixedDeclarationGraph);
+        let Some(object) = bootstrap_object_for_node(node, allow_later_declarations)? else {
+            continue;
         };
         let codec = object.codec.as_str();
         let Some(expected_kind) = bootstrap_codec_kind(codec) else {
@@ -942,10 +1072,12 @@ fn decode_flat_intent_bootstrap_impl(
             .graph()
             .nodes()
             .iter()
-            .filter_map(|(id, node)| {
-                matches!(node.kind, IntentNodeKind::Bootstrap { .. }).then_some((*id, node))
+            .filter_map(|(id, node)| match bootstrap_object_for_node(node, true) {
+                Ok(Some(_)) => Some(Ok((*id, node))),
+                Ok(None) => None,
+                Err(error) => Some(Err(error)),
             })
-            .collect::<BTreeMap<_, _>>();
+            .collect::<Result<BTreeMap<_, _>, IntentBootstrapError>>()?;
         let expected_nodes = canonical
             .graph()
             .nodes()
@@ -959,7 +1091,13 @@ fn decode_flat_intent_bootstrap_impl(
             .filter(|(_, record)| nodes.contains(&record.owner_node))
             .map(|(id, record)| (*id, *record))
             .collect::<BTreeMap<_, _>>();
-        if actual_nodes != expected_nodes || actual_reservations != reservations {
+        let mut declarations_match = actual_nodes.len() == expected_nodes.len();
+        for (id, expected) in &expected_nodes {
+            declarations_match &= actual_nodes.get(id).is_some_and(|actual| {
+                bootstrap_declaration_matches_candidate(expected, actual).unwrap_or(false)
+            });
+        }
+        if !declarations_match || actual_reservations != reservations {
             return Err(IntentBootstrapError::NonCanonicalBootstrap);
         }
     } else if canonical.graph() != session.graph()
@@ -1420,4 +1558,105 @@ fn append_computed_features(
         )?);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use geosolve_sketch::{ScalarDomain, ScalarUnit};
+
+    use super::*;
+
+    #[test]
+    fn point_ejection_preflight_rejects_ambiguous_incomplete_unsupported_and_malformed_state() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let point = document.add_point("point", [1.0, 2.0]).expect("point");
+        let scalar = document
+            .add_scalar("scalar", 3.0, ScalarUnit::Length, ScalarDomain::Finite)
+            .expect("scalar");
+        let features = ComputedFeatureDocument::new(document.id());
+        let session = normalize_flat_sketch_intent(
+            IntentSessionId::from_raw(0x83_b301),
+            &document,
+            &features,
+            features.lifecycle_high_water(),
+        )
+        .expect("normalized bootstrap");
+        let ownership = flat_intent_bootstrap_materialization_map(&session).expect("ownership");
+        let point_node = session
+            .graph()
+            .nodes()
+            .values()
+            .find(|node| {
+                matches!(
+                    &node.kind,
+                    IntentNodeKind::Bootstrap { object }
+                        if object.codec.as_str() == BOOTSTRAP_POINT_CODEC_V1
+                )
+            })
+            .expect("Point bootstrap")
+            .id;
+        let scalar_node = session
+            .graph()
+            .nodes()
+            .values()
+            .find(|node| {
+                matches!(
+                    &node.kind,
+                    IntentNodeKind::Bootstrap { object }
+                        if object.codec.as_str() == BOOTSTRAP_SCALAR_CODEC_V1
+                )
+            })
+            .expect("Scalar bootstrap")
+            .id;
+        let before = session.to_canonical_json().expect("canonical before");
+        assert!(
+            bootstrap_point_ejection_patch(&session, &ownership, &document, point_node).is_ok()
+        );
+
+        let mut ambiguous = ownership.clone();
+        let duplicate = ambiguous
+            .nodes
+            .iter()
+            .find(|entry| entry.node == point_node)
+            .expect("point ownership")
+            .clone();
+        ambiguous.nodes.push(duplicate);
+        assert!(matches!(
+            bootstrap_point_ejection_patch(&session, &ambiguous, &document, point_node),
+            Err(IntentBootstrapError::InvalidEjection)
+        ));
+
+        let mut incomplete = ownership.clone();
+        incomplete
+            .reservations
+            .retain(|(_, binding)| *binding != IntentNativeBinding::Point(point));
+        assert!(matches!(
+            bootstrap_point_ejection_patch(&session, &incomplete, &document, point_node),
+            Err(IntentBootstrapError::InvalidEjection)
+        ));
+        assert!(matches!(
+            bootstrap_point_ejection_patch(&session, &ownership, &document, scalar_node),
+            Err(IntentBootstrapError::InvalidEjection)
+        ));
+
+        let malformed = IntentBootstrapObject::new(
+            BootstrapNativeKind::Point,
+            IntentKey::new(BOOTSTRAP_POINT_CODEC_V1).unwrap(),
+            b"not canonical point JSON".to_vec(),
+        )
+        .unwrap();
+        assert!(matches!(
+            validate_ejected_point_origin(&malformed),
+            Err(IntentBootstrapError::InvalidEjection)
+        ));
+        assert_eq!(session.to_canonical_json().unwrap(), before);
+        assert_eq!(
+            document.point(point).unwrap().position.map(f64::to_bits),
+            [1.0_f64.to_bits(), 2.0_f64.to_bits()]
+        );
+        assert_eq!(
+            document.scalar(scalar).unwrap().value.to_bits(),
+            3.0_f64.to_bits()
+        );
+    }
 }

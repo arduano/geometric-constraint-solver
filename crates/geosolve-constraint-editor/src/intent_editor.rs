@@ -711,6 +711,37 @@ impl ProjectionalEditorSession {
         self.apply_patch(patch)
     }
 
+    /// Explicitly promotes one exact historical native Point declaration into
+    /// the supported typed Sketch Point recipe.
+    ///
+    /// The declaration, output port, native reservation and point identity are
+    /// retained in place, so downstream dependencies require no rewriting.
+    /// The exact bootstrap payload remains sealed reconstruction provenance.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing, non-Point, already-ejected, suppressed, malformed,
+    /// incompletely owned or ambiguous declaration, or ordinary projectional
+    /// publication failure. Rejection changes no durable session state.
+    pub fn eject_bootstrap_point(
+        &mut self,
+        node: NodeId,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            crate::intent_bootstrap::bootstrap_point_ejection_patch(
+                self.coordinator.intent(),
+                &accepted.ownership,
+                accepted.session.design_document(),
+                node,
+            )?
+        };
+        self.apply_patch(patch)
+    }
+
     /// Applies one complete contextual relation or dimension application
     /// through the sole typed intent history.
     ///
