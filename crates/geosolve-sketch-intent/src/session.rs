@@ -1776,7 +1776,12 @@ fn validate_checkpoint(
         checkpoint.reservation_identity,
         &checkpoint.external_inputs,
     );
-    if checkpoint.accepted.is_some() && checkpoint.latest_attempt.is_none() {
+    if checkpoint.latest_attempt.is_none()
+        && (checkpoint.accepted.is_some()
+            || !checkpoint.graph.nodes().is_empty()
+            || !checkpoint.instance.values().is_empty()
+            || checkpoint.external_inputs != IntentExternalInputs::default())
+    {
         return Err(IntentSessionError::InvalidAuthority);
     }
     if let Some(attempt) = &checkpoint.latest_attempt {
@@ -2126,6 +2131,16 @@ mod tests {
         let canonical = session.to_canonical_json().unwrap();
         let mut wire: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
         wire.current.latest_attempt = None;
+        wire.digest = session_wire_digest(&wire);
+        let forged = serde_json::to_string(&wire).unwrap();
+        assert!(matches!(
+            IntentSession::from_json(&forged),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+
+        let mut wire: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        wire.current.latest_attempt = None;
+        wire.current.accepted = None;
         wire.digest = session_wire_digest(&wire);
         let forged = serde_json::to_string(&wire).unwrap();
         assert!(matches!(
