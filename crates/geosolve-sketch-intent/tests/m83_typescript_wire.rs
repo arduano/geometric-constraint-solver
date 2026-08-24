@@ -221,6 +221,20 @@ fn cascade_roots_policy_matches_the_checked_typescript_fixture() {
 }
 
 #[test]
+fn bootstrap_point_ejection_matches_the_closed_typescript_operation_shape() {
+    let operation = IntentPatchOperation::EjectBootstrapPoint { node: node(0x48) };
+    let actual = serde_json::to_string(&operation).expect("bootstrap ejection serializes");
+
+    assert_eq!(
+        actual,
+        r#"{"operation":"eject_bootstrap_point","node":"0000000000000048"}"#,
+    );
+    let decoded: IntentPatchOperation =
+        serde_json::from_str(&actual).expect("TypeScript operation shape is Rust-decodable");
+    assert_eq!(decoded, operation);
+}
+
+#[test]
 fn simplified_pre_parity_shapes_are_rejected_by_the_rust_wire() {
     let patch = representative_patch();
     let value = serde_json::to_value(patch).expect("fixture patch serializes");

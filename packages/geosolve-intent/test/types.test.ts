@@ -4,6 +4,7 @@ import {
   aliasPort,
   createNode,
   draft,
+  ejectBootstrapPoint,
   input,
   leaf,
   nodePort,
@@ -70,6 +71,10 @@ const segmentDraft = draft(first, "segment.main", {
 });
 const operation = createNode(first, "segment", segmentDraft);
 patch(first, firstIdentity, "require_accepted", [operation]);
+ejectBootstrapPoint(first, stableNode(first, "0000000000000004"));
+
+// @ts-expect-error Bootstrap ejection cannot target another session namespace.
+ejectBootstrapPoint(first, stableNode(second, "0000000000000004"));
 
 const foreignDraft = draft(second, "point.foreign", {
   family: "geometry",

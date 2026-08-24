@@ -19,6 +19,7 @@ import {
   encodeIntentLiteral,
   encodeIntentPatch,
   encodeIntentRpcRequest,
+  ejectBootstrapPoint,
   externalInputs,
   input,
   leaf,
@@ -155,6 +156,26 @@ test("multi-root cascade policy reproduces the checked Rust operation byte-for-b
   assert.equal(JSON.stringify(decoded.operations[0]), cascadeRootsFixtureText);
 });
 
+test("bootstrap Point ejection uses the closed Rust operation shape", () => {
+  const owner = session(fixture.expected.session);
+  const operation = ejectBootstrapPoint(
+    owner,
+    stableNode(owner, "0000000000000048"),
+  );
+  const encoded = encodeIntentPatch(patch(
+    owner,
+    sessionIdentity(owner, fixture.expected),
+    "require_accepted",
+    [operation],
+  ));
+  const decoded = JSON.parse(encoded) as { operations: unknown[] };
+
+  assert.deepEqual(decoded.operations, [{
+    operation: "eject_bootstrap_point",
+    node: "0000000000000048",
+  }]);
+});
+
 test("finite float edge spellings reproduce checked Rust serde bytes", () => {
   const values = [
     0,
@@ -200,6 +221,10 @@ test("builders reject cross-session, wrong-kind, malformed-ID, and invalid-leaf 
     /requires point, received curve/u,
   );
   assert.throws(() => stableNode(first, "node-1"), /lowercase hexadecimal/u);
+  assert.throws(
+    () => ejectBootstrapPoint(first, stableNode(second, "0000000000000007") as never),
+    /cross-session intent reference/u,
+  );
   assert.throws(() => aliasPort(first, "alias", "node:primary:0" as never, "point"), /selector/u);
   assert.throws(
     () => aliasPort(first, "unpaired\ud800", nodePort("primary"), "point"),

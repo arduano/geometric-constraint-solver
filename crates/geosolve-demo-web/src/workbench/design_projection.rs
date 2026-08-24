@@ -613,6 +613,7 @@ fn operation_label(kind: IntentPatchOperationKind) -> &'static str {
         IntentPatchOperationKind::SetSuppressed => "Suppress",
         IntentPatchOperationKind::SetDefinitionField => "Edit definition",
         IntentPatchOperationKind::SetInstanceLeaf => "Move / edit value",
+        IntentPatchOperationKind::EjectBootstrapPoint => "Eject bootstrap Point",
         IntentPatchOperationKind::RebindInput => "Reconnect",
         IntentPatchOperationKind::RenameNode => "Rename",
         IntentPatchOperationKind::MoveDeclaration => "Organize",

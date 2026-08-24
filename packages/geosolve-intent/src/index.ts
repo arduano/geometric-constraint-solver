@@ -418,6 +418,11 @@ export type IntentOperation<S extends string> =
       readonly [operationBrand]: S;
     }
   | {
+      readonly operation: "eject_bootstrap_point";
+      readonly node: string;
+      readonly [operationBrand]: S;
+    }
+  | {
       readonly operation: "rename_node";
       readonly node: string;
       readonly name: string;
@@ -758,6 +763,15 @@ export function rebindInput<S extends string>(
   requireOwner(owner, source);
   validateInputSlot(slot);
   return operation(owner, { operation: "rebind_input", node: node.id, slot, source });
+}
+
+/** Promotes one exact legacy native Point into an editable typed Sketch Point in place. */
+export function ejectBootstrapPoint<S extends string>(
+  owner: SessionRef<S>,
+  node: NodeRef<NoInfer<S>>,
+): IntentOperation<S> {
+  requireOwner(owner, node);
+  return operation(owner, { operation: "eject_bootstrap_point", node: node.id });
 }
 
 export function renameNode<S extends string>(
@@ -1286,6 +1300,8 @@ function encodeOperation(value: IntentOperation<string>): string {
       return `{"operation":"set_instance_leaf","leaf":${quote(value.leaf)},"value":${encodeLiteral(value.value)}}`;
     case "rebind_input":
       return `{"operation":"rebind_input","node":${quote(value.node)},"slot":${quote(value.slot)},"source":${encodePortRef(value.source)}}`;
+    case "eject_bootstrap_point":
+      return `{"operation":"eject_bootstrap_point","node":${quote(value.node)}}`;
     case "rename_node":
       return `{"operation":"rename_node","node":${quote(value.node)},"name":${quote(value.name)}}`;
     case "move_declaration":
