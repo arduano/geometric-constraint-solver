@@ -2,16 +2,15 @@
 
 # M83 focused UAT — Projectional sketch design intent
 
-Status: **post-F007 architecture hardening complete; fresh clean-qualified immutable replacement
-candidate and focused human UAT pending**. Automation owns exact identities, equations, residuals,
-persistence and deterministic reconstruction; human review owns clarity and interaction feel.
+Status: **post-F007 architecture hardening clean-qualified and immutably nominated; focused human
+UAT pending**. Automation owns exact identities, equations, residuals, persistence and
+deterministic reconstruction; human review owns clarity and interaction feel.
 
 ## Candidate authority
 
 Initial nomination commit `232b83a` and post-F005 source `a621cdd`/tree `f6d77b4` are withdrawn by
 M83-F001 through M83-F007 and remain historical evidence only. The post-F007 candidate below is
-also superseded before human UAT by the architecture-hardening pass; it remains live temporarily
-only until the fresh candidate is clean-qualified, frozen and byte-verified.
+also superseded by the architecture-hardening pass and is historical evidence only.
 
 - Superseded post-F007 product source: `fafea4ebeddc295ca898258ac604858bcdd4db5f`.
 - Superseded post-F007 product tree: `ff75c36aacdabe601f34bb59baaba01f6c91687a`.
@@ -19,8 +18,8 @@ only until the fresh candidate is clean-qualified, frozen and byte-verified.
   non-symlink files `0444`).
 - Ordered file-manifest aggregate:
   `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`.
-- Temporarily retained superseded Tailscale endpoint: `http://100.94.63.83:8080/`
-  (`geosolve-m83-uat.service`, PID `4006665`).
+- Retired superseded Tailscale service: `geosolve-m83-uat.service`, PID `4006665`; its immutable
+  snapshot remains preserved.
 - Clean gate:
   `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`,
   exit 0 at 2026-08-24 20:30:47 AEST after 967 seconds; 373,070-byte, 5,530-line log
@@ -46,10 +45,38 @@ Temporary byte/browser listeners were retired only after their passes; the retai
 passed independent byte and focused browser verification. Complete freeze, browser and serving
 evidence is in `/tmp/geosolve-m83-f007-freeze-evidence.y5GbCJ`.
 
+Current mechanical UAT authority:
+
+- Product source: `1e70f3f4dc6778881ce180b2922235a6cc103cf7`.
+- Product tree: `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`.
+- Clean gate: exit 0 on 2026-08-25 at 05:14:03 AEST after 1,102 seconds; 386,013-byte,
+  5,667-line log `/tmp/geosolve-m83-post-hardening-gate.fCN9ie7B/release-gate.log`, SHA-256
+  `53e9da5f91978d90899c2a54a6a01c9b16f0616c9b76ea93dde8d57b78416136`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m83-post-hardening-uat.R821Vpjj` (directory `0555`;
+  seven regular non-symlink files `0444`).
+- Ordered file-manifest aggregate:
+  `63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`.
+- Frozen browser verification: the existing 3/3 suite and focused F006/F007 2/2 suite pass locally;
+  the focused suite also passes on temporary and retained Tailscale endpoints.
+- Temporary exact served-byte verification:
+  `/tmp/geosolve-m83-post-hardening-temp-verify.iED2TLx3/results.tsv`, SHA-256
+  `5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`; the temporary service is
+  retired after its byte and browser passes.
+- Retained exact served-byte verification:
+  `/tmp/geosolve-m83-post-hardening-final-verify.456o9Uey/results.tsv`, with the same SHA-256.
+- Retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, PID `2404961`).
+- Complete freeze, browser, service and byte evidence:
+  `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`.
+
+Both current byte-verification passes cover `/` plus all seven assets: HTTP 200, zero redirects,
+no `Location` or `Content-Encoding`, exact media type/length/body and root equality with
+`index.html`. Temporary listeners were retired only after passing; the retained service then
+passed independent byte and focused-browser verification.
+
 GitHub Pages deliberately remains on accepted M81 bytes. M83-U1 through M83-U9 are pending and no
 automated result below is presented as human evidence.
 
-The renewed candidate must additionally preserve the automation-only architecture contract:
+The renewed candidate mechanically preserves the automation-only architecture contract:
 strict SHA-256 v2/legacy-v1 migration, independently validated accepted/current/history authority,
 descriptor/body chronology, exact ownership, prepared Fillet/Offset publication, compact explicit
 Snapshot reads, typed bounded receipts/responses, the 64 MiB workspace admission boundary and 4 MiB

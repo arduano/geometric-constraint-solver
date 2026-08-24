@@ -40,13 +40,14 @@ construction/NURBS UAT and certified all-family visual profiles.
   for retained-invalid Profile Offset. M76 annotation layout remains a disposable presentation-
   only workspace cache outside graph, materialization and history identity. M83-F001 through
   M83-F007 are implemented; the `232b83a`, `a621cdd` and `fafea4e` nominations are historical
-  because a post-F007 architecture-hardening pass now supersedes them before human UAT. That pass
+  because a post-F007 architecture-hardening pass supersedes them. That pass
   introduces canonical SHA-256 graph/session wire v2 with strictly authenticated legacy-v1
   migration, cached ordinary identity reads with independent validation hashing, complete nested-
   checkpoint/evidence/ownership validation, central declaration descriptors, compact graph/source
   reads, typed bounded RPC mutation receipts and exact prepared Fillet/Offset publication. It adds
-  no equation, constraint, priority or JavaScript solver. A fresh clean freeze and explicit human
-  UAT remain required; GitHub Pages continues to serve accepted M81.
+  no equation, constraint, priority or JavaScript solver. Source `1e70f3f`, tree `77251db`, passes
+  the complete clean gate and owns the frozen Tailscale UAT candidate; explicit human UAT remains
+  required and GitHub Pages continues to serve accepted M81.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -872,8 +873,9 @@ intent session owns accepted authority; an absent nested authority cannot be rep
 flat design/accepted fields, including the all-absent case. The web adapter renders the data-only
 source and compact graph snapshot supplied by the editor and uses the strict typed RPC client; it
 does not expand bootstrap payload bytes or infer field defaults. The former `fafea4e` artifact is
-historical pre-hardening evidence. M83 remains unaccepted until a fresh freeze and human UAT pass;
-public Pages still serves accepted M81.
+historical pre-hardening evidence. Exact post-hardening source `1e70f3f`, tree `77251db`, passes the
+clean gate, no-rebuild freeze, focused browser checks and temporary/retained byte verification.
+M83 remains unaccepted until human UAT passes; public Pages still serves accepted M81.
 
 Workspace encode/decode shares the reproduction codec's 64 MiB admitted-workspace ceiling. A
 narrow version probe and disposable-cache visitor avoid an arbitrary `serde_json::Value` tree;
@@ -1699,5 +1701,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   requires a newly approved architecture rather than reactivating ADR 0038.
 - M83: active and not yet accepted. ADR 0040's projectional graph, F001-F007 interaction repairs
   and post-F007 architecture hardening are implemented over the unchanged M81 solver/domain
-  baseline. Prior nominations through `fafea4e` are historical; a fresh clean frozen candidate and
-  focused human UAT remain required. GitHub Pages continues to serve accepted M81.
+  baseline. Prior nominations through `fafea4e` are historical; source `1e70f3f`, tree `77251db`,
+  is the clean-qualified frozen Tailscale candidate. Focused human UAT remains required, and GitHub
+  Pages continues to serve accepted M81.

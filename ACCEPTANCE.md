@@ -3234,10 +3234,10 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
-complete; fresh clean qualification and focused human UAT pending. ADR 0040,
-`docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no human
-evidence or accepted product claim exists yet.
+Status: implementation, M83-F001 through M83-F007 repair, post-F007 architecture hardening,
+clean qualification and immutable Tailscale nomination complete; focused human UAT pending.
+ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no
+human evidence or accepted product claim exists yet.
 
 - The canonical design is an unordered typed dependency graph with stable never-reused
   declarations, ports, children, input-slot bindings and native reservations. Instance values,
@@ -3323,11 +3323,23 @@ snapshot `/tmp/geosolve-m83-f007-uat.52r7H7` has ordered-manifest aggregate
 `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`; the existing 3/3 frozen
 browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Temporary
 and final served-byte ledgers both have SHA-256
-`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`; the retained candidate is
-`http://100.94.63.83:8080/`, PID `4006665`. Post-F007 architecture hardening supersedes that
-candidate before human UAT; fresh source/tree, clean gate, freeze and retained-service replacement
-remain pending. M83-U1 through M83-U9, targeted finding rechecks, Pages publication and milestone
-closure remain pending.
+`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. That post-F007 service,
+PID `4006665`, is retired and its snapshot remains historical evidence.
+
+The current post-hardening product source is
+`1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`. Its complete clean release gate passes; the 386,013-
+byte, 5,667-line log has SHA-256
+`53e9da5f91978d90899c2a54a6a01c9b16f0616c9b76ea93dde8d57b78416136`. The exact no-rebuild
+snapshot `/tmp/geosolve-m83-post-hardening-uat.R821Vpjj` has ordered-manifest aggregate
+`63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`; its existing 3/3 and focused
+F006/F007 2/2 browser suites pass. The focused suite also passes on temporary and retained
+Tailscale listeners. Both eight-path served-byte ledgers have SHA-256
+`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`. The retained candidate is
+`http://100.94.63.83:8080/`, service `geosolve-m83-uat.service`, PID `2404961`; complete evidence is
+in `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`. M83-U1 through M83-U9, targeted
+finding rechecks, Pages publication and milestone closure remain pending. No automated result is
+human acceptance evidence, and GitHub Pages continues to serve accepted M81.
 
 ## Regression and oracle policy
 

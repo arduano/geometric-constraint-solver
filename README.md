@@ -145,16 +145,17 @@ mutations return bounded receipts while explicit Snapshot performs the full read
 FNV-1a-derived v1 digest is validated for deterministic migration only; it is not cryptographically
 secure. RPC and workspace host surfaces now share explicit 16/64 MiB receipt/response and 64 MiB
 workspace bounds, with disposable annotation JSON capped at 4 MiB. Prior M83 nominations through
-post-F007 source `fafea4e` are historical. A fresh clean freeze and focused human UAT remain
-pending, and public GitHub Pages continues to serve accepted M81.
+post-F007 source `fafea4e` are historical. Post-hardening source `1e70f3f`, tree `77251db`, passes
+the complete clean gate and owns the frozen, browser/byte-verified Tailscale candidate. Focused
+human UAT remains pending, and public GitHub Pages continues to serve accepted M81.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M83 post-F007 architecture hardening awaiting a fresh
-   freeze and focused UAT over the accepted M81 baseline.
+3. `PLAN.md` — authoritative roadmap, with M83 post-F007 architecture hardening clean-qualified
+   and frozen while focused UAT remains pending over the accepted M81 baseline.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -175,7 +176,7 @@ Physics, collision and a production rendering system remain out of scope.
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
 16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — implemented
     projectional Design Intent Graph contract, F001-F007 historical nomination ledger, post-F007
-    architecture hardening and pending scorecard.
+    architecture hardening, current immutable nomination and pending scorecard.
 
 ## Workspace
 
@@ -213,9 +214,9 @@ companions. The host continues to own expressions, B-rep projection, feature his
 and application undo. M40.7, M53 and M61-M81 have explicit acceptance dispositions. M83 now
 implements a projectional intent/session layer while deliberately retaining the native solver as
 accepted geometry authority; post-F007 architecture hardening supersedes the prior nomination, and
-a fresh freeze plus human UAT remain pending. Public Pages remains on accepted M81. New
-milestones
-normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
+the fresh clean freeze passes while human UAT remains pending. Public Pages remains on accepted
+M81. New milestones normally end in hands-on UAT after objective automation; M74 records an
+explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
 mobile support requirement.
 

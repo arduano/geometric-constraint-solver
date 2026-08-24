@@ -4305,11 +4305,13 @@ M83 adds no residual equation and does not reinterpret any earlier geometric ora
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
 existing solver. G1-G6 implementation and focused/proportional coverage are complete through
 M83-F001 through M83-F007. Initial nomination `232b83a` and post-F005 source `a621cdd` are
-withdrawn. Replacement product source `fafea4e`, tree `ff75c36`, its clean gate, no-rebuild freeze,
-existing 3/3 plus focused F006/F007 2/2 frozen browser checks, and independent temporary/retained
-Tailscale byte verification remain historical evidence. Post-F007 architecture hardening
-supersedes that candidate before human UAT; fresh qualification/freeze plus targeted human rechecks
-remain pending. M81 GitHub Pages bytes remain public authority.
+withdrawn. The superseded post-F007 replacement source `fafea4e`, tree `ff75c36`, its clean gate,
+no-rebuild freeze, existing 3/3 plus focused F006/F007 2/2 frozen browser checks, and independent
+temporary/retained Tailscale byte verification remain historical evidence. Post-F007 architecture
+hardening supersedes that candidate. Current product source `1e70f3f`, tree `77251db`, passes the
+complete clean gate, exact no-rebuild freeze, 5/5 frozen-browser checks and temporary/retained
+Tailscale byte verification. Targeted human rechecks remain pending. M81 GitHub Pages bytes remain
+public authority.
 
 ### M83-G1 — schema, alias and order independence
 
@@ -4490,50 +4492,58 @@ The superseded post-F007 no-rebuild release output is frozen at
 `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`. The existing 3/3 frozen
 browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Both served-
 byte ledgers have SHA-256
-`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`; the retained candidate is
-`http://100.94.63.83:8080/`, PID `4006665`. `docs/M83_UAT.md` owns the historical evidence plus the
-pending renewed source/tree/service record and human scorecard. GitHub Pages remains on accepted
-M81 bytes until the renewed candidate is explicitly approved.
+`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. Historical retained service
+PID `4006665` is retired; its immutable snapshot remains historical evidence.
+
+Current source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, passes the post-hardening clean gate. Its exact
+no-rebuild snapshot `/tmp/geosolve-m83-post-hardening-uat.R821Vpjj` has aggregate
+`63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`; the existing 3/3 and focused
+F006/F007 2/2 suites pass, and both temporary/final eight-path byte ledgers have SHA-256
+`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`. The retained candidate is
+`http://100.94.63.83:8080/`, PID `2404961`. `docs/M83_UAT.md` owns both historical evidence and the
+current mechanical authority plus pending human scorecard. GitHub Pages remains on accepted M81
+until the current candidate is explicitly approved.
 
 ### M83-F001 — deterministic accepted drag identity and exact-once terminal capture
 
-Status: repaired, clean-qualified and replacement-nominated; human recheck pending. A rejected
-newer sample may not erase the newest visible accepted preview, an exact release must reuse that
-accepted identity, and pointer-up/cancel/capture-loss may retire one capture only once. Suppressed
-outputs and retained-invalid current intent expose no direct-manipulation route. Coordinator,
-editor, browser-adapter and frozen Playwright regressions own the contract.
+Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+A rejected newer sample may not erase the newest visible accepted preview, an exact release must
+reuse that accepted identity, and pointer-up/cancel/capture-loss may retire one capture only once.
+Suppressed outputs and retained-invalid current intent expose no direct-manipulation route.
+Coordinator, editor, browser-adapter and frozen Playwright regressions own the contract.
 
 ### M83-F002 — Outline and cell before/after insertion semantics
 
-Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Upper/lower
-drop halves resolve to before/after slots after excluding the moving identity. Adjacent/end moves
-are visible; self, stale and cross-cell targets reject; accepted geometry and semantic identity are
-unchanged; Undo restores exact organization.
+Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Upper/lower drop halves resolve to before/after slots after excluding the moving identity.
+Adjacent/end moves are visible; self, stale and cross-cell targets reject; accepted geometry and
+semantic identity are unchanged; Undo restores exact organization.
 
 ### M83-F003 — retained-invalid migrated/bootstrap reload authority
 
-Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Workspace v8
-cold restore retains the newer failed intent and its history while reconstructing the exact prior
-accepted canvas from authenticated accepted bootstrap authority. Undo repairs it; corrupt or
-mismatched evidence rejects rather than blanking or inventing geometry.
+Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Workspace v8 cold restore retains the newer failed intent and its history while reconstructing the
+exact prior accepted canvas from authenticated accepted bootstrap authority. Undo repairs it;
+corrupt or mismatched evidence rejects rather than blanking or inventing geometry.
 
 ### M83-F004 — exact-CAS Structured Source token edits
 
-Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Source token
-requests carry exact `IntentSessionIdentity` through browser, Rust RPC and TypeScript. A token kept
-across reorder rejects before numeric lookup and cannot mutate the declaration that newly occupies
-its old ID; source, history and accepted evidence remain exact.
+Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Source token requests carry exact `IntentSessionIdentity` through browser, Rust RPC and TypeScript.
+A token kept across reorder rejects before numeric lookup and cannot mutate the declaration that
+newly occupies its old ID; source, history and accepted evidence remain exact.
 
 ### M83-F005 — stable input binding projection
 
-Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Structured
-Source and Inspector deterministically show every canonical input slot and exact stable typed port.
-Rebind replaces the old reference in both projections. Inspector exposes no input, button,
-`contenteditable` or typed edit marker for these references.
+Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Structured Source and Inspector deterministically show every canonical input slot and exact stable
+typed port. Rebind replaces the old reference in both projections. Inspector exposes no input,
+button, `contenteditable` or typed edit marker for these references.
 
 ### M83-F006 — shared recipe drags commit deterministic preview/cold parity
 
-Status: repaired, clean-qualified and replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
 Reproduce by drawing a rectangle and a diagonal Segment which aliases two rectangle corners, then
 repeatedly dragging a shared corner. Before repair, each retained preview solved correctly but
 pointer-up could return `PreviewColdMismatch` and snap back: native continuation retained an edge's
@@ -4552,9 +4562,9 @@ No equation, residual, priority or tolerance changes.
 
 ### M83-F007 — New creates a fresh projectional workspace
 
-Status: repaired, clean-qualified and replacement-nominated; human recheck pending. The
-projectional availability map had disabled New and supplied no event route, making it difficult to
-reset a populated sketch. Startup and New now share one canonical empty projectional authority.
+Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+The projectional availability map had disabled New and supplied no event route, making it difficult
+to reset a populated sketch. Startup and New now share one canonical empty projectional authority.
 New clears durable authored geometry/declarations/history and transient interaction/authoring
 state, returns to Select, resets the camera and autosaves workspace v8. Native adapter tests prove
 the empty accepted and design documents, empty Undo/Redo, projectional v8 round trip, enabled

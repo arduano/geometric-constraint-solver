@@ -277,8 +277,9 @@ materialization/read DTOs in `geosolve-constraint-editor`, the demo-local worksp
 the `@geosolve/intent` TypeScript package. These surfaces do not change canonical sketch v1-v4,
 the native solver equation/priority catalog or the accepted M81 Pages product. M83-F001 through
 M83-F007 are implemented, but their `fafea4e` nomination is historical because the later
-architecture-hardening pass requires a fresh freeze and focused human UAT. Public GitHub Pages
-continues to serve M81.
+architecture-hardening pass supersedes it. Post-hardening source `1e70f3f`, tree `77251db`, passes
+the complete clean gate and owns the frozen, browser/byte-verified Tailscale candidate. Focused
+human UAT remains pending, and public GitHub Pages continues to serve M81.
 
 Canonical intent graph/session output is wire v2 and uses SHA-256 for component/content identity.
 The importer accepts canonical experimental v1 only after its FNV-1a-derived outer and nested

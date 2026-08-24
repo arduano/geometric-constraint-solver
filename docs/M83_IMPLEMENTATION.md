@@ -2,10 +2,10 @@
 
 # M83 implementation ledger — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
-complete; fresh clean qualification and human UAT pending**. This ledger records implementation
-and qualification against ADR 0040 and `docs/M83_GOALS.md`. Accepted M81 GitHub Pages bytes remain
-public authority.
+Status: **implementation, M83-F001 through M83-F007 repair, post-F007 architecture hardening,
+clean qualification and immutable Tailscale nomination complete; human UAT pending**. This ledger
+records implementation and qualification against ADR 0040 and `docs/M83_GOALS.md`. Accepted M81
+GitHub Pages bytes remain public authority.
 
 ## Baseline and disposition
 
@@ -24,7 +24,9 @@ public authority.
 - Post-F007 product source, now superseded by architecture hardening before UAT:
   `fafea4ebeddc295ca898258ac604858bcdd4db5f`; tree
   `ff75c36aacdabe601f34bb59baaba01f6c91687a`.
-- Current post-hardening product source/tree: pending clean nomination.
+- Current post-hardening product source:
+  `1e70f3f4dc6778881ce180b2922235a6cc103cf7`; tree
+  `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`.
 
 ## Implementation slices
 
@@ -115,7 +117,7 @@ token edit with exact `IntentSessionIdentity` before token lookup across DOM, Ru
 TypeScript. M83-F005 exposes canonical input-slot-to-stable-port bindings in Structured Source and
 Inspector; rebind updates both deterministically and Inspector references remain read-only.
 
-### I6 — qualification and nomination
+### I6 — historical pre-hardening qualification and nominations
 
 Post-F005 mechanical qualification and nomination completed. Inventory, order-independence,
 reservation/tombstone, retained-failure, cold/warm differential,
@@ -129,8 +131,8 @@ human approval; neither earlier nomination supplies current UAT authority.
 
 ### I7 — post-F007 architecture hardening
 
-Complete in the working candidate; fresh clean nomination is pending. This pass changes no sketch
-equation, priority, tolerance or branch policy.
+Complete, clean-qualified and immutably nominated for focused human UAT. This pass changes no
+sketch equation, priority, tolerance or branch policy.
 
 `geosolve-sketch-intent` now uses SHA-256 for graph/session wire v2 and validates canonical
 experimental v1 before translating its FNV-derived graph, instance, reservation, external-input,
@@ -204,7 +206,8 @@ pass
 ```
 
 These are proportional development results, not a clean release claim. The committed clean gate,
-no-rebuild artifact and served-byte evidence remain required below.
+no-rebuild artifact and served-byte evidence are recorded in the post-hardening qualification
+section below.
 
 ## Findings
 
@@ -438,7 +441,7 @@ The documentation-only descendant recording that evidence did not replace its pr
 or rebuild its artifact. GitHub Pages deliberately remains on accepted M81 bytes until explicit
 M83 human approval.
 
-## Post-F007 qualification record
+## Superseded post-F007 qualification record
 
 Focused F006/F007 owner and collateral suites pass: materializer 27/27, projectional coordinator
 6/6, curve controls 5/5, projectional editor 10/10 and demo-web library 195/195, including the
@@ -515,4 +518,78 @@ began serving the frozen directory at `http://100.94.63.83:8080/`. Independent f
 ledger, `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. Both ledgers cover `/`
 and all seven files with HTTP 200, zero redirects, no `Location` or `Content-Encoding`, exact media
 type/length/body, and root equality with `index.html`. Temporary services are retired; `:8080`
-remains live for focused human UAT. GitHub Pages remains on accepted M81.
+remained live until the post-hardening replacement passed. That process is now retired; its
+snapshot and ledgers remain historical evidence. GitHub Pages remains on accepted M81.
+
+## Post-hardening qualification and immutable nomination
+
+Current product source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, passes this exact clean command:
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The gate ran from 2026-08-25 04:55:41 to 05:14:03 AEST in 1,102 seconds. Its 386,013-byte,
+5,667-line log is `/tmp/geosolve-m83-post-hardening-gate.fCN9ie7B/release-gate.log`, SHA-256
+`53e9da5f91978d90899c2a54a6a01c9b16f0616c9b76ea93dde8d57b78416136`. It passed formatting and
+diff hygiene, warnings-denied locked all-target/all-feature workspace Clippy, locked all-feature
+workspace tests, the unchanged 271-row golden with `--require-clean`, every native/WASM parity
+cut, the actual WASM transition matrix that exposed the final checkpoint-prefix defect, all-feature
+WASM, TypeScript clean install/build/runtime tests (19/19), warnings-denied Rustdoc, benchmark
+compilation, licence/package checks and Trunk 0.21.14 release assembly. The ignored 256-moving-body
+sparse crossover passed in 142.09 seconds.
+
+M83 retained-preview p95 was 2.314 ms against 16 ms and exact terminal publication was 49.605 ms
+against 750 ms. Fillet-radius, Offset-distance and relation-heavy-curve-control frame p95 values
+were 1.284 ms, 3.256 ms and 11.996 ms; exact terminals were 0.517 ms, 0.711 ms and 38.975 ms. All
+remain inside their independent 250/400/150 ms frame and 4000/6000/3000 ms terminal ceilings.
+
+Without rebuilding, the gate-produced `dist` was copied to
+`/tmp/geosolve-m83-post-hardening-uat.R821Vpjj`, byte-compared before and after freezing, and made
+immutable for UAT: directory mode `0555`, seven regular non-symlink files at `0444`. Complete
+evidence is in `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`. The ordered manifest
+aggregate is `63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`:
+
+```text
+02920ba6b2e0a180c3502d2fbe51274f897db766f530ef469019e1f9527fe5f9  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+5a1ef428cae7e62ae40161b46cbbdd240a2b3175507c73682142fe94440af522  geosolve-demo-web-b903543072525cfa.js
+76c40562bac1a9644d5e2abaa88952ba05881bd021fc0e113048631281e7b16a  geosolve-demo-web-b903543072525cfa_bg.wasm
+7c9b5312e8e6db41d726dd643932674ab175d2141634c05bc09fecf70ea8bcd1  index.html
+368d50605a0f14d4e67784e711cd5d920cd56a715fe82d09e68f2bd974caaf24  styles-4251c5b53d199c44.css
+```
+
+| File | Bytes |
+| --- | ---: |
+| `API_COMPATIBILITY.md` | 31,680 |
+| `LICENSE` | 35,148 |
+| `THIRD_PARTY_LICENSES.md` | 3,120 |
+| `geosolve-demo-web-b903543072525cfa.js` | 37,314 |
+| `geosolve-demo-web-b903543072525cfa_bg.wasm` | 11,967,734 |
+| `index.html` | 32,577 |
+| `styles-4251c5b53d199c44.css` | 45,555 |
+
+The existing browser suite passes 3/3 and the focused F006/F007 suite passes 2/2 against those
+frozen bytes. The focused 2/2 suite also passes independently on both temporary and retained
+Tailscale endpoints. Temporary service `geosolve-m83-post-hardening-temp-uat.service`, PID
+`2400110`, first served the snapshot at `100.94.63.83:18088`; it was retired after its byte and
+browser passes. Temporary evidence
+`/tmp/geosolve-m83-post-hardening-temp-verify.iED2TLx3/results.tsv` has SHA-256
+`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`.
+
+Only after those checks passed was historical PID `4006665` retired and
+`geosolve-m83-uat.service`, PID `2404961`, started on `http://100.94.63.83:8080/`. Independent final
+evidence `/tmp/geosolve-m83-post-hardening-final-verify.456o9Uey/results.tsv` has the identical
+SHA-256. Both ledgers cover `/` plus all seven assets with HTTP 200, zero redirects, no `Location`
+or `Content-Encoding`, exact media type/length/body, and root equality with `index.html`. The
+temporary and loopback verification services are retired; the retained service remains live for
+focused human UAT. GitHub Pages deliberately remains on accepted M81, and M83-U1 through M83-U9,
+targeted F001-F007 human rechecks, publication and milestone closure remain pending.
+
+The documentation-only descendant recording this qualification does not replace product source
+`1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, or rebuild or mutate the frozen artifact. The artifact
+therefore retains the exact `API_COMPATIBILITY.md` bytes produced by that qualified product source.

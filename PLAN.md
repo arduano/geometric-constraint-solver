@@ -5596,9 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
-complete; fresh clean qualification and focused human UAT pending**. ADR 0040 and
-`docs/M83_GOALS.md` own the replacement contract. The rejected
+Status: **implementation, M83-F001 through M83-F007 repair, post-F007 architecture hardening,
+clean qualification and immutable Tailscale nomination complete; focused human UAT pending**.
+ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
 
@@ -5679,10 +5679,10 @@ chronological owner-rewrite candidate remains archived at
 - [x] Preserve the historical post-F007 formatting, diff-hygiene, Clippy/Rustdoc, workspace-test,
   WASM, unchanged-golden and clean-release evidence; the later architecture hardening supersedes
   that nomination without invalidating it as historical evidence.
-- [ ] Pass the same complete clean release gate from committed post-hardening source.
+- [x] Pass the same complete clean release gate from committed post-hardening source.
 - [x] Preserve the historical post-F007 no-rebuild freeze, existing 3/3 and focused F006/F007 2/2
   browser checks and exact temporary/retained served-byte evidence.
-- [ ] Freeze the post-hardening gate output without rebuilding, re-run the focused frozen-browser
+- [x] Freeze the post-hardening gate output without rebuilding, re-run the focused frozen-browser
   checks, byte-verify it first on a temporary listener and then replace the retained UAT service.
 - [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U9.
 - [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
@@ -5697,11 +5697,24 @@ tree `f6d77b4`, are withdrawn and remain historical evidence only. Post-F007 pro
 `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`; the existing 3/3 frozen
 browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Temporary
 and final served-byte ledgers both have SHA-256
-`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. The exact candidate is live
-at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `4006665`. The architecture-
-hardening pass supersedes those bytes before human UAT; a fresh product source/tree, clean gate,
-freeze and service replacement are pending. All human UAT rows and Pages publication remain
-pending.
+`9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. That historical service,
+PID `4006665`, is retired and its immutable snapshot remains preserved.
+
+Current mechanical UAT authority is product source
+`1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`. Its complete clean release gate passes with log
+SHA-256 `53e9da5f91978d90899c2a54a6a01c9b16f0616c9b76ea93dde8d57b78416136`.
+The exact no-rebuild snapshot `/tmp/geosolve-m83-post-hardening-uat.R821Vpjj` is frozen at
+ordered-manifest aggregate `63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`.
+The existing 3/3 suite and focused F006/F007 2/2 suite pass on those bytes; the focused suite also
+passes on both temporary and retained Tailscale listeners. Temporary and final eight-path served-
+byte ledgers both have SHA-256
+`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`. The exact candidate is live
+at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `2404961`. Complete evidence is
+in `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`. All human UAT rows, Pages
+publication and milestone closure remain pending; GitHub Pages continues to serve accepted M81.
+The documentation-only descendant recording this evidence does not replace product source
+`1e70f3f`, tree `77251db`, or rebuild or mutate the frozen artifact.
 
 Gate: organization, names and source row order cannot change materialization; exact before/after
 organization moves cannot change geometry; every accepted

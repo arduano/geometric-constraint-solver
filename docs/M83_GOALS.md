@@ -2,11 +2,10 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
-complete; fresh clean qualification and focused human UAT pending**. ADR 0040 is the active
-architecture. The rejected
-chronological candidate is preserved only on `archive/m83-chronological-lineage-2026-08-23` at
-`be62a1c`; it is not a compatibility target.
+Status: **implementation, M83-F001 through M83-F007 repair, post-F007 architecture hardening,
+clean qualification and immutable Tailscale nomination complete; focused human UAT pending**.
+ADR 0040 is the active architecture. The rejected chronological candidate is preserved only on
+`archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; it is not a compatibility target.
 
 ## Goal
 
@@ -136,10 +135,13 @@ validated flat accepted scene authoritative.
 The initial `232b83a` nomination and post-F005 source `a621cdd` are withdrawn by M83-F001 through
 M83-F007. Source `fafea4e`, tree `ff75c36`, its complete clean gate, exact no-rebuild freeze, 5/5
 frozen-browser checks and temporary/retained served-byte records remain historical post-F007
-evidence. The later architecture-hardening pass supersedes that candidate before human UAT and
-requires a fresh clean gate, freeze and Tailscale replacement. M83-U1 through M83-U9 and targeted
-finding rechecks remain pending human evidence; accepted M81 GitHub Pages bytes remain public
-authority.
+evidence. The later architecture-hardening pass supersedes that candidate. Current source
+`1e70f3f`, tree `77251db`, passes the fresh clean gate; its exact no-rebuild snapshot
+`/tmp/geosolve-m83-post-hardening-uat.R821Vpjj`, aggregate
+`63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`, passes 5/5 frozen-browser
+checks and temporary/retained served-byte verification and is live at
+`http://100.94.63.83:8080/`. M83-U1 through M83-U9 and targeted finding rechecks remain pending
+human evidence; accepted M81 GitHub Pages bytes remain public authority.
 
 ## Non-goals
 
