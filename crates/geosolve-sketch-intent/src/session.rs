@@ -3863,6 +3863,36 @@ mod tests {
     }
 
     #[test]
+    fn canonical_v2_rejects_reauthenticated_relabelled_suppression_effect() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fd_00)).unwrap();
+        commit_point(&mut session, "suppression-kind", "wire.suppression.kind");
+        let point = *session.graph().nodes().keys().next().unwrap();
+        let suppress = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetSuppressed {
+                node: point,
+                suppressed: true,
+            }],
+        );
+        let plan = session.plan_patch(suppress, accepted).unwrap();
+        session.commit_plan(plan).unwrap();
+
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
+        wire.undo
+            .last_mut()
+            .expect("suppression enters Undo")
+            .descriptor
+            .operation_kinds = vec![IntentPatchOperationKind::SetDefinitionField];
+
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(wire)),
+            Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+    }
+
+    #[test]
     fn canonical_v2_rejects_reauthenticated_body_inconsistent_history_descriptor() {
         let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fd_01)).unwrap();
         commit_point(&mut session, "operation-kind", "wire.operation.kind");
@@ -3986,6 +4016,32 @@ mod tests {
             b"different retained validation".to_vec(),
         )
         .unwrap();
+
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(wire)),
+            Err(IntentSessionError::InvalidHistoryTransition)
+        ));
+    }
+
+    #[test]
+    fn canonical_v2_rejects_reauthenticated_retained_failure_accepted_authority_rewrite() {
+        let session = session_with_retained_failure();
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
+        let accepted = wire
+            .current
+            .accepted
+            .as_mut()
+            .expect("prior accepted authority");
+        accepted.reservations.revision =
+            next_revision(accepted.reservations.revision).expect("test revision advances");
+        accepted.target = semantic_identity(
+            &accepted.graph,
+            &accepted.instance,
+            accepted.reservations.identity(),
+            &accepted.external_inputs,
+        );
+        bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
 
         assert!(matches!(
             IntentSession::from_json(&authenticated_wire_json(wire)),
