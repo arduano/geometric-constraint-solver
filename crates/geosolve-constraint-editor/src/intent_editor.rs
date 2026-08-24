@@ -7,10 +7,13 @@
 //! [`ProjectionalIntentCoordinator`]; [`ConstraintEditor`] contributes only
 //! disposable selection, hover and pointer-gesture state.
 
+use std::sync::Arc;
+
 use geosolve_sketch::{
     DesignPointId, DocumentCurveControlId, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentId, OperationControl, PreparedSketchInput, RetainedSketchDocumentSession,
-    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity, SketchHardValidity,
+    DocumentId, OperationControl, OperationOutcome, PreparedSketchInput,
+    RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity,
+    SketchHardValidity,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedFeatureAuthoringSnapshot, ComputedFeatureDefinition,
@@ -19,6 +22,7 @@ use geosolve_sketch_features::{
 use geosolve_sketch_intent::{
     IntentKey, IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
 };
+use geosolve_sketch_topology::{OffsetOperandRequest, PreparedOffsetOperandQuery};
 use thiserror::Error;
 
 use crate::intent_bootstrap::{
@@ -27,9 +31,11 @@ use crate::intent_bootstrap::{
 use crate::{
     AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
     ConstraintEditor, EditorEffect, EditorError, EditorScene, FeatureAuthoringCandidate,
+    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
     IntentBootstrapError, IntentInspectorEditError, IntentInspectorEditTarget,
-    IntentInspectorEditValue, IntentInspectorProjection, IntentSourceEditError,
-    IntentSourceTokenId, IntentValidationEvidence, IntentWorkbenchProjection, Modifiers,
+    IntentInspectorEditValue, IntentInspectorProjection, IntentNativeBinding,
+    IntentSourceEditError, IntentSourceTokenId, IntentValidationEvidence,
+    IntentWorkbenchProjection, Modifiers, OffsetAuthoringCandidate, OffsetAuthoringOutcome,
     OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
     ProjectionalAuthoringError, ProjectionalCoordinatorError, ProjectionalFilletAuthoringError,
     ProjectionalIntentCoordinator, ProjectionalPatchOutcome, ProjectionalProfileOffsetError,
@@ -77,6 +83,22 @@ struct ActiveProfileOffsetDistanceDrag {
     latest: Option<ColdIntentMaterialization>,
 }
 
+#[derive(Debug)]
+struct ProjectionalFilletAuthoringPreview {
+    intent: IntentSessionIdentity,
+    candidate: FeatureAuthoringCandidate,
+    materialization: ColdIntentMaterialization,
+    feature: geosolve_sketch_features::ComputedFeatureId,
+}
+
+#[derive(Debug)]
+struct ProjectionalProfileOffsetAuthoringPreview {
+    intent: IntentSessionIdentity,
+    candidate: OffsetAuthoringCandidate,
+    materialization: ColdIntentMaterialization,
+    provisional_items: Vec<SelectionItem>,
+}
+
 /// Result of one terminal pointer sample.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectionalEditorPointerOutcome {
@@ -110,6 +132,8 @@ pub struct ProjectionalEditorSession {
     curve_control_drag: Option<ActiveCurveControlDrag>,
     fillet_radius_drag: Option<ActiveFilletRadiusDrag>,
     profile_offset_distance_drag: Option<ActiveProfileOffsetDistanceDrag>,
+    fillet_authoring_preview: Option<ProjectionalFilletAuthoringPreview>,
+    profile_offset_authoring_preview: Option<ProjectionalProfileOffsetAuthoringPreview>,
     preview_control: OperationControl,
 }
 
@@ -289,6 +313,8 @@ impl ProjectionalEditorSession {
             curve_control_drag: None,
             fillet_radius_drag: None,
             profile_offset_distance_drag: None,
+            fillet_authoring_preview: None,
+            profile_offset_authoring_preview: None,
             preview_control,
         }
     }
@@ -373,8 +399,18 @@ impl ProjectionalEditorSession {
                     .as_ref()
                     .and_then(|drag| drag.latest.as_ref())
             });
-        let materialization = property_preview.unwrap_or(accepted_materialization);
-        let session = property_preview
+        let authoring_preview = self
+            .fillet_authoring_preview
+            .as_ref()
+            .map(|preview| &preview.materialization)
+            .or_else(|| {
+                self.profile_offset_authoring_preview
+                    .as_ref()
+                    .map(|preview| &preview.materialization)
+            });
+        let transient_preview = property_preview.or(authoring_preview);
+        let materialization = transient_preview.unwrap_or(accepted_materialization);
+        let session = transient_preview
             .map_or_else(
                 || self.coordinator.presentation_session(),
                 |preview| Some(&preview.session),
