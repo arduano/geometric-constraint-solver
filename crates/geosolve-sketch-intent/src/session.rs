@@ -1776,6 +1776,9 @@ fn validate_checkpoint(
         checkpoint.reservation_identity,
         &checkpoint.external_inputs,
     );
+    if checkpoint.accepted.is_some() && checkpoint.latest_attempt.is_none() {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
     if let Some(attempt) = &checkpoint.latest_attempt {
         if attempt.target != semantic {
             return Err(IntentSessionError::InvalidAuthority);
@@ -2094,5 +2097,36 @@ mod tests {
         );
         assert!(reservation.raw() < session.allocator.next_reservation.raw());
         session.validate().unwrap();
+    }
+
+    #[test]
+    fn canonical_import_rejects_accepted_authority_without_its_attempt_record() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83fe)).unwrap();
+        let create = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("accepted"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key("accepted.point"),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = session.plan_patch(create, accepted).unwrap();
+        session.commit_plan(plan).unwrap();
+
+        let canonical = session.to_canonical_json().unwrap();
+        let mut wire: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        wire.current.latest_attempt = None;
+        wire.digest = session_wire_digest(&wire);
+        let forged = serde_json::to_string(&wire).unwrap();
+        assert!(matches!(
+            IntentSession::from_json(&forged),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
     }
 }
