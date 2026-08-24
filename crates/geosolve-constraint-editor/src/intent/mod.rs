@@ -1483,7 +1483,7 @@ impl LoweringState {
         for port in node.ports.values() {
             let reference = port.as_ref(node.id);
             if let Some(binding) = self.port_bindings.get(&reference).copied() {
-                if matches!(port.flow, IntentIdentityFlow::Created { .. }) {
+                if !node.suppressed && matches!(port.flow, IntentIdentityFlow::Created { .. }) {
                     self.bind_reverse_leaves(node.id, port, binding)?;
                 }
                 continue;
@@ -1504,7 +1504,7 @@ impl LoweringState {
             };
             if let Some(binding) = binding {
                 self.port_bindings.insert(reference, binding);
-                if matches!(port.flow, IntentIdentityFlow::Created { .. }) {
+                if !node.suppressed && matches!(port.flow, IntentIdentityFlow::Created { .. }) {
                     self.bind_reverse_leaves(node.id, port, binding)?;
                 }
             }

@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, EditorEffect, GeometryRoleSelectionState, IntentNativeBinding,
-    IntentSourceTokenTarget, Modifiers, PointerInput, ProjectionalEditorError,
+    ColdIntentMaterializer, ConstraintEditor, EditorEffect, GeometryRoleSelectionState,
+    IntentNativeBinding, IntentSourceTokenTarget, Modifiers, PointerInput, ProjectionalEditorError,
     ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
-use geosolve_sketch::{DesignPointId, DocumentId, GeometryRole, PersistentId, SketchDatum};
+use geosolve_sketch::{
+    DesignPointId, DocumentId, GeometryRole, OperationControl, PersistentId, SketchDatum,
+    cancellation_pair,
+};
 use geosolve_sketch_intent::{
     GeometryRecipeKind, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
     IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
@@ -97,6 +100,12 @@ fn invalid_segment() -> IntentNodeDraft {
 }
 
 fn fixture() -> (ProjectionalEditorSession, DesignPointId, Viewport) {
+    fixture_with_preview_control(None)
+}
+
+fn fixture_with_preview_control(
+    preview_control: Option<OperationControl>,
+) -> (ProjectionalEditorSession, DesignPointId, Viewport) {
     let mut coordinator = ProjectionalIntentCoordinator::empty(
         IntentSessionId::from_raw(0x8300_4001),
         ColdIntentMaterializer::with_default_policy(
@@ -135,8 +144,16 @@ fn fixture() -> (ProjectionalEditorSession, DesignPointId, Viewport) {
     else {
         panic!("the sketch-point primary port must bind one native point")
     };
+    let session = match preview_control {
+        Some(control) => ProjectionalEditorSession::with_editor_and_control(
+            coordinator,
+            ConstraintEditor::default(),
+            control,
+        ),
+        None => ProjectionalEditorSession::new(coordinator),
+    };
     (
-        ProjectionalEditorSession::new(coordinator),
+        session,
         point,
         Viewport::new([800.0, 600.0], [0.0, 0.0], 50.0).unwrap(),
     )
@@ -237,6 +254,55 @@ fn pointer_frames_are_transient_and_release_commits_one_intent_transaction() {
 }
 
 #[test]
+fn rejected_terminal_sample_commits_the_last_visible_accepted_point_preview_once() {
+    let (cancel, token) = cancellation_pair();
+    let mut control = OperationControl::unlimited();
+    control.token = token;
+    let (mut session, point, viewport) = fixture_with_preview_control(Some(control));
+    let history_before = session.coordinator().intent().undo_len();
+    let origin = viewport.model_to_screen([1.0, 2.0]);
+    let accepted_target = viewport.model_to_screen([2.0, 3.0]);
+    let rejected_terminal = viewport.model_to_screen([5.0, -4.0]);
+
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session.pointer_down(&scene, pointer(8, origin)).unwrap();
+    assert_eq!(
+        session
+            .pointer_move(&scene, pointer(8, accepted_target))
+            .unwrap(),
+        vec![EditorEffect::PreviewPointMove {
+            point,
+            model_position: [2.0, 3.0],
+        }],
+    );
+    assert_pair(point_position(&session, point), [2.0, 3.0]);
+
+    cancel.cancel();
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    assert!(
+        session
+            .pointer_move(&preview_scene, pointer(8, rejected_terminal))
+            .unwrap()
+            .is_empty(),
+        "controlled rejection must retain the visibly accepted preview",
+    );
+    assert_pair(point_position(&session, point), [2.0, 3.0]);
+
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    let outcome = session
+        .pointer_up(&preview_scene, pointer(8, rejected_terminal))
+        .unwrap();
+    assert!(outcome.transaction.is_some());
+    assert_pair(point_position(&session, point), [2.0, 3.0]);
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before + 1
+    );
+    session.undo().unwrap().unwrap();
+    assert_pair(point_position(&session, point), [1.0, 2.0]);
+}
+
+#[test]
 fn cancelled_preview_restores_the_exact_accepted_scene_without_history() {
     let (mut session, point, viewport) = fixture();
     let scene = session.scene(viewport, 0.5).unwrap();
@@ -323,6 +389,14 @@ fn retained_invalid_intent_keeps_the_prior_scene_and_transient_selection() {
             .model_position,
         [1.0, 2.0],
     );
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let origin = viewport.model_to_screen([1.0, 2.0]);
+    assert!(matches!(
+        session.pointer_down(&scene, pointer(10, origin)),
+        Err(ProjectionalEditorError::RetainedIntentDirectManipulationUnavailable)
+    ));
+    assert!(session.editor().active_pointer_gesture().is_none());
+    assert_pair(point_position(&session, point), [1.0, 2.0]);
 }
 
 #[test]

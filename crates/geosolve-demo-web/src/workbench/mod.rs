@@ -1716,6 +1716,33 @@ const fn projectional_direct_gesture_is_capturable(
     )
 }
 
+/// A pointer-specific terminal may mutate projectional gesture state only
+/// while that exact pointer still owns capture. In particular, the browser's
+/// expected `lostpointercapture` after a successful release is a stale event,
+/// not a second cancellation terminal.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_terminal_owns_capture(
+    captured_pointer: Option<i32>,
+    terminal_pointer: Option<i32>,
+) -> bool {
+    match terminal_pointer {
+        Some(pointer) => captured_pointer == Some(pointer),
+        None => true,
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn route_projectional_terminal_capture(
+    captured_pointer: &mut Option<i32>,
+    terminal_pointer: Option<i32>,
+) -> Option<i32> {
+    if projectional_terminal_owns_capture(*captured_pointer, terminal_pointer) {
+        captured_pointer.take()
+    } else {
+        None
+    }
+}
+
 /// Applies the projectional browser's presentation-only constraint-mark
 /// policy to the same scene DTO used by paint and picking.
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1758,6 +1785,80 @@ enum ProjectionalOutlineDrag {
         painted_identity: geosolve_sketch_intent::IntentSessionIdentity,
         cell: geosolve_sketch_intent::CellId,
     },
+}
+
+/// Resolves the insertion boundary represented by one painted declaration row.
+///
+/// Native HTML drag/drop reports the row under the pointer, not an insertion
+/// slot. Treating every row as "before" makes a downward drag onto the next row
+/// a no-op, while the same gesture over a later row happens to work. The row's
+/// upper and lower halves instead denote the adjacent before/after slots, with
+/// the dragged declaration removed before the successor is calculated.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_outline_drop_before(
+    projection: &geosolve_constraint_editor::IntentWorkbenchProjection,
+    dragged: geosolve_sketch_intent::NodeId,
+    cell: geosolve_sketch_intent::CellId,
+    anchor: Option<geosolve_sketch_intent::NodeId>,
+    after: bool,
+) -> Result<Option<geosolve_sketch_intent::NodeId>, &'static str> {
+    let Some(anchor) = anchor else {
+        return Ok(None);
+    };
+    if anchor == dragged {
+        return Err("the declaration cannot be dropped onto itself");
+    }
+    let hidden = design_projection::grouped_outline_helper_nodes(projection);
+    let visible = projection
+        .outline
+        .iter()
+        .find(|candidate| candidate.cell == cell)
+        .ok_or("the drop cell belongs to a stale Outline")?
+        .declarations
+        .iter()
+        .map(|declaration| declaration.node)
+        .filter(|node| !hidden.contains(node) && *node != dragged)
+        .collect::<Vec<_>>();
+    let index = visible
+        .iter()
+        .position(|node| *node == anchor)
+        .ok_or("the drop target belongs to a different or stale cell")?;
+    Ok(if after {
+        visible.get(index + 1).copied()
+    } else {
+        Some(anchor)
+    })
+}
+
+/// Resolves the insertion boundary represented by one painted cell header.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_cell_drop_before(
+    projection: &geosolve_constraint_editor::IntentWorkbenchProjection,
+    dragged: geosolve_sketch_intent::CellId,
+    anchor: Option<geosolve_sketch_intent::CellId>,
+    after: bool,
+) -> Result<Option<geosolve_sketch_intent::CellId>, &'static str> {
+    let Some(anchor) = anchor else {
+        return Ok(None);
+    };
+    if anchor == dragged {
+        return Err("the cell cannot be dropped onto itself");
+    }
+    let visible = projection
+        .outline
+        .iter()
+        .map(|cell| cell.cell)
+        .filter(|cell| *cell != dragged)
+        .collect::<Vec<_>>();
+    let index = visible
+        .iter()
+        .position(|cell| *cell == anchor)
+        .ok_or("the drop cell belongs to a stale Outline")?;
+    Ok(if after {
+        visible.get(index + 1).copied()
+    } else {
+        Some(anchor)
+    })
 }
 
 /// Resolves one Outline organization gesture against the exact projection it
@@ -4514,9 +4615,11 @@ pub(crate) mod wasm {
     fn release_projectional_pointer_capture(
         viewport: &Element,
         wb: &mut ProjectionalWorkbench,
+        terminal_pointer: Option<i32>,
         release_platform_capture: bool,
     ) -> Option<i32> {
-        let pointer_id = wb.captured_pointer.take()?;
+        let pointer_id =
+            super::route_projectional_terminal_capture(&mut wb.captured_pointer, terminal_pointer)?;
         if release_platform_capture && viewport.has_pointer_capture(pointer_id) {
             let _ = viewport.release_pointer_capture(pointer_id);
         }
@@ -5163,10 +5266,7 @@ pub(crate) mod wasm {
         release_platform_capture: bool,
         notice: &str,
     ) -> bool {
-        if pointer_id.is_some_and(|pointer_id| {
-            wb.captured_pointer
-                .is_some_and(|captured| captured != pointer_id)
-        }) {
+        if !super::projectional_terminal_owns_capture(wb.captured_pointer, pointer_id) {
             return false;
         }
         let retired_frame = wb.pointer_moves.borrow_mut().invalidate();
@@ -5196,7 +5296,7 @@ pub(crate) mod wasm {
         };
         let effect_count = effects.len();
         let _ = dispatch_projectional_effects(wb, effects);
-        release_projectional_pointer_capture(viewport, wb, release_platform_capture);
+        release_projectional_pointer_capture(viewport, wb, pointer_id, release_platform_capture);
         let changed = retired_frame || had_capture || effect_count != 0;
         if changed {
             wb.notice = notice.into();
@@ -6004,7 +6104,12 @@ pub(crate) mod wasm {
                     });
                 let presentation = match outcome {
                     Ok(changed) => {
-                        release_projectional_pointer_capture(&up_viewport, &mut wb, true);
+                        release_projectional_pointer_capture(
+                            &up_viewport,
+                            &mut wb,
+                            Some(event.pointer_id()),
+                            true,
+                        );
                         wb.notice = match (feature_authoring_drag, changed) {
                             (true, true) => {
                                 "Fillet radius preview updated; Apply remains pending".into()
@@ -6042,7 +6147,12 @@ pub(crate) mod wasm {
                 });
             let event = match outcome {
                 Ok(outcome) => {
-                    release_projectional_pointer_capture(&up_viewport, &mut wb, true);
+                    release_projectional_pointer_capture(
+                        &up_viewport,
+                        &mut wb,
+                        Some(event.pointer_id()),
+                        true,
+                    );
                     if outcome.transaction.is_some() {
                         wb.notice = "Projectional direct movement accepted".into();
                         super::WorkbenchPresentationEvent::PointerRelease
@@ -6328,6 +6438,20 @@ pub(crate) mod wasm {
             component,
             submission,
         })
+    }
+
+    fn projectional_drop_uses_after_slot(target: &Element, event: &Event) -> bool {
+        let Some(pointer) = event.dyn_ref::<MouseEvent>() else {
+            return false;
+        };
+        let bounds = target.get_bounding_client_rect();
+        f64::from(pointer.client_y()) >= bounds.top() + bounds.height() * 0.5
+    }
+
+    fn clear_projectional_drop_indicator(root: &Element) {
+        while let Ok(Some(active)) = root.query_selector("[data-intent-drop-active]") {
+            let _ = active.remove_attribute("data-intent-drop-active");
+        }
     }
 
     fn install_projectional_events(
@@ -7059,25 +7183,56 @@ pub(crate) mod wasm {
         drag_start.forget();
 
         let over_workbench = Rc::clone(workbench);
+        let over_root = root.clone();
         let drag_over = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event
+            let Some(origin) = event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
             else {
                 return;
             };
-            let owns_target = match over_workbench.borrow().outline_drag {
-                Some(super::ProjectionalOutlineDrag::Declaration { .. }) => target
+            let target = match over_workbench.borrow().outline_drag {
+                Some(super::ProjectionalOutlineDrag::Declaration { .. }) => origin
                     .closest("[data-intent-drop-before], [data-intent-drop-cell]")
-                    .is_ok_and(|target| target.is_some()),
-                Some(super::ProjectionalOutlineDrag::Cell { .. }) => target
+                    .ok()
+                    .flatten(),
+                Some(super::ProjectionalOutlineDrag::Cell { .. }) => origin
                     .closest("[data-intent-cell-drop-before], [data-intent-cell-drop-end]")
-                    .is_ok_and(|target| target.is_some()),
-                None => false,
+                    .ok()
+                    .flatten(),
+                None => None,
             };
-            if owns_target {
-                event.prevent_default();
-            }
+            let Some(target) = target else {
+                clear_projectional_drop_indicator(&over_root);
+                return;
+            };
+            event.prevent_default();
+            clear_projectional_drop_indicator(&over_root);
+            let slot = if target.has_attribute("data-intent-cell-drop-end")
+                || target.has_attribute("data-intent-drop-cell")
+            {
+                "end"
+            } else if projectional_drop_uses_after_slot(&target, &event) {
+                "after"
+            } else {
+                "before"
+            };
+            let indicator = if target.has_attribute("data-intent-drop-before") {
+                target
+                    .closest(".wb-intent-row-wrap")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| target.clone())
+            } else if target.has_attribute("data-intent-cell-drop-before") {
+                target
+                    .closest(".wb-intent-cell")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| target.clone())
+            } else {
+                target.clone()
+            };
+            let _ = indicator.set_attribute("data-intent-drop-active", slot);
         });
         root.add_event_listener_with_callback("dragover", drag_over.as_ref().unchecked_ref())?;
         drag_over.forget();
@@ -7116,18 +7271,28 @@ pub(crate) mod wasm {
                     else {
                         return;
                     };
-                    let before = target
+                    let anchor = target
                         .get_attribute("data-intent-drop-before")
                         .and_then(|node| node.parse().ok());
                     let result = if projection.identity != painted_identity {
                         Err("the dragged declaration belongs to a stale Outline".to_owned())
                     } else {
-                        super::projectional_outline_move_patch(
+                        super::projectional_outline_drop_before(
                             &projection,
                             node,
-                            super::ProjectionalOutlineMove::Drop { cell, before },
+                            cell,
+                            anchor,
+                            anchor.is_some() && projectional_drop_uses_after_slot(&target, &event),
                         )
                         .map_err(str::to_owned)
+                        .and_then(|before| {
+                            super::projectional_outline_move_patch(
+                                &projection,
+                                node,
+                                super::ProjectionalOutlineMove::Drop { cell, before },
+                            )
+                            .map_err(str::to_owned)
+                        })
                     };
                     (result, "Outline declaration order updated")
                 }
@@ -7143,18 +7308,27 @@ pub(crate) mod wasm {
                         return;
                     };
                     event.prevent_default();
-                    let before = target
+                    let anchor = target
                         .get_attribute("data-intent-cell-drop-before")
                         .and_then(|cell| cell.parse().ok());
                     let result = if projection.identity != painted_identity {
                         Err("the dragged cell belongs to a stale Outline".to_owned())
                     } else {
-                        super::projectional_cell_move_patch(
+                        super::projectional_cell_drop_before(
                             &projection,
                             cell,
-                            super::ProjectionalCellMove::Drop { before },
+                            anchor,
+                            anchor.is_some() && projectional_drop_uses_after_slot(&target, &event),
                         )
                         .map_err(str::to_owned)
+                        .and_then(|before| {
+                            super::projectional_cell_move_patch(
+                                &projection,
+                                cell,
+                                super::ProjectionalCellMove::Drop { before },
+                            )
+                            .map_err(str::to_owned)
+                        })
                     };
                     (result, "Outline cell order updated")
                 }
@@ -7179,8 +7353,10 @@ pub(crate) mod wasm {
         drop_handler.forget();
 
         let end_workbench = Rc::clone(workbench);
+        let end_root = root.clone();
         let drag_end = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
             end_workbench.borrow_mut().outline_drag = None;
+            clear_projectional_drop_indicator(&end_root);
         });
         root.add_event_listener_with_callback("dragend", drag_end.as_ref().unchecked_ref())?;
         drag_end.forget();
@@ -14274,14 +14450,16 @@ mod tests {
         geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
         native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
         offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
-        offset_target_for_selection, owns_authoring_pick, projectional_cell_move_patch,
-        projectional_design_markup, projectional_direct_gesture_is_capturable,
-        projectional_outline_move_patch, rational_conic_construction_copy,
-        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
-        reproduction_overlay_presentation, reproduction_payload_size_label,
-        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
-        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
-        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
+        offset_target_for_selection, owns_authoring_pick, projectional_cell_drop_before,
+        projectional_cell_move_patch, projectional_design_markup,
+        projectional_direct_gesture_is_capturable, projectional_outline_drop_before,
+        projectional_outline_move_patch, projectional_terminal_owns_capture,
+        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
+        reproduction_focus_target_after_action, reproduction_overlay_presentation,
+        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
+        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
+        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
+        route_projectional_terminal_capture, should_route_stationary_draft_inference,
     };
 
     #[test]
@@ -14466,6 +14644,146 @@ mod tests {
     }
 
     #[test]
+    fn projectional_outline_drop_halves_resolve_adjacent_insertion_slots() {
+        run_projectional_test_with_large_stack("projectional-outline-drop-slots", || {
+            let mut editor = projectional_authoring_fixture();
+            let third = editor
+                .apply_patch(IntentPatch::new(
+                    editor.coordinator().intent().identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new("third").unwrap(),
+                        draft: Box::new(
+                            geosolve_sketch_intent::IntentNodeDraft::new(
+                                IntentNodeKind::Geometry {
+                                    recipe: geosolve_sketch_intent::GeometryRecipeKind::SketchPoint,
+                                },
+                                IntentKey::new("third-point").unwrap(),
+                            )
+                            .with_instance_leaf(
+                                geosolve_sketch_intent::IntentPortSelector::Node {
+                                    role: geosolve_sketch_intent::IntentPortRole::Primary,
+                                    index: 0,
+                                },
+                                geosolve_sketch_intent::LeafField::X,
+                                geosolve_sketch_intent::IntentLiteral::Quantity {
+                                    value: 8.0,
+                                    unit: geosolve_sketch_intent::IntentUnit::Length,
+                                },
+                            )
+                            .with_instance_leaf(
+                                geosolve_sketch_intent::IntentPortSelector::Node {
+                                    role: geosolve_sketch_intent::IntentPortRole::Primary,
+                                    index: 0,
+                                },
+                                geosolve_sketch_intent::LeafField::Y,
+                                geosolve_sketch_intent::IntentLiteral::Quantity {
+                                    value: -3.0,
+                                    unit: geosolve_sketch_intent::IntentUnit::Length,
+                                },
+                            ),
+                        ),
+                        cell: None,
+                    }],
+                ))
+                .unwrap()
+                .aliases
+                .node(&IntentKey::new("third").unwrap())
+                .unwrap();
+            let projection = editor.workbench_projection();
+            let cell = projection.outline[0].cell;
+            let nodes = projection.outline[0]
+                .declarations
+                .iter()
+                .map(|declaration| declaration.node)
+                .collect::<Vec<_>>();
+            assert_eq!(nodes.len(), 3);
+            assert_eq!(nodes[2], third);
+
+            assert_eq!(
+                projectional_outline_drop_before(&projection, nodes[0], cell, Some(nodes[1]), true)
+                    .unwrap(),
+                Some(nodes[2]),
+                "the lower half of the immediately following row must move after that row",
+            );
+            assert_eq!(
+                projectional_outline_drop_before(
+                    &projection,
+                    nodes[2],
+                    cell,
+                    Some(nodes[0]),
+                    false,
+                )
+                .unwrap(),
+                Some(nodes[0]),
+            );
+            assert_eq!(
+                projectional_outline_drop_before(&projection, nodes[1], cell, Some(nodes[2]), true)
+                    .unwrap(),
+                None,
+                "the lower half of the final row must resolve to the end slot",
+            );
+            assert!(
+                projectional_outline_drop_before(
+                    &projection,
+                    nodes[0],
+                    cell,
+                    Some(nodes[0]),
+                    false,
+                )
+                .is_err()
+            );
+
+            let evidence_before = editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .evidence
+                .clone();
+            let before =
+                projectional_outline_drop_before(&projection, nodes[0], cell, Some(nodes[1]), true)
+                    .unwrap();
+            let patch = projectional_outline_move_patch(
+                &projection,
+                nodes[0],
+                super::ProjectionalOutlineMove::Drop { cell, before },
+            )
+            .unwrap();
+            assert_eq!(
+                editor.apply_patch(patch).unwrap().disposition,
+                IntentPlanDisposition::OrganizationOnly,
+            );
+            assert_eq!(
+                editor.workbench_projection().outline[0]
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.node)
+                    .collect::<Vec<_>>(),
+                vec![nodes[1], nodes[0], nodes[2]],
+                "dropping onto the lower half of an adjacent row must visibly move after it",
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+                    .evidence,
+                evidence_before,
+                "Outline drag/drop remains organization-only",
+            );
+            editor.undo().unwrap().unwrap();
+            assert_eq!(
+                editor.workbench_projection().outline[0]
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.node)
+                    .collect::<Vec<_>>(),
+                nodes,
+            );
+        });
+    }
+
+    #[test]
     #[allow(
         clippy::too_many_lines,
         reason = "one cell gesture contract keeps history and accepted authority checks together"
@@ -14514,6 +14832,21 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(original.len(), 3);
             assert_eq!(original[1..], [first_cell, second_cell]);
+            assert_eq!(
+                projectional_cell_drop_before(&projection, original[0], Some(first_cell), true,)
+                    .unwrap(),
+                Some(second_cell),
+                "the lower half of the next cell header must resolve after that cell",
+            );
+            assert_eq!(
+                projectional_cell_drop_before(&projection, first_cell, Some(second_cell), true,)
+                    .unwrap(),
+                None,
+            );
+            assert!(
+                projectional_cell_drop_before(&projection, first_cell, Some(first_cell), false,)
+                    .is_err()
+            );
             let markup = super::design_projection::outline_markup(&projection, None);
             assert!(markup.contains("data-intent-cell-drag="));
             assert!(markup.contains("data-intent-cell-drop-before="));
@@ -14626,6 +14959,43 @@ mod tests {
         assert!(!projectional_direct_gesture_is_capturable(
             ActivePointerGestureKind::FilletContact,
         ));
+    }
+
+    #[test]
+    fn projectional_pointer_terminal_is_exact_once_after_capture_release() {
+        let mut released = Some(83);
+        assert_eq!(
+            route_projectional_terminal_capture(&mut released, Some(83)),
+            Some(83),
+            "the owning pointer-up must retire capture exactly once",
+        );
+        assert_eq!(released, None);
+        assert_eq!(
+            route_projectional_terminal_capture(&mut released, Some(83)),
+            None,
+            "the resulting lostpointercapture must be a stale no-op",
+        );
+
+        let mut lost_first = Some(83);
+        assert_eq!(
+            route_projectional_terminal_capture(&mut lost_first, Some(83)),
+            Some(83),
+            "lostpointercapture may cancel the live owner once",
+        );
+        assert_eq!(
+            route_projectional_terminal_capture(&mut lost_first, Some(83)),
+            None,
+            "a repeated loss cannot cancel twice",
+        );
+
+        let mut foreign = Some(83);
+        assert_eq!(
+            route_projectional_terminal_capture(&mut foreign, Some(84)),
+            None,
+            "a foreign terminal cannot retire the owning gesture",
+        );
+        assert_eq!(foreign, Some(83));
+        assert!(projectional_terminal_owns_capture(Some(83), None));
     }
 
     #[test]
@@ -15401,6 +15771,8 @@ mod tests {
             assert_eq!(markup.declaration_count, 1);
             assert!(markup.outline.contains("aria-selected=\"true\""));
             assert!(markup.source.contains("wb-intent-source-token"));
+            assert!(markup.source.contains("data-intent-drop-before="));
+            assert!(markup.source.contains("draggable=\"true\""));
             assert!(
                 markup
                     .history
@@ -15970,6 +16342,21 @@ mod tests {
             let scene = projectional.scene(viewport, 0.5).unwrap();
             let outcome = projectional.pointer_up(&scene, exact_terminal).unwrap();
             assert!(outcome.transaction.is_some());
+            let mut captured_pointer = Some(83);
+            assert_eq!(
+                route_projectional_terminal_capture(&mut captured_pointer, Some(83)),
+                Some(83),
+                "the successful browser pointer-up retires capture before platform release",
+            );
+            let mut notice = "Projectional direct movement accepted".to_owned();
+            let mut presentation = WorkbenchPresentationCounters::default();
+            presentation.record(WorkbenchPresentationEvent::PointerRelease);
+            if route_projectional_terminal_capture(&mut captured_pointer, Some(83)).is_some() {
+                projectional.cancel_interaction();
+                notice =
+                    "Projectional interaction canceled because pointer capture was lost".to_owned();
+                presentation.record(WorkbenchPresentationEvent::InteractionCancellation);
+            }
             assert_eq!(
                 position(projectional).map(f64::to_bits),
                 [7.0_f64, 8.0].map(f64::to_bits),
@@ -15982,6 +16369,17 @@ mod tests {
                     .applied
                     .len(),
                 initial_history + 1,
+            );
+            assert_eq!(notice, "Projectional direct movement accepted");
+            assert_eq!(
+                presentation,
+                WorkbenchPresentationCounters {
+                    transient_renders: 0,
+                    durable_renders: 1,
+                    workspace_saves: 1,
+                    durable_panel_rebuilds: 1,
+                },
+                "lostpointercapture after pointer-up cannot overwrite success or render again",
             );
             projectional.undo().unwrap().unwrap();
             assert_eq!(

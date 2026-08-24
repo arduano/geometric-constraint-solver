@@ -525,11 +525,8 @@ impl ProjectionalIntentCoordinator {
                     });
                     Ok(Some(preview))
                 }
-                OperationOutcome::Cancelled { .. } => {
-                    Err(ProjectionalCoordinatorError::DragCancelled)
-                }
-                OperationOutcome::WorkExhausted { .. } => {
-                    Err(ProjectionalCoordinatorError::DragWorkExhausted)
+                OperationOutcome::Cancelled { .. } | OperationOutcome::WorkExhausted { .. } => {
+                    Ok(None)
                 }
                 _ => Err(ProjectionalCoordinatorError::UnknownDragOutcome),
             }
@@ -573,7 +570,11 @@ impl ProjectionalIntentCoordinator {
         let latest = drag
             .latest
             .ok_or(ProjectionalCoordinatorError::NoAcceptedDragSample)?;
-        if latest.preview.request_id != request_id || drag.latest_request_id != Some(request_id) {
+        if latest.preview.request_id != request_id
+            || drag
+                .latest_request_id
+                .is_none_or(|latest_request_id| request_id > latest_request_id)
+        {
             return Err(ProjectionalCoordinatorError::StaleDragSample);
         }
         if pair_bits(latest.preview.accepted_position) == pair_bits(drag.origin_position) {

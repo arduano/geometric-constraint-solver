@@ -170,10 +170,10 @@ fn push_declaration_button(
     let _ = write!(
         markup,
         concat!(
-            "<div class=\"wb-intent-row-wrap\" data-intent-node=\"{}\" data-intent-cell=\"{}\">",
+            "<div class=\"wb-intent-row-wrap\" data-intent-node=\"{}\" data-intent-drop-before=\"{}\" data-intent-cell=\"{}\">",
             "<button type=\"button\" class=\"wb-intent-row{}\" ",
             "id=\"wb-intent-node-{}\" data-intent-node=\"{}\" ",
-            "data-intent-drop-before=\"{}\" data-intent-cell=\"{}\" ",
+            "data-intent-cell=\"{}\" ",
             "data-intent-state=\"{}\" draggable=\"true\" role=\"treeitem\" ",
             "aria-selected=\"{}\"><span class=\"wb-intent-kind\">{}</span>",
             "<span class=\"wb-intent-name\">{}</span><small>{}</small></button>",
@@ -183,9 +183,9 @@ fn push_declaration_button(
             "</span></div>"
         ),
         declaration.node,
+        declaration.node,
         cell,
         if selected { " selected" } else { "" },
-        declaration.node,
         declaration.node,
         declaration.node,
         cell,

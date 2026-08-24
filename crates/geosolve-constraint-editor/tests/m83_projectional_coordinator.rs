@@ -27,11 +27,15 @@ fn coordinate(value: f64) -> IntentLiteral {
 }
 
 fn point(position: [f64; 2]) -> IntentNodeDraft {
+    named_point("point.main", position)
+}
+
+fn named_point(name: &str, position: [f64; 2]) -> IntentNodeDraft {
     IntentNodeDraft::new(
         IntentNodeKind::Geometry {
             recipe: GeometryRecipeKind::SketchPoint,
         },
-        key("point.main"),
+        key(name),
     )
     .with_instance_leaf(
         selector(IntentPortRole::Primary),
@@ -262,6 +266,86 @@ fn point_preview_rejects_stale_samples_and_cancellation_adds_no_history() {
     assert_eq!(coordinator.intent().identity(), identity);
     assert_eq!(coordinator.intent().history_projection(), history);
     assert_pair(accepted_position(&coordinator, point), [0.0, 0.0]);
+}
+
+#[test]
+fn point_release_commits_last_accepted_sample_after_a_rejected_newer_attempt() {
+    let mut coordinator = coordinator(0x8300_2005);
+    let point = create_point(&mut coordinator, [0.0, 0.0]);
+    let history_before = coordinator.intent().undo_len();
+    coordinator.begin_point_drag(12, point).unwrap();
+    let accepted = coordinator
+        .preview_point_drag(12, 4, [3.0, -2.0], OperationControl::unlimited())
+        .unwrap()
+        .expect("first point sample must be accepted");
+    assert_pair(accepted.accepted_position, [3.0, -2.0]);
+
+    let mut exhausted = OperationControl::unlimited();
+    exhausted.limits.document_validation_items = 0;
+    assert_eq!(
+        coordinator
+            .preview_point_drag(12, 5, [7.0, 8.0], exhausted)
+            .unwrap(),
+        None,
+        "bounded rejection must retain, not counterfeit, the accepted sample",
+    );
+    let outcome = coordinator.finish_point_drag(12, 4).unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert_pair(accepted_position(&coordinator, point), [3.0, -2.0]);
+    assert_eq!(coordinator.intent().undo_len(), history_before + 1);
+    coordinator.undo().unwrap().unwrap();
+    assert_pair(accepted_position(&coordinator, point), [0.0, 0.0]);
+}
+
+#[test]
+fn suppressed_outputs_never_poison_unrelated_point_drag_reverse_binding() {
+    let mut coordinator = coordinator(0x8300_2006);
+    let live = create_point(&mut coordinator, [1.0, 2.0]);
+    let created = coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("suppressed-point"),
+                draft: Box::new(named_point("point.suppressed", [-5.0, 4.0])),
+                cell: None,
+            }],
+        ))
+        .unwrap();
+    let suppressed = created.aliases.node(&key("suppressed-point")).unwrap();
+    coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetSuppressed {
+                node: suppressed,
+                suppressed: true,
+            }],
+        ))
+        .unwrap();
+
+    let accepted = coordinator.accepted_materialization().unwrap();
+    let document = accepted.session.design_document();
+    assert_eq!(document.points().len(), 1);
+    for (native, _) in &accepted.ownership.writable_leaves {
+        match *native {
+            geosolve_constraint_editor::IntentNativeWritableLeaf::PointX { point }
+            | geosolve_constraint_editor::IntentNativeWritableLeaf::PointY { point } => {
+                assert!(document.point(point).is_some());
+            }
+            geosolve_constraint_editor::IntentNativeWritableLeaf::ScalarValue { scalar } => {
+                assert!(document.scalar(scalar).is_some());
+            }
+        }
+    }
+
+    coordinator.begin_point_drag(13, live).unwrap();
+    coordinator
+        .preview_point_drag(13, 1, [2.5, 3.5], OperationControl::unlimited())
+        .unwrap()
+        .expect("unrelated live point preview");
+    coordinator.finish_point_drag(13, 1).unwrap();
+    assert_pair(accepted_position(&coordinator, live), [2.5, 3.5]);
 }
 
 #[test]

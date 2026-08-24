@@ -2214,6 +2214,19 @@ impl ProjectionalEditorSession {
             let _ = self.editor.cancel();
             return Err(ProjectionalEditorError::AmbiguousDirectManipulationRoute);
         }
+        if route_count != 0
+            && !self
+                .coordinator
+                .intent()
+                .accepted()
+                .is_some_and(|accepted| {
+                    accepted.target == self.coordinator.intent().semantic_identity()
+                })
+        {
+            self.cancel_direct_manipulation();
+            let _ = self.editor.cancel();
+            return Err(ProjectionalEditorError::RetainedIntentDirectManipulationUnavailable);
+        }
         if let Some(route) = point_route {
             if self.curve_control_drag.is_some() {
                 self.cancel_direct_manipulation();
@@ -2593,11 +2606,11 @@ impl ProjectionalEditorSession {
                         self.preview_control.clone(),
                     )?;
                     let accepted_position = preview.map(|preview| preview.accepted_position);
-                    if let Some(drag) = self.point_drag.as_mut() {
+                    if let Some(accepted_position) = accepted_position
+                        && let Some(drag) = self.point_drag.as_mut()
+                    {
                         drag.latest_request_id = Some(request_id);
-                        if accepted_position.is_some() {
-                            drag.latest_position = accepted_position;
-                        }
+                        drag.latest_position = Some(accepted_position);
                     }
                     presentation.extend(self.editor.projected_drag_result(
                         pointer_id,
@@ -3177,6 +3190,10 @@ pub enum ProjectionalEditorError {
     PointPreviewMismatch,
     #[error("the editor prepared both point and selected-curve mutation routes for one press")]
     AmbiguousDirectManipulationRoute,
+    #[error(
+        "direct manipulation is unavailable while retained invalid intent is above the accepted scene"
+    )]
+    RetainedIntentDirectManipulationUnavailable,
     #[error("the terminal selected-curve sample has no prepared projectional route")]
     MissingCurveControlDragRoute,
     #[error("the terminal selected-curve sample does not match its prepared route")]

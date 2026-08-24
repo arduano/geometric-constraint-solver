@@ -4649,6 +4649,7 @@ struct PointGesture {
     origin: ScreenPoint,
     model_offset: [f64; 2],
     moved: bool,
+    last_sampled_position: Option<[f64; 2]>,
     latest_request: Option<u64>,
 }
 
@@ -6251,6 +6252,7 @@ impl ConstraintEditor {
                             point_position[1] - pointer_position[1],
                         ],
                         moved: false,
+                        last_sampled_position: None,
                         latest_request: None,
                     });
                     self.last_valid_drag_preview = None;
@@ -6626,6 +6628,7 @@ impl ConstraintEditor {
                             point_position[1] - pointer_position[1],
                         ],
                         moved: false,
+                        last_sampled_position: None,
                         latest_request: None,
                     });
                     self.last_valid_drag_preview = None;
@@ -7315,22 +7318,30 @@ impl ConstraintEditor {
         if !gesture.moved {
             return Vec::new();
         }
+        let pointer_position = scene.viewport.screen_to_model(input.position);
+        let model_position = [
+            pointer_position[0] + gesture.model_offset[0],
+            pointer_position[1] + gesture.model_offset[1],
+        ];
+        if gesture
+            .last_sampled_position
+            .is_some_and(|sampled| model_positions_bit_equal(sampled, model_position))
+        {
+            return Vec::new();
+        }
         let request_id = self.next_projection_request;
         let Some(next_request) = request_id.checked_add(1) else {
             return Vec::new();
         };
         self.next_projection_request = next_request;
+        gesture.last_sampled_position = Some(model_position);
         gesture.latest_request = Some(request_id);
         self.point_gesture = Some(gesture);
-        let pointer_position = scene.viewport.screen_to_model(input.position);
         vec![EditorEffect::RequestProjectedPointMove {
             pointer_id: input.pointer_id,
             request_id,
             point: gesture.point,
-            model_position: [
-                pointer_position[0] + gesture.model_offset[0],
-                pointer_position[1] + gesture.model_offset[1],
-            ],
+            model_position,
         }]
     }
 
@@ -7902,7 +7913,7 @@ impl ConstraintEditor {
         point: DesignPointId,
         accepted_model_position: Option<[f64; 2]>,
     ) -> Vec<EditorEffect> {
-        let Some(gesture) = self.point_gesture else {
+        let Some(mut gesture) = self.point_gesture else {
             return Vec::new();
         };
         if gesture.pointer_id != pointer_id
@@ -7912,9 +7923,11 @@ impl ConstraintEditor {
         {
             return Vec::new();
         }
-        let Some(position) =
-            accepted_model_position.filter(|p| p.iter().all(|value| value.is_finite()))
+        let Some(position) = accepted_model_position
+            .filter(|position| position.iter().all(|value| value.is_finite()))
         else {
+            gesture.last_sampled_position = None;
+            self.point_gesture = Some(gesture);
             return Vec::new();
         };
         self.last_valid_drag_preview =
@@ -22158,6 +22171,15 @@ mod tests {
                 point: points[0],
                 model_position: [2.0, 3.0]
             }]
+        );
+        assert!(
+            editor
+                .pointer_move(
+                    &scene,
+                    pointer(8, endpoint.x + 3.0, endpoint.y, Modifiers::default())
+                )
+                .is_empty(),
+            "an exact release coordinate must reuse its already accepted preview",
         );
         assert!(
             editor
