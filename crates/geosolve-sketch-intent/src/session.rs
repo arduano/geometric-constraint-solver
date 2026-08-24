@@ -17,8 +17,8 @@ use crate::graph::{
     allocate_draft, allocated_alias_ports, assign_identity_generations, finish_allocated_draft,
 };
 use crate::ids::{
-    CellId, ContentDigest, IntentKey, IntentSessionId, NodeId, PlanToken, Revision, digest_bytes,
-    legacy_digest_bytes,
+    CellId, ContentDigest, IntentKey, IntentSessionId, NodeId, PlanToken, ReservationId, Revision,
+    digest_bytes, legacy_digest_bytes,
 };
 use crate::model::{
     IntentExternalInputs, IntentExternalInputsIdentity, IntentIdentityFlow, IntentInstanceState,
@@ -302,6 +302,11 @@ struct SessionCheckpoint {
     graph: IntentGraph,
     instance: IntentInstanceState,
     reservation_identity: IntentReservationLedgerIdentity,
+    /// Exact never-reused reservation prefix retained when this checkpoint
+    /// was captured. Experimental wire-v1 omitted it and is migrated through
+    /// its independently authenticated historical ledger.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reservation_high_water: Option<ReservationId>,
     organization: IntentOrganization,
     external_inputs: IntentExternalInputs,
     latest_attempt: Option<IntentLatestAttempt>,
@@ -1170,6 +1175,7 @@ impl IntentSession {
                 next_revision(reservations.revision).ok_or(IntentPlanError::RevisionExhausted)?;
         }
         staged.reservation_identity = reservations.identity();
+        staged.reservation_high_water = Some(allocator.next_reservation);
         validate_organization(&staged.graph, &staged.organization)?;
         let semantic = semantic_identity(
             &staged.graph,
@@ -1730,6 +1736,9 @@ impl IntentSession {
             validate_legacy_wire_authority(&wire)?;
             migrate_legacy_wire_identities(&mut wire)?;
         }
+        if wire.current.reservation_high_water != Some(wire.allocator.next_reservation) {
+            return Err(IntentSessionError::InvalidAuthority);
+        }
         let semantic_identity = semantic_identity(
             &wire.current.graph,
             &wire.current.instance,
@@ -1775,6 +1784,7 @@ impl IntentSession {
             graph: self.graph.clone(),
             instance: self.instance.clone(),
             reservation_identity: self.reservations.identity(),
+            reservation_high_water: Some(self.allocator.next_reservation),
             organization: self.organization.clone(),
             external_inputs: self.external_inputs.clone(),
             latest_attempt: self.latest_attempt.clone(),
@@ -1857,6 +1867,7 @@ impl IntentSession {
                 .ok_or(IntentSessionError::RevisionExhausted)?;
         }
         checkpoint.reservation_identity = self.reservations.identity();
+        checkpoint.reservation_high_water = Some(self.allocator.next_reservation);
         let restored_semantic = semantic_identity(
             &checkpoint.graph,
             &checkpoint.instance,
@@ -2101,52 +2112,60 @@ fn migrated_legacy_checkpoint_reservation_identity(
     checkpoint: &SessionCheckpoint,
     current_reservations: &IntentReservationLedger,
     current: bool,
-) -> Option<IntentReservationLedgerIdentity> {
+) -> Option<(IntentReservationLedgerIdentity, ReservationId)> {
     if current {
-        return (checkpoint.reservation_identity == current_reservations.legacy_identity())
-            .then(|| current_reservations.identity());
+        return (checkpoint.reservation_identity == current_reservations.legacy_identity()).then(
+            || {
+                (
+                    current_reservations.identity(),
+                    current_reservations
+                        .next_reservation_high_water()
+                        .expect("validated reservation ledger has finite high-water"),
+                )
+            },
+        );
     }
-    historical_checkpoint_reservation_ledger_candidates(checkpoint, current_reservations)
+    legacy_historical_checkpoint_reservation_ledger_candidates(checkpoint, current_reservations)
         .into_iter()
         .find(|candidate| checkpoint.reservation_identity == candidate.legacy_identity())
-        .map(|candidate| candidate.identity())
+        .map(|candidate| {
+            (
+                candidate.identity(),
+                candidate
+                    .next_reservation_high_water()
+                    .expect("validated reservation ledger has finite high-water"),
+            )
+        })
 }
 
-/// Reconstructs every reservation-ledger shape which a retained checkpoint
-/// can authenticate without guessing historical topology.
-///
-/// Accepted checkpoints carry their exact ledger. A retained-failed
-/// checkpoint instead carries the prior accepted ledger plus reservations and
-/// disposition changes declared by its current graph. Replaying that one
-/// deterministic reconciliation is necessary for Undo/Redo entries whose
-/// reservation revision sits between the accepted and current ledgers.
-#[cfg(test)]
-fn checkpoint_reservation_ledger_candidates(
+/// Reconstructs the sole ledger prefix authenticated by a wire-v2 checkpoint.
+/// The high-water is an exact witness, not a hint: graph reconciliation may
+/// change only declaration disposition and may not manufacture a reservation
+/// outside the retained monotonic prefix.
+fn checkpoint_reservation_ledger_from_high_water(
     checkpoint: &SessionCheckpoint,
     current_reservations: &IntentReservationLedger,
-) -> Vec<IntentReservationLedger> {
-    let mut bases = vec![
-        IntentReservationLedger::empty(),
-        current_reservations.clone(),
-    ];
-    if let Some(accepted) = &checkpoint.accepted {
-        bases.push(accepted.reservations.clone());
+) -> Option<IntentReservationLedger> {
+    let high_water = checkpoint.reservation_high_water?;
+    let mut candidate = current_reservations.prefix_before(high_water);
+    if candidate.next_reservation_high_water() != Some(high_water)
+        || candidate
+            .validate_graph_metadata(&checkpoint.graph)
+            .is_err()
+        || candidate.reconcile(&checkpoint.graph).is_err()
+    {
+        return None;
     }
-    let mut candidates = bases.clone();
-    for mut candidate in bases {
-        if candidate.reconcile(&checkpoint.graph).is_ok() {
-            // The authenticated checkpoint owns the exact historical
-            // revision. Reconciliation reconstructs entries and states; it
-            // must not manufacture a different revision chronology.
-            candidate.revision = checkpoint.reservation_identity.0.revision;
-            candidates.push(candidate);
-        }
-    }
-    candidates.dedup();
-    candidates
+    candidate.revision = checkpoint.reservation_identity.0.revision;
+    (candidate.next_reservation_high_water() == Some(high_water)
+        && candidate.validate_against_graph(&checkpoint.graph).is_ok())
+    .then_some(candidate)
 }
 
-fn historical_checkpoint_reservation_ledger_candidates(
+/// Experimental wire-v1 did not retain a reservation high-water. Its
+/// independently authenticated checkpoints therefore use the original
+/// bounded reconstruction candidates only during one-way legacy migration.
+fn legacy_historical_checkpoint_reservation_ledger_candidates(
     checkpoint: &SessionCheckpoint,
     current_reservations: &IntentReservationLedger,
 ) -> Vec<IntentReservationLedger> {
@@ -2174,9 +2193,8 @@ fn historical_checkpoint_reservation_identity_valid(
     checkpoint: &SessionCheckpoint,
     current_reservations: &IntentReservationLedger,
 ) -> bool {
-    historical_checkpoint_reservation_ledger_candidates(checkpoint, current_reservations)
-        .into_iter()
-        .any(|candidate| candidate.identity() == checkpoint.reservation_identity)
+    checkpoint_reservation_ledger_from_high_water(checkpoint, current_reservations)
+        .is_some_and(|candidate| candidate.identity() == checkpoint.reservation_identity)
 }
 
 fn validate_legacy_wire_authority(wire: &IntentSessionWire) -> Result<(), IntentSessionError> {
@@ -2192,7 +2210,12 @@ fn validate_legacy_checkpoint_authority(
     current_reservations: &IntentReservationLedger,
     current: bool,
 ) -> Result<(), IntentSessionError> {
-    if migrated_legacy_checkpoint_reservation_identity(checkpoint, current_reservations, current)
+    if checkpoint.reservation_high_water.is_some()
+        || migrated_legacy_checkpoint_reservation_identity(
+            checkpoint,
+            current_reservations,
+            current,
+        )
         .is_none()
     {
         return Err(IntentSessionError::InvalidAuthority);
@@ -2347,9 +2370,11 @@ fn migrate_legacy_checkpoint(
     current_reservations: &IntentReservationLedger,
     current: bool,
 ) {
-    checkpoint.reservation_identity =
+    let (reservation_identity, reservation_high_water) =
         migrated_legacy_checkpoint_reservation_identity(checkpoint, current_reservations, current)
             .expect("legacy checkpoint authority was validated before migration");
+    checkpoint.reservation_identity = reservation_identity;
+    checkpoint.reservation_high_water = Some(reservation_high_water);
     if let Some(accepted) = &mut checkpoint.accepted {
         accepted.evidence.external_inputs = accepted.external_inputs.identity();
         accepted.evidence.reauthenticate();
@@ -2364,6 +2389,12 @@ fn migrate_legacy_checkpoint(
             && accepted.external_inputs == checkpoint.external_inputs
         {
             checkpoint.reservation_identity = accepted.reservations.identity();
+            checkpoint.reservation_high_water = Some(
+                accepted
+                    .reservations
+                    .next_reservation_high_water()
+                    .expect("validated accepted ledger has finite high-water"),
+            );
         }
     }
     let current = semantic_identity(
@@ -2975,17 +3006,7 @@ fn validate_checkpoint(
         &checkpoint.instance,
         &checkpoint.external_inputs,
     )?;
-    reservations.validate_graph_metadata(&checkpoint.graph)?;
-    let reservation_identity_valid = if current {
-        checkpoint.reservation_identity == reservations.identity()
-    } else {
-        historical_checkpoint_reservation_identity_valid(checkpoint, reservations)
-    };
-    if checkpoint.reservation_identity.0.revision > reservations.revision()
-        || !reservation_identity_valid
-    {
-        return Err(IntentSessionError::InvalidAuthority);
-    }
+    validate_checkpoint_reservation_authority(checkpoint, reservations, current)?;
     validate_organization(&checkpoint.graph, &checkpoint.organization)?;
     let semantic = semantic_identity(
         &checkpoint.graph,
@@ -3066,6 +3087,50 @@ fn validate_checkpoint(
     Ok(())
 }
 
+fn validate_checkpoint_reservation_authority(
+    checkpoint: &SessionCheckpoint,
+    reservations: &IntentReservationLedger,
+    current: bool,
+) -> Result<(), IntentSessionError> {
+    reservations.validate_graph_metadata(&checkpoint.graph)?;
+    let live_high_water = reservations
+        .next_reservation_high_water()
+        .ok_or(IntentSessionError::InvalidAuthority)?;
+    let Some(checkpoint_high_water) = checkpoint.reservation_high_water else {
+        return Err(IntentSessionError::InvalidAuthority);
+    };
+    if checkpoint_high_water.raw() == 0
+        || (current && checkpoint_high_water != live_high_water)
+        || (!current && checkpoint_high_water > live_high_water)
+        || checkpoint.graph.nodes().values().any(|node| {
+            node.reservations
+                .keys()
+                .any(|reservation| *reservation >= checkpoint_high_water)
+        })
+        || checkpoint.accepted.as_ref().is_some_and(|accepted| {
+            !reservation_ledger_is_contiguous(&accepted.reservations)
+                || accepted
+                    .reservations
+                    .entries()
+                    .keys()
+                    .any(|reservation| *reservation >= checkpoint_high_water)
+        })
+    {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
+    let reservation_identity_valid = if current {
+        checkpoint.reservation_identity == reservations.identity()
+    } else {
+        historical_checkpoint_reservation_identity_valid(checkpoint, reservations)
+    };
+    if checkpoint.reservation_identity.0.revision > reservations.revision()
+        || !reservation_identity_valid
+    {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
+    Ok(())
+}
+
 fn validate_semantic_state(
     graph: &IntentGraph,
     instance: &IntentInstanceState,
@@ -3088,6 +3153,11 @@ fn validate_allocator<'a>(
     checkpoints: impl Iterator<Item = &'a SessionCheckpoint>,
     reservations: &IntentReservationLedger,
 ) -> Result<(), IntentSessionError> {
+    if reservations.next_reservation_high_water() != Some(allocator.next_reservation)
+        || !reservation_ledger_is_contiguous(reservations)
+    {
+        return Err(IntentSessionError::AllocatorRegression);
+    }
     if reservations.entries().values().any(|record| {
         record.id.raw() >= allocator.next_reservation.raw()
             || record.owner_node.raw() >= allocator.next_node.raw()
@@ -3124,6 +3194,19 @@ fn validate_allocator<'a>(
         }
     }
     Ok(())
+}
+
+fn reservation_ledger_is_contiguous(reservations: &IntentReservationLedger) -> bool {
+    reservations
+        .entries()
+        .keys()
+        .enumerate()
+        .all(|(index, reservation)| {
+            u64::try_from(index)
+                .ok()
+                .and_then(|value| value.checked_add(1))
+                == Some(reservation.raw())
+        })
 }
 
 fn push_bounded(history: &mut Vec<HistoryEntry>, entry: HistoryEntry) {
@@ -3264,8 +3347,9 @@ pub enum IntentSessionError {
 mod tests {
     use super::*;
     use crate::{
-        GeometryRecipeKind, InputRole, InputSlot, IntentLiteral, IntentNodeDraft, IntentNodeKind,
-        IntentPatchOperationKind, IntentPortRef, IntentReservationState, LeafField, LeafRef,
+        ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentLiteral, IntentNodeDraft,
+        IntentNodeKind, IntentPatchOperationKind, IntentPortRef, IntentReservationState, LeafField,
+        LeafRef,
     };
 
     fn key(value: &str) -> IntentKey {
@@ -3436,12 +3520,12 @@ mod tests {
         current_reservations: &IntentReservationLedger,
     ) {
         let reservation_identity =
-            checkpoint_reservation_ledger_candidates(checkpoint, current_reservations)
-                .into_iter()
-                .find(|candidate| candidate.identity() == checkpoint.reservation_identity)
+            checkpoint_reservation_ledger_from_high_water(checkpoint, current_reservations)
+                .filter(|candidate| candidate.identity() == checkpoint.reservation_identity)
                 .expect("current checkpoint reservation identity is reconstructible")
                 .legacy_identity();
         checkpoint.reservation_identity = reservation_identity;
+        checkpoint.reservation_high_water = None;
 
         let materialization_digest = checkpoint.accepted.as_mut().map(|accepted| {
             rewrite_evidence_as_legacy(&mut accepted.evidence, &accepted.external_inputs);
@@ -3862,6 +3946,162 @@ mod tests {
     }
 
     #[test]
+    fn canonical_v2_rejects_reauthenticated_checkpoint_reservation_prefix_tampering() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_83f3)).unwrap();
+        commit_point(&mut session, "accepted", "accepted.point");
+        session.undo().unwrap().expect("point creation is undoable");
+        session.redo().unwrap().expect("point creation is redoable");
+        commit_retained_failure(
+            &mut session,
+            "retained",
+            "retained.point",
+            "retained-failure",
+        );
+        let canonical = session.to_canonical_json().unwrap();
+
+        for forged_high_water in [
+            None,
+            Some(ReservationId::from_raw(1)),
+            Some(session.allocator.next_reservation),
+        ] {
+            let mut wire: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+            let checkpoint = wire
+                .undo
+                .iter_mut()
+                .find(|entry| entry.checkpoint.accepted.is_none())
+                .map(|entry| &mut entry.checkpoint)
+                .expect("Undo retains the accepted-less empty checkpoint");
+            assert_ne!(checkpoint.reservation_high_water, forged_high_water);
+            checkpoint.reservation_high_water = forged_high_water;
+            assert!(matches!(
+                IntentSession::from_json(&authenticated_wire_json(wire)),
+                Err(IntentSessionError::InvalidAuthority)
+            ));
+        }
+
+        let mut current: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        current.current.reservation_high_water = Some(ReservationId::from_raw(2));
+        let current_result = IntentSession::from_json(&authenticated_wire_json(current));
+        assert!(
+            matches!(current_result, Err(IntentSessionError::InvalidAuthority)),
+            "unexpected current-prefix result: {current_result:?}"
+        );
+
+        let accepted_session = session_with_undo_and_redo();
+        let live_high_water = Some(accepted_session.allocator.next_reservation);
+        let mut accepted: IntentSessionWire =
+            serde_json::from_str(&accepted_session.to_canonical_json().unwrap()).unwrap();
+        let checkpoint = accepted
+            .undo
+            .iter_mut()
+            .find(|entry| {
+                entry.checkpoint.accepted.is_some()
+                    && entry.checkpoint.reservation_high_water != live_high_water
+            })
+            .map(|entry| &mut entry.checkpoint)
+            .expect("Undo retains an accepted checkpoint below live high-water");
+        checkpoint.reservation_high_water = live_high_water;
+        let accepted_result = IntentSession::from_json(&authenticated_wire_json(accepted));
+        assert!(
+            matches!(accepted_result, Err(IntentSessionError::InvalidAuthority)),
+            "unexpected accepted-prefix result: {accepted_result:?}"
+        );
+    }
+
+    #[test]
+    fn canonical_v2_rejects_checkpoint_high_water_which_splits_a_reservation_pair() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_83f4)).unwrap();
+        commit_point(&mut session, "base", "accepted.base");
+        let point_alias = |node| PatchPortRef::Alias {
+            node: key(node),
+            selector: crate::IntentPortSelector::Node {
+                role: crate::IntentPortRole::Primary,
+                index: 0,
+            },
+        };
+        let coincident = IntentNodeDraft::new(
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::Coincident,
+            },
+            key("coincident"),
+        )
+        .with_input(InputSlot::new(InputRole::Point, 0), point_alias("left"))
+        .with_input(InputSlot::new(InputRole::Point, 1), point_alias("right"));
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("left"),
+                    draft: Box::new(IntentNodeDraft::new(
+                        IntentNodeKind::Geometry {
+                            recipe: GeometryRecipeKind::SketchPoint,
+                        },
+                        key("left"),
+                    )),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("right"),
+                    draft: Box::new(IntentNodeDraft::new(
+                        IntentNodeKind::Geometry {
+                            recipe: GeometryRecipeKind::SketchPoint,
+                        },
+                        key("right"),
+                    )),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("coincident"),
+                    draft: Box::new(coincident),
+                    cell: None,
+                },
+            ],
+        );
+        let plan = session.plan_patch(patch, accepted).unwrap();
+        let coincident = plan.aliases().node(&key("coincident")).unwrap();
+        session.commit_plan(plan).unwrap();
+
+        let pair = session
+            .graph()
+            .node(coincident)
+            .unwrap()
+            .reservations
+            .values()
+            .find_map(|reservation| {
+                reservation
+                    .paired_with
+                    .map(|paired| (reservation.id, paired))
+            })
+            .expect("Coincident retains its constraint/source pair");
+        let (lower, split_high_water) = if pair.0 < pair.1 {
+            pair
+        } else {
+            (pair.1, pair.0)
+        };
+        assert_eq!(split_high_water.raw(), lower.raw() + 1);
+
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
+        let checkpoint = wire
+            .undo
+            .iter_mut()
+            .find(|entry| {
+                entry.checkpoint.accepted.is_some()
+                    && entry.checkpoint.reservation_high_water
+                        != Some(session.allocator.next_reservation)
+            })
+            .map(|entry| &mut entry.checkpoint)
+            .expect("Undo retains the accepted base checkpoint");
+        checkpoint.reservation_high_water = Some(split_high_water);
+        let result = IntentSession::from_json(&authenticated_wire_json(wire));
+        assert!(
+            matches!(result, Err(IntentSessionError::InvalidAuthority)),
+            "unexpected pair-splitting result: {result:?}"
+        );
+    }
+
+    #[test]
     fn canonical_v2_rejects_reauthenticated_permuted_history_checkpoint_bodies() {
         let session = session_with_undo_and_redo();
         let canonical = session.to_canonical_json().unwrap();
@@ -4240,6 +4480,14 @@ mod tests {
             Err(IntentSessionError::InvalidAuthority)
         ));
 
+        let mut invented_high_water = legacy_wire();
+        invented_high_water.current.reservation_high_water =
+            Some(invented_high_water.allocator.next_reservation);
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_legacy_json(invented_high_water)),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+
         let mut retained = session_with_retained_failure();
         commit_point(
             &mut retained,
@@ -4558,6 +4806,49 @@ mod tests {
         assert_eq!(
             session.latest_attempt().unwrap().disposition,
             IntentAttemptDisposition::RetainedFailed
+        );
+    }
+
+    #[test]
+    fn retained_failure_after_accepted_undo_redo_keeps_every_checkpoint_authoritative() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fd_05)).unwrap();
+        commit_point(&mut session, "accepted", "wire.accepted");
+        session.undo().unwrap().expect("point creation is undoable");
+        session.redo().unwrap().expect("point creation is redoable");
+        commit_retained_failure(
+            &mut session,
+            "retained",
+            "wire.retained",
+            "retained-failure",
+        );
+
+        let initial = &session.undo[0].checkpoint;
+        assert!(initial.accepted.is_none());
+        assert_eq!(
+            initial.reservation_high_water,
+            Some(ReservationId::from_raw(2))
+        );
+        assert_eq!(
+            session.allocator.next_reservation,
+            ReservationId::from_raw(3)
+        );
+
+        let current = session.checkpoint();
+        validate_checkpoint(&current, &session.reservations, true)
+            .unwrap_or_else(|error| panic!("Current checkpoint: {error:?}"));
+        for (index, entry) in session.undo.iter().enumerate() {
+            validate_checkpoint(&entry.checkpoint, &session.reservations, false)
+                .unwrap_or_else(|error| panic!("Undo checkpoint {index}: {error:?}"));
+        }
+        assert!(session.redo.is_empty());
+        session.validate().unwrap();
+        let canonical = session.to_canonical_json().unwrap();
+        assert_eq!(
+            IntentSession::from_json(&canonical)
+                .unwrap()
+                .to_canonical_json()
+                .unwrap(),
+            canonical
         );
     }
 

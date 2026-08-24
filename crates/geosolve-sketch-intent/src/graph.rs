@@ -176,6 +176,31 @@ impl IntentReservationLedger {
         self.revision
     }
 
+    /// Returns the first reservation identity which is not retained in this
+    /// monotonic ledger.
+    pub(crate) fn next_reservation_high_water(&self) -> Option<ReservationId> {
+        self.entries
+            .keys()
+            .next_back()
+            .map_or(Some(ReservationId::from_raw(1)), |last| {
+                last.raw().checked_add(1).map(ReservationId::from_raw)
+            })
+    }
+
+    /// Copies the exact monotonic record prefix below one retained allocator
+    /// high-water. The caller reconciles historical disposition against its
+    /// checkpoint graph and supplies that checkpoint's exact ledger revision.
+    pub(crate) fn prefix_before(&self, high_water: ReservationId) -> Self {
+        Self {
+            revision: self.revision,
+            entries: self
+                .entries
+                .range(..high_water)
+                .map(|(id, record)| (*id, *record))
+                .collect(),
+        }
+    }
+
     #[must_use]
     /// Returns the exact revisioned identity of all durable records.
     ///

@@ -1791,7 +1791,8 @@ mod tests {
         IntentNodeKind, IntentOrganization, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
         IntentPlanDisposition, IntentPortRole, IntentPortSelector, IntentReservationLedger,
         IntentReservationLedgerIdentity, IntentSemanticIdentity, IntentSession, IntentSessionId,
-        IntentTransactionDescriptor, IntentUnit, LeafField, Revision, intent_legacy_content_digest,
+        IntentTransactionDescriptor, IntentUnit, LeafField, ReservationId, Revision,
+        intent_legacy_content_digest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -1887,6 +1888,8 @@ mod tests {
         graph: IntentGraph,
         instance: IntentInstanceState,
         reservation_identity: IntentReservationLedgerIdentity,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reservation_high_water: Option<ReservationId>,
         organization: IntentOrganization,
         external_inputs: IntentExternalInputs,
         latest_attempt: Option<IntentLatestAttempt>,
@@ -1995,6 +1998,7 @@ mod tests {
             legacy_reservation_identity(&empty)
         };
         checkpoint.reservation_identity = reservation_identity;
+        checkpoint.reservation_high_water = None;
 
         let accepted_digest = checkpoint.accepted.as_mut().map(|accepted| {
             let accepted_external = legacy_external_identity(&accepted.external_inputs);

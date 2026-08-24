@@ -249,6 +249,71 @@ fn retained_failure_and_organization_keep_the_exact_accepted_scene() {
 }
 
 #[test]
+fn retained_failure_after_undo_redo_remains_canonical_and_replayable() {
+    let mut coordinator = coordinator(0x8300_2007);
+    let point = create_point(&mut coordinator, [2.0, 5.0]);
+
+    coordinator
+        .undo()
+        .unwrap()
+        .expect("point creation is undoable");
+    coordinator
+        .redo()
+        .unwrap()
+        .expect("point creation is redoable");
+    assert_pair(accepted_position(&coordinator, point), [2.0, 5.0]);
+    let accepted_before = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+
+    let retained_invalid = IntentPatch::new(
+        coordinator.intent().identity(),
+        IntentPatchPolicy::RetainFailedIntent,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("invalid-after-redo"),
+            draft: Box::new(invalid_segment()),
+            cell: None,
+        }],
+    );
+    assert_eq!(
+        coordinator
+            .apply_patch(retained_invalid)
+            .unwrap()
+            .disposition,
+        IntentPlanDisposition::RetainedFailed
+    );
+    assert_pair(accepted_position(&coordinator, point), [2.0, 5.0]);
+    assert_eq!(
+        coordinator.accepted_materialization().unwrap().evidence,
+        accepted_before
+    );
+
+    let canonical = coordinator.intent().to_canonical_json().unwrap();
+    let restored_intent = IntentSession::from_json(&canonical).unwrap();
+    let mut restored = ProjectionalIntentCoordinator::restore(
+        restored_intent,
+        ColdIntentMaterializer::with_default_policy(
+            DocumentId(PersistentId::from_u128(0x8300_2007_u128 << 32)),
+            1.0,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_pair(accepted_position(&restored, point), [2.0, 5.0]);
+    restored
+        .undo()
+        .unwrap()
+        .expect("retained failure is undoable");
+    restored
+        .redo()
+        .unwrap()
+        .expect("retained failure is redoable");
+    assert_pair(accepted_position(&restored, point), [2.0, 5.0]);
+}
+
+#[test]
 fn point_preview_rejects_stale_samples_and_cancellation_adds_no_history() {
     let mut coordinator = coordinator(0x8300_2003);
     let point = create_point(&mut coordinator, [0.0, 0.0]);
