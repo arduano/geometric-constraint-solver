@@ -138,7 +138,7 @@ Physics, collision and a production rendering system remain out of scope.
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M83 mechanically implemented and awaiting nomination/UAT over the accepted M81 baseline.
+3. `PLAN.md` — authoritative roadmap, with M83 clean-nominated and awaiting focused UAT over the accepted M81 baseline.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -158,7 +158,8 @@ Physics, collision and a production rendering system remain out of scope.
 15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
 16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — implemented
-    projectional Design Intent Graph contract, nomination ledger and pending scorecard.
+    projectional Design Intent Graph contract, clean-qualified nomination ledger and pending
+    scorecard.
 
 ## Workspace
 
@@ -193,7 +194,8 @@ cancellation, stable diagnostics and separate sketch-operation/production-topolo
 companions. The host continues to own expressions, B-rep projection, feature history
 and application undo. M40.7, M53 and M61-M81 have explicit acceptance dispositions. M83 now
 implements a projectional intent/session layer while deliberately retaining the native solver as
-accepted geometry authority; nomination and human UAT remain pending. New milestones
+accepted geometry authority; immutable nomination passes and human UAT remains pending. New
+milestones
 normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
 mobile support requirement.

@@ -39,9 +39,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   rejected chronological JSON-owner-rewrite candidate. Canvas/tree and Design projections resolve
   one visible stable declaration owner, including closure deletion for retained-invalid Profile
   Offset. M76 annotation layout remains a disposable presentation-only workspace cache outside
-  graph, materialization and history identity. Final clean nomination is in progress; no M83
-  capability is accepted until the complete gate, frozen Tailscale candidate and explicit human UAT
-  pass.
+  graph, materialization and history identity. Exact source `1b4f455`, tree `ce09e01`, passes the
+  complete clean gate and immutable no-rebuild Tailscale nomination; no M83 capability is accepted
+  until explicit human UAT passes.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -797,8 +797,9 @@ the canonical intent session plus authenticated accepted materialization; strict
 first restore through their historical decoder and then become per-object bootstrap declarations,
 while abandoned v7 rejects. The M76 annotation-layout field remains a disposable,
 compatibility-filtered presentation cache outside intent/materialization/history authority and is
-recomputed when absent or invalid. M83 is mechanically implemented but remains unaccepted until
-clean Tailscale nomination and human UAT pass; public Pages still serves accepted M81.
+recomputed when absent or invalid. M83 is mechanically implemented and clean-nominated at the
+immutable Tailscale endpoint, but remains unaccepted until human UAT passes; public Pages still
+serves accepted M81.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is

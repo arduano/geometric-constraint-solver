@@ -3234,9 +3234,9 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation complete; clean nomination in progress. ADR 0040, `docs/M83_GOALS.md` and
-the M83 scenario section own the active acceptance contract; no human evidence or accepted product
-claim exists yet.
+Status: implementation, clean mechanical qualification and immutable Tailscale nomination
+complete; focused human UAT pending. ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own
+the active acceptance contract; no human evidence or accepted product claim exists yet.
 
 - The canonical design is an unordered typed dependency graph with stable never-reused
   declarations, ports, children and native reservations. Instance values, presentation
@@ -3282,6 +3282,16 @@ claim exists yet.
   the complete clean release gate all pass before nomination.
 - The exact no-rebuild release artifact is frozen and byte-verified on Tailscale for M83 UAT.
   GitHub Pages remains on the accepted M81 product until explicit supervising-human approval.
+
+Exact nomination evidence: source `1b4f4558688e1bd32be075793e11885f892a3245`, tree
+`ce09e010dc74f2e97b19d52d15433eef8f2f78d3`, passes the complete clean gate recorded at log
+SHA-256 `b6547c1bbbb99175d108c5a2a506f6146a8b01b133a3953c472c9705dd5caeae`. Frozen no-rebuild
+snapshot `/tmp/geosolve-m83-uat.DFamHN` has ordered-manifest aggregate
+`4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`; temporary and retained
+served-byte ledgers independently exact-match it at result SHA-256
+`6d57de9beadd0114afb2d1f101b0f9a542c876ea45aa9f9efda11724b351ce97`. The retained candidate is
+`http://100.94.63.83:8080/`. M83-U1 through M83-U8, Pages publication and milestone closure remain
+pending.
 
 ## Regression and oracle policy
 

@@ -2,8 +2,8 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation complete; candidate qualification in progress**. ADR 0040 is the active
-architecture. The rejected
+Status: **implementation and immutable candidate nomination complete; focused human UAT
+pending**. ADR 0040 is the active architecture. The rejected
 chronological candidate is preserved only on `archive/m83-chronological-lineage-2026-08-23` at
 `be62a1c`; it is not a compatibility target.
 
@@ -94,9 +94,10 @@ validated flat accepted scene authoritative.
 - The exact no-rebuild candidate is frozen and byte-verified over Tailscale. GitHub Pages remains
   on the accepted M81 product until explicit M83 human approval.
 
-Implementation and focused proportional qualification now satisfy G1-G6. The clean release gate,
-immutable no-rebuild freeze and served-byte record are the remaining mechanical nomination steps;
-M83-U1 through M83-U8 remain pending human evidence.
+Implementation, the complete clean release gate, immutable no-rebuild freeze and exact
+served-byte record now satisfy the mechanical G1-G6 nomination contract at source `1b4f455`, tree
+`ce09e01`. M83-U1 through M83-U8 remain pending human evidence; accepted M81 GitHub Pages bytes
+remain public authority.
 
 ## Non-goals
 

@@ -4304,8 +4304,9 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 M83 adds no residual equation and does not reinterpret any earlier geometric oracle. The corpus
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
 existing solver. G1-G6 implementation and focused/proportional coverage are complete through
-selection/deletion hardening `62378c9`; final clean nomination, immutable Tailscale publication and
-human UAT remain pending. M81 GitHub Pages bytes remain public authority.
+selection/deletion hardening `62378c9`. Exact product source `1b4f455`, tree `ce09e01`, passes the
+final clean gate and immutable no-rebuild Tailscale nomination; human UAT remains pending. M81
+GitHub Pages bytes remain public authority.
 
 ### M83-G1 — schema, alias and order independence
 
@@ -4402,9 +4403,11 @@ ordinary compatible workspace round trip solely as presentation state, is omitte
 reproduction authority, never affects materialization or Undo/Redo and is discarded so automatic
 placement can be recomputed when missing, stale or malformed.
 
-The exact no-rebuild release output is frozen and served over Tailscale for the human scorecard in
-`docs/M83_UAT.md`. GitHub Pages remains on accepted M81 bytes until that candidate is explicitly
-approved.
+The exact no-rebuild release output is frozen at `/tmp/geosolve-m83-uat.DFamHN`, aggregate
+`4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`, and independently
+byte-verified at `http://100.94.63.83:8080/`. `docs/M83_UAT.md` owns the full source/tree/service
+and request-ledger evidence plus the pending human scorecard. GitHub Pages remains on accepted M81
+bytes until that candidate is explicitly approved.
 
 ## Frozen near-singular fixtures
 

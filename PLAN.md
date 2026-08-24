@@ -5596,9 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation complete; clean nomination in progress**. ADR 0040 and
-`docs/M83_GOALS.md` own the replacement contract. The rejected chronological owner-rewrite
-candidate remains archived at
+Status: **implementation and immutable Tailscale nomination complete; focused human UAT
+pending**. ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
+chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
 
 - [x] Reject and archive the chronological snapshot/JSON-owner-rewrite model; preserve only its
@@ -5642,11 +5642,24 @@ candidate remains archived at
 - [x] Add inventory, order-independence, stable-identity, retained-failure, deletion-closure,
   persistence/migration, cold/warm differential, native/WASM/TypeScript and complete golden
   coverage for every supported declaration family.
-- [ ] Pass formatting, diff hygiene, warnings-denied Clippy/Rustdoc, locked all-feature workspace
+- [x] Pass formatting, diff hygiene, warnings-denied Clippy/Rustdoc, locked all-feature workspace
   tests, relevant WASM builds, unchanged milestone-neutral golden and the complete clean release
   gate from committed source.
-- [ ] Freeze the exact release output without rebuilding, byte-verify and serve it over Tailscale,
-  then receive explicit supervising-human UAT. Do not deploy M83 to GitHub Pages before approval.
+- [x] Freeze the exact release output without rebuilding, byte-verify it first on a temporary
+  Tailscale listener and independently at the retained UAT endpoint.
+- [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U8.
+- [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
+  listener and close the milestone.
+
+Nomination record: exact product source `1b4f4558688e1bd32be075793e11885f892a3245`, tree
+`ce09e010dc74f2e97b19d52d15433eef8f2f78d3`, passes the complete clean release gate (log SHA-256
+`b6547c1bbbb99175d108c5a2a506f6146a8b01b133a3953c472c9705dd5caeae`). Its no-rebuild snapshot
+`/tmp/geosolve-m83-uat.DFamHN` is frozen at ordered-manifest aggregate
+`4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`; temporary and final
+eight-request ledgers both have SHA-256
+`6d57de9beadd0114afb2d1f101b0f9a542c876ea45aa9f9efda11724b351ce97`. The exact candidate is live
+at `http://100.94.63.83:8080/`. All human UAT rows and Pages publication remain pending; the
+evidence-only documentation descendant does not replace the product source/tree.
 
 Gate: organization, names and source row order cannot change materialization; every accepted
 materialization is independently native-solver validated and reproducible from canonical intent;

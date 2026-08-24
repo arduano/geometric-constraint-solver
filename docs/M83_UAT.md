@@ -2,12 +2,35 @@
 
 # M83 focused UAT — Projectional sketch design intent
 
-Status: **implementation complete; not yet nominated**. Focused/proportional qualification passes
-through the final selection/deletion hardening at `62378c9`; the clean-gate, no-rebuild Tailscale
-candidate is still being produced. This scorecard becomes executable only after its exact source,
-tree, artifact and served-byte evidence are recorded here. Automation owns exact identities,
-equations, residuals, persistence and deterministic reconstruction; human review owns clarity and
-interaction feel.
+Status: **clean-qualified immutable candidate nominated; focused human UAT pending**. Automation
+owns exact identities, equations, residuals, persistence and deterministic reconstruction; human
+review owns clarity and interaction feel.
+
+## Candidate authority
+
+- Product source: `1b4f4558688e1bd32be075793e11885f892a3245`.
+- Product tree: `ce09e010dc74f2e97b19d52d15433eef8f2f78d3`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m83-uat.DFamHN` (directory `0555`; seven regular
+  non-symlink files `0444`).
+- Ordered file-manifest aggregate:
+  `4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`.
+- Retained Tailscale endpoint: `http://100.94.63.83:8080/`
+  (`geosolve-m83-uat.service`, PID `2747514`).
+- Clean gate:
+  `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`,
+  exit 0 at 2026-08-24 14:52:37 AEST; log SHA-256
+  `b6547c1bbbb99175d108c5a2a506f6146a8b01b133a3953c472c9705dd5caeae`.
+- Exact served-byte verification: temporary
+  `/tmp/geosolve-m83-temp-verify.2ogZzJ/results.tsv` and retained
+  `/tmp/geosolve-m83-final-verify.GG1MfU/results.tsv`, each SHA-256
+  `6d57de9beadd0114afb2d1f101b0f9a542c876ea45aa9f9efda11724b351ce97`.
+
+Both verification passes covered `/` plus all seven assets: HTTP 200, zero redirects, no
+`Location` or `Content-Encoding`, exact media type/length/body, the frozen aggregate above and
+root equality with `index.html`. Temporary `:18083` verification passed before the retained
+`:8080` service started, then the temporary listener was retired. The documentation-only
+descendant recording this evidence neither replaces the product source/tree nor rebuilds the
+candidate bytes.
 
 GitHub Pages deliberately remains on accepted M81 bytes. M83-U1 through M83-U8 are pending and no
 automated result below is presented as human evidence.
