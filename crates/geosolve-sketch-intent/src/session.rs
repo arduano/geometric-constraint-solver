@@ -202,6 +202,7 @@ impl IntentTransactionDescriptor {
         diff: IntentSemanticDiff,
     ) -> Self {
         operation_kinds.sort_unstable();
+        operation_kinds.dedup();
         let affected_nodes = diff.affected_nodes();
         Self {
             target_revision,
@@ -218,7 +219,7 @@ impl IntentTransactionDescriptor {
             || !self
                 .operation_kinds
                 .windows(2)
-                .all(|pair| pair[0] <= pair[1])
+                .all(|pair| pair[0] < pair[1])
             || self.affected_nodes != self.diff.affected_nodes()
             || (self.disposition == IntentPlanDisposition::OrganizationOnly
                 && self.diff.requires_materialization())
@@ -491,24 +492,32 @@ fn validate_history_descriptor_transition(
             .latest_attempt
             .as_ref()
             .is_some_and(|attempt| attempt.disposition == IntentAttemptDisposition::RetainedFailed),
-        IntentPlanDisposition::OrganizationOnly => true,
+        IntentPlanDisposition::OrganizationOnly => organization_changed,
+    };
+    let authority_transition_matches = match descriptor.disposition {
+        IntentPlanDisposition::Accepted => true,
+        IntentPlanDisposition::RetainedFailed => before.accepted == after.accepted,
+        IntentPlanDisposition::OrganizationOnly => {
+            history_attempt_content_eq(
+                before.latest_attempt.as_ref(),
+                after.latest_attempt.as_ref(),
+            ) && history_accepted_content_eq(before.accepted.as_ref(), after.accepted.as_ref())
+        }
     };
     let graph_changed = !definition_nodes.is_empty();
-    let has_created_nodes = !created_nodes.is_empty();
-    let has_deleted_nodes = !deleted_nodes.is_empty();
-    let operation_kinds_match = (has_created_nodes
-        == descriptor
-            .operation_kinds
-            .contains(&IntentPatchOperationKind::CreateNode))
-        && (has_deleted_nodes
-            == descriptor
-                .operation_kinds
-                .contains(&IntentPatchOperationKind::DeleteNode))
-        && (!external_inputs_changed
-            || descriptor
-                .operation_kinds
-                .contains(&IntentPatchOperationKind::ReplaceExternalInputs));
+    let operation_kinds_match =
+        history_operation_kinds_match(before, after, descriptor, &created_nodes, &deleted_nodes);
+    let organization_nodes_match = history_organization_nodes_match(
+        before,
+        after,
+        &created_nodes,
+        &deleted_nodes,
+        &descriptor.diff.organization_nodes,
+    );
 
+    if !authority_transition_matches {
+        return Err(IntentSessionError::InvalidHistoryTransition);
+    }
     if descriptor.diff.created_nodes != created_nodes
         || descriptor.diff.deleted_nodes != deleted_nodes
         || descriptor.diff.definition_nodes != definition_nodes
@@ -518,17 +527,406 @@ fn validate_history_descriptor_transition(
             != (!instance_nodes.is_empty() || !deleted_nodes.is_empty())
         || descriptor.diff.organization_changed != organization_changed
         || descriptor.diff.external_inputs_changed != external_inputs_changed
-        || descriptor
-            .diff
-            .organization_nodes
-            .iter()
-            .any(|node| !before_nodes.contains_key(node) || !after_nodes.contains_key(node))
+        || !organization_nodes_match
         || !disposition_matches
         || !operation_kinds_match
     {
         return Err(IntentSessionError::InvalidHistoryDescriptor);
     }
     Ok(())
+}
+
+fn history_attempt_content_eq(
+    left: Option<&IntentLatestAttempt>,
+    right: Option<&IntentLatestAttempt>,
+) -> bool {
+    left.map(|attempt| {
+        (
+            attempt.disposition,
+            &attempt.failed_nodes,
+            attempt.diagnostic.as_ref(),
+        )
+    }) == right.map(|attempt| {
+        (
+            attempt.disposition,
+            &attempt.failed_nodes,
+            attempt.diagnostic.as_ref(),
+        )
+    })
+}
+
+fn history_accepted_content_eq(
+    left: Option<&IntentAcceptedAuthority>,
+    right: Option<&IntentAcceptedAuthority>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => {
+            left.graph.nodes == right.graph.nodes
+                && left.instance.values == right.instance.values
+                && left.external_inputs == right.external_inputs
+        }
+        _ => false,
+    }
+}
+
+fn history_operation_kinds_match(
+    before: &SessionCheckpoint,
+    after: &SessionCheckpoint,
+    descriptor: &IntentTransactionDescriptor,
+    created_nodes: &BTreeSet<NodeId>,
+    deleted_nodes: &BTreeSet<NodeId>,
+) -> bool {
+    history_operation_kinds(before, after, created_nodes, deleted_nodes)
+        .is_some_and(|expected| descriptor.operation_kinds == expected)
+}
+
+/// Reconstructs the unique effective patch categories from two retained
+/// checkpoint bodies. History descriptors are audit projections, not replay
+/// logs: no-op requests and the number of same-category edits carry no durable
+/// meaning, while every observable state transition must be reachable through
+/// the closed patch vocabulary.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed transition audit reconstructs every patch category before accepting history"
+)]
+fn history_operation_kinds(
+    before: &SessionCheckpoint,
+    after: &SessionCheckpoint,
+    created_nodes: &BTreeSet<NodeId>,
+    deleted_nodes: &BTreeSet<NodeId>,
+) -> Option<Vec<IntentPatchOperationKind>> {
+    let mut expected = BTreeSet::new();
+    if !created_nodes.is_empty() {
+        expected.insert(IntentPatchOperationKind::CreateNode);
+    }
+    if !deleted_nodes.is_empty() {
+        expected.insert(IntentPatchOperationKind::DeleteNode);
+    }
+
+    let mut reachable_graph = before.graph.clone();
+    reachable_graph
+        .nodes
+        .retain(|node, _| !deleted_nodes.contains(node));
+    for node in created_nodes {
+        reachable_graph
+            .nodes
+            .insert(*node, after.graph.nodes().get(node)?.clone());
+    }
+    for (node_id, after_node) in after
+        .graph
+        .nodes()
+        .iter()
+        .filter(|(node, _)| !created_nodes.contains(node) && !deleted_nodes.contains(node))
+    {
+        let current = reachable_graph.node(*node_id)?;
+        if current.kind != after_node.kind
+            || current.bootstrap_origin != after_node.bootstrap_origin
+        {
+            reachable_graph.eject_bootstrap_point(*node_id).ok()?;
+            expected.insert(IntentPatchOperationKind::EjectBootstrapPoint);
+        }
+        if reachable_graph.node(*node_id)?.suppressed != after_node.suppressed {
+            reachable_graph
+                .set_suppressed(*node_id, after_node.suppressed)
+                .ok()?;
+            expected.insert(IntentPatchOperationKind::SetSuppressed);
+        }
+        let current_fields = reachable_graph.node(*node_id)?.fields.clone();
+        if current_fields != after_node.fields {
+            if current_fields
+                .keys()
+                .any(|field| !after_node.fields.contains_key(field))
+            {
+                return None;
+            }
+            for (field, value) in &after_node.fields {
+                if current_fields.get(field) != Some(value) {
+                    reachable_graph
+                        .set_field(*node_id, field.clone(), value.clone())
+                        .ok()?;
+                }
+            }
+            expected.insert(IntentPatchOperationKind::SetDefinitionField);
+        }
+        let current_inputs = reachable_graph.node(*node_id)?.inputs.clone();
+        if current_inputs != after_node.inputs {
+            if current_inputs.keys().ne(after_node.inputs.keys()) {
+                return None;
+            }
+            for (slot, source) in &after_node.inputs {
+                if current_inputs.get(slot) != Some(source) {
+                    reachable_graph
+                        .rebind_input(*node_id, *slot, *source)
+                        .ok()?;
+                }
+            }
+            expected.insert(IntentPatchOperationKind::RebindInput);
+        }
+    }
+    assign_identity_generations(&mut reachable_graph).ok()?;
+    if reachable_graph.nodes().len() != after.graph.nodes().len()
+        || reachable_graph.nodes().iter().any(|(node, expected)| {
+            after
+                .graph
+                .nodes()
+                .get(node)
+                .is_none_or(|actual| !history_node_definition_eq(expected, actual))
+        })
+    {
+        return None;
+    }
+
+    let retained_instance_changed = before
+        .instance
+        .values()
+        .keys()
+        .chain(after.instance.values().keys())
+        .filter(|leaf| !created_nodes.contains(&leaf.node) && !deleted_nodes.contains(&leaf.node))
+        .any(|leaf| before.instance.values().get(leaf) != after.instance.values().get(leaf));
+    if before.instance.values().iter().any(|(leaf, _)| {
+        !created_nodes.contains(&leaf.node)
+            && !deleted_nodes.contains(&leaf.node)
+            && !after.instance.values().contains_key(leaf)
+    }) {
+        return None;
+    }
+    if retained_instance_changed {
+        expected.insert(IntentPatchOperationKind::SetInstanceLeaf);
+    }
+
+    if before.organization.default_cell != after.organization.default_cell {
+        return None;
+    }
+    let before_cells = before
+        .organization
+        .cells
+        .keys()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let after_cells = after
+        .organization
+        .cells
+        .keys()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let created_cells = after_cells
+        .difference(&before_cells)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let deleted_cells = before_cells
+        .difference(&after_cells)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if !created_cells.is_empty() {
+        expected.insert(IntentPatchOperationKind::CreateCell);
+    }
+    if !deleted_cells.is_empty() {
+        expected.insert(IntentPatchOperationKind::DeleteCell);
+    }
+    for cell in before_cells.intersection(&after_cells) {
+        if before.organization.cells[cell].name != after.organization.cells[cell].name {
+            return None;
+        }
+    }
+
+    if before.organization.node_names.iter().any(|(node, name)| {
+        !deleted_nodes.contains(node)
+            && after
+                .organization
+                .node_names
+                .get(node)
+                .is_some_and(|after| after != name)
+    }) {
+        expected.insert(IntentPatchOperationKind::RenameNode);
+    }
+    let common_cell_order_before = before
+        .organization
+        .cell_order
+        .iter()
+        .filter(|cell| after_cells.contains(cell))
+        .copied()
+        .collect::<Vec<_>>();
+    let common_cell_order_after = after
+        .organization
+        .cell_order
+        .iter()
+        .filter(|cell| before_cells.contains(cell))
+        .copied()
+        .collect::<Vec<_>>();
+    if common_cell_order_before != common_cell_order_after {
+        expected.insert(IntentPatchOperationKind::ReorderCells);
+    }
+    if history_declaration_move_required(before, after, created_nodes, deleted_nodes) {
+        expected.insert(IntentPatchOperationKind::MoveDeclaration);
+    }
+    if before.external_inputs != after.external_inputs {
+        expected.insert(IntentPatchOperationKind::ReplaceExternalInputs);
+    }
+
+    Some(expected.into_iter().collect())
+}
+
+fn history_ports_eq(left: &crate::IntentNode, right: &crate::IntentNode) -> bool {
+    left.ports.len() == right.ports.len()
+        && left.ports.iter().all(|(port, left_port)| {
+            right.ports.get(port).is_some_and(|right_port| {
+                left_port.id == right_port.id
+                    && left_port.selector == right_port.selector
+                    && left_port.kind == right_port.kind
+                    && left_port.writable == right_port.writable
+                    && history_identity_flow_eq(left_port.flow, right_port.flow)
+            })
+        })
+}
+
+fn history_declaration_locations(
+    organization: &IntentOrganization,
+    retained: &BTreeSet<NodeId>,
+) -> BTreeMap<NodeId, (crate::CellId, usize)> {
+    let mut locations = BTreeMap::new();
+    for (cell, value) in &organization.cells {
+        for (index, node) in value
+            .declarations
+            .iter()
+            .filter(|node| retained.contains(node))
+            .enumerate()
+        {
+            locations.insert(*node, (*cell, index));
+        }
+    }
+    locations
+}
+
+fn history_declaration_move_required(
+    before: &SessionCheckpoint,
+    after: &SessionCheckpoint,
+    created_nodes: &BTreeSet<NodeId>,
+    deleted_nodes: &BTreeSet<NodeId>,
+) -> bool {
+    let retained = before
+        .graph
+        .nodes()
+        .keys()
+        .filter(|node| !deleted_nodes.contains(node) && !created_nodes.contains(node))
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut expected = after
+        .organization
+        .cells
+        .keys()
+        .map(|cell| (*cell, Vec::new()))
+        .collect::<BTreeMap<_, _>>();
+    for (cell, value) in &before.organization.cells {
+        if let Some(declarations) = expected.get_mut(cell) {
+            declarations.extend(
+                value
+                    .declarations
+                    .iter()
+                    .filter(|node| retained.contains(node))
+                    .copied(),
+            );
+        }
+    }
+    let mut deleted_cells = before
+        .organization
+        .cells
+        .keys()
+        .filter(|cell| !after.organization.cells.contains_key(cell))
+        .copied()
+        .collect::<Vec<_>>();
+    deleted_cells
+        .sort_by_key(|cell| IntentPatchOperation::DeleteCell { cell: *cell }.canonical_bytes());
+    let default = expected
+        .get_mut(&after.organization.default_cell)
+        .expect("validated organization retains its default cell");
+    for cell in deleted_cells {
+        default.extend(
+            before.organization.cells[&cell]
+                .declarations
+                .iter()
+                .filter(|node| retained.contains(node))
+                .copied(),
+        );
+    }
+    let actual = after
+        .organization
+        .cells
+        .iter()
+        .map(|(cell, value)| {
+            (
+                *cell,
+                value
+                    .declarations
+                    .iter()
+                    .filter(|node| retained.contains(node))
+                    .copied()
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    expected != actual
+}
+
+fn history_organization_nodes_match(
+    before: &SessionCheckpoint,
+    after: &SessionCheckpoint,
+    created_nodes: &BTreeSet<NodeId>,
+    deleted_nodes: &BTreeSet<NodeId>,
+    claimed: &BTreeSet<NodeId>,
+) -> bool {
+    let retained = before
+        .graph
+        .nodes()
+        .keys()
+        .filter(|node| !deleted_nodes.contains(node) && !created_nodes.contains(node))
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if claimed.iter().any(|node| !retained.contains(node)) {
+        return false;
+    }
+    let before_locations = history_declaration_locations(&before.organization, &retained);
+    let after_locations = history_declaration_locations(&after.organization, &retained);
+    let mandatory = retained
+        .iter()
+        .filter(|node| {
+            before.organization.node_names.get(node) != after.organization.node_names.get(node)
+                || before_locations.get(node).map(|location| location.0)
+                    != after_locations.get(node).map(|location| location.0)
+        })
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if !mandatory.is_subset(claimed) {
+        return false;
+    }
+    if claimed.iter().any(|node| {
+        !mandatory.contains(node) && before_locations.get(node) == after_locations.get(node)
+    }) {
+        return false;
+    }
+    for cell in before
+        .organization
+        .cells
+        .keys()
+        .filter(|cell| after.organization.cells.contains_key(cell))
+    {
+        let before_order = before.organization.cells[cell]
+            .declarations
+            .iter()
+            .filter(|node| retained.contains(node) && !claimed.contains(node))
+            .copied()
+            .collect::<Vec<_>>();
+        let after_order = after.organization.cells[cell]
+            .declarations
+            .iter()
+            .filter(|node| retained.contains(node) && !claimed.contains(node))
+            .copied()
+            .collect::<Vec<_>>();
+        if before_order != after_order {
+            return false;
+        }
+    }
+    true
 }
 
 fn history_node_definition_eq(left: &crate::IntentNode, right: &crate::IntentNode) -> bool {
@@ -543,16 +941,7 @@ fn history_node_definition_eq(left: &crate::IntentNode, right: &crate::IntentNod
         && left.reservations == right.reservations
         && left.child_order == right.child_order
         && left.children == right.children
-        && left.ports.len() == right.ports.len()
-        && left.ports.iter().all(|(port, left_port)| {
-            right.ports.get(port).is_some_and(|right_port| {
-                left_port.id == right_port.id
-                    && left_port.selector == right_port.selector
-                    && left_port.kind == right_port.kind
-                    && left_port.writable == right_port.writable
-                    && history_identity_flow_eq(left_port.flow, right_port.flow)
-            })
-        })
+        && history_ports_eq(left, right)
 }
 
 fn history_identity_flow_eq(left: IntentIdentityFlow, right: IntentIdentityFlow) -> bool {
@@ -727,11 +1116,6 @@ impl IntentSession {
         }
         validate_patch_conflicts(patch.operations())?;
         let policy = patch.policy;
-        let operation_kinds = patch
-            .operations()
-            .iter()
-            .map(IntentPatchOperation::kind)
-            .collect::<Vec<_>>();
         let base_checkpoint = self.checkpoint();
         let mut staged = base_checkpoint.clone();
         let mut reservations = self.reservations.clone();
@@ -745,6 +1129,19 @@ impl IntentSession {
             &mut aliases,
             &mut diff,
         )?;
+        if aliases
+            .nodes
+            .values()
+            .any(|node| !staged.graph.nodes().contains_key(node))
+            || aliases
+                .cells
+                .values()
+                .any(|cell| !staged.organization.cells().contains_key(cell))
+        {
+            return Err(IntentPlanError::ConflictingOperations {
+                target: "newly allocated identity deleted in the same patch".into(),
+            });
+        }
         if !diff.graph_changed
             && !diff.instance_changed
             && !diff.organization_changed
@@ -840,6 +1237,23 @@ impl IntentSession {
         };
 
         let revision = next_revision(self.revision).ok_or(IntentPlanError::RevisionExhausted)?;
+        let created_nodes = staged
+            .graph
+            .nodes()
+            .keys()
+            .filter(|node| !base_checkpoint.graph.nodes().contains_key(node))
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let deleted_nodes = base_checkpoint
+            .graph
+            .nodes()
+            .keys()
+            .filter(|node| !staged.graph.nodes().contains_key(node))
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let operation_kinds =
+            history_operation_kinds(&base_checkpoint, &staged, &created_nodes, &deleted_nodes)
+                .ok_or(IntentSessionError::InvalidHistoryDescriptor)?;
         let descriptor =
             IntentTransactionDescriptor::new(revision, disposition, operation_kinds, diff.clone());
         descriptor.validate()?;
@@ -1312,7 +1726,7 @@ impl IntentSession {
         }
         if wire.version == LEGACY_INTENT_SESSION_VERSION {
             validate_legacy_wire_authority(&wire)?;
-            migrate_legacy_wire_identities(&mut wire);
+            migrate_legacy_wire_identities(&mut wire)?;
         }
         let semantic_identity = semantic_identity(
             &wire.current.graph,
@@ -1825,14 +2239,77 @@ fn validate_legacy_checkpoint_authority(
     Ok(())
 }
 
-fn migrate_legacy_wire_identities(wire: &mut IntentSessionWire) {
+fn migrate_legacy_wire_identities(wire: &mut IntentSessionWire) -> Result<(), IntentSessionError> {
     let current_reservations = wire.reservations.clone();
     migrate_legacy_checkpoint(&mut wire.current, &current_reservations, true);
     for entry in wire.undo.iter_mut().chain(&mut wire.redo) {
         migrate_legacy_checkpoint(&mut entry.checkpoint, &current_reservations, false);
     }
     bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+    let undo_kinds = wire
+        .undo
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            let after = wire
+                .undo
+                .get(index + 1)
+                .map_or(&wire.current, |next| &next.checkpoint);
+            let created = after
+                .graph
+                .nodes()
+                .keys()
+                .filter(|node| !entry.checkpoint.graph.nodes().contains_key(node))
+                .copied()
+                .collect::<BTreeSet<_>>();
+            let deleted = entry
+                .checkpoint
+                .graph
+                .nodes()
+                .keys()
+                .filter(|node| !after.graph.nodes().contains_key(node))
+                .copied()
+                .collect::<BTreeSet<_>>();
+            history_operation_kinds(&entry.checkpoint, after, &created, &deleted)
+                .ok_or(IntentSessionError::InvalidHistoryDescriptor)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let redo_kinds = wire
+        .redo
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            let before = wire
+                .redo
+                .get(index + 1)
+                .map_or(&wire.current, |next| &next.checkpoint);
+            let created = entry
+                .checkpoint
+                .graph
+                .nodes()
+                .keys()
+                .filter(|node| !before.graph.nodes().contains_key(node))
+                .copied()
+                .collect::<BTreeSet<_>>();
+            let deleted = before
+                .graph
+                .nodes()
+                .keys()
+                .filter(|node| !entry.checkpoint.graph.nodes().contains_key(node))
+                .copied()
+                .collect::<BTreeSet<_>>();
+            history_operation_kinds(before, &entry.checkpoint, &created, &deleted)
+                .ok_or(IntentSessionError::InvalidHistoryDescriptor)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    for (entry, kinds) in wire.undo.iter_mut().zip(undo_kinds) {
+        entry.descriptor.operation_kinds = kinds;
+    }
+    for (entry, kinds) in wire.redo.iter_mut().zip(redo_kinds) {
+        entry.descriptor.operation_kinds = kinds;
+    }
     wire.version = INTENT_SESSION_VERSION;
+    Ok(())
 }
 
 fn migrate_legacy_checkpoint(
@@ -3382,6 +3859,137 @@ mod tests {
         assert!(matches!(
             IntentSession::from_json(&authenticated_wire_json(wire)),
             Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+    }
+
+    #[test]
+    fn canonical_v2_rejects_reauthenticated_body_inconsistent_history_descriptor() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fd_01)).unwrap();
+        commit_point(&mut session, "operation-kind", "wire.operation.kind");
+        let point = *session.graph().nodes().keys().next().unwrap();
+        let rename = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::RenameNode {
+                node: point,
+                name: key("forged operation kind"),
+            }],
+        );
+        let plan = session
+            .plan_patch(rename, |_| {
+                panic!("organization-only patch must not materialize")
+            })
+            .unwrap();
+        session.commit_plan(plan).unwrap();
+
+        let canonical = session.to_canonical_json().unwrap();
+
+        let mut substituted: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        substituted
+            .undo
+            .last_mut()
+            .expect("rename enters Undo")
+            .descriptor
+            .operation_kinds = vec![IntentPatchOperationKind::MoveDeclaration];
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(substituted)),
+            Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+
+        let mut added: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        let operation_kinds = &mut added
+            .undo
+            .last_mut()
+            .expect("rename enters Undo")
+            .descriptor
+            .operation_kinds;
+        operation_kinds.push(IntentPatchOperationKind::SetDefinitionField);
+        operation_kinds.sort_unstable();
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(added)),
+            Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+
+        let mut incomplete: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        let descriptor = &mut incomplete
+            .undo
+            .last_mut()
+            .expect("rename enters Undo")
+            .descriptor;
+        descriptor.diff.organization_nodes.clear();
+        descriptor.affected_nodes = descriptor.diff.affected_nodes();
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(incomplete)),
+            Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+    }
+
+    #[test]
+    fn canonical_v2_allows_history_neutral_organization_only_evidence_refresh() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fd_02)).unwrap();
+        commit_point(&mut session, "organization", "wire.organization.authority");
+        let point = *session.graph().nodes().keys().next().unwrap();
+        let rename = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::RenameNode {
+                node: point,
+                name: key("organization-only authority"),
+            }],
+        );
+        let plan = session
+            .plan_patch(rename, |_| {
+                panic!("organization-only patch must not materialize")
+            })
+            .unwrap();
+        session.commit_plan(plan).unwrap();
+
+        let history = session.history_projection();
+        assert!(
+            session
+                .refresh_current_accepted_evidence(|candidate| IntentEvaluation::Accepted {
+                    evidence: MaterializationEvidence::new_host_artifacts(
+                        candidate.external_inputs().identity(),
+                        b"refreshed materialization".to_vec(),
+                        b"refreshed ownership".to_vec(),
+                        b"refreshed validation".to_vec(),
+                    )
+                    .unwrap(),
+                })
+                .unwrap()
+        );
+        assert_eq!(session.history_projection(), history);
+        let canonical = session.to_canonical_json().unwrap();
+        assert_eq!(
+            IntentSession::from_json(&canonical)
+                .unwrap()
+                .to_canonical_json()
+                .unwrap(),
+            canonical,
+        );
+    }
+
+    #[test]
+    fn canonical_v2_rejects_reauthenticated_retained_failure_accepted_evidence_rewrite() {
+        let session = session_with_retained_failure();
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
+        let current = wire
+            .current
+            .accepted
+            .as_mut()
+            .expect("prior accepted authority");
+        current.evidence = MaterializationEvidence::new_host_artifacts(
+            current.external_inputs.identity(),
+            b"different retained materialization".to_vec(),
+            b"different retained ownership".to_vec(),
+            b"different retained validation".to_vec(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(wire)),
+            Err(IntentSessionError::InvalidHistoryTransition)
         ));
     }
 
