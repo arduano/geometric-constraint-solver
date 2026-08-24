@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use geosolve_constraint_editor::{
-    ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, IntentNativeBinding, Modifiers,
-    OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringTarget,
-    ProfileOffsetDirectionState, ProjectionalEditorError, ProjectionalEditorSession,
-    ProjectionalIntentCoordinator, ProjectionalProfileOffsetError, ScreenPoint, Viewport,
+    ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, GeometryInteractionPolicy,
+    IntentNativeBinding, Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState,
+    OffsetAuthoringTarget, PickTolerance, ProfileOffsetDirectionState, ProjectionalEditorError,
+    ProjectionalEditorSession, ProjectionalIntentCoordinator, ProjectionalProfileOffsetError,
+    ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     CurveSpan, DocumentDimensionDefinition, DocumentDimensionId, DocumentId,
     DocumentProfileOffsetOperand, OperationControl, OperationOutcome, PersistentId,
+    RetainedSketchDocumentSession, SketchHardValidity,
 };
 use geosolve_sketch_intent::{
     AggregateKind, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey, IntentKey,
@@ -230,6 +232,187 @@ fn assert_independently_valid(session: &ProjectionalEditorSession) {
     );
 }
 
+fn assert_native_session_independently_valid(session: &RetainedSketchDocumentSession) {
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("current accepted native geometry");
+    let solve = accepted.solve_result();
+    let report = solve.unstable_core_report();
+    assert!(report.hard_residuals_validated, "{report:#?}");
+    assert!(
+        report.hard_residual_max.is_finite() && report.hard_residual_max <= 1.0e-9,
+        "{report:#?}"
+    );
+    assert!(
+        solve
+            .acceptance_hard_residual_max
+            .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
+        "{solve:#?}"
+    );
+    let diagnostics = accepted.diagnostics();
+    let independent = diagnostics.solve.expect("accepted solve diagnostics");
+    assert_eq!(independent.hard_validity, SketchHardValidity::Valid);
+    assert!(independent.hard_residuals_validated);
+    assert!(
+        independent
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
+        "{independent:#?}"
+    );
+
+    let document = accepted.document();
+    assert!(document.model_scale().is_finite() && document.model_scale() > 0.0);
+    assert!(
+        document
+            .points()
+            .iter()
+            .flat_map(|point| point.position)
+            .all(f64::is_finite)
+    );
+    assert!(
+        document
+            .scalars()
+            .iter()
+            .all(|scalar| scalar.value.is_finite())
+    );
+    for curve in document.curves() {
+        for span in document.curve_spans(curve.id).unwrap() {
+            for parameter in [0.0, 0.5, 1.0] {
+                let jet = document.evaluate_curve_jet(span, parameter).unwrap();
+                assert!(
+                    [
+                        jet.position.x,
+                        jet.position.y,
+                        jet.first_derivative.x,
+                        jet.first_derivative.y,
+                        jet.second_derivative.x,
+                        jet.second_derivative.y,
+                        jet.third_derivative.x,
+                        jet.third_derivative.y,
+                    ]
+                    .into_iter()
+                    .all(f64::is_finite),
+                    "non-finite accepted jet for {span:?} at {parameter}: {jet:?}"
+                );
+            }
+        }
+    }
+}
+
+fn native_span_by_label(session: &ProjectionalEditorSession, label: &str) -> CurveSpan {
+    let document = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    let curve = document
+        .curves()
+        .iter()
+        .find(|curve| curve.label == label)
+        .unwrap();
+    document.curve_spans(curve.id).unwrap()[0]
+}
+
+fn provisional_inventory_from_document_delta(
+    accepted: &geosolve_sketch::SketchDocument,
+    preview: &geosolve_sketch::SketchDocument,
+) -> Vec<SelectionItem> {
+    let accepted_points = accepted
+        .points()
+        .iter()
+        .map(|point| point.id)
+        .collect::<BTreeSet<_>>();
+    let accepted_curves = accepted
+        .curves()
+        .iter()
+        .map(|curve| curve.id)
+        .collect::<BTreeSet<_>>();
+    let accepted_constraints = accepted
+        .constraints()
+        .iter()
+        .map(|constraint| constraint.id)
+        .collect::<BTreeSet<_>>();
+    let accepted_dimensions = accepted
+        .dimensions()
+        .iter()
+        .map(|dimension| dimension.id)
+        .collect::<BTreeSet<_>>();
+
+    let mut items = preview
+        .points()
+        .iter()
+        .filter(|point| !accepted_points.contains(&point.id))
+        .map(|point| SelectionItem::Point(point.id))
+        .chain(
+            preview
+                .curves()
+                .iter()
+                .filter(|curve| !accepted_curves.contains(&curve.id))
+                .flat_map(|curve| preview.curve_spans(curve.id).unwrap())
+                .map(SelectionItem::Curve),
+        )
+        .chain(
+            preview
+                .constraints()
+                .iter()
+                .filter(|constraint| !accepted_constraints.contains(&constraint.id))
+                .map(|constraint| SelectionItem::Constraint(constraint.id)),
+        )
+        .chain(
+            preview
+                .dimensions()
+                .iter()
+                .filter(|dimension| !accepted_dimensions.contains(&dimension.id))
+                .map(|dimension| SelectionItem::Dimension(dimension.id)),
+        )
+        .collect::<Vec<_>>();
+    items.sort_unstable();
+    items.dedup();
+    items
+}
+
+fn assert_same_scene_geometry(
+    actual: &geosolve_constraint_editor::EditorScene,
+    expected: &geosolve_constraint_editor::EditorScene,
+) {
+    assert_eq!(actual.viewport, expected.viewport);
+    assert_eq!(actual.points, expected.points);
+    assert_eq!(actual.curves, expected.curves);
+    assert_eq!(actual.datums, expected.datums);
+    assert_eq!(actual.computed_curves, expected.computed_curves);
+    assert_eq!(actual.annotations, expected.annotations);
+    assert_eq!(actual.constraint_entries, expected.constraint_entries);
+}
+
+fn assert_same_document_semantics(
+    actual: &geosolve_sketch::SketchDocument,
+    expected: &geosolve_sketch::SketchDocument,
+) {
+    assert_eq!(actual.id(), expected.id());
+    assert_eq!(
+        actual.model_scale().to_bits(),
+        expected.model_scale().to_bits()
+    );
+    assert_eq!(actual.points(), expected.points());
+    assert_eq!(actual.scalars(), expected.scalars());
+    assert_eq!(actual.curves(), expected.curves());
+    assert_eq!(actual.contacts(), expected.contacts());
+    assert_eq!(actual.trim_views(), expected.trim_views());
+    assert_eq!(actual.constraints(), expected.constraints());
+    assert_eq!(actual.dimensions(), expected.dimensions());
+    assert_eq!(actual.parameters(), expected.parameters());
+    assert_eq!(actual.parameter_bindings(), expected.parameter_bindings());
+    assert_eq!(actual.external_bindings(), expected.external_bindings());
+    assert_eq!(actual.source_order(), expected.source_order());
+    for curve in expected.curves() {
+        assert_eq!(
+            actual.geometry_role(curve.id),
+            expected.geometry_role(curve.id)
+        );
+    }
+}
+
 const fn pointer(
     pointer_id: u64,
     position: ScreenPoint,
@@ -254,12 +437,7 @@ fn offset_drag_geometry(
     ScreenPoint,
     [f64; 2],
 ) {
-    let document = session
-        .coordinator()
-        .accepted_materialization()
-        .unwrap()
-        .session
-        .design_document();
+    let document = session.presentation_session().unwrap().design_document();
     let definition = &document.dimension(dimension).unwrap().definition;
     let DocumentDimensionDefinition::ProfileOffset { operand, .. } = definition else {
         unreachable!()
@@ -294,6 +472,666 @@ fn offset_drag_geometry(
         y: 0.5 * (first.y + last.y),
     };
     (scene, press, derivative)
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one authoring regression keeps last-valid preview, history-free release, Apply, and Undo evidence contiguous"
+)]
+fn projectional_offset_authoring_distance_drag_is_history_free_until_apply() {
+    let mut session = fixture(false, 0x8300_0ff5_0024);
+    let viewport = Viewport::new([800.0, 600.0], [2.0, 1.5], 50.0).unwrap();
+    let mut state = offset_state(&session, false);
+    let history_before = session.coordinator().intent().undo_len();
+    let identity_before = session.coordinator().intent().identity();
+    let intent_before = session.coordinator().intent().clone();
+    let accepted_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .clone();
+
+    assert!(
+        session
+            .refresh_offset_authoring_preview(&state, key("offset.authoring.drag"))
+            .unwrap()
+    );
+    let dimension = session
+        .offset_authoring_provisional_items()
+        .iter()
+        .find_map(|item| match item {
+            SelectionItem::Dimension(dimension) => Some(*dimension),
+            _ => None,
+        })
+        .expect("the cold Profile Offset preview owns one provisional dimension");
+    let (scene, press, derivative) = offset_drag_geometry(&session, dimension, viewport);
+    let origin = viewport.screen_to_model(press);
+    assert!(
+        session
+            .pointer_down_offset_authoring_distance(
+                &state,
+                &scene,
+                pointer(86, press),
+                key("offset.authoring.drag"),
+            )
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        session.editor().active_pointer_gesture().unwrap().kind,
+        ActivePointerGestureKind::OffsetDistance
+    );
+
+    let first_target = viewport.model_to_screen([
+        0.25f64.mul_add(derivative[0], origin[0]),
+        0.25f64.mul_add(derivative[1], origin[1]),
+    ]);
+    let first_distance = session
+        .pointer_move_offset_authoring_distance(&mut state, &scene, pointer(86, first_target))
+        .unwrap()
+        .into_iter()
+        .find_map(|effect| match effect {
+            EditorEffect::PreviewAcceptedProfileOffsetDistance { distance, .. } => Some(distance),
+            _ => None,
+        })
+        .expect("the finite authoring sample must cold-materialize");
+    assert_eq!(first_distance.to_bits(), 0.75_f64.to_bits());
+    let last_valid_state = state.clone();
+    let last_valid_json = session
+        .presentation_session()
+        .unwrap()
+        .design_document()
+        .to_draft_v5_json()
+        .unwrap();
+
+    let invalid_target = viewport.model_to_screen([
+        (-1.0f64).mul_add(derivative[0], origin[0]),
+        (-1.0f64).mul_add(derivative[1], origin[1]),
+    ]);
+    assert!(
+        session
+            .pointer_move_offset_authoring_distance(
+                &mut state,
+                &session.scene(viewport, 0.5).unwrap(),
+                pointer(86, invalid_target),
+            )
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(state, last_valid_state);
+    assert_eq!(
+        session
+            .presentation_session()
+            .unwrap()
+            .design_document()
+            .to_draft_v5_json()
+            .unwrap(),
+        last_valid_json
+    );
+
+    let final_target = viewport.model_to_screen([
+        0.4f64.mul_add(derivative[0], origin[0]),
+        0.4f64.mul_add(derivative[1], origin[1]),
+    ]);
+    let latest_scene = session.scene(viewport, 0.5).unwrap();
+    let final_distance = session
+        .pointer_move_offset_authoring_distance(
+            &mut state,
+            &latest_scene,
+            pointer(86, final_target),
+        )
+        .unwrap()
+        .into_iter()
+        .find_map(|effect| match effect {
+            EditorEffect::PreviewAcceptedProfileOffsetDistance { distance, .. } => Some(distance),
+            _ => None,
+        })
+        .expect("a newer valid sample must replace the held authoring preview");
+    assert_eq!(final_distance.to_bits(), 0.9_f64.to_bits());
+    assert!(
+        session
+            .pointer_up_offset_authoring_distance(
+                &mut state,
+                &session.scene(viewport, 0.5).unwrap(),
+                pointer(86, final_target),
+            )
+            .unwrap()
+    );
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        accepted_before.evidence
+    );
+    assert_native_session_independently_valid(session.presentation_session().unwrap());
+
+    let outcome = session
+        .apply_profile_offset_preview(&mut state, key("offset.authoring.drag"))
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before + 1
+    );
+    assert_independently_valid(&session);
+
+    session.undo().unwrap().unwrap();
+    let undone = session.coordinator().accepted_materialization().unwrap();
+    assert_same_document_semantics(
+        undone.session.design_document(),
+        accepted_before.session.design_document(),
+    );
+    assert_eq!(
+        session.coordinator().intent().graph().nodes(),
+        intent_before.graph().nodes()
+    );
+    assert_eq!(
+        session.coordinator().intent().instance().values(),
+        intent_before.instance().values()
+    );
+    assert_native_session_independently_valid(session.presentation_session().unwrap());
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one public-boundary matrix compares face and ordered-chain semantic/canvas collection without hiding either lifecycle"
+)]
+fn projectional_offset_activation_and_semantic_canvas_picks_are_equivalent() {
+    let viewport = Viewport::new([800.0, 600.0], [2.0, 1.5], 50.0).unwrap();
+    let policy = GeometryInteractionPolicy::default();
+    let tolerance = PickTolerance::default();
+
+    let mut semantic_face = fixture(true, 0x8300_0ff5_0020);
+    let intent_before = semantic_face.coordinator().intent().clone();
+    let mut semantic_face_state = OffsetAuthoringState::default();
+    assert!(matches!(
+        semantic_face
+            .activate_offset_authoring(&mut semantic_face_state)
+            .unwrap(),
+        OffsetAuthoringOutcome::ModeEntered(_)
+    ));
+    assert!(semantic_face_state.is_active());
+    assert_eq!(
+        semantic_face_state.index().unwrap().input(),
+        semantic_face
+            .presentation_session()
+            .unwrap()
+            .accepted_prepared_input()
+            .unwrap()
+    );
+    assert_eq!(
+        semantic_face_state.distance().unwrap().to_bits(),
+        0.1_f64.to_bits()
+    );
+    assert!(
+        semantic_face
+            .offset_authoring_provisional_items()
+            .is_empty()
+    );
+    assert_eq!(semantic_face.coordinator().intent(), &intent_before);
+
+    let face = semantic_face_state.index().unwrap().faces()[0].key.clone();
+    let mut canvas_face_state = semantic_face_state.clone();
+    let scene = semantic_face.scene(viewport, 0.5).unwrap();
+    assert!(matches!(
+        semantic_face_state.pick_target(OffsetAuthoringTarget::Face(face.clone())),
+        OffsetAuthoringOutcome::OperandChanged { .. }
+    ));
+    let position = viewport.model_to_screen([2.0, 1.5]);
+    assert!(matches!(
+        canvas_face_state.hover_at(&scene, position, tolerance, policy),
+        OffsetAuthoringOutcome::HoverChanged(Some(ref hover))
+            if hover.target == OffsetAuthoringTarget::Face(face.clone())
+                && hover.availability.is_available()
+    ));
+    assert!(matches!(
+        canvas_face_state.pick_at(&scene, position, tolerance, policy),
+        OffsetAuthoringOutcome::OperandChanged { .. }
+    ));
+    assert_eq!(canvas_face_state.operand(), semantic_face_state.operand());
+    assert_eq!(
+        canvas_face_state.candidate(),
+        semantic_face_state.candidate()
+    );
+
+    let mut semantic_chain = fixture(false, 0x8300_0ff5_0021);
+    let mut semantic_chain_state = OffsetAuthoringState::default();
+    semantic_chain
+        .activate_offset_authoring(&mut semantic_chain_state)
+        .unwrap();
+    let bottom = native_span_by_label(&semantic_chain, "line.bottom");
+    let right = native_span_by_label(&semantic_chain, "line.right");
+    let mut canvas_chain_state = semantic_chain_state.clone();
+    let scene = semantic_chain.scene(viewport, 0.5).unwrap();
+    for span in [bottom, right] {
+        assert!(matches!(
+            semantic_chain_state.pick_target(OffsetAuthoringTarget::Span(span)),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+    }
+    for (model, span) in [([2.0, 0.0], bottom), ([4.0, 1.5], right)] {
+        let position = viewport.model_to_screen(model);
+        assert!(matches!(
+            canvas_chain_state.hover_at(&scene, position, tolerance, policy),
+            OffsetAuthoringOutcome::HoverChanged(Some(ref hover))
+                if hover.target == OffsetAuthoringTarget::Span(span)
+                    && hover.availability.is_available()
+        ));
+        assert!(matches!(
+            canvas_chain_state.pick_at(&scene, position, tolerance, policy),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+    }
+    assert_eq!(canvas_chain_state.operand(), semantic_chain_state.operand());
+    assert_eq!(
+        canvas_chain_state.candidate(),
+        semantic_chain_state.candidate()
+    );
+    assert_eq!(semantic_chain.coordinator().intent().undo_len(), 1);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact lifecycle test keeps cold inventory, publication, collector refresh, independent validation, and Undo evidence contiguous"
+)]
+fn projectional_face_offset_cold_preview_applies_once_reactivates_and_undoes() {
+    let mut session = fixture(true, 0x8300_0ff5_0022);
+    let viewport = Viewport::new([800.0, 600.0], [2.0, 1.5], 50.0).unwrap();
+    let intent_before = session.coordinator().intent().clone();
+    let history_before = intent_before.history_projection();
+    let design_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document()
+        .clone();
+    let accepted_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let scene_before = session.scene(viewport, 0.5).unwrap();
+
+    let mut state = OffsetAuthoringState::default();
+    session.activate_offset_authoring(&mut state).unwrap();
+    let original_index = state.index().unwrap().clone();
+    let original_input = original_index.input();
+    let face = original_index.faces()[0].key.clone();
+    assert!(matches!(
+        state.pick_target(OffsetAuthoringTarget::Face(face)),
+        OffsetAuthoringOutcome::OperandChanged { .. }
+    ));
+    assert!(matches!(
+        state.set_distance(0.5),
+        OffsetAuthoringOutcome::DistanceChanged { .. }
+    ));
+    let durable_identity = session.coordinator().intent().identity();
+    let durable_history = session.coordinator().intent().history_projection();
+    let durable_evidence = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+    assert!(
+        session
+            .refresh_offset_authoring_preview(&state, key("offset.preview.face"))
+            .unwrap()
+    );
+    assert!(session.offset_authoring_preview_matches(&state));
+    assert_eq!(session.coordinator().intent().identity(), durable_identity);
+    assert_eq!(
+        session.coordinator().intent().history_projection(),
+        durable_history
+    );
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        durable_evidence
+    );
+
+    let durable_document = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document()
+        .clone();
+    let preview_session = session.presentation_session().unwrap();
+    assert_native_session_independently_valid(preview_session);
+    let preview_document = preview_session.design_document().clone();
+    let preview_accepted_json = preview_session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .to_draft_v5_json()
+        .unwrap();
+    let preview_design_json = preview_document.to_draft_v5_json().unwrap();
+    let expected_inventory =
+        provisional_inventory_from_document_delta(&durable_document, &preview_document);
+    assert_eq!(
+        session.offset_authoring_provisional_items(),
+        expected_inventory
+    );
+    assert_eq!(expected_inventory.len(), 9);
+    assert_eq!(
+        expected_inventory
+            .iter()
+            .filter(|item| matches!(item, SelectionItem::Point(_)))
+            .count(),
+        4
+    );
+    assert_eq!(
+        expected_inventory
+            .iter()
+            .filter(|item| matches!(item, SelectionItem::Curve(_)))
+            .count(),
+        4
+    );
+    assert_eq!(
+        expected_inventory
+            .iter()
+            .filter(|item| matches!(item, SelectionItem::Dimension(_)))
+            .count(),
+        1
+    );
+    assert!(
+        expected_inventory
+            .iter()
+            .all(|item| !matches!(item, SelectionItem::Constraint(_)))
+    );
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    assert_eq!(preview_scene.points.len(), scene_before.points.len() + 4);
+    assert_eq!(preview_scene.curves.len(), scene_before.curves.len() + 4);
+
+    let history_before_apply = session.coordinator().intent().undo_len();
+    let outcome = session
+        .apply_profile_offset_preview(&mut state, key("offset.preview.face"))
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before_apply + 1
+    );
+    assert!(state.operand().is_none());
+    assert!(!session.offset_authoring_preview_matches(&state));
+    assert!(session.offset_authoring_provisional_items().is_empty());
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .to_draft_v5_json()
+            .unwrap(),
+        preview_design_json
+    );
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .to_draft_v5_json()
+            .unwrap(),
+        preview_accepted_json
+    );
+    assert_same_scene_geometry(&session.scene(viewport, 0.5).unwrap(), &preview_scene);
+    assert_independently_valid(&session);
+    assert_native_session_independently_valid(session.presentation_session().unwrap());
+
+    assert!(matches!(
+        session.activate_offset_authoring(&mut state).unwrap(),
+        OffsetAuthoringOutcome::ModeEntered(_)
+    ));
+    let refreshed_index = state.index().unwrap();
+    assert!(!Arc::ptr_eq(&original_index, refreshed_index));
+    assert_ne!(refreshed_index.input(), original_input);
+    assert_eq!(
+        refreshed_index.input(),
+        session
+            .presentation_session()
+            .unwrap()
+            .accepted_prepared_input()
+            .unwrap()
+    );
+    assert!(state.operand().is_none());
+    assert_eq!(state.distance().unwrap().to_bits(), 0.5_f64.to_bits());
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before_apply + 1
+    );
+
+    session.undo().unwrap().unwrap();
+    let restored_intent = session.coordinator().intent();
+    assert_eq!(
+        restored_intent.graph().nodes(),
+        intent_before.graph().nodes()
+    );
+    assert_eq!(
+        restored_intent.instance().values(),
+        intent_before.instance().values()
+    );
+    assert_eq!(
+        restored_intent.organization().default_cell(),
+        intent_before.organization().default_cell()
+    );
+    assert_eq!(
+        restored_intent.organization().cell_order(),
+        intent_before.organization().cell_order()
+    );
+    assert_eq!(
+        restored_intent.organization().cells(),
+        intent_before.organization().cells()
+    );
+    assert_eq!(
+        restored_intent.organization().node_names(),
+        intent_before.organization().node_names()
+    );
+    assert_eq!(
+        restored_intent.external_inputs(),
+        intent_before.external_inputs()
+    );
+    assert_eq!(restored_intent.undo_len(), intent_before.undo_len());
+    assert_eq!(
+        restored_intent.history_projection().applied,
+        history_before.applied
+    );
+    assert_eq!(restored_intent.redo_len(), 1);
+    let restored = session.coordinator().accepted_materialization().unwrap();
+    assert_same_document_semantics(restored.session.design_document(), &design_before);
+    assert_same_document_semantics(
+        restored
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &accepted_before,
+    );
+    assert_same_scene_geometry(&session.scene(viewport, 0.5).unwrap(), &scene_before);
+    assert_native_session_independently_valid(session.presentation_session().unwrap());
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one failure matrix proves both stale topology and invalid distance preserve complete projectional authority"
+)]
+fn projectional_offset_stale_topology_and_invalid_distance_cannot_apply() {
+    let viewport = Viewport::new([800.0, 600.0], [2.0, 1.5], 50.0).unwrap();
+    let mut session = fixture(false, 0x8300_0ff5_0023);
+    let mut stale = OffsetAuthoringState::default();
+    session.activate_offset_authoring(&mut stale).unwrap();
+    for label in ["line.bottom", "line.right"] {
+        let span = native_span_by_label(&session, label);
+        assert!(matches!(
+            stale.pick_target(OffsetAuthoringTarget::Span(span)),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+    }
+    assert!(matches!(
+        stale.set_distance(0.5),
+        OffsetAuthoringOutcome::DistanceChanged { .. }
+    ));
+    assert!(
+        session
+            .refresh_offset_authoring_preview(&stale, key("offset.stale"))
+            .unwrap()
+    );
+    assert!(session.offset_authoring_preview_matches(&stale));
+    let stale_before_mutation = stale.clone();
+
+    session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![create(
+                "unrelated-stale",
+                point("point.unrelated.stale", [10.0, 10.0]),
+            )],
+        ))
+        .unwrap();
+    assert!(!session.offset_authoring_preview_matches(&stale));
+    let intent_before_failure = session.coordinator().intent().clone();
+    let evidence_before_failure = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+    let document_before_failure = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document()
+        .to_draft_v5_json()
+        .unwrap();
+    let scene_before_failure = session.scene(viewport, 0.5).unwrap();
+
+    assert!(matches!(
+        session.refresh_offset_authoring_preview(&stale, key("offset.stale")),
+        Err(ProjectionalEditorError::ProfileOffset(
+            ProjectionalProfileOffsetError::StaleCandidate
+        ))
+    ));
+    assert!(matches!(
+        session.apply_profile_offset_preview(&mut stale, key("offset.stale")),
+        Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)
+    ));
+    assert!(matches!(
+        session.apply_profile_offset(&mut stale, key("offset.stale.direct")),
+        Err(ProjectionalEditorError::ProfileOffset(
+            ProjectionalProfileOffsetError::StaleCandidate
+        ))
+    ));
+    assert_eq!(stale, stale_before_mutation);
+    assert_eq!(session.coordinator().intent(), &intent_before_failure);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before_failure
+    );
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .to_draft_v5_json()
+            .unwrap(),
+        document_before_failure
+    );
+    assert_same_scene_geometry(
+        &session.scene(viewport, 0.5).unwrap(),
+        &scene_before_failure,
+    );
+
+    let mut invalid = OffsetAuthoringState::default();
+    session.activate_offset_authoring(&mut invalid).unwrap();
+    let bottom = native_span_by_label(&session, "line.bottom");
+    assert!(matches!(
+        invalid.pick_target(OffsetAuthoringTarget::Span(bottom)),
+        OffsetAuthoringOutcome::OperandChanged { .. }
+    ));
+    assert!(
+        session
+            .refresh_offset_authoring_preview(&invalid, key("offset.invalid"))
+            .unwrap()
+    );
+    assert!(matches!(
+        invalid.set_distance(0.0),
+        OffsetAuthoringOutcome::Warning(_)
+    ));
+    assert!(invalid.candidate().is_none());
+    assert!(
+        !session
+            .refresh_offset_authoring_preview(&invalid, key("offset.invalid"))
+            .unwrap()
+    );
+    assert!(session.offset_authoring_provisional_items().is_empty());
+
+    let invalid_before_failure = invalid.clone();
+    let intent_before_invalid = session.coordinator().intent().clone();
+    let evidence_before_invalid = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+    let scene_before_invalid = session.scene(viewport, 0.5).unwrap();
+    assert!(matches!(
+        session.apply_profile_offset_preview(&mut invalid, key("offset.invalid")),
+        Err(ProjectionalEditorError::AuthoringCandidateIncomplete)
+    ));
+    assert!(matches!(
+        session.apply_profile_offset(&mut invalid, key("offset.invalid.direct")),
+        Err(ProjectionalEditorError::ProfileOffset(
+            ProjectionalProfileOffsetError::IncompleteCandidate
+        ))
+    ));
+    assert!(matches!(
+        invalid.set_distance(f64::NAN),
+        OffsetAuthoringOutcome::Warning(_)
+    ));
+    assert_eq!(invalid, invalid_before_failure);
+    assert_eq!(session.coordinator().intent(), &intent_before_invalid);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before_invalid
+    );
+    assert_same_scene_geometry(
+        &session.scene(viewport, 0.5).unwrap(),
+        &scene_before_invalid,
+    );
+    assert_native_session_independently_valid(session.presentation_session().unwrap());
 }
 
 #[test]

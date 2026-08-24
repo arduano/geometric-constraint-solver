@@ -3344,6 +3344,10 @@ pub(crate) mod wasm {
     struct ProjectionalWorkbench {
         authority: super::WorkbenchDocumentAuthority,
         authoring: AuthoringState,
+        feature_authoring: FeatureAuthoringState,
+        offset_authoring: OffsetAuthoringState,
+        feature_candidate: Option<FeatureAuthoringCandidate>,
+        feature_pending: Vec<FeatureAuthoringPick>,
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
@@ -3480,6 +3484,10 @@ pub(crate) mod wasm {
         let mut workbench = ProjectionalWorkbench {
             authority,
             authoring: AuthoringState::default(),
+            feature_authoring: FeatureAuthoringState::default(),
+            offset_authoring: OffsetAuthoringState::default(),
+            feature_candidate: None,
+            feature_pending: Vec::new(),
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
@@ -3508,10 +3516,9 @@ pub(crate) mod wasm {
     }
 
     fn set_projectional_surface_availability(document: &Document) -> Result<(), JsValue> {
-        // Selection, point direct manipulation, and the complete typed geometry
-        // and relation/dimension catalogs are projectional. Computed features
-        // and Offset stay visibly unavailable until their own intent bridges
-        // are activated.
+        // Selection, point direct manipulation, typed geometry, relations,
+        // dimensions, computed Fillet and native Profile Offset all publish
+        // through the sole projectional intent history.
         set_disabled(&required(document, "wb-tool-select")?, false)?;
         for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
             set_disabled(
@@ -3537,10 +3544,10 @@ pub(crate) mod wasm {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-feature=\"{key}\"]"))?
             {
-                set_disabled(&button, true)?;
+                set_disabled(&button, false)?;
             }
         }
-        set_disabled(&required(document, "wb-offset-trigger")?, true)?;
+        set_disabled(&required(document, "wb-offset-trigger")?, false)?;
         set_disabled(&required(document, "wb-geometry-role")?, false)?;
         for id in [
             "wb-authoring-curvature",
@@ -3598,10 +3605,22 @@ pub(crate) mod wasm {
         wb.authoring.active_tool().is_some()
     }
 
+    fn projectional_feature_authoring_active(wb: &ProjectionalWorkbench) -> bool {
+        wb.feature_authoring.active_tool().is_some()
+    }
+
+    fn projectional_offset_authoring_active(wb: &ProjectionalWorkbench) -> bool {
+        wb.offset_authoring.is_active()
+    }
+
     fn open_projectional_sample(wb: &mut ProjectionalWorkbench, key: &str) -> Result<(), String> {
         let coordinator = wb.samples.open_key(key)?;
         wb.authority = super::WorkbenchDocumentAuthority::from_flat_coordinator(coordinator)?;
         wb.authoring.deactivate();
+        wb.feature_authoring.deactivate();
+        let _ = wb.offset_authoring.cancel();
+        wb.feature_candidate = None;
+        wb.feature_pending.clear();
         wb.option_overlay.close();
         wb.construction_preview = None;
         wb.pointer_moves.borrow_mut().invalidate();
@@ -3626,38 +3645,71 @@ pub(crate) mod wasm {
         let editor = wb.editor().editor();
         let geometry_active = projectional_geometry_authoring_active(wb);
         let ordinary_active = projectional_ordinary_authoring_active(wb);
-        let active = geometry_active || ordinary_active;
+        let feature_active = projectional_feature_authoring_active(wb);
+        let offset_active = projectional_offset_authoring_active(wb);
+        let active = geometry_active || ordinary_active || feature_active || offset_active;
         set_hidden(&required(document, "wb-draft-guide")?, !active)?;
         let status = editor.geometry_draft_status();
-        let guide_text = wb.authoring.active_tool().map_or_else(
-            || {
-                status.as_ref().map_or_else(
-                    || "Select a geometry recipe".to_owned(),
-                    super::geometry_palette::status_text,
-                )
-            },
-            |tool| {
-                format!(
-                    "{} · {} pending · Escape clears/exits",
-                    authoring_tool_label(tool),
-                    wb.authoring.pending().len(),
-                )
-            },
-        );
+        let guide_text = if feature_active {
+            let guidance = wb.feature_authoring.guidance();
+            format!(
+                "{} · {} corner{} · Escape clears/exits",
+                guidance.message,
+                guidance.completed_corners,
+                if guidance.completed_corners == 1 {
+                    ""
+                } else {
+                    "s"
+                },
+            )
+        } else if offset_active {
+            wb.offset_authoring.guidance().message.to_owned()
+        } else if let Some(tool) = wb.authoring.active_tool() {
+            format!(
+                "{} · {} pending · Escape clears/exits",
+                authoring_tool_label(tool),
+                wb.authoring.pending().len(),
+            )
+        } else {
+            status.as_ref().map_or_else(
+                || "Select a geometry recipe".to_owned(),
+                super::geometry_palette::status_text,
+            )
+        };
         required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
         let finish = required(document, "wb-guide-finish")?;
         let can_finish = editor.can_complete_draft();
-        set_hidden(&finish, ordinary_active || !geometry_active || !can_finish)?;
+        set_hidden(
+            &finish,
+            ordinary_active || feature_active || offset_active || !geometry_active || !can_finish,
+        )?;
         set_disabled(&finish, !can_finish)?;
         if let Some(button) =
             document.query_selector(".wb-palette-terminal [data-wb-action=\"finish\"]")?
         {
-            set_disabled(&button, ordinary_active || !can_finish)?;
+            set_disabled(
+                &button,
+                ordinary_active || feature_active || offset_active || !can_finish,
+            )?;
         }
+        let feature_ready = feature_active
+            && wb.feature_candidate.is_some()
+            && wb
+                .editor()
+                .feature_authoring_preview_matches(&wb.feature_authoring);
+        let feature_apply = required(document, "wb-guide-apply")?;
+        set_hidden(&feature_apply, !feature_ready)?;
+        set_disabled(&feature_apply, !feature_ready)?;
+        set_hidden(&required(document, "wb-guide-apply-native")?, true)?;
+        set_hidden(&required(document, "wb-guide-apply-native-reason")?, true)?;
 
         required(document, "wb-tool-select")?.set_attribute(
             "aria-pressed",
-            if editor.tool() == EditorTool::Select && !ordinary_active {
+            if editor.tool() == EditorTool::Select
+                && !ordinary_active
+                && !feature_active
+                && !offset_active
+            {
                 "true"
             } else {
                 "false"
@@ -3717,6 +3769,22 @@ pub(crate) mod wasm {
                 )?;
             }
         }
+        for (key, _, tool) in super::action_surface::FEATURE_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-feature=\"{key}\"]"))?
+            {
+                button.set_attribute(
+                    "aria-pressed",
+                    if wb.feature_authoring.active_tool() == Some(tool) {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )?;
+            }
+        }
+        required(document, "wb-offset-trigger")?
+            .set_attribute("aria-pressed", if offset_active { "true" } else { "false" })?;
 
         let role = editor.authoring_geometry_role();
         let role_button = required(document, "wb-geometry-role")?;
@@ -3746,8 +3814,8 @@ pub(crate) mod wasm {
             super::canvas_cursor_key_with_curve_control(
                 editor.tool(),
                 ordinary_active,
-                false,
-                false,
+                feature_active,
+                offset_active,
                 false,
                 editor.hover_state(),
                 editor.active_pointer_gesture(),
@@ -3793,6 +3861,18 @@ pub(crate) mod wasm {
             let kind = super::OptionOverlayKind::Dimension(dimension);
             set_option_invoker_expanded(document, &format!("wb-authoring-{key}-tool"), kind, open)?;
         }
+        set_option_invoker_expanded(
+            document,
+            "wb-feature-fillet-trigger",
+            super::OptionOverlayKind::Fillet,
+            open,
+        )?;
+        set_option_invoker_expanded(
+            document,
+            "wb-offset-trigger",
+            super::OptionOverlayKind::Offset,
+            open,
+        )?;
         let family = match open {
             Some(super::OptionOverlayKind::GeometryFamily(family)) => Some(family),
             _ => None,
@@ -3844,8 +3924,14 @@ pub(crate) mod wasm {
                 "wb-option-panel-dimension",
                 matches!(open, Some(super::OptionOverlayKind::Dimension(_))),
             ),
-            ("wb-option-panel-fillet", false),
-            ("wb-option-panel-offset", false),
+            (
+                "wb-option-panel-fillet",
+                open == Some(super::OptionOverlayKind::Fillet),
+            ),
+            (
+                "wb-option-panel-offset",
+                open == Some(super::OptionOverlayKind::Offset),
+            ),
             (
                 "wb-option-panel-construction-display",
                 open == Some(super::OptionOverlayKind::ConstructionDisplay),
@@ -3976,6 +4062,49 @@ pub(crate) mod wasm {
                 super::rational_conic_construction_copy(editor.conic_options().middle_weight);
             required(document, "wb-conic-rational-help")?.set_text_content(Some(help));
         }
+        if open == Some(super::OptionOverlayKind::Fillet) {
+            if let Some(radius) = wb.feature_authoring.options().fillet_radius
+                && document
+                    .active_element()
+                    .is_none_or(|element| element.id() != "wb-feature-fillet-radius")
+                && let Ok(input) =
+                    required(document, "wb-feature-fillet-radius")?.dyn_into::<HtmlInputElement>()
+            {
+                input.set_value(&radius.to_string());
+            }
+            set_disabled(
+                &required(document, "wb-feature-fillet-radius")?,
+                !projectional_feature_authoring_active(wb),
+            )?;
+        }
+        if open == Some(super::OptionOverlayKind::Offset) {
+            required(document, "wb-offset-operand-status")?
+                .set_text_content(Some(&super::offset_operand_status(&wb.offset_authoring)));
+            required(document, "wb-offset-direction")?.set_text_content(Some(
+                super::offset_direction_label(wb.offset_authoring.operand()),
+            ));
+            if let Some(distance) = wb.offset_authoring.distance()
+                && document
+                    .active_element()
+                    .is_none_or(|element| element.id() != "wb-offset-distance")
+                && let Ok(input) =
+                    required(document, "wb-offset-distance")?.dyn_into::<HtmlInputElement>()
+            {
+                input.set_value(&distance.to_string());
+            }
+            set_disabled(
+                &required(document, "wb-offset-apply")?,
+                !wb.editor()
+                    .offset_authoring_preview_matches(&wb.offset_authoring),
+            )?;
+            if let Some(flip) = document.query_selector("[data-wb-action=\"offset-flip\"]")? {
+                set_disabled(&flip, wb.offset_authoring.operand().is_none())?;
+            }
+            set_disabled(
+                &required(document, "wb-offset-distance")?,
+                !projectional_offset_authoring_active(wb),
+            )?;
+        }
         Ok(())
     }
 
@@ -4082,26 +4211,42 @@ pub(crate) mod wasm {
         scope: super::WorkbenchRenderScope,
     ) -> Result<(), JsValue> {
         let scene = projectional_scene(&wb);
-        let source = wb.editor().coordinator().presentation_session();
+        let source = wb.editor().presentation_session();
         let accepted = source.and_then(
             geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
         );
         let selection = wb.editor().editor().selection();
-        let pending = wb
+        let mut canvas_selection = selection.to_vec();
+        if let Some(item) = wb.editor().feature_authoring_preview_item() {
+            canvas_selection.push(item);
+            canvas_selection.sort_unstable();
+            canvas_selection.dedup();
+        }
+        let mut pending = wb
             .authoring
             .pending()
             .iter()
             .map(|operand| operand.item)
             .collect::<Vec<_>>();
+        pending.extend(
+            wb.feature_pending
+                .iter()
+                .map(|pick| SelectionItem::Curve(pick.curve.source.span)),
+        );
+        let offset_presentation = super::offset_canvas_presentation(&wb.offset_authoring);
+        pending.extend(offset_presentation.pending.iter().copied());
+        pending.sort_unstable();
+        pending.dedup();
+        let provisional = wb.editor().offset_authoring_provisional_items();
         let hover = wb.editor().editor().hover_state();
         required(document, "wb-viewport")?.set_inner_html(
             &super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
                 scene.as_ref(),
                 accepted,
                 &[],
-                selection,
+                &canvas_selection,
                 &pending,
-                &[],
+                provisional,
                 hover,
                 wb.construction_preview.as_ref(),
                 wb.editor().editor().draft_inference_resolution(),
@@ -4112,7 +4257,7 @@ pub(crate) mod wasm {
                 super::scene::CanvasDisplayOptions {
                     grid_visible: wb.grid_visible,
                 },
-                None,
+                Some(&offset_presentation),
                 wb.camera.viewport(),
             ),
         );
@@ -4136,6 +4281,43 @@ pub(crate) mod wasm {
         coordinate_element.set_attribute(
             "data-inference-adjusted",
             if coordinate.adjusted { "true" } else { "false" },
+        )?;
+        root.set_attribute(
+            "data-feature-authoring",
+            if projectional_feature_authoring_active(wb) {
+                match wb.feature_authoring.guidance().stage {
+                    FeatureAuthoringStage::PickFirstFilletCurve => "pick-first",
+                    FeatureAuthoringStage::PickSecondFilletCurve => "pick-second",
+                    FeatureAuthoringStage::PreviewReady => "preview-ready",
+                }
+            } else {
+                "inactive"
+            },
+        )?;
+        root.set_attribute(
+            "data-offset-authoring",
+            if projectional_offset_authoring_active(wb) {
+                match wb.offset_authoring.guidance().stage {
+                    OffsetAuthoringStage::PickOperand => "pick-operand",
+                    OffsetAuthoringStage::CollectChain => "collect-chain",
+                    OffsetAuthoringStage::PreviewReady => "preview-ready",
+                }
+            } else {
+                "inactive"
+            },
+        )?;
+        root.set_attribute(
+            "data-offset-preview",
+            if wb
+                .editor()
+                .offset_authoring_preview_matches(&wb.offset_authoring)
+            {
+                "ready"
+            } else if provisional.is_empty() {
+                "none"
+            } else {
+                "last-valid"
+            },
         )?;
         render_projectional_authoring_status(document, wb)?;
         Ok(())
@@ -4223,6 +4405,14 @@ pub(crate) mod wasm {
     }
 
     fn reconcile_projectional_authoring(wb: &mut ProjectionalWorkbench) {
+        if projectional_feature_authoring_active(wb) {
+            clear_projectional_feature_authoring(wb);
+            wb.option_overlay.close();
+        }
+        if projectional_offset_authoring_active(wb) {
+            clear_projectional_offset_authoring(wb);
+            wb.option_overlay.close();
+        }
         if wb.authoring.active_tool().is_none() {
             return;
         }
@@ -4369,6 +4559,437 @@ pub(crate) mod wasm {
         handle_projectional_authoring_outcome(wb, outcome)
     }
 
+    fn projectional_feature_symbol(wb: &ProjectionalWorkbench) -> Result<IntentKey, String> {
+        IntentKey::new(format!(
+            "Fillet {}",
+            wb.editor()
+                .coordinator()
+                .intent()
+                .identity()
+                .revision
+                .raw()
+                .saturating_add(1),
+        ))
+        .map_err(|error| error.to_string())
+    }
+
+    fn projectional_offset_symbol(wb: &ProjectionalWorkbench) -> Result<IntentKey, String> {
+        IntentKey::new(format!(
+            "Offset {}",
+            wb.editor()
+                .coordinator()
+                .intent()
+                .identity()
+                .revision
+                .raw()
+                .saturating_add(1),
+        ))
+        .map_err(|error| error.to_string())
+    }
+
+    fn clear_projectional_feature_authoring(wb: &mut ProjectionalWorkbench) {
+        wb.feature_authoring.deactivate();
+        wb.feature_candidate = None;
+        wb.feature_pending.clear();
+        wb.editor_mut().clear_authoring_previews();
+    }
+
+    fn clear_projectional_offset_authoring(wb: &mut ProjectionalWorkbench) {
+        let _ = wb.offset_authoring.cancel();
+        wb.editor_mut().clear_authoring_previews();
+    }
+
+    fn handle_projectional_feature_outcome(
+        wb: &mut ProjectionalWorkbench,
+        outcome: FeatureAuthoringOutcome,
+    ) {
+        match outcome {
+            FeatureAuthoringOutcome::ModeEntered(guidance) => {
+                wb.feature_candidate = None;
+                wb.feature_pending.clear();
+                wb.notice = format!("{} · Escape exits", guidance.message);
+            }
+            FeatureAuthoringOutcome::NoNativeHit(guidance) => {
+                guidance.message.clone_into(&mut wb.notice);
+            }
+            FeatureAuthoringOutcome::Collecting { pending, guidance } => {
+                wb.feature_candidate = None;
+                wb.feature_pending = pending;
+                guidance.message.clone_into(&mut wb.notice);
+            }
+            FeatureAuthoringOutcome::PreviewRequested {
+                candidate,
+                guidance,
+            } => {
+                wb.feature_pending.clear();
+                wb.feature_candidate = Some(candidate);
+                wb.notice = format!("{} · Apply or press Enter", guidance.message);
+            }
+            FeatureAuthoringOutcome::Apply(_) => {
+                wb.notice = "Fillet candidate ready to apply".into();
+            }
+            FeatureAuthoringOutcome::Warning(warning) => {
+                wb.notice = warning.message;
+            }
+            FeatureAuthoringOutcome::CandidateCleared(guidance) => {
+                wb.feature_candidate = None;
+                wb.feature_pending.clear();
+                wb.notice = format!("Fillet batch cleared · {}", guidance.message);
+            }
+            FeatureAuthoringOutcome::ModeExited => {
+                wb.feature_candidate = None;
+                wb.feature_pending.clear();
+                wb.notice = "Computed feature authoring exited; Select active".into();
+            }
+            FeatureAuthoringOutcome::Inactive => {}
+        }
+    }
+
+    fn activate_projectional_feature_authoring(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+        tool: FeatureAuthoringTool,
+    ) {
+        let radius = match feature_radius_input(document) {
+            Ok(radius) => radius,
+            Err(error) => {
+                wb.notice = error;
+                return;
+            }
+        };
+        let selection = wb
+            .editor()
+            .editor()
+            .selection()
+            .iter()
+            .copied()
+            .map(|item| {
+                let parameter = match item {
+                    SelectionItem::Curve(span) => wb.editor().editor().curve_pick_parameter(span),
+                    SelectionItem::Point(_)
+                    | SelectionItem::Constraint(_)
+                    | SelectionItem::Dimension(_)
+                    | SelectionItem::Datum(_)
+                    | SelectionItem::Feature(_)
+                    | SelectionItem::FeatureCorner(_) => None,
+                };
+                (item, parameter)
+            })
+            .collect::<Vec<_>>();
+        wb.authoring.deactivate();
+        clear_projectional_offset_authoring(wb);
+        let effects = wb
+            .editor_mut()
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        let _ = dispatch_projectional_effects(wb, effects);
+        let symbol = match projectional_feature_symbol(wb) {
+            Ok(symbol) => symbol,
+            Err(error) => {
+                wb.notice = error;
+                return;
+            }
+        };
+        let options = FeatureAuthoringOptions {
+            fillet_radius: radius,
+            ..FeatureAuthoringOptions::default()
+        };
+        let result = {
+            let ProjectionalWorkbench {
+                authority,
+                feature_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .activate_feature_authoring(feature_authoring, tool, options, &selection, symbol)
+        };
+        match result {
+            Ok(outcome) => handle_projectional_feature_outcome(wb, outcome),
+            Err(error) => wb.notice = format!("Fillet preview is unavailable: {error}"),
+        }
+    }
+
+    fn projectional_feature_pick_at(
+        wb: &mut ProjectionalWorkbench,
+        scene: &EditorScene,
+        position: ScreenPoint,
+    ) {
+        let symbol = match projectional_feature_symbol(wb) {
+            Ok(symbol) => symbol,
+            Err(error) => {
+                wb.notice = error;
+                return;
+            }
+        };
+        let result = {
+            let ProjectionalWorkbench {
+                authority,
+                feature_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .transact_feature_authoring_pick_at(
+                    feature_authoring,
+                    scene,
+                    position,
+                    PickTolerance::default(),
+                    symbol,
+                )
+        };
+        match result {
+            Ok(outcome) => handle_projectional_feature_outcome(wb, outcome),
+            Err(error) => wb.notice = format!("Fillet preview is unavailable: {error}"),
+        }
+    }
+
+    fn projectional_feature_pick_item(
+        wb: &mut ProjectionalWorkbench,
+        item: SelectionItem,
+        parameter: Option<f64>,
+    ) {
+        let symbol = match projectional_feature_symbol(wb) {
+            Ok(symbol) => symbol,
+            Err(error) => {
+                wb.notice = error;
+                return;
+            }
+        };
+        let result = {
+            let ProjectionalWorkbench {
+                authority,
+                feature_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .transact_feature_authoring_pick_items(
+                    feature_authoring,
+                    &[(item, parameter)],
+                    symbol,
+                )
+        };
+        match result {
+            Ok(outcome) => handle_projectional_feature_outcome(wb, outcome),
+            Err(error) => wb.notice = format!("Fillet preview is unavailable: {error}"),
+        }
+    }
+
+    fn update_projectional_feature_options(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+    ) -> Result<String, String> {
+        let radius = feature_radius_input(document)?
+            .or(wb.feature_authoring.options().fillet_radius)
+            .ok_or_else(|| "fillet radius must be finite and positive".to_owned())?;
+        let symbol = projectional_feature_symbol(wb)?;
+        let outcome = {
+            let ProjectionalWorkbench {
+                authority,
+                feature_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .transact_feature_authoring_radius(feature_authoring, radius, symbol)
+                .map_err(|error| format!("Fillet preview is unavailable: {error}"))?
+        };
+        handle_projectional_feature_outcome(wb, outcome);
+        Ok(wb.notice.clone())
+    }
+
+    fn apply_projectional_feature_authoring(wb: &mut ProjectionalWorkbench) -> Result<(), String> {
+        let symbol = projectional_feature_symbol(wb)?;
+        let outcome = {
+            let ProjectionalWorkbench {
+                authority,
+                feature_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .apply_computed_fillet_preview(feature_authoring, symbol)
+                .map_err(|error| format!("Fillet set was not applied: {error}"))?
+        };
+        if outcome.disposition != geosolve_sketch_intent::IntentPlanDisposition::Accepted {
+            return Err("Fillet publication returned a non-accepted transaction".into());
+        }
+        wb.feature_candidate = None;
+        wb.feature_pending.clear();
+        wb.option_overlay.close();
+        wb.notice = "Computed Fillet set accepted; Select active".into();
+        Ok(())
+    }
+
+    fn handle_projectional_offset_outcome(
+        wb: &mut ProjectionalWorkbench,
+        outcome: OffsetAuthoringOutcome,
+    ) {
+        match outcome {
+            OffsetAuthoringOutcome::ModeEntered(guidance) => {
+                wb.notice = format!("{} · Escape exits", guidance.message);
+            }
+            OffsetAuthoringOutcome::HoverChanged(_) | OffsetAuthoringOutcome::Inactive => {}
+            OffsetAuthoringOutcome::OperandChanged { guidance, .. }
+            | OffsetAuthoringOutcome::DistanceChanged { guidance, .. } => {
+                guidance.message.clone_into(&mut wb.notice);
+            }
+            OffsetAuthoringOutcome::ApplyRequested(_) => {
+                wb.notice = "Offset candidate ready to apply".into();
+            }
+            OffsetAuthoringOutcome::Warning(warning) => wb.notice = warning.message,
+            OffsetAuthoringOutcome::ModeExited => {
+                wb.notice = "Offset canceled; Select active".into();
+            }
+        }
+    }
+
+    fn activate_projectional_offset_authoring(wb: &mut ProjectionalWorkbench) {
+        wb.authoring.deactivate();
+        clear_projectional_feature_authoring(wb);
+        let effects = wb
+            .editor_mut()
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        let _ = dispatch_projectional_effects(wb, effects);
+        let result = {
+            let ProjectionalWorkbench {
+                authority,
+                offset_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .activate_offset_authoring(offset_authoring)
+        };
+        match result {
+            Ok(outcome) => handle_projectional_offset_outcome(wb, outcome),
+            Err(error) => wb.notice = format!("Offset is unavailable: {error}"),
+        }
+    }
+
+    fn refresh_projectional_offset_preview(wb: &mut ProjectionalWorkbench) {
+        let symbol = match projectional_offset_symbol(wb) {
+            Ok(symbol) => symbol,
+            Err(error) => {
+                wb.notice = error;
+                return;
+            }
+        };
+        let result = {
+            let ProjectionalWorkbench {
+                authority,
+                offset_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .refresh_offset_authoring_preview(offset_authoring, symbol)
+        };
+        match result {
+            Ok(true) => {
+                wb.notice = format!("{} · Preview ready", wb.offset_authoring.guidance().message);
+            }
+            Ok(false) => {}
+            Err(error) => wb.notice = format!("Offset preview is unavailable: {error}"),
+        }
+    }
+
+    fn projectional_offset_pick_item(wb: &mut ProjectionalWorkbench, item: SelectionItem) {
+        let Some(target) = super::offset_target_for_selection(item) else {
+            wb.notice = "Offset tree and keyboard picks require a native curve".into();
+            return;
+        };
+        let outcome = wb.offset_authoring.pick_target(target);
+        let rebuild = matches!(outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+        handle_projectional_offset_outcome(wb, outcome);
+        if rebuild {
+            refresh_projectional_offset_preview(wb);
+        }
+    }
+
+    fn update_projectional_offset_options(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+    ) -> Result<String, String> {
+        let value = input_value(document, "wb-offset-distance")
+            .and_then(|value| value.parse::<f64>().ok())
+            .unwrap_or(f64::NAN);
+        let symbol = projectional_offset_symbol(wb)?;
+        let outcome = {
+            let ProjectionalWorkbench {
+                authority,
+                offset_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .transact_offset_authoring_distance(offset_authoring, value, symbol)
+                .map_err(|error| format!("Offset preview is unavailable: {error}"))?
+        };
+        let invalid = matches!(outcome, OffsetAuthoringOutcome::Warning(_));
+        handle_projectional_offset_outcome(wb, outcome);
+        if invalid {
+            Err(wb.notice.clone())
+        } else {
+            Ok(wb.notice.clone())
+        }
+    }
+
+    fn apply_projectional_offset_authoring(wb: &mut ProjectionalWorkbench) -> Result<bool, String> {
+        let outcome = wb.offset_authoring.apply();
+        let ready = matches!(outcome, OffsetAuthoringOutcome::ApplyRequested(_));
+        handle_projectional_offset_outcome(wb, outcome);
+        if !ready {
+            return Ok(false);
+        }
+        let symbol = projectional_offset_symbol(wb)?;
+        let outcome = {
+            let ProjectionalWorkbench {
+                authority,
+                offset_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .apply_profile_offset_preview(offset_authoring, symbol)
+                .map_err(|error| format!("Offset was not applied: {error}"))?
+        };
+        if outcome.disposition != geosolve_sketch_intent::IntentPlanDisposition::Accepted {
+            return Err("Offset publication returned a non-accepted transaction".into());
+        }
+        let result = {
+            let ProjectionalWorkbench {
+                authority,
+                offset_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .activate_offset_authoring(offset_authoring)
+        };
+        if let Err(error) = result {
+            let _ = wb.offset_authoring.cancel();
+            wb.option_overlay.close();
+            wb.notice =
+                format!("Offset accepted; fresh operand collection is unavailable: {error}");
+            return Ok(true);
+        }
+        wb.notice = "Offset accepted; select another face or open chain".into();
+        Ok(true)
+    }
+
     fn cancel_projectional_interaction(
         viewport: &Element,
         wb: &mut ProjectionalWorkbench,
@@ -4384,7 +5005,29 @@ pub(crate) mod wasm {
         }
         let retired_frame = wb.pointer_moves.borrow_mut().invalidate();
         let had_capture = wb.captured_pointer.is_some();
-        let effects = wb.editor_mut().cancel_interaction();
+        let effects = if wb.editor().feature_authoring_radius_drag_active() {
+            let ProjectionalWorkbench {
+                authority,
+                feature_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .cancel_feature_authoring_radius_drag(feature_authoring)
+        } else if wb.editor().offset_authoring_distance_drag_active() {
+            let ProjectionalWorkbench {
+                authority,
+                offset_authoring,
+                ..
+            } = wb;
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .cancel_offset_authoring_distance_drag(offset_authoring)
+        } else {
+            wb.editor_mut().cancel_interaction()
+        };
         let effect_count = effects.len();
         let _ = dispatch_projectional_effects(wb, effects);
         release_projectional_pointer_capture(viewport, wb, release_platform_capture);
@@ -4421,7 +5064,76 @@ pub(crate) mod wasm {
                     wb.notice = "Projectional pointer preview has no accepted scene".into();
                     return;
                 };
-                if projectional_ordinary_authoring_active(&wb) {
+                if projectional_feature_authoring_active(&wb) {
+                    let radius_drag = wb.editor().feature_authoring_radius_drag_active();
+                    let result = if radius_drag {
+                        let ProjectionalWorkbench {
+                            authority,
+                            feature_authoring,
+                            ..
+                        } = &mut *wb;
+                        authority
+                            .projectional_mut()
+                            .expect("projectional adapter owns projectional authority")
+                            .pointer_move_feature_authoring_radius(
+                                feature_authoring,
+                                &scene,
+                                sample.input,
+                            )
+                    } else {
+                        let authoring = wb.feature_authoring.clone();
+                        wb.editor_mut().pointer_move_feature_authoring(
+                            &authoring,
+                            &scene,
+                            sample.input,
+                            PickTolerance::default(),
+                        )
+                    };
+                    match result {
+                        Ok(effects) => {
+                            if !radius_drag {
+                                let _ = dispatch_projectional_effects(&mut wb, effects);
+                            }
+                        }
+                        Err(error) => {
+                            wb.notice = format!("Fillet hover is unavailable: {error}");
+                        }
+                    }
+                } else if projectional_offset_authoring_active(&wb) {
+                    if wb.editor().offset_authoring_distance_drag_active() {
+                        let result = {
+                            let ProjectionalWorkbench {
+                                authority,
+                                offset_authoring,
+                                ..
+                            } = &mut *wb;
+                            authority
+                                .projectional_mut()
+                                .expect("projectional adapter owns projectional authority")
+                                .pointer_move_offset_authoring_distance(
+                                    offset_authoring,
+                                    &scene,
+                                    sample.input,
+                                )
+                        };
+                        match result {
+                            Ok(_) => {}
+                            Err(error) => {
+                                wb.notice =
+                                    format!("Offset drag retained its last preview: {error}");
+                            }
+                        }
+                    } else {
+                        let policy = wb.editor().editor().geometry_interaction_policy();
+                        let outcome = wb.offset_authoring.hover_at(
+                            &scene,
+                            sample.input.position,
+                            PickTolerance::default(),
+                            policy,
+                        );
+                        handle_projectional_offset_outcome(&mut wb, outcome);
+                    }
+                } else if projectional_ordinary_authoring_active(&wb) {
                     let authoring = wb.authoring.clone();
                     let effects = wb.editor_mut().pointer_move_authoring(
                         &authoring,
@@ -4485,6 +5197,171 @@ pub(crate) mod wasm {
             };
             event.prevent_default();
             wb.pointer_moves.borrow_mut().invalidate();
+            if projectional_feature_authoring_active(&wb) {
+                let symbol = match projectional_feature_symbol(&wb) {
+                    Ok(symbol) => symbol,
+                    Err(error) => {
+                        wb.notice = error;
+                        return;
+                    }
+                };
+                let authoring = wb.feature_authoring.clone();
+                match wb.editor_mut().pointer_down_feature_authoring_radius(
+                    &authoring,
+                    &scene,
+                    input,
+                    PickTolerance::default(),
+                    symbol,
+                ) {
+                    Ok(Some(effects)) => {
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
+                        let capturable = wb
+                            .editor()
+                            .editor()
+                            .active_pointer_gesture()
+                            .is_some_and(|gesture| {
+                                gesture.pointer_id == input.pointer_id
+                                    && gesture.kind
+                                        == geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
+                            });
+                        if capturable
+                            && down_viewport
+                                .set_pointer_capture(event.pointer_id())
+                                .is_ok()
+                        {
+                            wb.captured_pointer = Some(event.pointer_id());
+                            wb.notice =
+                                "Adjust the provisional Fillet radius; Apply remains pending"
+                                    .into();
+                        } else {
+                            let ProjectionalWorkbench {
+                                authority,
+                                feature_authoring,
+                                ..
+                            } = &mut *wb;
+                            let _ = authority
+                                .projectional_mut()
+                                .expect("projectional adapter owns projectional authority")
+                                .cancel_feature_authoring_radius_drag(feature_authoring);
+                            wb.notice =
+                                "Fillet radius drag canceled because pointer capture failed".into();
+                        }
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &down_document,
+                            &down_workbench,
+                            super::WorkbenchPresentationEvent::PointerMoveFrame,
+                        );
+                        return;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        wb.notice = format!("Fillet radius drag is unavailable: {error}");
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &down_document,
+                            &down_workbench,
+                            super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                        );
+                        return;
+                    }
+                }
+                projectional_feature_pick_at(&mut wb, &scene, input.position);
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &down_document,
+                    &down_workbench,
+                    super::WorkbenchPresentationEvent::PointerMoveFrame,
+                );
+                return;
+            }
+            if projectional_offset_authoring_active(&wb) {
+                let symbol = match projectional_offset_symbol(&wb) {
+                    Ok(symbol) => symbol,
+                    Err(error) => {
+                        wb.notice = error;
+                        return;
+                    }
+                };
+                let authoring = wb.offset_authoring.clone();
+                match wb
+                    .editor_mut()
+                    .pointer_down_offset_authoring_distance(&authoring, &scene, input, symbol)
+                {
+                    Ok(Some(effects)) => {
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
+                        let capturable = wb
+                            .editor()
+                            .editor()
+                            .active_pointer_gesture()
+                            .is_some_and(|gesture| {
+                                gesture.pointer_id == input.pointer_id
+                                    && gesture.kind
+                                        == geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance
+                            });
+                        if capturable
+                            && down_viewport
+                                .set_pointer_capture(event.pointer_id())
+                                .is_ok()
+                        {
+                            wb.captured_pointer = Some(event.pointer_id());
+                            wb.notice =
+                                "Adjust the provisional Offset distance; Apply remains pending"
+                                    .into();
+                        } else {
+                            let ProjectionalWorkbench {
+                                authority,
+                                offset_authoring,
+                                ..
+                            } = &mut *wb;
+                            let _ = authority
+                                .projectional_mut()
+                                .expect("projectional adapter owns projectional authority")
+                                .cancel_offset_authoring_distance_drag(offset_authoring);
+                            wb.notice =
+                                "Offset distance drag canceled because pointer capture failed"
+                                    .into();
+                        }
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &down_document,
+                            &down_workbench,
+                            super::WorkbenchPresentationEvent::PointerMoveFrame,
+                        );
+                        return;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        wb.notice = format!("Offset distance drag is unavailable: {error}");
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &down_document,
+                            &down_workbench,
+                            super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                        );
+                        return;
+                    }
+                }
+                let policy = wb.editor().editor().geometry_interaction_policy();
+                let outcome = wb.offset_authoring.pick_at(
+                    &scene,
+                    input.position,
+                    PickTolerance::default(),
+                    policy,
+                );
+                let rebuild = matches!(outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+                handle_projectional_offset_outcome(&mut wb, outcome);
+                if rebuild {
+                    refresh_projectional_offset_preview(&mut wb);
+                }
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &down_document,
+                    &down_workbench,
+                    super::WorkbenchPresentationEvent::PointerMoveFrame,
+                );
+                return;
+            }
             if projectional_ordinary_authoring_active(&wb) {
                 let Some(document) = projectional_authoring_document(&wb) else {
                     wb.notice =
@@ -4692,20 +5569,49 @@ pub(crate) mod wasm {
             };
             event.prevent_default();
             let pending = up_pointer_moves.borrow_mut().drain_before_terminal();
-            let mut failure = None;
-            for sample in pending
+            let feature_authoring_drag = wb.editor().feature_authoring_radius_drag_active();
+            let offset_authoring_drag = wb.editor().offset_authoring_distance_drag_active();
+            let samples = pending
                 .into_iter()
                 .filter(|sample| sample.input.pointer_id == input.pointer_id)
                 .map(|sample| sample.input)
                 .chain(std::iter::once(input))
-            {
+                .collect::<Vec<_>>();
+            let mut failure = None;
+            for sample in samples {
                 let Some(scene) = projectional_scene(&wb) else {
                     failure = Some("the accepted scene became unavailable".to_owned());
                     break;
                 };
-                if let Err(error) = wb.editor_mut().pointer_move(&scene, sample) {
-                    failure = Some(error.to_string());
-                    break;
+                let result = if feature_authoring_drag {
+                    let ProjectionalWorkbench {
+                        authority,
+                        feature_authoring,
+                        ..
+                    } = &mut *wb;
+                    authority
+                        .projectional_mut()
+                        .expect("projectional adapter owns projectional authority")
+                        .pointer_move_feature_authoring_radius(feature_authoring, &scene, sample)
+                } else if offset_authoring_drag {
+                    let ProjectionalWorkbench {
+                        authority,
+                        offset_authoring,
+                        ..
+                    } = &mut *wb;
+                    authority
+                        .projectional_mut()
+                        .expect("projectional adapter owns projectional authority")
+                        .pointer_move_offset_authoring_distance(offset_authoring, &scene, sample)
+                } else {
+                    wb.editor_mut().pointer_move(&scene, sample)
+                };
+                match result {
+                    Ok(_) => {}
+                    Err(error) => {
+                        failure = Some(error.to_string());
+                        break;
+                    }
                 }
             }
             up_pointer_moves.borrow_mut().observe(input);
@@ -4723,6 +5629,73 @@ pub(crate) mod wasm {
                     &up_workbench,
                     super::WorkbenchPresentationEvent::InteractionCancellation,
                 );
+                return;
+            }
+            if feature_authoring_drag || offset_authoring_drag {
+                let outcome = projectional_scene(&wb)
+                    .ok_or_else(|| "the exact terminal authoring preview is unavailable".to_owned())
+                    .and_then(|scene| {
+                        if feature_authoring_drag {
+                            let ProjectionalWorkbench {
+                                authority,
+                                feature_authoring,
+                                ..
+                            } = &mut *wb;
+                            authority
+                                .projectional_mut()
+                                .expect("projectional adapter owns projectional authority")
+                                .pointer_up_feature_authoring_radius(
+                                    feature_authoring,
+                                    &scene,
+                                    input,
+                                )
+                                .map_err(|error| error.to_string())
+                        } else {
+                            let ProjectionalWorkbench {
+                                authority,
+                                offset_authoring,
+                                ..
+                            } = &mut *wb;
+                            authority
+                                .projectional_mut()
+                                .expect("projectional adapter owns projectional authority")
+                                .pointer_up_offset_authoring_distance(
+                                    offset_authoring,
+                                    &scene,
+                                    input,
+                                )
+                                .map_err(|error| error.to_string())
+                        }
+                    });
+                let presentation = match outcome {
+                    Ok(changed) => {
+                        release_projectional_pointer_capture(&up_viewport, &mut wb, true);
+                        wb.notice = match (feature_authoring_drag, changed) {
+                            (true, true) => {
+                                "Fillet radius preview updated; Apply remains pending".into()
+                            }
+                            (true, false) => "Fillet radius preview unchanged".into(),
+                            (false, true) => {
+                                "Offset distance preview updated; Apply remains pending".into()
+                            }
+                            (false, false) => "Offset distance preview unchanged".into(),
+                        };
+                        super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+                    }
+                    Err(error) => {
+                        cancel_projectional_interaction(
+                            &up_viewport,
+                            &mut wb,
+                            Some(event.pointer_id()),
+                            true,
+                            &format!("Projectional authoring gesture canceled: {error}"),
+                        );
+                        super::WorkbenchPresentationEvent::InteractionCancellation
+                    }
+                };
+                drop(wb);
+                let _ =
+                    present_projectional_pointer_event(&up_document, &up_workbench, presentation);
                 return;
             }
             let outcome = projectional_scene(&wb)
@@ -4809,8 +5782,12 @@ pub(crate) mod wasm {
                 return;
             }
             let retired_frame = leave_pointer_moves.borrow_mut().clear_stationary_sample();
+            let cleared_offset_hover = wb.offset_authoring.hover().is_some();
+            if cleared_offset_hover {
+                wb.offset_authoring.clear_hover();
+            }
             let effects = wb.editor_mut().editor_mut().pointer_leave();
-            if !retired_frame && effects.is_empty() {
+            if !retired_frame && !cleared_offset_hover && effects.is_empty() {
                 return;
             }
             let _ = dispatch_projectional_effects(&mut wb, effects);
@@ -5044,6 +6021,7 @@ pub(crate) mod wasm {
                 .closest(concat!(
                     "[data-wb-tool], [data-wb-geometry-family], ",
                     "[data-wb-geometry-variant], [data-wb-authoring], ",
+                    "[data-wb-feature], [data-wb-offset], ",
                     "[data-editor-item], [data-wb-action], [data-sample-id], ",
                     "[data-sample-group-trigger], [data-intent-move], ",
                     "[data-intent-cell-move], [data-wb-option]"
@@ -5166,6 +6144,8 @@ pub(crate) mod wasm {
                     );
                 }
                 wb.authoring.deactivate();
+                clear_projectional_feature_authoring(&mut wb);
+                clear_projectional_offset_authoring(&mut wb);
                 wb.option_overlay.close();
                 let effects = wb
                     .editor_mut()
@@ -5194,6 +6174,8 @@ pub(crate) mod wasm {
                 }
                 let variant = wb.geometry_palette.selected(family);
                 wb.authoring.deactivate();
+                clear_projectional_feature_authoring(&mut wb);
+                clear_projectional_offset_authoring(&mut wb);
                 wb.option_overlay
                     .open(super::OptionOverlayKind::GeometryFamily(family));
                 match update_construction_options_for_variant(
@@ -5234,6 +6216,8 @@ pub(crate) mod wasm {
                     );
                 }
                 wb.authoring.deactivate();
+                clear_projectional_feature_authoring(&mut wb);
+                clear_projectional_offset_authoring(&mut wb);
                 wb.geometry_palette.remember(variant);
                 wb.option_overlay
                     .open(super::OptionOverlayKind::GeometryFamily(variant.family()));
@@ -5277,6 +6261,8 @@ pub(crate) mod wasm {
                 } else {
                     wb.option_overlay.close();
                 }
+                clear_projectional_feature_authoring(&mut wb);
+                clear_projectional_offset_authoring(&mut wb);
                 let committed = activate_projectional_authoring(&click_document, &mut wb, tool);
                 if committed {
                     save_projectional(&wb);
@@ -5290,6 +6276,54 @@ pub(crate) mod wasm {
                 }
                 return;
             }
+            if let Some(tool) = target
+                .get_attribute("data-wb-feature")
+                .and_then(|key| super::action_surface::feature_tool_from_key(&key))
+            {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before Fillet authoring",
+                    );
+                }
+                wb.option_overlay.open(super::OptionOverlayKind::Fillet);
+                activate_projectional_feature_authoring(&click_document, &mut wb, tool);
+                let focus = super::OptionOverlayKind::Fillet
+                    .first_control_id()
+                    .to_owned();
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                focus_by_id(&click_document, &focus);
+                return;
+            }
+            if target
+                .get_attribute("data-wb-offset")
+                .is_some_and(|key| super::action_surface::is_offset_tool_key(&key))
+            {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before Offset authoring",
+                    );
+                }
+                wb.option_overlay.open(super::OptionOverlayKind::Offset);
+                activate_projectional_offset_authoring(&mut wb);
+                let focus = super::OptionOverlayKind::Offset
+                    .first_control_id()
+                    .to_owned();
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                focus_by_id(&click_document, &focus);
+                return;
+            }
             if target.has_attribute("data-editor-item")
                 && let Some(item) = selection_item(&target)
             {
@@ -5300,6 +6334,27 @@ pub(crate) mod wasm {
                     .dyn_ref::<MouseEvent>()
                     .is_some_and(|event| event.detail() > 0);
                 let mut wb = click_workbench.borrow_mut();
+                if projectional_offset_authoring_active(&wb) {
+                    if super::offset_click_owns_semantic_pick(is_canvas_item, is_pointer_click) {
+                        projectional_offset_pick_item(&mut wb, item);
+                        drop(wb);
+                        let _ = render_projectional(&click_document, &click_workbench);
+                    }
+                    return;
+                }
+                if projectional_feature_authoring_active(&wb) {
+                    let input = if is_canvas_item {
+                        super::AuthoringItemInput::CanvasClick
+                    } else {
+                        super::AuthoringItemInput::TreeClick
+                    };
+                    if super::owns_authoring_pick(input) {
+                        projectional_feature_pick_item(&mut wb, item, None);
+                        drop(wb);
+                        let _ = render_projectional(&click_document, &click_workbench);
+                    }
+                    return;
+                }
                 if projectional_ordinary_authoring_active(&wb) {
                     let input = if is_canvas_item {
                         super::AuthoringItemInput::CanvasClick
@@ -5455,6 +6510,27 @@ pub(crate) mod wasm {
                     reconcile_projectional_authoring(&mut wb);
                     durable = true;
                 }
+                Some("feature-apply") => match apply_projectional_feature_authoring(&mut wb) {
+                    Ok(()) => durable = true,
+                    Err(error) => wb.notice = error,
+                },
+                Some("offset-apply") => match apply_projectional_offset_authoring(&mut wb) {
+                    Ok(committed) => durable = committed,
+                    Err(error) => wb.notice = error,
+                },
+                Some("offset-flip") => {
+                    let outcome = wb.offset_authoring.flip();
+                    let rebuild = matches!(outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+                    handle_projectional_offset_outcome(&mut wb, outcome);
+                    if rebuild {
+                        refresh_projectional_offset_preview(&mut wb);
+                    }
+                }
+                Some("offset-cancel") => {
+                    clear_projectional_offset_authoring(&mut wb);
+                    wb.option_overlay.close();
+                    wb.notice = "Offset canceled; Select active".into();
+                }
                 Some("finish") => {
                     wb.pointer_moves.borrow_mut().invalidate();
                     let effects = projectional_scene(&wb).map_or_else(Vec::new, |scene| {
@@ -5470,7 +6546,25 @@ pub(crate) mod wasm {
                 }
                 Some("cancel") => {
                     wb.pointer_moves.borrow_mut().invalidate();
-                    if projectional_ordinary_authoring_active(&wb) {
+                    if projectional_feature_authoring_active(&wb) {
+                        let outcome = wb.feature_authoring.cancel();
+                        let exited = matches!(outcome, FeatureAuthoringOutcome::ModeExited);
+                        if matches!(
+                            outcome,
+                            FeatureAuthoringOutcome::CandidateCleared(_)
+                                | FeatureAuthoringOutcome::ModeExited
+                        ) {
+                            wb.editor_mut().clear_authoring_previews();
+                        }
+                        handle_projectional_feature_outcome(&mut wb, outcome);
+                        if exited {
+                            wb.option_overlay.close();
+                        }
+                    } else if projectional_offset_authoring_active(&wb) {
+                        clear_projectional_offset_authoring(&mut wb);
+                        wb.option_overlay.close();
+                        wb.notice = "Offset canceled; Select active".into();
+                    } else if projectional_ordinary_authoring_active(&wb) {
                         if let Some(document) = projectional_authoring_document(&wb) {
                             let outcome = wb.authoring.cancel(&document);
                             let exited = matches!(outcome, AuthoringOutcome::ModeExited);
@@ -5498,6 +6592,8 @@ pub(crate) mod wasm {
                 Some("options-close") => {
                     wb.pointer_moves.borrow_mut().invalidate();
                     wb.authoring.deactivate();
+                    clear_projectional_feature_authoring(&mut wb);
+                    clear_projectional_offset_authoring(&mut wb);
                     let effects = wb
                         .editor_mut()
                         .editor_mut()
@@ -5815,8 +6911,11 @@ pub(crate) mod wasm {
                             Ok("Canvas geometry scope updated".to_owned())
                         })
                     }
-                    Some(super::OptionOverlayKind::Fillet | super::OptionOverlayKind::Offset) => {
-                        Err("This projectional tool is not active yet".to_owned())
+                    Some(super::OptionOverlayKind::Fillet) => {
+                        update_projectional_feature_options(&change_document, &mut wb)
+                    }
+                    Some(super::OptionOverlayKind::Offset) => {
+                        update_projectional_offset_options(&change_document, &mut wb)
                     }
                     None => Ok("Tool options closed".to_owned()),
                 };
@@ -6097,6 +7196,33 @@ pub(crate) mod wasm {
                 }
             }
             if event.key() == "Enter"
+                && projectional_feature_authoring_active(&keyboard_workbench.borrow())
+            {
+                event.prevent_default();
+                let mut wb = keyboard_workbench.borrow_mut();
+                match apply_projectional_feature_authoring(&mut wb) {
+                    Ok(()) => save_projectional(&wb),
+                    Err(error) => wb.notice = error,
+                }
+                drop(wb);
+                let _ = render_projectional(&keyboard_document, &keyboard_workbench);
+                return;
+            }
+            if event.key() == "Enter"
+                && projectional_offset_authoring_active(&keyboard_workbench.borrow())
+            {
+                event.prevent_default();
+                let mut wb = keyboard_workbench.borrow_mut();
+                match apply_projectional_offset_authoring(&mut wb) {
+                    Ok(true) => save_projectional(&wb),
+                    Ok(false) => {}
+                    Err(error) => wb.notice = error,
+                }
+                drop(wb);
+                let _ = render_projectional(&keyboard_document, &keyboard_workbench);
+                return;
+            }
+            if event.key() == "Enter"
                 && projectional_geometry_authoring_active(&keyboard_workbench.borrow())
             {
                 event.prevent_default();
@@ -6119,6 +7245,21 @@ pub(crate) mod wasm {
                     &keyboard_workbench,
                     presentation,
                 );
+                return;
+            }
+            if event.key() == "Backspace"
+                && projectional_offset_authoring_active(&keyboard_workbench.borrow())
+            {
+                event.prevent_default();
+                let mut wb = keyboard_workbench.borrow_mut();
+                let outcome = wb.offset_authoring.backspace();
+                let rebuild = matches!(outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+                handle_projectional_offset_outcome(&mut wb, outcome);
+                if rebuild {
+                    refresh_projectional_offset_preview(&mut wb);
+                }
+                drop(wb);
+                let _ = render_projectional(&keyboard_document, &keyboard_workbench);
                 return;
             }
             if matches!(event.key().as_str(), "Delete" | "Backspace")
@@ -6154,7 +7295,25 @@ pub(crate) mod wasm {
                     );
                 } else {
                     wb.pointer_moves.borrow_mut().invalidate();
-                    if projectional_ordinary_authoring_active(&wb) {
+                    if projectional_feature_authoring_active(&wb) {
+                        let outcome = wb.feature_authoring.cancel();
+                        let exited = matches!(outcome, FeatureAuthoringOutcome::ModeExited);
+                        if matches!(
+                            outcome,
+                            FeatureAuthoringOutcome::CandidateCleared(_)
+                                | FeatureAuthoringOutcome::ModeExited
+                        ) {
+                            wb.editor_mut().clear_authoring_previews();
+                        }
+                        handle_projectional_feature_outcome(&mut wb, outcome);
+                        if exited {
+                            wb.option_overlay.close();
+                        }
+                    } else if projectional_offset_authoring_active(&wb) {
+                        clear_projectional_offset_authoring(&mut wb);
+                        wb.option_overlay.close();
+                        wb.notice = "Offset canceled; Select active".into();
+                    } else if projectional_ordinary_authoring_active(&wb) {
                         if let Some(document) = projectional_authoring_document(&wb) {
                             let outcome = wb.authoring.cancel(&document);
                             let exited = matches!(outcome, AuthoringOutcome::ModeExited);

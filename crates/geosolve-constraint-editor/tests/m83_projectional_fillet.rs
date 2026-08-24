@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, FeatureAuthoringCandidate,
-    FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool, IntentNativeBinding,
-    Modifiers, PickTolerance, PointerInput, ProjectionalEditorSession,
-    ProjectionalIntentCoordinator, ScreenPoint, Viewport,
+    ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, EditorHoverTarget,
+    FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+    FeatureAuthoringState, FeatureAuthoringTool, IntentNativeBinding, IntentNativeWritableLeaf,
+    Modifiers, PickTolerance, PointerInput, ProjectionalEditorError, ProjectionalEditorSession,
+    ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_features::{
@@ -136,7 +137,7 @@ fn fillet_candidate(
             FeatureAuthoringTool::Fillet,
             &[],
         ),
-        FeatureAuthoringOutcome::ModeEntered(_)
+        FeatureAuthoringOutcome::ModeEntered(_) | FeatureAuthoringOutcome::Collecting { .. }
     ));
     assert!(matches!(
         state.pick_at(
@@ -222,6 +223,67 @@ fn create_fillet(
         1
     );
     node.id
+}
+
+fn complete_projectional_fillet_authoring(
+    session: &mut ProjectionalEditorSession,
+    viewport: Viewport,
+) -> FeatureAuthoringState {
+    let mut state = FeatureAuthoringState::default();
+    assert!(matches!(
+        session
+            .activate_feature_authoring(
+                &mut state,
+                FeatureAuthoringTool::Fillet,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(1.0),
+                    ..FeatureAuthoringOptions::default()
+                },
+                &[],
+                key("Fillet 1"),
+            )
+            .unwrap(),
+        FeatureAuthoringOutcome::ModeEntered(_) | FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    let scene = session.scene(viewport, 0.5).unwrap();
+    assert!(matches!(
+        session
+            .transact_feature_authoring_pick_at(
+                &mut state,
+                &scene,
+                viewport.model_to_screen([3.0, 0.0]),
+                PickTolerance::default(),
+                key("Fillet 1"),
+            )
+            .unwrap(),
+        FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    assert!(matches!(
+        session
+            .transact_feature_authoring_pick_at(
+                &mut state,
+                &scene,
+                viewport.model_to_screen([4.0, 1.0]),
+                PickTolerance::default(),
+                key("Fillet 1"),
+            )
+            .unwrap(),
+        FeatureAuthoringOutcome::PreviewRequested { .. }
+    ));
+    assert!(session.feature_authoring_preview_matches(&state));
+    state
+}
+
+fn assert_independently_valid(session: &ProjectionalEditorSession) {
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+    );
+    assert!(accepted.validation.all_active_features_current);
 }
 
 const fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
@@ -626,4 +688,313 @@ fn radius_drag_cancel_and_invalid_release_preserve_authority_and_history() {
     assert!(session.editor().active_pointer_gesture().is_none());
     assert_eq!(session.coordinator().intent().identity(), identity_before);
     assert_eq!(session.coordinator().intent().undo_len(), history_before);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one lifecycle regression keeps cold preview, Apply, allocator high-water, Undo, and independent validation evidence contiguous"
+)]
+fn projectional_fillet_authoring_previews_applies_once_and_undo_restores_exact_base() {
+    let (mut session, viewport) = fixture();
+    let history_before = session.coordinator().intent().undo_len();
+    let identity_before = session.coordinator().intent().identity();
+    let accepted_before = session.coordinator().accepted_materialization().unwrap();
+    let ownership_before = accepted_before.ownership.clone();
+    let evidence_before = accepted_before.evidence.clone();
+    assert!(accepted_before.features.features().is_empty());
+    let feature_allocator_before = accepted_before.features.allocator_high_water();
+    let document_before = accepted_before.session.design_document().clone();
+    let mut state = FeatureAuthoringState::default();
+
+    assert!(matches!(
+        session
+            .activate_feature_authoring(
+                &mut state,
+                FeatureAuthoringTool::Fillet,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(1.0),
+                    ..FeatureAuthoringOptions::default()
+                },
+                &[],
+                key("Fillet 1"),
+            )
+            .unwrap(),
+        FeatureAuthoringOutcome::ModeEntered(_) | FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_move_feature_authoring(
+            &state,
+            &scene,
+            pointer(801, viewport.model_to_screen([3.0, 0.0])),
+            PickTolerance::default(),
+        )
+        .unwrap();
+    assert!(matches!(
+        session.editor().hover_state().target,
+        Some(EditorHoverTarget::Geometry(SelectionItem::Curve(_)))
+    ));
+    assert!(matches!(
+        session
+            .transact_feature_authoring_pick_at(
+                &mut state,
+                &scene,
+                viewport.model_to_screen([3.0, 0.0]),
+                PickTolerance::default(),
+                key("Fillet 1"),
+            )
+            .unwrap(),
+        FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    assert!(session.feature_authoring_preview_item().is_none());
+    assert!(matches!(
+        session
+            .transact_feature_authoring_pick_at(
+                &mut state,
+                &scene,
+                viewport.model_to_screen([4.0, 1.0]),
+                PickTolerance::default(),
+                key("Fillet 1"),
+            )
+            .unwrap(),
+        FeatureAuthoringOutcome::PreviewRequested { .. }
+    ));
+    assert!(session.feature_authoring_preview_matches(&state));
+    assert!(matches!(
+        session.feature_authoring_preview_item(),
+        Some(SelectionItem::Feature(_))
+    ));
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before
+    );
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    assert_eq!(preview_scene.computed_curves.len(), 1);
+    assert!(preview_scene.computed_curves[0].radius.is_finite());
+
+    let outcome = session
+        .apply_computed_fillet_preview(&mut state, key("Fillet 1"))
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert!(state.active_tool().is_none());
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before + 1
+    );
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    assert_eq!(accepted.features.features().len(), 1);
+    let removed_feature = accepted.features.features()[0].id;
+    let ComputedFeatureDefinition::FilletSet(removed_fillet) =
+        &accepted.features.features()[0].definition;
+    let removed_corner = removed_fillet.corners[0].id;
+    let intent_allocator_after_apply = session.coordinator().intent().allocator_high_water();
+    assert_independently_valid(&session);
+
+    session.undo().unwrap().unwrap();
+    let undone = session.coordinator().accepted_materialization().unwrap();
+    assert_eq!(undone.session.design_document(), &document_before);
+    assert_eq!(undone.ownership.nodes, ownership_before.nodes);
+    assert_eq!(undone.ownership.ports, ownership_before.ports);
+    assert_eq!(undone.ownership.reservations, ownership_before.reservations);
+    assert_eq!(
+        undone.ownership.writable_leaves,
+        ownership_before.writable_leaves
+    );
+    assert_eq!(undone.ownership.aggregates, ownership_before.aggregates);
+    assert!(undone.features.features().is_empty());
+    assert_eq!(
+        undone.features.allocator_high_water(),
+        feature_allocator_before,
+        "Undo restores the semantic empty feature payload"
+    );
+    assert_eq!(
+        session.coordinator().intent().allocator_high_water(),
+        intent_allocator_after_apply,
+        "Undo retains the durable intent allocator high-water without requiring feature revision reuse"
+    );
+    assert!(
+        session
+            .scene(viewport, 0.5)
+            .unwrap()
+            .computed_curves
+            .is_empty()
+    );
+    assert_independently_valid(&session);
+
+    let mut divergent = complete_projectional_fillet_authoring(&mut session, viewport);
+    session
+        .apply_computed_fillet_preview(&mut divergent, key("Fillet divergent"))
+        .unwrap();
+    let republished = session.coordinator().accepted_materialization().unwrap();
+    let republished_feature = &republished.features.features()[0];
+    let ComputedFeatureDefinition::FilletSet(republished_fillet) = &republished_feature.definition;
+    assert!(republished_feature.id.raw() > removed_feature.raw());
+    assert!(republished_fillet.corners[0].id.raw() > removed_corner.raw());
+    assert_independently_valid(&session);
+}
+
+#[test]
+fn projectional_fillet_authoring_radius_drag_is_history_free_until_apply() {
+    let (mut session, viewport) = fixture();
+    let mut state = complete_projectional_fillet_authoring(&mut session, viewport);
+    let history_before = session.coordinator().intent().undo_len();
+    let canonical_before = session.coordinator().intent().to_canonical_json().unwrap();
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let rail = scene.fillet_affordances[0].radius_rail;
+    assert!(
+        session
+            .pointer_down_feature_authoring_radius(
+                &state,
+                &scene,
+                pointer(802, rail.screen_grip),
+                PickTolerance::default(),
+                key("Fillet 1"),
+            )
+            .unwrap()
+            .is_some()
+    );
+    assert!(session.feature_authoring_radius_drag_active());
+    assert_eq!(
+        session.editor().active_pointer_gesture().unwrap().kind,
+        ActivePointerGestureKind::FilletRadius
+    );
+    let origin = viewport.screen_to_model(rail.screen_grip);
+    let target = viewport.model_to_screen([
+        0.25f64.mul_add(rail.model_derivative[0], origin[0]),
+        0.25f64.mul_add(rail.model_derivative[1], origin[1]),
+    ]);
+    let effects = session
+        .pointer_move_feature_authoring_radius(&mut state, &scene, pointer(802, target))
+        .unwrap();
+    let radius = effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::PreviewComputedFeatureRadius { radius, .. } => Some(*radius),
+            _ => None,
+        })
+        .unwrap();
+    assert_ne!(radius.to_bits(), 1.0_f64.to_bits());
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    assert_eq!(
+        preview_scene.computed_curves[0].radius.to_bits(),
+        radius.to_bits()
+    );
+    assert!(
+        session
+            .pointer_up_feature_authoring_radius(&mut state, &preview_scene, pointer(802, target),)
+            .unwrap()
+    );
+    assert!(!session.feature_authoring_radius_drag_active());
+    assert!(session.feature_authoring_preview_matches(&state));
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session.coordinator().intent().to_canonical_json().unwrap(),
+        canonical_before
+    );
+
+    session
+        .apply_computed_fillet_preview(&mut state, key("Fillet 1"))
+        .unwrap();
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before + 1
+    );
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let ComputedFeatureDefinition::FilletSet(fillet) = &accepted.features.features()[0].definition;
+    assert_eq!(fillet.radius.to_bits(), radius.to_bits());
+    assert_independently_valid(&session);
+}
+
+#[test]
+fn projectional_fillet_invalid_stale_and_noop_transitions_are_atomic() {
+    let (mut session, viewport) = fixture();
+    let mut empty = FeatureAuthoringState::default();
+    let canonical_empty = session.coordinator().intent().to_canonical_json().unwrap();
+    assert!(matches!(
+        session.apply_computed_fillet_preview(&mut empty, key("Fillet noop")),
+        Err(ProjectionalEditorError::AuthoringCandidateIncomplete)
+    ));
+    assert_eq!(
+        session.coordinator().intent().to_canonical_json().unwrap(),
+        canonical_empty
+    );
+
+    let old_state = complete_projectional_fillet_authoring(&mut session, viewport);
+    let start = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document()
+        .points()
+        .iter()
+        .find(|point| point.label == "point.start")
+        .unwrap()
+        .id;
+    let x_leaf = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership
+        .writable_leaf(IntentNativeWritableLeaf::PointX { point: start })
+        .unwrap();
+    session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetInstanceLeaf {
+                leaf: x_leaf,
+                value: coordinate(-1.0),
+            }],
+        ))
+        .unwrap();
+    let mut fresh_state = complete_projectional_fillet_authoring(&mut session, viewport);
+    let canonical_before = session.coordinator().intent().to_canonical_json().unwrap();
+    let evidence_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+    let preview_before = session.scene(viewport, 0.5).unwrap().computed_curves[0].clone();
+    let fresh_before = fresh_state.clone();
+
+    assert!(matches!(
+        session
+            .transact_feature_authoring_radius(&mut fresh_state, -1.0, key("Fillet 1"))
+            .unwrap(),
+        FeatureAuthoringOutcome::Warning(_)
+    ));
+    assert_eq!(fresh_state, fresh_before);
+    assert!(session.feature_authoring_preview_matches(&fresh_state));
+
+    let mut stale_state = old_state;
+    assert!(matches!(
+        session
+            .transact_feature_authoring_radius(&mut stale_state, 0.75, key("Fillet 1"))
+            .unwrap(),
+        FeatureAuthoringOutcome::Warning(_)
+    ));
+    assert!(session.feature_authoring_preview_matches(&fresh_state));
+    let preview_after = session.scene(viewport, 0.5).unwrap().computed_curves[0].clone();
+    assert_eq!(preview_after, preview_before);
+    assert_eq!(
+        session.coordinator().intent().to_canonical_json().unwrap(),
+        canonical_before
+    );
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before
+    );
 }

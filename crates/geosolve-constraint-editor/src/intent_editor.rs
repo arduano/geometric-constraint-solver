@@ -83,7 +83,7 @@ struct ActiveProfileOffsetDistanceDrag {
     latest: Option<ColdIntentMaterialization>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ProjectionalFilletAuthoringPreview {
     intent: IntentSessionIdentity,
     candidate: FeatureAuthoringCandidate,
@@ -91,12 +91,37 @@ struct ProjectionalFilletAuthoringPreview {
     feature: geosolve_sketch_features::ComputedFeatureId,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ProjectionalProfileOffsetAuthoringPreview {
     intent: IntentSessionIdentity,
     candidate: OffsetAuthoringCandidate,
     materialization: ColdIntentMaterialization,
     provisional_items: Vec<SelectionItem>,
+    dimension: DocumentDimensionId,
+}
+
+#[derive(Clone, Debug)]
+struct ActiveFilletAuthoringRadiusDrag {
+    pointer_id: u64,
+    intent: IntentSessionIdentity,
+    expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    feature: geosolve_sketch_features::ComputedFeatureId,
+    origin_state: FeatureAuthoringState,
+    origin_preview: ProjectionalFilletAuthoringPreview,
+    latest_radius: Option<f64>,
+    symbol: IntentKey,
+}
+
+#[derive(Clone, Debug)]
+struct ActiveProfileOffsetAuthoringDistanceDrag {
+    pointer_id: u64,
+    intent: IntentSessionIdentity,
+    expected: PreparedSketchInput,
+    dimension: DocumentDimensionId,
+    origin_state: OffsetAuthoringState,
+    origin_preview: ProjectionalProfileOffsetAuthoringPreview,
+    latest_distance: Option<f64>,
+    symbol: IntentKey,
 }
 
 /// Result of one terminal pointer sample.
@@ -134,6 +159,8 @@ pub struct ProjectionalEditorSession {
     profile_offset_distance_drag: Option<ActiveProfileOffsetDistanceDrag>,
     fillet_authoring_preview: Option<ProjectionalFilletAuthoringPreview>,
     profile_offset_authoring_preview: Option<ProjectionalProfileOffsetAuthoringPreview>,
+    fillet_authoring_radius_drag: Option<ActiveFilletAuthoringRadiusDrag>,
+    profile_offset_authoring_distance_drag: Option<ActiveProfileOffsetAuthoringDistanceDrag>,
     preview_control: OperationControl,
 }
 
@@ -315,6 +342,8 @@ impl ProjectionalEditorSession {
             profile_offset_distance_drag: None,
             fillet_authoring_preview: None,
             profile_offset_authoring_preview: None,
+            fillet_authoring_radius_drag: None,
+            profile_offset_authoring_distance_drag: None,
             preview_control,
         }
     }
@@ -339,6 +368,32 @@ impl ProjectionalEditorSession {
         &mut self.editor
     }
 
+    /// Native session which owns the currently rendered projectional scene,
+    /// including history-free property or authoring previews.
+    #[must_use]
+    pub fn presentation_session(&self) -> Option<&RetainedSketchDocumentSession> {
+        self.fillet_radius_drag
+            .as_ref()
+            .and_then(|drag| drag.latest.as_ref())
+            .or_else(|| {
+                self.profile_offset_distance_drag
+                    .as_ref()
+                    .and_then(|drag| drag.latest.as_ref())
+            })
+            .or_else(|| {
+                self.fillet_authoring_preview
+                    .as_ref()
+                    .map(|preview| &preview.materialization)
+            })
+            .or_else(|| {
+                self.profile_offset_authoring_preview
+                    .as_ref()
+                    .map(|preview| &preview.materialization)
+            })
+            .map(|materialization| &materialization.session)
+            .or_else(|| self.coordinator.presentation_session())
+    }
+
     /// Builds the durable editor-owned Outline/source/History projection.
     ///
     /// Pointer-frame methods never call this function; presentation adapters
@@ -352,6 +407,45 @@ impl ProjectionalEditorSession {
     #[must_use]
     pub const fn selected_declaration(&self) -> Option<NodeId> {
         self.selected_declaration
+    }
+
+    fn scene_materialization(
+        &self,
+    ) -> Result<
+        (
+            &ColdIntentMaterialization,
+            &RetainedSketchDocumentSession,
+            bool,
+        ),
+        ProjectionalEditorError,
+    > {
+        let accepted = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let property_preview = self
+            .fillet_radius_drag
+            .as_ref()
+            .and_then(|drag| drag.latest.as_ref())
+            .or_else(|| {
+                self.profile_offset_distance_drag
+                    .as_ref()
+                    .and_then(|drag| drag.latest.as_ref())
+            });
+        let authoring_preview = self
+            .fillet_authoring_preview
+            .as_ref()
+            .map(|preview| &preview.materialization)
+            .or_else(|| {
+                self.profile_offset_authoring_preview
+                    .as_ref()
+                    .map(|preview| &preview.materialization)
+            });
+        let materialization = property_preview.or(authoring_preview).unwrap_or(accepted);
+        let session = self
+            .presentation_session()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        Ok((materialization, session, property_preview.is_some()))
     }
 
     /// Selects one stable declaration for Outline/source/Inspector projection.
@@ -386,36 +480,7 @@ impl ProjectionalEditorSession {
         viewport: Viewport,
         chord_tolerance_pixels: f64,
     ) -> Result<EditorScene, ProjectionalEditorError> {
-        let accepted_materialization = self
-            .coordinator
-            .accepted_materialization()
-            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
-        let property_preview = self
-            .fillet_radius_drag
-            .as_ref()
-            .and_then(|drag| drag.latest.as_ref())
-            .or_else(|| {
-                self.profile_offset_distance_drag
-                    .as_ref()
-                    .and_then(|drag| drag.latest.as_ref())
-            });
-        let authoring_preview = self
-            .fillet_authoring_preview
-            .as_ref()
-            .map(|preview| &preview.materialization)
-            .or_else(|| {
-                self.profile_offset_authoring_preview
-                    .as_ref()
-                    .map(|preview| &preview.materialization)
-            });
-        let transient_preview = property_preview.or(authoring_preview);
-        let materialization = transient_preview.unwrap_or(accepted_materialization);
-        let session = transient_preview
-            .map_or_else(
-                || self.coordinator.presentation_session(),
-                |preview| Some(&preview.session),
-            )
-            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let (materialization, session, property_preview_active) = self.scene_materialization()?;
         let accepted = session
             .accepted_state_for_current_input()
             .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
@@ -464,17 +529,19 @@ impl ProjectionalEditorSession {
         scene.apply_annotation_layout(&self.editor.annotation_layout_for_scene());
         let mut scene = scene.with_retained_session(session)?;
         self.editor.populate_curve_controls(&mut scene)?;
-        if property_preview.is_none() {
+        if !property_preview_active {
             self.attach_computed_fillet_radius_rails(&mut scene, session, materialization)?;
         }
-        if property_preview.is_some()
-            && let Some(drag) = self.fillet_radius_drag.as_ref()
-        {
+        if property_preview_active && let Some(drag) = self.fillet_radius_drag.as_ref() {
             scene.set_computed_fillet_interaction_origin(drag.expected)?;
         }
-        if property_preview.is_some()
-            && let Some(drag) = self.profile_offset_distance_drag.as_ref()
-        {
+        if property_preview_active && let Some(drag) = self.profile_offset_distance_drag.as_ref() {
+            scene.set_accepted_offset_distance_interaction_origin(&drag.expected)?;
+        }
+        if let Some(drag) = self.fillet_authoring_radius_drag.as_ref() {
+            scene.set_computed_fillet_interaction_origin(drag.expected)?;
+        }
+        if let Some(drag) = self.profile_offset_authoring_distance_drag.as_ref() {
             scene.set_accepted_offset_distance_interaction_origin(&drag.expected)?;
         }
         if let Some((accepted_revision, expected, request_id, model_position)) =
@@ -540,6 +607,859 @@ impl ProjectionalEditorSession {
         Ok(())
     }
 
+    /// Captures the exact current native boundary used by projectional
+    /// computed-Fillet collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed accepted-scene or feature-snapshot failure.
+    pub fn feature_authoring_snapshot(
+        &self,
+    ) -> Result<ComputedFeatureAuthoringSnapshot, ProjectionalEditorError> {
+        let accepted = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        ComputedFeatureAuthoringSnapshot::capture(&accepted.session)
+            .map_err(|error| ProjectionalEditorError::ComputedScene(error.to_string()))
+    }
+
+    /// Enters projectional computed-Fillet collection from exact accepted
+    /// native selection and prepares a history-free preview when the
+    /// preselection already forms a complete candidate.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot or cold-preview failure without changing the
+    /// collector or replacing a prior valid preview.
+    pub fn activate_feature_authoring(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        tool: FeatureAuthoringTool,
+        options: FeatureAuthoringOptions,
+        selection: &[(SelectionItem, Option<f64>)],
+        symbol: IntentKey,
+    ) -> Result<FeatureAuthoringOutcome, ProjectionalEditorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let document = snapshot.sketch_document().clone();
+        let mut trial = state.clone();
+        let _ = trial.activate(&snapshot, &document, tool, &[]);
+        let options_outcome = trial.set_options(&snapshot, options);
+        if matches!(options_outcome, FeatureAuthoringOutcome::Warning(_)) {
+            return Ok(options_outcome);
+        }
+        let outcome = if selection.is_empty() {
+            options_outcome
+        } else {
+            trial.pick_items(&snapshot, &document, selection)
+        };
+        self.finish_feature_authoring_transition(state, trial, outcome, symbol)
+    }
+
+    /// Resolves one Fillet canvas pick through the shared native authoring
+    /// owner, preparing the exact typed intent preview before publishing the
+    /// collector transition.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot, stale-scene or cold-preview failure state-neutrally.
+    pub fn transact_feature_authoring_pick_at(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        scene: &EditorScene,
+        position: crate::ScreenPoint,
+        tolerance: PickTolerance,
+        symbol: IntentKey,
+    ) -> Result<FeatureAuthoringOutcome, ProjectionalEditorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let document = snapshot.sketch_document().clone();
+        let mut trial = state.clone();
+        let outcome = trial.pick_at_with_policy(
+            &snapshot,
+            &document,
+            scene,
+            position,
+            tolerance,
+            self.editor.geometry_interaction_policy(),
+        );
+        self.finish_feature_authoring_transition(state, trial, outcome, symbol)
+    }
+
+    /// Resolves one semantic tree/keyboard Fillet pick through the same
+    /// history-free preview boundary as canvas input.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot or cold-preview failure state-neutrally.
+    pub fn transact_feature_authoring_pick_items(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        items: &[(SelectionItem, Option<f64>)],
+        symbol: IntentKey,
+    ) -> Result<FeatureAuthoringOutcome, ProjectionalEditorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let document = snapshot.sketch_document().clone();
+        let mut trial = state.clone();
+        let outcome = trial.pick_items(&snapshot, &document, items);
+        self.finish_feature_authoring_transition(state, trial, outcome, symbol)
+    }
+
+    /// Continues the complete projectional Fillet candidate to one absolute
+    /// radius and replaces its preview only after cold validation succeeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot or cold-preview failure state-neutrally.
+    pub fn transact_feature_authoring_radius(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        radius: f64,
+        symbol: IntentKey,
+    ) -> Result<FeatureAuthoringOutcome, ProjectionalEditorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let mut trial = state.clone();
+        let outcome = trial.continue_radius_absolute(&snapshot, radius);
+        self.finish_feature_authoring_transition(state, trial, outcome, symbol)
+    }
+
+    /// Publishes the exact Fillet item an unchanged press would consume.
+    /// This hover path changes no intent, preview or authoring candidate.
+    ///
+    /// # Errors
+    ///
+    /// Returns a current-snapshot failure.
+    pub fn pointer_move_feature_authoring(
+        &mut self,
+        state: &FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        tolerance: PickTolerance,
+    ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
+        if let Some((_, item)) =
+            self.feature_authoring_radius_hit(state, scene, input.position, tolerance)?
+        {
+            return Ok(self.editor.set_authoring_hover_target(Some(item)));
+        }
+        let snapshot = self.feature_authoring_snapshot()?;
+        let target = state.hover_item_at_with_policy(
+            &snapshot,
+            snapshot.sketch_document(),
+            scene,
+            input.position,
+            tolerance,
+            self.editor.geometry_interaction_policy(),
+        );
+        Ok(self.editor.set_authoring_hover_target(target))
+    }
+
+    fn feature_authoring_radius_hit(
+        &self,
+        state: &FeatureAuthoringState,
+        scene: &EditorScene,
+        position: crate::ScreenPoint,
+        tolerance: PickTolerance,
+    ) -> Result<
+        Option<(geosolve_sketch_features::ComputedCornerRef, SelectionItem)>,
+        ProjectionalEditorError,
+    > {
+        if !self.feature_authoring_preview_matches(state) {
+            return Ok(None);
+        }
+        let preview = self
+            .fillet_authoring_preview
+            .as_ref()
+            .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
+        if scene.computed_input != Some(preview.materialization.computed.input()) {
+            return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+        }
+        let feature = preview
+            .materialization
+            .features
+            .feature(preview.feature)
+            .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
+        let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+        Ok(fillet.corners.iter().find_map(|corner| {
+            let owner = geosolve_sketch_features::ComputedCornerRef {
+                feature: preview.feature,
+                corner: corner.id,
+            };
+            self.editor
+                .feature_radius_hover_item(scene, position, owner, tolerance)
+                .map(|item| (owner, item))
+        }))
+    }
+
+    /// Starts a history-free radius gesture only when the press independently
+    /// hits the exact cold-materialized Fillet candidate currently rendered.
+    /// A non-radius press is returned to the ordinary native operand collector.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale preview, scene or gesture provenance without changing
+    /// intent, history, accepted authority or the collector.
+    pub fn pointer_down_feature_authoring_radius(
+        &mut self,
+        state: &FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        tolerance: PickTolerance,
+        symbol: IntentKey,
+    ) -> Result<Option<Vec<EditorEffect>>, ProjectionalEditorError> {
+        let Some((owner, _)) =
+            self.feature_authoring_radius_hit(state, scene, input.position, tolerance)?
+        else {
+            return Ok(None);
+        };
+        if self.fillet_authoring_radius_drag.is_some() {
+            return Ok(Some(Vec::new()));
+        }
+        let preview = self
+            .fillet_authoring_preview
+            .clone()
+            .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
+        let effects = self
+            .editor
+            .pointer_down_feature_radius(scene, input, owner, tolerance)
+            .ok_or(ProjectionalEditorError::FilletRadiusDragRouteMismatch)?;
+        let route = self
+            .editor
+            .prepared_feature_radius_drag_route()
+            .ok_or(ProjectionalEditorError::FilletRadiusDragRouteMismatch)?;
+        if route.pointer_id != input.pointer_id
+            || route.expected != preview.materialization.computed.input()
+            || route.feature != preview.feature
+            || route.origin_radius.to_bits() != preview.candidate.radius().to_bits()
+        {
+            let _ = self.editor.cancel();
+            return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+        }
+        self.fillet_authoring_radius_drag = Some(ActiveFilletAuthoringRadiusDrag {
+            pointer_id: input.pointer_id,
+            intent: self.coordinator.intent().identity(),
+            expected: route.expected,
+            feature: route.feature,
+            origin_state: state.clone(),
+            origin_preview: preview,
+            latest_radius: None,
+            symbol,
+        });
+        Ok(Some(effects))
+    }
+
+    /// Advances a live pre-Apply Fillet radius gesture by cold-materializing
+    /// the entire typed candidate. Accepted intent and history remain untouched.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/out-of-order effects or an invalid continuation while
+    /// retaining the prior last-valid candidate and preview.
+    pub fn pointer_move_feature_authoring_radius(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
+        let active = self
+            .fillet_authoring_radius_drag
+            .clone()
+            .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?;
+        if active.pointer_id != input.pointer_id
+            || active.intent != self.coordinator.intent().identity()
+        {
+            return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+        }
+        let effects = self.editor.pointer_move(scene, input);
+        let mut presentation = Vec::new();
+        for effect in effects {
+            match effect {
+                EditorEffect::PreviewComputedFeatureRadius {
+                    expected,
+                    feature,
+                    radius,
+                } => {
+                    if expected != active.expected || feature != active.feature {
+                        return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+                    }
+                    let snapshot = self.feature_authoring_snapshot()?;
+                    let mut trial = active.origin_state.clone();
+                    let FeatureAuthoringOutcome::PreviewRequested { candidate, .. } =
+                        trial.continue_radius_absolute(&snapshot, radius)
+                    else {
+                        return Err(ProjectionalEditorError::AuthoringPreviewRejected);
+                    };
+                    let preview = self.prepare_computed_fillet_authoring_preview(
+                        active.symbol.clone(),
+                        &candidate,
+                    )?;
+                    if preview.feature != feature
+                        || preview.candidate != candidate
+                        || !self
+                            .editor
+                            .accept_computed_feature_radius_preview(&expected, feature, radius)
+                    {
+                        return Err(ProjectionalEditorError::FilletRadiusPreviewMismatch);
+                    }
+                    self.fillet_authoring_preview = Some(preview);
+                    *state = trial;
+                    if let Some(drag) = self.fillet_authoring_radius_drag.as_mut() {
+                        drag.latest_radius = Some(radius);
+                    }
+                    presentation.push(EditorEffect::PreviewComputedFeatureRadius {
+                        expected,
+                        feature,
+                        radius,
+                    });
+                }
+                EditorEffect::RestoreComputedFeatureRadius { .. }
+                | EditorEffect::ClearComputedFeaturePreview => {
+                    self.restore_feature_authoring_radius_drag(state);
+                    presentation.push(EditorEffect::ClearComputedFeaturePreview);
+                }
+                other => presentation.push(other),
+            }
+        }
+        Ok(presentation)
+    }
+
+    /// Finishes a pre-Apply Fillet radius gesture without publishing intent.
+    /// Apply remains the only durable feature transaction.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a foreign pointer or terminal sample and restores the exact
+    /// pointer-down collector/preview checkpoint.
+    pub fn pointer_up_feature_authoring_radius(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Result<bool, ProjectionalEditorError> {
+        let active = self
+            .fillet_authoring_radius_drag
+            .clone()
+            .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?;
+        if active.pointer_id != input.pointer_id
+            || active.intent != self.coordinator.intent().identity()
+        {
+            self.restore_feature_authoring_radius_drag(state);
+            return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+        }
+        let effects = self.editor.pointer_up(scene, scene.design_identity, input);
+        let committed = effects.iter().any(|effect| {
+            matches!(
+                effect,
+                EditorEffect::CommitComputedFeatureRadius {
+                    expected,
+                    feature,
+                    radius,
+                } if *expected == active.expected
+                    && *feature == active.feature
+                    && active.latest_radius.is_some_and(|latest| latest.to_bits() == radius.to_bits())
+            )
+        });
+        if committed && self.feature_authoring_preview_matches(state) {
+            self.fillet_authoring_radius_drag = None;
+            return Ok(true);
+        }
+        self.restore_feature_authoring_radius_drag(state);
+        Ok(false)
+    }
+
+    /// Cancels a live pre-Apply Fillet radius gesture and restores its exact
+    /// history-free pointer-down state.
+    pub fn cancel_feature_authoring_radius_drag(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+    ) -> Vec<EditorEffect> {
+        let effects = self.editor.cancel();
+        self.restore_feature_authoring_radius_drag(state);
+        effects
+    }
+
+    fn restore_feature_authoring_radius_drag(&mut self, state: &mut FeatureAuthoringState) {
+        if let Some(active) = self.fillet_authoring_radius_drag.take() {
+            *state = active.origin_state;
+            self.fillet_authoring_preview = Some(active.origin_preview);
+        }
+    }
+
+    /// Whether projectional Fillet authoring currently owns the captured
+    /// pointer as a history-free radius gesture.
+    #[must_use]
+    pub const fn feature_authoring_radius_drag_active(&self) -> bool {
+        self.fillet_authoring_radius_drag.is_some()
+    }
+
+    /// Whether the complete collector candidate is exactly the cold preview
+    /// currently rendered by [`Self::scene`].
+    #[must_use]
+    pub fn feature_authoring_preview_matches(&self, state: &FeatureAuthoringState) -> bool {
+        let FeatureAuthoringOutcome::Apply(candidate) = state.apply() else {
+            return false;
+        };
+        self.fillet_authoring_preview
+            .as_ref()
+            .is_some_and(|preview| {
+                preview.intent == self.coordinator.intent().identity()
+                    && preview.candidate == candidate
+            })
+    }
+
+    /// Stable computed owner used only to paint the current provisional
+    /// Fillet result as selected candidate geometry.
+    #[must_use]
+    pub fn feature_authoring_preview_item(&self) -> Option<SelectionItem> {
+        self.fillet_authoring_preview
+            .as_ref()
+            .filter(|preview| preview.intent == self.coordinator.intent().identity())
+            .map(|preview| SelectionItem::Feature(preview.feature))
+    }
+
+    fn finish_feature_authoring_transition(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        trial: FeatureAuthoringState,
+        outcome: FeatureAuthoringOutcome,
+        symbol: IntentKey,
+    ) -> Result<FeatureAuthoringOutcome, ProjectionalEditorError> {
+        match &outcome {
+            FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => {
+                let preview = self.prepare_computed_fillet_authoring_preview(symbol, candidate)?;
+                self.profile_offset_authoring_preview = None;
+                self.fillet_authoring_preview = Some(preview);
+            }
+            FeatureAuthoringOutcome::ModeEntered(_)
+            | FeatureAuthoringOutcome::Collecting { .. }
+            | FeatureAuthoringOutcome::CandidateCleared(_)
+            | FeatureAuthoringOutcome::ModeExited => {
+                self.fillet_authoring_preview = None;
+            }
+            FeatureAuthoringOutcome::NoNativeHit(_)
+            | FeatureAuthoringOutcome::Warning(_)
+            | FeatureAuthoringOutcome::Inactive => return Ok(outcome),
+            FeatureAuthoringOutcome::Apply(_) => {}
+        }
+        *state = trial;
+        Ok(outcome)
+    }
+
+    fn prepare_computed_fillet_authoring_preview(
+        &self,
+        symbol: IntentKey,
+        candidate: &FeatureAuthoringCandidate,
+    ) -> Result<ProjectionalFilletAuthoringPreview, ProjectionalEditorError> {
+        let accepted = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let accepted_state = accepted
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let accepted_input = accepted
+            .session
+            .accepted_prepared_input()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let translated = projectional_fillet_patch(
+            self.coordinator.intent().identity(),
+            self.coordinator.intent(),
+            &accepted.ownership,
+            accepted_input,
+            accepted_state.identity(),
+            symbol,
+            candidate,
+        )?;
+        let materialization = self
+            .coordinator
+            .preview_patch_materialization(translated.patch)?
+            .ok_or(ProjectionalEditorError::AuthoringPreviewRejected)?;
+        let features = materialization
+            .features
+            .features()
+            .iter()
+            .filter(|feature| accepted.features.feature(feature.id).is_none())
+            .map(|feature| feature.id)
+            .collect::<Vec<_>>();
+        let [feature] = features.as_slice() else {
+            return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+        };
+        Ok(ProjectionalFilletAuthoringPreview {
+            intent: self.coordinator.intent().identity(),
+            candidate: candidate.clone(),
+            materialization,
+            feature: *feature,
+        })
+    }
+
+    /// Activates native Profile Offset from the exact current accepted
+    /// topology snapshot. No partial operand index is installed.
+    ///
+    /// # Errors
+    ///
+    /// Returns topology capture, bounded-work or accepted-authority failure.
+    pub fn activate_offset_authoring(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+    ) -> Result<OffsetAuthoringOutcome, ProjectionalEditorError> {
+        let accepted = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let query =
+            PreparedOffsetOperandQuery::capture(&accepted.session, OffsetOperandRequest::default())
+                .map_err(|error| ProjectionalEditorError::OffsetAuthoring(error.to_string()))?;
+        let OperationOutcome::Completed { value, .. } = query
+            .execute(crate::coordinator::bounded_geometry_control())
+            .map_err(|error| ProjectionalEditorError::OffsetAuthoring(error.to_string()))?
+        else {
+            return Err(ProjectionalEditorError::OffsetAuthoring(
+                "topology capture exhausted its bounded work envelope".into(),
+            ));
+        };
+        let index = value.operand_index.map(Arc::new).ok_or_else(|| {
+            ProjectionalEditorError::OffsetAuthoring(
+                "topology capture did not produce a complete operand index".into(),
+            )
+        })?;
+        let model_scale = accepted.session.design_document().model_scale();
+        self.clear_authoring_previews();
+        Ok(state.activate(index, model_scale))
+    }
+
+    /// Cold-materializes the exact current Profile Offset candidate without
+    /// publishing intent or history. A failed replacement leaves the last
+    /// valid preview intact.
+    ///
+    /// # Errors
+    ///
+    /// Returns stale/incomplete topology or ordinary cold-materialization
+    /// failure without changing accepted authority.
+    pub fn refresh_offset_authoring_preview(
+        &mut self,
+        state: &OffsetAuthoringState,
+        symbol: IntentKey,
+    ) -> Result<bool, ProjectionalEditorError> {
+        if state.candidate().is_none() {
+            self.profile_offset_authoring_preview = None;
+            return Ok(false);
+        }
+        let preview = self.prepare_profile_offset_authoring_preview(state, symbol)?;
+        self.fillet_authoring_preview = None;
+        self.profile_offset_authoring_preview = Some(preview);
+        Ok(true)
+    }
+
+    fn prepare_profile_offset_authoring_preview(
+        &self,
+        state: &OffsetAuthoringState,
+        symbol: IntentKey,
+    ) -> Result<ProjectionalProfileOffsetAuthoringPreview, ProjectionalEditorError> {
+        let candidate = state
+            .candidate()
+            .ok_or(ProjectionalEditorError::AuthoringCandidateIncomplete)?;
+        let accepted = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let translated = projectional_profile_offset_patch(
+            self.coordinator.intent().identity(),
+            self.coordinator.intent(),
+            &accepted.ownership,
+            &accepted.session,
+            state,
+            symbol,
+        )?;
+        let materialization = self
+            .coordinator
+            .preview_patch_materialization(translated.patch)?
+            .ok_or(ProjectionalEditorError::AuthoringPreviewRejected)?;
+        let provisional_items = provisional_items(&accepted.ownership, &materialization.ownership);
+        if provisional_items.is_empty() {
+            return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+        }
+        let dimension = provisional_profile_offset_dimension(&materialization, &provisional_items)?;
+        Ok(ProjectionalProfileOffsetAuthoringPreview {
+            intent: self.coordinator.intent().identity(),
+            candidate,
+            materialization,
+            provisional_items,
+            dimension,
+        })
+    }
+
+    /// Applies one numeric Profile Offset authoring edit atomically with its
+    /// exact cold preview. Invalid/rejected replacements leave both collector
+    /// and last-valid preview unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns an exact translation or materialization failure without
+    /// changing intent, accepted authority, history or collector state.
+    pub fn transact_offset_authoring_distance(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        distance: f64,
+        symbol: IntentKey,
+    ) -> Result<OffsetAuthoringOutcome, ProjectionalEditorError> {
+        let mut trial = state.clone();
+        let outcome = trial.set_distance(distance);
+        match &outcome {
+            OffsetAuthoringOutcome::DistanceChanged { .. } => {
+                let preview = trial
+                    .candidate()
+                    .map(|_| self.prepare_profile_offset_authoring_preview(&trial, symbol))
+                    .transpose()?;
+                self.fillet_authoring_preview = None;
+                self.profile_offset_authoring_preview = preview;
+                *state = trial;
+            }
+            OffsetAuthoringOutcome::Warning(_)
+            | OffsetAuthoringOutcome::Inactive
+            | OffsetAuthoringOutcome::ModeEntered(_)
+            | OffsetAuthoringOutcome::HoverChanged(_)
+            | OffsetAuthoringOutcome::OperandChanged { .. }
+            | OffsetAuthoringOutcome::ApplyRequested(_)
+            | OffsetAuthoringOutcome::ModeExited => {}
+        }
+        Ok(outcome)
+    }
+
+    /// Starts a history-free distance gesture when a press hits the exact
+    /// provisional Profile Offset target or annotation currently rendered.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale preview/scene provenance without changing durable state.
+    pub fn pointer_down_offset_authoring_distance(
+        &mut self,
+        state: &OffsetAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        symbol: IntentKey,
+    ) -> Result<Option<Vec<EditorEffect>>, ProjectionalEditorError> {
+        if !self.offset_authoring_preview_matches(state) {
+            return Ok(None);
+        }
+        if self.profile_offset_authoring_distance_drag.is_some() {
+            return Ok(Some(Vec::new()));
+        }
+        let preview = self
+            .profile_offset_authoring_preview
+            .clone()
+            .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
+        let Some(effects) = self
+            .editor
+            .pointer_down_accepted_offset_distance(scene, input)
+        else {
+            return Ok(None);
+        };
+        let route = self
+            .editor
+            .prepared_accepted_offset_distance_drag_route()
+            .ok_or(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch)?;
+        let expected = preview
+            .materialization
+            .session
+            .accepted_prepared_input()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        if route.pointer_id != input.pointer_id
+            || route.expected != expected
+            || route.dimension != preview.dimension
+            || route.origin_distance.to_bits() != preview.candidate.distance.to_bits()
+        {
+            let _ = self.editor.cancel();
+            return Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch);
+        }
+        self.profile_offset_authoring_distance_drag =
+            Some(ActiveProfileOffsetAuthoringDistanceDrag {
+                pointer_id: input.pointer_id,
+                intent: self.coordinator.intent().identity(),
+                expected,
+                dimension: route.dimension,
+                origin_state: state.clone(),
+                origin_preview: preview,
+                latest_distance: None,
+                symbol,
+            });
+        Ok(Some(effects))
+    }
+
+    /// Advances a live pre-Apply Profile Offset distance gesture through the
+    /// same typed patch and cold-materialization boundary used by numeric edit.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale or invalid samples while retaining the prior last-valid
+    /// preview and every durable authority unchanged.
+    pub fn pointer_move_offset_authoring_distance(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
+        let active = self
+            .profile_offset_authoring_distance_drag
+            .clone()
+            .ok_or(ProjectionalEditorError::MissingProfileOffsetDistanceDragRoute)?;
+        if active.pointer_id != input.pointer_id
+            || active.intent != self.coordinator.intent().identity()
+        {
+            return Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch);
+        }
+        let effects = self.editor.pointer_move(scene, input);
+        let mut presentation = Vec::new();
+        for effect in effects {
+            match effect {
+                EditorEffect::PreviewAcceptedProfileOffsetDistance {
+                    expected,
+                    dimension,
+                    distance,
+                } => {
+                    if expected != active.expected || dimension != active.dimension {
+                        return Err(
+                            ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch,
+                        );
+                    }
+                    let mut trial = active.origin_state.clone();
+                    if !matches!(
+                        trial.set_distance(distance),
+                        OffsetAuthoringOutcome::DistanceChanged { distance: accepted, .. }
+                            if accepted.to_bits() == distance.to_bits()
+                    ) {
+                        return Err(ProjectionalEditorError::AuthoringPreviewRejected);
+                    }
+                    let preview = self
+                        .prepare_profile_offset_authoring_preview(&trial, active.symbol.clone())?;
+                    if preview.dimension != dimension
+                        || !self
+                            .editor
+                            .accept_profile_offset_distance_preview(&expected, dimension, distance)
+                    {
+                        return Err(ProjectionalEditorError::ProfileOffsetDistancePreviewMismatch);
+                    }
+                    self.profile_offset_authoring_preview = Some(preview);
+                    *state = trial;
+                    if let Some(drag) = self.profile_offset_authoring_distance_drag.as_mut() {
+                        drag.latest_distance = Some(distance);
+                    }
+                    presentation.push(EditorEffect::PreviewAcceptedProfileOffsetDistance {
+                        expected,
+                        dimension,
+                        distance,
+                    });
+                }
+                EditorEffect::ClearAcceptedProfileOffsetPreview => {
+                    self.restore_offset_authoring_distance_drag(state);
+                    presentation.push(EditorEffect::ClearAcceptedProfileOffsetPreview);
+                }
+                other => presentation.push(other),
+            }
+        }
+        Ok(presentation)
+    }
+
+    /// Finishes a pre-Apply Profile Offset distance gesture without publishing
+    /// a declaration or history entry.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a foreign pointer or terminal sample and restores the exact
+    /// pointer-down collector/preview checkpoint.
+    pub fn pointer_up_offset_authoring_distance(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Result<bool, ProjectionalEditorError> {
+        let active = self
+            .profile_offset_authoring_distance_drag
+            .clone()
+            .ok_or(ProjectionalEditorError::MissingProfileOffsetDistanceDragRoute)?;
+        if active.pointer_id != input.pointer_id
+            || active.intent != self.coordinator.intent().identity()
+        {
+            self.restore_offset_authoring_distance_drag(state);
+            return Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch);
+        }
+        let effects = self.editor.pointer_up(scene, scene.design_identity, input);
+        let committed = effects.iter().any(|effect| {
+            matches!(
+                effect,
+                EditorEffect::CommitAcceptedProfileOffsetDistance {
+                    expected,
+                    dimension,
+                    distance,
+                } if *expected == active.expected
+                    && *dimension == active.dimension
+                    && active.latest_distance.is_some_and(|latest| latest.to_bits() == distance.to_bits())
+            )
+        });
+        if committed && self.offset_authoring_preview_matches(state) {
+            self.profile_offset_authoring_distance_drag = None;
+            return Ok(true);
+        }
+        self.restore_offset_authoring_distance_drag(state);
+        Ok(false)
+    }
+
+    /// Cancels a live pre-Apply Profile Offset distance gesture and restores
+    /// its exact history-free pointer-down state.
+    pub fn cancel_offset_authoring_distance_drag(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+    ) -> Vec<EditorEffect> {
+        let effects = self.editor.cancel();
+        self.restore_offset_authoring_distance_drag(state);
+        effects
+    }
+
+    fn restore_offset_authoring_distance_drag(&mut self, state: &mut OffsetAuthoringState) {
+        if let Some(active) = self.profile_offset_authoring_distance_drag.take() {
+            *state = active.origin_state;
+            self.profile_offset_authoring_preview = Some(active.origin_preview);
+        }
+    }
+
+    /// Whether projectional Offset authoring currently owns the captured
+    /// pointer as a history-free distance gesture.
+    #[must_use]
+    pub const fn offset_authoring_distance_drag_active(&self) -> bool {
+        self.profile_offset_authoring_distance_drag.is_some()
+    }
+
+    /// Whether Apply would publish the exact Profile Offset candidate currently
+    /// rendered by [`Self::scene`].
+    #[must_use]
+    pub fn offset_authoring_preview_matches(&self, state: &OffsetAuthoringState) -> bool {
+        self.profile_offset_authoring_preview
+            .as_ref()
+            .zip(state.candidate().as_ref())
+            .is_some_and(|(preview, candidate)| {
+                preview.intent == self.coordinator.intent().identity()
+                    && preview.candidate == *candidate
+            })
+    }
+
+    /// Exact native items introduced only by the current history-free Profile
+    /// Offset candidate.
+    #[must_use]
+    pub fn offset_authoring_provisional_items(&self) -> &[SelectionItem] {
+        self.profile_offset_authoring_preview
+            .as_ref()
+            .filter(|preview| preview.intent == self.coordinator.intent().identity())
+            .map_or(&[], |preview| preview.provisional_items.as_slice())
+    }
+
+    /// Clears only computed-Fillet/Profile-Offset authoring previews. Accepted
+    /// intent, history, evidence and the reusable collectors are unchanged.
+    pub fn clear_authoring_previews(&mut self) {
+        let _ = self.editor.cancel();
+        self.fillet_authoring_radius_drag = None;
+        self.profile_offset_authoring_distance_drag = None;
+        self.fillet_authoring_preview = None;
+        self.profile_offset_authoring_preview = None;
+    }
+
     /// Applies a typed durable patch through the sole intent history.
     ///
     /// # Errors
@@ -550,6 +1470,7 @@ impl ProjectionalEditorSession {
         patch: IntentPatch,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
         self.cancel_interaction();
+        self.clear_authoring_previews();
         let outcome = self.coordinator.apply_patch(patch)?;
         if outcome.disposition == IntentPlanDisposition::Accepted {
             self.clear_transient_selection();
@@ -595,6 +1516,31 @@ impl ProjectionalEditorSession {
             .patch
         };
         self.apply_patch(patch)
+    }
+
+    /// Applies only the exact computed-Fillet candidate currently rendered by
+    /// the history-free projectional preview.
+    ///
+    /// # Errors
+    ///
+    /// Rejects incomplete/stale collector state or a preview mismatch without
+    /// changing intent, accepted authority, history or collector state.
+    pub fn apply_computed_fillet_preview(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        symbol: IntentKey,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let FeatureAuthoringOutcome::Apply(candidate) = state.apply() else {
+            return Err(ProjectionalEditorError::AuthoringCandidateIncomplete);
+        };
+        if !self.feature_authoring_preview_matches(state) {
+            return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+        }
+        let outcome = self.apply_computed_fillet(symbol, &candidate)?;
+        if outcome.disposition == IntentPlanDisposition::Accepted {
+            let _ = state.publication_succeeded();
+        }
+        Ok(outcome)
     }
 
     /// Edits one stable computed-Fillet radius. A geometrically invalid value
@@ -665,6 +1611,27 @@ impl ProjectionalEditorSession {
             state.clear_after_apply();
         }
         Ok(outcome)
+    }
+
+    /// Applies only the exact native Profile Offset candidate currently
+    /// rendered by the history-free projectional preview.
+    ///
+    /// # Errors
+    ///
+    /// Rejects incomplete/stale collector state or a preview mismatch without
+    /// changing intent, accepted authority, history or collector state.
+    pub fn apply_profile_offset_preview(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        symbol: IntentKey,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        if state.candidate().is_none() {
+            return Err(ProjectionalEditorError::AuthoringCandidateIncomplete);
+        }
+        if !self.offset_authoring_preview_matches(state) {
+            return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+        }
+        self.apply_profile_offset(state, symbol)
     }
 
     /// Edits the positive distance property owned by one accepted native
@@ -969,6 +1936,7 @@ impl ProjectionalEditorSession {
     /// Returns an intent or cold-reconstruction error without changing state.
     pub fn undo(&mut self) -> Result<Option<IntentSessionIdentity>, ProjectionalEditorError> {
         self.cancel_interaction();
+        self.clear_authoring_previews();
         let moved = self.coordinator.undo()?;
         if moved.is_some() {
             self.clear_transient_selection();
@@ -984,6 +1952,7 @@ impl ProjectionalEditorSession {
     /// Returns an intent or cold-reconstruction error without changing state.
     pub fn redo(&mut self) -> Result<Option<IntentSessionIdentity>, ProjectionalEditorError> {
         self.cancel_interaction();
+        self.clear_authoring_previews();
         let moved = self.coordinator.redo()?;
         if moved.is_some() {
             self.clear_transient_selection();
@@ -1713,6 +2682,79 @@ impl ProjectionalEditorSession {
     }
 }
 
+fn provisional_items(
+    accepted: &crate::IntentMaterializationMap,
+    preview: &crate::IntentMaterializationMap,
+) -> Vec<SelectionItem> {
+    let accepted = accepted
+        .nodes
+        .iter()
+        .flat_map(|node| node.owned.iter().copied())
+        .chain(accepted.ports.iter().map(|(_, binding)| *binding))
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut items = preview
+        .nodes
+        .iter()
+        .flat_map(|node| node.owned.iter().copied())
+        .chain(preview.ports.iter().map(|(_, binding)| *binding))
+        .filter(|binding| !accepted.contains(binding))
+        .filter_map(|binding| match binding {
+            IntentNativeBinding::Point(point) => Some(SelectionItem::Point(point)),
+            IntentNativeBinding::CurveSpan(span) => Some(SelectionItem::Curve(span)),
+            IntentNativeBinding::Constraint(constraint) => {
+                Some(SelectionItem::Constraint(constraint))
+            }
+            IntentNativeBinding::Dimension(dimension) => Some(SelectionItem::Dimension(dimension)),
+            IntentNativeBinding::ComputedFeature(feature) => Some(SelectionItem::Feature(feature)),
+            IntentNativeBinding::ComputedFeatureCorner(_)
+            | IntentNativeBinding::Scalar(_)
+            | IntentNativeBinding::Curve(_)
+            | IntentNativeBinding::Contact(_)
+            | IntentNativeBinding::Source(_)
+            | IntentNativeBinding::Parameter(_)
+            | IntentNativeBinding::ExternalBinding(_)
+            | IntentNativeBinding::Logical(_) => None,
+        })
+        .collect::<Vec<_>>();
+    items.sort_unstable();
+    items.dedup();
+    items
+}
+
+fn provisional_profile_offset_dimension(
+    preview: &ColdIntentMaterialization,
+    items: &[SelectionItem],
+) -> Result<DocumentDimensionId, ProjectionalEditorError> {
+    let dimensions = items
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Dimension(dimension) => Some(*dimension),
+            SelectionItem::Point(_)
+            | SelectionItem::Curve(_)
+            | SelectionItem::Constraint(_)
+            | SelectionItem::Datum(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_) => None,
+        })
+        .filter(|dimension| {
+            preview
+                .session
+                .design_document()
+                .dimension(*dimension)
+                .is_some_and(|dimension| {
+                    matches!(
+                        dimension.definition,
+                        DocumentDimensionDefinition::ProfileOffset { .. }
+                    )
+                })
+        })
+        .collect::<Vec<_>>();
+    let [dimension] = dimensions.as_slice() else {
+        return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+    };
+    Ok(*dimension)
+}
+
 /// Projectional headless interaction failure.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -1749,6 +2791,14 @@ pub enum ProjectionalEditorError {
     ComputedScene(String),
     #[error("computed scene evaluation stopped before publication")]
     ComputedSceneStopped,
+    #[error("the projectional authoring candidate is incomplete")]
+    AuthoringCandidateIncomplete,
+    #[error("the projectional authoring preview was independently rejected")]
+    AuthoringPreviewRejected,
+    #[error("the projectional authoring preview does not match its typed candidate identity")]
+    AuthoringPreviewIdentityMismatch,
+    #[error("Profile Offset authoring is unavailable: {0}")]
+    OffsetAuthoring(String),
     #[error("flat bootstrap activation currently requires a current accepted native design")]
     BootstrapCurrentAcceptanceRequired,
     #[error("flat bootstrap declarations and the restored native document disagree")]

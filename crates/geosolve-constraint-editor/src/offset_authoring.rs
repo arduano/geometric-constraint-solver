@@ -268,8 +268,9 @@ impl OffsetAuthoringState {
         self.hover.as_ref()
     }
 
-    /// Clears presentation-only operand hover when a higher-priority provisional surface wins.
-    pub(crate) fn clear_hover(&mut self) {
+    /// Clears presentation-only operand hover on pointer leave or when a
+    /// higher-priority provisional surface wins.
+    pub fn clear_hover(&mut self) {
         self.hover = None;
     }
 
