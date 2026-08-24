@@ -3,13 +3,14 @@
 use std::sync::Arc;
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, IntentNativeBinding, OffsetAuthoringOutcome, OffsetAuthoringState,
-    OffsetAuthoringTarget, ProfileOffsetDirectionState, ProjectionalEditorError,
-    ProjectionalEditorSession, ProjectionalIntentCoordinator, ProjectionalProfileOffsetError,
+    ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, IntentNativeBinding, Modifiers,
+    OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringTarget,
+    ProfileOffsetDirectionState, ProjectionalEditorError, ProjectionalEditorSession,
+    ProjectionalIntentCoordinator, ProjectionalProfileOffsetError, ScreenPoint, Viewport,
 };
 use geosolve_sketch::{
-    CurveSpan, DocumentDimensionDefinition, DocumentDimensionId, DocumentId, OperationControl,
-    OperationOutcome, PersistentId,
+    CurveSpan, DocumentDimensionDefinition, DocumentDimensionId, DocumentId,
+    DocumentProfileOffsetOperand, OperationControl, OperationOutcome, PersistentId,
 };
 use geosolve_sketch_intent::{
     AggregateKind, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey, IntentKey,
@@ -227,6 +228,72 @@ fn assert_independently_valid(session: &ProjectionalEditorSession) {
             .flat_map(|point| point.position)
             .all(f64::is_finite)
     );
+}
+
+const fn pointer(
+    pointer_id: u64,
+    position: ScreenPoint,
+) -> geosolve_constraint_editor::PointerInput {
+    geosolve_constraint_editor::PointerInput {
+        pointer_id,
+        position,
+        modifiers: Modifiers {
+            shift: false,
+            control: false,
+            command: false,
+        },
+    }
+}
+
+fn offset_drag_geometry(
+    session: &ProjectionalEditorSession,
+    dimension: DocumentDimensionId,
+    viewport: Viewport,
+) -> (
+    geosolve_constraint_editor::EditorScene,
+    ScreenPoint,
+    [f64; 2],
+) {
+    let document = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    let definition = &document.dimension(dimension).unwrap().definition;
+    let DocumentDimensionDefinition::ProfileOffset { operand, .. } = definition else {
+        unreachable!()
+    };
+    let edge = match operand {
+        DocumentProfileOffsetOperand::Face { outer, .. } => outer.edges[0],
+        DocumentProfileOffsetOperand::OpenChain { chain, .. } => chain.edges[0],
+    };
+    let source = document.evaluate_curve_jet(edge.source.curve, 0.5).unwrap();
+    let target = document.evaluate_curve_jet(edge.target.curve, 0.5).unwrap();
+    let normal = source.differential().unwrap().left_normal;
+    let separation = [
+        target.position.x - source.position.x,
+        target.position.y - source.position.y,
+    ];
+    let sign = if separation[0].mul_add(normal.x, separation[1] * normal.y) > 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let derivative = [normal.x * sign, normal.y * sign];
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let curve = scene
+        .curves
+        .iter()
+        .find(|curve| curve.span == edge.target.curve)
+        .unwrap();
+    let first = curve.screen_polyline.first().unwrap();
+    let last = curve.screen_polyline.last().unwrap();
+    let press = ScreenPoint {
+        x: 0.5 * (first.x + last.x),
+        y: 0.5 * (first.y + last.y),
+    };
+    (scene, press, derivative)
 }
 
 #[test]
@@ -607,6 +674,201 @@ fn stale_candidates_and_invalid_properties_change_no_history_or_authority() {
     assert_eq!(
         session.coordinator().intent().undo_len(),
         history_after_apply
+    );
+    assert_independently_valid(&session);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one lifecycle regression keeps preview, exact publication, independent validity, and Undo evidence contiguous"
+)]
+fn accepted_offset_drag_previews_without_history_then_commits_once_and_undoes() {
+    let mut session = fixture(false, 0x8300_0ff5_0010);
+    let mut state = offset_state(&session, false);
+    session
+        .apply_profile_offset(&mut state, key("offset.drag"))
+        .unwrap();
+    let dimension = profile_offset_dimension(&session);
+    let viewport = Viewport::new([800.0, 600.0], [2.0, 1.5], 50.0).unwrap();
+    let (scene, press, derivative) = offset_drag_geometry(&session, dimension, viewport);
+    let history_before = session.coordinator().intent().undo_len();
+    let identity_before = session.coordinator().intent().identity();
+    let evidence_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+
+    session.pointer_down(&scene, pointer(81, press)).unwrap();
+    assert_eq!(
+        session.editor().active_pointer_gesture().unwrap().kind,
+        ActivePointerGestureKind::OffsetDistance
+    );
+    let origin = viewport.screen_to_model(press);
+    let target = viewport.model_to_screen([
+        0.25f64.mul_add(derivative[0], origin[0]),
+        0.25f64.mul_add(derivative[1], origin[1]),
+    ]);
+    let effects = session.pointer_move(&scene, pointer(81, target)).unwrap();
+    effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::PreviewAcceptedProfileOffsetDistance { distance, .. } => Some(*distance),
+            _ => None,
+        })
+        .expect("the finite accepted Offset sample must cold-materialize");
+    let target = viewport.model_to_screen([
+        0.4f64.mul_add(derivative[0], origin[0]),
+        0.4f64.mul_add(derivative[1], origin[1]),
+    ]);
+    let distance = session
+        .pointer_move(&scene, pointer(81, target))
+        .unwrap()
+        .into_iter()
+        .find_map(|effect| match effect {
+            EditorEffect::PreviewAcceptedProfileOffsetDistance { distance, .. } => Some(distance),
+            _ => None,
+        })
+        .expect("the newer accepted Offset sample must replace the prior preview");
+    assert_eq!(distance.to_bits(), 0.9_f64.to_bits());
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before
+    );
+
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    let outcome = session
+        .pointer_up(&preview_scene, pointer(81, target))
+        .unwrap();
+    assert_eq!(
+        outcome.transaction.unwrap().disposition,
+        IntentPlanDisposition::Accepted
+    );
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before + 1
+    );
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let DocumentDimensionDefinition::ProfileOffset { target, .. } = accepted
+        .session
+        .design_document()
+        .dimension(dimension)
+        .unwrap()
+        .definition
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        accepted
+            .session
+            .design_document()
+            .scalar(target)
+            .unwrap()
+            .value
+            .to_bits(),
+        distance.to_bits()
+    );
+    assert_independently_valid(&session);
+
+    session.undo().unwrap().unwrap();
+    let undone = session.coordinator().accepted_materialization().unwrap();
+    let DocumentDimensionDefinition::ProfileOffset { target, .. } = undone
+        .session
+        .design_document()
+        .dimension(dimension)
+        .unwrap()
+        .definition
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        undone
+            .session
+            .design_document()
+            .scalar(target)
+            .unwrap()
+            .value
+            .to_bits(),
+        0.5_f64.to_bits()
+    );
+}
+
+#[test]
+fn accepted_offset_cancel_invalid_and_stale_releases_publish_nothing() {
+    let mut session = fixture(false, 0x8300_0ff5_0011);
+    let mut state = offset_state(&session, false);
+    session
+        .apply_profile_offset(&mut state, key("offset.drag.rollback"))
+        .unwrap();
+    let dimension = profile_offset_dimension(&session);
+    let viewport = Viewport::new([800.0, 600.0], [2.0, 1.5], 50.0).unwrap();
+    let (scene, press, derivative) = offset_drag_geometry(&session, dimension, viewport);
+    let history_before = session.coordinator().intent().undo_len();
+    let identity_before = session.coordinator().intent().identity();
+    let evidence_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+    let origin = viewport.screen_to_model(press);
+    let valid = viewport.model_to_screen([
+        0.2f64.mul_add(derivative[0], origin[0]),
+        0.2f64.mul_add(derivative[1], origin[1]),
+    ]);
+
+    session.pointer_down(&scene, pointer(82, press)).unwrap();
+    session.pointer_move(&scene, pointer(82, valid)).unwrap();
+    assert!(
+        session
+            .cancel_interaction()
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearAcceptedProfileOffsetPreview))
+    );
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session.pointer_down(&scene, pointer(83, press)).unwrap();
+    session.pointer_move(&scene, pointer(83, valid)).unwrap();
+    assert!(matches!(
+        session.pointer_up(&scene, pointer(83, valid)),
+        Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch)
+    ));
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session.pointer_down(&scene, pointer(84, press)).unwrap();
+    let invalid = viewport.model_to_screen([
+        (-1.0f64).mul_add(derivative[0], origin[0]),
+        (-1.0f64).mul_add(derivative[1], origin[1]),
+    ]);
+    assert!(
+        session
+            .pointer_move(&scene, pointer(84, invalid))
+            .unwrap()
+            .is_empty()
+    );
+    let outcome = session.pointer_up(&scene, pointer(84, invalid)).unwrap();
+    assert!(outcome.transaction.is_none());
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before
     );
     assert_independently_valid(&session);
 }

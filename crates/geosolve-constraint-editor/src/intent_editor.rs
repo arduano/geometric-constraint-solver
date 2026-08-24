@@ -8,12 +8,13 @@
 //! disposable selection, hover and pointer-gesture state.
 
 use geosolve_sketch::{
-    DesignPointId, DocumentCurveControlId, DocumentDimensionId, DocumentId, OperationControl,
-    RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity,
-    SketchHardValidity,
+    DesignPointId, DocumentCurveControlId, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentId, OperationControl, PreparedSketchInput, RetainedSketchDocumentSession,
+    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity, SketchHardValidity,
 };
 use geosolve_sketch_features::{
-    ComputedEvaluationAllocator, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
+    ComputedEvaluationAllocator, ComputedFeatureAuthoringSnapshot, ComputedFeatureDefinition,
+    ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
 };
 use geosolve_sketch_intent::{
     IntentKey, IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
@@ -56,6 +57,26 @@ struct ActiveCurveControlDrag {
     latest_position: Option<[f64; 2]>,
 }
 
+#[derive(Debug)]
+struct ActiveFilletRadiusDrag {
+    pointer_id: u64,
+    intent: IntentSessionIdentity,
+    expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    feature: geosolve_sketch_features::ComputedFeatureId,
+    latest_radius: Option<f64>,
+    latest: Option<ColdIntentMaterialization>,
+}
+
+#[derive(Debug)]
+struct ActiveProfileOffsetDistanceDrag {
+    pointer_id: u64,
+    intent: IntentSessionIdentity,
+    expected: PreparedSketchInput,
+    dimension: DocumentDimensionId,
+    latest_distance: Option<f64>,
+    latest: Option<ColdIntentMaterialization>,
+}
+
 /// Result of one terminal pointer sample.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectionalEditorPointerOutcome {
@@ -87,6 +108,8 @@ pub struct ProjectionalEditorSession {
     selected_declaration: Option<NodeId>,
     point_drag: Option<ActivePointDrag>,
     curve_control_drag: Option<ActiveCurveControlDrag>,
+    fillet_radius_drag: Option<ActiveFilletRadiusDrag>,
+    profile_offset_distance_drag: Option<ActiveProfileOffsetDistanceDrag>,
     preview_control: OperationControl,
 }
 
@@ -264,6 +287,8 @@ impl ProjectionalEditorSession {
             selected_declaration: None,
             point_drag: None,
             curve_control_drag: None,
+            fillet_radius_drag: None,
+            profile_offset_distance_drag: None,
             preview_control,
         }
     }
@@ -335,13 +360,25 @@ impl ProjectionalEditorSession {
         viewport: Viewport,
         chord_tolerance_pixels: f64,
     ) -> Result<EditorScene, ProjectionalEditorError> {
-        let materialization = self
+        let accepted_materialization = self
             .coordinator
             .accepted_materialization()
             .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
-        let session = self
-            .coordinator
-            .presentation_session()
+        let property_preview = self
+            .fillet_radius_drag
+            .as_ref()
+            .and_then(|drag| drag.latest.as_ref())
+            .or_else(|| {
+                self.profile_offset_distance_drag
+                    .as_ref()
+                    .and_then(|drag| drag.latest.as_ref())
+            });
+        let materialization = property_preview.unwrap_or(accepted_materialization);
+        let session = property_preview
+            .map_or_else(
+                || self.coordinator.presentation_session(),
+                |preview| Some(&preview.session),
+            )
             .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
         let accepted = session
             .accepted_state_for_current_input()
@@ -391,6 +428,19 @@ impl ProjectionalEditorSession {
         scene.apply_annotation_layout(&self.editor.annotation_layout_for_scene());
         let mut scene = scene.with_retained_session(session)?;
         self.editor.populate_curve_controls(&mut scene)?;
+        if property_preview.is_none() {
+            self.attach_computed_fillet_radius_rails(&mut scene, session, materialization)?;
+        }
+        if property_preview.is_some()
+            && let Some(drag) = self.fillet_radius_drag.as_ref()
+        {
+            scene.set_computed_fillet_interaction_origin(drag.expected)?;
+        }
+        if property_preview.is_some()
+            && let Some(drag) = self.profile_offset_distance_drag.as_ref()
+        {
+            scene.set_accepted_offset_distance_interaction_origin(&drag.expected)?;
+        }
         if let Some((accepted_revision, expected, request_id, model_position)) =
             self.coordinator.curve_control_preview_origin()
         {
@@ -402,6 +452,56 @@ impl ProjectionalEditorSession {
             );
         }
         Ok(scene)
+    }
+
+    fn attach_computed_fillet_radius_rails(
+        &self,
+        scene: &mut EditorScene,
+        session: &RetainedSketchDocumentSession,
+        materialization: &ColdIntentMaterialization,
+    ) -> Result<(), ProjectionalEditorError> {
+        if materialization.features.features().is_empty() {
+            return Ok(());
+        }
+        let snapshot = ComputedFeatureAuthoringSnapshot::capture(session)
+            .map_err(|error| ProjectionalEditorError::ComputedScene(error.to_string()))?;
+        for feature in materialization.features.features() {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+            let mut affected_owners = fillet
+                .corners
+                .iter()
+                .map(|corner| geosolve_sketch_features::ComputedCornerRef {
+                    feature: feature.id,
+                    corner: corner.id,
+                })
+                .collect::<Vec<_>>();
+            affected_owners.sort_unstable();
+            for corner in &fillet.corners {
+                let outcome = snapshot.continue_fillet_corner(
+                    corner.without_id(),
+                    fillet.radius,
+                    fillet.radius,
+                    ComputedFeatureEvaluationPolicy::default(),
+                    self.preview_control.clone(),
+                );
+                let Ok(geosolve_sketch::OperationOutcome::Completed {
+                    value: continuation,
+                    ..
+                }) = outcome
+                else {
+                    continue;
+                };
+                scene.attach_computed_fillet_radius_rail(
+                    geosolve_sketch_features::ComputedCornerRef {
+                        feature: feature.id,
+                        corner: corner.id,
+                    },
+                    continuation.sensitivity.center_derivative,
+                    affected_owners.clone(),
+                )?;
+            }
+        }
+        Ok(())
     }
 
     /// Applies a typed durable patch through the sole intent history.
@@ -868,15 +968,33 @@ impl ProjectionalEditorSession {
     /// Returns a typed ownership/continuation error when the selected point is
     /// not a writable intent output. The rejected route is cancelled before a
     /// move frame can request native work.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one pointer-down authentication table keeps all mutually exclusive projectional mutation routes explicit"
+    )]
     pub fn pointer_down(
         &mut self,
         scene: &EditorScene,
         input: PointerInput,
     ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
-        let effects = self.editor.pointer_down(scene, input);
+        let effects = self
+            .editor
+            .pointer_down_accepted_offset_distance(scene, input)
+            .unwrap_or_else(|| self.editor.pointer_down(scene, input));
         let point_route = self.editor.prepared_point_drag_route();
         let curve_route = self.editor.prepared_curve_control_drag_route();
-        if point_route.is_some() && curve_route.is_some() {
+        let fillet_route = self.editor.prepared_feature_radius_drag_route();
+        let offset_route = self.editor.prepared_accepted_offset_distance_drag_route();
+        let route_count = [
+            point_route.is_some(),
+            curve_route.is_some(),
+            fillet_route.is_some(),
+            offset_route.is_some(),
+        ]
+        .into_iter()
+        .filter(|present| *present)
+        .count();
+        if route_count > 1 {
             self.cancel_direct_manipulation();
             let _ = self.editor.cancel();
             return Err(ProjectionalEditorError::AmbiguousDirectManipulationRoute);
@@ -941,6 +1059,98 @@ impl ProjectionalEditorSession {
                     latest_position: None,
                 });
             }
+        } else if let Some(route) = fillet_route {
+            if let Some(active) = self.fillet_radius_drag.as_ref() {
+                if active.pointer_id != route.pointer_id
+                    || active.expected != route.expected
+                    || active.feature != route.feature
+                {
+                    self.cancel_fillet_radius_drag();
+                    let _ = self.editor.cancel();
+                    return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+                }
+            } else {
+                let accepted = self
+                    .coordinator
+                    .accepted_materialization()
+                    .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+                let origin_radius = accepted
+                    .features
+                    .feature(route.feature)
+                    .map(|feature| match &feature.definition {
+                        ComputedFeatureDefinition::FilletSet(fillet) => fillet.radius,
+                    })
+                    .filter(|radius| radius.to_bits() == route.origin_radius.to_bits());
+                if accepted.computed.input() != route.expected || origin_radius.is_none() {
+                    let _ = self.editor.cancel();
+                    return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+                }
+                projectional_fillet_radius_patch(
+                    self.coordinator.intent(),
+                    &accepted.ownership,
+                    route.feature,
+                    route.origin_radius,
+                )?;
+                self.fillet_radius_drag = Some(ActiveFilletRadiusDrag {
+                    pointer_id: route.pointer_id,
+                    intent: self.coordinator.intent().identity(),
+                    expected: route.expected,
+                    feature: route.feature,
+                    latest_radius: None,
+                    latest: None,
+                });
+            }
+        } else if let Some(route) = offset_route {
+            if let Some(active) = self.profile_offset_distance_drag.as_ref() {
+                if active.pointer_id != route.pointer_id
+                    || active.expected != route.expected
+                    || active.dimension != route.dimension
+                {
+                    self.cancel_profile_offset_distance_drag();
+                    let _ = self.editor.cancel();
+                    return Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch);
+                }
+            } else {
+                let accepted = self
+                    .coordinator
+                    .accepted_materialization()
+                    .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+                let current_input = accepted
+                    .session
+                    .accepted_prepared_input()
+                    .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+                let origin_distance = accepted
+                    .session
+                    .design_document()
+                    .dimension(route.dimension)
+                    .and_then(|dimension| match dimension.definition {
+                        DocumentDimensionDefinition::ProfileOffset { target, .. } => accepted
+                            .session
+                            .design_document()
+                            .scalar(target)
+                            .map(|scalar| scalar.value),
+                        _ => None,
+                    })
+                    .filter(|distance| distance.to_bits() == route.origin_distance.to_bits());
+                if current_input != route.expected || origin_distance.is_none() {
+                    let _ = self.editor.cancel();
+                    return Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch);
+                }
+                projectional_profile_offset_distance_patch(
+                    self.coordinator.intent(),
+                    &accepted.ownership,
+                    route.dimension,
+                    route.origin_distance,
+                )?;
+                self.profile_offset_distance_drag = Some(ActiveProfileOffsetDistanceDrag {
+                    pointer_id: route.pointer_id,
+                    intent: self.coordinator.intent().identity(),
+                    expected: route.expected,
+                    dimension: route.dimension,
+                    latest_distance: None,
+                    latest: None,
+                });
+            }
         } else {
             self.cancel_direct_manipulation();
         }
@@ -969,6 +1179,10 @@ impl ProjectionalEditorSession {
     /// # Errors
     ///
     /// Returns a typed stale-route, preview, or exact cold-reconstruction error.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one terminal dispatcher proves every direct-manipulation route can publish at most one transaction"
+    )]
     pub fn pointer_up(
         &mut self,
         scene: &EditorScene,
@@ -1047,6 +1261,65 @@ impl ProjectionalEditorSession {
                     self.cancel_curve_control_drag();
                     presentation.push(EditorEffect::ClearCurveControlPreview);
                 }
+                EditorEffect::CommitComputedFeatureRadius {
+                    expected,
+                    feature,
+                    radius,
+                } => {
+                    let Some(drag) = self.fillet_radius_drag.take() else {
+                        return Err(ProjectionalEditorError::MissingFilletRadiusDragRoute);
+                    };
+                    let latest_input = drag.latest.as_ref().map(|latest| latest.computed.input());
+                    if drag.pointer_id != input.pointer_id
+                        || drag.intent != self.coordinator.intent().identity()
+                        || drag.expected != expected
+                        || drag.feature != feature
+                        || drag
+                            .latest_radius
+                            .is_none_or(|accepted| accepted.to_bits() != radius.to_bits())
+                        || drag.latest.is_none()
+                        || scene.computed_input != latest_input
+                    {
+                        return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+                    }
+                    transaction = Some(self.edit_computed_fillet_radius(feature, radius)?);
+                }
+                EditorEffect::ClearComputedFeaturePreview => {
+                    self.cancel_fillet_radius_drag();
+                    presentation.push(EditorEffect::ClearComputedFeaturePreview);
+                }
+                EditorEffect::CommitAcceptedProfileOffsetDistance {
+                    expected,
+                    dimension,
+                    distance,
+                } => {
+                    let Some(drag) = self.profile_offset_distance_drag.take() else {
+                        return Err(ProjectionalEditorError::MissingProfileOffsetDistanceDragRoute);
+                    };
+                    let latest_input = drag
+                        .latest
+                        .as_ref()
+                        .and_then(|latest| latest.session.accepted_prepared_input());
+                    if drag.pointer_id != input.pointer_id
+                        || drag.intent != self.coordinator.intent().identity()
+                        || drag.expected != expected
+                        || drag.dimension != dimension
+                        || drag
+                            .latest_distance
+                            .is_none_or(|accepted| accepted.to_bits() != distance.to_bits())
+                        || drag.latest.is_none()
+                        || scene.authenticated_prepared_input() != latest_input
+                    {
+                        return Err(
+                            ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch,
+                        );
+                    }
+                    transaction = Some(self.edit_profile_offset_distance(dimension, distance)?);
+                }
+                EditorEffect::ClearAcceptedProfileOffsetPreview => {
+                    self.cancel_profile_offset_distance_drag();
+                    presentation.push(EditorEffect::ClearAcceptedProfileOffsetPreview);
+                }
                 effect => presentation.push(effect),
             }
         }
@@ -1063,6 +1336,10 @@ impl ProjectionalEditorSession {
         self.editor.cancel()
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one preview dispatcher keeps transient acknowledgement and history-free failure behavior auditable"
+    )]
     fn resolve_pointer_frame(
         &mut self,
         effects: Vec<EditorEffect>,
@@ -1136,6 +1413,95 @@ impl ProjectionalEditorSession {
                     self.cancel_curve_control_drag();
                     presentation.push(EditorEffect::ClearCurveControlPreview);
                 }
+                EditorEffect::PreviewComputedFeatureRadius {
+                    expected,
+                    feature,
+                    radius,
+                } => {
+                    self.authenticate_fillet_radius_drag(&expected, feature)?;
+                    let patch = {
+                        let accepted = self
+                            .coordinator
+                            .accepted_materialization()
+                            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+                        projectional_fillet_radius_patch(
+                            self.coordinator.intent(),
+                            &accepted.ownership,
+                            feature,
+                            radius,
+                        )?
+                    };
+                    if let Some(preview) = self.coordinator.preview_patch_materialization(patch)? {
+                        if !self
+                            .editor
+                            .accept_computed_feature_radius_preview(&expected, feature, radius)
+                        {
+                            self.cancel_fillet_radius_drag();
+                            return Err(ProjectionalEditorError::FilletRadiusPreviewMismatch);
+                        }
+                        let Some(drag) = self.fillet_radius_drag.as_mut() else {
+                            return Err(ProjectionalEditorError::MissingFilletRadiusDragRoute);
+                        };
+                        drag.latest_radius = Some(radius);
+                        drag.latest = Some(preview);
+                        presentation.push(EditorEffect::PreviewComputedFeatureRadius {
+                            expected,
+                            feature,
+                            radius,
+                        });
+                    }
+                }
+                EditorEffect::ClearComputedFeaturePreview
+                | EditorEffect::RestoreComputedFeatureRadius { .. } => {
+                    self.cancel_fillet_radius_drag();
+                    presentation.push(EditorEffect::ClearComputedFeaturePreview);
+                }
+                EditorEffect::PreviewAcceptedProfileOffsetDistance {
+                    expected,
+                    dimension,
+                    distance,
+                } => {
+                    self.authenticate_profile_offset_distance_drag(&expected, dimension)?;
+                    let patch = {
+                        let accepted = self
+                            .coordinator
+                            .accepted_materialization()
+                            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+                        projectional_profile_offset_distance_patch(
+                            self.coordinator.intent(),
+                            &accepted.ownership,
+                            dimension,
+                            distance,
+                        )?
+                    };
+                    if let Some(preview) = self.coordinator.preview_patch_materialization(patch)? {
+                        if !self
+                            .editor
+                            .accept_profile_offset_distance_preview(&expected, dimension, distance)
+                        {
+                            self.cancel_profile_offset_distance_drag();
+                            return Err(
+                                ProjectionalEditorError::ProfileOffsetDistancePreviewMismatch,
+                            );
+                        }
+                        let Some(drag) = self.profile_offset_distance_drag.as_mut() else {
+                            return Err(
+                                ProjectionalEditorError::MissingProfileOffsetDistanceDragRoute,
+                            );
+                        };
+                        drag.latest_distance = Some(distance);
+                        drag.latest = Some(preview);
+                        presentation.push(EditorEffect::PreviewAcceptedProfileOffsetDistance {
+                            expected,
+                            dimension,
+                            distance,
+                        });
+                    }
+                }
+                EditorEffect::ClearAcceptedProfileOffsetPreview => {
+                    self.cancel_profile_offset_distance_drag();
+                    presentation.push(EditorEffect::ClearAcceptedProfileOffsetPreview);
+                }
                 effect => presentation.push(effect),
             }
         }
@@ -1184,9 +1550,55 @@ impl ProjectionalEditorSession {
         self.coordinator.cancel_curve_control_drag();
     }
 
+    fn authenticate_fillet_radius_drag(
+        &mut self,
+        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+    ) -> Result<(), ProjectionalEditorError> {
+        if self.fillet_radius_drag.as_ref().is_some_and(|drag| {
+            drag.intent == self.coordinator.intent().identity()
+                && drag.expected == *expected
+                && drag.feature == feature
+        }) {
+            return Ok(());
+        }
+        self.cancel_fillet_radius_drag();
+        Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch)
+    }
+
+    fn cancel_fillet_radius_drag(&mut self) {
+        self.fillet_radius_drag = None;
+    }
+
+    fn authenticate_profile_offset_distance_drag(
+        &mut self,
+        expected: &PreparedSketchInput,
+        dimension: DocumentDimensionId,
+    ) -> Result<(), ProjectionalEditorError> {
+        if self
+            .profile_offset_distance_drag
+            .as_ref()
+            .is_some_and(|drag| {
+                drag.intent == self.coordinator.intent().identity()
+                    && drag.expected == *expected
+                    && drag.dimension == dimension
+            })
+        {
+            return Ok(());
+        }
+        self.cancel_profile_offset_distance_drag();
+        Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch)
+    }
+
+    fn cancel_profile_offset_distance_drag(&mut self) {
+        self.profile_offset_distance_drag = None;
+    }
+
     fn cancel_direct_manipulation(&mut self) {
         self.cancel_point_drag();
         self.cancel_curve_control_drag();
+        self.cancel_fillet_radius_drag();
+        self.cancel_profile_offset_distance_drag();
     }
 
     fn reject_construction_commit(&mut self, token: crate::ConstructionCommitToken) {
@@ -1277,4 +1689,16 @@ pub enum ProjectionalEditorError {
     CurveControlDragRouteMismatch,
     #[error("the terminal selected-curve sample has no independently accepted preview")]
     MissingAcceptedCurveControlSample,
+    #[error("the terminal Fillet-radius sample has no prepared projectional route")]
+    MissingFilletRadiusDragRoute,
+    #[error("the Fillet-radius sample does not match its prepared projectional route")]
+    FilletRadiusDragRouteMismatch,
+    #[error("the independently accepted Fillet-radius sample does not match editor state")]
+    FilletRadiusPreviewMismatch,
+    #[error("the terminal Profile Offset sample has no prepared projectional route")]
+    MissingProfileOffsetDistanceDragRoute,
+    #[error("the Profile Offset sample does not match its prepared projectional route")]
+    ProfileOffsetDistanceDragRouteMismatch,
+    #[error("the independently accepted Profile Offset sample does not match editor state")]
+    ProfileOffsetDistancePreviewMismatch,
 }

@@ -9931,7 +9931,10 @@ impl RetainedEditorCoordinator {
             }
             EditorEffect::PreviewOffsetAuthoringDistance { .. }
             | EditorEffect::FinishOffsetAuthoringDistance { .. }
-            | EditorEffect::RestoreOffsetAuthoringDistance { .. } => {
+            | EditorEffect::RestoreOffsetAuthoringDistance { .. }
+            | EditorEffect::PreviewAcceptedProfileOffsetDistance { .. }
+            | EditorEffect::CommitAcceptedProfileOffsetDistance { .. }
+            | EditorEffect::ClearAcceptedProfileOffsetPreview => {
                 Err(CoordinatorError::OffsetPreviewMismatch)
             }
             EditorEffect::CommitComputedFilletAction { target } => {
@@ -11662,26 +11665,14 @@ fn preview_profile_offset_edges(
     let dimension = document
         .dimension(preview.metadata.dimension)
         .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?;
-    let DocumentDimensionDefinition::ProfileOffset { target, operand } = &dimension.definition
-    else {
+    let DocumentDimensionDefinition::ProfileOffset { target, .. } = &dimension.definition else {
         return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
     };
     if *target != preview.metadata.distance {
         return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
     }
-    let edges = match operand {
-        DocumentProfileOffsetOperand::Face { outer, holes, .. } => outer
-            .edges
-            .iter()
-            .chain(holes.iter().flat_map(|hole| &hole.edges))
-            .copied()
-            .collect::<Vec<_>>(),
-        DocumentProfileOffsetOperand::OpenChain { chain, .. } => chain.edges.clone(),
-    };
-    if edges.is_empty() {
-        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
-    }
-    Ok(edges)
+    crate::profile_offset_edges(document, preview.metadata.dimension)
+        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)
 }
 
 fn offset_distance_annotation_sample(
@@ -11691,21 +11682,12 @@ fn offset_distance_annotation_sample(
     let document = patch_preview
         .accepted_document()
         .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-    let edges = preview_profile_offset_edges(preview)?;
-    let edge = edges[0];
-    let parameter = match document
-        .curve(edge.target.curve.curve)
-        .map(|curve| &curve.definition)
-    {
-        Some(CurveDefinition::Circle { .. }) => std::f64::consts::PI,
-        Some(CurveDefinition::Line { .. } | CurveDefinition::CircularArc { .. }) => 0.5,
-        _ => {
-            return Err(CoordinatorError::OffsetOperationUnavailable(
-                "the grouped Offset annotation has no exact supported target rail".into(),
-            ));
-        }
-    };
-    Ok((edge.target.curve, parameter))
+    preview_profile_offset_edges(preview)?;
+    crate::profile_offset_annotation_sample(document, preview.metadata.dimension).ok_or_else(|| {
+        CoordinatorError::OffsetOperationUnavailable(
+            "the grouped Offset annotation has no exact supported target rail".into(),
+        )
+    })
 }
 
 fn offset_distance_rail(
@@ -11722,45 +11704,19 @@ fn offset_distance_rail(
     let document = patch_preview
         .accepted_document()
         .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-    let edges = preview_profile_offset_edges(preview)?;
-    let mut matching = edges.into_iter().filter(|edge| edge.target.curve == target);
-    let edge = matching
-        .next()
-        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?;
-    if matching.next().is_some() {
-        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
-    }
-    let source = document
-        .evaluate_curve_jet(edge.source.curve, parameter)
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
-    let target = document
-        .evaluate_curve_jet(edge.target.curve, parameter)
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
-    let differential = source
-        .differential()
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
-    let normal = [differential.left_normal.x, differential.left_normal.y];
-    let separation = [
-        target.position.x - source.position.x,
-        target.position.y - source.position.y,
-    ];
-    let projection = separation[0].mul_add(normal[0], separation[1] * normal[1]);
-    let scale = separation[0]
-        .hypot(separation[1])
-        .max(preview.candidate.distance)
-        .max(document.model_scale().abs())
-        .max(1.0);
-    if !projection.is_finite() || projection.abs() <= 64.0 * f64::EPSILON * scale {
-        return Err(CoordinatorError::OffsetOperationUnavailable(
+    preview_profile_offset_edges(preview)?;
+    crate::profile_offset_distance_rail(
+        document,
+        preview.metadata.dimension,
+        target,
+        parameter,
+        preview.candidate.distance,
+    )
+    .ok_or_else(|| {
+        CoordinatorError::OffsetOperationUnavailable(
             "the provisional Offset target has no finite normal-distance rail".into(),
-        ));
-    }
-    let sign = if projection.is_sign_positive() {
-        1.0
-    } else {
-        -1.0
-    };
-    Ok([normal[0] * sign, normal[1] * sign])
+        )
+    })
 }
 
 fn offset_preview_metadata(

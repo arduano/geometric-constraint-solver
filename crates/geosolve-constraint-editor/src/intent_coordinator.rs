@@ -250,6 +250,31 @@ impl ProjectionalIntentCoordinator {
         self.commit_planned(plan, materialized)
     }
 
+    /// Independently cold-materializes one typed patch without publishing its
+    /// intent plan, accepted authority, or history entry.
+    ///
+    /// This is the projectional direct-manipulation preview seam. A retained
+    /// failure returns `None`; an accepted result returns the complete native
+    /// materialization which a presentation session may hold transiently. The
+    /// caller must still publish the same typed edit through an ordinary
+    /// terminal transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary exact-CAS planning or cold-materialization error.
+    pub(crate) fn preview_patch_materialization(
+        &self,
+        patch: IntentPatch,
+    ) -> Result<Option<ColdIntentMaterialization>, ProjectionalCoordinatorError> {
+        let (plan, materialized) = self.plan_patch(patch)?;
+        if plan.disposition() == IntentPlanDisposition::Accepted {
+            return materialized
+                .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)
+                .map(Some);
+        }
+        Ok(None)
+    }
+
     /// Deletes one declaration and its exact Rust-computed dependent closure
     /// as a single accepted transaction. Callers never enumerate generated
     /// native objects or guess dependency ownership.

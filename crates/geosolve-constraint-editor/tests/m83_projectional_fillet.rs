@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, FeatureAuthoringCandidate, FeatureAuthoringOutcome,
-    FeatureAuthoringState, FeatureAuthoringTool, IntentNativeBinding, PickTolerance,
-    ProjectionalEditorSession, ProjectionalIntentCoordinator, Viewport,
+    ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, FeatureAuthoringCandidate,
+    FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool, IntentNativeBinding,
+    Modifiers, PickTolerance, PointerInput, ProjectionalEditorSession,
+    ProjectionalIntentCoordinator, ScreenPoint, Viewport,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_features::{
@@ -223,6 +224,18 @@ fn create_fillet(
     node.id
 }
 
+const fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
+    PointerInput {
+        pointer_id,
+        position,
+        modifiers: Modifiers {
+            shift: false,
+            control: false,
+            command: false,
+        },
+    }
+}
+
 #[test]
 fn computed_fillet_is_exactly_cold_reconstructed_and_composed() {
     let (mut session, viewport) = fixture();
@@ -409,5 +422,190 @@ fn rejected_radius_is_retained_over_the_exact_prior_computed_scene() {
     assert_eq!(
         session.scene(viewport, 0.5).unwrap().computed_curves.len(),
         1
+    );
+}
+
+#[test]
+fn radius_drag_previews_without_history_then_publishes_one_undoable_transaction() {
+    let (mut session, viewport) = fixture();
+    create_fillet(&mut session, viewport);
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let rail = scene.fillet_affordances[0].radius_rail;
+    let feature = rail.owner.feature;
+    let history_before = session.coordinator().intent().undo_len();
+    let identity_before = session.coordinator().intent().identity();
+    let evidence_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+
+    session
+        .pointer_down(&scene, pointer(71, rail.screen_grip))
+        .unwrap();
+    assert_eq!(
+        session.editor().active_pointer_gesture().unwrap().kind,
+        ActivePointerGestureKind::FilletRadius
+    );
+    let origin = viewport.screen_to_model(rail.screen_grip);
+    let target = viewport.model_to_screen([
+        0.25f64.mul_add(rail.model_derivative[0], origin[0]),
+        0.25f64.mul_add(rail.model_derivative[1], origin[1]),
+    ]);
+    let effects = session.pointer_move(&scene, pointer(71, target)).unwrap();
+    effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::PreviewComputedFeatureRadius { radius, .. } => Some(*radius),
+            _ => None,
+        })
+        .expect("the finite same-branch sample must be independently accepted");
+    let target = viewport.model_to_screen([
+        0.4f64.mul_add(rail.model_derivative[0], origin[0]),
+        0.4f64.mul_add(rail.model_derivative[1], origin[1]),
+    ]);
+    let radius = session
+        .pointer_move(&scene, pointer(71, target))
+        .unwrap()
+        .into_iter()
+        .find_map(|effect| match effect {
+            EditorEffect::PreviewComputedFeatureRadius { radius, .. } => Some(radius),
+            _ => None,
+        })
+        .expect("the newer independently accepted sample must replace the prior preview");
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before
+    );
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    assert_eq!(
+        preview_scene.computed_curves[0].radius.to_bits(),
+        radius.to_bits()
+    );
+
+    let outcome = session
+        .pointer_up(&preview_scene, pointer(71, target))
+        .unwrap();
+    assert_eq!(
+        outcome.transaction.unwrap().disposition,
+        IntentPlanDisposition::Accepted
+    );
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before + 1
+    );
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let ComputedFeatureDefinition::FilletSet(fillet) =
+        &accepted.features.feature(feature).unwrap().definition;
+    assert_eq!(fillet.radius.to_bits(), radius.to_bits());
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(accepted.validation.all_active_features_current);
+
+    session.undo().unwrap().unwrap();
+    let undone = session.coordinator().accepted_materialization().unwrap();
+    let ComputedFeatureDefinition::FilletSet(fillet) =
+        &undone.features.feature(feature).unwrap().definition;
+    assert_eq!(fillet.radius.to_bits(), 1.0_f64.to_bits());
+}
+
+#[test]
+fn radius_drag_cancel_and_invalid_release_preserve_authority_and_history() {
+    let (mut session, viewport) = fixture();
+    create_fillet(&mut session, viewport);
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let rail = scene.fillet_affordances[0].radius_rail;
+    let history_before = session.coordinator().intent().undo_len();
+    let identity_before = session.coordinator().intent().identity();
+    let evidence_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+    let origin = viewport.screen_to_model(rail.screen_grip);
+    let valid = viewport.model_to_screen([
+        0.2f64.mul_add(rail.model_derivative[0], origin[0]),
+        0.2f64.mul_add(rail.model_derivative[1], origin[1]),
+    ]);
+
+    session
+        .pointer_down(&scene, pointer(72, rail.screen_grip))
+        .unwrap();
+    session.pointer_move(&scene, pointer(72, valid)).unwrap();
+    assert_ne!(
+        session.scene(viewport, 0.5).unwrap().computed_curves[0]
+            .radius
+            .to_bits(),
+        1.0_f64.to_bits()
+    );
+    assert!(
+        session
+            .cancel_interaction()
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::RestoreComputedFeatureRadius { .. }))
+    );
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session.scene(viewport, 0.5).unwrap().computed_curves[0]
+            .radius
+            .to_bits(),
+        1.0_f64.to_bits()
+    );
+
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_down(&scene, pointer(73, rail.screen_grip))
+        .unwrap();
+    session.pointer_move(&scene, pointer(73, valid)).unwrap();
+    assert!(matches!(
+        session.pointer_up(&scene, pointer(73, valid)),
+        Err(geosolve_constraint_editor::ProjectionalEditorError::FilletRadiusDragRouteMismatch)
+    ));
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_down(&scene, pointer(74, rail.screen_grip))
+        .unwrap();
+    session.pointer_move(&scene, pointer(74, valid)).unwrap();
+    let preview_scene = session.scene(viewport, 0.5).unwrap();
+    let invalid = viewport.model_to_screen([
+        (-2.0f64).mul_add(rail.model_derivative[0], origin[0]),
+        (-2.0f64).mul_add(rail.model_derivative[1], origin[1]),
+    ]);
+    assert!(
+        session
+            .pointer_move(&preview_scene, pointer(74, invalid))
+            .unwrap()
+            .is_empty()
+    );
+    let outcome = session
+        .pointer_up(&preview_scene, pointer(74, invalid))
+        .unwrap();
+    assert!(outcome.transaction.is_none());
+    assert_eq!(session.coordinator().intent().identity(), identity_before);
+    assert_eq!(session.coordinator().intent().undo_len(), history_before);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence_before
+    );
+    assert_eq!(
+        session.scene(viewport, 0.5).unwrap().computed_curves[0]
+            .radius
+            .to_bits(),
+        1.0_f64.to_bits()
     );
 }
