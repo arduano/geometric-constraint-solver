@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSuccess,
-    MAX_INTENT_RPC_REQUEST_BYTES, ProjectionalIntentCoordinator,
+    ColdIntentMaterializer, IntentInspectorEditTarget, IntentInspectorEditValue,
+    IntentInspectorField, IntentNativeBinding, IntentRpcOutcome, IntentRpcRequest,
+    IntentRpcSession, IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES, ProjectionalEditorSession,
+    ProjectionalIntentCoordinator, apply_intent_rpc_json_to_editor, apply_intent_rpc_to_editor,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_intent::{
@@ -21,6 +23,20 @@ fn rpc() -> IntentRpcSession {
             IntentSessionId::from_raw(0x8300_4001),
             ColdIntentMaterializer::with_default_policy(
                 DocumentId(PersistentId::from_u128(0x8300_4001_u128 << 32)),
+                1.0,
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+    )
+}
+
+fn editor() -> ProjectionalEditorSession {
+    ProjectionalEditorSession::new(
+        ProjectionalIntentCoordinator::empty(
+            IntentSessionId::from_raw(0x8300_4002),
+            ColdIntentMaterializer::with_default_policy(
+                DocumentId(PersistentId::from_u128(0x8300_4002_u128 << 32)),
                 1.0,
             )
             .unwrap(),
@@ -278,5 +294,182 @@ fn retained_invalid_stale_and_oversized_rpc_requests_preserve_exact_authority() 
             .expect("oversize rejection retains native authority")
             .validation,
         accepted_validation,
+    );
+}
+
+#[test]
+fn code_authored_rpc_continues_through_live_gui_projection_and_one_history() {
+    let mut editor = editor();
+    let request = IntentRpcRequest::ApplyPatch {
+        patch: Box::new(IntentPatch::new(
+            editor.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("point"),
+                draft: Box::new(point()),
+                cell: None,
+            }],
+        )),
+    };
+    let response = apply_intent_rpc_to_editor(&mut editor, request);
+    let IntentRpcOutcome::Success {
+        value: IntentRpcSuccess::Patch { aliases, .. },
+    } = response
+    else {
+        panic!("code-authored patch must publish through the live editor")
+    };
+    let node = aliases.node(&key("point")).unwrap();
+    let port = aliases
+        .port(
+            &key("point"),
+            IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            },
+        )
+        .unwrap();
+    let IntentNativeBinding::Point(native_point) = editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership
+        .port(port)
+        .unwrap()
+    else {
+        panic!("code-authored point must retain an editable native binding")
+    };
+
+    let projection = editor.workbench_projection();
+    assert_eq!(projection.outline[0].declarations[0].node, node);
+    assert!(editor.set_selected_declaration(Some(node)));
+    let inspector = editor.selected_inspector(&projection).unwrap();
+    let x = inspector
+        .fields
+        .iter()
+        .find_map(|field| match field {
+            IntentInspectorField::Instance { leaf, .. } if leaf.field == LeafField::X => {
+                Some(*leaf)
+            }
+            _ => None,
+        })
+        .unwrap();
+    editor
+        .edit_inspector(
+            &inspector,
+            &IntentInspectorEditTarget::Instance { leaf: x },
+            IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Quantity {
+                    value: 7.0,
+                    unit: IntentUnit::Length,
+                },
+            },
+        )
+        .unwrap();
+    let accepted = editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    assert_eq!(
+        accepted.document().point(native_point).unwrap().position[0].to_bits(),
+        7.0_f64.to_bits()
+    );
+    assert_eq!(editor.workbench_projection().history.applied.len(), 2);
+
+    let rpc_undo = apply_intent_rpc_to_editor(&mut editor, IntentRpcRequest::Undo);
+    assert!(matches!(
+        rpc_undo,
+        IntentRpcOutcome::Success {
+            value: IntentRpcSuccess::History { moved: true, .. }
+        }
+    ));
+    assert_eq!(editor.workbench_projection().history.applied.len(), 1);
+    assert_eq!(editor.workbench_projection().history.redoable.len(), 1);
+    editor.redo().unwrap().unwrap();
+    assert_eq!(editor.workbench_projection().history.applied.len(), 2);
+    editor.undo().unwrap().unwrap();
+    let rpc_redo = apply_intent_rpc_to_editor(&mut editor, IntentRpcRequest::Redo);
+    assert!(matches!(
+        rpc_redo,
+        IntentRpcOutcome::Success {
+            value: IntentRpcSuccess::History { moved: true, .. }
+        }
+    ));
+    assert_eq!(editor.workbench_projection().history.applied.len(), 2);
+}
+
+#[test]
+fn live_editor_rpc_parse_resource_and_stale_failures_are_state_neutral() {
+    let mut editor = editor();
+    let stale_identity = editor.coordinator().intent().identity();
+    let accepted = apply_intent_rpc_to_editor(
+        &mut editor,
+        IntentRpcRequest::ApplyPatch {
+            patch: Box::new(IntentPatch::new(
+                stale_identity,
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::CreateNode {
+                    alias: key("point"),
+                    draft: Box::new(point()),
+                    cell: None,
+                }],
+            )),
+        },
+    );
+    assert!(matches!(accepted, IntentRpcOutcome::Success { .. }));
+    let before = editor.coordinator().intent().clone();
+    let accepted_evidence = editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+
+    let malformed: IntentRpcOutcome = serde_json::from_str(&apply_intent_rpc_json_to_editor(
+        &mut editor,
+        r#"{"method":"execute_typescript","source":"solve()"}"#,
+    ))
+    .unwrap();
+    assert!(matches!(
+        malformed,
+        IntentRpcOutcome::Failure { ref failure } if failure.code == "invalid_request"
+    ));
+    assert_eq!(editor.coordinator().intent(), &before);
+
+    let oversized = " ".repeat(MAX_INTENT_RPC_REQUEST_BYTES + 1);
+    let exhausted: IntentRpcOutcome =
+        serde_json::from_str(&apply_intent_rpc_json_to_editor(&mut editor, &oversized)).unwrap();
+    assert!(matches!(
+        exhausted,
+        IntentRpcOutcome::Failure { ref failure } if failure.code == "request_too_large"
+    ));
+    assert_eq!(editor.coordinator().intent(), &before);
+
+    let stale = IntentRpcRequest::ApplyPatch {
+        patch: Box::new(IntentPatch::new(
+            stale_identity,
+            IntentPatchPolicy::RequireAccepted,
+            Vec::new(),
+        )),
+    };
+    let stale: IntentRpcOutcome = serde_json::from_str(&apply_intent_rpc_json_to_editor(
+        &mut editor,
+        &serde_json::to_string(&stale).unwrap(),
+    ))
+    .unwrap();
+    assert!(matches!(
+        stale,
+        IntentRpcOutcome::Failure { ref failure } if failure.code == "patch_rejected"
+    ));
+    assert_eq!(editor.coordinator().intent(), &before);
+    assert_eq!(
+        editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        accepted_evidence
     );
 }

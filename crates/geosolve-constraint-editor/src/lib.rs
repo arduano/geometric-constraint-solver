@@ -138,7 +138,8 @@ pub use intent_projection::{
 };
 pub use intent_rpc::{
     IntentRpcFailure, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSnapshot,
-    IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES,
+    IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES, apply_intent_rpc_json_to_editor,
+    apply_intent_rpc_to_editor,
 };
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
