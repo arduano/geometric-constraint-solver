@@ -1710,6 +1710,7 @@ const fn projectional_direct_gesture_is_capturable(
         kind,
         geosolve_constraint_editor::ActivePointerGestureKind::Point
             | geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
+            | geosolve_constraint_editor::ActivePointerGestureKind::Annotation
             | geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
             | geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance
     )
@@ -5732,6 +5733,9 @@ pub(crate) mod wasm {
                             geosolve_constraint_editor::ActivePointerGestureKind::CurveControl => {
                                 "Projectional curve-control gesture prepared".into()
                             }
+                            geosolve_constraint_editor::ActivePointerGestureKind::Annotation => {
+                                "Annotation placement gesture prepared".into()
+                            }
                             geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius => {
                                 "Projectional Fillet-radius gesture prepared".into()
                             }
@@ -5846,6 +5850,15 @@ pub(crate) mod wasm {
             let pending = up_pointer_moves.borrow_mut().drain_before_terminal();
             let feature_authoring_drag = wb.editor().feature_authoring_radius_drag_active();
             let offset_authoring_drag = wb.editor().offset_authoring_distance_drag_active();
+            let annotation_drag =
+                wb.editor()
+                    .editor()
+                    .active_pointer_gesture()
+                    .is_some_and(|gesture| {
+                        gesture.pointer_id == input.pointer_id
+                            && gesture.kind
+                                == geosolve_constraint_editor::ActivePointerGestureKind::Annotation
+                    });
             let pending = pending
                 .filter(|sample| sample.input.pointer_id == input.pointer_id)
                 .map(|sample| sample.input);
@@ -5975,6 +5988,13 @@ pub(crate) mod wasm {
                     if outcome.transaction.is_some() {
                         wb.notice = "Projectional direct movement accepted".into();
                         super::WorkbenchPresentationEvent::PointerRelease
+                    } else if annotation_drag {
+                        wb.notice = "Annotation placement updated".into();
+                        // Annotation layout is explicit presentation state,
+                        // not graph/solver intent, but it is part of workspace
+                        // v8 and therefore persists on its terminal release.
+                        save_projectional(&wb);
+                        super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
                     } else {
                         wb.notice = "Canvas selection updated".into();
                         super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
@@ -6709,6 +6729,30 @@ pub(crate) mod wasm {
                     wb.editor_mut().set_selected_declaration(None);
                     wb.editor_mut().set_selection([]);
                     wb.notice = "Sketch and declaration selection cleared".into();
+                }
+                Some("annotation-reset-selected") => {
+                    let changed = wb
+                        .editor_mut()
+                        .editor_mut()
+                        .reset_selected_annotation_layout();
+                    wb.notice = if changed {
+                        "Selected annotations returned to automatic placement".into()
+                    } else {
+                        "Selected annotations already use automatic placement".into()
+                    };
+                    durable = changed;
+                }
+                Some("annotation-reset-all") => {
+                    let changed = wb
+                        .editor_mut()
+                        .editor_mut()
+                        .reset_all_annotation_layout();
+                    wb.notice = if changed {
+                        "All annotations returned to automatic placement".into()
+                    } else {
+                        "Annotations already use automatic placement".into()
+                    };
+                    durable = changed;
                 }
                 Some("delete") => {
                     if let Ok(viewport) = required(&click_document, "wb-viewport") {
@@ -14521,10 +14565,10 @@ mod tests {
         assert!(projectional_direct_gesture_is_capturable(
             ActivePointerGestureKind::OffsetDistance,
         ));
-        for unsupported in [
+        assert!(projectional_direct_gesture_is_capturable(
             ActivePointerGestureKind::Annotation,
-            ActivePointerGestureKind::FilletContact,
-        ] {
+        ));
+        for unsupported in [ActivePointerGestureKind::FilletContact] {
             assert!(!projectional_direct_gesture_is_capturable(unsupported));
         }
     }
