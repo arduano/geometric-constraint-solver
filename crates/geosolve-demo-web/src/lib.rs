@@ -98,6 +98,17 @@ mod wasm {
         }
     }
 
+    /// Applies one bounded canonical RPC request to the projectional workbench
+    /// installed in this browser document.
+    ///
+    /// Unlike [`IntentRpcHandle`], this function owns no independent session:
+    /// canvas gestures, Inspector/source edits, code patches and Undo/Redo all
+    /// mutate the installed workbench's one `ProjectionalEditorSession`.
+    #[wasm_bindgen]
+    pub fn apply_workbench_intent_rpc(request: &str) -> String {
+        crate::workbench::live_intent_rpc::apply_installed(request)
+    }
+
     #[cfg_attr(not(test), wasm_bindgen(start))]
     pub fn start() -> Result<(), JsValue> {
         console_error_panic_hook::set_once();
@@ -109,9 +120,13 @@ mod wasm {
 
     #[cfg(test)]
     mod tests {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
         use geosolve_constraint_editor::{
-            IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSuccess,
-            MAX_INTENT_RPC_REQUEST_BYTES,
+            ColdIntentMaterializer, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession,
+            IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES, ProjectionalEditorSession,
+            ProjectionalIntentCoordinator, apply_intent_rpc_json_to_editor,
         };
         use geosolve_sketch_intent::{
             GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
@@ -120,7 +135,7 @@ mod wasm {
         };
         use wasm_bindgen_test::wasm_bindgen_test;
 
-        use super::IntentRpcHandle;
+        use super::{IntentRpcHandle, apply_workbench_intent_rpc};
 
         fn point_patch(session: &IntentRpcSession) -> IntentRpcRequest {
             let selector = IntentPortSelector::Node {
@@ -359,6 +374,82 @@ mod wasm {
                     accepted_evidence
                 );
             }
+        }
+
+        #[wasm_bindgen_test]
+        fn actual_wasm_workbench_export_mutates_the_registered_live_editor() {
+            let session = geosolve_sketch_intent::IntentSessionId::from_raw(0x8300_5102);
+            let document = geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(
+                0x8300_5102_0000,
+            ));
+            let materializer = ColdIntentMaterializer::with_default_policy(document, 1.0).unwrap();
+            let coordinator = ProjectionalIntentCoordinator::empty(session, materializer).unwrap();
+            let editor = Rc::new(RefCell::new(ProjectionalEditorSession::new(coordinator)));
+            let installed = Rc::clone(&editor);
+            crate::workbench::live_intent_rpc::install(move |request| {
+                apply_intent_rpc_json_to_editor(&mut installed.borrow_mut(), request)
+            });
+
+            let before = editor.borrow().coordinator().intent().identity();
+            let selector = IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            };
+            let draft = IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::SketchPoint,
+                },
+                IntentKey::new("wasm.live.point").unwrap(),
+            )
+            .with_instance_leaf(
+                selector,
+                LeafField::X,
+                IntentLiteral::Quantity {
+                    value: 3.0,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_instance_leaf(
+                selector,
+                LeafField::Y,
+                IntentLiteral::Quantity {
+                    value: 4.0,
+                    unit: IntentUnit::Length,
+                },
+            );
+            let request = serde_json::to_string(&IntentRpcRequest::ApplyPatch {
+                patch: Box::new(IntentPatch::new(
+                    before,
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new("point").unwrap(),
+                        draft: Box::new(draft),
+                        cell: None,
+                    }],
+                )),
+            })
+            .unwrap();
+            let response: IntentRpcOutcome =
+                serde_json::from_str(&apply_workbench_intent_rpc(&request)).unwrap();
+            let after = editor.borrow().coordinator().intent().identity();
+            assert_ne!(after, before);
+            assert!(matches!(
+                response,
+                IntentRpcOutcome::Success {
+                    value: IntentRpcSuccess::Patch { snapshot, .. }
+                } if snapshot.identity == after
+            ));
+
+            let snapshot: IntentRpcOutcome =
+                serde_json::from_str(&apply_workbench_intent_rpc(r#"{"method":"snapshot"}"#))
+                    .unwrap();
+            assert!(matches!(
+                snapshot,
+                IntentRpcOutcome::Success {
+                    value: IntentRpcSuccess::Snapshot { snapshot }
+                } if snapshot.identity == after
+            ));
+            assert_eq!(editor.borrow().coordinator().intent().undo_len(), 1);
         }
     }
 }

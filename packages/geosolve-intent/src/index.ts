@@ -473,7 +473,22 @@ export type IntentRpcRequest<S extends string = string> =
   | { readonly method: "inspector"; readonly node: string }
   | { readonly method: "edit_source_token"; readonly token: number; readonly replacement: string };
 
-/** The exact single-string surface implemented by WASM `IntentRpcHandle.apply`. */
+/**
+ * The exact single-string surface implemented by WASM `IntentRpcHandle.apply`
+ * and the live-workbench `apply_workbench_intent_rpc` export.
+ *
+ * A host can bind the typed client to the already installed GUI without
+ * creating a second intent session:
+ *
+ * ```ts
+ * const first = JSON.parse(wasm.apply_workbench_intent_rpc('{"method":"snapshot"}'));
+ * const sessionId = first.value.snapshot.identity.session;
+ * const client = new IntentClient(sessionId, {
+ *   apply: wasm.apply_workbench_intent_rpc,
+ * });
+ * await client.undo();
+ * ```
+ */
 export interface IntentRpcTransport {
   apply(canonicalRequestJson: string): string | Promise<string>;
 }

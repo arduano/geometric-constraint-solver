@@ -11,6 +11,8 @@ mod geometry_palette;
 #[cfg(any(target_arch = "wasm32", test))]
 mod icons;
 #[cfg(any(target_arch = "wasm32", test))]
+pub(crate) mod live_intent_rpc;
+#[cfg(any(target_arch = "wasm32", test))]
 mod panels;
 #[cfg(any(target_arch = "wasm32", test))]
 mod persistence;
@@ -3400,6 +3402,7 @@ pub(crate) mod wasm {
     }
 
     pub(crate) fn install(document: &Document) -> Result<(), JsValue> {
+        super::live_intent_rpc::clear();
         let storage = super::platform::window()?.local_storage().ok().flatten();
         let snapshot = storage.as_ref().and_then(|storage| {
             storage
@@ -3512,7 +3515,78 @@ pub(crate) mod wasm {
         set_projectional_surface_availability(document)?;
         render_projectional(document, &workbench)?;
         install_projectional_events(document, &workbench)?;
+        install_projectional_live_intent_rpc(document, &workbench);
         Ok(())
+    }
+
+    fn install_projectional_live_intent_rpc(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+    ) {
+        let rpc_document = document.clone();
+        let rpc_workbench = Rc::clone(workbench);
+        super::live_intent_rpc::install(move |request| {
+            apply_projectional_live_intent_rpc(&rpc_document, &rpc_workbench, request)
+        });
+    }
+
+    fn apply_projectional_live_intent_rpc(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+        request: &str,
+    ) -> String {
+        let may_change_identity = super::live_intent_rpc::request_may_change_identity(request);
+        let Ok(mut wb) = workbench.try_borrow_mut() else {
+            return super::live_intent_rpc::failure_response(
+                "workbench_busy",
+                "the projectional workbench is handling another synchronous interaction",
+            );
+        };
+        let before = wb.editor().coordinator().intent().identity();
+        if may_change_identity {
+            let Ok(viewport) = required(document, "wb-viewport") else {
+                return super::live_intent_rpc::failure_response(
+                    "workbench_surface_unavailable",
+                    "the projectional workbench viewport is unavailable",
+                );
+            };
+            let _ = cancel_projectional_interaction(
+                &viewport,
+                &mut wb,
+                None,
+                true,
+                "Canvas interaction canceled before code edit",
+            );
+        }
+        let response =
+            geosolve_constraint_editor::apply_intent_rpc_json_to_editor(wb.editor_mut(), request);
+        let identity_changed = before != wb.editor().coordinator().intent().identity();
+        if may_change_identity {
+            reconcile_projectional_authoring(&mut wb);
+        }
+        if identity_changed {
+            wb.notice = "Design intent updated from code".into();
+        }
+        let policy = super::live_intent_rpc::LiveIntentRpcPresentationPolicy::after_request(
+            identity_changed,
+            may_change_identity,
+        );
+        drop(wb);
+
+        if policy.save_workspace {
+            save_projectional(&workbench.borrow());
+        }
+        if policy.render_durable {
+            let _ = render_projectional(document, workbench);
+        } else if policy.render_transient {
+            let _ = render_projectional_canvas(
+                document,
+                &workbench.borrow(),
+                super::WorkbenchRenderScope::Transient,
+            );
+            let _ = render_projectional_tool_options_overlay(document, &workbench.borrow());
+        }
+        response
     }
 
     fn set_projectional_surface_availability(document: &Document) -> Result<(), JsValue> {
