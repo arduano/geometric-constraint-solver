@@ -127,8 +127,9 @@ pub use intent_feature_authoring::{
 };
 pub use intent_offset_authoring::{
     ProjectionalProfileOffsetError, ProjectionalProfileOffsetPatch,
-    projectional_profile_offset_delete_patch, projectional_profile_offset_direction_patch,
-    projectional_profile_offset_distance_patch, projectional_profile_offset_patch,
+    projectional_profile_offset_delete_node_patch, projectional_profile_offset_delete_patch,
+    projectional_profile_offset_direction_patch, projectional_profile_offset_distance_patch,
+    projectional_profile_offset_patch,
 };
 pub use intent_projection::{
     IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,

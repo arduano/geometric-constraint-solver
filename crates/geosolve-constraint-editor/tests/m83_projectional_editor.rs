@@ -354,6 +354,47 @@ fn click_only_point_route_is_cancelled_before_the_next_press() {
 }
 
 #[test]
+fn native_and_design_selection_project_to_one_exact_declaration_owner() {
+    let (mut session, point, _viewport) = fixture();
+    let node = *session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .keys()
+        .next()
+        .unwrap();
+
+    assert_eq!(session.selected_declaration(), None);
+    session.set_selection([SelectionItem::Point(point)]);
+    assert_eq!(session.selected_declaration(), Some(node));
+
+    assert!(session.set_selected_declaration(Some(node)));
+    assert!(session.editor().selection().is_empty());
+    assert_eq!(session.selected_declaration(), Some(node));
+
+    session.set_selection([SelectionItem::Datum(SketchDatum::XAxis)]);
+    assert_eq!(session.selected_declaration(), None);
+    assert!(matches!(
+        session.delete_selected_declaration(),
+        Err(ProjectionalEditorError::MissingDeleteSelection)
+    ));
+
+    session.set_selection([SelectionItem::Point(point)]);
+    let history_before = session.coordinator().intent().undo_len();
+    assert_eq!(
+        session.delete_selected_declaration().unwrap().disposition,
+        IntentPlanDisposition::Accepted
+    );
+    assert_eq!(
+        session.coordinator().intent().undo_len(),
+        history_before + 1
+    );
+    assert!(session.coordinator().intent().graph().node(node).is_none());
+    assert_eq!(session.selected_declaration(), None);
+}
+
+#[test]
 fn logical_selection_source_edit_and_closure_delete_share_the_intent_history() {
     let (mut session, point, viewport) = fixture();
     let node = *session

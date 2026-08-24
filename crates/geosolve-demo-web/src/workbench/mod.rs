@@ -4578,6 +4578,18 @@ pub(crate) mod wasm {
         let _ = wb.authoring.reconcile(&document);
     }
 
+    fn delete_projectional_selection(wb: &mut ProjectionalWorkbench) -> Result<String, String> {
+        let result = wb
+            .editor_mut()
+            .delete_selected_declaration()
+            .map(|_| "Design declaration and exact owned closure deleted".to_owned())
+            .map_err(|error| error.to_string());
+        if result.is_ok() {
+            reconcile_projectional_authoring(wb);
+        }
+        result
+    }
+
     fn apply_projectional_authoring_application(
         wb: &mut ProjectionalWorkbench,
         application: &AuthoringApplication,
@@ -6825,61 +6837,13 @@ pub(crate) mod wasm {
                             "Active interaction canceled before deletion",
                         );
                     }
-                    let Some(node) = wb.editor().selected_declaration() else {
-                        wb.notice = "Select a design declaration to delete".into();
-                        drop(wb);
-                        let _ = render_projectional(&click_document, &click_workbench);
-                        return;
-                    };
-                    let offset_dimension = wb
-                        .editor()
-                        .coordinator()
-                        .intent()
-                        .graph()
-                        .node(node)
-                        .filter(|declaration| {
-                            matches!(
-                                &declaration.kind,
-                                geosolve_sketch_intent::IntentNodeKind::Operation {
-                                    operation: geosolve_sketch_intent::OperationKind::ProfileOffset
-                                }
-                            )
-                        })
-                        .and_then(|_| {
-                            wb.editor()
-                                .coordinator()
-                                .accepted_materialization()
-                                .and_then(|accepted| {
-                                    accepted
-                                        .ownership
-                                        .nodes
-                                        .iter()
-                                        .find(|owner| owner.node == node)
-                                        .and_then(|owner| {
-                                            owner.owned.iter().find_map(|binding| match binding {
-                                                geosolve_constraint_editor::IntentNativeBinding::Dimension(
-                                                    dimension,
-                                                ) => Some(*dimension),
-                                                _ => None,
-                                            })
-                                        })
-                                })
-                        });
-                    wb.notice = if let Some(dimension) = offset_dimension {
-                        wb.editor_mut()
-                            .delete_profile_offset(dimension)
-                            .map_or_else(
-                                |error| error.to_string(),
-                                |_| "Profile Offset and its owned operands deleted".into(),
-                            )
-                    } else {
-                        wb.editor_mut().delete_declaration(node).map_or_else(
-                            |error| error.to_string(),
-                            |_| "Design declaration and dependent closure deleted".into(),
-                        )
-                    };
-                    reconcile_projectional_authoring(&mut wb);
-                    durable = true;
+                    match delete_projectional_selection(&mut wb) {
+                        Ok(notice) => {
+                            wb.notice = notice;
+                            durable = true;
+                        }
+                        Err(error) => wb.notice = error,
+                    }
                 }
                 Some("feature-apply") => match apply_projectional_feature_authoring(&mut wb) {
                     Ok(()) => durable = true,
@@ -7695,6 +7659,37 @@ pub(crate) mod wasm {
                 } else {
                     let _ = dispatch_projectional_effects(&mut wb, effects);
                     wb.notice = "Latest unfinished geometry stage removed".into();
+                }
+                drop(wb);
+                let _ = render_projectional(&keyboard_document, &keyboard_workbench);
+                return;
+            }
+            if matches!(event.key().as_str(), "Delete" | "Backspace") {
+                event.prevent_default();
+                let mut wb = keyboard_workbench.borrow_mut();
+                if projectional_feature_authoring_active(&wb)
+                    || projectional_offset_authoring_active(&wb)
+                    || projectional_ordinary_authoring_active(&wb)
+                {
+                    wb.notice =
+                        "Finish or cancel active authoring before deleting a declaration".into();
+                } else {
+                    if let Ok(viewport) = required(&keyboard_document, "wb-viewport") {
+                        let _ = cancel_projectional_interaction(
+                            &viewport,
+                            &mut wb,
+                            None,
+                            true,
+                            "Active interaction canceled before deletion",
+                        );
+                    }
+                    match delete_projectional_selection(&mut wb) {
+                        Ok(notice) => {
+                            wb.notice = notice;
+                            save_projectional(&wb);
+                        }
+                        Err(error) => wb.notice = error,
+                    }
                 }
                 drop(wb);
                 let _ = render_projectional(&keyboard_document, &keyboard_workbench);

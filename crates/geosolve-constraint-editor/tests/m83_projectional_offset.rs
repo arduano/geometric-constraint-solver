@@ -1415,7 +1415,16 @@ fn face_offset_delete_removes_every_typed_loop_operand_and_undo_restores_them() 
         .collect::<Vec<_>>();
     assert_eq!(aggregates.len(), 1);
 
-    session.delete_profile_offset(dimension).unwrap();
+    session.set_selection([SelectionItem::Dimension(dimension)]);
+    assert_eq!(session.selected_declaration(), Some(operation));
+    assert!(session.set_selected_declaration(Some(aggregates[0])));
+    assert_eq!(
+        session.selected_declaration(),
+        Some(operation),
+        "a private grouped operand selects its sole visible Offset owner",
+    );
+    assert!(session.editor().selection().is_empty());
+    session.delete_selected_declaration().unwrap();
     let graph = session.coordinator().intent().graph();
     assert!(graph.node(operation).is_none());
     assert!(aggregates.iter().all(|node| graph.node(*node).is_none()));
@@ -1435,6 +1444,62 @@ fn face_offset_delete_removes_every_typed_loop_operand_and_undo_restores_them() 
     assert!(graph.node(operation).is_some());
     assert!(aggregates.iter().all(|node| graph.node(*node).is_some()));
     assert_eq!(profile_offset_dimension(&session), dimension);
+    assert_independently_valid(&session);
+}
+
+#[test]
+fn retained_invalid_offset_deletes_by_stable_declaration_without_accepted_ownership() {
+    let mut session = fixture(true, 0x8300_0ff5_0024);
+    let mut state = offset_state(&session, true);
+    session
+        .apply_profile_offset(&mut state, key("offset.face.retained.invalid"))
+        .unwrap();
+    let dimension = profile_offset_dimension(&session);
+    let operation = profile_offset_node(&session);
+    let aggregate = session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| matches!(node.kind, IntentNodeKind::Aggregate { .. }))
+        .unwrap()
+        .id;
+    assert_eq!(
+        session
+            .edit_profile_offset_direction(dimension, ProfileOffsetDirectionState::Inward)
+            .unwrap()
+            .disposition,
+        IntentPlanDisposition::Accepted,
+    );
+    assert!(session.set_selected_declaration(Some(operation)));
+    let accepted_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+
+    let invalid = session
+        .edit_profile_offset_distance(dimension, 10.0)
+        .unwrap();
+    assert_eq!(invalid.disposition, IntentPlanDisposition::RetainedFailed);
+    assert_eq!(session.selected_declaration(), Some(operation));
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        accepted_before,
+    );
+
+    let deleted = session.delete_selected_declaration().unwrap();
+    assert_eq!(deleted.disposition, IntentPlanDisposition::Accepted);
+    let graph = session.coordinator().intent().graph();
+    assert!(graph.node(operation).is_none());
+    assert!(graph.node(aggregate).is_none());
+    assert_eq!(session.selected_declaration(), None);
     assert_independently_valid(&session);
 }
 

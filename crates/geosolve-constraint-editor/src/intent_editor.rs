@@ -20,8 +20,9 @@ use geosolve_sketch_features::{
     ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
 };
 use geosolve_sketch_intent::{
-    IntentFieldKey, IntentKey, IntentLiteral, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
-    IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
+    IntentFieldKey, IntentKey, IntentLiteral, IntentNodeKind, IntentPatch, IntentPatchOperation,
+    IntentPatchPolicy, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
+    OperationKind,
 };
 use geosolve_sketch_topology::{OffsetOperandRequest, PreparedOffsetOperandQuery};
 use thiserror::Error;
@@ -43,8 +44,9 @@ use crate::{
     SelectionItem, Viewport, decode_flat_intent_bootstrap,
     flat_intent_bootstrap_materialization_map, projectional_application_patch,
     projectional_construction_patch, projectional_fillet_patch, projectional_fillet_radius_patch,
-    projectional_profile_offset_delete_patch, projectional_profile_offset_direction_patch,
-    projectional_profile_offset_distance_patch, projectional_profile_offset_patch,
+    projectional_profile_offset_delete_node_patch, projectional_profile_offset_delete_patch,
+    projectional_profile_offset_direction_patch, projectional_profile_offset_distance_patch,
+    projectional_profile_offset_patch,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -404,7 +406,12 @@ impl ProjectionalEditorSession {
         IntentWorkbenchProjection::from_session(self.coordinator.intent())
     }
 
-    /// Currently selected logical declaration, independent of canvas picks.
+    /// Currently selected logical declaration.
+    ///
+    /// A unique native canvas/tree pick is projected back to this same stable
+    /// owner. Outline/source selection clears native selection, so an older
+    /// declaration can never remain the implicit mutation target after the
+    /// user visibly selects a different sketch item.
     #[must_use]
     pub const fn selected_declaration(&self) -> Option<NodeId> {
         self.selected_declaration
@@ -451,11 +458,15 @@ impl ProjectionalEditorSession {
 
     /// Selects one stable declaration for Outline/source/Inspector projection.
     ///
-    /// Missing or deleted identities clear the logical selection. This is
-    /// presentation state and never appends intent history.
+    /// Missing or deleted identities clear the logical selection. A private
+    /// one-consumer Profile Offset aggregate resolves to its visible operation
+    /// owner. Selecting a declaration clears any competing native selection.
+    /// This is presentation state and never appends intent history.
     pub fn set_selected_declaration(&mut self, node: Option<NodeId>) -> bool {
-        self.selected_declaration =
-            node.filter(|node| self.coordinator.intent().graph().node(*node).is_some());
+        self.selected_declaration = node.and_then(|node| self.visible_declaration_owner(node));
+        if self.selected_declaration.is_some() {
+            self.editor.set_selection([]);
+        }
         self.selected_declaration.is_some() == node.is_some()
     }
 
@@ -1893,6 +1904,42 @@ impl ProjectionalEditorSession {
         Ok(outcome)
     }
 
+    /// Deletes the one declaration addressed by the coherent logical/native
+    /// selection projection.
+    ///
+    /// Profile Offset uses its declaration-level multi-root closure so private
+    /// Profile/OpenChain operands are removed even when the latest explicit
+    /// intent is retained-invalid and absent from accepted native ownership.
+    /// Every other declaration uses the ordinary exact dependent closure.
+    ///
+    /// # Errors
+    ///
+    /// Rejects empty or ambiguous selection, protected/malformed declaration
+    /// state, or ordinary planning/materialization/publication failure without
+    /// changing intent, accepted authority, selection, or history.
+    pub fn delete_selected_declaration(
+        &mut self,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let node = self
+            .selected_declaration
+            .ok_or(ProjectionalEditorError::MissingDeleteSelection)?;
+        let is_profile_offset = matches!(
+            self.coordinator
+                .intent()
+                .graph()
+                .node(node)
+                .map(|node| &node.kind),
+            Some(IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset
+            })
+        );
+        if !is_profile_offset {
+            return self.delete_declaration(node);
+        }
+        let patch = projectional_profile_offset_delete_node_patch(self.coordinator.intent(), node)?;
+        self.apply_patch(patch)
+    }
+
     /// Applies one recognized structured-source token as an ordinary typed
     /// exact-CAS patch. Source text is never executed.
     ///
@@ -1965,11 +2012,13 @@ impl ProjectionalEditorSession {
     /// Replaces transient selection without touching intent or history.
     pub fn set_selection(&mut self, selection: impl IntoIterator<Item = SelectionItem>) {
         self.editor.set_selection(selection);
+        self.project_native_selection_to_declaration();
     }
 
     /// Applies one transient selection click without touching intent or history.
     pub fn select_item(&mut self, item: SelectionItem, modifiers: Modifiers) {
         self.editor.select_item(item, modifiers);
+        self.project_native_selection_to_declaration();
     }
 
     /// Returns the aggregate persistent role of the currently selected
@@ -2146,6 +2195,7 @@ impl ProjectionalEditorSession {
             .editor
             .pointer_down_accepted_offset_distance(scene, input)
             .unwrap_or_else(|| self.editor.pointer_down(scene, input));
+        self.project_native_selection_to_declaration();
         let point_route = self.editor.prepared_point_drag_route();
         let curve_route = self.editor.prepared_curve_control_drag_route();
         let fillet_route = self.editor.prepared_feature_radius_drag_route();
@@ -2801,6 +2851,72 @@ impl ProjectionalEditorSession {
         self.editor.set_selection([]);
     }
 
+    fn project_native_selection_to_declaration(&mut self) {
+        let selection = self.editor.selection();
+        if selection.is_empty() {
+            self.selected_declaration = None;
+            return;
+        }
+        let Some(accepted) = self.coordinator.accepted_materialization() else {
+            self.selected_declaration = None;
+            return;
+        };
+        let mut owners = std::collections::BTreeSet::new();
+        for item in selection {
+            let item_owners = accepted
+                .ownership
+                .nodes
+                .iter()
+                .filter(|owner| {
+                    owner
+                        .owned
+                        .iter()
+                        .any(|binding| native_binding_selects_item(*binding, *item))
+                })
+                .map(|owner| owner.node)
+                .collect::<std::collections::BTreeSet<_>>();
+            let mut item_owners = item_owners.into_iter();
+            let Some(owner) = item_owners.next() else {
+                self.selected_declaration = None;
+                return;
+            };
+            if item_owners.next().is_some() {
+                self.selected_declaration = None;
+                return;
+            }
+            owners.insert(owner);
+        }
+        let mut owners = owners.into_iter();
+        self.selected_declaration = owners
+            .next()
+            .filter(|_| owners.next().is_none())
+            .and_then(|node| self.visible_declaration_owner(node));
+    }
+
+    fn visible_declaration_owner(&self, node: NodeId) -> Option<NodeId> {
+        let graph = self.coordinator.intent().graph();
+        let declaration = graph.node(node)?;
+        if !matches!(declaration.kind, IntentNodeKind::Aggregate { .. }) {
+            return Some(node);
+        }
+        let consumers = graph
+            .nodes()
+            .values()
+            .filter(|candidate| candidate.dependencies().contains(&node))
+            .collect::<Vec<_>>();
+        let [consumer] = consumers.as_slice() else {
+            return Some(node);
+        };
+        matches!(
+            consumer.kind,
+            IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset
+            }
+        )
+        .then_some(consumer.id)
+        .or(Some(node))
+    }
+
     fn reconcile_declaration_selection(&mut self) {
         if self
             .selected_declaration
@@ -2808,6 +2924,53 @@ impl ProjectionalEditorSession {
         {
             self.selected_declaration = None;
         }
+    }
+}
+
+fn native_binding_selects_item(binding: IntentNativeBinding, item: SelectionItem) -> bool {
+    match (binding, item) {
+        (IntentNativeBinding::Point(candidate), SelectionItem::Point(point)) => candidate == point,
+        (IntentNativeBinding::Curve(candidate), SelectionItem::Curve(span)) => {
+            candidate == span.curve
+        }
+        (IntentNativeBinding::CurveSpan(candidate), SelectionItem::Curve(span)) => {
+            candidate.curve == span.curve
+        }
+        (IntentNativeBinding::Constraint(candidate), SelectionItem::Constraint(constraint)) => {
+            candidate == constraint
+        }
+        (IntentNativeBinding::Dimension(candidate), SelectionItem::Dimension(dimension)) => {
+            candidate == dimension
+        }
+        (IntentNativeBinding::ComputedFeature(candidate), SelectionItem::Feature(feature)) => {
+            candidate == feature
+        }
+        (IntentNativeBinding::ComputedFeature(candidate), SelectionItem::FeatureCorner(corner)) => {
+            candidate == corner.feature
+        }
+        (
+            IntentNativeBinding::ComputedFeatureCorner(candidate),
+            SelectionItem::FeatureCorner(corner),
+        ) => candidate == corner.corner,
+        (
+            IntentNativeBinding::Scalar(_)
+            | IntentNativeBinding::Contact(_)
+            | IntentNativeBinding::Source(_)
+            | IntentNativeBinding::Parameter(_)
+            | IntentNativeBinding::ExternalBinding(_)
+            | IntentNativeBinding::Logical(_),
+            _,
+        )
+        | (
+            _,
+            SelectionItem::Datum(_)
+            | SelectionItem::Point(_)
+            | SelectionItem::Curve(_)
+            | SelectionItem::Constraint(_)
+            | SelectionItem::Dimension(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_),
+        ) => false,
     }
 }
 
@@ -2968,6 +3131,8 @@ pub enum ProjectionalEditorError {
     ConstructionAcknowledgementMismatch,
     #[error("there is no independently accepted projectional scene")]
     NoAcceptedAuthority,
+    #[error("select one exact Design declaration or owned sketch item to delete")]
+    MissingDeleteSelection,
     #[error("no projectional curve with an editable persistent role is selected")]
     MissingGeometryRoleSelection,
     #[error("intrinsic reference geometry has a protected role")]

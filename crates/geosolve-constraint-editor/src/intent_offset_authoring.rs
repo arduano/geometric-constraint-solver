@@ -246,10 +246,38 @@ pub fn projectional_profile_offset_delete_patch(
     dimension: DocumentDimensionId,
 ) -> Result<IntentPatch, ProjectionalProfileOffsetError> {
     let node = profile_offset_owner(intent, ownership, dimension)?;
+    projectional_profile_offset_delete_node_patch(intent, node)
+}
+
+/// Builds one exact closure deletion from the stable Profile Offset
+/// declaration itself.
+///
+/// Unlike [`projectional_profile_offset_delete_patch`], this route does not
+/// require the operation to occur in the last accepted native ownership map.
+/// That distinction lets retained-invalid explicit intent remove its private
+/// Profile/OpenChain helper in the same transaction instead of falling back to
+/// a generic downstream-only declaration delete.
+///
+/// # Errors
+///
+/// Rejects a missing or non-Offset declaration and any changed/invalid
+/// dependency closure before returning a patch.
+pub fn projectional_profile_offset_delete_node_patch(
+    intent: &IntentSession,
+    node: NodeId,
+) -> Result<IntentPatch, ProjectionalProfileOffsetError> {
     let declaration = intent
         .graph()
         .node(node)
         .ok_or(ProjectionalProfileOffsetError::WrongDeclarationKind)?;
+    if !matches!(
+        declaration.kind,
+        IntentNodeKind::Operation {
+            operation: OperationKind::ProfileOffset
+        }
+    ) {
+        return Err(ProjectionalProfileOffsetError::WrongDeclarationKind);
+    }
     let operation_closure = intent
         .graph()
         .dependent_closure([node])

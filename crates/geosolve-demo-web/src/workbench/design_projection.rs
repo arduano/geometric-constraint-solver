@@ -203,12 +203,15 @@ fn push_declaration_button(
 
 /// Renders the exact editor-owned structured source, wrapping only recognized
 /// token ranges with stable typed edit coordinates. The source is displayed as
-/// code and is never evaluated by the browser.
+/// code and is never evaluated by the browser. Grouped presentation-owned
+/// helper declarations retain recognized typed token edits without exposing a
+/// second selection or reorder target.
 pub(crate) fn structured_source_markup(
     projection: &IntentWorkbenchProjection,
     selection: Option<DesignProjectionSelection>,
 ) -> String {
     let source = &projection.structured_source;
+    let grouped_helpers = grouped_outline_helper_nodes(projection);
     let mut markup = String::new();
     let mut line_start = 0;
     for (line_number, inclusive) in source.text.split_inclusive('\n').enumerate() {
@@ -221,9 +224,12 @@ pub(crate) fn structured_source_markup(
             .collect::<Vec<_>>();
         let selected = line_tokens.iter().any(|token| {
             let node = token_node(&token.target);
-            selection.is_some_and(|value| value.node == node)
+            !grouped_helpers.contains(&node) && selection.is_some_and(|value| value.node == node)
         });
-        let node = line_tokens.first().map(|token| token_node(&token.target));
+        let node = line_tokens
+            .iter()
+            .map(|token| token_node(&token.target))
+            .find(|node| !grouped_helpers.contains(node));
         let organization = node.and_then(|node| {
             projection
                 .outline
@@ -250,7 +256,13 @@ pub(crate) fn structured_source_markup(
             }),
             line_number + 1,
         );
-        push_source_line(&mut markup, line, line_start, &line_tokens);
+        push_source_line(
+            &mut markup,
+            line,
+            line_start,
+            &line_tokens,
+            &grouped_helpers,
+        );
         markup.push_str("</code></div>");
         line_start += inclusive.len();
     }
@@ -262,6 +274,7 @@ fn push_source_line(
     line: &str,
     line_start: usize,
     tokens: &[&IntentSourceToken],
+    non_interactive_nodes: &BTreeSet<NodeId>,
 ) {
     let mut cursor = line_start;
     for token in tokens {
@@ -282,7 +295,11 @@ fn push_source_line(
                 "spellcheck=\"false\">{}</span>"
             ),
             token.id.0,
-            format!(" data-intent-node=\"{node}\""),
+            if non_interactive_nodes.contains(&node) {
+                String::new()
+            } else {
+                format!(" data-intent-node=\"{node}\"")
+            },
             escape_html(&line[token_start..token_end]),
         );
         cursor = token.end;
@@ -672,7 +689,10 @@ fn escape_html(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use geosolve_constraint_editor::{IntentOutlineDeclaration, IntentWorkbenchProjection};
+    use geosolve_constraint_editor::{
+        IntentOutlineDeclaration, IntentSourceToken, IntentSourceTokenId, IntentSourceTokenTarget,
+        IntentWorkbenchProjection,
+    };
     use geosolve_sketch_intent::{
         AggregateKind, GeometryRecipeKind, IntentEvaluation, IntentKey, IntentLiteral,
         IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
@@ -847,5 +867,81 @@ mod tests {
         let shared_markup = outline_markup(&projection, None);
         assert!(shared_markup.contains("offset_operand_helper"));
         assert_eq!(declaration_count(&projection), 4);
+    }
+
+    #[test]
+    fn structured_source_does_not_expose_private_offset_helpers_as_declarations() {
+        let (_, mut projection, helper) = fixture();
+        let offset = NodeId::from_raw(0x8305_2002);
+        let declaration = |node, symbol: &str, kind, dependencies| IntentOutlineDeclaration {
+            node,
+            symbol: key(symbol),
+            name: key(symbol),
+            kind,
+            suppressed: false,
+            retained_failure: false,
+            dependencies,
+        };
+        let helper_declaration = projection.outline[0]
+            .declarations
+            .iter_mut()
+            .find(|declaration| declaration.node == helper)
+            .expect("fixture declaration exists");
+        helper_declaration.kind = IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::OpenChain,
+        };
+        projection.outline[0].declarations.push(declaration(
+            offset,
+            "Offset 1",
+            IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset,
+            },
+            vec![helper],
+        ));
+
+        let offset_line = "    declare(\"offset\", \"Offset 1\");\n";
+        let offset_name_start = projection.structured_source.text.len()
+            + offset_line
+                .find("\"Offset 1\"")
+                .expect("synthetic declaration has a name token");
+        projection.structured_source.text.push_str(offset_line);
+        projection.structured_source.tokens.push(IntentSourceToken {
+            id: IntentSourceTokenId(
+                u32::try_from(projection.structured_source.tokens.len())
+                    .expect("bounded source token count"),
+            ),
+            start: offset_name_start,
+            end: offset_name_start + "\"Offset 1\"".len(),
+            target: IntentSourceTokenTarget::NodeName { node: offset },
+        });
+
+        let markup = structured_source_markup(
+            &projection,
+            Some(DesignProjectionSelection { node: helper }),
+        );
+        assert!(!markup.contains(&format!("data-intent-node=\"{helper}\"")));
+        assert!(!markup.contains(&format!("data-intent-drop-before=\"{helper}\"")));
+        let helper_row = markup
+            .split("</div>")
+            .find(|row| row.contains("&quot;Point 1&quot;"))
+            .expect("private helper source row is rendered as code");
+        assert!(!helper_row.contains(" selected"));
+        assert!(!helper_row.contains("data-intent-node="));
+        assert!(!helper_row.contains("data-intent-cell="));
+        assert!(!helper_row.contains("data-intent-drop-before="));
+        assert!(!helper_row.contains("draggable="));
+        assert!(helper_row.contains("data-intent-source-token=\"0\""));
+        assert!(helper_row.contains("contenteditable=\"plaintext-only\""));
+
+        let offset_row = markup
+            .split("</div>")
+            .find(|row| row.contains("&quot;Offset 1&quot;"))
+            .expect("visible Offset source row is rendered");
+        assert!(offset_row.contains(&format!("data-intent-node=\"{offset}\"")));
+        assert!(offset_row.contains("data-intent-cell="));
+        assert!(offset_row.contains(&format!("data-intent-drop-before=\"{offset}\"")));
+        assert!(offset_row.contains("draggable=\"true\""));
+        assert!(offset_row.contains("data-intent-source-token="));
+        assert!(offset_row.contains("contenteditable=\"plaintext-only\""));
     }
 }
