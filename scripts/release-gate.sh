@@ -15,7 +15,7 @@ cargo metadata --locked --offline --format-version 1 >/dev/null
 cargo fmt --all -- --check
 git diff --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-cargo test --locked --workspace --all-features
+RUST_MIN_STACK=16777216 cargo test --locked --workspace --all-features
 ./scripts/golden-authoring-scene-oracle.sh --require-clean
 env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
   cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity \
