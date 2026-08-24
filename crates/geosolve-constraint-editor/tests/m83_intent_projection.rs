@@ -7,9 +7,9 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{CurveDefinition, DocumentId, PersistentId};
 use geosolve_sketch_intent::{
-    CellTarget, GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
-    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector,
-    IntentSessionId, IntentUnit, LeafField,
+    CellTarget, GeometryRecipeKind, InputRole, InputSlot, IntentKey, IntentLiteral,
+    IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+    IntentPortRole, IntentPortSelector, IntentSessionId, IntentUnit, LeafField, PatchPortRef,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -28,11 +28,15 @@ fn coordinate(value: f64) -> IntentLiteral {
 }
 
 fn point(position: [f64; 2]) -> IntentNodeDraft {
+    named_point("point.main", position)
+}
+
+fn named_point(symbol: &str, position: [f64; 2]) -> IntentNodeDraft {
     IntentNodeDraft::new(
         IntentNodeKind::Geometry {
             recipe: GeometryRecipeKind::SketchPoint,
         },
-        key("point.main"),
+        key(symbol),
     )
     .with_instance_leaf(
         selector(IntentPortRole::Primary),
@@ -258,6 +262,100 @@ fn recognized_source_edit_uses_typed_patch_and_organization_stays_nonsemantic() 
     assert_eq!(
         source.patch_for_edit(coordinator.intent(), name.id, "\"stale\""),
         Err(IntentSourceEditError::StaleProjection)
+    );
+}
+
+#[test]
+fn source_and_inspector_project_exact_stable_input_bindings_after_rebind() {
+    let mut coordinator = coordinator();
+    let start_slot = InputSlot::new(InputRole::Point, 0);
+    let segment = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("bound.segment"),
+    )
+    .with_input(
+        start_slot,
+        PatchPortRef::Alias {
+            node: key("first"),
+            selector: selector(IntentPortRole::Primary),
+        },
+    )
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(5.0))
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(0.0));
+    let outcome = coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("first"),
+                    draft: Box::new(named_point("bound.first", [0.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second"),
+                    draft: Box::new(named_point("bound.second", [2.0, 1.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("segment"),
+                    draft: Box::new(segment),
+                    cell: None,
+                },
+            ],
+        ))
+        .unwrap();
+    let first = outcome
+        .aliases
+        .port(&key("first"), selector(IntentPortRole::Primary))
+        .unwrap();
+    let second = outcome
+        .aliases
+        .port(&key("second"), selector(IntentPortRole::Primary))
+        .unwrap();
+    let segment = outcome.aliases.node(&key("segment")).unwrap();
+
+    let before = IntentWorkbenchProjection::from_session(coordinator.intent());
+    let first_binding = format!(
+        "\"{start_slot}\": {}",
+        serde_json::to_string(&first).unwrap()
+    );
+    assert!(before.structured_source.text.contains(&first_binding));
+    assert_eq!(
+        before
+            .inspector(coordinator.intent(), segment)
+            .unwrap()
+            .inputs,
+        vec![(start_slot, first)]
+    );
+
+    coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::RebindInput {
+                node: segment,
+                slot: start_slot,
+                source: PatchPortRef::Stable { port: second },
+            }],
+        ))
+        .unwrap();
+    let after = IntentWorkbenchProjection::from_session(coordinator.intent());
+    let second_binding = format!(
+        "\"{start_slot}\": {}",
+        serde_json::to_string(&second).unwrap()
+    );
+    assert_ne!(after.structured_source.text, before.structured_source.text);
+    assert!(after.structured_source.text.contains(&second_binding));
+    assert!(!after.structured_source.text.contains(&first_binding));
+    assert_eq!(
+        after
+            .inspector(coordinator.intent(), segment)
+            .unwrap()
+            .inputs,
+        vec![(start_slot, second)]
     );
 }
 

@@ -407,6 +407,29 @@ pub(crate) fn inspector_markup(
         inspector.node,
         if inspector.suppressed { " checked" } else { "" },
     );
+    if !inspector.inputs.is_empty() {
+        markup.push_str("<fieldset class=\"wb-intent-inputs\"><legend>Inputs</legend>");
+        for (slot, source) in &inspector.inputs {
+            let _ = write!(
+                markup,
+                concat!(
+                    "<div class=\"wb-intent-input\" data-intent-input-slot=\"{}\" ",
+                    "data-intent-source-node=\"{}\" data-intent-source-port=\"{}\" ",
+                    "data-intent-source-kind=\"{:?}\"><span>{}</span>",
+                    "<code>{}.{} · {:?}</code></div>"
+                ),
+                escape_attribute(&slot.to_string()),
+                source.node,
+                source.port,
+                source.kind,
+                escape_html(&slot.to_string()),
+                source.node,
+                source.port,
+                source.kind,
+            );
+        }
+        markup.push_str("</fieldset>");
+    }
     for field in &inspector.fields {
         match field {
             IntentInspectorField::Definition { schema, value } => {
@@ -701,10 +724,11 @@ mod tests {
         IntentWorkbenchProjection,
     };
     use geosolve_sketch_intent::{
-        AggregateKind, GeometryRecipeKind, IntentEvaluation, IntentKey, IntentLiteral,
-        IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
-        IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
-        MaterializationEvidence, NodeId, OperationKind,
+        AggregateKind, GeometryRecipeKind, InputRole, InputSlot, IntentEvaluation, IntentKey,
+        IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation,
+        IntentPatchPolicy, IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
+        IntentSession, IntentSessionId, IntentUnit, LeafField, MaterializationEvidence, NodeId,
+        OperationKind, PortId,
     };
 
     use super::{
@@ -811,6 +835,51 @@ mod tests {
             2
         );
         assert!(!inspector.contains("onclick="));
+    }
+
+    #[test]
+    fn inspector_renders_stable_input_bindings_as_read_only_references() {
+        let (session, _, _) = fixture();
+        let node = NodeId::from_raw(0x8305_0011);
+        let source_node = NodeId::from_raw(0x8305_0010);
+        let slot = InputSlot::new(InputRole::Point, 0);
+        let source = IntentPortRef {
+            node: source_node,
+            port: PortId::from_raw(0x8305_1010),
+            kind: IntentPortKind::Point,
+        };
+        let inspector = geosolve_constraint_editor::IntentInspectorProjection {
+            node,
+            symbol: key("bound_segment"),
+            name: key("Bound segment"),
+            kind: IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            suppressed: false,
+            retained_failure: false,
+            inputs: vec![(slot, source)],
+            fields: Vec::new(),
+        };
+
+        let markup = inspector_markup(Some(&inspector), session.identity());
+        let inputs = markup
+            .split_once("<fieldset class=\"wb-intent-inputs\">")
+            .unwrap()
+            .1
+            .split_once("</fieldset>")
+            .unwrap()
+            .0;
+
+        assert!(inputs.contains("<legend>Inputs</legend>"));
+        assert!(inputs.contains(&format!("data-intent-input-slot=\"{slot}\"")));
+        assert!(inputs.contains(&format!("data-intent-source-node=\"{source_node}\"")));
+        assert!(inputs.contains(&format!("data-intent-source-port=\"{}\"", source.port)));
+        assert!(inputs.contains("data-intent-source-kind=\"Point\""));
+        assert!(inputs.contains(&format!("{source_node}.{} · Point", source.port)));
+        assert!(!inputs.contains("<input"));
+        assert!(!inputs.contains("<button"));
+        assert!(!inputs.contains("contenteditable"));
+        assert!(!inputs.contains("data-intent-edit"));
     }
 
     #[test]

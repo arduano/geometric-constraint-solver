@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use geosolve_sketch_intent::{
-    CellId, IntentAttemptDisposition, IntentDefinitionFieldSchema, IntentFieldKey,
+    CellId, InputSlot, IntentAttemptDisposition, IntentDefinitionFieldSchema, IntentFieldKey,
     IntentHistoryProjection, IntentKey, IntentLiteral, IntentNode, IntentNodeKind, IntentPatch,
     IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRef, IntentSession,
     IntentSessionIdentity, LeafRef, NodeId,
@@ -558,6 +558,7 @@ fn structured_source(session: &IntentSession) -> IntentStructuredSource {
                 if node.suppressed { "true" } else { "false" },
                 IntentSourceTokenTarget::Suppressed { node: *node_id },
             );
+            write_input_map(&mut writer, &node.inputs);
             write_literal_map(
                 &mut writer,
                 "fields",
@@ -602,6 +603,29 @@ fn structured_source(session: &IntentSession) -> IntentStructuredSource {
         text: writer.text,
         tokens: writer.tokens,
     }
+}
+
+fn write_input_map(writer: &mut SourceWriter, inputs: &BTreeMap<InputSlot, IntentPortRef>) {
+    writer.text.push_str(",\n      inputs: {");
+    for (index, (slot, source)) in inputs.iter().enumerate() {
+        if index > 0 {
+            writer.text.push(',');
+        }
+        writer.text.push_str("\n        ");
+        writer.text.push_str(
+            &serde_json::to_string(&slot.to_string())
+                .expect("input slot is infallibly serializable"),
+        );
+        writer.text.push_str(": ");
+        writer.text.push_str(
+            &serde_json::to_string(source)
+                .expect("stable typed port reference is infallibly serializable"),
+        );
+    }
+    if !inputs.is_empty() {
+        writer.text.push_str("\n      ");
+    }
+    writer.text.push('}');
 }
 
 fn write_literal_map<'a>(
