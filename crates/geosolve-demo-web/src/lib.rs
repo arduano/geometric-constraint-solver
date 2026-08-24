@@ -109,11 +109,14 @@ mod wasm {
 
     #[cfg(test)]
     mod tests {
-        use geosolve_constraint_editor::{IntentRpcRequest, IntentRpcSession};
+        use geosolve_constraint_editor::{
+            IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSuccess,
+            MAX_INTENT_RPC_REQUEST_BYTES,
+        };
         use geosolve_sketch_intent::{
             GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
-            IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole,
-            IntentPortSelector, IntentUnit, LeafField,
+            IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition,
+            IntentPortRole, IntentPortSelector, IntentUnit, LeafField,
         };
         use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -159,6 +162,70 @@ mod wasm {
             }
         }
 
+        fn retained_invalid_patch(session: &IntentRpcSession) -> IntentRpcRequest {
+            let start = IntentPortSelector::Node {
+                role: IntentPortRole::Start,
+                index: 0,
+            };
+            let end = IntentPortSelector::Node {
+                role: IntentPortRole::End,
+                index: 0,
+            };
+            let draft = IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Segment,
+                },
+                IntentKey::new("wasm.rpc.invalid.segment").unwrap(),
+            )
+            .with_instance_leaf(
+                start,
+                LeafField::X,
+                IntentLiteral::Quantity {
+                    value: 0.0,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_instance_leaf(
+                start,
+                LeafField::Y,
+                IntentLiteral::Quantity {
+                    value: 0.0,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_instance_leaf(
+                end,
+                LeafField::X,
+                IntentLiteral::Quantity {
+                    value: 1.0,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_instance_leaf(
+                end,
+                LeafField::Y,
+                IntentLiteral::Quantity {
+                    value: 0.0,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_field(
+                geosolve_sketch_intent::IntentFieldKey(IntentKey::new("branch_direction").unwrap()),
+                IntentLiteral::Point([f64::MAX, f64::MAX]),
+            );
+            IntentRpcRequest::ApplyPatch {
+                patch: Box::new(IntentPatch::new(
+                    session.coordinator().intent().identity(),
+                    IntentPatchPolicy::RetainFailedIntent,
+                    vec![IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new("invalid").unwrap(),
+                        draft: Box::new(draft),
+                        cell: None,
+                    }],
+                )),
+            }
+        }
+
         #[wasm_bindgen_test]
         fn actual_wasm_handle_matches_dom_free_rust_session_for_transition_matrix() {
             let session = "00000000000000000000000083005001";
@@ -167,6 +234,7 @@ mod wasm {
             let mut rust =
                 crate::intent_rpc::empty_session_from_raw(0x8300_5001, 0x8300_5001_0000, 1.0)
                     .unwrap();
+            let pristine_identity = rust.coordinator().intent().identity();
             let patch = serde_json::to_string(&point_patch(&rust)).unwrap();
             for request in [
                 r#"{"method":"snapshot"}"#.to_owned(),
@@ -174,12 +242,121 @@ mod wasm {
                 r#"{"method":"undo"}"#.to_owned(),
                 r#"{"method":"redo"}"#.to_owned(),
                 r#"{"method":"inspector","node":"0000000000000063"}"#.to_owned(),
-                r#"{"method":"execute_typescript","source":"solve()"}"#.to_owned(),
             ] {
                 assert_eq!(
                     handle.apply(&request),
                     rust.apply_json(&request),
                     "{request}"
+                );
+            }
+
+            let accepted_identity = rust.coordinator().intent().identity();
+            let accepted_evidence = handle
+                .session
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted WASM authority")
+                .evidence
+                .clone();
+            assert_eq!(
+                rust.coordinator()
+                    .accepted_materialization()
+                    .expect("accepted native authority")
+                    .evidence,
+                accepted_evidence
+            );
+
+            let retained_request = serde_json::to_string(&retained_invalid_patch(&rust)).unwrap();
+            let retained_response = handle.apply(&retained_request);
+            assert_eq!(retained_response, rust.apply_json(&retained_request));
+            let retained_response: IntentRpcOutcome =
+                serde_json::from_str(&retained_response).unwrap();
+            assert!(matches!(
+                retained_response,
+                IntentRpcOutcome::Success {
+                    value: IntentRpcSuccess::Patch {
+                        disposition: IntentPlanDisposition::RetainedFailed,
+                        ..
+                    }
+                }
+            ));
+            assert_ne!(rust.coordinator().intent().identity(), accepted_identity);
+            assert_eq!(
+                handle
+                    .session
+                    .coordinator()
+                    .accepted_materialization()
+                    .expect("retained WASM authority")
+                    .evidence,
+                accepted_evidence
+            );
+            assert_eq!(
+                rust.coordinator()
+                    .accepted_materialization()
+                    .expect("retained native authority")
+                    .evidence,
+                accepted_evidence
+            );
+
+            let retained_identity = rust.coordinator().intent().identity();
+            let retained_intent = rust.coordinator().intent().to_canonical_json().unwrap();
+            let retained_snapshot = rust.snapshot();
+            assert_eq!(handle.session.snapshot(), retained_snapshot);
+
+            let stale = serde_json::to_string(&IntentRpcRequest::ApplyPatch {
+                patch: Box::new(IntentPatch::new(
+                    pristine_identity,
+                    IntentPatchPolicy::RequireAccepted,
+                    Vec::new(),
+                )),
+            })
+            .unwrap();
+            let malformed = r#"{"method":"execute_typescript","source":"solve()"}"#.to_owned();
+            let oversized = " ".repeat(MAX_INTENT_RPC_REQUEST_BYTES + 1);
+            for (request, expected_code) in [
+                (stale, "patch_rejected"),
+                (malformed, "invalid_request"),
+                (oversized, "request_too_large"),
+            ] {
+                let wasm_response = handle.apply(&request);
+                assert_eq!(wasm_response, rust.apply_json(&request), "{expected_code}");
+                let response: IntentRpcOutcome = serde_json::from_str(&wasm_response).unwrap();
+                assert!(matches!(
+                    response,
+                    IntentRpcOutcome::Failure { ref failure }
+                        if failure.code == expected_code
+                            && failure.identity == Some(retained_identity)
+                ));
+                assert_eq!(
+                    handle
+                        .session
+                        .coordinator()
+                        .intent()
+                        .to_canonical_json()
+                        .unwrap(),
+                    retained_intent
+                );
+                assert_eq!(
+                    rust.coordinator().intent().to_canonical_json().unwrap(),
+                    retained_intent
+                );
+                assert_eq!(handle.session.snapshot(), retained_snapshot);
+                assert_eq!(rust.snapshot(), retained_snapshot);
+                assert_eq!(
+                    handle
+                        .session
+                        .coordinator()
+                        .accepted_materialization()
+                        .expect("rejection retains WASM authority")
+                        .evidence,
+                    accepted_evidence
+                );
+                assert_eq!(
+                    rust.coordinator()
+                        .accepted_materialization()
+                        .expect("rejection retains native authority")
+                        .evidence,
+                    accepted_evidence
                 );
             }
         }
