@@ -4303,7 +4303,9 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 
 M83 adds no residual equation and does not reinterpret any earlier geometric oracle. The corpus
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
-existing solver.
+existing solver. G1-G6 implementation and focused/proportional coverage are complete through
+selection/deletion hardening `62378c9`; final clean nomination, immutable Tailscale publication and
+human UAT remain pending. M81 GitHub Pages bytes remain public authority.
 
 ### M83-G1 — schema, alias and order independence
 
@@ -4373,6 +4375,14 @@ Inspector fields are schema-derived, retained invalid intent stays inspectable a
 read-only. A mixed sequence across all projections produces exactly one bounded composite
 Undo/Redo stream with no mirrored coordinator entry.
 
+Canvas/tree selection resolves through accepted logical/native ownership to that same visible
+declaration. Ambiguous, unowned, protected-datum, multi-owner or mixed-owner selections clear the
+declaration target; Outline/source selection clears competing native selection. Toolbar and
+Delete/Backspace share one editor deletion route after authoring precedence. A private one-consumer
+Profile Offset aggregate is grouped beneath its visible operation, cannot be selected or reordered
+as an invisible source row, and is removed with that operation even when explicit intent is
+retained-invalid over older accepted ownership. Recognized source tokens remain typed edit targets.
+
 ### M83-G6 — workspace, WASM and TypeScript parity
 
 Workspace v8 round-trips current/accepted graph and instance identities, organization, external
@@ -4386,6 +4396,11 @@ Native and WASM/RPC transition transcripts match for valid, retained-invalid, st
 resource-exhausted patches. Branded TypeScript builders reject cross-session or wrong-port kinds at
 compile time where representable and at runtime otherwise. Neither generated source nor the
 package contains a curve equation, residual evaluator, expression graph or solver.
+
+The optional M76 annotation-layout cache is not an intent-session component. It may survive an
+ordinary compatible workspace round trip solely as presentation state, is omitted/ignored by
+reproduction authority, never affects materialization or Undo/Redo and is discarded so automatic
+placement can be recomputed when missing, stale or malformed.
 
 The exact no-rebuild release output is frozen and served over Tailscale for the human scorecard in
 `docs/M83_UAT.md`. GitHub Pages remains on accepted M81 bytes until that candidate is explicitly

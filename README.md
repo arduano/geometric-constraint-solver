@@ -138,7 +138,7 @@ Physics, collision and a production rendering system remain out of scope.
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M83 active over the accepted M81 baseline.
+3. `PLAN.md` — authoritative roadmap, with M83 mechanically implemented and awaiting nomination/UAT over the accepted M81 baseline.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -157,8 +157,8 @@ Physics, collision and a production rendering system remain out of scope.
     publicly verified geometry-family/variant contract, implementation ledger and scorecard.
 15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
-16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — active
-    projectional Design Intent Graph contract, implementation ledger and pending scorecard.
+16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — implemented
+    projectional Design Intent Graph contract, nomination ledger and pending scorecard.
 
 ## Workspace
 
@@ -168,16 +168,22 @@ Physics, collision and a production rendering system remain out of scope.
 - `geosolve-sketch-ops` — deterministic equation-free split/trim/extend/construction proposals over complete stamped sketch snapshots; no residuals, solver state or private publication path.
 - `geosolve-sketch-topology` — read-only revision-stamped production wires, regions, holes and exact source provenance with explicit bounded completeness; no solver or B-rep state.
 - `geosolve-sketch-features` — separately versioned persistent computed-feature intent and independently validated revision-local output over exact accepted sketch snapshots; no residuals, solver variables, canonical sketch schema or B-rep state.
+- `geosolve-sketch-intent` — order-independent typed declaration/port/reservation graph, writable
+  instance state, non-semantic organization, exact-CAS patches, tombstones, canonical persistence
+  and one bounded composite history; no sketch equations or solver dependency.
 - `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking,
   selection, gestures, exact geometry-family recipes, selected-curve control cages/properties,
-  constraint/dimension and computed-feature authoring, and typed editor effects over public
-  sketch/feature APIs; no renderer, DOM, storage or equations.
+  constraint/dimension and computed-feature authoring, deterministic projectional materialization,
+  logical/native ownership and typed editor effects over public sketch/feature APIs; no renderer,
+  DOM, storage or equations.
 - `geosolve-linkage` — persistent planar and spatial rigid bodies/features/sources, deterministic JSON/runtime remapping, gauge-separated mobility, common joints/mates, drivers, explicit assembly modes, independently published natural/pseudo-arclength continuation, typed hysteretic branch events/mode changes and multi-driver body/feature velocity fields with optional physical motion bases.
 - `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
   document semantics; M50 removed its old playground, M51 consolidated the one directly tested
   workbench, M60 added public advanced-operation/topology presentation plus the versioned workspace
   envelope, M67 removed its raw developer evidence/topology cards, M77 renders only headless curve
-  controls/properties, and M78 presents only headless geometry families, stages and recipe previews.
+  controls/properties, M78 presents only headless geometry families, stages and recipe previews,
+  and M83 consumes editor-owned Outline/source/History/RPC projections without owning geometry
+  equations.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
 
@@ -186,8 +192,8 @@ unsolved design intent, ordinary CAD constraints/dimensions, immutable host inpu
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
 and application undo. M40.7, M53 and M61-M81 have explicit acceptance dispositions. M83 now
-introduces a projectional intent/session layer while deliberately retaining the native solver as
-accepted geometry authority. New milestones
+implements a projectional intent/session layer while deliberately retaining the native solver as
+accepted geometry authority; nomination and human UAT remain pending. New milestones
 normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
 mobile support requirement.

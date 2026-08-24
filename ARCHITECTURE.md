@@ -31,12 +31,17 @@ construction/NURBS UAT and certified all-family visual profiles.
   model, inverse controls, tests, ADR and evidence for a future redesign. No prototype API,
   persistence v2, golden expansion or UI remains on `main`. `docs/M82_DEFERRED.md` owns the
   disposition.
-- **Active target:** M83 implements ADR 0040's projectional Design Intent Graph above the unchanged
+- **Active target:** M83 has mechanically implemented ADR 0040's projectional Design Intent Graph
+  above the unchanged
   native solver. Stable typed declaration/port/reservation identity, separately revisioned
   instance/organization/external state, deterministic Rust materialization, one composite history,
   TypeScript-shaped source projection and prepared reverse-binding drag routes replace the
-  rejected chronological JSON-owner-rewrite candidate. No M83 capability is accepted until its
-  complete mechanical gate, frozen Tailscale candidate and explicit human UAT pass.
+  rejected chronological JSON-owner-rewrite candidate. Canvas/tree and Design projections resolve
+  one visible stable declaration owner, including closure deletion for retained-invalid Profile
+  Offset. M76 annotation layout remains a disposable presentation-only workspace cache outside
+  graph, materialization and history identity. Final clean nomination is in progress; no M83
+  capability is accepted until the complete gate, frozen Tailscale candidate and explicit human UAT
+  pass.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -341,6 +346,16 @@ Offset residual registration/path/incidence/audit assembly remains behind the co
 independent candidate validation deliberately stays separate in `compiler.rs`. Public paths,
 canonical wire DTOs, error strings, registration/incidence/audit order and equations do not change.
 
+### `geosolve-sketch-intent`
+
+M83 adds an equation-free pure-Rust semantic layer which does not depend on `geosolve-sketch`, the
+editor or the web crate. It owns the closed declaration schemas, stable nodes/ports/children,
+typed native reservations and tombstones, separately revisioned instance/organization/external
+state, unordered exact-CAS patches, canonical persistence and one bounded composite history.
+Dependency-DAG order and stable identity are semantic; display names, cells and source order are
+not. Accepted materialization evidence is opaque host-owned bytes at this layer, so the crate
+cannot solve, evaluate geometry or claim residual validity.
+
 ### `geosolve-constraint-editor`
 
 Owns presentation-independent sketch interaction policy over public `geosolve-sketch` and
@@ -356,7 +371,7 @@ Owns presentation-independent sketch interaction policy over public `geosolve-sk
 - typed document-edit, preview, commit and cancellation effects; and
 - deterministic transition/replay fixtures for native and WASM qualification.
 
-It depends one way on `geosolve-sketch` and, under ADR 0031, on
+It depends one way on `geosolve-sketch`, `geosolve-sketch-intent` and, under ADR 0031, on
 `geosolve-sketch-features`. The unreleased general ADR 0030 operation-authoring facade and its
 dependency were removed when M66 closed. ADR 0037 narrowly reintroduces a direct
 `geosolve-sketch-ops` dependency for deterministic Profile Offset proposals; the editor still owns
@@ -366,6 +381,15 @@ storage or host expressions. M40.2 implements accepted scene, picking,
 selection, basic relation applicability and the click/drag boundary; M40.3-M40.6
 complete and mechanically qualify the state machine under ADR 0029 through one
 canonical native/release-WASM report and focused browser platform evidence.
+
+Under ADR 0040, the editor owns deterministic graph-to-document materialization above those same
+public domain APIs. It translates exact reservations, records logical/native ownership and reverse
+free-leaf routes, cold-reconstructs through the native retained solver and publishes accepted
+evidence only after existing independent finite/residual/domain/branch validation. Canvas,
+Inspector, structured source, operations and DOM-free RPC submit one closed patch vocabulary and
+share the intent session's composite history. Direct pointer previews reuse retained native solver
+state and keep only authenticated gesture data transient; they do not replay or serialize the
+graph per frame.
 
 M81 moves unchanged checkpoint encoding/decoding, restore and successful history publication into
 private `coordinator/history.rs`. Durable feature candidates evaluate and checkpoint against a
@@ -766,6 +790,15 @@ measurement or global problem. The implementation preserves that boundary. Initi
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn historical evidence; F011 replacement
 source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the clean/served-artifact gates and remains
 qualified product authority. Human UAT and exact Pages publication pass.
+
+For active M83 this crate renders only editor-owned Outline, structured-source, read-only History,
+Inspector and diagnostic DTOs and forwards normalized typed edits/RPC requests. Workspace v8 stores
+the canonical intent session plus authenticated accepted materialization; strict v1-v6 workspaces
+first restore through their historical decoder and then become per-object bootstrap declarations,
+while abandoned v7 rejects. The M76 annotation-layout field remains a disposable,
+compatibility-filtered presentation cache outside intent/materialization/history authority and is
+recomputed when absent or invalid. M83 is mechanically implemented but remains unaccepted until
+clean Tailscale nomination and human UAT pass; public Pages still serves accepted M81.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is

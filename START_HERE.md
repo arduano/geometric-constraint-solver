@@ -239,14 +239,17 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 `archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
-M83 is the active projectional design-intent milestone. ADR 0040 replaces the rejected
+M83 is the active, mechanically implemented projectional design-intent milestone. ADR 0040
+replaces the rejected
 chronological snapshot/JSON-owner-rewrite candidate with an order-independent typed dependency
 graph, separate writable instance and presentation organization state, deterministic Rust
 materialization into the unchanged native solver, one composite history and prepared reverse-
 binding drag routes. The discarded candidate remains on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; do not restore it wholesale. M83 is
-not accepted product behavior until clean qualification, a frozen Tailscale candidate and explicit
-human UAT pass. Pages therefore remains on accepted M81 product bytes.
+not accepted product behavior until its in-progress clean nomination, frozen Tailscale candidate
+and explicit human UAT pass. Pages therefore remains on accepted M81 product bytes. The M76
+annotation-layout cache stays disposable presentation-only workspace state beside, not inside, the
+intent graph/materialization/history authority.
 
 ## Read first
 
@@ -652,7 +655,8 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M82 are complete. M83 is active and not yet accepted. M82 closes by explicit deferral rather than feature acceptance: `fa54f30`
+M1-M82 are complete. M83 implementation is complete, nomination qualification is in progress and
+human acceptance remains pending. M82 closes by explicit deferral rather than feature acceptance: `fa54f30`
 restores the exact M81 product tree and the complete discarded prototype is archived at
 `archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
 qualification, immutable Tailscale byte verification and supervising-human acceptance; approval

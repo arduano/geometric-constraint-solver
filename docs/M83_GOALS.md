@@ -2,7 +2,8 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation in progress**. ADR 0040 is the active architecture. The rejected
+Status: **implementation complete; candidate qualification in progress**. ADR 0040 is the active
+architecture. The rejected
 chronological candidate is preserved only on `archive/m83-chronological-lineage-2026-08-23` at
 `be62a1c`; it is not a compatibility target.
 
@@ -62,6 +63,10 @@ validated flat accepted scene authoritative.
   while whitespace/order edits cannot affect geometry. Do not execute arbitrary TypeScript.
 - Show retained invalid declarations and their diagnostics while the accepted canvas remains
   usable.
+- Keep M76 annotation layout as a disposable presentation cache beside the intent session. It may
+  survive an ordinary workspace save, but it is neither declaration/instance state nor part of
+  materialization, solver input or composite Undo/Redo history, and it is recomputed safely when
+  absent or incompatible.
 
 ### M83-G6 — host surface and persistence
 
@@ -88,6 +93,10 @@ validated flat accepted scene authoritative.
   builds, the unchanged milestone-neutral golden and complete clean release gate pass.
 - The exact no-rebuild candidate is frozen and byte-verified over Tailscale. GitHub Pages remains
   on the accepted M81 product until explicit M83 human approval.
+
+Implementation and focused proportional qualification now satisfy G1-G6. The clean release gate,
+immutable no-rebuild freeze and served-byte record are the remaining mechanical nomination steps;
+M83-U1 through M83-U8 remain pending human evidence.
 
 ## Non-goals
 

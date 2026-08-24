@@ -3234,8 +3234,9 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation in progress. ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own
-the active acceptance contract; no candidate is nominated yet.
+Status: implementation complete; clean nomination in progress. ADR 0040, `docs/M83_GOALS.md` and
+the M83 scenario section own the active acceptance contract; no human evidence or accepted product
+claim exists yet.
 
 - The canonical design is an unordered typed dependency graph with stable never-reused
   declarations, ports, children and native reservations. Instance values, presentation
@@ -3259,6 +3260,11 @@ the active acceptance contract; no candidate is nominated yet.
 - One composite Undo/Redo history covers graph, instance, organization and external-input edits.
   History presentation is read-only; declaration/cell ordering, aliases, names and structured-
   source row order cannot affect geometry or native allocation.
+- Canvas/tree and Outline/source selection resolve to one exact visible stable declaration owner.
+  Ambiguous, protected, unowned or multi-owner native selection cannot leave an older declaration
+  as a mutation target. Toolbar and Delete/Backspace use the same editor-owned deletion path;
+  retained-invalid Profile Offset removes its exact private aggregate closure, while grouped
+  helpers never become invisible source selection or reorder targets.
 - Structured source is a deterministic TypeScript-shaped Rust projection with typed token edits,
   not arbitrary TypeScript execution. Native, DOM-free WASM/RPC and branded TypeScript builders
   produce the same patch identities and typed outcomes.
@@ -3266,6 +3272,10 @@ the active acceptance contract; no candidate is nominated yet.
   Abandoned v7 rejects. Strict v1-v6 restoration remains available and is normalized honestly as
   typed per-object bootstrap declarations with exact native identity bindings rather than an
   aggregate flat peer authority or fictional recipe history.
+- Compatible moved-annotation positions may round-trip only as the existing disposable
+  presentation cache. They are outside intent/session identity, dependency scheduling,
+  materialization, solver input and composite history; missing, stale or corrupt cache state is
+  discarded and deterministically recomputed.
 - Inventory-driven schema/materializer tests, cold/warm differential reconstruction, order/
   identity/failure/deletion/persistence coverage, native/WASM/RPC/TypeScript parity, drag
   performance, unchanged milestone-neutral golden, locked workspace tests, Clippy/Rustdoc/WASM and

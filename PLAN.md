@@ -5596,8 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation in progress**. ADR 0040 and `docs/M83_GOALS.md` own the replacement
-contract. The rejected chronological owner-rewrite candidate remains archived at
+Status: **implementation complete; clean nomination in progress**. ADR 0040 and
+`docs/M83_GOALS.md` own the replacement contract. The rejected chronological owner-rewrite
+candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
 
 - [x] Reject and archive the chronological snapshot/JSON-owner-rewrite model; preserve only its
@@ -5609,34 +5610,36 @@ contract. The rejected chronological owner-rewrite candidate remains archived at
 - [x] Freeze the replacement architecture: one order-independent typed graph, separately
   revisioned instance/organization/external state, deterministic Rust materialization into the
   existing native solver, one composite history and cold reconstruction authority.
-- [ ] Complete and qualify the pure-Rust `geosolve-sketch-intent` crate: stable node/port/child/
+- [x] Complete and qualify the pure-Rust `geosolve-sketch-intent` crate: stable node/port/child/
   reservation identity, all existing catalogs, schema-derived aliases and children, explicit
   identity continuation/retirement tombstones, unordered exact-CAS patches, retained failure,
   canonical persistence and bounded Undo/Redo.
-- [ ] Implement the editor-owned deterministic materializer with exact typed reservation lowering,
+- [x] Implement the editor-owned deterministic materializer with exact typed reservation lowering,
   dependency scheduling, logical/native ownership, reverse free-leaf bindings, exact host-input
   decoding and independently validated accepted/latest/retained authority.
-- [ ] Lower native Fillet and Profile Offset through their existing authenticated domain APIs;
+- [x] Lower native Fillet and Profile Offset through their existing authenticated domain APIs;
   add no new constraint, residual, formula, priority or JavaScript solve path.
-- [ ] Bootstrap existing flat samples and v1-v6 workspaces honestly as typed per-object native
+- [x] Bootstrap existing flat samples and v1-v6 workspaces honestly as typed per-object native
   declarations with exact identity bindings, with explicit supported ejection rather than an
   aggregate flat peer authority, invented historical recipe or rejected `ImportedBaseline` ledger
   semantics.
-- [ ] Route every persistent canvas, Inspector, source, operation and organization mutation
+- [x] Route every persistent canvas, Inspector, source, operation and organization mutation
   through one intent session and one composite Undo/Redo history. Keep only authenticated gesture
   state transient.
-- [ ] Prepare direct manipulation from reverse free-leaf bindings at pointer-down, reuse retained
+- [x] Prepare direct manipulation from reverse free-leaf bindings at pointer-down, reuse retained
   native solver sessions for coalesced preview and publish only the exact newest pointer-up sample
   as one instance/property patch. Never silently rewrite drivers or fixed properties.
-- [ ] Advance the application envelope to experimental workspace v8, explicitly reject abandoned
+- [x] Advance the application envelope to experimental workspace v8, explicitly reject abandoned
   v7, and round-trip graph/instance/organization/external/accepted evidence, reservations,
   tombstones and bounded history canonically.
-- [ ] Add DOM-free intent WASM/RPC parity and a branded TypeScript package over the closed patch
+- [x] Add DOM-free intent WASM/RPC parity and a branded TypeScript package over the closed patch
   vocabulary, with runtime and compile-time tests and no executable constraint equations.
-- [ ] Add `Outline | Structured source | History` Design-panel tabs, schema-generated Inspector
+- [x] Add `Outline | Structured source | History` Design-panel tabs, schema-generated Inspector
   forms, organization-only drag/drop, deterministic TypeScript-shaped projection, retained-invalid
   presentation and read-only History.
-- [ ] Add inventory, order-independence, stable-identity, retained-failure, deletion-closure,
+- [x] Preserve movable annotation layout as a compatible disposable presentation cache outside
+  intent/materialization/history authority; cache loss or corruption recomputes placement.
+- [x] Add inventory, order-independence, stable-identity, retained-failure, deletion-closure,
   persistence/migration, cold/warm differential, native/WASM/TypeScript and complete golden
   coverage for every supported declaration family.
 - [ ] Pass formatting, diff hygiene, warnings-denied Clippy/Rustdoc, locked all-feature workspace
