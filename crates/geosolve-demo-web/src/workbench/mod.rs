@@ -294,6 +294,25 @@ impl WorkbenchDocumentAuthority {
     }
 }
 
+/// Builds the canonical empty projectional workspace used by startup and New.
+///
+/// Keeping both routes on this shared boundary prevents the browser action
+/// from falling back to the retired flat event path or creating a second
+/// document/history authority.
+#[cfg(any(target_arch = "wasm32", test))]
+fn fresh_projectional_authority() -> Result<WorkbenchDocumentAuthority, String> {
+    let document = geosolve_sketch::SketchDocument::new(10.0).map_err(|error| error.to_string())?;
+    let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+        document,
+        geosolve_sketch::DocumentSolveRequest::default(),
+        geosolve_core::SolverConfig::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    let coordinator = geosolve_constraint_editor::RetainedEditorCoordinator::new(session)
+        .map_err(|error| error.to_string())?;
+    WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)
+}
+
 /// The established flat workbench remains intentionally unchanged behind its
 /// own listener installation. Dereferencing is therefore available only to
 /// that flat-only adapter; projectional startup installs a disjoint event path.
@@ -3546,9 +3565,7 @@ pub(crate) mod wasm {
             WorkspaceSnapshot::decode(snapshot)
                 .and_then(|value| super::WorkbenchDocumentAuthority::from_snapshot(&value))
         } else {
-            empty_coordinator().and_then(|coordinator| {
-                super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)
-            })
+            super::fresh_projectional_authority()
         };
         match restored {
             Ok(authority) if authority.is_projectional() => {
@@ -3556,10 +3573,7 @@ pub(crate) mod wasm {
             }
             Ok(authority) => install_flat(document, authority, "Ready".to_owned()),
             Err(error) => {
-                let fresh = empty_coordinator()
-                    .and_then(|coordinator| {
-                        super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)
-                    })
+                let fresh = super::fresh_projectional_authority()
                     .map_err(|fresh_error| JsValue::from_str(&fresh_error))?;
                 install_projectional(
                     document,
@@ -3767,7 +3781,7 @@ pub(crate) mod wasm {
         ] {
             set_disabled(&required(document, id)?, false)?;
         }
-        for action in ["new", "reproduction-copy", "reproduction-open"] {
+        for action in ["reproduction-copy", "reproduction-open"] {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
             {
@@ -3775,6 +3789,7 @@ pub(crate) mod wasm {
             }
         }
         for action in [
+            "new",
             "cancel",
             "finish",
             "geometry-role",
@@ -3822,6 +3837,37 @@ pub(crate) mod wasm {
 
     fn projectional_offset_authoring_active(wb: &ProjectionalWorkbench) -> bool {
         wb.offset_authoring.is_active()
+    }
+
+    fn reset_projectional_workbench(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+    ) -> Result<(), String> {
+        let authority = super::fresh_projectional_authority()?;
+        let viewport = required(document, "wb-viewport")
+            .map_err(|_| "the canvas viewport is unavailable".to_owned())?;
+        cancel_projectional_before_camera_change(&viewport, wb);
+
+        wb.authority = authority;
+        wb.authoring.deactivate();
+        clear_projectional_feature_authoring(wb);
+        clear_projectional_offset_authoring(wb);
+        let effects = wb
+            .editor_mut()
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        let _ = dispatch_projectional_effects(wb, effects);
+        wb.samples = super::samples::SampleCatalogState::default();
+        wb.camera.reset();
+        wb.pan_gesture = None;
+        *wb.pointer_moves.borrow_mut() = super::ProjectionalPointerMoveQueue::default();
+        wb.captured_pointer = None;
+        wb.outline_drag = None;
+        wb.option_overlay.close();
+        wb.construction_preview = None;
+        wb.problems = super::DismissibleDisclosure::default();
+        wb.notice = "New sketch created".into();
+        Ok(())
     }
 
     fn open_projectional_sample(wb: &mut ProjectionalWorkbench, key: &str) -> Result<(), String> {
@@ -6887,6 +6933,12 @@ pub(crate) mod wasm {
             let mut wb = click_workbench.borrow_mut();
             let mut durable = false;
             match action.as_deref() {
+                Some("new") => match reset_projectional_workbench(&click_document, &mut wb) {
+                    Ok(()) => durable = true,
+                    Err(error) => {
+                        wb.notice = format!("A new sketch could not be created: {error}")
+                    }
+                },
                 Some("undo") | Some("redo") => {
                     if let Ok(viewport) = required(&click_document, "wb-viewport") {
                         let _ = cancel_projectional_interaction(
@@ -14550,6 +14602,83 @@ mod tests {
                     .all(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
             );
         });
+    }
+
+    #[test]
+    fn projectional_new_authority_has_empty_scene_and_round_trips_as_workspace_v8() {
+        run_projectional_test_with_large_stack("projectional-new-authority", || {
+            let authority = super::fresh_projectional_authority().unwrap();
+            assert!(authority.is_projectional());
+            assert!(authority.flat_ref().is_none());
+
+            let projectional = authority.projectional_ref().unwrap();
+            let session = projectional.coordinator().presentation_session().unwrap();
+            let design = session.design_document();
+            let accepted = session
+                .accepted_state_for_current_input()
+                .unwrap()
+                .document();
+            for document in [design, accepted] {
+                assert!(document.points().is_empty());
+                assert!(document.curves().is_empty());
+                assert!(document.constraints().is_empty());
+                assert!(document.dimensions().is_empty());
+            }
+            assert!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .nodes()
+                    .values()
+                    .all(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. })),
+                "an empty native sketch may contain only its history-free bootstrap header",
+            );
+            assert_eq!(projectional.coordinator().intent().undo_len(), 0);
+            assert_eq!(projectional.coordinator().intent().redo_len(), 0);
+
+            let encoded = authority.snapshot().unwrap().encode().unwrap();
+            assert!(encoded.contains("\"version\":8"));
+            let decoded = WorkspaceSnapshot::decode(&encoded).unwrap();
+            let restored = WorkbenchDocumentAuthority::from_snapshot(&decoded).unwrap();
+            assert!(restored.is_projectional());
+            assert_eq!(restored.snapshot().unwrap().encode().unwrap(), encoded);
+        });
+    }
+
+    #[test]
+    fn projectional_new_button_is_enabled_and_routes_to_the_durable_reset() {
+        let html = include_str!("../../index.html");
+        assert!(html.contains("data-wb-action=\"new\">New</button>"));
+
+        let source = include_str!("mod.rs");
+        let availability = source
+            .split("fn set_projectional_surface_availability")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("fn projectional_feature_authoring_active")
+                    .next()
+            })
+            .expect("projectional availability implementation");
+        assert!(availability.contains("\"new\","));
+        let disabled = availability
+            .split("for action in [\"reproduction-copy\", \"reproduction-open\"]")
+            .nth(1)
+            .and_then(|source| source.split("for action in [").next())
+            .expect("projectional disabled-action block");
+        assert!(!disabled.contains("\"new\""));
+
+        let events = source
+            .split("fn install_projectional_events")
+            .nth(1)
+            .expect("projectional event implementation");
+        assert!(events.contains(
+            "Some(\"new\") => match reset_projectional_workbench(&click_document, &mut wb)"
+        ));
+        assert!(
+            events.contains("if durable {\n                save_projectional(&wb);\n            }")
+        );
     }
 
     #[test]
