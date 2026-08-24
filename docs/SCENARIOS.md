@@ -4304,13 +4304,11 @@ Pages publication is claimed; existing accepted M81 Pages bytes remain public au
 M83 adds no residual equation and does not reinterpret any earlier geometric oracle. The corpus
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
 existing solver. G1-G6 implementation and focused/proportional coverage are complete through
-M83-F001 through M83-F007. Initial nomination `232b83a` and post-F005 source `a621cdd` are
-withdrawn. The superseded post-F007 replacement source `fafea4e`, tree `ff75c36`, its clean gate,
-no-rebuild freeze, existing 3/3 plus focused F006/F007 2/2 frozen browser checks, and independent
-temporary/retained Tailscale byte verification remain historical evidence. Post-F007 architecture
-hardening supersedes that candidate. Current product source `1e70f3f`, tree `77251db`, passes the
-complete clean gate, exact no-rebuild freeze, 5/5 frozen-browser checks and temporary/retained
-Tailscale byte verification. Targeted human rechecks remain pending. M81 GitHub Pages bytes remain
+M83-F001 through M83-F009. Initial nomination `232b83a` plus sources `a621cdd`, `fafea4e` and
+`1e70f3f` are superseded historical evidence. Current product source `b0de5af`, tree `ff0b29d`,
+passes the complete clean gate, exact no-rebuild freeze, 7/7 local frozen-browser checks, 4/4
+temporary Tailscale checks, 4/4 retained Tailscale checks and independent temporary/retained byte
+verification. Targeted F001-F009 human rechecks remain pending. M81 GitHub Pages bytes remain
 public authority.
 
 ### M83-G1 — schema, alias and order independence
@@ -4447,8 +4445,9 @@ placement can be recomputed when missing, stale or malformed.
 
 ### Post-F007 architecture hardening
 
-This is an automation-owned architecture qualification slice rather than M83-F008. It changes no
-solver equation, branch or product interaction contract.
+This automation-owned architecture qualification slice predates and is separate from the later
+M83-F008/F009 product findings. It changes no solver equation, branch or product interaction
+contract.
 
 Round-trip canonical graph/session wire v2 and compare SHA-256 identities. Rewrite authentic v2
 fixtures into canonical legacy v1, including accepted and retained-failed current/Undo/Redo states,
@@ -4495,19 +4494,23 @@ byte ledgers have SHA-256
 `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. Historical retained service
 PID `4006665` is retired; its immutable snapshot remains historical evidence.
 
-Current source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
-`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, passes the post-hardening clean gate. Its exact
-no-rebuild snapshot `/tmp/geosolve-m83-post-hardening-uat.R821Vpjj` has aggregate
-`63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`; the existing 3/3 and focused
-F006/F007 2/2 suites pass, and both temporary/final eight-path byte ledgers have SHA-256
-`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`. The retained candidate is
-`http://100.94.63.83:8080/`, PID `2404961`. `docs/M83_UAT.md` owns both historical evidence and the
-current mechanical authority plus pending human scorecard. GitHub Pages remains on accepted M81
-until the current candidate is explicitly approved.
+Source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, and its post-hardening snapshot remain superseded
+historical evidence after F008/F009. Current source
+`b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
+`ff0b29dee074bc67a136c23feb5ee56c99deeba1`, passes the fresh clean gate. Its exact no-rebuild
+snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` has aggregate
+`f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`; the existing 3/3, focused
+F006/F007 2/2 and focused F008/F009 2/2 suites pass locally, and both focused suites pass on
+temporary and retained Tailscale listeners. Both temporary/final eight-path byte ledgers have
+SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. The retained candidate
+is `http://100.94.63.83:8080/`, PID `3376452`. `docs/M83_UAT.md` owns historical evidence, current
+mechanical authority and the pending U1-U9/F001-F009 human scorecard. GitHub Pages remains on
+accepted M81 until the current candidate is explicitly approved.
 
 ### M83-F001 — deterministic accepted drag identity and exact-once terminal capture
 
-Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and F008/F009 replacement-nominated; human recheck pending.
 A rejected newer sample may not erase the newest visible accepted preview, an exact release must
 reuse that accepted identity, and pointer-up/cancel/capture-loss may retire one capture only once.
 Suppressed outputs and retained-invalid current intent expose no direct-manipulation route.
@@ -4515,35 +4518,35 @@ Coordinator, editor, browser-adapter and frozen Playwright regressions own the c
 
 ### M83-F002 — Outline and cell before/after insertion semantics
 
-Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and F008/F009 replacement-nominated; human recheck pending.
 Upper/lower drop halves resolve to before/after slots after excluding the moving identity.
 Adjacent/end moves are visible; self, stale and cross-cell targets reject; accepted geometry and
 semantic identity are unchanged; Undo restores exact organization.
 
 ### M83-F003 — retained-invalid migrated/bootstrap reload authority
 
-Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and F008/F009 replacement-nominated; human recheck pending.
 Workspace v8 cold restore retains the newer failed intent and its history while reconstructing the
 exact prior accepted canvas from authenticated accepted bootstrap authority. Undo repairs it;
 corrupt or mismatched evidence rejects rather than blanking or inventing geometry.
 
 ### M83-F004 — exact-CAS Structured Source token edits
 
-Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and F008/F009 replacement-nominated; human recheck pending.
 Source token requests carry exact `IntentSessionIdentity` through browser, Rust RPC and TypeScript.
 A token kept across reorder rejects before numeric lookup and cannot mutate the declaration that
 newly occupies its old ID; source, history and accepted evidence remain exact.
 
 ### M83-F005 — stable input binding projection
 
-Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and F008/F009 replacement-nominated; human recheck pending.
 Structured Source and Inspector deterministically show every canonical input slot and exact stable
 typed port. Rebind replaces the old reference in both projections. Inspector exposes no input,
 button, `contenteditable` or typed edit marker for these references.
 
 ### M83-F006 — shared recipe drags commit deterministic preview/cold parity
 
-Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and F008/F009 replacement-nominated; human recheck pending.
 Reproduce by drawing a rectangle and a diagonal Segment which aliases two rectangle corners, then
 repeatedly dragging a shared corner. Before repair, each retained preview solved correctly but
 pointer-up could return `PreviewColdMismatch` and snap back: native continuation retained an edge's
@@ -4562,7 +4565,7 @@ No equation, residual, priority or tolerance changes.
 
 ### M83-F007 — New creates a fresh projectional workspace
 
-Status: repaired, clean-qualified and post-hardening replacement-nominated; human recheck pending.
+Status: repaired, clean-qualified and F008/F009 replacement-nominated; human recheck pending.
 The projectional availability map had disabled New and supplied no event route, making it difficult
 to reset a populated sketch. Startup and New now share one canonical empty projectional authority.
 New clears durable authored geometry/declarations/history and transient interaction/authoring
@@ -4570,6 +4573,45 @@ state, returns to Select, resets the camera and autosaves workspace v8. Native a
 the empty accepted and design documents, empty Undo/Redo, projectional v8 round trip, enabled
 action and durable event route. The frozen browser scenario additionally proves that both a
 populated scene and its History clear and remain empty after reload.
+
+### M83-F008 — complete projectional reproduction transport
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. On a fresh
+projectional workspace, create a rectangle and a shared diagonal so both accepted geometry and
+unified intent history are populated. Copy repro must be enabled and emit one bounded
+`GEOSOLVE_REPRO_V1` payload whose decoded workspace is v8, whose current/accepted intent authority
+and Undo history are complete, and whose disposable annotation cache is absent. Clipboard denial
+or an insecure origin must leave the entire payload selected for manual copy.
+
+Close the dialog, invoke New and load the saved payload. Decode, workspace validation and
+projectional reconstruction must all complete before live authority changes; the exact scene,
+stable IDs, current history and deterministic reproduction payload return. Change the payload
+checksum and attempt another load. It must reject visibly with the dialog still open and leave the
+complete live authority unchanged. Overlay close/Escape restores focus ownership, and a late
+clipboard completion from an earlier request cannot overwrite newer text or state.
+
+The Rust persistence regression owns exact bounded v8 authority/history round trip. Thin adapter
+coverage owns enabled controls and complete routes; the frozen browser scenario owns Copy-New-Load
+round trip and atomic corrupt-payload rejection. No new solver or persistence language is added.
+
+### M83-F009 — suppressed Fillet parents and frame-local scene failure
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Create a
+rectangle, apply a computed Fillet to one corner, then suppress that declaration. The suppressed
+feature and corner identities remain editable and its evaluation becomes typed Suppressed, but it
+publishes no computed edge or radius affordance. Every finite native parent curve is visible; cold
+restore agrees; Undo restores the same active feature/corner and Redo restores the same suppressed
+state. Independent accepted-state validation must pass throughout.
+
+Scene composition must distinguish a legitimate history position with no accepted authority from
+an actual composition error. The first produces `data-scene-state="empty"` without inventing an
+error. The second produces `data-scene-state="unavailable"` and a visible frame-local `Canvas scene
+unavailable: ...` message instead of disappearing through `.ok()`. A valid next frame returns to
+`ready` and restores the durable workbench notice, so no stale global error persists.
+
+The projectional Fillet owner regression covers suppression, restore and Undo/Redo. The demo owner
+test covers empty/unavailable/ready status semantics, and the frozen browser scenario covers the
+reported rectangle-Fillet suppression path without blank geometry or stale canvas failure.
 
 ## Frozen near-singular fixtures
 

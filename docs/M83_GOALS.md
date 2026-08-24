@@ -2,8 +2,9 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F007 repair, post-F007 architecture hardening,
-clean qualification and immutable Tailscale nomination complete; focused human UAT pending**.
+Status: **implementation, M83-F001 through M83-F009 repair, post-F007 architecture hardening,
+clean qualification and immutable F008/F009 Tailscale replacement nomination complete; focused
+human UAT pending**.
 ADR 0040 is the active architecture. The rejected chronological candidate is preserved only on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; it is not a compatibility target.
 
@@ -36,6 +37,9 @@ validated flat accepted scene authoritative.
 - Reconstruct that exact accepted materialization when retained-invalid migrated/bootstrap v8
   intent is reloaded, while preserving current failed intent, history and Undo.
 - Make cold canonical reconstruction the authority and prove warm/cold semantic parity.
+- When a computed Fillet is suppressed, retain its declaration and exact identity but publish no
+  computed edge/affordance and do not hide its finite native parents. Restore, Undo and Redo must
+  preserve the same feature/corner identity.
 
 ### M83-G3 — one mutation and history protocol
 
@@ -82,6 +86,9 @@ validated flat accepted scene authoritative.
 - Keep New available on the projectional surface. It creates the same canonical empty workspace-v8
   authority as fresh startup, clears authored geometry/declarations/history and transient
   authoring state, returns to Select, resets the camera and saves the new workspace.
+- Distinguish legitimate empty accepted authority from scene-composition failure. The latter is a
+  visible frame-local canvas status, never a durable stale error, and clears on the next valid
+  composition.
 
 ### M83-G6 — host surface and persistence
 
@@ -93,6 +100,9 @@ validated flat accepted scene authoritative.
   higher-level declarations.
 - Round-trip graph/instance/organization/external identities, accepted evidence, reservations,
   tombstones and bounded history canonically.
+- Enable Copy/Load repro for projectional workspaces. Copy transports the complete bounded v8
+  authority and unified history with manual-selection fallback; Load validates the complete
+  snapshot before atomic replacement. Annotation layout remains omitted and recomputable.
 
 ### Post-F007 architecture hardening
 
@@ -132,16 +142,16 @@ validated flat accepted scene authoritative.
 - The exact no-rebuild candidate is frozen and byte-verified over Tailscale. GitHub Pages remains
   on the accepted M81 product until explicit M83 human approval.
 
-The initial `232b83a` nomination and post-F005 source `a621cdd` are withdrawn by M83-F001 through
-M83-F007. Source `fafea4e`, tree `ff75c36`, its complete clean gate, exact no-rebuild freeze, 5/5
-frozen-browser checks and temporary/retained served-byte records remain historical post-F007
-evidence. The later architecture-hardening pass supersedes that candidate. Current source
-`1e70f3f`, tree `77251db`, passes the fresh clean gate; its exact no-rebuild snapshot
-`/tmp/geosolve-m83-post-hardening-uat.R821Vpjj`, aggregate
-`63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`, passes 5/5 frozen-browser
-checks and temporary/retained served-byte verification and is live at
-`http://100.94.63.83:8080/`. M83-U1 through M83-U9 and targeted finding rechecks remain pending
-human evidence; accepted M81 GitHub Pages bytes remain public authority.
+The initial `232b83a` nomination, post-F005 source `a621cdd`, post-F007 source `fafea4e` and post-
+hardening source `1e70f3f` remain historical evidence after M83-F001 through M83-F009. Current
+source `b0de5af`, tree `ff0b29d`, passes the fresh clean gate; its exact no-rebuild snapshot
+`/tmp/geosolve-m83-f008-f009-uat.zLfB22EK`, aggregate
+`f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`, passes 7/7 local browser
+checks and 4/4 on both temporary and retained Tailscale listeners. Both temporary/final eight-path
+byte ledgers have SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`;
+the candidate is live at `http://100.94.63.83:8080/`, PID `3376452`. M83-U1 through M83-U9 and
+F001-F009 human rechecks remain pending evidence; accepted M81 GitHub Pages bytes remain public
+authority.
 
 ## Non-goals
 

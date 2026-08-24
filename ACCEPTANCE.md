@@ -3234,8 +3234,9 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation, M83-F001 through M83-F007 repair, post-F007 architecture hardening,
-clean qualification and immutable Tailscale nomination complete; focused human UAT pending.
+Status: implementation, M83-F001 through M83-F009 repair, post-F007 architecture hardening,
+clean qualification and immutable F008/F009 Tailscale replacement nomination complete; focused
+human UAT pending.
 ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no
 human evidence or accepted product claim exists yet.
 
@@ -3302,6 +3303,14 @@ human evidence or accepted product claim exists yet.
   workspace-v8 authority used by startup. It clears durable authored geometry/declarations/history
   and transient authoring/problem/camera state, returns to Select and autosaves; it cannot route
   through the retired flat authority.
+- Copy repro emits the complete bounded workspace-v8 projectional authority and unified intent
+  history through `GEOSOLVE_REPRO_V1`; clipboard failure keeps the full text selected. Load repro
+  validates the complete snapshot before atomic replacement and never makes annotation layout
+  authoritative.
+- A suppressed computed Fillet remains an editable declaration but contributes no computed edge,
+  radius affordance or native-parent hiding; restore, Undo and Redo preserve exact feature/corner
+  identity. Legitimate absent authority renders an empty scene, while any other scene-composition
+  failure is visible for that frame and clears automatically after valid composition resumes.
 - Compatible moved-annotation positions may round-trip only as the existing disposable
   presentation cache. They are outside intent/session identity, dependency scheduling,
   materialization, solver input and composite history; missing, stale or corrupt cache state is
@@ -3326,20 +3335,22 @@ and final served-byte ledgers both have SHA-256
 `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. That post-F007 service,
 PID `4006665`, is retired and its snapshot remains historical evidence.
 
-The current post-hardening product source is
-`1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
-`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`. Its complete clean release gate passes; the 386,013-
-byte, 5,667-line log has SHA-256
-`53e9da5f91978d90899c2a54a6a01c9b16f0616c9b76ea93dde8d57b78416136`. The exact no-rebuild
-snapshot `/tmp/geosolve-m83-post-hardening-uat.R821Vpjj` has ordered-manifest aggregate
-`63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`; its existing 3/3 and focused
-F006/F007 2/2 browser suites pass. The focused suite also passes on temporary and retained
-Tailscale listeners. Both eight-path served-byte ledgers have SHA-256
-`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`. The retained candidate is
-`http://100.94.63.83:8080/`, service `geosolve-m83-uat.service`, PID `2404961`; complete evidence is
-in `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`. M83-U1 through M83-U9, targeted
-finding rechecks, Pages publication and milestone closure remain pending. No automated result is
-human acceptance evidence, and GitHub Pages continues to serve accepted M81.
+Post-hardening product source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, is superseded historical evidence after F008/F009.
+The current product source is `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
+`ff0b29dee074bc67a136c23feb5ee56c99deeba1`. Its complete clean release gate passes; the
+381,514-byte, 5,645-line log `/tmp/geosolve-m83-f008-f009-release-gate.log` has SHA-256
+`fc07730eed2c158c234828700ea9fbed1b6c7f0e396c5464baab20063e967ed1`. The exact no-rebuild
+snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` has ordered-manifest aggregate
+`f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`. Existing 3/3, focused
+F006/F007 2/2 and focused F008/F009 2/2 browser suites pass locally (7/7 total); both focused
+suites pass on temporary and retained Tailscale listeners (4/4 each). Both eight-path served-byte
+ledgers have SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`.
+The retained candidate is `http://100.94.63.83:8080/`, service `geosolve-m83-uat.service`, PID
+`3376452`; complete evidence is in `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`.
+M83-U1 through M83-U9 and F001-F009 human rechecks, Pages publication and milestone closure remain
+pending. No automated result is human acceptance evidence, and GitHub Pages continues to serve
+accepted M81.
 
 ## Regression and oracle policy
 

@@ -39,15 +39,20 @@ construction/NURBS UAT and certified all-family visual profiles.
   and Design projections resolve one visible stable declaration owner, including closure deletion
   for retained-invalid Profile Offset. M76 annotation layout remains a disposable presentation-
   only workspace cache outside graph, materialization and history identity. M83-F001 through
-  M83-F007 are implemented; the `232b83a`, `a621cdd` and `fafea4e` nominations are historical
-  because a post-F007 architecture-hardening pass supersedes them. That pass
+  M83-F009 are implemented; the `232b83a`, `a621cdd`, `fafea4e` and `1e70f3f` nominations are
+  historical because architecture hardening and the later F008/F009 replacement supersede them.
+  The hardening pass
   introduces canonical SHA-256 graph/session wire v2 with strictly authenticated legacy-v1
   migration, cached ordinary identity reads with independent validation hashing, complete nested-
   checkpoint/evidence/ownership validation, central declaration descriptors, compact graph/source
   reads, typed bounded RPC mutation receipts and exact prepared Fillet/Offset publication. It adds
-  no equation, constraint, priority or JavaScript solver. Source `1e70f3f`, tree `77251db`, passes
-  the complete clean gate and owns the frozen Tailscale UAT candidate; explicit human UAT remains
-  required and GitHub Pages continues to serve accepted M81.
+  no equation, constraint, priority or JavaScript solver. F008 carries the complete validated
+  workspace-v8 projectional authority and unified history through the existing bounded
+  `GEOSOLVE_REPRO_V1` envelope; F009 excludes suppressed computed Fillets from native-parent
+  hiding and distinguishes empty accepted authority from a frame-local scene-composition error.
+  Source `b0de5af`, tree `ff0b29d`, passes the complete clean gate and owns the frozen Tailscale
+  UAT candidate; explicit human UAT remains required and GitHub Pages continues to serve accepted
+  M81.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -873,9 +878,17 @@ intent session owns accepted authority; an absent nested authority cannot be rep
 flat design/accepted fields, including the all-absent case. The web adapter renders the data-only
 source and compact graph snapshot supplied by the editor and uses the strict typed RPC client; it
 does not expand bootstrap payload bytes or infer field defaults. The former `fafea4e` artifact is
-historical pre-hardening evidence. Exact post-hardening source `1e70f3f`, tree `77251db`, passes the
-clean gate, no-rebuild freeze, focused browser checks and temporary/retained byte verification.
-M83 remains unaccepted until human UAT passes; public Pages still serves accepted M81.
+historical pre-hardening evidence and `1e70f3f` is the superseded post-hardening candidate. F008
+enables Copy/Load repro only by encoding and validating the complete workspace snapshot before
+atomically replacing live projectional authority; annotation layout is still discarded as a
+disposable cache. Clipboard denial or an insecure origin leaves the complete payload selected for
+manual copy. F009 composes native-parent hiding only from active computed Fillets. Projectional
+scene errors are never erased with `.ok()`: legitimate missing accepted authority renders an empty
+state, other failures render `data-scene-state="unavailable"` and a frame-local `Canvas scene
+unavailable: ...` status, and the next successful frame clears it. Exact replacement source
+`b0de5af`, tree `ff0b29d`, passes the clean gate, no-rebuild freeze, focused browser checks and
+temporary/retained byte verification. M83 remains unaccepted until human UAT passes; public Pages
+still serves accepted M81.
 
 Workspace encode/decode shares the reproduction codec's 64 MiB admitted-workspace ceiling. A
 narrow version probe and disposable-cache visitor avoid an arbitrary `serde_json::Value` tree;
@@ -1699,8 +1712,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `d1e2613`; rollback `fa54f30` restores exact M81 tree `17b2eea` and passes the complete release
   gate. The rejected UAT service is retired and was never published to Pages. Any future attempt
   requires a newly approved architecture rather than reactivating ADR 0038.
-- M83: active and not yet accepted. ADR 0040's projectional graph, F001-F007 interaction repairs
+- M83: active and not yet accepted. ADR 0040's projectional graph, F001-F009 interaction repairs
   and post-F007 architecture hardening are implemented over the unchanged M81 solver/domain
-  baseline. Prior nominations through `fafea4e` are historical; source `1e70f3f`, tree `77251db`,
+  baseline. Prior nominations through `1e70f3f` are historical; source `b0de5af`, tree `ff0b29d`,
   is the clean-qualified frozen Tailscale candidate. Focused human UAT remains required, and GitHub
   Pages continues to serve accepted M81.

@@ -276,10 +276,10 @@ human gate passes. It adds the equation-free `geosolve-sketch-intent` crate, pro
 materialization/read DTOs in `geosolve-constraint-editor`, the demo-local workspace-v8 envelope and
 the `@geosolve/intent` TypeScript package. These surfaces do not change canonical sketch v1-v4,
 the native solver equation/priority catalog or the accepted M81 Pages product. M83-F001 through
-M83-F007 are implemented, but their `fafea4e` nomination is historical because the later
-architecture-hardening pass supersedes it. Post-hardening source `1e70f3f`, tree `77251db`, passes
-the complete clean gate and owns the frozen, browser/byte-verified Tailscale candidate. Focused
-human UAT remains pending, and public GitHub Pages continues to serve M81.
+M83-F009 are implemented, but nominations through `1e70f3f` are historical because architecture
+hardening and the later F008/F009 replacement supersede them. Source `b0de5af`, tree `ff0b29d`,
+passes the complete clean gate and owns the frozen, browser/byte-verified Tailscale candidate.
+Focused human UAT remains pending, and public GitHub Pages continues to serve M81.
 
 Canonical intent graph/session output is wire v2 and uses SHA-256 for component/content identity.
 The importer accepts canonical experimental v1 only after its FNV-1a-derived outer and nested
@@ -311,6 +311,17 @@ The demo-local workspace-v8 envelope is admitted only within the 64 MiB reproduc
 limit, and its disposable annotation-layout string is capped at 4 MiB. These host resource bounds
 may reject oversized experimental M83 snapshots which the earlier provisional decoder attempted
 to parse; canonical sketch v1-v4 and accepted M81 persistence are unchanged.
+
+M83-F008 changes only the non-published demo host integration around the existing
+`GEOSOLVE_REPRO_V1` envelope. Copy encodes the complete already-authenticated workspace-v8
+projectional snapshot, including its unified intent history; Load decodes, bounds and validates the
+complete snapshot before atomically replacing live authority. Annotation layout remains omitted as
+disposable presentation state, and existing flat-coordinator transport remains source-compatible.
+M83-F009 is likewise an owner/presentation correction: a suppressed computed Fillet no longer
+participates in active native-parent hiding, while a non-empty projectional scene-composition
+failure is surfaced for one frame instead of being collapsed into legitimate absent authority.
+Neither finding adds a public library type, solver equation, constraint, persistence version or
+supported wire promise.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

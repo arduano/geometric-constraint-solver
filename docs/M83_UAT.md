@@ -2,9 +2,10 @@
 
 # M83 focused UAT — Projectional sketch design intent
 
-Status: **post-F007 architecture hardening clean-qualified and immutably nominated; focused human
-UAT pending**. Automation owns exact identities, equations, residuals, persistence and
-deterministic reconstruction; human review owns clarity and interaction feel.
+Status: **M83-F001 through M83-F009 and post-F007 architecture hardening clean-qualified; the
+immutable F008/F009 replacement is nominated and focused human UAT remains pending**. Automation
+owns exact identities, equations, residuals, persistence and deterministic reconstruction; human
+review owns clarity and interaction feel.
 
 ## Candidate authority
 
@@ -45,7 +46,7 @@ Temporary byte/browser listeners were retired only after their passes; the retai
 passed independent byte and focused browser verification. Complete freeze, browser and serving
 evidence is in `/tmp/geosolve-m83-f007-freeze-evidence.y5GbCJ`.
 
-Current mechanical UAT authority:
+Superseded post-hardening mechanical authority:
 
 - Product source: `1e70f3f4dc6778881ce180b2922235a6cc103cf7`.
 - Product tree: `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`.
@@ -64,14 +65,44 @@ Current mechanical UAT authority:
   retired after its byte and browser passes.
 - Retained exact served-byte verification:
   `/tmp/geosolve-m83-post-hardening-final-verify.456o9Uey/results.tsv`, with the same SHA-256.
-- Retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, PID `2404961`).
+- Historical retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, retired
+  PID `2404961`); that URL now serves the current authority below.
 - Complete freeze, browser, service and byte evidence:
   `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`.
 
-Both current byte-verification passes cover `/` plus all seven assets: HTTP 200, zero redirects,
+Both superseded byte-verification passes cover `/` plus all seven assets: HTTP 200, zero redirects,
 no `Location` or `Content-Encoding`, exact media type/length/body and root equality with
-`index.html`. Temporary listeners were retired only after passing; the retained service then
-passed independent byte and focused-browser verification.
+`index.html`. F008/F009 retired PID `2404961` only after their replacement passed; the immutable
+snapshot and complete evidence remain historical.
+
+Current mechanical UAT authority:
+
+- Product source: `b0de5af55a8c9fe3550137cda91dae63c87666b1`.
+- Product tree: `ff0b29dee074bc67a136c23feb5ee56c99deeba1`.
+- Clean gate: exit 0 on 2026-08-25 at 09:33:51 AEST after 975 seconds; 381,514-byte,
+  5,645-line log `/tmp/geosolve-m83-f008-f009-release-gate.log`, SHA-256
+  `fc07730eed2c158c234828700ea9fbed1b6c7f0e396c5464baab20063e967ed1`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` (directory `0555`; seven
+  regular non-symlink files `0444`).
+- Ordered file-manifest aggregate:
+  `f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`.
+- Frozen browser verification: existing 3/3, focused F006/F007 2/2 and focused F008/F009 2/2
+  suites pass locally (7/7 total); both focused suites pass on temporary and retained Tailscale
+  endpoints (4/4 each).
+- Temporary exact served-byte verification:
+  `/tmp/geosolve-m83-f008-f009-temp-verify.uNTvzMdz/results.tsv`, SHA-256
+  `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`; temporary PID `3349639`
+  is retired after its byte and browser passes.
+- Retained exact served-byte verification:
+  `/tmp/geosolve-m83-f008-f009-final-verify.na1TWg0E/results.tsv`, with the same SHA-256.
+- Retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, PID `3376452`).
+- Complete freeze, browser, service and byte evidence:
+  `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`.
+
+Both current byte-verification passes cover `/` plus all seven assets: HTTP 200, zero redirects,
+exact media type/length/body and root equality with `index.html`. Temporary listeners were retired
+only after passing; the retained service then passed independent byte and focused-browser
+verification.
 
 GitHub Pages deliberately remains on accepted M81 bytes. M83-U1 through M83-U9 are pending and no
 automated result below is presented as human evidence.
@@ -89,9 +120,9 @@ extra hands-on scorecard rows.
 | M83-U2 | Select declarations in Outline and edit supported fields in the Inspector. Move declarations and cells by buttons and by upper/lower-half drag/drop, including adjacent/end moves. | Typed edits update the accepted sketch; before/after organization reorder changes only presentation and never geometry, IDs, constraints or DOF; Undo restores exact order. | pending |
 | M83-U3 | Open Structured Source, inspect stable input bindings, rebind through code/RPC, then reorder and attempt an edit from a stale token before editing a current numeric/branch token. | Source and Inspector show the same updated stable binding, Inspector inputs are read-only, stale tokens reject without retargeting, and current typed edits match canvas behavior while invalid intent retains the prior accepted canvas. | pending |
 | M83-U4 | Drag free points and curve controls repeatedly in large samples, including reversal, one accepted preview followed by a rejected sample, delayed capture loss, and six successive drags of a rectangle corner shared with a diagonal. | Preview remains smooth; release commits the newest visible accepted preview exactly once, derived rectangle/polyline branch round-off never causes snap-back, explicit Segment/Midpoint Line branches remain stable, delayed/duplicate terminals are inert, and Undo restores the complete pre-drag state. Driving/fixed properties are never silently rewritten. | pending |
-| M83-U5 | Change Fillet radius and Offset distance through their dedicated gestures, then delete their declarations from canvas/tree and Outline/source selection. | Property gestures remain intuitive; every surface names one visible declaration owner, deletion removes the complete owned feature/association in one action and one Undo restores it. Private Offset helpers never become invisible mutation targets. | pending |
+| M83-U5 | Change Fillet radius and Offset distance through their dedicated gestures, suppress and restore a rectangle Fillet, then delete the declarations from canvas/tree and Outline/source selection. | Property gestures remain intuitive; suppressing a Fillet removes its computed edge/affordance but restores every finite native parent without a blank canvas or stale error; Undo/Redo restores exact identity. Every surface names one visible declaration owner, deletion removes the complete owned feature/association in one action and one Undo restores it. Private Offset helpers never become invisible mutation targets. | pending |
 | M83-U6 | Undo/Redo a mixture of canvas, Inspector, source and organization changes, then inspect History. | One coherent history is observed; History is read-only and no action is duplicated or skipped. | pending |
-| M83-U7 | Save/reload ordinary and retained-invalid v8 workspaces, then load representative v1-v6 workspaces/samples and continue editing. | v8 returns exactly; retained-invalid migrated/bootstrap intent preserves the prior accepted canvas, current failure and Undo; older flat scenes restore honestly without invented recipe history or blank geometry. | pending |
+| M83-U7 | Save/reload ordinary and retained-invalid v8 workspaces, Copy repro, New, Load the copied repro, reject a deliberately corrupt payload, then load representative v1-v6 workspaces/samples and continue editing. | v8 and the copied complete projectional authority/history return exactly; annotation layout may recompute; corrupt repro rejects without changing the live scene. Retained-invalid migrated/bootstrap intent preserves the prior accepted canvas, current failure and Undo; older flat scenes restore honestly without invented recipe history or blank geometry. | pending |
 | M83-U8 | Exercise an AI/RPC or packaged TypeScript patch example and then continue editing its output in the GUI. | Code-authored declarations use the same stable references and typed Inspector/canvas behavior; no separate JS solver or opaque uneditable result appears. | pending |
 | M83-U9 | Populate a sketch and its History, enter an authoring tool, then press New. | New is enabled; geometry and design history clear, Select becomes active, transient authoring/problems/camera state reset, and reload returns the same empty workspace v8. | pending |
 
@@ -110,6 +141,8 @@ uneditable code-authored output withdraws the candidate and opens an owning-laye
 | M83-F005 | U3 stable input binding visibility and read-only Inspector presentation | pending |
 | M83-F006 | U4 repeated rectangle/shared-diagonal drags commit without snap-back while explicit branches and Undo remain exact | pending |
 | M83-F007 | U9 enabled New clears the projectional workspace and persists the empty Select state | pending |
+| M83-F008 | U7 enabled Copy/Load repro round-trips complete projectional authority/history and corrupt input rejects atomically | pending |
+| M83-F009 | U5 suppressed Fillet reveals native parents, removes computed affordances and never leaves a hidden/stale canvas failure | pending |
 
 Moved annotation positions are intentionally presentation-only cache state. Workspace reload may
 retain compatible positions, but source/Outline/History, solver materialization and Undo/Redo must

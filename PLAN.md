@@ -5596,8 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F007 repair, post-F007 architecture hardening,
-clean qualification and immutable Tailscale nomination complete; focused human UAT pending**.
+Status: **implementation, M83-F001 through M83-F009 repair, post-F007 architecture hardening,
+clean qualification and immutable F008/F009 Tailscale replacement nomination complete; focused
+human UAT pending**.
 ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
@@ -5656,6 +5657,12 @@ chronological owner-rewrite candidate remains archived at
 - [x] Resolve M83-F007: enable New on the projectional surface and reset through the canonical
   empty workspace-v8 authority, clearing authored geometry/declarations/history and transients,
   returning to Select and autosaving without falling back to the retired flat path.
+- [x] Resolve M83-F008: enable projectional Copy/Load repro controls, encode the complete bounded
+  workspace-v8 authority and unified intent history, validate before atomic replacement, preserve
+  manual-copy fallback and keep annotation layout disposable.
+- [x] Resolve M83-F009: exclude suppressed computed Fillets from active native-parent hiding so
+  suppression restores their ordinary parents; distinguish legitimate empty authority from
+  frame-local scene-composition failure and clear that failure on the next valid frame.
 - [x] Complete the post-F007 trust-boundary audit without changing sketch mathematics: move
   canonical graph/session identity to SHA-256 wire v2, strictly validate and migrate legacy-v1
   FNV fingerprints, cache ordinary identity reads, and independently rederive every cached,
@@ -5684,6 +5691,9 @@ chronological owner-rewrite candidate remains archived at
   browser checks and exact temporary/retained served-byte evidence.
 - [x] Freeze the post-hardening gate output without rebuilding, re-run the focused frozen-browser
   checks, byte-verify it first on a temporary listener and then replace the retained UAT service.
+- [x] Pass one fresh clean release gate from committed F008/F009 source, freeze its exact output
+  without rebuilding, pass 7/7 local plus 4/4 temporary and 4/4 retained Tailscale browser checks,
+  and byte-verify `/` plus all seven files before replacing the retained service.
 - [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U9.
 - [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
   listener and close the milestone.
@@ -5700,21 +5710,24 @@ and final served-byte ledgers both have SHA-256
 `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. That historical service,
 PID `4006665`, is retired and its immutable snapshot remains preserved.
 
-Current mechanical UAT authority is product source
-`1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
-`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`. Its complete clean release gate passes with log
-SHA-256 `53e9da5f91978d90899c2a54a6a01c9b16f0616c9b76ea93dde8d57b78416136`.
-The exact no-rebuild snapshot `/tmp/geosolve-m83-post-hardening-uat.R821Vpjj` is frozen at
-ordered-manifest aggregate `63730632c228e39f5243dde0d2f906eb493e5e61bd916faece6615f61adc9aef`.
-The existing 3/3 suite and focused F006/F007 2/2 suite pass on those bytes; the focused suite also
-passes on both temporary and retained Tailscale listeners. Temporary and final eight-path served-
-byte ledgers both have SHA-256
-`5fe8485fc0c0c16ea00b745c69add9303e2665eb830bb88a890b53ddc4a77259`. The exact candidate is live
-at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `2404961`. Complete evidence is
-in `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`. All human UAT rows, Pages
-publication and milestone closure remain pending; GitHub Pages continues to serve accepted M81.
-The documentation-only descendant recording this evidence does not replace product source
-`1e70f3f`, tree `77251db`, or rebuild or mutate the frozen artifact.
+The post-hardening source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
+`77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, and its immutable snapshot remain historical evidence
+after F008/F009. Current mechanical UAT authority is product source
+`b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
+`ff0b29dee074bc67a136c23feb5ee56c99deeba1`. Its fresh complete clean release gate passes; the
+381,514-byte, 5,645-line log `/tmp/geosolve-m83-f008-f009-release-gate.log` has SHA-256
+`fc07730eed2c158c234828700ea9fbed1b6c7f0e396c5464baab20063e967ed1`. The exact no-rebuild
+snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` is frozen at ordered-manifest aggregate
+`f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`. The existing 3/3,
+focused F006/F007 2/2 and focused F008/F009 2/2 suites pass locally (7/7 total); the two focused
+suites pass on both temporary and retained Tailscale listeners (4/4 each). Temporary and final
+eight-path served-byte ledgers both have SHA-256
+`b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. The exact candidate is live
+at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `3376452`. Complete evidence is
+in `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. All M83-U1 through M83-U9 rows,
+F001-F009 human rechecks, Pages publication and milestone closure remain pending; GitHub Pages
+continues to serve accepted M81. The documentation-only descendant recording this evidence does
+not replace product source `b0de5af`, tree `ff0b29d`, or rebuild or mutate the frozen artifact.
 
 Gate: organization, names and source row order cannot change materialization; exact before/after
 organization moves cannot change geometry; every accepted
@@ -5723,9 +5736,11 @@ invalid intent and retained-invalid reload retain the prior accepted scene; ordi
 remains responsive and commits the newest authenticated accepted sample only once to writable free
 leaves; derived Polyline/rectangle branch round-off cannot reject an otherwise exact same-cell
 commit while explicit Segment/Midpoint Line branches remain exact; New produces one canonical empty
-projectional workspace; stale source tokens fail exact CAS, stable input bindings remain visible
-across rebind, one coherent history spans GUI/source/code edits, and all existing constraint
-mathematics remain solely in the native Rust solver.
+projectional workspace; Copy/Load transports complete validated projectional authority without
+making annotation layout authoritative; suppressed Fillets reveal finite native parents; scene
+composition failures are visible and non-stale; stale source tokens fail exact CAS, stable input
+bindings remain visible across rebind, one coherent history spans GUI/source/code edits, and all
+existing constraint mathematics remain solely in the native Rust solver.
 
 ## Explicit non-goals
 

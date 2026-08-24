@@ -135,7 +135,7 @@ complete; `6874aa1` remains qualified product authority.
 M80 completes the accepted native topology-preserving Profile Offset and native line-line Fillet
 publication cut; M81 completes the accepted behavior-preserving core consolidation. M82 is closed
 as a deferred, fully rolled-back computed Offset exploration. M83 is active and not yet accepted:
-ADR 0040's projectional Design Intent Graph, M83-F001 through M83-F007 and a subsequent
+ADR 0040's projectional Design Intent Graph, M83-F001 through M83-F009 and a subsequent
 architecture-hardening pass are implemented over the unchanged M81 solver authority. The
 hardening pass introduces SHA-256 canonical graph/session wire v2 with strict legacy-v1 migration,
 cached ordinary identity reads with independent validation hashing, complete nested-checkpoint/
@@ -144,18 +144,21 @@ descriptors, compact data-only read projections and a strict typed RPC/TypeScrip
 mutations return bounded receipts while explicit Snapshot performs the full read. The legacy
 FNV-1a-derived v1 digest is validated for deterministic migration only; it is not cryptographically
 secure. RPC and workspace host surfaces now share explicit 16/64 MiB receipt/response and 64 MiB
-workspace bounds, with disposable annotation JSON capped at 4 MiB. Prior M83 nominations through
-post-F007 source `fafea4e` are historical. Post-hardening source `1e70f3f`, tree `77251db`, passes
-the complete clean gate and owns the frozen, browser/byte-verified Tailscale candidate. Focused
-human UAT remains pending, and public GitHub Pages continues to serve accepted M81.
+workspace bounds, with disposable annotation JSON capped at 4 MiB. F008 restores complete
+workspace-v8 projectional Copy/Load repro transport; F009 keeps suppressed Fillet parents visible
+and makes scene-composition failure a truthful frame-local canvas status. Prior M83 nominations
+through post-hardening source `1e70f3f` are historical. Replacement source `b0de5af`, tree
+`ff0b29d`, passes the complete clean gate and owns the frozen, browser/byte-verified Tailscale
+candidate. Focused human UAT remains pending, and public GitHub Pages continues to serve accepted
+M81.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M83 post-F007 architecture hardening clean-qualified
-   and frozen while focused UAT remains pending over the accepted M81 baseline.
+3. `PLAN.md` — authoritative roadmap, with M83 F008/F009 replacement clean-qualified and frozen
+   while focused UAT remains pending over the accepted M81 baseline.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -175,7 +178,7 @@ Physics, collision and a production rendering system remain out of scope.
 15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
 16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — implemented
-    projectional Design Intent Graph contract, F001-F007 historical nomination ledger, post-F007
+    projectional Design Intent Graph contract, F001-F009 finding/nomination ledger, post-F007
     architecture hardening, current immutable nomination and pending scorecard.
 
 ## Workspace
@@ -202,8 +205,8 @@ Physics, collision and a production rendering system remain out of scope.
   workbench, M60 added public advanced-operation/topology presentation plus the versioned workspace
   envelope, M67 removed its raw developer evidence/topology cards, M77 renders only headless curve
   controls/properties, M78 presents only headless geometry families, stages and recipe previews,
-  and M83 consumes editor-owned Outline/data-only source/History/Snapshot/RPC projections without
-  owning geometry equations.
+  and M83 consumes editor-owned Outline/data-only source/History/Snapshot/RPC projections plus the
+  complete validated workspace-v8 reproduction transport without owning geometry equations.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
 
@@ -213,9 +216,9 @@ cancellation, stable diagnostics and separate sketch-operation/production-topolo
 companions. The host continues to own expressions, B-rep projection, feature history
 and application undo. M40.7, M53 and M61-M81 have explicit acceptance dispositions. M83 now
 implements a projectional intent/session layer while deliberately retaining the native solver as
-accepted geometry authority; post-F007 architecture hardening supersedes the prior nomination, and
-the fresh clean freeze passes while human UAT remains pending. Public Pages remains on accepted
-M81. New milestones normally end in hands-on UAT after objective automation; M74 records an
+accepted geometry authority; F008/F009 supersede the post-hardening nomination, and the fresh
+clean freeze passes while human UAT remains pending. Public Pages remains on accepted M81. New
+milestones normally end in hands-on UAT after objective automation; M74 records an
 explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
 mobile support requirement.
