@@ -652,6 +652,90 @@ fn computed_fillet_is_exactly_cold_reconstructed_and_composed() {
 }
 
 #[test]
+fn suppressed_computed_fillet_keeps_native_parents_visible_and_restores_exactly() {
+    let (mut session, viewport) = fixture();
+    let node = create_fillet(&mut session, viewport);
+    let active = session.coordinator().accepted_materialization().unwrap();
+    let feature = active.features.features()[0].id;
+    let ComputedFeatureDefinition::FilletSet(fillet) = &active.features.features()[0].definition;
+    let corner = fillet.corners[0].id;
+
+    let outcome = session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetSuppressed {
+                node,
+                suppressed: true,
+            }],
+        ))
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+
+    let suppressed = session.coordinator().accepted_materialization().unwrap();
+    assert_eq!(suppressed.session.design_document().curves().len(), 2);
+    let [suppressed_feature] = suppressed.features.features() else {
+        panic!("the suppressed Fillet must remain an editable declaration")
+    };
+    assert_eq!(suppressed_feature.id, feature);
+    assert!(suppressed_feature.suppressed);
+    let ComputedFeatureDefinition::FilletSet(suppressed_fillet) = &suppressed_feature.definition;
+    assert_eq!(suppressed_fillet.corners[0].id, corner);
+    let [evaluation] = suppressed.computed.feature_evaluations() else {
+        panic!("the suppressed Fillet must retain one evaluated disposition")
+    };
+    assert!(matches!(
+        evaluation.state,
+        ComputedFeatureEvaluationState::Suppressed
+    ));
+    assert!(suppressed.computed.edges().is_empty());
+    assert_independently_valid(&session);
+    let scene = session.scene(viewport, 0.5).unwrap();
+    assert_eq!(scene.curves.len(), 2);
+    assert!(scene.computed_curves.is_empty());
+    assert!(scene.fillet_affordances.is_empty());
+    assert!(scene.points.iter().all(|point| {
+        point.model_position[0].is_finite() && point.model_position[1].is_finite()
+    }));
+    assert!(scene.curves.iter().all(|curve| {
+        curve
+            .screen_polyline
+            .iter()
+            .all(|point| point.x.is_finite() && point.y.is_finite())
+    }));
+
+    let intent = session.coordinator().intent().clone();
+    let mut restored = ProjectionalEditorSession::restore(
+        intent,
+        DocumentId(PersistentId::from_u128(DOCUMENT_RAW)),
+        10.0,
+    )
+    .unwrap();
+    let restored_scene = restored.scene(viewport, 0.5).unwrap();
+    assert_eq!(restored_scene.curves.len(), 2);
+    assert!(restored_scene.computed_curves.is_empty());
+    assert!(restored_scene.fillet_affordances.is_empty());
+
+    restored.undo().unwrap().unwrap();
+    let active_again = restored.coordinator().accepted_materialization().unwrap();
+    assert_eq!(active_again.features.features()[0].id, feature);
+    assert!(!active_again.features.features()[0].suppressed);
+    let ComputedFeatureDefinition::FilletSet(active_fillet) =
+        &active_again.features.features()[0].definition;
+    assert_eq!(active_fillet.corners[0].id, corner);
+    let active_scene = restored.scene(viewport, 0.5).unwrap();
+    assert_eq!(active_scene.computed_curves.len(), 1);
+    assert_eq!(active_scene.fillet_affordances.len(), 1);
+
+    restored.redo().unwrap().unwrap();
+    let suppressed_again = restored.scene(viewport, 0.5).unwrap();
+    assert_eq!(suppressed_again.curves.len(), 2);
+    assert!(suppressed_again.computed_curves.is_empty());
+    assert!(suppressed_again.fillet_affordances.is_empty());
+    assert_independently_valid(&restored);
+}
+
+#[test]
 fn organization_reorder_does_not_reconstruct_or_renumber_computed_fillet() {
     let (mut session, viewport) = fixture();
     let node = create_fillet(&mut session, viewport);

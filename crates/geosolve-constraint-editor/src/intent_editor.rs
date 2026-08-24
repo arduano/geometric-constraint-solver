@@ -642,7 +642,12 @@ impl ProjectionalEditorSession {
         }
         let snapshot = ComputedFeatureAuthoringSnapshot::capture(session)
             .map_err(|error| ProjectionalEditorError::ComputedScene(error.to_string()))?;
-        for feature in materialization.features.features() {
+        for feature in materialization
+            .features
+            .features()
+            .iter()
+            .filter(|feature| !feature.suppressed)
+        {
             let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
             let mut affected_owners = fillet
                 .corners
