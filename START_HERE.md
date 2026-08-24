@@ -240,17 +240,17 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
 M83 is the active, mechanically implemented projectional design-intent milestone. ADR 0040
-replaces the rejected
-chronological snapshot/JSON-owner-rewrite candidate with an order-independent typed dependency
-graph, separate writable instance and presentation organization state, deterministic Rust
-materialization into the unchanged native solver, one composite history and prepared reverse-
-binding drag routes. The discarded candidate remains on
-`archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; do not restore it wholesale. M83 is
-not accepted product behavior until explicit human UAT passes. Exact source `1b4f455`, tree
-`ce09e01`, passes the complete clean gate and immutable no-rebuild Tailscale nomination at
-`http://100.94.63.83:8080/`; Pages therefore remains on accepted M81 product bytes. The M76
-annotation-layout cache stays disposable presentation-only workspace state beside, not inside,
-the intent graph/materialization/history authority.
+replaces the rejected chronological snapshot/JSON-owner-rewrite candidate with an order-independent
+typed dependency graph, separate writable instance and presentation organization state,
+deterministic Rust materialization into the unchanged native solver, one composite history and
+prepared reverse-binding drag routes. The discarded candidate remains on
+`archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; do not restore it wholesale. The
+initial immutable nomination recorded by `232b83a` is withdrawn by M83-F001 through M83-F005.
+Replacement source `a621cdd`, tree `f6d77b4`, passes the complete clean gate, frozen browser
+regressions and byte-verified no-rebuild Tailscale nomination at
+`http://100.94.63.83:8080/`. M83 is not accepted product behavior until explicit human UAT passes;
+Pages therefore remains on accepted M81 product bytes. The M76 annotation-layout cache stays
+disposable presentation-only workspace state outside graph/materialization/history authority.
 
 ## Read first
 
@@ -284,7 +284,8 @@ the intent graph/materialization/history authority.
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
 19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — active projectional
-    intent contract, clean-qualified immutable nomination ledger and pending focused scorecard.
+    intent contract, F001-F005 replacement qualification/nomination ledger and pending focused
+    scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -656,8 +657,9 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M82 are complete. M83 implementation and immutable candidate nomination are complete; human
-acceptance remains pending. M82 closes by explicit deferral rather than feature acceptance:
+M1-M82 are complete. M83 implementation and post-F005 replacement candidate nomination are
+complete; human acceptance remains pending. M82 closes by explicit deferral rather than feature
+acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
 `archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
 qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
@@ -764,8 +766,9 @@ Durable milestone and cleanup records:
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
 - `docs/adr/0040-projectional-design-intent-graph.md` (active replacement architecture)
 - `docs/M83_GOALS.md` (active projectional intent contract)
-- `docs/M83_IMPLEMENTATION.md` (clean-qualified implementation and nomination ledger)
-- `docs/M83_UAT.md` (exact immutable candidate authority and pending focused scorecard)
+- `docs/M83_IMPLEMENTATION.md` (withdrawn initial nomination, F001-F005 repairs and replacement
+  qualification ledger)
+- `docs/M83_UAT.md` (exact replacement-candidate authority and pending focused scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

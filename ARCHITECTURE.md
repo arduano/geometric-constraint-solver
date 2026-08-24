@@ -32,16 +32,17 @@ construction/NURBS UAT and certified all-family visual profiles.
   persistence v2, golden expansion or UI remains on `main`. `docs/M82_DEFERRED.md` owns the
   disposition.
 - **Active target:** M83 has mechanically implemented ADR 0040's projectional Design Intent Graph
-  above the unchanged
-  native solver. Stable typed declaration/port/reservation identity, separately revisioned
-  instance/organization/external state, deterministic Rust materialization, one composite history,
+  above the unchanged native solver. Stable typed declaration/port/input/reservation identity,
+  separately revisioned instance/organization/external state, deterministic Rust materialization,
+  one composite history,
   TypeScript-shaped source projection and prepared reverse-binding drag routes replace the
   rejected chronological JSON-owner-rewrite candidate. Canvas/tree and Design projections resolve
   one visible stable declaration owner, including closure deletion for retained-invalid Profile
   Offset. M76 annotation layout remains a disposable presentation-only workspace cache outside
-  graph, materialization and history identity. Exact source `1b4f455`, tree `ce09e01`, passes the
-  complete clean gate and immutable no-rebuild Tailscale nomination; no M83 capability is accepted
-  until explicit human UAT passes.
+  graph, materialization and history identity. The initial `232b83a` nomination is withdrawn by
+  M83-F001 through M83-F005. Replacement source `a621cdd`, tree `f6d77b4`, passes the complete
+  clean gate, frozen browser checks and immutable no-rebuild Tailscale nomination; no M83
+  capability is accepted until explicit human UAT passes.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -350,7 +351,7 @@ canonical wire DTOs, error strings, registration/incidence/audit order and equat
 
 M83 adds an equation-free pure-Rust semantic layer which does not depend on `geosolve-sketch`, the
 editor or the web crate. It owns the closed declaration schemas, stable nodes/ports/children,
-typed native reservations and tombstones, separately revisioned instance/organization/external
+typed input-slot bindings, native reservations and tombstones, separately revisioned instance/organization/external
 state, unordered exact-CAS patches, canonical persistence and one bounded composite history.
 Dependency-DAG order and stable identity are semantic; display names, cells and source order are
 not. Accepted materialization evidence is opaque host-owned bytes at this layer, so the crate
@@ -387,8 +388,11 @@ public domain APIs. It translates exact reservations, records logical/native own
 free-leaf routes, cold-reconstructs through the native retained solver and publishes accepted
 evidence only after existing independent finite/residual/domain/branch validation. Canvas,
 Inspector, structured source, operations and DOM-free RPC submit one closed patch vocabulary and
-share the intent session's composite history. Direct pointer previews reuse retained native solver
-state and keep only authenticated gesture data transient; they do not replay or serialize the
+share the intent session's composite history. Structured-source token edits carry their exact
+originating session/revision/digest identity, and both source and Inspector project stable input
+bindings read-only. Direct pointer previews reuse retained native solver state and keep only
+authenticated gesture data transient; the latest accepted sample remains distinct from a later
+rejected attempt and owns exact-once terminal publication. They do not replay or serialize the
 graph per frame.
 
 M81 moves unchanged checkpoint encoding/decoding, restore and successful history publication into
@@ -792,12 +796,15 @@ source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the clean/served-artifa
 qualified product authority. Human UAT and exact Pages publication pass.
 
 For active M83 this crate renders only editor-owned Outline, structured-source, read-only History,
-Inspector and diagnostic DTOs and forwards normalized typed edits/RPC requests. Workspace v8 stores
-the canonical intent session plus authenticated accepted materialization; strict v1-v6 workspaces
-first restore through their historical decoder and then become per-object bootstrap declarations,
-while abandoned v7 rejects. The M76 annotation-layout field remains a disposable,
+Inspector and diagnostic DTOs and forwards normalized typed edits/RPC requests. Outline/cell drops
+resolve painted upper/lower halves into exact before/after organization slots. Workspace v8 stores
+the canonical intent session plus authenticated accepted materialization; retained-invalid
+migrated/bootstrap reload reconstructs the exact prior accepted scene while preserving current
+failed intent and Undo. Strict v1-v6 workspaces first restore through their historical decoder and
+then become per-object bootstrap declarations, while abandoned v7 rejects. The M76 annotation-
+layout field remains a disposable,
 compatibility-filtered presentation cache outside intent/materialization/history authority and is
-recomputed when absent or invalid. M83 is mechanically implemented and clean-nominated at the
+recomputed when absent or invalid. Post-F005 M83 source `a621cdd` is clean-nominated at the
 immutable Tailscale endpoint, but remains unaccepted until human UAT passes; public Pages still
 serves accepted M81.
 

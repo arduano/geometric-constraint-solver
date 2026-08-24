@@ -4304,9 +4304,10 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 M83 adds no residual equation and does not reinterpret any earlier geometric oracle. The corpus
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
 existing solver. G1-G6 implementation and focused/proportional coverage are complete through
-selection/deletion hardening `62378c9`. Exact product source `1b4f455`, tree `ce09e01`, passes the
-final clean gate and immutable no-rebuild Tailscale nomination; human UAT remains pending. M81
-GitHub Pages bytes remain public authority.
+M83-F001 through M83-F005. Initial nomination `232b83a` is withdrawn. Replacement product source
+`a621cdd`, tree `f6d77b4`, passes the final clean gate, 3/3 frozen browser checks and immutable
+no-rebuild Tailscale nomination; human UAT and targeted finding rechecks remain pending. M81 GitHub
+Pages bytes remain public authority.
 
 ### M83-G1 — schema, alias and order independence
 
@@ -4317,6 +4318,10 @@ native reservations with the reviewed catalog. Existing-point operands must alia
 point port and allocate no point reservation. Constraint/source and dimension/source reservations
 are contiguous owner-first pairs. Curve handles which are not persistent `DesignPointId` values
 remain logical-only.
+
+Every canonical input slot/reference appears in Structured Source and Inspector as the exact
+stable typed port. Rebinding switches both projections from the old port to the new port without
+an editable Inspector input control.
 
 Create the same dependency graph from several patch-array, alias-name, cell, declaration and
 source-display orders. Canonical dependency scheduling, semantic identity, native reservations,
@@ -4348,6 +4353,9 @@ Submit structurally valid but incompatible explicit intent with retain-failure p
 and typed failed-node diagnostic advance, while canvas authority remains the exact previous
 accepted materialization and cannot be rebound as current inference publication authority.
 Cancellation, work exhaustion and stale output retain both intent and accepted authority exactly.
+Cold reload of retained-invalid migrated/bootstrap v8 intent reconstructs that authenticated prior
+accepted canvas while preserving the current failed graph, history and exact Undo; corrupt or
+mismatched accepted evidence rejects.
 
 ### M83-G4 — free-leaf drag and exact release
 
@@ -4357,11 +4365,13 @@ movement may write only the genuinely free instance leaves returned by that rout
 driving dimension and explicit branch remain bit-exact. Dedicated Fillet/Offset gestures edit only
 their existing property owner.
 
-Queue several pointer samples around one animation frame, include one invalid target and release
-at a final valid target. Pointer frames perform no intent/session JSON encoding, workspace save,
-durable panel rebuild or history mutation. Pointer-up drains and authenticates the newest sample,
-independently validates it, commits one composite transaction and makes one Undo restore the exact
-pre-gesture graph/instance/accepted state. A stale or cancelled release publishes nothing.
+Queue several pointer samples around one animation frame, accept one preview, then include a newer
+invalid target and release. Pointer frames perform no intent/session JSON encoding, workspace save,
+durable panel rebuild or history mutation. Attempted and accepted identities remain distinct;
+pointer-up commits the newest visible authenticated accepted preview once, exact-coordinate release
+reuses it, and delayed/foreign/duplicate capture terminals are inert. Suppressed-output bindings
+and retained-invalid current intent cannot start a route. One Undo restores the exact pre-gesture
+graph/instance/accepted state; cancellation without an accepted sample publishes nothing.
 
 ### M83-G5 — source, panel and unified history
 
@@ -4370,6 +4380,13 @@ DOM-free RPC. The target semantic identities and outcomes agree. Rename/reorder 
 rows, including drag/drop stress after dependent geometry exists; materialized document and
 accepted evidence stay exact. A structural source edit follows typed schema validation, while
 arbitrary syntax/execution is unavailable.
+
+Drop declarations and cells on upper/lower target halves for adjacent, non-adjacent and end moves;
+these resolve to explicit before/after slots and exact organization-only Undo. Retain a numeric
+source token, reorder so that ID would name a different owner, and submit the old token with its old
+session identity: exact CAS rejects before lookup with source, history and accepted evidence
+unchanged. Source and Inspector expose identical stable input bindings after rebind, and Inspector
+bindings remain read-only.
 
 The `Outline | Structured source | History` projection selects the same stable declaration.
 Inspector fields are schema-derived, retained invalid intent stays inspectable and History is
@@ -4393,6 +4410,11 @@ typed per-object bootstrap declarations whose ports bind the exact existing poin
 contact/constraint/dimension/source identities; no aggregate flat peer authority, recipe grouping
 or ownership is invented. Explicit supported ejection preserves accepted sketch semantics.
 
+For a migrated/bootstrap v8 session whose current intent is retained-invalid, reload derives
+accepted ownership from the authenticated accepted graph/bootstrap prefix and retains current
+failure/history/Undo. Exact session identity is carried consistently through native, WASM/RPC and
+branded TypeScript source-token requests.
+
 Native and WASM/RPC transition transcripts match for valid, retained-invalid, stale, malformed and
 resource-exhausted patches. Branded TypeScript builders reject cross-session or wrong-port kinds at
 compile time where representable and at runtime otherwise. Neither generated source nor the
@@ -4403,11 +4425,49 @@ ordinary compatible workspace round trip solely as presentation state, is omitte
 reproduction authority, never affects materialization or Undo/Redo and is discarded so automatic
 placement can be recomputed when missing, stale or malformed.
 
-The exact no-rebuild release output is frozen at `/tmp/geosolve-m83-uat.DFamHN`, aggregate
-`4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`, and independently
-byte-verified at `http://100.94.63.83:8080/`. `docs/M83_UAT.md` owns the full source/tree/service
-and request-ledger evidence plus the pending human scorecard. GitHub Pages remains on accepted M81
-bytes until that candidate is explicitly approved.
+The exact replacement no-rebuild release output is frozen at
+`/tmp/geosolve-m83-f005-uat.ge07gw`, aggregate
+`720ea687a7002a9f1dbc818147263d9b003cc03bd79cefb2cf8e6aca2597b89b`, and independently
+byte-verified at `http://100.94.63.83:8080/`; both request ledgers have SHA-256
+`585aa1571a1bc4440fcce609afa17435382ad1ee8d8f9d60e128229f18313a87`.
+`docs/M83_UAT.md` owns the full source/tree/service evidence plus pending human scorecard. GitHub
+Pages remains on accepted M81 bytes until that candidate is explicitly approved.
+
+### M83-F001 — deterministic accepted drag identity and exact-once terminal capture
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. A rejected
+newer sample may not erase the newest visible accepted preview, an exact release must reuse that
+accepted identity, and pointer-up/cancel/capture-loss may retire one capture only once. Suppressed
+outputs and retained-invalid current intent expose no direct-manipulation route. Coordinator,
+editor, browser-adapter and frozen Playwright regressions own the contract.
+
+### M83-F002 — Outline and cell before/after insertion semantics
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Upper/lower
+drop halves resolve to before/after slots after excluding the moving identity. Adjacent/end moves
+are visible; self, stale and cross-cell targets reject; accepted geometry and semantic identity are
+unchanged; Undo restores exact organization.
+
+### M83-F003 — retained-invalid migrated/bootstrap reload authority
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Workspace v8
+cold restore retains the newer failed intent and its history while reconstructing the exact prior
+accepted canvas from authenticated accepted bootstrap authority. Undo repairs it; corrupt or
+mismatched evidence rejects rather than blanking or inventing geometry.
+
+### M83-F004 — exact-CAS Structured Source token edits
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Source token
+requests carry exact `IntentSessionIdentity` through browser, Rust RPC and TypeScript. A token kept
+across reorder rejects before numeric lookup and cannot mutate the declaration that newly occupies
+its old ID; source, history and accepted evidence remain exact.
+
+### M83-F005 — stable input binding projection
+
+Status: repaired, clean-qualified and replacement-nominated; human recheck pending. Structured
+Source and Inspector deterministically show every canonical input slot and exact stable typed port.
+Rebind replaces the old reference in both projections. Inspector exposes no input, button,
+`contenteditable` or typed edit marker for these references.
 
 ## Frozen near-singular fixtures
 

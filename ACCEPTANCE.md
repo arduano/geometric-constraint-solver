@@ -3234,13 +3234,14 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation, clean mechanical qualification and immutable Tailscale nomination
-complete; focused human UAT pending. ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own
-the active acceptance contract; no human evidence or accepted product claim exists yet.
+Status: implementation, M83-F001 through M83-F005 repair, clean replacement qualification and
+immutable Tailscale nomination complete; focused human UAT pending. ADR 0040,
+`docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no human
+evidence or accepted product claim exists yet.
 
 - The canonical design is an unordered typed dependency graph with stable never-reused
-  declarations, ports, children and native reservations. Instance values, presentation
-  organization and external inputs have separate exact identities.
+  declarations, ports, children, input-slot bindings and native reservations. Instance values,
+  presentation organization and external inputs have separate exact identities.
 - All existing geometry recipes, relations, dimensions, operations, computed Fillets, host
   declarations and external references are represented without introducing a new residual,
   formula, expression, priority or JavaScript solver.
@@ -3252,22 +3253,29 @@ the active acceptance contract; no human evidence or accepted product claim exis
   writable-free-leaf bindings, and can publish accepted state only after the existing independent
   finite/residual/domain/branch checks pass.
 - Invalid explicit intent remains retained and inspectable while the previous accepted scene stays
-  visible. Cancelled, exhausted and stale evaluations publish nothing.
+  visible. Retained-invalid migrated/bootstrap v8 reload reconstructs that exact accepted scene
+  while preserving current failed intent, history and Undo. Cancelled, exhausted and stale
+  evaluations publish nothing.
 - Ordinary drag previews reuse one prepared retained native solver session. Pointer frames do not
-  save, serialize/replay intent or rebuild durable panels; exact pointer-up commits only the newest
-  authenticated sample as one instance/property transaction and never silently rewrites a driver
-  or fixed property.
+  save, serialize/replay intent or rebuild durable panels. Attempted and accepted sample identities
+  stay distinct; exact pointer-up commits the newest authenticated accepted preview even after a
+  later rejected attempt, retires capture exactly once and never silently rewrites a driver or
+  fixed property.
 - One composite Undo/Redo history covers graph, instance, organization and external-input edits.
   History presentation is read-only; declaration/cell ordering, aliases, names and structured-
-  source row order cannot affect geometry or native allocation.
+  source row order cannot affect geometry or native allocation. Outline/cell upper and lower drop
+  halves resolve to explicit before/after slots, including adjacent/end moves, with exact Undo.
 - Canvas/tree and Outline/source selection resolve to one exact visible stable declaration owner.
   Ambiguous, protected, unowned or multi-owner native selection cannot leave an older declaration
   as a mutation target. Toolbar and Delete/Backspace use the same editor-owned deletion path;
   retained-invalid Profile Offset removes its exact private aggregate closure, while grouped
   helpers never become invisible source selection or reorder targets.
 - Structured source is a deterministic TypeScript-shaped Rust projection with typed token edits,
-  not arbitrary TypeScript execution. Native, DOM-free WASM/RPC and branded TypeScript builders
-  produce the same patch identities and typed outcomes.
+  not arbitrary TypeScript execution. Every token edit authenticates the exact originating
+  session/revision/digest before numeric token lookup; stale reorder tokens reject atomically.
+  Structured Source and Inspector expose every stable input-slot-to-port binding across rebind,
+  and Inspector input references are read-only. Native, DOM-free WASM/RPC and branded TypeScript
+  builders produce the same patch identities and typed outcomes.
 - Workspace v8 round-trips intent, accepted evidence, reservations, tombstones and bounded history.
   Abandoned v7 rejects. Strict v1-v6 restoration remains available and is normalized honestly as
   typed per-object bootstrap declarations with exact native identity bindings rather than an
@@ -3283,15 +3291,16 @@ the active acceptance contract; no human evidence or accepted product claim exis
 - The exact no-rebuild release artifact is frozen and byte-verified on Tailscale for M83 UAT.
   GitHub Pages remains on the accepted M81 product until explicit supervising-human approval.
 
-Exact nomination evidence: source `1b4f4558688e1bd32be075793e11885f892a3245`, tree
-`ce09e010dc74f2e97b19d52d15433eef8f2f78d3`, passes the complete clean gate recorded at log
-SHA-256 `b6547c1bbbb99175d108c5a2a506f6146a8b01b133a3953c472c9705dd5caeae`. Frozen no-rebuild
-snapshot `/tmp/geosolve-m83-uat.DFamHN` has ordered-manifest aggregate
-`4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`; temporary and retained
-served-byte ledgers independently exact-match it at result SHA-256
-`6d57de9beadd0114afb2d1f101b0f9a542c876ea45aa9f9efda11724b351ce97`. The retained candidate is
-`http://100.94.63.83:8080/`. M83-U1 through M83-U8, Pages publication and milestone closure remain
-pending.
+Exact nomination evidence: initial nomination commit `232b83a` and its advertised source/tree are
+withdrawn by F001-F005. Replacement source `a621cddc0a3b8687d6b7686bc850619332c73779`, tree
+`f6d77b447552d0d120c48be4bfdeb96bc5f2da59`, passes the complete clean gate recorded at log
+SHA-256 `1043356cb2480944314566eab7fb92e5d560f48ee606ce3ca15ea4753f16af1d`. Frozen no-rebuild
+snapshot `/tmp/geosolve-m83-f005-uat.ge07gw` has ordered-manifest aggregate
+`720ea687a7002a9f1dbc818147263d9b003cc03bd79cefb2cf8e6aca2597b89b`; all three browser
+regressions pass and temporary/retained served-byte ledgers independently exact-match it at result
+SHA-256 `585aa1571a1bc4440fcce609afa17435382ad1ee8d8f9d60e128229f18313a87`. The retained candidate is
+`http://100.94.63.83:8080/`. M83-U1 through M83-U8, targeted finding rechecks, Pages publication
+and milestone closure remain pending.
 
 ## Regression and oracle policy
 

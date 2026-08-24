@@ -2,8 +2,8 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation and immutable candidate nomination complete; focused human UAT
-pending**. ADR 0040 is the active architecture. The rejected
+Status: **implementation and post-F005 replacement candidate nomination complete; focused human
+UAT pending**. ADR 0040 is the active architecture. The rejected
 chronological candidate is preserved only on `archive/m83-chronological-lineage-2026-08-23` at
 `be62a1c`; it is not a compatibility target.
 
@@ -20,8 +20,8 @@ validated flat accepted scene authoritative.
 
 - Cover all 25 existing geometry recipes and the complete current relation, dimension, operation,
   computed-Fillet, host-parameter and external-reference catalogs without adding a new equation.
-- Generate stable ports, children, writable leaves and typed native reservations from closed Rust
-  schemas. Existing-point operands alias existing point outputs.
+- Generate stable ports, children, input-slot bindings, writable leaves and typed native
+  reservations from closed Rust schemas. Existing-point operands alias existing point outputs.
 - Separate graph, instance, organization and external-input identities. Schedule only by the
   dependency DAG and stable IDs; names and display order are non-semantic.
 - Retain never-reused reservations and typed tombstones across suppression, failure, deletion,
@@ -33,14 +33,18 @@ validated flat accepted scene authoritative.
 - Retain a stable logical/native ownership map and reverse free-leaf bindings.
 - Require existing finite/domain/branch/residual validation before accepted publication.
 - Keep the previous accepted materialization visible beneath newer retained invalid intent.
+- Reconstruct that exact accepted materialization when retained-invalid migrated/bootstrap v8
+  intent is reloaded, while preserving current failed intent, history and Undo.
 - Make cold canonical reconstruction the authority and prove warm/cold semantic parity.
 
 ### M83-G3 — one mutation and history protocol
 
 - Route canvas, Inspector, structured source, AI/RPC and operation deletion through typed unordered
   exact-CAS patches.
+- Authenticate a Structured Source token against its exact originating session/revision/digest
+  before resolving its numeric ID; stale reordered tokens reject without mutation.
 - Publish one composite Undo/Redo entry per accepted user action. History is read-only; Outline and
-  cell reorder are organization-only.
+  cell reorder are organization-only and use explicit before/after insertion slots.
 - Delete an Offset/operation by its declaration and exact dependent closure instead of requiring
   manual deletion of every generated object.
 - Do not duplicate coordinator and intent histories or use JSON-leaf reverse diffs.
@@ -48,7 +52,8 @@ validated flat accepted scene authoritative.
 ### M83-G4 — predictable fast direct manipulation
 
 - Prepare one reverse binding route at pointer-down, use the retained native solver for coalesced
-  previews and commit only the newest exact pointer-up sample.
+  previews and commit only the newest authenticated accepted pointer-up sample. A later rejected
+  attempt cannot obscure the visible accepted preview, and each capture has one terminal owner.
 - Ordinary drags update genuinely free instance leaves only. They never silently rewrite a driving
   dimension, fixed target, branch or arbitrary former action.
 - Keep explicit Fillet-radius and Profile-Offset-distance gestures as property edits.
@@ -61,6 +66,8 @@ validated flat accepted scene authoritative.
   changing materialization.
 - Generate deterministic TypeScript-shaped source; recognized token edits create typed patches,
   while whitespace/order edits cannot affect geometry. Do not execute arbitrary TypeScript.
+- Project exact stable input-slot-to-port bindings in both Structured Source and Inspector; rebind
+  updates both and Inspector presents these references read-only.
 - Show retained invalid declarations and their diagnostics while the accepted canvas remains
   usable.
 - Keep M76 annotation layout as a disposable presentation cache beside the intent session. It may
@@ -94,10 +101,11 @@ validated flat accepted scene authoritative.
 - The exact no-rebuild candidate is frozen and byte-verified over Tailscale. GitHub Pages remains
   on the accepted M81 product until explicit M83 human approval.
 
-Implementation, the complete clean release gate, immutable no-rebuild freeze and exact
-served-byte record now satisfy the mechanical G1-G6 nomination contract at source `1b4f455`, tree
-`ce09e01`. M83-U1 through M83-U8 remain pending human evidence; accepted M81 GitHub Pages bytes
-remain public authority.
+The initial `232b83a` nomination is withdrawn by M83-F001 through M83-F005. Implementation, the
+complete clean replacement gate, frozen browser regressions, immutable no-rebuild freeze and exact
+served-byte record now satisfy the mechanical G1-G6 nomination contract at source `a621cdd`, tree
+`f6d77b4`. M83-U1 through M83-U8 and targeted finding rechecks remain pending human evidence;
+accepted M81 GitHub Pages bytes remain public authority.
 
 ## Non-goals
 

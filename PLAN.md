@@ -5596,8 +5596,8 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation and immutable Tailscale nomination complete; focused human UAT
-pending**. ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
+Status: **implementation and post-F005 replacement Tailscale nomination complete; focused human
+UAT pending**. ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
 
@@ -5629,6 +5629,10 @@ chronological owner-rewrite candidate remains archived at
 - [x] Prepare direct manipulation from reverse free-leaf bindings at pointer-down, reuse retained
   native solver sessions for coalesced preview and publish only the exact newest pointer-up sample
   as one instance/property patch. Never silently rewrite drivers or fixed properties.
+- [x] Resolve M83-F001: retain attempted and accepted sample identity separately, commit the newest
+  visible accepted preview after a rejected terminal attempt, reuse an exact release preview and
+  retire pointer capture exactly once. Suppressed/missing reverse bindings and retained-invalid
+  direct manipulation fail closed.
 - [x] Advance the application envelope to experimental workspace v8, explicitly reject abandoned
   v7, and round-trip graph/instance/organization/external/accepted evidence, reservations,
   tombstones and bounded history canonically.
@@ -5637,6 +5641,14 @@ chronological owner-rewrite candidate remains archived at
 - [x] Add `Outline | Structured source | History` Design-panel tabs, schema-generated Inspector
   forms, organization-only drag/drop, deterministic TypeScript-shaped projection, retained-invalid
   presentation and read-only History.
+- [x] Resolve M83-F002: map Outline/cell drop halves to explicit before/after insertion slots,
+  including adjacent and end moves, without changing geometry or semantic identity.
+- [x] Resolve M83-F003: restore a retained-invalid migrated/bootstrap v8 workspace with its exact
+  prior accepted canvas, current failed intent, history and Undo instead of blank geometry.
+- [x] Resolve M83-F004: authenticate every Structured Source token edit with its exact originating
+  intent-session identity before numeric token resolution across Rust, browser and TypeScript.
+- [x] Resolve M83-F005: project every stable input slot/reference in Structured Source and
+  Inspector, update both after rebind and keep Inspector bindings read-only.
 - [x] Preserve movable annotation layout as a compatible disposable presentation cache outside
   intent/materialization/history authority; cache loss or corruption recomputes placement.
 - [x] Add inventory, order-independence, stable-identity, retained-failure, deletion-closure,
@@ -5651,21 +5663,26 @@ chronological owner-rewrite candidate remains archived at
 - [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
   listener and close the milestone.
 
-Nomination record: exact product source `1b4f4558688e1bd32be075793e11885f892a3245`, tree
-`ce09e010dc74f2e97b19d52d15433eef8f2f78d3`, passes the complete clean release gate (log SHA-256
-`b6547c1bbbb99175d108c5a2a506f6146a8b01b133a3953c472c9705dd5caeae`). Its no-rebuild snapshot
-`/tmp/geosolve-m83-uat.DFamHN` is frozen at ordered-manifest aggregate
-`4bb4bf4f22caefae429b514cfffda1d92ac3704e6f3474c5022413ec0f242989`; temporary and final
-eight-request ledgers both have SHA-256
-`6d57de9beadd0114afb2d1f101b0f9a542c876ea45aa9f9efda11724b351ce97`. The exact candidate is live
+Nomination record: the initial `232b83a` nomination advertising source `1b4f455`, tree `ce09e01`,
+is withdrawn and remains historical evidence only. Post-F005 product source
+`a621cddc0a3b8687d6b7686bc850619332c73779`, tree
+`f6d77b447552d0d120c48be4bfdeb96bc5f2da59`, passes the complete clean release gate (log SHA-256
+`1043356cb2480944314566eab7fb92e5d560f48ee606ce3ca15ea4753f16af1d`). Its no-rebuild snapshot
+`/tmp/geosolve-m83-f005-uat.ge07gw` is frozen at ordered-manifest aggregate
+`720ea687a7002a9f1dbc818147263d9b003cc03bd79cefb2cf8e6aca2597b89b`; all three frozen browser
+regressions pass, and temporary/final eight-request ledgers both have SHA-256
+`585aa1571a1bc4440fcce609afa17435382ad1ee8d8f9d60e128229f18313a87`. The exact candidate is live
 at `http://100.94.63.83:8080/`. All human UAT rows and Pages publication remain pending; the
 evidence-only documentation descendant does not replace the product source/tree.
 
-Gate: organization, names and source row order cannot change materialization; every accepted
+Gate: organization, names and source row order cannot change materialization; exact before/after
+organization moves cannot change geometry; every accepted
 materialization is independently native-solver validated and reproducible from canonical intent;
-invalid intent retains the prior accepted scene; ordinary dragging remains responsive and commits
-only writable free leaves; one coherent history spans GUI/source/code edits; and all existing
-constraint mathematics remain solely in the native Rust solver.
+invalid intent and retained-invalid reload retain the prior accepted scene; ordinary dragging
+remains responsive and commits the newest authenticated accepted sample only once to writable free
+leaves; stale source tokens fail exact CAS, stable input bindings remain visible across rebind, one
+coherent history spans GUI/source/code edits, and all existing constraint mathematics remain solely
+in the native Rust solver.
 
 ## Explicit non-goals
 
