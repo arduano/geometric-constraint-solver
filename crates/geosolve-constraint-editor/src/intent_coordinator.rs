@@ -13,6 +13,7 @@ use geosolve_sketch::{
     DocumentDragLocalityPlan, DocumentEdit, DocumentRationalConicControl, DocumentSessionError,
     DocumentSolveRequest, OperationControl, OperationOutcome, PreparedSketchOperation,
     PreparedSketchPatch, RetainedSketchDocumentSession, ScalarUnit, SketchDesignIdentity,
+    SketchDocument,
 };
 use geosolve_sketch_intent::{
     DeletePolicy, GeometryRecipeKind, IntentAliasMap, IntentFieldKey, IntentKey, IntentLiteral,
@@ -612,15 +613,18 @@ impl ProjectionalIntentCoordinator {
             .session
             .accepted_state_for_current_input()
             .ok_or(ProjectionalCoordinatorError::NoAcceptedDragSample)?
-            .document()
-            .to_draft_v5_json()?;
+            .document();
         let cold_document = materialized
             .session
             .accepted_state_for_current_input()
             .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?
-            .document()
-            .to_draft_v5_json()?;
-        if cold_document != preview_document {
+            .document();
+        if !direct_manipulation_preview_matches_cold(
+            &self.intent,
+            ownership,
+            preview_document,
+            cold_document,
+        )? {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
         self.commit_planned(plan, Some(materialized))
@@ -926,19 +930,26 @@ impl ProjectionalIntentCoordinator {
         let (plan, materialized) = self.plan_patch(patch)?;
         let materialized =
             materialized.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
-        let preview_document = latest
-            .patch
-            .preview()
+        let ownership = &self
+            .accepted
+            .as_ref()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
+            .ownership;
+        let preview_patch = latest.patch.preview();
+        let preview_document = preview_patch
             .accepted_document()
-            .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?
-            .to_draft_v5_json()?;
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?;
         let cold_document = materialized
             .session
             .accepted_state_for_current_input()
             .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?
-            .document()
-            .to_draft_v5_json()?;
-        if cold_document != preview_document {
+            .document();
+        if !direct_manipulation_preview_matches_cold(
+            &self.intent,
+            ownership,
+            preview_document,
+            cold_document,
+        )? {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
         self.commit_planned(plan, Some(materialized)).map(Some)
@@ -973,6 +984,264 @@ impl ProjectionalIntentCoordinator {
 
 fn pair_bits(value: [f64; 2]) -> [u64; 2] {
     value.map(f64::to_bits)
+}
+
+/// Compares a retained direct-manipulation preview with its cold reconstruction.
+///
+/// Native continuation deliberately retains a line span's previous explicit
+/// branch vector while its endpoints move. Higher-level recipes which do not
+/// expose a branch field instead derive that same positive branch from their
+/// current endpoints during every cold materialization. The two authorities
+/// can therefore differ only by round-off in this recomputable metadata (for
+/// example `[1, 0]` versus `[1, 7e-17]`) even though every accepted coordinate
+/// and branch cell is identical.
+///
+/// Normalize only the closed schema-owned derived set in the canonical draft
+/// comparison before requiring exact document equality. Segment and Midpoint
+/// Line branches remain explicit intent fields and are never normalized away
+/// here. A derived vector must also remain in the preview's same positive
+/// branch cell; an actual branch flip still rejects.
+fn direct_manipulation_preview_matches_cold(
+    intent: &IntentSession,
+    ownership: &crate::IntentMaterializationMap,
+    preview: &SketchDocument,
+    cold: &SketchDocument,
+) -> Result<bool, geosolve_sketch::DocumentError> {
+    if preview == cold {
+        return Ok(true);
+    }
+    let mut normalized: serde_json::Value = serde_json::from_str(&preview.to_draft_v5_json()?)?;
+    let cold: serde_json::Value = serde_json::from_str(&cold.to_draft_v5_json()?)?;
+    for materialization in &ownership.nodes {
+        let Some(node) = intent.graph().node(materialization.node) else {
+            return Ok(false);
+        };
+        let IntentNodeKind::Geometry { recipe } = node.kind else {
+            continue;
+        };
+        if !geometry_recipe_has_derived_line_branches(recipe) {
+            continue;
+        }
+        for curve in materialization
+            .owned
+            .iter()
+            .filter_map(|binding| match binding {
+                crate::IntentNativeBinding::Curve(curve) => Some(*curve),
+                _ => None,
+            })
+        {
+            if !normalize_derived_curve_branches(&mut normalized, &cold, curve) {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(serde_json::to_string(&normalized)? == serde_json::to_string(&cold)?)
+}
+
+fn normalize_derived_curve_branches(
+    preview: &mut serde_json::Value,
+    cold: &serde_json::Value,
+    curve: CurveId,
+) -> bool {
+    let Some(cold_curve) = draft_curve(cold, curve) else {
+        return false;
+    };
+    let Some(cold_definition) = cold_curve.get("definition").cloned() else {
+        return false;
+    };
+    let Some(preview_definition) =
+        draft_curve_mut(preview, curve).and_then(|curve| curve.get_mut("definition"))
+    else {
+        return false;
+    };
+    normalize_derived_branch_definition(preview_definition, &cold_definition)
+}
+
+fn draft_curve(document: &serde_json::Value, curve: CurveId) -> Option<&serde_json::Value> {
+    let id = serde_json::to_value(curve).ok()?;
+    document
+        .get("document")?
+        .get("curves")?
+        .as_array()?
+        .iter()
+        .find(|candidate| candidate.get("id") == Some(&id))
+}
+
+fn draft_curve_mut(
+    document: &mut serde_json::Value,
+    curve: CurveId,
+) -> Option<&mut serde_json::Value> {
+    let id = serde_json::to_value(curve).ok()?;
+    document
+        .get_mut("document")?
+        .get_mut("curves")?
+        .as_array_mut()?
+        .iter_mut()
+        .find(|candidate| candidate.get("id") == Some(&id))
+}
+
+fn normalize_derived_branch_definition(
+    preview: &mut serde_json::Value,
+    cold: &serde_json::Value,
+) -> bool {
+    let key = match cold.get("kind").and_then(serde_json::Value::as_str) {
+        Some("line") => "branch_direction",
+        Some("polyline") => "branch_directions",
+        _ => return false,
+    };
+    if preview.get("kind") != cold.get("kind") {
+        return false;
+    }
+    let Some(preview_branches) = preview.get(key) else {
+        return false;
+    };
+    let Some(cold_branches) = cold.get(key) else {
+        return false;
+    };
+    let same_positive_cell = if key == "branch_direction" {
+        json_branch_pair(preview_branches, cold_branches)
+            .is_some_and(|(preview, cold)| branch_dot(preview, cold) > 0.0)
+    } else {
+        let Some(preview) = preview_branches.as_array() else {
+            return false;
+        };
+        let Some(cold) = cold_branches.as_array() else {
+            return false;
+        };
+        preview.len() == cold.len()
+            && preview.iter().zip(cold).all(|(preview, cold)| {
+                json_branch_pair(preview, cold)
+                    .is_some_and(|(preview, cold)| branch_dot(preview, cold) > 0.0)
+            })
+    };
+    if !same_positive_cell {
+        return false;
+    }
+    let Some(definition) = preview.as_object_mut() else {
+        return false;
+    };
+    definition.insert(key.to_owned(), cold_branches.clone());
+    true
+}
+
+fn json_branch_pair(
+    preview: &serde_json::Value,
+    cold: &serde_json::Value,
+) -> Option<([f64; 2], [f64; 2])> {
+    let preview: [f64; 2] = serde_json::from_value(preview.clone()).ok()?;
+    let cold: [f64; 2] = serde_json::from_value(cold.clone()).ok()?;
+    preview
+        .into_iter()
+        .chain(cold)
+        .all(f64::is_finite)
+        .then_some((preview, cold))
+}
+
+fn branch_dot(first: [f64; 2], second: [f64; 2]) -> f64 {
+    first[0].mul_add(second[0], first[1] * second[1])
+}
+
+const fn geometry_recipe_has_derived_line_branches(recipe: GeometryRecipeKind) -> bool {
+    matches!(
+        recipe,
+        GeometryRecipeKind::Polyline
+            | GeometryRecipeKind::TwoPointAlignedRectangle
+            | GeometryRecipeKind::ThreePointCornerRectangle
+            | GeometryRecipeKind::CenterRectangle
+            | GeometryRecipeKind::ThreePointCenterRectangle
+    )
+}
+
+#[cfg(test)]
+mod direct_manipulation_comparison_tests {
+    use super::*;
+
+    #[test]
+    fn derived_line_branch_normalization_is_same_cell_and_field_local() {
+        let cold = serde_json::json!({
+            "kind": "line",
+            "start": 1,
+            "end": 2,
+            "branch_direction": [1.0, 0.0],
+        });
+        let mut noisy = serde_json::json!({
+            "kind": "line",
+            "start": 1,
+            "end": 2,
+            "branch_direction": [1.0, 1.0e-17],
+        });
+        assert!(normalize_derived_branch_definition(&mut noisy, &cold));
+        assert_eq!(noisy, cold);
+
+        let mut flipped = serde_json::json!({
+            "kind": "line",
+            "start": 1,
+            "end": 2,
+            "branch_direction": [-1.0, 0.0],
+        });
+        let flipped_before = flipped.clone();
+        assert!(!normalize_derived_branch_definition(&mut flipped, &cold));
+        assert_eq!(flipped, flipped_before);
+
+        let mut unrelated = serde_json::json!({
+            "kind": "line",
+            "start": 99,
+            "end": 2,
+            "branch_direction": [1.0, 1.0e-17],
+        });
+        assert!(normalize_derived_branch_definition(&mut unrelated, &cold));
+        assert_ne!(unrelated, cold, "unrelated document state remains exact");
+    }
+
+    #[test]
+    fn derived_polyline_requires_every_branch_to_remain_in_its_cell() {
+        let cold = serde_json::json!({
+            "kind": "polyline",
+            "points": [1, 2, 3],
+            "closed": false,
+            "branch_directions": [[1.0, 0.0], [0.0, 1.0]],
+        });
+        let mut noisy = serde_json::json!({
+            "kind": "polyline",
+            "points": [1, 2, 3],
+            "closed": false,
+            "branch_directions": [[1.0, 1.0e-17], [-1.0e-17, 1.0]],
+        });
+        assert!(normalize_derived_branch_definition(&mut noisy, &cold));
+        assert_eq!(noisy, cold);
+
+        let mut flipped = serde_json::json!({
+            "kind": "polyline",
+            "points": [1, 2, 3],
+            "closed": false,
+            "branch_directions": [[1.0, 0.0], [0.0, -1.0]],
+        });
+        assert!(!normalize_derived_branch_definition(&mut flipped, &cold));
+    }
+
+    #[test]
+    fn only_schema_derived_line_recipes_enter_branch_normalization() {
+        let derived = GeometryRecipeKind::ALL
+            .into_iter()
+            .filter(|recipe| geometry_recipe_has_derived_line_branches(*recipe))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            derived,
+            vec![
+                GeometryRecipeKind::Polyline,
+                GeometryRecipeKind::TwoPointAlignedRectangle,
+                GeometryRecipeKind::ThreePointCornerRectangle,
+                GeometryRecipeKind::CenterRectangle,
+                GeometryRecipeKind::ThreePointCenterRectangle,
+            ]
+        );
+        assert!(!geometry_recipe_has_derived_line_branches(
+            GeometryRecipeKind::Segment
+        ));
+        assert!(!geometry_recipe_has_derived_line_branches(
+            GeometryRecipeKind::MidpointLine
+        ));
+    }
 }
 
 fn point_drag_intent_operations(

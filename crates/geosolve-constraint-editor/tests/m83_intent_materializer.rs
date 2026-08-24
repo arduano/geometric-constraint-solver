@@ -982,6 +982,47 @@ fn cold_geometry_inventory_materializes_every_exactly_reconstructible_recipe() {
 }
 
 #[test]
+fn midpoint_line_cold_materialization_preserves_its_explicit_branch() {
+    let branch = [std::f64::consts::FRAC_1_SQRT_2; 2];
+    let draft = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::MidpointLine,
+        },
+        key("midpoint-line"),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Midpoint),
+        LeafField::X,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Midpoint),
+        LeafField::Y,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(2.0))
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(0.0))
+    .with_field(
+        IntentFieldKey(key("branch_direction")),
+        IntentLiteral::Point(branch),
+    );
+    let output = cold_materialize_ops(0x8300_10ff, vec![create("line", draft)]);
+    let document = output
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    let CurveDefinition::Line {
+        branch_direction, ..
+    } = document.curves()[0].definition
+    else {
+        panic!("Midpoint Line must materialize one native line");
+    };
+    assert_eq!(branch_direction.map(f64::to_bits), branch.map(f64::to_bits));
+    assert_independently_validated(&output);
+}
+
+#[test]
 fn geometry_role_is_exact_for_profile_and_construction_recipes() {
     for (index, role) in [GeometryRole::Profile, GeometryRole::Construction]
         .into_iter()

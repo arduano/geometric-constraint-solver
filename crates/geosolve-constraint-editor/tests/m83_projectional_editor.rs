@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, ConstraintEditor, EditorEffect, GeometryRoleSelectionState,
-    IntentNativeBinding, IntentSourceTokenTarget, Modifiers, PointerInput, ProjectionalEditorError,
+    ColdIntentMaterializer, ConstraintEditor, ConstructionCommitPlan, ConstructionPoint,
+    ConstructionProposal, ConstructionRelationDefinition, DraftSpanSlot, EditorEffect,
+    GeometryRoleSelectionState, GeometryToolVariant, InferredRelation, IntentNativeBinding,
+    IntentSourceTokenTarget, Modifiers, PointerInput, ProjectionalEditorError,
     ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
+    projectional_construction_patch,
 };
 use geosolve_sketch::{
-    DesignPointId, DocumentId, GeometryRole, OperationControl, PersistentId, SketchDatum,
-    cancellation_pair,
+    CurveSpan, DesignPointId, DocumentId, GeometryRole, OperationControl, PersistentId,
+    SketchDatum, cancellation_pair,
 };
 use geosolve_sketch_intent::{
     GeometryRecipeKind, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
@@ -184,6 +187,150 @@ fn assert_pair(actual: [f64; 2], expected: [f64; 2]) {
     assert_eq!(actual.map(f64::to_bits), expected.map(f64::to_bits));
 }
 
+fn aligned_rectangle_plan() -> ConstructionCommitPlan {
+    ConstructionCommitPlan {
+        proposal: ConstructionProposal::RectangleLoop {
+            points: vec![
+                ConstructionPoint::New([-2.0, -1.5]),
+                ConstructionPoint::New([2.0, 1.5]),
+                ConstructionPoint::New([2.0, -1.5]),
+                ConstructionPoint::New([-2.0, 1.5]),
+            ],
+            corners: [0, 2, 1, 3],
+            center: None,
+        },
+        curve_roles: vec![GeometryRole::Profile; 4],
+        relations: [
+            InferredRelation::Horizontal {
+                line: DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment: 0,
+                },
+            },
+            InferredRelation::Vertical {
+                line: DraftSpanSlot::Created {
+                    curve_index: 1,
+                    segment: 0,
+                },
+            },
+            InferredRelation::Horizontal {
+                line: DraftSpanSlot::Created {
+                    curve_index: 2,
+                    segment: 0,
+                },
+            },
+            InferredRelation::Vertical {
+                line: DraftSpanSlot::Created {
+                    curve_index: 3,
+                    segment: 0,
+                },
+            },
+        ]
+        .into_iter()
+        .map(ConstructionRelationDefinition::recipe_intrinsic)
+        .collect(),
+    }
+}
+
+fn shared_corner_rectangle_diagonal_fixture() -> (
+    ProjectionalEditorSession,
+    DesignPointId,
+    CurveSpan,
+    Viewport,
+) {
+    let (mut session, _seed, viewport) = fixture();
+    let rectangle = aligned_rectangle_plan();
+    let rectangle = {
+        let accepted = session.coordinator().accepted_materialization().unwrap();
+        projectional_construction_patch(
+            session.coordinator().intent().identity(),
+            session.coordinator().intent(),
+            &accepted.ownership,
+            GeometryToolVariant::TwoPointAlignedRectangle,
+            &rectangle,
+        )
+        .unwrap()
+    };
+    let rectangle_alias = rectangle.geometry_alias.clone();
+    let rectangle = session.apply_patch(rectangle.patch).unwrap();
+    let corner_port = rectangle
+        .aliases
+        .port(
+            &rectangle_alias,
+            IntentPortSelector::Node {
+                role: IntentPortRole::Corner,
+                index: 0,
+            },
+        )
+        .unwrap();
+    let opposite_port = rectangle
+        .aliases
+        .port(
+            &rectangle_alias,
+            IntentPortSelector::Node {
+                role: IntentPortRole::Corner,
+                index: 2,
+            },
+        )
+        .unwrap();
+    let ownership = &session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership;
+    let IntentNativeBinding::Point(corner) = ownership.port(corner_port).unwrap() else {
+        panic!("rectangle corner must own a native point");
+    };
+    let IntentNativeBinding::Point(opposite) = ownership.port(opposite_port).unwrap() else {
+        panic!("rectangle opposite corner must own a native point");
+    };
+    let document = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    let line = ConstructionCommitPlan {
+        proposal: ConstructionProposal::Line {
+            start: ConstructionPoint::Existing {
+                id: corner,
+                position: document.point(corner).unwrap().position,
+            },
+            end: ConstructionPoint::Existing {
+                id: opposite,
+                position: document.point(opposite).unwrap().position,
+            },
+        },
+        curve_roles: vec![GeometryRole::Profile],
+        relations: Vec::new(),
+    };
+    let line = {
+        let accepted = session.coordinator().accepted_materialization().unwrap();
+        projectional_construction_patch(
+            session.coordinator().intent().identity(),
+            session.coordinator().intent(),
+            &accepted.ownership,
+            GeometryToolVariant::Segment,
+            &line,
+        )
+        .unwrap()
+    };
+    let line_alias = line.geometry_alias.clone();
+    let line = session.apply_patch(line.patch).unwrap();
+    let line_port = line.aliases.port(&line_alias, span()).unwrap();
+    let IntentNativeBinding::CurveSpan(diagonal) = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership
+        .port(line_port)
+        .unwrap()
+    else {
+        panic!("shared-corner segment must own one native span");
+    };
+    (session, corner, diagonal, viewport)
+}
+
 #[test]
 fn pointer_frames_are_transient_and_release_commits_one_intent_transaction() {
     let (mut session, point, viewport) = fixture();
@@ -300,6 +447,95 @@ fn rejected_terminal_sample_commits_the_last_visible_accepted_point_preview_once
     );
     session.undo().unwrap().unwrap();
     assert_pair(point_position(&session, point), [1.0, 2.0]);
+}
+
+#[test]
+fn shared_corner_rectangle_diagonal_drag_commits_the_visible_preview() {
+    let (mut session, corner, diagonal, viewport) = shared_corner_rectangle_diagonal_fixture();
+    let origin = point_position(&session, corner);
+    let history_before = session.coordinator().intent().undo_len();
+    let branch_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document()
+        .curve_branch_direction(diagonal)
+        .unwrap();
+    let deltas = [
+        [1.0, 0.5],
+        [-0.35, 0.8],
+        [0.7, -0.4],
+        [-0.6, -0.6],
+        [0.9, 0.2],
+        [-0.25, 0.45],
+    ];
+    for (index, delta) in deltas.into_iter().enumerate() {
+        let current = point_position(&session, corner);
+        let target = [current[0] + delta[0], current[1] + delta[1]];
+        let pointer_id = 83 + u64::try_from(index).unwrap();
+        let scene = session.scene(viewport, 0.5).unwrap();
+        session
+            .pointer_down(
+                &scene,
+                pointer(pointer_id, viewport.model_to_screen(current)),
+            )
+            .unwrap();
+        let effects = session
+            .pointer_move(
+                &scene,
+                pointer(pointer_id, viewport.model_to_screen(target)),
+            )
+            .unwrap();
+        let preview = effects
+            .iter()
+            .find_map(|effect| match effect {
+                EditorEffect::PreviewPointMove {
+                    point,
+                    model_position,
+                } if *point == corner => Some(*model_position),
+                _ => None,
+            })
+            .expect("shared-corner drag must publish one accepted preview");
+        assert_pair(point_position(&session, corner), preview);
+
+        let preview_scene = session.scene(viewport, 0.5).unwrap();
+        let outcome = session
+            .pointer_up(
+                &preview_scene,
+                pointer(pointer_id, viewport.model_to_screen(target)),
+            )
+            .unwrap();
+        assert!(outcome.transaction.is_some());
+        assert_pair(point_position(&session, corner), preview);
+        assert_eq!(
+            session.coordinator().intent().undo_len(),
+            history_before + index + 1
+        );
+        let accepted = session.coordinator().accepted_materialization().unwrap();
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|residual| residual <= 1.0e-9)
+        );
+        assert_eq!(
+            accepted
+                .session
+                .design_document()
+                .curve_branch_direction(diagonal)
+                .unwrap()
+                .map(f64::to_bits),
+            branch_before.map(f64::to_bits),
+            "the explicit diagonal branch is not derived preview metadata",
+        );
+    }
+
+    for _ in deltas {
+        session.undo().unwrap().unwrap();
+    }
+    assert_pair(point_position(&session, corner), origin);
 }
 
 #[test]

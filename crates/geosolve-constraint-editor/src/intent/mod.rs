@@ -2481,7 +2481,7 @@ fn lower_midpoint_line(
         batch,
         state,
     )?;
-    let branch_direction = finite_direction(node.id, start_position, end_position)?;
+    let branch_direction = branch_direction(node, start_position, end_position)?;
     materialize_curve(
         node,
         0,
