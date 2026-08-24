@@ -6,15 +6,16 @@ use std::collections::BTreeSet;
 use geosolve_sketch_intent::{
     AggregateKind, BootstrapNativeKind, CellTarget, ComputedFeatureKind, ConstraintKind,
     DeletePolicy, DimensionKind, ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind,
-    InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentEvaluationFailure,
-    IntentEvaluationFailureKind, IntentFieldKey, IntentGraphError, IntentIdentityFlow, IntentKey,
-    IntentLiteral, IntentLiteralSchema, IntentNativeReservationKind, IntentNodeDraft,
-    IntentNodeKind, IntentOperationOutput, IntentOperationOutputKind, IntentPatch,
-    IntentPatchOperation, IntentPatchOperationKind, IntentPatchPolicy, IntentPlanDisposition,
-    IntentPlanError, IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
-    IntentReservationState, IntentSession, IntentSessionId, IntentSessionIdentity, IntentUnit,
-    LeafField, LeafRef, MaterializationEvidence, NodeId, OperationKind, ParameterIntentKind,
-    PatchPortRef, PortId,
+    InputRole, InputSlot, IntentBootstrapObject, IntentDefinitionFieldDescriptor,
+    IntentEditClassification, IntentEvaluation, IntentEvaluationFailure,
+    IntentEvaluationFailureKind, IntentFieldChoices, IntentFieldDefault, IntentFieldKey,
+    IntentGraphError, IntentIdentityFlow, IntentKey, IntentLiteral, IntentLiteralSchema,
+    IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentOperationOutput,
+    IntentOperationOutputKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind,
+    IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRef,
+    IntentPortRole, IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId,
+    IntentSessionIdentity, IntentUnit, LeafField, LeafRef, MaterializationEvidence, NodeId,
+    OperationKind, ParameterIntentKind, PatchPortRef, PortId,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -178,6 +179,21 @@ fn declaration_schema_cases() -> Vec<DeclarationSchemaCase> {
         );
     }
     cases
+}
+
+fn field_descriptor(
+    kind: &IntentNodeKind,
+    dynamic_children: u16,
+    name: &str,
+) -> IntentDefinitionFieldDescriptor {
+    kind.field_descriptors(dynamic_children)
+        .into_iter()
+        .find(|descriptor| descriptor.schema.field.0.as_str() == name)
+        .unwrap_or_else(|| panic!("{kind:?} has no {name} descriptor"))
+}
+
+fn closed_choices(values: &[&str]) -> IntentFieldChoices {
+    IntentFieldChoices::Closed(values.iter().copied().map(key).collect())
 }
 
 fn literal_for_schema(schema: IntentLiteralSchema) -> IntentLiteral {
@@ -498,6 +514,14 @@ fn ordered_span_aggregates_supply_typed_chain_and_profile_offset_operands() {
     .with_input(
         InputSlot::new(InputRole::Profile, 0),
         alias_port("profile", IntentPortRole::Profile, 0),
+    )
+    .with_field(
+        IntentFieldKey(key("source_traversal")),
+        IntentLiteral::Enum(key("forward")),
+    )
+    .with_field(
+        IntentFieldKey(key("target_traversal")),
+        IntentLiteral::Enum(key("forward")),
     );
     let patch = IntentPatch::new(
         session.identity(),
@@ -680,6 +704,55 @@ fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
 
     for (index, case) in cases.iter().enumerate() {
         let schema = case.kind.schema(case.dynamic_children);
+        let descriptors = case.kind.field_descriptors(case.dynamic_children);
+        assert_eq!(
+            descriptors
+                .iter()
+                .map(|descriptor| descriptor.schema.clone())
+                .collect::<Vec<_>>(),
+            schema.fields,
+            "{} descriptor drifted from validation schema",
+            case.label
+        );
+        assert!(descriptors.iter().all(|descriptor| {
+            descriptor.edit == IntentEditClassification::Definition
+                && matches!(
+                    (&descriptor.schema.literal, &descriptor.choices),
+                    (IntentLiteralSchema::Enum, IntentFieldChoices::Closed(_))
+                        | (_, IntentFieldChoices::NotApplicable)
+                )
+                && matches!(
+                    (&descriptor.schema.required, &descriptor.default),
+                    (true, IntentFieldDefault::Required)
+                        | (
+                            false,
+                            IntentFieldDefault::Literal(_)
+                                | IntentFieldDefault::Contextual
+                                | IntentFieldDefault::Conditional
+                        )
+                )
+        }));
+        for descriptor in &descriptors {
+            if let IntentFieldChoices::Closed(values) = &descriptor.choices {
+                assert!(!values.is_empty(), "{} has empty choices", case.label);
+                assert_eq!(
+                    values.iter().collect::<BTreeSet<_>>().len(),
+                    values.len(),
+                    "{} repeats choices for {:?}",
+                    case.label,
+                    descriptor.schema.field
+                );
+                if let IntentFieldDefault::Literal(IntentLiteral::Enum(value)) = &descriptor.default
+                {
+                    assert!(
+                        values.contains(value),
+                        "{} default for {:?} is outside its closed choices",
+                        case.label,
+                        descriptor.schema.field
+                    );
+                }
+            }
+        }
         assert!(
             schema.minimum_children <= schema.maximum_children,
             "{} has reversed child bounds",
@@ -811,6 +884,510 @@ fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
         }
         assert_eq!(session.identity(), identity);
         assert_eq!(session.allocator_high_water(), allocator);
+    }
+}
+
+#[test]
+fn descriptor_omission_categories_are_an_explicit_closed_inventory() {
+    let mut contextual = BTreeSet::new();
+    let mut conditional = BTreeSet::new();
+    for case in declaration_schema_cases() {
+        for descriptor in case.kind.field_descriptors(case.dynamic_children) {
+            let identity = format!("{}.{}", case.label, descriptor.schema.field.0.as_str());
+            match descriptor.default {
+                IntentFieldDefault::Contextual => {
+                    contextual.insert(identity);
+                }
+                IntentFieldDefault::Conditional => {
+                    conditional.insert(identity);
+                }
+                IntentFieldDefault::Required | IntentFieldDefault::Literal(_) => {}
+            }
+        }
+    }
+
+    assert_eq!(
+        contextual,
+        [
+            "geometry.Segment.branch_direction",
+            "geometry.MidpointLine.branch_direction",
+            "geometry.ThreePointCenterRectangle.side_midpoint",
+            "constraint.FixedPoint.target",
+            "annotation.offset",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+    );
+    assert_eq!(
+        conditional,
+        [
+            "dimension.ProfileOffset.direction",
+            "dimension.ProfileOffset.side",
+            "operation.AssociativeFillet.first_local_lower",
+            "operation.AssociativeFillet.first_local_upper",
+            "operation.AssociativeFillet.first_anchor_parameter",
+            "operation.AssociativeFillet.first_anchor_winding",
+            "operation.AssociativeFillet.second_local_lower",
+            "operation.AssociativeFillet.second_local_upper",
+            "operation.AssociativeFillet.second_anchor_parameter",
+            "operation.AssociativeFillet.second_anchor_winding",
+            "operation.ProfileOffset.direction",
+            "operation.ProfileOffset.side",
+            "operation.ProfileOffset.first_traversal",
+            "computed_feature.FilletSet.corner_0000_first_local_lower",
+            "computed_feature.FilletSet.corner_0000_first_local_upper",
+            "computed_feature.FilletSet.corner_0000_first_anchor_parameter",
+            "computed_feature.FilletSet.corner_0000_first_anchor_winding",
+            "computed_feature.FilletSet.corner_0000_second_local_lower",
+            "computed_feature.FilletSet.corner_0000_second_local_upper",
+            "computed_feature.FilletSet.corner_0000_second_anchor_parameter",
+            "computed_feature.FilletSet.corner_0000_second_anchor_winding",
+            "external.Binding.topology_digest",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+    );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one reviewed table freezes every family-specific native omission fallback"
+)]
+fn descriptor_static_defaults_match_the_native_declaration_fallbacks() {
+    let defaults = [
+        (
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::RationalQuadraticConic,
+            },
+            0,
+            "weighted_middle",
+            IntentLiteral::Point([1.0, 1.0]),
+        ),
+        (
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::OpenControlNurbs,
+            },
+            4,
+            "degree",
+            IntentLiteral::Natural(3),
+        ),
+        (
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::PeriodicControlNurbs,
+            },
+            4,
+            "gauge_index",
+            IntentLiteral::Natural(0),
+        ),
+        (
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::FixedCoordinate,
+            },
+            0,
+            "target",
+            IntentLiteral::Quantity {
+                value: 0.0,
+                unit: IntentUnit::Length,
+            },
+        ),
+        (
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::CircleCircleTangency,
+            },
+            0,
+            "center_direction",
+            IntentLiteral::Point([1.0, 0.0]),
+        ),
+        (
+            IntentNodeKind::Dimension {
+                dimension: DimensionKind::SupportingLineOffset,
+            },
+            0,
+            "side",
+            IntentLiteral::Enum(key("left")),
+        ),
+        (
+            IntentNodeKind::Dimension {
+                dimension: DimensionKind::ExactTranslatedSegmentOffset,
+            },
+            0,
+            "orientation",
+            IntentLiteral::Enum(key("same")),
+        ),
+        (
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::EndpointContinuity,
+            },
+            0,
+            "parameter_ratio",
+            IntentLiteral::Quantity {
+                value: 1.0,
+                unit: IntentUnit::Dimensionless,
+            },
+        ),
+    ];
+    for (kind, dynamic_children, field, expected) in defaults {
+        assert_eq!(
+            field_descriptor(&kind, dynamic_children, field).default,
+            IntentFieldDefault::Literal(expected),
+            "{kind:?}.{field}"
+        );
+    }
+
+    let contact_defaults = [
+        (
+            ConstraintKind::PointOnCurve,
+            "contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::LineCurveTangency,
+            "contact",
+            0.0,
+            "bounded",
+            "start",
+            "aligned",
+        ),
+        (
+            ConstraintKind::LineCircleTangency,
+            "first_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "aligned",
+        ),
+        (
+            ConstraintKind::LineCircleTangency,
+            "second_contact",
+            0.0,
+            "periodic",
+            "interior",
+            "aligned",
+        ),
+        (
+            ConstraintKind::CircleArcTangency,
+            "first_contact",
+            0.0,
+            "periodic",
+            "interior",
+            "aligned",
+        ),
+        (
+            ConstraintKind::CircleArcTangency,
+            "second_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "aligned",
+        ),
+        (
+            ConstraintKind::CurveCurveContact,
+            "first_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::CurveCurveContact,
+            "second_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::CurveCurveTangency,
+            "first_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "aligned",
+        ),
+        (
+            ConstraintKind::CurveCurveTangency,
+            "second_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "aligned",
+        ),
+        (
+            ConstraintKind::CurveDirection,
+            "contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::EqualCurvature,
+            "first_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::EqualCurvature,
+            "second_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::EndpointContinuity,
+            "first_contact",
+            1.0,
+            "bounded",
+            "end",
+            "none",
+        ),
+        (
+            ConstraintKind::EndpointContinuity,
+            "second_contact",
+            0.0,
+            "bounded",
+            "start",
+            "none",
+        ),
+        (
+            ConstraintKind::LineLineFillet,
+            "first_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::LineLineFillet,
+            "second_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::CurveCurveFillet,
+            "first_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+        (
+            ConstraintKind::CurveCurveFillet,
+            "second_contact",
+            0.5,
+            "bounded",
+            "interior",
+            "none",
+        ),
+    ];
+    for (constraint, prefix, parameter, domain, neighborhood, orientation) in contact_defaults {
+        let kind = IntentNodeKind::Constraint { constraint };
+        assert_eq!(
+            field_descriptor(&kind, 0, &format!("{prefix}_parameter")).default,
+            IntentFieldDefault::Literal(IntentLiteral::Quantity {
+                value: parameter,
+                unit: IntentUnit::Dimensionless,
+            }),
+            "{constraint:?}.{prefix}.parameter"
+        );
+        assert_eq!(
+            field_descriptor(&kind, 0, &format!("{prefix}_winding")).default,
+            IntentFieldDefault::Literal(IntentLiteral::Integer(0)),
+            "{constraint:?}.{prefix}.winding"
+        );
+        for (suffix, expected) in [
+            ("domain", domain),
+            ("neighborhood", neighborhood),
+            ("orientation", orientation),
+        ] {
+            assert_eq!(
+                field_descriptor(&kind, 0, &format!("{prefix}_{suffix}")).default,
+                IntentFieldDefault::Literal(IntentLiteral::Enum(key(expected))),
+                "{constraint:?}.{prefix}.{suffix}"
+            );
+        }
+        for (suffix, value) in [
+            ("domain_lower", 0.0),
+            ("domain_upper", 1.0),
+            ("domain_period", std::f64::consts::TAU),
+            ("neighborhood_lower", 0.0),
+            ("neighborhood_upper", 1.0),
+        ] {
+            assert_eq!(
+                field_descriptor(&kind, 0, &format!("{prefix}_{suffix}")).default,
+                IntentFieldDefault::Literal(IntentLiteral::Quantity {
+                    value,
+                    unit: IntentUnit::Dimensionless,
+                }),
+                "{constraint:?}.{prefix}.{suffix}"
+            );
+        }
+    }
+}
+
+#[test]
+fn descriptor_branch_choice_vocabularies_are_exact_and_profile_offset_is_driving_only() {
+    let cases: Vec<(IntentNodeKind, u16, &str, &[&str])> = vec![
+        (
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::PointOnCurve,
+            },
+            0,
+            "contact_orientation",
+            &["none", "unoriented", "aligned", "opposed"],
+        ),
+        (
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::CircleArcTangency,
+            },
+            0,
+            "side",
+            &["outside_arc", "inside_arc"],
+        ),
+        (
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::CurveDirection,
+            },
+            0,
+            "relation",
+            &["tangent", "normal"],
+        ),
+        (
+            IntentNodeKind::Dimension {
+                dimension: DimensionKind::ProfileOffset,
+            },
+            0,
+            "mode",
+            &["driving"],
+        ),
+        (
+            IntentNodeKind::Dimension {
+                dimension: DimensionKind::ProfileOffset,
+            },
+            0,
+            "source_traversal",
+            &["forward", "reverse"],
+        ),
+        (
+            IntentNodeKind::Operation {
+                operation: OperationKind::AssociativeFillet,
+            },
+            0,
+            "first_neighborhood",
+            &["interior", "local", "start", "end"],
+        ),
+        (
+            IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset,
+            },
+            0,
+            "direction",
+            &["outward", "inward"],
+        ),
+        (
+            IntentNodeKind::ComputedFeature {
+                feature: ComputedFeatureKind::FilletSet,
+            },
+            1,
+            "corner_0000_endpoint_order",
+            &["first_then_second", "second_then_first"],
+        ),
+        (
+            IntentNodeKind::Parameter {
+                parameter: ParameterIntentKind::Parameter,
+            },
+            0,
+            "kind",
+            &["length", "angle", "dimensionless", "activation"],
+        ),
+        (
+            IntentNodeKind::External {
+                external: ExternalIntentKind::Binding,
+            },
+            0,
+            "feature_kind",
+            &["point", "line_segment"],
+        ),
+    ];
+    for (kind, dynamic_children, field, expected) in cases {
+        assert_eq!(
+            field_descriptor(&kind, dynamic_children, field).choices,
+            closed_choices(expected),
+            "{kind:?}.{field}"
+        );
+    }
+}
+
+#[test]
+fn low_control_nurbs_require_an_explicit_admissible_degree() {
+    for (index, (recipe, dynamic_children, degree)) in [
+        (GeometryRecipeKind::OpenControlNurbs, 2, 1),
+        (GeometryRecipeKind::OpenControlNurbs, 3, 2),
+        (GeometryRecipeKind::PeriodicControlNurbs, 3, 2),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let kind = IntentNodeKind::Geometry { recipe };
+        let descriptor = field_descriptor(&kind, dynamic_children, "degree");
+        assert!(descriptor.schema.required);
+        assert_eq!(descriptor.default, IntentFieldDefault::Required);
+
+        let case = DeclarationSchemaCase {
+            label: format!("low-control.{recipe:?}"),
+            kind: kind.clone(),
+            dynamic_children,
+        };
+        let mut omitted = minimal_schema_draft(&case, &format!("nurbs-omitted-{index}"));
+        omitted.fields.remove(&IntentFieldKey(key("degree")));
+        assert!(matches!(
+            atomic_schema_rejection(&case.label, omitted),
+            IntentPlanError::Graph(IntentGraphError::MissingRequiredDefinitionField { .. })
+        ));
+
+        let session = IntentSession::with_id(IntentSessionId::from_raw(
+            0x83d0_0000 + u128::try_from(index).unwrap(),
+        ))
+        .unwrap();
+        let explicit = IntentNodeDraft::new(kind, key(&format!("nurbs-explicit-{index}")))
+            .with_dynamic_children(dynamic_children)
+            .with_field(
+                IntentFieldKey(key("degree")),
+                IntentLiteral::Natural(degree),
+            );
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("declaration"),
+                draft: Box::new(explicit),
+                cell: None,
+            }],
+        );
+        assert!(session.plan_patch(patch, accepted).is_ok());
+    }
+
+    for recipe in [
+        GeometryRecipeKind::OpenControlNurbs,
+        GeometryRecipeKind::PeriodicControlNurbs,
+    ] {
+        let descriptor = field_descriptor(&IntentNodeKind::Geometry { recipe }, 4, "degree");
+        assert!(!descriptor.schema.required);
+        assert_eq!(
+            descriptor.default,
+            IntentFieldDefault::Literal(IntentLiteral::Natural(3))
+        );
     }
 }
 
@@ -1547,6 +2124,38 @@ fn ordinary_geometry_reuse_is_a_schema_derived_alias_without_duplicate_native_id
             .count(),
         1
     );
+}
+
+#[test]
+fn concrete_descriptor_projects_the_allocated_output_and_edit_contract() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_38)).unwrap();
+    let (node, primary) = create_point(&mut session, "descriptor.point");
+    let declaration = session.graph().node(node).unwrap();
+    let descriptor = declaration.descriptor();
+
+    assert_eq!(descriptor.schema, declaration.kind.schema(0));
+    assert_eq!(
+        descriptor.suppression_edit,
+        IntentEditClassification::Definition
+    );
+    assert_eq!(
+        descriptor.input_edit,
+        IntentEditClassification::InputBinding
+    );
+    assert_eq!(descriptor.name_edit, IntentEditClassification::Organization);
+    let output = descriptor
+        .outputs
+        .iter()
+        .find(|output| output.port == primary)
+        .expect("primary point output");
+    assert_eq!(output.writable, vec![LeafField::X, LeafField::Y]);
+    assert_eq!(output.native, Some(IntentNativeReservationKind::Point));
+    assert_eq!(output.edit, IntentEditClassification::Instance);
+    assert!(matches!(
+        output.flow,
+        IntentIdentityFlow::Created { reservation }
+            if declaration.reservations.contains_key(&reservation)
+    ));
 }
 
 #[test]
@@ -2493,6 +3102,53 @@ fn pristine_empty_acceptance_rejects_wrong_inputs_and_retained_state() {
             .install_pristine_empty_acceptance(evidence)
             .is_err()
     );
+}
+
+#[test]
+fn direct_acceptance_seams_reject_forged_evidence_atomically() {
+    let mut pristine = IntentSession::with_id(IntentSessionId::from_raw(0x83_b007)).unwrap();
+    let mut forged_empty = MaterializationEvidence::new_host_artifacts(
+        pristine.external_inputs().identity(),
+        b"empty".to_vec(),
+        b"owners".to_vec(),
+        b"validated".to_vec(),
+    )
+    .unwrap();
+    forged_empty.ownership.push(0x83);
+    let pristine_identity = pristine.identity();
+    assert!(
+        pristine
+            .install_pristine_empty_acceptance(forged_empty)
+            .is_err()
+    );
+    assert_eq!(pristine.identity(), pristine_identity);
+    assert!(pristine.accepted().is_none());
+
+    let mut current = IntentSession::with_id(IntentSessionId::from_raw(0x83_b008)).unwrap();
+    let patch = IntentPatch::new(
+        current.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("point"),
+            draft: Box::new(point_draft("point")),
+            cell: None,
+        }],
+    );
+    let plan = current.plan_patch(patch, accepted).unwrap();
+    current.commit_plan(plan).unwrap();
+    let before = current.to_canonical_json().unwrap();
+    assert!(
+        current
+            .refresh_current_accepted_evidence(|candidate| {
+                let IntentEvaluation::Accepted { mut evidence } = accepted(candidate) else {
+                    unreachable!()
+                };
+                evidence.host_validation.push(0x83);
+                IntentEvaluation::Accepted { evidence }
+            })
+            .is_err()
+    );
+    assert_eq!(current.to_canonical_json().unwrap(), before);
 }
 
 #[test]
@@ -3579,4 +4235,139 @@ fn deterministic_history_projection_moves_descriptors_through_undo_redo() {
     );
     session.redo().unwrap().unwrap();
     assert_eq!(session.history_projection(), projection);
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn hostile_stable_rebind_references_fail_closed_without_materialization_or_state_change() {
+    #[derive(Clone, Copy)]
+    enum ExpectedError {
+        UnknownNode(NodeId),
+        UnknownPort { node: NodeId, port: PortId },
+        KindMismatch,
+    }
+
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8336)).unwrap();
+    let (source_node, source_port) = create_point(&mut session, "stable.source");
+    let alias_patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("stable-alias"),
+            draft: Box::new(
+                IntentNodeDraft::new(
+                    IntentNodeKind::Identity {
+                        transition: IdentityTransitionKind::Alias,
+                        port_kind: IntentPortKind::Point,
+                    },
+                    key("stable.alias"),
+                )
+                .with_input(
+                    InputSlot::new(InputRole::Identity, 0),
+                    PatchPortRef::Stable { port: source_port },
+                ),
+            ),
+            cell: None,
+        }],
+    );
+    let plan = session.plan_patch(alias_patch, accepted).unwrap();
+    let alias_node = plan.aliases().node(&key("stable-alias")).unwrap();
+    session.commit_plan(plan).unwrap();
+
+    let unknown_node = NodeId::from_raw(u64::MAX);
+    let unknown_port = PortId::from_raw(u64::MAX);
+    let cases = [
+        (
+            "unknown node",
+            IntentPortRef {
+                node: unknown_node,
+                ..source_port
+            },
+            ExpectedError::UnknownNode(unknown_node),
+        ),
+        (
+            "unknown port on a live node",
+            IntentPortRef {
+                port: unknown_port,
+                ..source_port
+            },
+            ExpectedError::UnknownPort {
+                node: source_node,
+                port: unknown_port,
+            },
+        ),
+        (
+            "caller-stamped kind mismatch",
+            IntentPortRef {
+                kind: IntentPortKind::Scalar,
+                ..source_port
+            },
+            ExpectedError::KindMismatch,
+        ),
+    ];
+
+    let identity = session.identity();
+    let canonical = session.to_canonical_json().unwrap();
+    let allocator = session.allocator_high_water();
+    for (label, source, expected) in cases {
+        let evaluated = Cell::new(false);
+        let patch = IntentPatch::new(
+            identity,
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::RebindInput {
+                node: alias_node,
+                slot: InputSlot::new(InputRole::Identity, 0),
+                source: PatchPortRef::Stable { port: source },
+            }],
+        );
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            session.plan_patch(patch, |candidate| {
+                evaluated.set(true);
+                accepted(candidate)
+            })
+        }));
+        let error = result
+            .unwrap_or_else(|_| panic!("{label} panicked instead of returning a typed error"))
+            .expect_err("hostile reference unexpectedly planned");
+        assert!(!evaluated.get(), "{label} reached the materializer");
+        match (expected, error) {
+            (
+                ExpectedError::UnknownNode(expected),
+                IntentPlanError::Graph(IntentGraphError::UnknownNode(actual)),
+            ) => assert_eq!(actual, expected, "{label}"),
+            (
+                ExpectedError::UnknownPort {
+                    node: expected_node,
+                    port: expected_port,
+                },
+                IntentPlanError::Graph(IntentGraphError::UnknownPort {
+                    node: actual_node,
+                    port: actual_port,
+                }),
+            ) => {
+                assert_eq!(actual_node, expected_node, "{label}");
+                assert_eq!(actual_port, expected_port, "{label}");
+            }
+            (
+                ExpectedError::KindMismatch,
+                IntentPlanError::Graph(IntentGraphError::InputKindMismatch {
+                    expected: IntentPortKind::Point,
+                    actual: IntentPortKind::Scalar,
+                    ..
+                }),
+            ) => {}
+            (_, actual) => panic!("{label} returned unexpected error: {actual:?}"),
+        }
+        assert_eq!(session.identity(), identity, "{label} changed identity");
+        assert_eq!(
+            session.to_canonical_json().unwrap(),
+            canonical,
+            "{label} changed canonical state"
+        );
+        assert_eq!(
+            session.allocator_high_water(),
+            allocator,
+            "{label} changed allocator high-water"
+        );
+    }
 }

@@ -125,8 +125,9 @@ mod wasm {
 
         use geosolve_constraint_editor::{
             ColdIntentMaterializer, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession,
-            IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES, ProjectionalEditorSession,
-            ProjectionalIntentCoordinator, apply_intent_rpc_json_to_editor,
+            IntentRpcSuccess, MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES, MAX_INTENT_RPC_REQUEST_BYTES,
+            ProjectionalEditorSession, ProjectionalIntentCoordinator,
+            apply_intent_rpc_json_to_editor,
         };
         use geosolve_sketch_intent::{
             GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
@@ -258,11 +259,12 @@ mod wasm {
                 r#"{"method":"redo"}"#.to_owned(),
                 r#"{"method":"inspector","node":"0000000000000063"}"#.to_owned(),
             ] {
-                assert_eq!(
-                    handle.apply(&request),
-                    rust.apply_json(&request),
-                    "{request}"
-                );
+                let wasm_response = handle.apply(&request);
+                assert_eq!(wasm_response, rust.apply_json(&request), "{request}");
+                if request.contains("\"method\":\"apply_patch\"") {
+                    assert!(!wasm_response.contains("\"snapshot\":"));
+                    assert!(wasm_response.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
+                }
             }
 
             let accepted_identity = rust.coordinator().intent().identity();
@@ -289,11 +291,8 @@ mod wasm {
             assert!(matches!(
                 retained_response,
                 IntentRpcOutcome::Success {
-                    value: IntentRpcSuccess::Patch {
-                        disposition: IntentPlanDisposition::RetainedFailed,
-                        ..
-                    }
-                }
+                    value: IntentRpcSuccess::Patch { ref receipt }
+                } if receipt.disposition == IntentPlanDisposition::RetainedFailed
             ));
             assert_ne!(rust.coordinator().intent().identity(), accepted_identity);
             assert_eq!(
@@ -429,15 +428,17 @@ mod wasm {
                 )),
             })
             .unwrap();
-            let response: IntentRpcOutcome =
-                serde_json::from_str(&apply_workbench_intent_rpc(&request)).unwrap();
+            let encoded_response = apply_workbench_intent_rpc(&request);
+            assert!(!encoded_response.contains("\"snapshot\":"));
+            assert!(encoded_response.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
+            let response: IntentRpcOutcome = serde_json::from_str(&encoded_response).unwrap();
             let after = editor.borrow().coordinator().intent().identity();
             assert_ne!(after, before);
             assert!(matches!(
                 response,
                 IntentRpcOutcome::Success {
-                    value: IntentRpcSuccess::Patch { snapshot, .. }
-                } if snapshot.identity == after
+                    value: IntentRpcSuccess::Patch { receipt }
+                } if receipt.identity == after
             ));
 
             let snapshot: IntentRpcOutcome =

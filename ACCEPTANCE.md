@@ -3234,8 +3234,8 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation, M83-F001 through M83-F007 repair, clean post-F007 qualification and
-immutable Tailscale nomination complete; focused human UAT pending. ADR 0040,
+Status: implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
+complete; fresh clean qualification and focused human UAT pending. ADR 0040,
 `docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no human
 evidence or accepted product claim exists yet.
 
@@ -3284,6 +3284,20 @@ evidence or accepted product claim exists yet.
   Abandoned v7 rejects. Strict v1-v6 restoration remains available and is normalized honestly as
   typed per-object bootstrap declarations with exact native identity bindings rather than an
   aggregate flat peer authority or fictional recipe history.
+- Canonical graph/session output is SHA-256 wire v2. Legacy-v1 import validates canonical FNV
+  fingerprints plus nested current/accepted/Undo/Redo/reservation/materialization authority before
+  one-way migration. Cached identity reads are independently rehashed on validation and mutation.
+- Undo/current/Redo causal edges, global descriptor chronology and body-derived descriptor effects
+  validate before import or restore. Accepted logical/native ownership is exact across ports,
+  reservations, writable leaves, spans, computed features, Fillet corners and aggregates.
+- One central declaration descriptor supplies schema/default/choice/output/edit metadata to compact
+  graph/source snapshots and typed clients. Explicit Snapshot is the complete read; mutations use
+  bounded typed receipts. Requests and mutation receipts are at most 16 MiB and every structured/
+  JSON response at most 64 MiB, with oversize rejection before publication.
+- Fillet/Offset Apply and accepted radius/distance releases publish the exact already validated
+  prepared transaction used by their preview. Workspace admission is 64 MiB and its version/cache/
+  canonical/digest/nested-intent validation avoids the superseded unbounded-amplification paths;
+  disposable annotation-layout JSON is independently bounded at 4 MiB.
 - New is enabled on the projectional workbench and creates the canonical empty projectional
   workspace-v8 authority used by startup. It clears durable authored geometry/declarations/history
   and transient authoring/problem/camera state, returns to Select and autosaves; it cannot route
@@ -3300,7 +3314,7 @@ evidence or accepted product claim exists yet.
   temporary/retained Tailscale byte verification for M83 UAT. GitHub Pages remains on the accepted
   M81 product until explicit supervising-human approval.
 
-Exact nomination evidence: initial nomination commit `232b83a` and post-F005 source `a621cdd`/tree
+Historical nomination evidence: initial nomination commit `232b83a` and post-F005 source `a621cdd`/tree
 `f6d77b4` are withdrawn by F001-F007. Replacement source
 `fafea4ebeddc295ca898258ac604858bcdd4db5f`, tree
 `ff75c36aacdabe601f34bb59baaba01f6c91687a`, passes the complete clean gate recorded at log
@@ -3310,8 +3324,10 @@ snapshot `/tmp/geosolve-m83-f007-uat.52r7H7` has ordered-manifest aggregate
 browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Temporary
 and final served-byte ledgers both have SHA-256
 `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`; the retained candidate is
-`http://100.94.63.83:8080/`, PID `4006665`. M83-U1 through M83-U9, targeted finding rechecks, Pages
-publication and milestone closure remain pending.
+`http://100.94.63.83:8080/`, PID `4006665`. Post-F007 architecture hardening supersedes that
+candidate before human UAT; fresh source/tree, clean gate, freeze and retained-service replacement
+remain pending. M83-U1 through M83-U9, targeted finding rechecks, Pages publication and milestone
+closure remain pending.
 
 ## Regression and oracle policy
 

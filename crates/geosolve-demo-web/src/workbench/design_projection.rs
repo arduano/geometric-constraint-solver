@@ -11,12 +11,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use geosolve_constraint_editor::{
-    IntentInspectorField, IntentInspectorProjection, IntentOutlineDeclaration, IntentSourceToken,
-    IntentSourceTokenTarget, IntentWorkbenchProjection,
+    IntentGraphNodeKind, IntentInspectorField, IntentInspectorProjection, IntentOutlineDeclaration,
+    IntentSourceToken, IntentSourceTokenTarget, IntentWorkbenchProjection,
 };
 use geosolve_sketch_intent::{
-    IntentLiteral, IntentLiteralSchema, IntentNodeKind, IntentPatchOperationKind,
-    IntentPlanDisposition, IntentSessionIdentity, IntentUnit, LeafField, NodeId, OperationKind,
+    IntentLiteral, IntentLiteralSchema, IntentPatchOperationKind, IntentPlanDisposition,
+    IntentSessionIdentity, IntentUnit, LeafField, NodeId, OperationKind,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -136,7 +136,7 @@ pub(crate) fn grouped_outline_helper_nodes(
         .filter(|declaration| {
             matches!(
                 &declaration.kind,
-                IntentNodeKind::Operation {
+                IntentGraphNodeKind::Operation {
                     operation: OperationKind::ProfileOffset
                 }
             )
@@ -145,7 +145,7 @@ pub(crate) fn grouped_outline_helper_nodes(
         .filter(|dependency| {
             consumer_count.get(dependency) == Some(&1)
                 && declarations.get(dependency).is_some_and(|declaration| {
-                    matches!(&declaration.kind, IntentNodeKind::Aggregate { .. })
+                    matches!(&declaration.kind, IntentGraphNodeKind::Aggregate { .. })
                 })
         })
         .collect()
@@ -407,39 +407,54 @@ pub(crate) fn inspector_markup(
         inspector.node,
         if inspector.suppressed { " checked" } else { "" },
     );
-    if !inspector.inputs.is_empty() {
-        markup.push_str("<fieldset class=\"wb-intent-inputs\"><legend>Inputs</legend>");
-        for (slot, source) in &inspector.inputs {
-            let _ = write!(
-                markup,
-                concat!(
-                    "<div class=\"wb-intent-input\" data-intent-input-slot=\"{}\" ",
-                    "data-intent-source-node=\"{}\" data-intent-source-port=\"{}\" ",
-                    "data-intent-source-kind=\"{:?}\"><span>{}</span>",
-                    "<code>{}.{} · {:?}</code></div>"
-                ),
-                escape_attribute(&slot.to_string()),
-                source.node,
-                source.port,
-                source.kind,
-                escape_html(&slot.to_string()),
-                source.node,
-                source.port,
-                source.kind,
-            );
-        }
-        markup.push_str("</fieldset>");
+    push_inspector_inputs(&mut markup, inspector);
+    push_inspector_fields(&mut markup, inspector);
+    markup.push_str("</section>");
+    markup
+}
+
+fn push_inspector_inputs(markup: &mut String, inspector: &IntentInspectorProjection) {
+    if inspector.inputs.is_empty() {
+        return;
     }
+    markup.push_str("<fieldset class=\"wb-intent-inputs\"><legend>Inputs</legend>");
+    for (slot, source) in &inspector.inputs {
+        let _ = write!(
+            markup,
+            concat!(
+                "<div class=\"wb-intent-input\" data-intent-input-slot=\"{}\" ",
+                "data-intent-source-node=\"{}\" data-intent-source-port=\"{}\" ",
+                "data-intent-source-kind=\"{:?}\"><span>{}</span>",
+                "<code>{}.{} · {:?}</code></div>"
+            ),
+            escape_attribute(&slot.to_string()),
+            source.node,
+            source.port,
+            source.kind,
+            escape_html(&slot.to_string()),
+            source.node,
+            source.port,
+            source.kind,
+        );
+    }
+    markup.push_str("</fieldset>");
+}
+
+fn push_inspector_fields(markup: &mut String, inspector: &IntentInspectorProjection) {
     for field in &inspector.fields {
         match field {
-            IntentInspectorField::Definition { schema, value } => {
+            IntentInspectorField::Definition { definition, value } => {
+                let schema = &inspector
+                    .definition_descriptor(definition)
+                    .expect("projected Inspector field has central descriptor")
+                    .schema;
                 let identity = format!(
                     "data-intent-node=\"{}\" data-intent-field=\"{}\"",
                     inspector.node,
                     escape_attribute(schema.field.0.as_str()),
                 );
                 push_optional_literal_editor(
-                    &mut markup,
+                    markup,
                     schema.field.0.as_str(),
                     "definition",
                     &identity,
@@ -447,11 +462,11 @@ pub(crate) fn inspector_markup(
                     value.as_ref(),
                 );
             }
-            IntentInspectorField::Instance {
-                leaf,
-                port_kind,
-                value,
-            } => {
+            IntentInspectorField::Instance { leaf, value } => {
+                let port_kind = inspector
+                    .output_descriptor(*leaf)
+                    .expect("projected Inspector leaf has central output descriptor")
+                    .kind;
                 let identity = format!(
                     concat!(
                         "data-intent-node=\"{}\" data-intent-port=\"{}\" ",
@@ -463,7 +478,7 @@ pub(crate) fn inspector_markup(
                     port_kind,
                 );
                 push_optional_literal_editor(
-                    &mut markup,
+                    markup,
                     leaf_field_label(leaf.field),
                     "instance",
                     &identity,
@@ -473,8 +488,6 @@ pub(crate) fn inspector_markup(
             }
         }
     }
-    markup.push_str("</section>");
-    markup
 }
 
 fn push_optional_literal_editor(
@@ -637,19 +650,19 @@ pub(crate) fn literal_schema_for_instance(
     )
 }
 
-fn node_family_label(kind: &IntentNodeKind) -> &'static str {
+fn node_family_label(kind: &IntentGraphNodeKind) -> &'static str {
     match kind {
-        IntentNodeKind::Geometry { .. } => "Geometry",
-        IntentNodeKind::Constraint { .. } => "Relation",
-        IntentNodeKind::Dimension { .. } => "Dimension",
-        IntentNodeKind::Operation { .. } => "Operation",
-        IntentNodeKind::ComputedFeature { .. } => "Computed",
-        IntentNodeKind::Aggregate { .. } => "Aggregate",
-        IntentNodeKind::Parameter { .. } => "Parameter",
-        IntentNodeKind::External { .. } => "External",
-        IntentNodeKind::Bootstrap { .. } => "Imported",
-        IntentNodeKind::Annotation => "Annotation",
-        IntentNodeKind::Identity { .. } => "Identity",
+        IntentGraphNodeKind::Geometry { .. } => "Geometry",
+        IntentGraphNodeKind::Constraint { .. } => "Relation",
+        IntentGraphNodeKind::Dimension { .. } => "Dimension",
+        IntentGraphNodeKind::Operation { .. } => "Operation",
+        IntentGraphNodeKind::ComputedFeature { .. } => "Computed",
+        IntentGraphNodeKind::Aggregate { .. } => "Aggregate",
+        IntentGraphNodeKind::Parameter { .. } => "Parameter",
+        IntentGraphNodeKind::External { .. } => "External",
+        IntentGraphNodeKind::Bootstrap { .. } => "Imported",
+        IntentGraphNodeKind::Annotation => "Annotation",
+        IntentGraphNodeKind::Identity { .. } => "Identity",
     }
 }
 
@@ -720,15 +733,15 @@ fn escape_html(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        IntentOutlineDeclaration, IntentSourceToken, IntentSourceTokenId, IntentSourceTokenTarget,
-        IntentWorkbenchProjection,
+        IntentGraphNodeKind, IntentOutlineDeclaration, IntentSourceToken, IntentSourceTokenId,
+        IntentSourceTokenTarget, IntentWorkbenchProjection,
     };
     use geosolve_sketch_intent::{
-        AggregateKind, GeometryRecipeKind, InputRole, InputSlot, IntentEvaluation, IntentKey,
-        IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation,
-        IntentPatchPolicy, IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
-        IntentSession, IntentSessionId, IntentUnit, LeafField, MaterializationEvidence, NodeId,
-        OperationKind, PortId,
+        AggregateKind, GeometryRecipeKind, InputRole, InputSlot, IntentDeclarationDescriptor,
+        IntentEditClassification, IntentEvaluation, IntentKey, IntentLiteral, IntentNodeDraft,
+        IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortKind,
+        IntentPortRef, IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId,
+        IntentUnit, LeafField, MaterializationEvidence, NodeId, OperationKind, PortId,
     };
 
     use super::{
@@ -815,7 +828,12 @@ mod tests {
         assert_eq!(declaration_count(&projection), 1);
         assert!(outline.contains(&format!("data-intent-node=\"{node}\"")));
         assert!(outline.contains("aria-selected=\"true\""));
-        assert!(source.contains("import { design } from &quot;@geosolve/intent&quot;;"));
+        assert!(
+            source.contains(
+                "import type { IntentSourceSnapshot } from &quot;@geosolve/intent&quot;;"
+            )
+        );
+        assert!(source.contains("satisfies IntentSourceSnapshot;"));
         assert!(source.contains("data-intent-source-token=\"0\""));
         assert!(source.contains(&format!(
             "data-intent-digest=\"{}\"",
@@ -848,16 +866,27 @@ mod tests {
             port: PortId::from_raw(0x8305_1010),
             kind: IntentPortKind::Point,
         };
+        let kind = IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        };
         let inspector = geosolve_constraint_editor::IntentInspectorProjection {
             node,
             symbol: key("bound_segment"),
             name: key("Bound segment"),
-            kind: IntentNodeKind::Geometry {
+            kind: IntentGraphNodeKind::Geometry {
                 recipe: GeometryRecipeKind::Segment,
             },
             suppressed: false,
             retained_failure: false,
             inputs: vec![(slot, source)],
+            descriptor: IntentDeclarationDescriptor {
+                schema: kind.schema(0),
+                fields: kind.field_descriptors(0),
+                outputs: Vec::new(),
+                suppression_edit: IntentEditClassification::Definition,
+                input_edit: IntentEditClassification::InputBinding,
+                name_edit: IntentEditClassification::Organization,
+            },
             fields: Vec::new(),
         };
 
@@ -887,7 +916,8 @@ mod tests {
         let (_, projection, _) = fixture();
         let first = structured_source_markup(&projection, None);
         assert_eq!(first, structured_source_markup(&projection, None));
-        assert!(first.contains("export const sketch = design"));
+        assert!(first.contains("export const sketch = {"));
+        assert!(first.contains("satisfies IntentSourceSnapshot;"));
         assert!(first.contains("contenteditable=\"plaintext-only\""));
         assert!(first.contains("data-intent-drop-before="));
         assert!(first.contains("draggable=\"true\""));
@@ -913,7 +943,7 @@ mod tests {
             declaration(
                 aggregate,
                 "offset_operand_helper",
-                IntentNodeKind::Aggregate {
+                IntentGraphNodeKind::Aggregate {
                     aggregate: AggregateKind::OpenChain,
                 },
                 Vec::new(),
@@ -921,7 +951,7 @@ mod tests {
             declaration(
                 offset,
                 "Offset 1",
-                IntentNodeKind::Operation {
+                IntentGraphNodeKind::Operation {
                     operation: OperationKind::ProfileOffset,
                 },
                 vec![aggregate],
@@ -939,7 +969,7 @@ mod tests {
         projection.outline[0].declarations.push(declaration(
             NodeId::from_raw(0x8305_1003),
             "Offset 2",
-            IntentNodeKind::Operation {
+            IntentGraphNodeKind::Operation {
                 operation: OperationKind::ProfileOffset,
             },
             vec![aggregate],
@@ -967,13 +997,13 @@ mod tests {
             .iter_mut()
             .find(|declaration| declaration.node == helper)
             .expect("fixture declaration exists");
-        helper_declaration.kind = IntentNodeKind::Aggregate {
+        helper_declaration.kind = IntentGraphNodeKind::Aggregate {
             aggregate: AggregateKind::OpenChain,
         };
         projection.outline[0].declarations.push(declaration(
             offset,
             "Offset 1",
-            IntentNodeKind::Operation {
+            IntentGraphNodeKind::Operation {
                 operation: OperationKind::ProfileOffset,
             },
             vec![helper],

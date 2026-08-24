@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use geosolve_constraint_editor::{IntentRpcRequest, IntentRpcSession};
+use geosolve_constraint_editor::{
+    IntentRpcRequest, IntentRpcSession, MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES,
+};
 use geosolve_demo_web::intent_rpc;
 use geosolve_sketch_intent::{
     GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
@@ -64,11 +66,14 @@ fn create_point_request(session: &IntentRpcSession) -> String {
 fn dom_free_web_adapter_matches_the_shared_native_rpc_byte_for_byte() {
     let (mut native, mut wasm_surface) = sessions();
     let request = create_point_request(&native);
+    let native_receipt = native.apply_json(&request);
     assert_eq!(
-        native.apply_json(&request),
+        native_receipt,
         wasm_surface.apply_json(&request),
         "the wasm-bindgen handle delegates to this same DOM-free byte protocol"
     );
+    assert!(!native_receipt.contains("\"snapshot\":"));
+    assert!(native_receipt.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
     assert_eq!(
         native.apply_json(r#"{"method":"snapshot"}"#),
         wasm_surface.apply_json(r#"{"method":"snapshot"}"#)

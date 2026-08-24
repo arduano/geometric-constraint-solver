@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, IntentInspectorEditTarget, IntentInspectorEditValue,
-    IntentInspectorField, IntentNativeBinding, IntentRpcOutcome, IntentRpcRequest,
-    IntentRpcSession, IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES, ProjectionalEditorSession,
-    ProjectionalIntentCoordinator, apply_intent_rpc_json_to_editor, apply_intent_rpc_to_editor,
+    ColdIntentMaterializer, IntentGraphNodeKind, IntentInspectorEditTarget,
+    IntentInspectorEditValue, IntentInspectorField, IntentNativeBinding, IntentRpcOutcome,
+    IntentRpcRequest, IntentRpcSession, IntentRpcSuccess, MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES,
+    MAX_INTENT_RPC_REQUEST_BYTES, ProjectionalEditorSession, ProjectionalIntentCoordinator,
+    apply_intent_rpc_json_to_editor, apply_intent_rpc_to_editor,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_intent::{
-    CellTarget, GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
-    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector,
-    IntentSessionId, IntentUnit, LeafField,
+    BootstrapNativeKind, CellTarget, GeometryRecipeKind, IntentBootstrapObject, IntentFieldKey,
+    IntentIdentityFlow, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+    IntentOperationOutput, IntentOperationOutputKind, IntentPatch, IntentPatchOperation,
+    IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSessionId, IntentUnit, LeafField,
+    OperationKind, intent_content_digest,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -132,6 +135,320 @@ fn invalid_segment() -> IntentNodeDraft {
 }
 
 #[test]
+fn rpc_graph_snapshot_exposes_actual_stable_output_ids_and_current_leaves() {
+    let mut rpc = rpc();
+    let response = rpc.apply(IntentRpcRequest::ApplyPatch {
+        patch: Box::new(IntentPatch::new(
+            rpc.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("point"),
+                draft: Box::new(point()),
+                cell: None,
+            }],
+        )),
+    });
+    let IntentRpcOutcome::Success {
+        value: IntentRpcSuccess::Patch { receipt },
+    } = response
+    else {
+        panic!("valid point patch must return a bounded receipt")
+    };
+    assert_eq!(receipt.identity, rpc.coordinator().intent().identity());
+    let node = receipt
+        .aliases
+        .node(&key("point"))
+        .expect("stable node alias");
+    let selector = IntentPortSelector::Node {
+        role: IntentPortRole::Primary,
+        index: 0,
+    };
+    let port = receipt
+        .aliases
+        .port(&key("point"), selector)
+        .expect("stable point output alias");
+    let snapshot = rpc.snapshot();
+    let declaration = snapshot.graph.cells[0]
+        .declarations
+        .iter()
+        .find(|declaration| declaration.node == node)
+        .expect("queryable declaration");
+    assert_eq!(declaration.symbol, key("rpc.point"));
+    assert_eq!(declaration.name, key("rpc.point"));
+    assert!(!declaration.suppressed);
+    assert!(declaration.inputs.is_empty());
+    assert!(declaration.definition_fields.is_empty());
+    assert!(declaration.dependencies.is_empty());
+    let output = declaration
+        .descriptor
+        .outputs
+        .iter()
+        .find(|output| output.port == port)
+        .expect("actual stable output ID");
+    assert_eq!(output.selector, selector);
+    assert_eq!(output.writable, [LeafField::X, LeafField::Y]);
+    assert!(matches!(output.flow, IntentIdentityFlow::Created { .. }));
+    assert_eq!(declaration.instance_leaves.len(), 2);
+    assert!(
+        declaration
+            .instance_leaves
+            .iter()
+            .all(|entry| entry.leaf.node == node && entry.leaf.port == port.port)
+    );
+
+    let encoded = serde_json::to_string(&snapshot.graph).expect("graph query serializes");
+    let decoded = serde_json::from_str(&encoded).expect("graph query round trips");
+    assert_eq!(snapshot.graph, decoded);
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn rpc_graph_snapshot_preserves_child_topology_and_operation_output_spans() {
+    let mut operation_outputs = Vec::new();
+    operation_outputs
+        .extend((0..4).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Point)));
+    operation_outputs.extend((0..4).map(|_| IntentOperationOutput::curve(1)));
+    operation_outputs.extend(
+        (0..5).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Constraint)),
+    );
+    operation_outputs
+        .extend((0..2).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Scalar)));
+    operation_outputs.extend(
+        (0..2).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Dimension)),
+    );
+    let polyline = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Polyline,
+        },
+        key("rpc.polyline"),
+    )
+    .with_dynamic_children(3);
+    let polyline_port_count = polyline
+        .schema_generated_port_count()
+        .expect("bounded polyline port shape");
+    let rectangle = IntentNodeDraft::new(
+        IntentNodeKind::Operation {
+            operation: OperationKind::Rectangle,
+        },
+        key("rpc.rectangle"),
+    )
+    .with_field(
+        IntentFieldKey(key("origin")),
+        IntentLiteral::Point([1.0, 2.0]),
+    )
+    .with_field(
+        IntentFieldKey(key("width")),
+        IntentLiteral::Quantity {
+            value: 4.0,
+            unit: IntentUnit::Length,
+        },
+    )
+    .with_field(
+        IntentFieldKey(key("height")),
+        IntentLiteral::Quantity {
+            value: 3.0,
+            unit: IntentUnit::Length,
+        },
+    )
+    .with_field(
+        IntentFieldKey(key("role")),
+        IntentLiteral::Enum(key("profile")),
+    )
+    .with_operation_outputs(operation_outputs.clone());
+    let rectangle_port_count = rectangle
+        .schema_generated_port_count()
+        .expect("bounded rectangle-operation port shape");
+
+    let mut rpc = rpc();
+    let response = rpc.apply(IntentRpcRequest::ApplyPatch {
+        patch: Box::new(IntentPatch::new(
+            rpc.coordinator().intent().identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("polyline"),
+                    draft: Box::new(polyline),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("rectangle"),
+                    draft: Box::new(rectangle),
+                    cell: None,
+                },
+            ],
+        )),
+    });
+    let IntentRpcOutcome::Success {
+        value: IntentRpcSuccess::Patch { receipt },
+    } = response
+    else {
+        panic!("valid child and operation-output declarations must remain queryable")
+    };
+    let polyline_node = receipt
+        .aliases
+        .node(&key("polyline"))
+        .expect("polyline alias");
+    let rectangle_node = receipt
+        .aliases
+        .node(&key("rectangle"))
+        .expect("rectangle alias");
+
+    let authoritative_polyline = rpc
+        .coordinator()
+        .intent()
+        .graph()
+        .node(polyline_node)
+        .expect("authoritative polyline");
+    let expected_children = authoritative_polyline
+        .child_order
+        .iter()
+        .map(|child_id| {
+            let child = &authoritative_polyline.children[child_id];
+            (
+                *child_id,
+                child.schema,
+                child
+                    .ports
+                    .iter()
+                    .map(|port_id| authoritative_polyline.ports[port_id].as_ref(polyline_node))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(expected_children.len(), 3);
+    assert_eq!(authoritative_polyline.ports.len(), polyline_port_count);
+    assert_eq!(
+        rpc.coordinator()
+            .intent()
+            .graph()
+            .node(rectangle_node)
+            .expect("authoritative rectangle")
+            .ports
+            .len(),
+        rectangle_port_count
+    );
+
+    let snapshot = rpc.snapshot();
+    let declarations = &snapshot.graph.cells[0].declarations;
+    let projected_polyline = declarations
+        .iter()
+        .find(|declaration| declaration.node == polyline_node)
+        .expect("projected polyline");
+    assert_eq!(projected_polyline.children.len(), expected_children.len());
+    for (projected, (child, schema, ports)) in
+        projected_polyline.children.iter().zip(expected_children)
+    {
+        assert_eq!(projected.child, child);
+        assert_eq!(projected.schema, schema);
+        assert_eq!(projected.ports, ports);
+    }
+
+    let projected_rectangle = declarations
+        .iter()
+        .find(|declaration| declaration.node == rectangle_node)
+        .expect("projected rectangle operation");
+    assert_eq!(projected_rectangle.operation_outputs, operation_outputs);
+    assert_eq!(
+        projected_rectangle
+            .operation_outputs
+            .iter()
+            .filter(|output| output.kind == IntentOperationOutputKind::Curve)
+            .map(|output| output.curve_span_count)
+            .collect::<Vec<_>>(),
+        vec![1, 1, 1, 1]
+    );
+
+    let encoded = serde_json::to_string(&snapshot.graph).expect("graph query serializes");
+    let decoded = serde_json::from_str(&encoded).expect("graph query round trips");
+    assert_eq!(snapshot.graph, decoded);
+}
+
+#[test]
+fn rpc_graph_snapshot_compacts_large_bootstrap_payload_to_sha256_metadata() {
+    const PAYLOAD_BYTES: usize = 512 * 1024;
+    let payload = vec![0xa5; PAYLOAD_BYTES];
+    let payload_sha256 = intent_content_digest(&payload);
+    let codec = key("rpc-large-bootstrap-v1");
+    let draft = IntentNodeDraft::new(
+        IntentNodeKind::Bootstrap {
+            object: IntentBootstrapObject::new(BootstrapNativeKind::Point, codec.clone(), payload)
+                .expect("bounded bootstrap payload"),
+        },
+        key("rpc.large.bootstrap"),
+    );
+    let mut rpc = rpc();
+    let response = rpc.apply(IntentRpcRequest::ApplyPatch {
+        patch: Box::new(IntentPatch::new(
+            rpc.coordinator().intent().identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("bootstrap"),
+                draft: Box::new(draft),
+                cell: None,
+            }],
+        )),
+    });
+    let IntentRpcOutcome::Success {
+        value: IntentRpcSuccess::Patch { receipt },
+    } = response
+    else {
+        panic!("unsupported host codec must remain queryable as retained intent")
+    };
+    assert_eq!(
+        receipt.disposition,
+        geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed
+    );
+    let node = receipt
+        .aliases
+        .node(&key("bootstrap"))
+        .expect("bootstrap alias");
+    let snapshot = rpc.snapshot();
+    let declaration = snapshot.graph.cells[0]
+        .declarations
+        .iter()
+        .find(|declaration| declaration.node == node)
+        .expect("retained bootstrap declaration");
+    let IntentGraphNodeKind::Bootstrap { object } = &declaration.kind else {
+        panic!("bootstrap kind metadata must stay explicit")
+    };
+    assert_eq!(object.kind, BootstrapNativeKind::Point);
+    assert_eq!(object.codec, codec);
+    assert_eq!(object.payload_bytes, PAYLOAD_BYTES as u64);
+    assert_eq!(object.payload_sha256, payload_sha256);
+    assert!(declaration.bootstrap_origin.is_none());
+
+    let encoded = serde_json::to_string(&snapshot.graph).expect("bounded graph query serializes");
+    assert!(!encoded.contains("\"payload\":"));
+    assert!(encoded.contains(&format!("\"payload_bytes\":{PAYLOAD_BYTES}")));
+    assert!(encoded.contains(&payload_sha256.to_string()));
+    assert!(
+        encoded.len() < 8 * 1024,
+        "opaque payload size must not scale the stable query response"
+    );
+    let full_snapshot = serde_json::to_string(&snapshot).expect("full RPC snapshot serializes");
+    assert!(!full_snapshot.contains("\"payload\":"));
+    assert!(
+        full_snapshot.len() < 32 * 1024,
+        "workbench projection must not reintroduce opaque bootstrap bytes"
+    );
+
+    let inspector = rpc.apply(IntentRpcRequest::Inspector { node });
+    let encoded_inspector = serde_json::to_string(&inspector).expect("Inspector RPC serializes");
+    assert!(!encoded_inspector.contains("\"payload\":"));
+    assert!(
+        encoded_inspector.len() < 8 * 1024,
+        "Inspector response must remain independent of bootstrap payload size"
+    );
+
+    let encoded_receipt = serde_json::to_string(&IntentRpcOutcome::Success {
+        value: IntentRpcSuccess::Patch { receipt },
+    })
+    .expect("mutation receipt serializes");
+    assert!(!encoded_receipt.contains("\"snapshot\":"));
+    assert!(encoded_receipt.len() < 4 * 1024);
+}
+
+#[test]
 fn native_and_json_rpc_share_exact_patch_history_and_projection() {
     let mut native = rpc();
     let patch = IntentPatch::new(
@@ -150,36 +467,113 @@ fn native_and_json_rpc_share_exact_patch_history_and_projection() {
     let response_json = native.apply_json(&request_json);
     let response: IntentRpcOutcome = serde_json::from_str(&response_json).unwrap();
     let IntentRpcOutcome::Success {
-        value:
-            IntentRpcSuccess::Patch {
-                disposition,
-                snapshot,
-                ..
-            },
+        value: IntentRpcSuccess::Patch { receipt },
     } = response
     else {
         panic!("valid typed patch must be accepted")
     };
     assert_eq!(
-        disposition,
+        receipt.disposition,
         geosolve_sketch_intent::IntentPlanDisposition::Accepted
     );
+    assert_eq!(receipt.identity, native.coordinator().intent().identity());
+    let snapshot = native.snapshot();
     assert_eq!(snapshot.identity, native.coordinator().intent().identity());
     assert_eq!(snapshot.projection.outline[0].declarations.len(), 1);
     assert_eq!(snapshot.projection.history.applied.len(), 1);
     assert!(snapshot.accepted_validation.is_some());
 
     let undo = native.apply_json(r#"{"method":"undo"}"#);
+    assert!(!undo.contains("\"snapshot\":"));
+    assert!(undo.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
     let undo: IntentRpcOutcome = serde_json::from_str(&undo).unwrap();
     let IntentRpcOutcome::Success {
-        value: IntentRpcSuccess::History { moved, snapshot },
+        value: IntentRpcSuccess::History { receipt },
     } = undo
     else {
         panic!("Undo must return a history result")
     };
-    assert!(moved);
+    assert!(receipt.moved);
+    assert_eq!(receipt.identity, native.coordinator().intent().identity());
+    let snapshot = native.snapshot();
     assert!(snapshot.projection.outline[0].declarations.is_empty());
     assert_eq!(snapshot.projection.history.redoable.len(), 1);
+
+    let redo = native.apply_json(r#"{"method":"redo"}"#);
+    assert!(!redo.contains("\"snapshot\":"));
+    assert!(redo.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
+    let redo: IntentRpcOutcome = serde_json::from_str(&redo).unwrap();
+    let IntentRpcOutcome::Success {
+        value: IntentRpcSuccess::History { receipt },
+    } = redo
+    else {
+        panic!("Redo must return a history receipt")
+    };
+    assert!(receipt.moved);
+    assert_eq!(receipt.identity, native.coordinator().intent().identity());
+    assert_eq!(native.snapshot().projection.history.applied.len(), 1);
+}
+
+#[test]
+fn source_token_mutation_returns_only_its_exact_post_commit_receipt() {
+    let mut rpc = rpc();
+    assert!(matches!(
+        rpc.apply(IntentRpcRequest::ApplyPatch {
+            patch: Box::new(IntentPatch::new(
+                rpc.coordinator().intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::CreateNode {
+                    alias: key("point"),
+                    draft: Box::new(point()),
+                    cell: None,
+                }],
+            )),
+        }),
+        IntentRpcOutcome::Success { .. }
+    ));
+    let before = rpc.coordinator().intent().identity();
+    let token = rpc
+        .snapshot()
+        .projection
+        .structured_source
+        .tokens
+        .into_iter()
+        .find(|token| {
+            matches!(
+                token.target,
+                geosolve_constraint_editor::IntentSourceTokenTarget::NodeName { .. }
+            )
+        })
+        .expect("generated node-name token");
+    let request = IntentRpcRequest::EditSourceToken {
+        expected: Box::new(before),
+        token: token.id,
+        replacement: r#""RPC renamed point""#.to_owned(),
+    };
+
+    let encoded = rpc.apply_json(&serde_json::to_string(&request).unwrap());
+    assert!(!encoded.contains("\"snapshot\":"));
+    assert!(encoded.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
+    let response: IntentRpcOutcome = serde_json::from_str(&encoded).unwrap();
+    let IntentRpcOutcome::Success {
+        value: IntentRpcSuccess::Patch { receipt },
+    } = response
+    else {
+        panic!("valid source-token edit returns a patch receipt")
+    };
+    assert_ne!(receipt.identity, before);
+    assert_eq!(receipt.identity, rpc.coordinator().intent().identity());
+    assert_eq!(
+        receipt.disposition,
+        geosolve_sketch_intent::IntentPlanDisposition::OrganizationOnly
+    );
+    assert!(receipt.aliases.nodes.is_empty());
+    assert!(receipt.aliases.ports.is_empty());
+    assert!(receipt.aliases.cells.is_empty());
+    assert_eq!(
+        rpc.snapshot().projection.outline[0].declarations[0].name,
+        key("RPC renamed point")
+    );
 }
 
 #[test]
@@ -199,12 +593,17 @@ fn malformed_and_stale_rpc_are_fail_closed_and_preserve_authority() {
         node: geosolve_sketch_intent::NodeId::from_raw(99),
     });
     let IntentRpcOutcome::Success {
-        value: IntentRpcSuccess::Inspector { inspector, .. },
+        value:
+            IntentRpcSuccess::Inspector {
+                identity: projected,
+                inspector,
+            },
     } = unknown
     else {
         panic!("unknown Inspector selection is a valid empty projection")
     };
     assert!(inspector.is_none());
+    assert_eq!(*projected, identity);
     assert_eq!(rpc.coordinator().intent().identity(), identity);
 }
 
@@ -341,11 +740,9 @@ fn retained_invalid_stale_and_oversized_rpc_requests_preserve_exact_authority() 
     assert!(matches!(
         accepted,
         IntentRpcOutcome::Success {
-            value: IntentRpcSuccess::Patch {
-                disposition: geosolve_sketch_intent::IntentPlanDisposition::Accepted,
-                ..
-            }
-        }
+            value: IntentRpcSuccess::Patch { ref receipt }
+        } if receipt.disposition
+            == geosolve_sketch_intent::IntentPlanDisposition::Accepted
     ));
     let accepted_identity = rpc.coordinator().intent().identity();
     let accepted_validation = rpc
@@ -369,11 +766,9 @@ fn retained_invalid_stale_and_oversized_rpc_requests_preserve_exact_authority() 
     assert!(matches!(
         retained,
         IntentRpcOutcome::Success {
-            value: IntentRpcSuccess::Patch {
-                disposition: geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed,
-                ..
-            }
-        }
+            value: IntentRpcSuccess::Patch { ref receipt }
+        } if receipt.disposition
+            == geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed
     ));
     let retained_identity = rpc.coordinator().intent().identity();
     assert_eq!(
@@ -417,6 +812,51 @@ fn retained_invalid_stale_and_oversized_rpc_requests_preserve_exact_authority() 
 }
 
 #[test]
+fn excessive_schema_generated_alias_receipt_rejects_before_publication() {
+    let mut rpc = rpc();
+    let before = rpc.coordinator().intent().clone();
+    let wide_operation = |symbol: &str| {
+        IntentNodeDraft::new(
+            IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset,
+            },
+            key(symbol),
+        )
+        .with_operation_outputs(vec![IntentOperationOutput::curve(u16::MAX)])
+    };
+    let request = IntentRpcRequest::ApplyPatch {
+        patch: Box::new(IntentPatch::new(
+            before.identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-operation"),
+                    draft: Box::new(wide_operation("rpc.excessive.first")),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second-operation"),
+                    draft: Box::new(wide_operation("rpc.excessive.second")),
+                    cell: None,
+                },
+            ],
+        )),
+    };
+
+    let response = rpc.apply(request);
+    assert!(matches!(
+        response,
+        IntentRpcOutcome::Failure { ref failure }
+            if failure.code == "receipt_too_large"
+                && failure.identity == Some(before.identity())
+    ));
+    assert_eq!(rpc.coordinator().intent(), &before);
+    assert!(rpc.coordinator().accepted_materialization().is_none());
+    let encoded = serde_json::to_string(&response).expect("bounded failure receipt serializes");
+    assert!(encoded.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
+}
+
+#[test]
 fn code_authored_rpc_continues_through_live_gui_projection_and_one_history() {
     let mut editor = editor();
     let request = IntentRpcRequest::ApplyPatch {
@@ -432,13 +872,14 @@ fn code_authored_rpc_continues_through_live_gui_projection_and_one_history() {
     };
     let response = apply_intent_rpc_to_editor(&mut editor, request);
     let IntentRpcOutcome::Success {
-        value: IntentRpcSuccess::Patch { aliases, .. },
+        value: IntentRpcSuccess::Patch { receipt },
     } = response
     else {
         panic!("code-authored patch must publish through the live editor")
     };
-    let node = aliases.node(&key("point")).unwrap();
-    let port = aliases
+    let node = receipt.aliases.node(&key("point")).unwrap();
+    let port = receipt
+        .aliases
         .port(
             &key("point"),
             IntentPortSelector::Node {
@@ -501,8 +942,8 @@ fn code_authored_rpc_continues_through_live_gui_projection_and_one_history() {
     assert!(matches!(
         rpc_undo,
         IntentRpcOutcome::Success {
-            value: IntentRpcSuccess::History { moved: true, .. }
-        }
+            value: IntentRpcSuccess::History { ref receipt }
+        } if receipt.moved
     ));
     assert_eq!(editor.workbench_projection().history.applied.len(), 1);
     assert_eq!(editor.workbench_projection().history.redoable.len(), 1);
@@ -513,8 +954,8 @@ fn code_authored_rpc_continues_through_live_gui_projection_and_one_history() {
     assert!(matches!(
         rpc_redo,
         IntentRpcOutcome::Success {
-            value: IntentRpcSuccess::History { moved: true, .. }
-        }
+            value: IntentRpcSuccess::History { ref receipt }
+        } if receipt.moved
     ));
     assert_eq!(editor.workbench_projection().history.applied.len(), 2);
 }

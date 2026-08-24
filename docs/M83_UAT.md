@@ -2,22 +2,24 @@
 
 # M83 focused UAT — Projectional sketch design intent
 
-Status: **post-F007 clean-qualified immutable replacement candidate nominated; focused human UAT
-pending**. Automation owns exact identities, equations, residuals, persistence and deterministic
-reconstruction; human review owns clarity and interaction feel.
+Status: **post-F007 architecture hardening complete; fresh clean-qualified immutable replacement
+candidate and focused human UAT pending**. Automation owns exact identities, equations, residuals,
+persistence and deterministic reconstruction; human review owns clarity and interaction feel.
 
 ## Candidate authority
 
 Initial nomination commit `232b83a` and post-F005 source `a621cdd`/tree `f6d77b4` are withdrawn by
-M83-F001 through M83-F007 and remain historical evidence only.
+M83-F001 through M83-F007 and remain historical evidence only. The post-F007 candidate below is
+also superseded before human UAT by the architecture-hardening pass; it remains live temporarily
+only until the fresh candidate is clean-qualified, frozen and byte-verified.
 
-- Product source: `fafea4ebeddc295ca898258ac604858bcdd4db5f`.
-- Product tree: `ff75c36aacdabe601f34bb59baaba01f6c91687a`.
-- Frozen no-rebuild snapshot: `/tmp/geosolve-m83-f007-uat.52r7H7` (directory `0555`; seven regular
+- Superseded post-F007 product source: `fafea4ebeddc295ca898258ac604858bcdd4db5f`.
+- Superseded post-F007 product tree: `ff75c36aacdabe601f34bb59baaba01f6c91687a`.
+- Historical frozen no-rebuild snapshot: `/tmp/geosolve-m83-f007-uat.52r7H7` (directory `0555`; seven regular
   non-symlink files `0444`).
 - Ordered file-manifest aggregate:
   `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`.
-- Retained Tailscale endpoint: `http://100.94.63.83:8080/`
+- Temporarily retained superseded Tailscale endpoint: `http://100.94.63.83:8080/`
   (`geosolve-m83-uat.service`, PID `4006665`).
 - Clean gate:
   `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`,
@@ -46,6 +48,13 @@ evidence is in `/tmp/geosolve-m83-f007-freeze-evidence.y5GbCJ`.
 
 GitHub Pages deliberately remains on accepted M81 bytes. M83-U1 through M83-U9 are pending and no
 automated result below is presented as human evidence.
+
+The renewed candidate must additionally preserve the automation-only architecture contract:
+strict SHA-256 v2/legacy-v1 migration, independently validated accepted/current/history authority,
+descriptor/body chronology, exact ownership, prepared Fillet/Offset publication, compact explicit
+Snapshot reads, typed bounded receipts/responses, the 64 MiB workspace admission boundary and 4 MiB
+disposable annotation-cache bound. These are mechanical trust/atomicity/resource properties, not
+extra hands-on scorecard rows.
 
 | ID | Check | Expected result | Status |
 | --- | --- | --- | --- |

@@ -22,6 +22,7 @@ mod intent_computed;
 mod intent_coordinator;
 mod intent_editor;
 mod intent_feature_authoring;
+mod intent_graph_snapshot;
 mod intent_inputs;
 mod intent_offset_authoring;
 mod intent_projection;
@@ -125,6 +126,11 @@ pub use intent_feature_authoring::{
     ProjectionalFilletAuthoringError, ProjectionalFilletPatch, projectional_fillet_patch,
     projectional_fillet_radius_patch,
 };
+pub use intent_graph_snapshot::{
+    IntentBootstrapMetadata, IntentGraphCell, IntentGraphChild, IntentGraphDeclaration,
+    IntentGraphDefinitionField, IntentGraphInput, IntentGraphInstanceLeaf, IntentGraphNodeKind,
+    IntentGraphSnapshot,
+};
 pub use intent_offset_authoring::{
     ProjectionalProfileOffsetError, ProjectionalProfileOffsetPatch,
     projectional_profile_offset_delete_node_patch, projectional_profile_offset_delete_patch,
@@ -138,9 +144,10 @@ pub use intent_projection::{
     IntentStructuredSource, IntentWorkbenchProjection,
 };
 pub use intent_rpc::{
-    IntentRpcFailure, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSnapshot,
-    IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES, apply_intent_rpc_json_to_editor,
-    apply_intent_rpc_to_editor,
+    IntentRpcFailure, IntentRpcHistoryReceipt, IntentRpcOutcome, IntentRpcPatchReceipt,
+    IntentRpcRequest, IntentRpcSession, IntentRpcSnapshot, IntentRpcSuccess,
+    MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES, MAX_INTENT_RPC_REQUEST_BYTES,
+    MAX_INTENT_RPC_RESPONSE_BYTES, apply_intent_rpc_json_to_editor, apply_intent_rpc_to_editor,
 };
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,

@@ -3,8 +3,9 @@
 use geosolve_constraint_editor::{
     ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, EditorHoverTarget,
     FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-    FeatureAuthoringState, FeatureAuthoringTool, IntentNativeBinding, IntentNativeWritableLeaf,
-    Modifiers, PickTolerance, PointerInput, ProjectionalEditorError, ProjectionalEditorSession,
+    FeatureAuthoringState, FeatureAuthoringTool, IntentMaterializationError,
+    IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf, Modifiers,
+    PickTolerance, PointerInput, ProjectionalEditorError, ProjectionalEditorSession,
     ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
@@ -14,8 +15,8 @@ use geosolve_sketch_features::{
 use geosolve_sketch_intent::{
     CellTarget, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey, IntentKey, IntentLiteral,
     IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
-    IntentPlanDisposition, IntentPortRole, IntentPortSelector, IntentSessionId, IntentUnit,
-    LeafField, PatchPortRef,
+    IntentPlanDisposition, IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
+    IntentSessionId, IntentUnit, LeafField, NodeId, PatchPortRef,
 };
 
 const DOCUMENT_RAW: u128 = 0x8300_f111_0000_0001;
@@ -120,6 +121,204 @@ fn fixture() -> (ProjectionalEditorSession, Viewport) {
         ProjectionalEditorSession::new(coordinator),
         Viewport::new([800.0, 600.0], [2.0, 2.0], 50.0).unwrap(),
     )
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the hostile provenance fixture keeps both independent Fillet supports explicit"
+)]
+fn provenance_fixture() -> ProjectionalEditorSession {
+    let document = DocumentId(PersistentId::from_u128(DOCUMENT_RAW + 1));
+    let mut coordinator = ProjectionalIntentCoordinator::empty(
+        IntentSessionId::from_raw(0x8300_f112),
+        ColdIntentMaterializer::with_default_policy(document, 10.0).unwrap(),
+    )
+    .unwrap();
+    coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-start"),
+                    draft: Box::new(point("first.start", [0.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-corner-one"),
+                    draft: Box::new(point("first.corner.one", [4.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-corner-two"),
+                    draft: Box::new(point("first.corner.two", [4.0, 4.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-end"),
+                    draft: Box::new(point("first.end", [8.0, 4.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-line-one"),
+                    draft: Box::new(line(
+                        "first.line.one",
+                        "first-start",
+                        "first-corner-one",
+                        [1.0, 0.0],
+                    )),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-line-two"),
+                    draft: Box::new(line(
+                        "first.line.two",
+                        "first-corner-one",
+                        "first-corner-two",
+                        [0.0, 1.0],
+                    )),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("first-line-three"),
+                    draft: Box::new(line(
+                        "first.line.three",
+                        "first-corner-two",
+                        "first-end",
+                        [1.0, 0.0],
+                    )),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second-start"),
+                    draft: Box::new(point("second.start", [12.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second-corner"),
+                    draft: Box::new(point("second.corner", [16.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second-end"),
+                    draft: Box::new(point("second.end", [16.0, 4.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second-line-one"),
+                    draft: Box::new(line(
+                        "second.line.one",
+                        "second-start",
+                        "second-corner",
+                        [1.0, 0.0],
+                    )),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second-line-two"),
+                    draft: Box::new(line(
+                        "second.line.two",
+                        "second-corner",
+                        "second-end",
+                        [0.0, 1.0],
+                    )),
+                    cell: None,
+                },
+            ],
+        ))
+        .unwrap();
+    ProjectionalEditorSession::new(coordinator)
+}
+
+fn fillet_candidate_for_points(
+    session: &ProjectionalEditorSession,
+    point_labels: &[&str],
+) -> FeatureAuthoringCandidate {
+    let native = session.coordinator().presentation_session().unwrap();
+    let snapshot = ComputedFeatureAuthoringSnapshot::capture(native).unwrap();
+    let document = snapshot.sketch_document();
+    let mut state = FeatureAuthoringState::default();
+    assert!(matches!(
+        state.activate(&snapshot, document, FeatureAuthoringTool::Fillet, &[]),
+        FeatureAuthoringOutcome::ModeEntered(_) | FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    let mut outcome = None;
+    for label in point_labels {
+        let point = document
+            .points()
+            .iter()
+            .find(|point| point.label == *label)
+            .unwrap()
+            .id;
+        outcome =
+            Some(state.pick_items(&snapshot, document, &[(SelectionItem::Point(point), None)]));
+    }
+    match outcome.unwrap() {
+        FeatureAuthoringOutcome::PreviewRequested { candidate, .. }
+        | FeatureAuthoringOutcome::Apply(candidate) => candidate,
+        other => panic!("expected a complete Fillet candidate, got {other:?}"),
+    }
+}
+
+fn validate_ownership(
+    session: &ProjectionalEditorSession,
+    ownership: &IntentMaterializationMap,
+) -> Result<(), IntentMaterializationError> {
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    ownership.validate_against(
+        session.coordinator().intent().semantic_identity(),
+        session.coordinator().intent().graph(),
+        session.coordinator().intent().instance(),
+        session.coordinator().intent().reservations(),
+        accepted
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &accepted.features,
+    )
+}
+
+fn swap_port_bindings(
+    ownership: &mut IntentMaterializationMap,
+    first: IntentPortRef,
+    second: IntentPortRef,
+) -> (IntentNativeBinding, IntentNativeBinding) {
+    let first_index = ownership
+        .ports
+        .binary_search_by_key(&first, |(reference, _)| *reference)
+        .unwrap();
+    let second_index = ownership
+        .ports
+        .binary_search_by_key(&second, |(reference, _)| *reference)
+        .unwrap();
+    let first_binding = ownership.ports[first_index].1;
+    let second_binding = ownership.ports[second_index].1;
+    ownership.ports[first_index].1 = second_binding;
+    ownership.ports[second_index].1 = first_binding;
+    (first_binding, second_binding)
+}
+
+fn swap_node_owned_bindings(
+    ownership: &mut IntentMaterializationMap,
+    first_node: NodeId,
+    first_binding: IntentNativeBinding,
+    second_node: NodeId,
+    second_binding: IntentNativeBinding,
+) {
+    for (node_id, old, new) in [
+        (first_node, first_binding, second_binding),
+        (second_node, second_binding, first_binding),
+    ] {
+        let node = ownership
+            .nodes
+            .iter_mut()
+            .find(|candidate| candidate.node == node_id)
+            .unwrap();
+        let index = node.owned.binary_search(&old).unwrap();
+        node.owned[index] = new;
+        node.owned.sort_unstable();
+    }
 }
 
 fn fillet_candidate(
@@ -296,6 +495,133 @@ const fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
             command: false,
         },
     }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one hostile matrix keeps feature-owner, corner-ordinal, and corner-owner permutations distinct"
+)]
+fn ownership_validation_rejects_computed_feature_and_fillet_corner_permutations() {
+    let mut session = provenance_fixture();
+    let first_candidate =
+        fillet_candidate_for_points(&session, &["first.corner.one", "first.corner.two"]);
+    assert_eq!(first_candidate.corners().len(), 2);
+    session
+        .apply_computed_fillet(key("Fillet first"), &first_candidate)
+        .unwrap();
+    let second_candidate = fillet_candidate_for_points(&session, &["second.corner"]);
+    assert_eq!(second_candidate.corners().len(), 1);
+    session
+        .apply_computed_fillet(key("Fillet second"), &second_candidate)
+        .unwrap();
+
+    let graph = session.coordinator().intent().graph();
+    let first_node = graph
+        .nodes()
+        .values()
+        .find(|node| node.symbol.as_str() == "Fillet first")
+        .unwrap();
+    let second_node = graph
+        .nodes()
+        .values()
+        .find(|node| node.symbol.as_str() == "Fillet second")
+        .unwrap();
+    let first_feature_port = first_node
+        .port_by_selector(selector(IntentPortRole::Feature, 0))
+        .unwrap()
+        .as_ref(first_node.id);
+    let second_feature_port = second_node
+        .port_by_selector(selector(IntentPortRole::Feature, 0))
+        .unwrap()
+        .as_ref(second_node.id);
+    let mut first_corner_ports = first_node
+        .ports
+        .values()
+        .filter(|port| port.kind == IntentPortKind::FeatureCorner)
+        .map(|port| port.as_ref(first_node.id))
+        .collect::<Vec<_>>();
+    first_corner_ports.sort_unstable();
+    assert_eq!(first_corner_ports.len(), 2);
+    let second_corner_port = second_node
+        .ports
+        .values()
+        .find(|port| port.kind == IntentPortKind::FeatureCorner)
+        .unwrap()
+        .as_ref(second_node.id);
+    let first_node_id = first_node.id;
+    let second_node_id = second_node.id;
+
+    let ownership = &session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership;
+    validate_ownership(&session, ownership).unwrap();
+
+    let mut swapped_feature_owners = ownership.clone();
+    let (first_feature, second_feature) = swap_port_bindings(
+        &mut swapped_feature_owners,
+        first_feature_port,
+        second_feature_port,
+    );
+    assert!(matches!(
+        (first_feature, second_feature),
+        (
+            IntentNativeBinding::ComputedFeature(_),
+            IntentNativeBinding::ComputedFeature(_)
+        )
+    ));
+    swap_node_owned_bindings(
+        &mut swapped_feature_owners,
+        first_node_id,
+        first_feature,
+        second_node_id,
+        second_feature,
+    );
+    assert!(matches!(
+        validate_ownership(&session, &swapped_feature_owners),
+        Err(IntentMaterializationError::OwnershipPortBindingMismatch { port })
+            if port == first_feature_port || port == second_feature_port
+    ));
+
+    let mut swapped_corner_ordinals = ownership.clone();
+    let (first_corner, second_corner) = swap_port_bindings(
+        &mut swapped_corner_ordinals,
+        first_corner_ports[0],
+        first_corner_ports[1],
+    );
+    assert!(matches!(
+        (first_corner, second_corner),
+        (
+            IntentNativeBinding::ComputedFeatureCorner(_),
+            IntentNativeBinding::ComputedFeatureCorner(_)
+        )
+    ));
+    assert!(matches!(
+        validate_ownership(&session, &swapped_corner_ordinals),
+        Err(IntentMaterializationError::OwnershipPortBindingMismatch { port })
+            if first_corner_ports.contains(&port)
+    ));
+
+    let mut swapped_corner_owners = ownership.clone();
+    let (first_corner, second_corner) = swap_port_bindings(
+        &mut swapped_corner_owners,
+        first_corner_ports[0],
+        second_corner_port,
+    );
+    swap_node_owned_bindings(
+        &mut swapped_corner_owners,
+        first_node_id,
+        first_corner,
+        second_node_id,
+        second_corner,
+    );
+    assert!(matches!(
+        validate_ownership(&session, &swapped_corner_owners),
+        Err(IntentMaterializationError::OwnershipPortBindingMismatch { port })
+            if port == first_corner_ports[0] || port == second_corner_port
+    ));
 }
 
 #[test]

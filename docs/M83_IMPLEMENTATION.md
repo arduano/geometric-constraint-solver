@@ -2,8 +2,8 @@
 
 # M83 implementation ledger — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F007 repair, clean post-F007 qualification and
-immutable Tailscale nomination complete; human UAT pending**. This ledger records implementation
+Status: **implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
+complete; fresh clean qualification and human UAT pending**. This ledger records implementation
 and qualification against ADR 0040 and `docs/M83_GOALS.md`. Accepted M81 GitHub Pages bytes remain
 public authority.
 
@@ -21,8 +21,10 @@ public authority.
   historical evidence only.
 - Post-F005 product source, since withdrawn by F006/F007: `a621cddc0a3b8687d6b7686bc850619332c73779`;
   tree `f6d77b447552d0d120c48be4bfdeb96bc5f2da59`.
-- Current post-F007 product source: `fafea4ebeddc295ca898258ac604858bcdd4db5f`;
-  tree `ff75c36aacdabe601f34bb59baaba01f6c91687a`.
+- Post-F007 product source, now superseded by architecture hardening before UAT:
+  `fafea4ebeddc295ca898258ac604858bcdd4db5f`; tree
+  `ff75c36aacdabe601f34bb59baaba01f6c91687a`.
+- Current post-hardening product source/tree: pending clean nomination.
 
 ## Implementation slices
 
@@ -125,9 +127,90 @@ post-F007 gate, no-rebuild freeze, 5/5 frozen-browser checks and temporary/retai
 verification pass; human M83-U1 through M83-U9 review remains pending. Do not publish Pages before
 human approval; neither earlier nomination supplies current UAT authority.
 
+### I7 — post-F007 architecture hardening
+
+Complete in the working candidate; fresh clean nomination is pending. This pass changes no sketch
+equation, priority, tolerance or branch policy.
+
+`geosolve-sketch-intent` now uses SHA-256 for graph/session wire v2 and validates canonical
+experimental v1 before translating its FNV-derived graph, instance, reservation, external-input,
+accepted-evidence and session identities. Cached session/semantic identities make ordinary reads
+independent of bounded-history size; import and every atomic state transition independently
+rederive them. Current, accepted, Undo and Redo checkpoints receive the same structural and opaque-
+component bounds. Causal before/after digests prevent checkpoint permutation; descriptor revisions
+are unique and globally chronological across Undo/Redo; body-derived created/deleted/definition/
+instance sets, component flags, disposition and unambiguous operation evidence prevent a
+reauthenticated history row from describing another transition. The reservation ledger and
+allocator remain monotonic across bounded-history eviction.
+
+One central `IntentDeclarationDescriptor` now owns typed field schemas, defaults, choices, output
+identity/native reservation semantics and edit classification. Allocation-free schema port
+counting rejects hostile child/output shapes before expansion and is exhaustively checked against
+all 109 declaration forms plus maximum child and operation-output variants. Accepted ownership is
+validated port-by-port across native objects, logical spans, computed features, Fillet corners,
+reservations, writable leaves and aggregate topology; a kind-compatible permutation no longer
+passes.
+
+The editor exposes a compact `IntentGraphSnapshot` and data-only structured-source snapshot; opaque
+bootstrap bytes appear only as kind, codec, byte length and SHA-256. Explicit Snapshot remains the
+complete query. Patch/source mutations return identity/disposition/alias receipts, Undo/Redo return
+identity/moved receipts and Inspector returns its stamped projection. Request and mutation-receipt
+caps are 16 MiB and all structured/JSON response paths share a 64 MiB ceiling. A conservative
+receipt preflight and bounded JSON writer reject excess before mutation publication; Rust and
+`@geosolve/intent` validate the same closed shapes and integer/session branding.
+
+Computed Fillet/Profile Offset Apply plus accepted radius/distance release now consume their exact
+opaque `PreparedProjectionalTransaction`: one exact-CAS plan and independently cold-validated
+materialization prepared for the visible preview. A stale prepared transaction rejects before both
+intent and native authority; terminal publication performs no second nominally equivalent plan or
+cold solve.
+
+Workspace v8 now shares the public 64 MiB reproduction limit instead of admitting roughly 640 MiB.
+A narrow version probe replaces a whole JSON `Value`; disposable annotation JSON is independently
+capped at 4 MiB and non-string caches are consumed through `IgnoredAny`; SHA is checked before the
+legacy fingerprint from one serialized digest payload; canonical outer comparison streams; v2
+nested intent is retained after one parse; and already parsed intent is passed into snapshot
+validation. Authenticated v8 verifies an oversized cache before discarding it, while flat legacy
+workspaces discard before cloning. The admitted wire plus one digest buffer remains an explicit
+bounded cost.
+
+The original normal-stack demo test that assembled three large native-Fillet coordinators is split
+into four exact cases. This removes a test-harness stack overflow without an environment override
+or product behavior change.
+
+Focused pre-nomination evidence on the complete dirty candidate passes:
+
+```text
+cargo test --locked -p geosolve-sketch-intent
+22 unit + 44 integration + 7 TypeScript-wire passed
+
+cargo test --locked -p geosolve-constraint-editor \
+  --test m83_intent_materializer --test m83_intent_rpc --test m83_projectional_fillet
+30 + 11 + 10 passed
+
+cargo test --locked -p geosolve-demo-web --lib
+204 passed on the ordinary test stack
+
+(cd packages/geosolve-intent && npm test)
+19 passed
+
+cargo clippy --locked -p geosolve-sketch-intent -p geosolve-constraint-editor \
+  -p geosolve-demo-web --all-targets --all-features -- -D warnings
+pass
+
+cargo fmt --all -- --check
+git diff --check
+pass
+```
+
+These are proportional development results, not a clean release claim. The committed clean gate,
+no-rebuild artifact and served-byte evidence remain required below.
+
 ## Findings
 
 All seven replacement findings are mechanically resolved; their human rechecks remain pending.
+The I7 work is an architecture-hardening pass, not M83-F008: its regressions were found by
+independent review before renewed UAT rather than by a shipped or human-reported product defect.
 
 - **M83-F001 — deterministic accepted drag identity and exact-once terminal capture.** The
   withdrawn candidate could let a rejected newer sample or duplicate capture terminal obscure the

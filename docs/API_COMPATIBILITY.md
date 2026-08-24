@@ -3,11 +3,10 @@
 ## Release line
 
 GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The
-eight library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
+nine library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
 `geosolve-linkage`, `geosolve-sketch-ops`, `geosolve-sketch-topology`,
-`geosolve-sketch-features` and `geosolve-constraint-editor`) version and release in lockstep.
-`geosolve-demo-web` is a
-non-published diagnostic consumer.
+`geosolve-sketch-features`, `geosolve-sketch-intent` and `geosolve-constraint-editor`) version and
+release in lockstep. `geosolve-demo-web` is a non-published diagnostic consumer.
 
 Before `1.0`, a minor version may contain source-breaking changes. Patch releases
 must remain source-compatible except where retaining behavior would preserve a
@@ -272,6 +271,46 @@ M81-F001 changes rejected-mutation side effects only: a failed durable computed-
 no longer consumes a revision-local output allocator value. No public type, signature, error text,
 wire format, crate dependency or successful publication result changes.
 
+M83 is an unreleased pre-1.0 projectional-authoring extension and remains experimental until its
+human gate passes. It adds the equation-free `geosolve-sketch-intent` crate, projectional
+materialization/read DTOs in `geosolve-constraint-editor`, the demo-local workspace-v8 envelope and
+the `@geosolve/intent` TypeScript package. These surfaces do not change canonical sketch v1-v4,
+the native solver equation/priority catalog or the accepted M81 Pages product. M83-F001 through
+M83-F007 are implemented, but their `fafea4e` nomination is historical because the later
+architecture-hardening pass requires a fresh freeze and focused human UAT. Public GitHub Pages
+continues to serve M81.
+
+Canonical intent graph/session output is wire v2 and uses SHA-256 for component/content identity.
+The importer accepts canonical experimental v1 only after its FNV-1a-derived outer and nested
+identities, accepted evidence, current/Undo/Redo checkpoint structure and exact retained-failed
+reservation-ledger provenance validate; it then migrates and emits v2. This preserves deterministic
+migration of the experimental M83 data rather than promoting FNV to a security guarantee: the
+legacy digest is not cryptographically secure. Ordinary session and semantic identity reads are
+cached, but import, mutation publication and explicit validation independently rehash and reject a
+stale cache or malformed nested authority.
+
+`IntentDeclarationDescriptor` is the central additive schema/edit metadata contract. It publishes
+typed field defaults and choices, output identity/native reservation state and edit classification
+for Inspector, graph/RPC snapshots and typed code clients. `IntentGraphSnapshot` is a bounded
+data-only query; opaque bootstrap payloads are represented by kind, codec, byte length and SHA-256
+rather than copied into every read. Structured Source now emits a TypeScript-shaped data-only
+`IntentSourceSnapshot`, not an executable callback or source-of-truth program.
+
+The DOM-free RPC and `IntentClient` are closed, typed, resource-bounded experimental APIs. Only an
+explicit Snapshot returns graph, workbench and accepted-validation state. Patch/source-edit
+mutations return identity/disposition/alias receipts, Undo/Redo return identity/moved receipts and
+Inspector returns its identity-stamped projection. A patch whose success receipt could exceed 16
+MiB rejects before planning/publication; structured and JSON responses share a 64 MiB ceiling.
+The TypeScript decoder validates exact fields, closed enums, integer fidelity, response bounds and
+session branding. Computed-Fillet/Profile-Offset Apply
+and accepted radius/distance drops now publish their exact already validated prepared transaction;
+that is a publication/atomicity correction, not a new public solver API or constraint type.
+
+The demo-local workspace-v8 envelope is admitted only within the 64 MiB reproduction-workspace
+limit, and its disposable annotation-layout string is capped at 4 MiB. These host resource bounds
+may reject oversized experimental M83 snapshots which the earlier provisional decoder attempted
+to parse; canonical sketch v1-v4 and accepted M81 persistence are unchanged.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 
@@ -294,6 +333,11 @@ The supported domain entry points are:
 - `geosolve-constraint-editor` state, scene, normalized input and typed effect APIs for
   presentation-independent constraint, dimension and computed-feature authoring over those sketch
   workflows.
+
+M83's not-yet-accepted experimental tier additionally includes `geosolve-sketch-intent` typed
+declarations, exact-CAS patches, canonical wire and bounded composite history plus the projectional
+editor/RPC and TypeScript surfaces described above. They do not become supported release APIs
+until the M83 human gate passes.
 
 Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain supported
 compatibility facades in the `0.2` line.
@@ -370,16 +414,17 @@ support contract.
 
 The publishable crates are released in dependency order:
 
-1. `geosolve-geometry`;
+1. `geosolve-geometry` and `geosolve-sketch-intent`, which has no GeoSolve crate dependency;
 2. `geosolve-core` after the matching geometry version is visible;
 3. `geosolve-sketch` and `geosolve-linkage` after the matching core version is
    visible;
 4. `geosolve-sketch-ops`, `geosolve-sketch-topology` and `geosolve-sketch-features` after the
    matching sketch version is visible;
-5. `geosolve-constraint-editor` after the matching sketch and sketch-features versions are visible.
+5. `geosolve-constraint-editor` after the matching sketch, sketch-features and sketch-intent
+   versions are visible.
 
 Cargo cannot create a registry-ready dependent archive before its path dependency
 version exists in the registry. The pre-publication gate therefore checks the exact
-archive file list for all eight crates and builds every workspace target from path
+archive file list for all nine crates and builds every workspace target from path
 dependencies. Each package includes `LICENSE` and `README.md`. Registry publication
 itself remains a maintainer action after a repository URL and release tag exist.

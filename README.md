@@ -132,13 +132,29 @@ plus all seven public files exact-verify at aggregate
 `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. Pages is final public-byte
 authority while the separately built Tailscale snapshot remains accepted UAT evidence. M79 is
 complete; `6874aa1` remains qualified product authority.
+M80 completes the accepted native topology-preserving Profile Offset and native line-line Fillet
+publication cut; M81 completes the accepted behavior-preserving core consolidation. M82 is closed
+as a deferred, fully rolled-back computed Offset exploration. M83 is active and not yet accepted:
+ADR 0040's projectional Design Intent Graph, M83-F001 through M83-F007 and a subsequent
+architecture-hardening pass are implemented over the unchanged M81 solver authority. The
+hardening pass introduces SHA-256 canonical graph/session wire v2 with strict legacy-v1 migration,
+cached ordinary identity reads with independent validation hashing, complete nested-checkpoint/
+evidence/ownership validation, exact prepared Fillet/Offset publication, central declaration
+descriptors, compact data-only read projections and a strict typed RPC/TypeScript client whose
+mutations return bounded receipts while explicit Snapshot performs the full read. The legacy
+FNV-1a-derived v1 digest is validated for deterministic migration only; it is not cryptographically
+secure. RPC and workspace host surfaces now share explicit 16/64 MiB receipt/response and 64 MiB
+workspace bounds, with disposable annotation JSON capped at 4 MiB. Prior M83 nominations through
+post-F007 source `fafea4e` are historical. A fresh clean freeze and focused human UAT remain
+pending, and public GitHub Pages continues to serve accepted M81.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with the M83 post-F005 replacement clean-nominated and awaiting focused UAT over the accepted M81 baseline.
+3. `PLAN.md` — authoritative roadmap, with M83 post-F007 architecture hardening awaiting a fresh
+   freeze and focused UAT over the accepted M81 baseline.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -158,8 +174,8 @@ Physics, collision and a production rendering system remain out of scope.
 15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
 16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — implemented
-    projectional Design Intent Graph contract, F001-F005 replacement nomination ledger and pending
-    scorecard.
+    projectional Design Intent Graph contract, F001-F007 historical nomination ledger, post-F007
+    architecture hardening and pending scorecard.
 
 ## Workspace
 
@@ -171,20 +187,22 @@ Physics, collision and a production rendering system remain out of scope.
 - `geosolve-sketch-features` — separately versioned persistent computed-feature intent and independently validated revision-local output over exact accepted sketch snapshots; no residuals, solver variables, canonical sketch schema or B-rep state.
 - `geosolve-sketch-intent` — order-independent typed declaration/port/reservation graph, writable
   instance state, non-semantic organization, exact-CAS patches, tombstones, canonical persistence
-  and one bounded composite history; no sketch equations or solver dependency.
+  and one bounded composite history; central declaration descriptors and SHA-256 wire v2; no
+  sketch equations or solver dependency.
 - `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking,
   selection, gestures, exact geometry-family recipes, selected-curve control cages/properties,
   constraint/dimension and computed-feature authoring, deterministic projectional materialization,
-  logical/native ownership and typed editor effects over public sketch/feature APIs; no renderer,
-  DOM, storage or equations.
+  strict logical/native ownership, compact data-only graph/source projections, typed RPC receipts
+  and exact prepared-transaction publication over public sketch/feature APIs; no renderer, DOM,
+  storage or equations.
 - `geosolve-linkage` — persistent planar and spatial rigid bodies/features/sources, deterministic JSON/runtime remapping, gauge-separated mobility, common joints/mates, drivers, explicit assembly modes, independently published natural/pseudo-arclength continuation, typed hysteretic branch events/mode changes and multi-driver body/feature velocity fields with optional physical motion bases.
 - `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
   document semantics; M50 removed its old playground, M51 consolidated the one directly tested
   workbench, M60 added public advanced-operation/topology presentation plus the versioned workspace
   envelope, M67 removed its raw developer evidence/topology cards, M77 renders only headless curve
   controls/properties, M78 presents only headless geometry families, stages and recipe previews,
-  and M83 consumes editor-owned Outline/source/History/RPC projections without owning geometry
-  equations.
+  and M83 consumes editor-owned Outline/data-only source/History/Snapshot/RPC projections without
+  owning geometry equations.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
 
@@ -194,8 +212,8 @@ cancellation, stable diagnostics and separate sketch-operation/production-topolo
 companions. The host continues to own expressions, B-rep projection, feature history
 and application undo. M40.7, M53 and M61-M81 have explicit acceptance dispositions. M83 now
 implements a projectional intent/session layer while deliberately retaining the native solver as
-accepted geometry authority; post-F005 immutable replacement nomination passes and human UAT
-remains pending. New
+accepted geometry authority; post-F007 architecture hardening supersedes the prior nomination, and
+a fresh freeze plus human UAT remain pending. Public Pages remains on accepted M81. New
 milestones
 normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future

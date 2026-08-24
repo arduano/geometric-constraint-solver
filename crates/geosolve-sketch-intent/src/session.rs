@@ -5,17 +5,25 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[cfg(test)]
+thread_local! {
+    static SESSION_IDENTITY_HASH_COUNT: std::cell::Cell<usize> = const {
+        std::cell::Cell::new(0)
+    };
+}
+
 use crate::graph::{
     IntentAllocatorHighWater, IntentGraph, IntentGraphError, IntentReservationLedger,
     allocate_draft, allocated_alias_ports, assign_identity_generations, finish_allocated_draft,
 };
 use crate::ids::{
     CellId, ContentDigest, IntentKey, IntentSessionId, NodeId, PlanToken, Revision, digest_bytes,
+    legacy_digest_bytes,
 };
 use crate::model::{
-    IntentExternalInputs, IntentExternalInputsIdentity, IntentInstanceState, IntentOrganization,
-    IntentReservationLedgerIdentity, IntentSemanticIdentity, MaterializationEvidence,
-    OrganizationCell, PatchPortRef, literal_matches_leaf, next_revision,
+    IntentExternalInputs, IntentExternalInputsIdentity, IntentIdentityFlow, IntentInstanceState,
+    IntentOrganization, IntentReservationLedgerIdentity, IntentSemanticIdentity,
+    MaterializationEvidence, OrganizationCell, PatchPortRef, literal_matches_leaf, next_revision,
 };
 use crate::patch::{
     CellTarget, DeletePolicy, IntentAliasMap, IntentPatch, IntentPatchOperation,
@@ -23,7 +31,8 @@ use crate::patch::{
 };
 
 /// Strict canonical intent-session wire version.
-pub const INTENT_SESSION_VERSION: u32 = 1;
+pub const INTENT_SESSION_VERSION: u32 = 2;
+const LEGACY_INTENT_SESSION_VERSION: u32 = 1;
 /// User-visible Undo/Redo bound.
 pub const MAX_INTENT_HISTORY_ENTRIES: usize = 1_024;
 /// Maximum strict canonical session JSON, including bounded history.
@@ -205,6 +214,7 @@ impl IntentTransactionDescriptor {
 
     fn validate(&self) -> Result<(), IntentSessionError> {
         if self.operation_kinds.is_empty()
+            || self.operation_kinds.len() > MAX_INTENT_PATCH_OPERATIONS
             || !self
                 .operation_kinds
                 .windows(2)
@@ -301,6 +311,262 @@ struct SessionCheckpoint {
 struct HistoryEntry {
     checkpoint: SessionCheckpoint,
     descriptor: IntentTransactionDescriptor,
+    #[serde(
+        default = "ContentDigest::zero",
+        skip_serializing_if = "content_digest_is_zero"
+    )]
+    before: ContentDigest,
+    #[serde(
+        default = "ContentDigest::zero",
+        skip_serializing_if = "content_digest_is_zero"
+    )]
+    after: ContentDigest,
+}
+
+fn content_digest_is_zero(value: &ContentDigest) -> bool {
+    *value == ContentDigest::zero()
+}
+
+/// Identifies the user-restorable checkpoint content while deliberately
+/// excluding monotonic/recomputable authority which changes during Undo/Redo.
+///
+/// Graph, instance and organization component revisions are advanced when a
+/// historical body is restored. The reservation ledger likewise retains
+/// later tombstones, and accepted materialization artifacts can be refreshed
+/// without creating a user transaction. Stable definitions, values,
+/// organization, exact host inputs, attempt disposition and accepted logical
+/// content are the causal history state and remain invariant across those
+/// maintenance operations.
+fn history_checkpoint_digest(checkpoint: &SessionCheckpoint) -> ContentDigest {
+    let attempt = checkpoint.latest_attempt.as_ref().map(|value| {
+        (
+            value.disposition,
+            &value.failed_nodes,
+            value.diagnostic.as_ref(),
+        )
+    });
+    let accepted = checkpoint.accepted.as_ref().map(|value| {
+        (
+            &value.graph.nodes,
+            &value.instance.values,
+            &value.external_inputs,
+        )
+    });
+    digest_bytes(
+        &serde_json::to_vec(&(
+            &checkpoint.graph.nodes,
+            &checkpoint.instance.values,
+            checkpoint.organization.default_cell,
+            &checkpoint.organization.cell_order,
+            &checkpoint.organization.cells,
+            &checkpoint.organization.node_names,
+            &checkpoint.external_inputs,
+            attempt,
+            accepted,
+        ))
+        .expect("history checkpoint identity is infallibly serializable"),
+    )
+}
+
+fn bind_history_edges(
+    current: &SessionCheckpoint,
+    undo: &mut [HistoryEntry],
+    redo: &mut [HistoryEntry],
+) {
+    let current = history_checkpoint_digest(current);
+    let undo_states = undo
+        .iter()
+        .map(|entry| history_checkpoint_digest(&entry.checkpoint))
+        .collect::<Vec<_>>();
+    let redo_states = redo
+        .iter()
+        .map(|entry| history_checkpoint_digest(&entry.checkpoint))
+        .collect::<Vec<_>>();
+
+    for (index, entry) in undo.iter_mut().enumerate() {
+        entry.before = undo_states[index];
+        entry.after = undo_states.get(index + 1).copied().unwrap_or(current);
+    }
+    for (index, entry) in redo.iter_mut().enumerate() {
+        entry.before = redo_states.get(index + 1).copied().unwrap_or(current);
+        entry.after = redo_states[index];
+    }
+}
+
+fn validate_history_edges(
+    current: &SessionCheckpoint,
+    undo: &[HistoryEntry],
+    redo: &[HistoryEntry],
+) -> Result<(), IntentSessionError> {
+    let current = history_checkpoint_digest(current);
+    let undo_states = undo
+        .iter()
+        .map(|entry| history_checkpoint_digest(&entry.checkpoint))
+        .collect::<Vec<_>>();
+    let redo_states = redo
+        .iter()
+        .map(|entry| history_checkpoint_digest(&entry.checkpoint))
+        .collect::<Vec<_>>();
+
+    for (index, entry) in undo.iter().enumerate() {
+        let after = undo_states.get(index + 1).copied().unwrap_or(current);
+        if entry.before != undo_states[index] || entry.after != after {
+            return Err(IntentSessionError::InvalidHistoryTransition);
+        }
+    }
+    for (index, entry) in redo.iter().enumerate() {
+        let before = redo_states.get(index + 1).copied().unwrap_or(current);
+        if entry.before != before || entry.after != redo_states[index] {
+            return Err(IntentSessionError::InvalidHistoryTransition);
+        }
+    }
+    Ok(())
+}
+
+fn validate_history_descriptors(
+    current: &SessionCheckpoint,
+    undo: &[HistoryEntry],
+    redo: &[HistoryEntry],
+) -> Result<(), IntentSessionError> {
+    for (index, entry) in undo.iter().enumerate() {
+        let after = undo.get(index + 1).map_or(current, |next| &next.checkpoint);
+        validate_history_descriptor_transition(&entry.checkpoint, after, &entry.descriptor)?;
+    }
+    for (index, entry) in redo.iter().enumerate() {
+        let before = redo.get(index + 1).map_or(current, |next| &next.checkpoint);
+        validate_history_descriptor_transition(before, &entry.checkpoint, &entry.descriptor)?;
+    }
+    Ok(())
+}
+
+fn validate_history_descriptor_transition(
+    before: &SessionCheckpoint,
+    after: &SessionCheckpoint,
+    descriptor: &IntentTransactionDescriptor,
+) -> Result<(), IntentSessionError> {
+    let before_nodes = before.graph.nodes();
+    let after_nodes = after.graph.nodes();
+    let created_nodes = after_nodes
+        .keys()
+        .filter(|node| !before_nodes.contains_key(node))
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let deleted_nodes = before_nodes
+        .keys()
+        .filter(|node| !after_nodes.contains_key(node))
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut definition_nodes = created_nodes
+        .iter()
+        .chain(&deleted_nodes)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    definition_nodes.extend(before_nodes.iter().filter_map(|(node, before_node)| {
+        after_nodes
+            .get(node)
+            .filter(|after_node| !history_node_definition_eq(before_node, after_node))
+            .map(|_| *node)
+    }));
+
+    let instance_nodes = before
+        .instance
+        .values()
+        .keys()
+        .chain(after.instance.values().keys())
+        .filter(|leaf| !deleted_nodes.contains(&leaf.node))
+        .filter(|leaf| before.instance.values().get(leaf) != after.instance.values().get(leaf))
+        .map(|leaf| leaf.node)
+        .collect::<BTreeSet<_>>();
+    let organization_changed = before.organization.default_cell != after.organization.default_cell
+        || before.organization.cell_order != after.organization.cell_order
+        || before.organization.cells != after.organization.cells
+        || before.organization.node_names != after.organization.node_names;
+    let external_inputs_changed = before.external_inputs != after.external_inputs;
+    let disposition_matches = match descriptor.disposition {
+        IntentPlanDisposition::Accepted => after
+            .latest_attempt
+            .as_ref()
+            .is_some_and(|attempt| attempt.disposition == IntentAttemptDisposition::Accepted),
+        IntentPlanDisposition::RetainedFailed => after
+            .latest_attempt
+            .as_ref()
+            .is_some_and(|attempt| attempt.disposition == IntentAttemptDisposition::RetainedFailed),
+        IntentPlanDisposition::OrganizationOnly => true,
+    };
+    let graph_changed = !definition_nodes.is_empty();
+    let has_created_nodes = !created_nodes.is_empty();
+    let has_deleted_nodes = !deleted_nodes.is_empty();
+    let operation_kinds_match = (has_created_nodes
+        == descriptor
+            .operation_kinds
+            .contains(&IntentPatchOperationKind::CreateNode))
+        && (has_deleted_nodes
+            == descriptor
+                .operation_kinds
+                .contains(&IntentPatchOperationKind::DeleteNode))
+        && (!external_inputs_changed
+            || descriptor
+                .operation_kinds
+                .contains(&IntentPatchOperationKind::ReplaceExternalInputs));
+
+    if descriptor.diff.created_nodes != created_nodes
+        || descriptor.diff.deleted_nodes != deleted_nodes
+        || descriptor.diff.definition_nodes != definition_nodes
+        || descriptor.diff.instance_nodes != instance_nodes
+        || descriptor.diff.graph_changed != graph_changed
+        || descriptor.diff.instance_changed
+            != (!instance_nodes.is_empty() || !deleted_nodes.is_empty())
+        || descriptor.diff.organization_changed != organization_changed
+        || descriptor.diff.external_inputs_changed != external_inputs_changed
+        || descriptor
+            .diff
+            .organization_nodes
+            .iter()
+            .any(|node| !before_nodes.contains_key(node) || !after_nodes.contains_key(node))
+        || !disposition_matches
+        || !operation_kinds_match
+    {
+        return Err(IntentSessionError::InvalidHistoryDescriptor);
+    }
+    Ok(())
+}
+
+fn history_node_definition_eq(left: &crate::IntentNode, right: &crate::IntentNode) -> bool {
+    left.id == right.id
+        && left.symbol == right.symbol
+        && left.kind == right.kind
+        && left.bootstrap_origin == right.bootstrap_origin
+        && left.suppressed == right.suppressed
+        && left.inputs == right.inputs
+        && left.fields == right.fields
+        && left.operation_outputs == right.operation_outputs
+        && left.reservations == right.reservations
+        && left.child_order == right.child_order
+        && left.children == right.children
+        && left.ports.len() == right.ports.len()
+        && left.ports.iter().all(|(port, left_port)| {
+            right.ports.get(port).is_some_and(|right_port| {
+                left_port.id == right_port.id
+                    && left_port.selector == right_port.selector
+                    && left_port.kind == right_port.kind
+                    && left_port.writable == right_port.writable
+                    && history_identity_flow_eq(left_port.flow, right_port.flow)
+            })
+        })
+}
+
+fn history_identity_flow_eq(left: IntentIdentityFlow, right: IntentIdentityFlow) -> bool {
+    match (left, right) {
+        (
+            IntentIdentityFlow::Continued { source: left, .. },
+            IntentIdentityFlow::Continued { source: right, .. },
+        )
+        | (
+            IntentIdentityFlow::Retired { source: left, .. },
+            IntentIdentityFlow::Retired { source: right, .. },
+        ) => left == right,
+        _ => left == right,
+    }
 }
 
 /// Retained design-intent authority and bounded transaction history.
@@ -308,6 +574,8 @@ struct HistoryEntry {
 pub struct IntentSession {
     id: IntentSessionId,
     revision: Revision,
+    identity: IntentSessionIdentity,
+    semantic_identity: IntentSemanticIdentity,
     graph: IntentGraph,
     instance: IntentInstanceState,
     reservations: IntentReservationLedger,
@@ -329,19 +597,48 @@ impl IntentSession {
     /// Returns an error only if the built-in organization key is invalid.
     pub fn with_id(id: IntentSessionId) -> Result<Self, IntentSessionError> {
         let sketch = IntentKey::new("Sketch")?;
+        let revision = Revision::from_raw(0);
+        let graph = IntentGraph::empty();
+        let instance = IntentInstanceState::empty();
+        let reservations = IntentReservationLedger::empty();
+        let organization = IntentOrganization::new(CellId::from_raw(1), sketch);
+        let external_inputs = IntentExternalInputs::default();
+        let latest_attempt = None;
+        let accepted = None;
+        let undo = Vec::new();
+        let redo = Vec::new();
+        let allocator = IntentAllocatorHighWater::initial();
+        let semantic_identity =
+            semantic_identity(&graph, &instance, reservations.identity(), &external_inputs);
+        let identity = session_identity(
+            id,
+            revision,
+            &graph,
+            &instance,
+            &reservations,
+            &organization,
+            &external_inputs,
+            latest_attempt.as_ref(),
+            accepted.as_ref(),
+            &undo,
+            &redo,
+            allocator,
+        );
         Ok(Self {
             id,
-            revision: Revision::from_raw(0),
-            graph: IntentGraph::empty(),
-            instance: IntentInstanceState::empty(),
-            reservations: IntentReservationLedger::empty(),
-            organization: IntentOrganization::new(CellId::from_raw(1), sketch),
-            external_inputs: IntentExternalInputs::default(),
+            revision,
+            identity,
+            semantic_identity,
+            graph,
+            instance,
+            reservations,
+            organization,
+            external_inputs,
             latest_attempt: None,
             accepted: None,
-            undo: Vec::new(),
-            redo: Vec::new(),
-            allocator: IntentAllocatorHighWater::initial(),
+            undo,
+            redo,
+            allocator,
         })
     }
 
@@ -391,31 +688,13 @@ impl IntentSession {
     }
 
     #[must_use]
-    pub fn semantic_identity(&self) -> IntentSemanticIdentity {
-        semantic_identity(
-            &self.graph,
-            &self.instance,
-            self.reservations.identity(),
-            &self.external_inputs,
-        )
+    pub const fn semantic_identity(&self) -> IntentSemanticIdentity {
+        self.semantic_identity
     }
 
     #[must_use]
-    pub fn identity(&self) -> IntentSessionIdentity {
-        session_identity(
-            self.id,
-            self.revision,
-            &self.graph,
-            &self.instance,
-            &self.reservations,
-            &self.organization,
-            &self.external_inputs,
-            self.latest_attempt.as_ref(),
-            self.accepted.as_ref(),
-            &self.undo,
-            &self.redo,
-            self.allocator,
-        )
+    pub const fn identity(&self) -> IntentSessionIdentity {
+        self.identity
     }
 
     /// Plans and fully validates one unordered patch without mutating the
@@ -453,7 +732,8 @@ impl IntentSession {
             .iter()
             .map(IntentPatchOperation::kind)
             .collect::<Vec<_>>();
-        let mut staged = self.checkpoint();
+        let base_checkpoint = self.checkpoint();
+        let mut staged = base_checkpoint.clone();
         let mut reservations = self.reservations.clone();
         let mut allocator = self.allocator;
         let mut aliases = IntentAliasMap::default();
@@ -512,6 +792,7 @@ impl IntentSession {
         let disposition = if diff.requires_materialization() {
             match materialize(&candidate) {
                 IntentEvaluation::Accepted { evidence } => {
+                    evidence.validate()?;
                     if evidence.external_inputs != staged.external_inputs.identity() {
                         return Err(IntentPlanError::MaterializationInputMismatch);
                     }
@@ -566,7 +847,9 @@ impl IntentSession {
         push_bounded(
             &mut undo,
             HistoryEntry {
-                checkpoint: self.checkpoint(),
+                before: history_checkpoint_digest(&base_checkpoint),
+                after: history_checkpoint_digest(&staged),
+                checkpoint: base_checkpoint,
                 descriptor: descriptor.clone(),
             },
         );
@@ -650,6 +933,7 @@ impl IntentSession {
         staged.redo = plan.redo;
         staged.allocator = plan.allocator;
         staged.revision = plan.target.revision;
+        staged.refresh_cached_identities();
         let actual = staged.identity();
         if actual != plan.target {
             return Err(IntentSessionError::InvalidPlanToken);
@@ -693,6 +977,7 @@ impl IntentSession {
         self.commit_plan(plan)?;
         self.undo.clear();
         self.redo.clear();
+        self.refresh_cached_identities();
         self.validate()?;
         Ok(self.identity())
     }
@@ -713,6 +998,7 @@ impl IntentSession {
         &mut self,
         evidence: MaterializationEvidence,
     ) -> Result<IntentSessionIdentity, IntentSessionError> {
+        evidence.validate()?;
         let pristine = self.revision.raw() == 0
             && self.graph.nodes().is_empty()
             && self.instance.values().is_empty()
@@ -749,6 +1035,7 @@ impl IntentSession {
             external_inputs: staged.external_inputs.clone(),
             evidence,
         });
+        staged.refresh_cached_identities();
         staged.validate()?;
         *self = staged;
         Ok(self.identity())
@@ -770,17 +1057,26 @@ impl IntentSession {
         let Some(entry) = staged.undo.pop() else {
             return Ok(None);
         };
+        let HistoryEntry {
+            checkpoint,
+            descriptor,
+            before,
+            after,
+        } = entry;
         let current = staged.checkpoint();
         push_bounded(
             &mut staged.redo,
             HistoryEntry {
                 checkpoint: current,
-                descriptor: entry.descriptor,
+                descriptor,
+                before,
+                after,
             },
         );
-        staged.restore_history_checkpoint(entry.checkpoint)?;
+        staged.restore_history_checkpoint(checkpoint)?;
         staged.revision =
             next_revision(staged.revision).ok_or(IntentSessionError::RevisionExhausted)?;
+        staged.refresh_cached_identities();
         staged.validate()?;
         *self = staged;
         Ok(Some(self.identity()))
@@ -801,17 +1097,26 @@ impl IntentSession {
         let Some(entry) = staged.redo.pop() else {
             return Ok(None);
         };
+        let HistoryEntry {
+            checkpoint,
+            descriptor,
+            before,
+            after,
+        } = entry;
         let current = staged.checkpoint();
         push_bounded(
             &mut staged.undo,
             HistoryEntry {
                 checkpoint: current,
-                descriptor: entry.descriptor,
+                descriptor,
+                before,
+                after,
             },
         );
-        staged.restore_history_checkpoint(entry.checkpoint)?;
+        staged.restore_history_checkpoint(checkpoint)?;
         staged.revision =
             next_revision(staged.revision).ok_or(IntentSessionError::RevisionExhausted)?;
+        staged.refresh_cached_identities();
         staged.validate()?;
         *self = staged;
         Ok(Some(self.identity()))
@@ -898,6 +1203,7 @@ impl IntentSession {
                 return Err(IntentPlanError::EvaluationRejected { failure });
             }
         };
+        evidence.validate()?;
         if evidence.external_inputs != self.external_inputs.identity() {
             return Err(IntentPlanError::MaterializationInputMismatch);
         }
@@ -926,6 +1232,7 @@ impl IntentSession {
             return Err(IntentSessionError::InvalidAuthority.into());
         }
         latest.materialization_digest = Some(authority.evidence.digest);
+        staged.refresh_cached_identities();
         staged.validate()?;
         *self = staged;
         Ok(true)
@@ -974,25 +1281,64 @@ impl IntentSession {
                 limit: MAX_INTENT_SESSION_JSON_BYTES,
             });
         }
-        let wire: IntentSessionWire = serde_json::from_str(json)?;
-        if wire.version != INTENT_SESSION_VERSION {
+        let mut wire: IntentSessionWire = serde_json::from_str(json)?;
+        if !matches!(
+            wire.version,
+            LEGACY_INTENT_SESSION_VERSION | INTENT_SESSION_VERSION
+        ) {
             return Err(IntentSessionError::UnsupportedVersion {
                 expected: INTENT_SESSION_VERSION,
                 actual: wire.version,
             });
         }
-        if wire.digest != session_wire_digest(&wire) {
+        let expected_digest = if wire.version == LEGACY_INTENT_SESSION_VERSION {
+            legacy_session_wire_digest(&wire)
+        } else {
+            session_wire_digest(&wire)
+        };
+        if wire.digest != expected_digest {
             return Err(IntentSessionError::DigestMismatch);
         }
         if serde_json::to_string(&wire)? != json {
             return Err(IntentSessionError::NonCanonicalJson);
         }
-        if wire.current.reservation_identity != wire.reservations.identity() {
+        let reservation_identity = if wire.version == LEGACY_INTENT_SESSION_VERSION {
+            wire.reservations.legacy_identity()
+        } else {
+            wire.reservations.identity()
+        };
+        if wire.current.reservation_identity != reservation_identity {
             return Err(IntentSessionError::InvalidAuthority);
         }
+        if wire.version == LEGACY_INTENT_SESSION_VERSION {
+            validate_legacy_wire_authority(&wire)?;
+            migrate_legacy_wire_identities(&mut wire);
+        }
+        let semantic_identity = semantic_identity(
+            &wire.current.graph,
+            &wire.current.instance,
+            wire.reservations.identity(),
+            &wire.current.external_inputs,
+        );
+        let identity = session_identity(
+            wire.id,
+            wire.revision,
+            &wire.current.graph,
+            &wire.current.instance,
+            &wire.reservations,
+            &wire.current.organization,
+            &wire.current.external_inputs,
+            wire.current.latest_attempt.as_ref(),
+            wire.current.accepted.as_ref(),
+            &wire.undo,
+            &wire.redo,
+            wire.allocator,
+        );
         let session = Self {
             id: wire.id,
             revision: wire.revision,
+            identity,
+            semantic_identity,
             graph: wire.current.graph,
             instance: wire.current.instance,
             reservations: wire.reservations,
@@ -1027,6 +1373,29 @@ impl IntentSession {
         self.external_inputs = checkpoint.external_inputs;
         self.latest_attempt = checkpoint.latest_attempt;
         self.accepted = checkpoint.accepted;
+    }
+
+    fn refresh_cached_identities(&mut self) {
+        self.semantic_identity = semantic_identity(
+            &self.graph,
+            &self.instance,
+            self.reservations.identity(),
+            &self.external_inputs,
+        );
+        self.identity = session_identity(
+            self.id,
+            self.revision,
+            &self.graph,
+            &self.instance,
+            &self.reservations,
+            &self.organization,
+            &self.external_inputs,
+            self.latest_attempt.as_ref(),
+            self.accepted.as_ref(),
+            &self.undo,
+            &self.redo,
+            self.allocator,
+        );
     }
 
     fn restore_history_checkpoint(
@@ -1125,22 +1494,55 @@ impl IntentSession {
                 .redo
                 .windows(2)
                 .all(|pair| pair[0].descriptor.target_revision > pair[1].descriptor.target_revision)
+            || self
+                .undo
+                .last()
+                .zip(self.redo.last())
+                .is_some_and(|(undo, redo)| {
+                    undo.descriptor.target_revision >= redo.descriptor.target_revision
+                })
         {
             return Err(IntentSessionError::InvalidHistoryDescriptor);
         }
         self.reservations.validate_against_graph(&self.graph)?;
-        validate_checkpoint(&self.checkpoint(), &self.reservations)?;
+        let current = self.checkpoint();
+        validate_checkpoint(&current, &self.reservations, true)?;
         for entry in self.undo.iter().chain(&self.redo) {
             entry.descriptor.validate()?;
-            validate_checkpoint(&entry.checkpoint, &self.reservations)?;
+            validate_checkpoint(&entry.checkpoint, &self.reservations, false)?;
         }
+        validate_history_edges(&current, &self.undo, &self.redo)?;
+        validate_history_descriptors(&current, &self.undo, &self.redo)?;
         validate_allocator(
             self.allocator,
-            std::iter::once(&self.checkpoint())
+            std::iter::once(&current)
                 .chain(self.undo.iter().map(|entry| &entry.checkpoint))
                 .chain(self.redo.iter().map(|entry| &entry.checkpoint)),
             &self.reservations,
         )?;
+        let semantic = semantic_identity(
+            &self.graph,
+            &self.instance,
+            self.reservations.identity(),
+            &self.external_inputs,
+        );
+        let identity = session_identity(
+            self.id,
+            self.revision,
+            &self.graph,
+            &self.instance,
+            &self.reservations,
+            &self.organization,
+            &self.external_inputs,
+            self.latest_attempt.as_ref(),
+            self.accepted.as_ref(),
+            &self.undo,
+            &self.redo,
+            self.allocator,
+        );
+        if semantic != self.semantic_identity || identity != self.identity {
+            return Err(IntentSessionError::InvalidCachedIdentity);
+        }
         Ok(())
     }
 }
@@ -1175,6 +1577,307 @@ fn session_wire_digest(wire: &IntentSessionWire) -> ContentDigest {
     )
 }
 
+fn legacy_session_wire_digest(wire: &IntentSessionWire) -> ContentDigest {
+    legacy_digest_bytes(
+        &serde_json::to_vec(&(
+            wire.version,
+            wire.id,
+            wire.revision,
+            &wire.current,
+            &wire.undo,
+            &wire.redo,
+            &wire.reservations,
+            wire.allocator,
+        ))
+        .expect("session wire payload is infallibly serializable"),
+    )
+}
+
+fn legacy_graph_identity(graph: &IntentGraph) -> crate::IntentGraphIdentity {
+    crate::IntentGraphIdentity(crate::ComponentIdentity {
+        revision: graph.revision,
+        digest: legacy_digest_bytes(
+            &serde_json::to_vec(&(graph.revision, &graph.nodes))
+                .expect("legacy graph identity is infallibly serializable"),
+        ),
+    })
+}
+
+fn legacy_instance_identity(instance: &IntentInstanceState) -> crate::IntentInstanceIdentity {
+    crate::IntentInstanceIdentity(crate::ComponentIdentity {
+        revision: instance.revision,
+        digest: legacy_digest_bytes(
+            &serde_json::to_vec(&(&instance.revision, &instance.values))
+                .expect("legacy instance identity is infallibly serializable"),
+        ),
+    })
+}
+
+fn legacy_external_identity(inputs: &IntentExternalInputs) -> IntentExternalInputsIdentity {
+    IntentExternalInputsIdentity {
+        revision: inputs.revision,
+        digest: legacy_digest_bytes(
+            &serde_json::to_vec(&(
+                inputs.revision,
+                &inputs.parameter_batch,
+                &inputs.external_snapshots,
+            ))
+            .expect("legacy external-input identity is infallibly serializable"),
+        ),
+    }
+}
+
+fn legacy_semantic_identity(
+    graph: &IntentGraph,
+    instance: &IntentInstanceState,
+    reservations: IntentReservationLedgerIdentity,
+    external_inputs: &IntentExternalInputs,
+) -> IntentSemanticIdentity {
+    IntentSemanticIdentity {
+        graph: legacy_graph_identity(graph),
+        instance: legacy_instance_identity(instance),
+        reservations,
+        external_inputs: legacy_external_identity(external_inputs),
+    }
+}
+
+fn legacy_materialization_evidence_digest(evidence: &MaterializationEvidence) -> ContentDigest {
+    legacy_digest_bytes(
+        &serde_json::to_vec(&(
+            evidence.external_inputs,
+            &evidence.materialization,
+            &evidence.ownership,
+            &evidence.host_validation,
+        ))
+        .expect("legacy materialization evidence is infallibly serializable"),
+    )
+}
+
+fn migrated_legacy_checkpoint_reservation_identity(
+    checkpoint: &SessionCheckpoint,
+    current_reservations: &IntentReservationLedger,
+    current: bool,
+) -> Option<IntentReservationLedgerIdentity> {
+    if current {
+        return (checkpoint.reservation_identity == current_reservations.legacy_identity())
+            .then(|| current_reservations.identity());
+    }
+    historical_checkpoint_reservation_ledger_candidates(checkpoint, current_reservations)
+        .into_iter()
+        .find(|candidate| checkpoint.reservation_identity == candidate.legacy_identity())
+        .map(|candidate| candidate.identity())
+}
+
+/// Reconstructs every reservation-ledger shape which a retained checkpoint
+/// can authenticate without guessing historical topology.
+///
+/// Accepted checkpoints carry their exact ledger. A retained-failed
+/// checkpoint instead carries the prior accepted ledger plus reservations and
+/// disposition changes declared by its current graph. Replaying that one
+/// deterministic reconciliation is necessary for Undo/Redo entries whose
+/// reservation revision sits between the accepted and current ledgers.
+#[cfg(test)]
+fn checkpoint_reservation_ledger_candidates(
+    checkpoint: &SessionCheckpoint,
+    current_reservations: &IntentReservationLedger,
+) -> Vec<IntentReservationLedger> {
+    let mut bases = vec![
+        IntentReservationLedger::empty(),
+        current_reservations.clone(),
+    ];
+    if let Some(accepted) = &checkpoint.accepted {
+        bases.push(accepted.reservations.clone());
+    }
+    let mut candidates = bases.clone();
+    for mut candidate in bases {
+        if candidate.reconcile(&checkpoint.graph).is_ok() {
+            // The authenticated checkpoint owns the exact historical
+            // revision. Reconciliation reconstructs entries and states; it
+            // must not manufacture a different revision chronology.
+            candidate.revision = checkpoint.reservation_identity.0.revision;
+            candidates.push(candidate);
+        }
+    }
+    candidates.dedup();
+    candidates
+}
+
+fn historical_checkpoint_reservation_ledger_candidates(
+    checkpoint: &SessionCheckpoint,
+    current_reservations: &IntentReservationLedger,
+) -> Vec<IntentReservationLedger> {
+    let mut bases = vec![
+        IntentReservationLedger::empty(),
+        current_reservations.clone(),
+    ];
+    if let Some(accepted) = &checkpoint.accepted {
+        bases.push(accepted.reservations.clone());
+    }
+    let mut candidates = Vec::new();
+    for mut candidate in bases {
+        if candidate.validate_against_graph(&checkpoint.graph).is_ok() {
+            candidates.push(candidate.clone());
+        }
+        if candidate.reconcile(&checkpoint.graph).is_ok() {
+            candidate.revision = checkpoint.reservation_identity.0.revision;
+            candidates.push(candidate);
+        }
+    }
+    candidates
+}
+
+fn historical_checkpoint_reservation_identity_valid(
+    checkpoint: &SessionCheckpoint,
+    current_reservations: &IntentReservationLedger,
+) -> bool {
+    historical_checkpoint_reservation_ledger_candidates(checkpoint, current_reservations)
+        .into_iter()
+        .any(|candidate| candidate.identity() == checkpoint.reservation_identity)
+}
+
+fn validate_legacy_wire_authority(wire: &IntentSessionWire) -> Result<(), IntentSessionError> {
+    validate_legacy_checkpoint_authority(&wire.current, &wire.reservations, true)?;
+    for entry in wire.undo.iter().chain(&wire.redo) {
+        validate_legacy_checkpoint_authority(&entry.checkpoint, &wire.reservations, false)?;
+    }
+    Ok(())
+}
+
+fn validate_legacy_checkpoint_authority(
+    checkpoint: &SessionCheckpoint,
+    current_reservations: &IntentReservationLedger,
+    current: bool,
+) -> Result<(), IntentSessionError> {
+    if migrated_legacy_checkpoint_reservation_identity(checkpoint, current_reservations, current)
+        .is_none()
+    {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
+    let semantic = legacy_semantic_identity(
+        &checkpoint.graph,
+        &checkpoint.instance,
+        checkpoint.reservation_identity,
+        &checkpoint.external_inputs,
+    );
+    if checkpoint.latest_attempt.is_none()
+        && (checkpoint.accepted.is_some()
+            || !checkpoint.graph.nodes().is_empty()
+            || !checkpoint.instance.values().is_empty()
+            || checkpoint.external_inputs != IntentExternalInputs::default())
+    {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
+    if let Some(accepted) = &checkpoint.accepted {
+        let accepted_semantic = legacy_semantic_identity(
+            &accepted.graph,
+            &accepted.instance,
+            accepted.reservations.legacy_identity(),
+            &accepted.external_inputs,
+        );
+        if accepted.target != accepted_semantic
+            || accepted.evidence.external_inputs
+                != legacy_external_identity(&accepted.external_inputs)
+            || accepted.evidence.digest
+                != legacy_materialization_evidence_digest(&accepted.evidence)
+        {
+            return Err(IntentSessionError::InvalidAuthority);
+        }
+    }
+    if let Some(attempt) = &checkpoint.latest_attempt {
+        if attempt.target != semantic {
+            return Err(IntentSessionError::InvalidAuthority);
+        }
+        match attempt.disposition {
+            IntentAttemptDisposition::Accepted => {
+                let accepted = checkpoint
+                    .accepted
+                    .as_ref()
+                    .ok_or(IntentSessionError::InvalidAuthority)?;
+                if accepted.target != semantic
+                    || attempt.materialization_digest != Some(accepted.evidence.digest)
+                    || !attempt.failed_nodes.is_empty()
+                    || attempt.diagnostic.is_some()
+                {
+                    return Err(IntentSessionError::InvalidAuthority);
+                }
+            }
+            IntentAttemptDisposition::RetainedFailed => {
+                if attempt.failed_nodes.is_empty()
+                    || attempt.diagnostic.is_none()
+                    || attempt.materialization_digest.is_some()
+                    || checkpoint
+                        .accepted
+                        .as_ref()
+                        .is_some_and(|accepted| accepted.target == semantic)
+                    || attempt
+                        .failed_nodes
+                        .iter()
+                        .any(|node| !checkpoint.graph.nodes().contains_key(node))
+                {
+                    return Err(IntentSessionError::InvalidAuthority);
+                }
+            }
+            IntentAttemptDisposition::OrganizationOnly => {
+                return Err(IntentSessionError::InvalidAuthority);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn migrate_legacy_wire_identities(wire: &mut IntentSessionWire) {
+    let current_reservations = wire.reservations.clone();
+    migrate_legacy_checkpoint(&mut wire.current, &current_reservations, true);
+    for entry in wire.undo.iter_mut().chain(&mut wire.redo) {
+        migrate_legacy_checkpoint(&mut entry.checkpoint, &current_reservations, false);
+    }
+    bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+    wire.version = INTENT_SESSION_VERSION;
+}
+
+fn migrate_legacy_checkpoint(
+    checkpoint: &mut SessionCheckpoint,
+    current_reservations: &IntentReservationLedger,
+    current: bool,
+) {
+    checkpoint.reservation_identity =
+        migrated_legacy_checkpoint_reservation_identity(checkpoint, current_reservations, current)
+            .expect("legacy checkpoint authority was validated before migration");
+    if let Some(accepted) = &mut checkpoint.accepted {
+        accepted.evidence.external_inputs = accepted.external_inputs.identity();
+        accepted.evidence.reauthenticate();
+        accepted.target = semantic_identity(
+            &accepted.graph,
+            &accepted.instance,
+            accepted.reservations.identity(),
+            &accepted.external_inputs,
+        );
+        if accepted.graph == checkpoint.graph
+            && accepted.instance == checkpoint.instance
+            && accepted.external_inputs == checkpoint.external_inputs
+        {
+            checkpoint.reservation_identity = accepted.reservations.identity();
+        }
+    }
+    let current = semantic_identity(
+        &checkpoint.graph,
+        &checkpoint.instance,
+        checkpoint.reservation_identity,
+        &checkpoint.external_inputs,
+    );
+    if let Some(attempt) = &mut checkpoint.latest_attempt {
+        attempt.target = current;
+        attempt.materialization_digest = match attempt.disposition {
+            IntentAttemptDisposition::Accepted => checkpoint
+                .accepted
+                .as_ref()
+                .map(|accepted| accepted.evidence.digest),
+            IntentAttemptDisposition::RetainedFailed
+            | IntentAttemptDisposition::OrganizationOnly => None,
+        };
+    }
+}
+
 fn semantic_identity(
     graph: &IntentGraph,
     instance: &IntentInstanceState,
@@ -1204,6 +1907,8 @@ fn session_identity(
     redo: &[HistoryEntry],
     allocator: IntentAllocatorHighWater,
 ) -> IntentSessionIdentity {
+    #[cfg(test)]
+    SESSION_IDENTITY_HASH_COUNT.with(|count| count.set(count.get() + 1));
     let graph_identity = graph.identity();
     let instance_identity = instance.identity();
     let reservation_identity = reservations.identity();
@@ -1756,20 +2461,25 @@ fn validate_organization(
 fn validate_checkpoint(
     checkpoint: &SessionCheckpoint,
     reservations: &IntentReservationLedger,
+    current: bool,
 ) -> Result<(), IntentSessionError> {
-    checkpoint.graph.validate()?;
+    validate_semantic_state(
+        &checkpoint.graph,
+        &checkpoint.instance,
+        &checkpoint.external_inputs,
+    )?;
     reservations.validate_graph_metadata(&checkpoint.graph)?;
-    if checkpoint.reservation_identity.0.revision > reservations.revision() {
+    let reservation_identity_valid = if current {
+        checkpoint.reservation_identity == reservations.identity()
+    } else {
+        historical_checkpoint_reservation_identity_valid(checkpoint, reservations)
+    };
+    if checkpoint.reservation_identity.0.revision > reservations.revision()
+        || !reservation_identity_valid
+    {
         return Err(IntentSessionError::InvalidAuthority);
     }
     validate_organization(&checkpoint.graph, &checkpoint.organization)?;
-    for (leaf, value) in checkpoint.instance.values() {
-        checkpoint.graph.writable_leaf(*leaf)?;
-        if !literal_matches_leaf(value, leaf.field) {
-            return Err(IntentSessionError::InvalidInstance);
-        }
-        value.validate()?;
-    }
     let semantic = semantic_identity(
         &checkpoint.graph,
         &checkpoint.instance,
@@ -1823,31 +2533,45 @@ fn validate_checkpoint(
             }
         }
     }
-    if let Some(accepted) = &checkpoint.accepted
-        && (accepted.graph.identity() != accepted.target.graph
+    if let Some(accepted) = &checkpoint.accepted {
+        validate_semantic_state(
+            &accepted.graph,
+            &accepted.instance,
+            &accepted.external_inputs,
+        )?;
+        accepted
+            .reservations
+            .validate_against_graph(&accepted.graph)?;
+        accepted.evidence.validate()?;
+        if accepted.graph.identity() != accepted.target.graph
             || accepted.instance.identity() != accepted.target.instance
             || accepted.reservations.identity() != accepted.target.reservations
             || accepted.external_inputs.identity() != accepted.target.external_inputs
             || accepted.external_inputs.identity() != accepted.evidence.external_inputs
             || accepted.target.external_inputs != accepted.evidence.external_inputs
-            || accepted.evidence.digest
-                != crate::intent_content_digest(
-                    &serde_json::to_vec(&(
-                        accepted.evidence.external_inputs,
-                        &accepted.evidence.materialization,
-                        &accepted.evidence.ownership,
-                        &accepted.evidence.host_validation,
-                    ))
-                    .expect("accepted evidence is infallibly serializable"),
-                ))
-    {
-        return Err(IntentSessionError::InvalidAuthority);
+        {
+            return Err(IntentSessionError::InvalidAuthority);
+        }
     }
     if let Some(accepted) = &checkpoint.accepted {
-        accepted
-            .reservations
-            .validate_against_graph(&accepted.graph)?;
         reservations.validate_superset_of(&accepted.reservations)?;
+    }
+    Ok(())
+}
+
+fn validate_semantic_state(
+    graph: &IntentGraph,
+    instance: &IntentInstanceState,
+    external_inputs: &IntentExternalInputs,
+) -> Result<(), IntentSessionError> {
+    graph.validate()?;
+    external_inputs.validate()?;
+    for (leaf, value) in instance.values() {
+        graph.writable_leaf(*leaf)?;
+        if !literal_matches_leaf(value, leaf.field) {
+            return Err(IntentSessionError::InvalidInstance);
+        }
+        value.validate()?;
     }
     Ok(())
 }
@@ -2007,6 +2731,10 @@ pub enum IntentSessionError {
     HistoryLimit,
     #[error("invalid deterministic intent-history descriptor")]
     InvalidHistoryDescriptor,
+    #[error("intent history checkpoint does not match its causal transition")]
+    InvalidHistoryTransition,
+    #[error("the retained intent identity cache does not authenticate its state")]
+    InvalidCachedIdentity,
     #[error("intent session JSON exceeds {limit} bytes")]
     JsonResourceLimit { limit: usize },
     #[error("unsupported intent session version {actual}; expected {expected}")]
@@ -2029,8 +2757,8 @@ pub enum IntentSessionError {
 mod tests {
     use super::*;
     use crate::{
-        GeometryRecipeKind, IntentNodeDraft, IntentNodeKind, IntentPatchOperationKind,
-        IntentReservationState,
+        GeometryRecipeKind, InputRole, InputSlot, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+        IntentPatchOperationKind, IntentPortRef, IntentReservationState, LeafField, LeafRef,
     };
 
     fn key(value: &str) -> IntentKey {
@@ -2047,6 +2775,208 @@ mod tests {
             )
             .unwrap(),
         }
+    }
+
+    fn commit_point(session: &mut IntentSession, alias: &str, symbol: &str) {
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key(alias),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key(symbol),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = session.plan_patch(patch, accepted).unwrap();
+        session.commit_plan(plan).unwrap();
+    }
+
+    fn session_with_undo_and_redo() -> IntentSession {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fd)).unwrap();
+        commit_point(&mut session, "point-a", "wire.point.a");
+        commit_point(&mut session, "point-b", "wire.point.b");
+        commit_point(&mut session, "point-c", "wire.point.c");
+        session.undo().unwrap().unwrap();
+        assert_eq!(session.undo_len(), 2);
+        assert_eq!(session.redo_len(), 1);
+        session
+    }
+
+    fn session_with_retained_failure() -> IntentSession {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_fa)).unwrap();
+        commit_point(&mut session, "accepted", "wire.accepted");
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("retained"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key("wire.retained"),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = session
+            .plan_patch(patch, |candidate| IntentEvaluation::Failed {
+                failure: IntentEvaluationFailure {
+                    kind: IntentEvaluationFailureKind::MaterializationRejected,
+                    failed_nodes: BTreeSet::from([*candidate
+                        .graph()
+                        .nodes()
+                        .keys()
+                        .next_back()
+                        .expect("retained declaration")]),
+                    diagnostic: key("retained-failure"),
+                },
+            })
+            .unwrap();
+        session.commit_plan(plan).unwrap();
+        assert_eq!(
+            session.latest_attempt().unwrap().disposition,
+            IntentAttemptDisposition::RetainedFailed
+        );
+        session
+    }
+
+    fn corrupt_accepted_graph(checkpoint: &mut SessionCheckpoint) {
+        let accepted = checkpoint.accepted.as_mut().expect("accepted authority");
+        let node_id = *accepted.graph.nodes.keys().next().expect("accepted node");
+        let output = accepted.graph.nodes[&node_id]
+            .ports
+            .values()
+            .next()
+            .expect("accepted output");
+        let source = IntentPortRef {
+            node: node_id,
+            port: output.id,
+            kind: output.kind,
+        };
+        accepted
+            .graph
+            .nodes
+            .get_mut(&node_id)
+            .expect("accepted node")
+            .inputs
+            .insert(InputSlot::new(InputRole::Point, 0), source);
+        accepted.target = semantic_identity(
+            &accepted.graph,
+            &accepted.instance,
+            accepted.reservations.identity(),
+            &accepted.external_inputs,
+        );
+    }
+
+    fn corrupt_accepted_instance(checkpoint: &mut SessionCheckpoint) {
+        let accepted = checkpoint.accepted.as_mut().expect("accepted authority");
+        let node_id = *accepted.graph.nodes.keys().next().expect("accepted node");
+        let port_id = accepted.graph.nodes[&node_id]
+            .ports
+            .keys()
+            .next()
+            .copied()
+            .expect("accepted output");
+        accepted.instance.values.insert(
+            LeafRef {
+                node: node_id,
+                port: port_id,
+                field: LeafField::Value,
+            },
+            IntentLiteral::Quantity {
+                value: 83.0,
+                unit: crate::IntentUnit::Dimensionless,
+            },
+        );
+        accepted.target = semantic_identity(
+            &accepted.graph,
+            &accepted.instance,
+            accepted.reservations.identity(),
+            &accepted.external_inputs,
+        );
+    }
+
+    fn rewrite_evidence_as_legacy(
+        evidence: &mut MaterializationEvidence,
+        external_inputs: &IntentExternalInputs,
+    ) {
+        evidence.external_inputs = legacy_external_identity(external_inputs);
+        evidence.digest = legacy_materialization_evidence_digest(evidence);
+    }
+
+    fn rewrite_checkpoint_as_legacy(
+        checkpoint: &mut SessionCheckpoint,
+        current_reservations: &IntentReservationLedger,
+    ) {
+        let reservation_identity =
+            checkpoint_reservation_ledger_candidates(checkpoint, current_reservations)
+                .into_iter()
+                .find(|candidate| candidate.identity() == checkpoint.reservation_identity)
+                .expect("current checkpoint reservation identity is reconstructible")
+                .legacy_identity();
+        checkpoint.reservation_identity = reservation_identity;
+
+        let materialization_digest = checkpoint.accepted.as_mut().map(|accepted| {
+            rewrite_evidence_as_legacy(&mut accepted.evidence, &accepted.external_inputs);
+            accepted.target = legacy_semantic_identity(
+                &accepted.graph,
+                &accepted.instance,
+                accepted.reservations.legacy_identity(),
+                &accepted.external_inputs,
+            );
+            accepted.evidence.digest
+        });
+        let target = legacy_semantic_identity(
+            &checkpoint.graph,
+            &checkpoint.instance,
+            reservation_identity,
+            &checkpoint.external_inputs,
+        );
+        if let Some(attempt) = &mut checkpoint.latest_attempt {
+            attempt.target = target;
+            attempt.materialization_digest = match attempt.disposition {
+                IntentAttemptDisposition::Accepted => materialization_digest,
+                IntentAttemptDisposition::RetainedFailed
+                | IntentAttemptDisposition::OrganizationOnly => None,
+            };
+        }
+    }
+
+    fn rewrite_wire_as_legacy(wire: &mut IntentSessionWire) {
+        rewrite_checkpoint_as_legacy(&mut wire.current, &wire.reservations);
+        for entry in wire.undo.iter_mut().chain(&mut wire.redo) {
+            rewrite_checkpoint_as_legacy(&mut entry.checkpoint, &wire.reservations);
+            entry.before = ContentDigest::zero();
+            entry.after = ContentDigest::zero();
+        }
+        wire.version = LEGACY_INTENT_SESSION_VERSION;
+        wire.digest = legacy_session_wire_digest(wire);
+    }
+
+    fn authenticated_wire_json(mut wire: IntentSessionWire) -> String {
+        wire.digest = session_wire_digest(&wire);
+        serde_json::to_string(&wire).unwrap()
+    }
+
+    fn assert_component_too_large<T>(
+        result: &Result<T, IntentSessionError>,
+        expected_component: &'static str,
+    ) {
+        assert!(matches!(
+            result,
+            Err(IntentSessionError::Model(
+                crate::IntentModelError::ComponentTooLarge {
+                    component,
+                    limit: crate::model::MAX_INTENT_OPAQUE_COMPONENT_BYTES,
+                }
+            )) if *component == expected_component
+        ));
     }
 
     #[test]
@@ -2087,18 +3017,66 @@ mod tests {
         );
         let plan = session.plan_patch(delete, accepted).unwrap();
         session.commit_plan(plan).unwrap();
-        let template = session.undo.last().unwrap().clone();
+
+        let create_survivor = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("survivor"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key("survivor.point"),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = session.plan_patch(create_survivor, accepted).unwrap();
+        let survivor = plan.aliases().node(&key("survivor")).unwrap();
+        session.commit_plan(plan).unwrap();
+
+        let mut before = session.checkpoint();
 
         for offset in 0..MAX_INTENT_HISTORY_ENTRIES {
-            let mut entry = template.clone();
-            entry.descriptor.target_revision = Revision::from_raw(3 + offset as u64);
-            push_bounded(&mut session.undo, entry);
+            let mut after = before.clone();
+            after.organization.revision = next_revision(after.organization.revision).unwrap();
+            after.organization.node_names.insert(
+                survivor,
+                key(if offset % 2 == 0 {
+                    "survivor.a"
+                } else {
+                    "survivor.b"
+                }),
+            );
+            let mut diff = IntentSemanticDiff::default();
+            diff.organization_nodes.insert(survivor);
+            diff.organization_changed = true;
+            push_bounded(
+                &mut session.undo,
+                HistoryEntry {
+                    before: history_checkpoint_digest(&before),
+                    after: history_checkpoint_digest(&after),
+                    checkpoint: before,
+                    descriptor: IntentTransactionDescriptor::new(
+                        Revision::from_raw(4 + offset as u64),
+                        IntentPlanDisposition::OrganizationOnly,
+                        vec![IntentPatchOperationKind::RenameNode],
+                        diff,
+                    ),
+                },
+            );
+            before = after;
         }
-        session.revision = Revision::from_raw(2 + MAX_INTENT_HISTORY_ENTRIES as u64);
+        session.restore_checkpoint(before);
+        session.revision = Revision::from_raw(3 + MAX_INTENT_HISTORY_ENTRIES as u64);
+        let current = session.checkpoint();
+        bind_history_edges(&current, &mut session.undo, &mut session.redo);
+        session.refresh_cached_identities();
 
         assert_eq!(session.undo.len(), MAX_INTENT_HISTORY_ENTRIES);
         assert!(session.undo.iter().all(|entry| {
-            entry.descriptor.operation_kinds == vec![IntentPatchOperationKind::DeleteNode]
+            entry.descriptor.operation_kinds == vec![IntentPatchOperationKind::RenameNode]
         }));
         assert_eq!(
             session.reservations.entries()[&reservation].state,
@@ -2164,5 +3142,706 @@ mod tests {
             IntentSession::from_json(&forged),
             Err(IntentSessionError::InvalidAuthority)
         ));
+    }
+
+    #[test]
+    fn canonical_legacy_v1_session_migrates_exactly_to_v2_sha_authority() {
+        let session = session_with_undo_and_redo();
+        let canonical_v2 = session.to_canonical_json().unwrap();
+        let mut legacy: IntentSessionWire = serde_json::from_str(&canonical_v2).unwrap();
+        rewrite_wire_as_legacy(&mut legacy);
+        let canonical_v1 = serde_json::to_string(&legacy).unwrap();
+        assert_eq!(
+            serde_json::to_string(
+                &serde_json::from_str::<IntentSessionWire>(&canonical_v1).unwrap()
+            )
+            .unwrap(),
+            canonical_v1,
+        );
+
+        let migrated = IntentSession::from_json(&canonical_v1).unwrap();
+        assert_eq!(migrated, session);
+        assert_eq!(migrated.to_canonical_json().unwrap(), canonical_v2);
+
+        let migrated_wire: IntentSessionWire =
+            serde_json::from_str(&migrated.to_canonical_json().unwrap()).unwrap();
+        assert_eq!(migrated_wire.version, INTENT_SESSION_VERSION);
+        assert_eq!(migrated_wire.digest, session_wire_digest(&migrated_wire));
+        assert_ne!(migrated_wire.digest, legacy.digest);
+    }
+
+    #[test]
+    fn canonical_legacy_v1_retained_failed_authority_migrates_exactly() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_83f1)).unwrap();
+        commit_point(&mut session, "accepted", "accepted.point");
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("failed"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key("failed.point"),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = session
+            .plan_patch(patch, |candidate| IntentEvaluation::Failed {
+                failure: IntentEvaluationFailure {
+                    kind: IntentEvaluationFailureKind::MaterializationRejected,
+                    failed_nodes: BTreeSet::from([*candidate
+                        .graph()
+                        .nodes()
+                        .keys()
+                        .next_back()
+                        .unwrap()]),
+                    diagnostic: key("retained-failure"),
+                },
+            })
+            .unwrap();
+        assert_eq!(plan.disposition(), IntentPlanDisposition::RetainedFailed);
+        session.commit_plan(plan).unwrap();
+
+        let canonical_v2 = session.to_canonical_json().unwrap();
+        let mut legacy: IntentSessionWire = serde_json::from_str(&canonical_v2).unwrap();
+        rewrite_wire_as_legacy(&mut legacy);
+        let canonical_v1 = serde_json::to_string(&legacy).unwrap();
+        let migrated = IntentSession::from_json(&canonical_v1).unwrap();
+
+        assert_eq!(migrated, session);
+        assert_eq!(migrated.to_canonical_json().unwrap(), canonical_v2);
+        assert_eq!(
+            migrated.latest_attempt().unwrap().disposition,
+            IntentAttemptDisposition::RetainedFailed
+        );
+    }
+
+    #[test]
+    fn canonical_legacy_v1_migrates_retained_failed_intermediate_history_ledger() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_83f2)).unwrap();
+        commit_point(&mut session, "accepted-a", "accepted.point.a");
+
+        let failed_patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("retained-b"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key("retained.point.b"),
+                )),
+                cell: None,
+            }],
+        );
+        let failed = session
+            .plan_patch(failed_patch, |candidate| IntentEvaluation::Failed {
+                failure: IntentEvaluationFailure {
+                    kind: IntentEvaluationFailureKind::MaterializationRejected,
+                    failed_nodes: BTreeSet::from([*candidate
+                        .graph()
+                        .nodes()
+                        .keys()
+                        .next_back()
+                        .expect("retained node")]),
+                    diagnostic: key("retained-intermediate"),
+                },
+            })
+            .unwrap();
+        session.commit_plan(failed).unwrap();
+        commit_point(&mut session, "accepted-c", "accepted.point.c");
+
+        let canonical_v2 = session.to_canonical_json().unwrap();
+        let mut legacy: IntentSessionWire = serde_json::from_str(&canonical_v2).unwrap();
+        let retained_checkpoint = legacy
+            .undo
+            .iter()
+            .find(|entry| {
+                entry
+                    .checkpoint
+                    .latest_attempt
+                    .as_ref()
+                    .is_some_and(|attempt| {
+                        attempt.disposition == IntentAttemptDisposition::RetainedFailed
+                    })
+            })
+            .expect("retained-failed checkpoint enters Undo");
+        assert_ne!(
+            retained_checkpoint.checkpoint.reservation_identity,
+            retained_checkpoint
+                .checkpoint
+                .accepted
+                .as_ref()
+                .expect("prior accepted authority")
+                .reservations
+                .identity(),
+            "the regression must exercise an intermediate reservation revision",
+        );
+        assert_ne!(
+            retained_checkpoint.checkpoint.reservation_identity,
+            legacy.reservations.identity(),
+            "the regression must not collapse to the current reservation ledger",
+        );
+
+        rewrite_wire_as_legacy(&mut legacy);
+        let canonical_v1 = serde_json::to_string(&legacy).unwrap();
+        let migrated = IntentSession::from_json(&canonical_v1).unwrap();
+
+        assert_eq!(migrated, session);
+        assert_eq!(migrated.to_canonical_json().unwrap(), canonical_v2);
+        assert!(
+            migrated
+                .history_projection()
+                .applied
+                .iter()
+                .any(|entry| { entry.disposition == IntentPlanDisposition::RetainedFailed })
+        );
+    }
+
+    #[test]
+    fn canonical_v2_rejects_reauthenticated_intermediate_reservation_identity_tampering() {
+        let mut session = session_with_retained_failure();
+        commit_point(
+            &mut session,
+            "accepted-after-failure",
+            "wire.accepted.after.failure",
+        );
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
+        let checkpoint = wire
+            .undo
+            .iter_mut()
+            .find(|entry| {
+                entry
+                    .checkpoint
+                    .latest_attempt
+                    .as_ref()
+                    .is_some_and(|attempt| {
+                        attempt.disposition == IntentAttemptDisposition::RetainedFailed
+                    })
+            })
+            .map(|entry| &mut entry.checkpoint)
+            .expect("retained-failed checkpoint enters Undo");
+        checkpoint.reservation_identity.0.digest = ContentDigest::zero();
+        checkpoint
+            .latest_attempt
+            .as_mut()
+            .expect("retained attempt")
+            .target
+            .reservations = checkpoint.reservation_identity;
+
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(wire)),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+    }
+
+    #[test]
+    fn canonical_v2_rejects_reauthenticated_permuted_history_checkpoint_bodies() {
+        let session = session_with_undo_and_redo();
+        let canonical = session.to_canonical_json().unwrap();
+
+        let mut undo: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        let (first, second) = undo.undo.split_at_mut(1);
+        std::mem::swap(&mut first[0].checkpoint, &mut second[0].checkpoint);
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(undo)),
+            Err(IntentSessionError::InvalidHistoryTransition)
+        ));
+
+        let mut with_two_redo = session;
+        with_two_redo
+            .undo()
+            .unwrap()
+            .expect("second transaction is undoable");
+        assert_eq!(with_two_redo.redo_len(), 2);
+        let mut redo: IntentSessionWire =
+            serde_json::from_str(&with_two_redo.to_canonical_json().unwrap()).unwrap();
+        let (first, second) = redo.redo.split_at_mut(1);
+        std::mem::swap(&mut first[0].checkpoint, &mut second[0].checkpoint);
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(redo)),
+            Err(IntentSessionError::InvalidHistoryTransition)
+        ));
+    }
+
+    #[test]
+    fn canonical_v2_rejects_reauthenticated_descriptors_for_different_checkpoint_bodies() {
+        let session = session_with_undo_and_redo();
+        let canonical = session.to_canonical_json().unwrap();
+        let mut wire: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+
+        let (first, second) = wire.undo.split_at_mut(1);
+        std::mem::swap(&mut first[0].checkpoint, &mut second[0].checkpoint);
+        bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(wire)),
+            Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+    }
+
+    #[test]
+    fn canonical_v2_rejects_reauthenticated_nonchronological_history_stacks() {
+        let session = session_with_undo_and_redo();
+        let canonical = session.to_canonical_json().unwrap();
+
+        let mut crossed: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        let undo_revision = crossed
+            .undo
+            .last()
+            .expect("two applied transactions")
+            .descriptor
+            .target_revision;
+        let redo_revision = crossed
+            .redo
+            .last()
+            .expect("one redoable transaction")
+            .descriptor
+            .target_revision;
+        crossed
+            .undo
+            .last_mut()
+            .expect("two applied transactions")
+            .descriptor
+            .target_revision = redo_revision;
+        crossed
+            .redo
+            .last_mut()
+            .expect("one redoable transaction")
+            .descriptor
+            .target_revision = undo_revision;
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(crossed)),
+            Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+
+        let mut duplicate: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        let duplicate_revision = duplicate
+            .undo
+            .last()
+            .expect("two applied transactions")
+            .descriptor
+            .target_revision;
+        duplicate
+            .redo
+            .last_mut()
+            .expect("one redoable transaction")
+            .descriptor
+            .target_revision = duplicate_revision;
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_wire_json(duplicate)),
+            Err(IntentSessionError::InvalidHistoryDescriptor)
+        ));
+    }
+
+    #[test]
+    fn history_transition_identity_survives_undo_redo_and_canonical_reload() {
+        let mut session = session_with_undo_and_redo();
+        let edge = {
+            let entry = session.undo.last().expect("second applied transaction");
+            (entry.before, entry.after, entry.descriptor.clone())
+        };
+
+        session
+            .undo()
+            .unwrap()
+            .expect("second transaction is undoable");
+        let redo = session.redo.last().expect("second transaction is redoable");
+        assert_eq!((redo.before, redo.after, redo.descriptor.clone()), edge);
+        let undone_json = session.to_canonical_json().unwrap();
+        assert_eq!(
+            IntentSession::from_json(&undone_json)
+                .unwrap()
+                .to_canonical_json()
+                .unwrap(),
+            undone_json
+        );
+
+        session
+            .redo()
+            .unwrap()
+            .expect("second transaction is redoable");
+        let applied = session.undo.last().expect("second transaction is applied");
+        assert_eq!(
+            (applied.before, applied.after, applied.descriptor.clone()),
+            edge
+        );
+        let redone_json = session.to_canonical_json().unwrap();
+        assert_eq!(
+            IntentSession::from_json(&redone_json)
+                .unwrap()
+                .to_canonical_json()
+                .unwrap(),
+            redone_json
+        );
+    }
+
+    #[test]
+    fn legacy_v1_import_rejects_reauthenticated_inner_authority_tampering() {
+        let session = session_with_undo_and_redo();
+        let canonical_v2 = session.to_canonical_json().unwrap();
+
+        let legacy_wire = || {
+            let mut wire: IntentSessionWire = serde_json::from_str(&canonical_v2).unwrap();
+            rewrite_wire_as_legacy(&mut wire);
+            wire
+        };
+        let authenticated_legacy_json = |mut wire: IntentSessionWire| {
+            wire.digest = legacy_session_wire_digest(&wire);
+            serde_json::to_string(&wire).unwrap()
+        };
+
+        let mut target = legacy_wire();
+        target
+            .current
+            .latest_attempt
+            .as_mut()
+            .unwrap()
+            .target
+            .graph
+            .0
+            .digest = ContentDigest::zero();
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_legacy_json(target)),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+
+        let mut evidence = legacy_wire();
+        evidence
+            .current
+            .accepted
+            .as_mut()
+            .unwrap()
+            .evidence
+            .ownership
+            .push(0x83);
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_legacy_json(evidence)),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+
+        let mut reservation = legacy_wire();
+        reservation.current.reservation_identity.0.digest = ContentDigest::zero();
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_legacy_json(reservation)),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+
+        let mut retained = session_with_retained_failure();
+        commit_point(
+            &mut retained,
+            "accepted-after-retained",
+            "wire.accepted.after.retained",
+        );
+        let mut retained_wire: IntentSessionWire =
+            serde_json::from_str(&retained.to_canonical_json().unwrap()).unwrap();
+        rewrite_wire_as_legacy(&mut retained_wire);
+        let checkpoint = retained_wire
+            .undo
+            .iter_mut()
+            .find(|entry| {
+                entry
+                    .checkpoint
+                    .latest_attempt
+                    .as_ref()
+                    .is_some_and(|attempt| {
+                        attempt.disposition == IntentAttemptDisposition::RetainedFailed
+                    })
+            })
+            .map(|entry| &mut entry.checkpoint)
+            .expect("retained-failed checkpoint enters legacy Undo");
+        checkpoint.reservation_identity.0.digest = ContentDigest::zero();
+        checkpoint
+            .latest_attempt
+            .as_mut()
+            .expect("retained attempt")
+            .target
+            .reservations = checkpoint.reservation_identity;
+        assert!(matches!(
+            IntentSession::from_json(&authenticated_legacy_json(retained_wire)),
+            Err(IntentSessionError::InvalidAuthority)
+        ));
+    }
+
+    #[test]
+    fn cached_identity_queries_never_rehash_retained_history() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_83ca)).unwrap();
+        for index in 0..32 {
+            let symbol = format!("cached_point_{index:02}");
+            commit_point(&mut session, &symbol, &symbol);
+        }
+        assert_eq!(session.undo_len(), 32);
+        let expected = session.identity();
+
+        SESSION_IDENTITY_HASH_COUNT.with(|count| count.set(0));
+        for _ in 0..10_000 {
+            assert_eq!(session.identity(), expected);
+            assert_eq!(session.semantic_identity().graph, expected.graph);
+        }
+        SESSION_IDENTITY_HASH_COUNT.with(|count| assert_eq!(count.get(), 0));
+
+        let canonical = session.to_canonical_json().unwrap();
+        SESSION_IDENTITY_HASH_COUNT.with(|count| assert!(count.get() > 0));
+        let restored = IntentSession::from_json(&canonical).unwrap();
+        assert_eq!(restored.identity(), expected);
+    }
+
+    #[test]
+    fn malformed_materializer_evidence_rejects_before_plan_publication() {
+        let session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_83e0)).unwrap();
+        let patch = || {
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::CreateNode {
+                    alias: key("evidence-point"),
+                    draft: Box::new(IntentNodeDraft::new(
+                        IntentNodeKind::Geometry {
+                            recipe: GeometryRecipeKind::SketchPoint,
+                        },
+                        key("evidence.point"),
+                    )),
+                    cell: None,
+                }],
+            )
+        };
+        let identity = session.identity();
+
+        let forged_digest = session.plan_patch(patch(), |candidate| {
+            let mut evidence = MaterializationEvidence::new_host_artifacts(
+                candidate.external_inputs().identity(),
+                b"materialization".to_vec(),
+                b"ownership".to_vec(),
+                b"validation".to_vec(),
+            )
+            .unwrap();
+            evidence.digest = ContentDigest::zero();
+            IntentEvaluation::Accepted { evidence }
+        });
+        assert!(matches!(
+            forged_digest,
+            Err(IntentPlanError::Model(
+                crate::IntentModelError::EvidenceDigestMismatch
+            ))
+        ));
+        assert_eq!(session.identity(), identity);
+        assert!(session.graph().nodes().is_empty());
+
+        let oversized = session.plan_patch(patch(), |candidate| IntentEvaluation::Accepted {
+            evidence: MaterializationEvidence {
+                external_inputs: candidate.external_inputs().identity(),
+                materialization: vec![0; crate::model::MAX_INTENT_OPAQUE_COMPONENT_BYTES + 1],
+                ownership: Vec::new(),
+                host_validation: Vec::new(),
+                digest: ContentDigest::zero(),
+            },
+        });
+        assert!(matches!(
+            oversized,
+            Err(IntentPlanError::Model(
+                crate::IntentModelError::ComponentTooLarge {
+                    component: "materialization",
+                    limit: crate::model::MAX_INTENT_OPAQUE_COMPONENT_BYTES,
+                }
+            ))
+        ));
+        assert_eq!(session.identity(), identity);
+        assert!(session.graph().nodes().is_empty());
+    }
+
+    #[test]
+    fn oversized_decoded_components_reject_current_accepted_undo_and_redo_atomically() {
+        let session = session_with_undo_and_redo();
+        let canonical = session.to_canonical_json().unwrap();
+        let identity = session.identity();
+        let oversized = || vec![0_u8; crate::model::MAX_INTENT_OPAQUE_COMPONENT_BYTES + 1];
+
+        let mut current: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        current.current.external_inputs.parameter_batch = oversized();
+        assert_component_too_large(
+            &IntentSession::from_json(&authenticated_wire_json(current)),
+            "parameter batch",
+        );
+        assert_eq!(session.identity(), identity);
+        assert_eq!(session.to_canonical_json().unwrap(), canonical);
+
+        let mut accepted: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        let accepted_authority = accepted.current.accepted.as_mut().unwrap();
+        accepted_authority.evidence.materialization = oversized();
+        accepted_authority.evidence.reauthenticate();
+        accepted
+            .current
+            .latest_attempt
+            .as_mut()
+            .unwrap()
+            .materialization_digest = Some(accepted_authority.evidence.digest);
+        assert_component_too_large(
+            &validate_checkpoint(&accepted.current, &accepted.reservations, true),
+            "materialization",
+        );
+        assert_eq!(session.identity(), identity);
+        assert_eq!(session.to_canonical_json().unwrap(), canonical);
+
+        let mut undo: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        undo.undo
+            .last_mut()
+            .unwrap()
+            .checkpoint
+            .external_inputs
+            .parameter_batch = oversized();
+        assert_component_too_large(
+            &validate_checkpoint(
+                &undo.undo.last().unwrap().checkpoint,
+                &undo.reservations,
+                false,
+            ),
+            "parameter batch",
+        );
+        assert_eq!(session.identity(), identity);
+        assert_eq!(session.to_canonical_json().unwrap(), canonical);
+
+        let mut redo: IntentSessionWire = serde_json::from_str(&canonical).unwrap();
+        redo.redo
+            .last_mut()
+            .unwrap()
+            .checkpoint
+            .external_inputs
+            .external_snapshots = oversized();
+        assert_component_too_large(
+            &validate_checkpoint(
+                &redo.redo.last().unwrap().checkpoint,
+                &redo.reservations,
+                false,
+            ),
+            "external snapshots",
+        );
+        assert_eq!(session.identity(), identity);
+        assert_eq!(session.to_canonical_json().unwrap(), canonical);
+
+        let mut forged_undo = session.clone();
+        forged_undo
+            .undo
+            .last_mut()
+            .unwrap()
+            .checkpoint
+            .external_inputs
+            .parameter_batch = oversized();
+        let before_undo = forged_undo.clone();
+        assert!(matches!(
+            forged_undo.undo(),
+            Err(IntentSessionError::Model(
+                crate::IntentModelError::ComponentTooLarge {
+                    component: "parameter batch",
+                    limit: crate::model::MAX_INTENT_OPAQUE_COMPONENT_BYTES,
+                }
+            ))
+        ));
+        assert_eq!(forged_undo, before_undo);
+
+        let mut forged_redo = session.clone();
+        forged_redo
+            .redo
+            .last_mut()
+            .unwrap()
+            .checkpoint
+            .external_inputs
+            .external_snapshots = oversized();
+        let before_redo = forged_redo.clone();
+        assert!(matches!(
+            forged_redo.redo(),
+            Err(IntentSessionError::Model(
+                crate::IntentModelError::ComponentTooLarge {
+                    component: "external snapshots",
+                    limit: crate::model::MAX_INTENT_OPAQUE_COMPONENT_BYTES,
+                }
+            ))
+        ));
+        assert_eq!(forged_redo, before_redo);
+    }
+
+    #[test]
+    fn nested_accepted_graph_and_instance_are_validated_in_current_undo_and_redo() {
+        let current = session_with_retained_failure();
+        let current_json = current.to_canonical_json().unwrap();
+
+        for corrupt in [
+            corrupt_accepted_graph as fn(&mut SessionCheckpoint),
+            corrupt_accepted_instance,
+        ] {
+            let mut wire: IntentSessionWire = serde_json::from_str(&current_json).unwrap();
+            corrupt(&mut wire.current);
+            assert!(
+                IntentSession::from_json(&authenticated_wire_json(wire)).is_err(),
+                "malformed nested Current accepted state must reject"
+            );
+        }
+
+        let mut with_undo = current.clone();
+        commit_point(
+            &mut with_undo,
+            "accepted-after-failure",
+            "wire.accepted.after.failure",
+        );
+        let undo_json = with_undo.to_canonical_json().unwrap();
+        for corrupt in [
+            corrupt_accepted_graph as fn(&mut SessionCheckpoint),
+            corrupt_accepted_instance,
+        ] {
+            let mut wire: IntentSessionWire = serde_json::from_str(&undo_json).unwrap();
+            let retained = wire
+                .undo
+                .iter_mut()
+                .find(|entry| {
+                    entry
+                        .checkpoint
+                        .latest_attempt
+                        .as_ref()
+                        .is_some_and(|attempt| {
+                            attempt.disposition == IntentAttemptDisposition::RetainedFailed
+                        })
+                })
+                .expect("retained-failed Undo checkpoint");
+            corrupt(&mut retained.checkpoint);
+            assert!(
+                IntentSession::from_json(&authenticated_wire_json(wire)).is_err(),
+                "malformed nested Undo accepted state must reject"
+            );
+        }
+
+        let mut with_redo = current;
+        with_redo
+            .undo()
+            .unwrap()
+            .expect("retained failure is undoable");
+        let redo_json = with_redo.to_canonical_json().unwrap();
+        for corrupt in [
+            corrupt_accepted_graph as fn(&mut SessionCheckpoint),
+            corrupt_accepted_instance,
+        ] {
+            let mut wire: IntentSessionWire = serde_json::from_str(&redo_json).unwrap();
+            let retained = wire
+                .redo
+                .iter_mut()
+                .find(|entry| {
+                    entry
+                        .checkpoint
+                        .latest_attempt
+                        .as_ref()
+                        .is_some_and(|attempt| {
+                            attempt.disposition == IntentAttemptDisposition::RetainedFailed
+                        })
+                })
+                .expect("retained-failed Redo checkpoint");
+            corrupt(&mut retained.checkpoint);
+            assert!(
+                IntentSession::from_json(&authenticated_wire_json(wire)).is_err(),
+                "malformed nested Redo accepted state must reject"
+            );
+        }
     }
 }

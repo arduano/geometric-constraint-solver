@@ -4,27 +4,29 @@ use std::cell::RefCell;
 
 use geosolve_constraint_editor::{
     BOOTSTRAP_POINT_CODEC_V1, ColdIntentMaterialization, ColdIntentMaterializer,
-    IntentMaterializationError, IntentNativeBinding, IntentNativeWritableLeaf,
+    IntentMaterializationError, IntentMaterializationMap, IntentNativeBinding,
+    IntentNativeWritableLeaf,
 };
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, CurveDefinition, DocumentArcTangencySide,
-    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
-    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
-    DocumentExternalBindingId, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentId,
-    DocumentLineSide, DocumentParameterId, DocumentParameterKind, ExternalLineOrientationV1,
-    ExternalSnapshotDigest, ExternalSnapshotEntry, ExternalSnapshotFeatureV1,
-    ExternalSnapshotResourcesV1, ExternalSnapshotSet, ExternalTopologyDigest, FeatureEndpoint,
-    GeometryRole, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
-    TangentOrientation,
+    ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan,
+    DocumentArcTangencySide, DocumentConstraintDefinition, DocumentCurveContinuity,
+    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveNormalSide,
+    DocumentDimensionDefinition, DocumentExternalBindingId, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentId, DocumentLineSide, DocumentParameterId,
+    DocumentParameterKind, ExternalLineOrientationV1, ExternalSnapshotDigest,
+    ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1,
+    ExternalSnapshotSet, ExternalTopologyDigest, FeatureEndpoint, GeometryRole, ParameterBatch,
+    ParameterBatchEntry, ParameterValue, PersistentId, TangentOrientation,
 };
 use geosolve_sketch_intent::{
     AggregateKind, BootstrapNativeKind, ConstraintKind, DeletePolicy, DimensionKind,
     ExternalInputRevision, ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind,
     InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentExternalInputs,
     IntentFieldKey, IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNodeDraft,
-    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortKind,
-    IntentPortRole, IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId,
-    IntentUnit, LeafField, OperationKind, ParameterIntentKind, PatchPortRef,
+    IntentNodeKind, IntentOperationOutput, IntentOperationOutputKind, IntentPatch,
+    IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRef, IntentPortRole,
+    IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId, IntentUnit,
+    LeafField, OperationKind, ParameterIntentKind, PatchPortRef,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -329,14 +331,21 @@ fn cold_materialize_ops(
     raw: u128,
     operations: Vec<IntentPatchOperation>,
 ) -> ColdIntentMaterialization {
-    let session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+    cold_materialize_session_ops(raw, operations).1
+}
+
+fn cold_materialize_session_ops(
+    raw: u128,
+    operations: Vec<IntentPatchOperation>,
+) -> (IntentSession, ColdIntentMaterialization) {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
     let materializer = ColdIntentMaterializer::with_default_policy(
         DocumentId(PersistentId::from_u128(raw << 32)),
         1.0,
     )
     .unwrap();
     let captured = RefCell::<Option<ColdIntentMaterialization>>::new(None);
-    session
+    let plan = session
         .plan_patch(
             IntentPatch::new(
                 session.identity(),
@@ -351,7 +360,159 @@ fn cold_materialize_ops(
             },
         )
         .unwrap();
-    captured.into_inner().unwrap()
+    session.commit_plan(plan).unwrap();
+    (session, captured.into_inner().unwrap())
+}
+
+fn validate_ownership(
+    ownership: &IntentMaterializationMap,
+    intent: &IntentSession,
+    output: &ColdIntentMaterialization,
+) -> Result<(), IntentMaterializationError> {
+    ownership.validate_against(
+        intent.semantic_identity(),
+        intent.graph(),
+        intent.instance(),
+        intent.reservations(),
+        output
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &output.features,
+    )
+}
+
+fn span_references(intent: &IntentSession, symbols: &[&str]) -> Vec<IntentPortRef> {
+    let symbols = symbols
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    intent
+        .graph()
+        .nodes()
+        .values()
+        .filter(|node| symbols.contains(node.symbol.as_str()))
+        .flat_map(|node| {
+            node.ports
+                .values()
+                .filter(|port| port.kind == IntentPortKind::CurveSpan)
+                .map(|port| port.as_ref(node.id))
+        })
+        .collect()
+}
+
+fn rotate_port_bindings(ownership: &mut IntentMaterializationMap, references: &[IntentPortRef]) {
+    assert!(references.len() >= 2);
+    let mut bindings = references
+        .iter()
+        .map(|reference| ownership.port(*reference).expect("owned logical port"))
+        .collect::<Vec<_>>();
+    bindings.rotate_left(1);
+    for (reference, binding) in references.iter().zip(bindings) {
+        let index = ownership
+            .ports
+            .binary_search_by_key(reference, |(candidate, _)| *candidate)
+            .expect("owned logical port index");
+        ownership.ports[index].1 = binding;
+    }
+}
+
+fn rectangle_operation() -> IntentNodeDraft {
+    let mut outputs = Vec::new();
+    outputs.extend((0..4).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Point)));
+    outputs.extend((0..4).map(|_| IntentOperationOutput::curve(1)));
+    outputs.extend(
+        (0..5).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Constraint)),
+    );
+    outputs
+        .extend((0..2).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Scalar)));
+    outputs.extend(
+        (0..2).map(|_| IntentOperationOutput::native(IntentOperationOutputKind::Dimension)),
+    );
+    IntentNodeDraft::new(
+        IntentNodeKind::Operation {
+            operation: OperationKind::Rectangle,
+        },
+        key("rectangle-operation"),
+    )
+    .with_field(
+        IntentFieldKey(key("origin")),
+        IntentLiteral::Point([1.0, 2.0]),
+    )
+    .with_field(IntentFieldKey(key("width")), coordinate(4.0))
+    .with_field(IntentFieldKey(key("height")), coordinate(3.0))
+    .with_field(
+        IntentFieldKey(key("role")),
+        IntentLiteral::Enum(key("profile")),
+    )
+    .with_operation_outputs(outputs)
+}
+
+fn aggregate_topology_operations() -> Vec<IntentPatchOperation> {
+    let second = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("second"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 0),
+        alias("first", IntentPortRole::End),
+    )
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(2.0))
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(0.0));
+    let chain = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::OpenChain,
+        },
+        key("chain"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("first", IntentPortRole::Span),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 1),
+        alias("second", IntentPortRole::Span),
+    );
+    let profile = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::ClosedProfile,
+        },
+        key("profile"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("circle", IntentPortRole::Span),
+    );
+    vec![
+        IntentPatchOperation::CreateNode {
+            alias: key("first"),
+            draft: Box::new(segment("first", [0.0, 0.0], [1.0, 0.0])),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("second"),
+            draft: Box::new(second),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("circle"),
+            draft: Box::new(circle("circle", [5.0, 0.0], 1.0)),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("chain"),
+            draft: Box::new(chain),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("profile"),
+            draft: Box::new(profile),
+            cell: None,
+        },
+    ]
 }
 
 fn assert_independently_validated(output: &ColdIntentMaterialization) {
@@ -381,6 +542,7 @@ fn assert_independently_validated(output: &ColdIntentMaterialization) {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn cold_point_segment_horizontal_materialization_is_accepted_and_exactly_owned() {
     let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_0101)).unwrap();
     let cold = ColdIntentMaterializer::with_default_policy(
@@ -466,6 +628,342 @@ fn cold_point_segment_horizontal_materialization_is_accepted_and_exactly_owned()
     assert_eq!(x_leaf.field, LeafField::X);
     assert_eq!(y_leaf.port, end_port.port);
     assert_eq!(y_leaf.field, LeafField::Y);
+
+    output
+        .ownership
+        .validate_against(
+            session.semantic_identity(),
+            session.graph(),
+            session.instance(),
+            session.reservations(),
+            accepted.document(),
+            &output.features,
+        )
+        .expect("fresh ownership evidence validates independently");
+
+    let mut reordered = output.ownership.clone();
+    reordered.ports.swap(0, 1);
+    assert!(matches!(
+        reordered.validate_against(
+            session.semantic_identity(),
+            session.graph(),
+            session.instance(),
+            session.reservations(),
+            accepted.document(),
+            &output.features,
+        ),
+        Err(IntentMaterializationError::InvalidOwnershipOrdering)
+    ));
+
+    let mut duplicate_owner = output.ownership.clone();
+    let duplicated = duplicate_owner.nodes[0].owned[0];
+    duplicate_owner.nodes[1].owned.push(duplicated);
+    duplicate_owner.nodes[1].owned.sort_unstable();
+    duplicate_owner.nodes[1].owned.dedup();
+    assert!(matches!(
+        duplicate_owner.validate_against(
+            session.semantic_identity(),
+            session.graph(),
+            session.instance(),
+            session.reservations(),
+            accepted.document(),
+            &output.features,
+        ),
+        Err(IntentMaterializationError::DuplicateNativeOwner { binding }) if binding == duplicated
+    ));
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one hostile ownership matrix keeps every cross-table omission and swap explicit"
+)]
+fn ownership_validation_rejects_omission_swaps_wrong_owner_and_duplicate_writable_leaf() {
+    let raw = 0x8300_0108_u128;
+    let template = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+    let operations = shared_horizontal_segment_patch(&template, [8.0, 3.0])
+        .operations()
+        .to_vec();
+    let (intent, output) = cold_materialize_session_ops(raw, operations);
+    validate_ownership(&output.ownership, &intent, &output).unwrap();
+
+    let mut stale = output.ownership.clone();
+    stale.semantic = IntentSession::with_id(IntentSessionId::from_raw(raw + 1))
+        .unwrap()
+        .semantic_identity();
+    assert!(matches!(
+        validate_ownership(&stale, &intent, &output),
+        Err(IntentMaterializationError::OwnershipSemanticMismatch)
+    ));
+
+    let point_port_candidates = output
+        .ownership
+        .ports
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (_, binding))| {
+            matches!(binding, IntentNativeBinding::Point(_)).then_some(index)
+        })
+        .collect::<Vec<_>>();
+    let first_point_port = point_port_candidates[0];
+    let second_point_port = point_port_candidates
+        .into_iter()
+        .find(|index| {
+            output.ownership.ports[*index].1 != output.ownership.ports[first_point_port].1
+        })
+        .unwrap();
+    let point_ports = [first_point_port, second_point_port];
+
+    let mut missing_port = output.ownership.clone();
+    let missing = missing_port.ports.remove(point_ports[0]).0;
+    assert!(matches!(
+        validate_ownership(&missing_port, &intent, &output),
+        Err(IntentMaterializationError::MissingOwnershipPort { port }) if port == missing
+    ));
+
+    let curve_binding = output
+        .ownership
+        .ports
+        .iter()
+        .find_map(|(_, binding)| {
+            matches!(binding, IntentNativeBinding::Curve(_)).then_some(*binding)
+        })
+        .unwrap();
+    let mut wrong_kind = output.ownership.clone();
+    let wrong_kind_port = wrong_kind.ports[point_ports[0]].0;
+    wrong_kind.ports[point_ports[0]].1 = curve_binding;
+    assert!(matches!(
+        validate_ownership(&wrong_kind, &intent, &output),
+        Err(IntentMaterializationError::OwnershipPortKindMismatch { port })
+            if port == wrong_kind_port
+    ));
+
+    let mut swapped_ports = output.ownership.clone();
+    swapped_ports.ports.swap(point_ports[0], point_ports[1]);
+    swapped_ports.ports[point_ports[0]].0 = output.ownership.ports[point_ports[0]].0;
+    swapped_ports.ports[point_ports[1]].0 = output.ownership.ports[point_ports[1]].0;
+    assert!(matches!(
+        validate_ownership(&swapped_ports, &intent, &output),
+        Err(IntentMaterializationError::OwnershipPortBindingMismatch { .. })
+    ));
+
+    let point_reservations = output
+        .ownership
+        .reservations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (_, binding))| {
+            matches!(binding, IntentNativeBinding::Point(_)).then_some(index)
+        })
+        .collect::<Vec<_>>();
+    assert!(point_reservations.len() >= 2);
+
+    let mut missing_reservation = output.ownership.clone();
+    let reservation = missing_reservation
+        .reservations
+        .remove(point_reservations[0])
+        .0;
+    assert!(matches!(
+        validate_ownership(&missing_reservation, &intent, &output),
+        Err(IntentMaterializationError::MissingOwnershipReservation {
+            reservation: actual
+        }) if actual == reservation
+    ));
+
+    let mut swapped_reservations = output.ownership.clone();
+    let first_binding = swapped_reservations.reservations[point_reservations[0]].1;
+    swapped_reservations.reservations[point_reservations[0]].1 =
+        swapped_reservations.reservations[point_reservations[1]].1;
+    swapped_reservations.reservations[point_reservations[1]].1 = first_binding;
+    assert!(matches!(
+        validate_ownership(&swapped_reservations, &intent, &output),
+        Err(IntentMaterializationError::OwnershipPortBindingMismatch { .. })
+    ));
+
+    let first_owned = output.ownership.nodes[0].owned[0];
+    let owner = output.ownership.nodes[0].node;
+    let mut missing_node_binding = output.ownership.clone();
+    missing_node_binding.nodes[0].owned.remove(0);
+    assert!(matches!(
+        validate_ownership(&missing_node_binding, &intent, &output),
+        Err(IntentMaterializationError::OwnershipNodeMismatch { node }) if node == owner
+    ));
+
+    let mut wrong_owner = output.ownership.clone();
+    wrong_owner.nodes[0].owned.remove(0);
+    wrong_owner.nodes[1].owned.push(first_owned);
+    wrong_owner.nodes[1].owned.sort_unstable();
+    assert!(matches!(
+        validate_ownership(&wrong_owner, &intent, &output),
+        Err(IntentMaterializationError::OwnershipNodeMismatch { .. })
+    ));
+
+    let mut missing_writable = output.ownership.clone();
+    let leaf = missing_writable.writable_leaves.remove(0).1;
+    assert!(matches!(
+        validate_ownership(&missing_writable, &intent, &output),
+        Err(IntentMaterializationError::MissingWritableOwnership { leaf: actual })
+            if actual == leaf
+    ));
+
+    let mut duplicate_writable = output.ownership.clone();
+    let duplicated_leaf = duplicate_writable.writable_leaves[0].1;
+    duplicate_writable.writable_leaves[1].1 = duplicated_leaf;
+    assert!(matches!(
+        validate_ownership(&duplicate_writable, &intent, &output),
+        Err(IntentMaterializationError::DuplicateWritableLeaf { leaf })
+            if leaf == duplicated_leaf
+    ));
+}
+
+#[test]
+fn ownership_validation_rejects_out_of_family_curve_spans_including_maximum_id() {
+    let raw = 0x8300_0109_u128;
+    let polyline = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Polyline,
+        },
+        key("polyline"),
+    )
+    .with_dynamic_children(4);
+    let nurbs = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::OpenControlNurbs,
+        },
+        key("nurbs"),
+    )
+    .with_dynamic_children(5)
+    .with_field(IntentFieldKey(key("degree")), IntentLiteral::Natural(2));
+    let (intent, output) = cold_materialize_session_ops(
+        raw,
+        vec![
+            create("line", segment("line", [0.0, 0.0], [1.0, 0.0])),
+            create("polyline", polyline),
+            create("nurbs", nurbs),
+        ],
+    );
+    let document = output
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+
+    let cases = document
+        .curves()
+        .iter()
+        .map(|curve| {
+            let invalid_segment = match &curve.definition {
+                CurveDefinition::Line { .. } => u32::MAX,
+                CurveDefinition::Polyline { .. } => {
+                    u32::try_from(document.curve_spans(curve.id).unwrap().len()).unwrap()
+                }
+                CurveDefinition::Nurbs { .. } => 0,
+                _ => panic!("fixture owns only line, polyline, and NURBS curves"),
+            };
+            (curve.id, invalid_segment)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(cases.len(), 3);
+
+    for (curve, segment) in cases {
+        let mut malformed = output.ownership.clone();
+        let (_, binding) = malformed
+            .ports
+            .iter_mut()
+            .find(|(_, binding)| {
+                matches!(binding, IntentNativeBinding::CurveSpan(span) if span.curve == curve)
+            })
+            .unwrap();
+        let span = CurveSpan { curve, segment };
+        *binding = IntentNativeBinding::CurveSpan(span);
+        assert!(matches!(
+            validate_ownership(&malformed, &intent, &output),
+            Err(IntentMaterializationError::InvalidOwnershipCurveSpan { span: actual })
+                if actual == span
+        ));
+    }
+
+    let mut missing_native = output.ownership.clone();
+    let (_, binding) = missing_native
+        .ports
+        .iter_mut()
+        .find(|(_, binding)| matches!(binding, IntentNativeBinding::CurveSpan(_)))
+        .unwrap();
+    let span = CurveSpan {
+        curve: CurveId(PersistentId::from_u128(0x8300_0109_ffff_ffff)),
+        segment: 0,
+    };
+    *binding = IntentNativeBinding::CurveSpan(span);
+    assert!(matches!(
+        validate_ownership(&missing_native, &intent, &output),
+        Err(IntentMaterializationError::MissingNativeOwnershipBinding {
+            binding: IntentNativeBinding::CurveSpan(actual)
+        }) if actual == span
+    ));
+}
+
+#[test]
+fn ownership_validation_rejects_full_same_kind_logical_span_permutations() {
+    let raw = 0x8300_010a_u128;
+    let polyline = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Polyline,
+        },
+        key("polyline"),
+    )
+    .with_dynamic_children(4);
+    let nurbs = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::OpenControlNurbs,
+        },
+        key("nurbs"),
+    )
+    .with_dynamic_children(5)
+    .with_field(IntentFieldKey(key("degree")), IntentLiteral::Natural(2));
+    let (intent, output) = cold_materialize_session_ops(
+        raw,
+        vec![
+            create(
+                "segment-a",
+                segment("segment-a", [-4.0, -2.0], [-2.0, -1.0]),
+            ),
+            create("segment-b", segment("segment-b", [-4.0, 1.0], [-1.0, 2.0])),
+            create("polyline", polyline),
+            create("nurbs", nurbs),
+            create("rectangle-operation", rectangle_operation()),
+        ],
+    );
+    validate_ownership(&output.ownership, &intent, &output).unwrap();
+
+    let cases = [
+        ("separate segments", vec!["segment-a", "segment-b"], 2),
+        ("polyline ordinals", vec!["polyline"], 3),
+        ("NURBS ordinals", vec!["nurbs"], 3),
+        (
+            "rectangle operation outputs",
+            vec!["rectangle-operation"],
+            4,
+        ),
+    ];
+    for (label, symbols, expected_count) in cases {
+        let references = span_references(&intent, &symbols);
+        assert_eq!(references.len(), expected_count, "{label}");
+        let distinct_bindings = references
+            .iter()
+            .map(|reference| output.ownership.port(*reference).unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(distinct_bindings.len(), expected_count, "{label}");
+
+        let mut permuted = output.ownership.clone();
+        rotate_port_bindings(&mut permuted, &references);
+        assert!(
+            matches!(
+                validate_ownership(&permuted, &intent, &output),
+                Err(IntentMaterializationError::OwnershipPortBindingMismatch { .. })
+            ),
+            "{label}"
+        );
+    }
 }
 
 #[test]
@@ -1899,72 +2397,8 @@ fn tangent_arc_materializes_exact_contact_parameters_and_relation_pair() {
 
 #[test]
 fn equation_free_aggregates_validate_exact_open_and_periodic_closed_topology() {
-    let second = IntentNodeDraft::new(
-        IntentNodeKind::Geometry {
-            recipe: GeometryRecipeKind::Segment,
-        },
-        key("second"),
-    )
-    .with_input(
-        InputSlot::new(InputRole::Point, 0),
-        alias("first", IntentPortRole::End),
-    )
-    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(2.0))
-    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(0.0));
-    let chain = IntentNodeDraft::new(
-        IntentNodeKind::Aggregate {
-            aggregate: AggregateKind::OpenChain,
-        },
-        key("chain"),
-    )
-    .with_input(
-        InputSlot::new(InputRole::Span, 0),
-        alias("first", IntentPortRole::Span),
-    )
-    .with_input(
-        InputSlot::new(InputRole::Span, 1),
-        alias("second", IntentPortRole::Span),
-    );
-    let profile = IntentNodeDraft::new(
-        IntentNodeKind::Aggregate {
-            aggregate: AggregateKind::ClosedProfile,
-        },
-        key("profile"),
-    )
-    .with_input(
-        InputSlot::new(InputRole::Span, 0),
-        alias("circle", IntentPortRole::Span),
-    );
-    let output = cold_materialize_ops(
-        0x8300_2001,
-        vec![
-            IntentPatchOperation::CreateNode {
-                alias: key("first"),
-                draft: Box::new(segment("first", [0.0, 0.0], [1.0, 0.0])),
-                cell: None,
-            },
-            IntentPatchOperation::CreateNode {
-                alias: key("second"),
-                draft: Box::new(second),
-                cell: None,
-            },
-            IntentPatchOperation::CreateNode {
-                alias: key("circle"),
-                draft: Box::new(circle("circle", [5.0, 0.0], 1.0)),
-                cell: None,
-            },
-            IntentPatchOperation::CreateNode {
-                alias: key("chain"),
-                draft: Box::new(chain),
-                cell: None,
-            },
-            IntentPatchOperation::CreateNode {
-                alias: key("profile"),
-                draft: Box::new(profile),
-                cell: None,
-            },
-        ],
-    );
+    let (intent, output) =
+        cold_materialize_session_ops(0x8300_2001, aggregate_topology_operations());
     assert_eq!(output.ownership.aggregates.len(), 2);
     let open = output
         .ownership
@@ -1980,6 +2414,33 @@ fn equation_free_aggregates_validate_exact_open_and_periodic_closed_topology() {
         .unwrap();
     assert_eq!(open.spans.len(), 2);
     assert_eq!(closed.spans.len(), 1);
+    validate_ownership(&output.ownership, &intent, &output).unwrap();
+
+    let mut missing = output.ownership.clone();
+    let missing_port = missing.aggregates.remove(0).port;
+    assert!(matches!(
+        validate_ownership(&missing, &intent, &output),
+        Err(IntentMaterializationError::InvalidOwnershipAggregate { port })
+            if port == missing_port
+    ));
+
+    let mut wrong_closure = output.ownership.clone();
+    wrong_closure.aggregates[0].closed = !wrong_closure.aggregates[0].closed;
+    let wrong_closure_port = wrong_closure.aggregates[0].port;
+    assert!(matches!(
+        validate_ownership(&wrong_closure, &intent, &output),
+        Err(IntentMaterializationError::InvalidOwnershipAggregate { port })
+            if port == wrong_closure_port
+    ));
+
+    let mut malformed_span = output.ownership.clone();
+    malformed_span.aggregates[0].spans[0].segment = u32::MAX;
+    let malformed_port = malformed_span.aggregates[0].port;
+    assert!(matches!(
+        validate_ownership(&malformed_span, &intent, &output),
+        Err(IntentMaterializationError::InvalidOwnershipAggregate { port })
+            if port == malformed_port
+    ));
 }
 
 #[test]

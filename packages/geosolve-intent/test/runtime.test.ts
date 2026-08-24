@@ -6,6 +6,8 @@ import test from "node:test";
 
 import {
   IntentClient,
+  IntentRpcProtocolError,
+  MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES,
   aliasCellTarget,
   aliasPort,
   canonicalStringify,
@@ -56,6 +58,70 @@ const cascadeRootsFixtureText = readFileSync(
 const fixture = JSON.parse(fixtureText) as {
   expected: Parameters<typeof sessionIdentity<string>>[1];
 };
+
+const emptyDescriptor = {
+  schema: {
+    inputs: [],
+    input_choices: [],
+    fields: [],
+    minimum_children: 0,
+    maximum_children: 0,
+  },
+  fields: [],
+  outputs: [],
+  suppression_edit: "definition",
+  input_edit: "input_binding",
+  name_edit: "organization",
+};
+
+function rpcSnapshot(identity = fixture.expected) {
+  const sourceText = [
+    'import type { IntentSourceSnapshot } from "@geosolve/intent";',
+    "",
+    "export const sketch = {",
+    "  cells: [],",
+    "} satisfies IntentSourceSnapshot;",
+    "",
+  ].join("\n");
+  return {
+    identity,
+    graph: {
+      identity,
+      cells: [] as unknown[],
+    },
+    projection: {
+      identity,
+      outline: [],
+      structured_source: {
+        identity,
+        text: sourceText,
+        tokens: [],
+      },
+      history: {
+        applied: [],
+        redoable: [],
+      },
+      latest_disposition: null,
+      latest_diagnostic: null,
+    },
+    accepted_validation: null,
+  };
+}
+
+function rpcSuccess(value: unknown): string {
+  return JSON.stringify({ outcome: "success", value });
+}
+
+function patchSuccess(identity = fixture.expected): string {
+  return rpcSuccess({
+    result: "patch",
+    receipt: {
+      identity,
+      disposition: "accepted",
+      aliases: { nodes: {}, ports: {}, cells: {} },
+    },
+  });
+}
 
 function representativePatch() {
   const owner = session(fixture.expected.session);
@@ -258,19 +324,68 @@ test("full session identity and Rust quantity nesting are mandatory on transport
   assert.equal("op" in (operation ?? {}), false);
 });
 
-test("client sends only the closed Rust apply_patch RPC payload", async () => {
+test("client sends only the closed Rust apply_patch RPC payload and parses its typed result", async () => {
   const calls: string[] = [];
   const value = representativePatch();
   const client = new IntentClient(fixture.expected.session, {
     async apply(json) {
       calls.push(json);
-      return "accepted-identity";
+      return patchSuccess();
     },
   });
 
-  assert.equal(await client.apply(value), "accepted-identity");
+  const response = await client.apply(value);
+  assert.equal(response.outcome, "success");
+  if (response.outcome === "success") {
+    assert.equal(response.value.result, "patch");
+    assert.equal(response.value.receipt.disposition, "accepted");
+    assert.equal(response.value.receipt.identity.session, fixture.expected.session);
+  }
   assert.deepEqual(calls, [`{"method":"apply_patch","patch":${fixtureText}}`]);
   assert.doesNotMatch(calls[0] ?? "", /residual|jacobian|solve/u);
+});
+
+test("mutation methods accept only bounded receipts and never require a full snapshot", async () => {
+  const encoded = patchSuccess();
+  assert.doesNotMatch(encoded, /"snapshot"/u);
+  assert.ok(Buffer.byteLength(encoded, "utf8") < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
+
+  const client = new IntentClient(fixture.expected.session, {
+    apply: () => " ".repeat(MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES + 1),
+  });
+  await assert.rejects(
+    () => client.apply(representativePatch()),
+    new RegExp(`response exceeds ${MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES} bytes`, "u"),
+  );
+});
+
+test("mutation receipts accept wide Rust-valid per-declaration port alias maps", async () => {
+  const selectorCount = 16_385;
+  const encoded = JSON.parse(patchSuccess()) as {
+    value: { receipt: { aliases: { ports: Record<string, unknown> } } };
+  };
+  encoded.value.receipt.aliases.ports.wide = Object.fromEntries(
+    Array.from({ length: selectorCount }, (_, index) => [
+      `node:span:${index.toString(16).padStart(4, "0")}`,
+      {
+        node: "0000000000000001",
+        port: (index + 2).toString(16).padStart(16, "0"),
+        kind: "curve_span",
+      },
+    ]),
+  );
+  const client = new IntentClient(fixture.expected.session, {
+    apply: () => JSON.stringify(encoded),
+  });
+
+  const response = await client.apply(representativePatch());
+  assert.equal(response.outcome, "success");
+  if (response.outcome === "success") {
+    assert.equal(
+      Object.keys(response.value.receipt.aliases.ports.wide ?? {}).length,
+      selectorCount,
+    );
+  }
 });
 
 test("client stamps source-token edits with the originating exact session identity", async () => {
@@ -278,12 +393,16 @@ test("client stamps source-token edits with the originating exact session identi
   const client = new IntentClient(fixture.expected.session, {
     async apply(json) {
       calls.push(json);
-      return "accepted-identity";
+      return patchSuccess();
     },
   });
   const expected = sessionIdentity(client.owner, fixture.expected);
 
-  assert.equal(await client.editSourceToken(expected, 7, "3.5"), "accepted-identity");
+  const response = await client.editSourceToken(expected, 7, "3.5");
+  assert.equal(response.outcome, "success");
+  if (response.outcome === "success") {
+    assert.equal(response.value.result, "patch");
+  }
   assert.deepEqual(calls, [
     `{"method":"edit_source_token","expected":${JSON.stringify(fixture.expected)},"token":7,"replacement":"3.5"}`,
   ]);
@@ -305,6 +424,431 @@ test("all DOM-free RPC requests use the closed Rust method tags", async () => {
       replacement: "3.5",
     }),
     `{"method":"edit_source_token","expected":${JSON.stringify(fixture.expected)},"token":7,"replacement":"3.5"}`,
+  );
+});
+
+test("snapshot parses the compact stable graph projection without bootstrap payload bytes", async () => {
+  const snapshot = rpcSnapshot();
+  snapshot.graph.cells.push({
+    cell: "0000000000000001",
+    name: "Bootstrap",
+    declarations: [{
+      node: "0000000000000002",
+      symbol: "bootstrap.point",
+      name: "Bootstrap point",
+      kind: {
+        family: "bootstrap",
+        object: {
+          kind: "point",
+          codec: "sketch-point-v1",
+          payload_bytes: 524288,
+          payload_sha256: "a".repeat(64),
+        },
+      },
+      bootstrap_origin: null,
+      suppressed: false,
+      inputs: [],
+      definition_fields: [],
+      instance_leaves: [],
+      operation_outputs: [],
+      children: [],
+      descriptor: {
+        ...emptyDescriptor,
+        schema: {
+          ...emptyDescriptor.schema,
+          fields: [{
+            field: "topology_digest",
+            literal: { kind: "text" },
+            required: false,
+          }],
+        },
+        fields: [{
+          schema: {
+            field: "topology_digest",
+            literal: { kind: "text" },
+            required: false,
+          },
+          default: { default: "conditional" },
+          choices: { choices: "not_applicable" },
+          edit: "definition",
+        }],
+      },
+      dependencies: [],
+    }],
+  });
+  snapshot.graph.cells.push({
+    cell: "0000000000000003",
+    name: "Stable topology",
+    declarations: [{
+      node: "0000000000000004",
+      symbol: "polyline.main",
+      name: "Polyline",
+      kind: { family: "geometry", recipe: "polyline" },
+      bootstrap_origin: null,
+      suppressed: false,
+      inputs: [],
+      definition_fields: [],
+      instance_leaves: [],
+      operation_outputs: [],
+      children: [{
+        child: "0000000000000010",
+        schema: "polyline_vertex",
+        ports: [{
+          node: "0000000000000004",
+          port: "0000000000000020",
+          kind: "point",
+        }],
+      }, {
+        child: "0000000000000011",
+        schema: "polyline_vertex",
+        ports: [{
+          node: "0000000000000004",
+          port: "0000000000000021",
+          kind: "point",
+        }],
+      }],
+      descriptor: emptyDescriptor,
+      dependencies: [],
+    }, {
+      node: "0000000000000005",
+      symbol: "operation.rectangle",
+      name: "Rectangle operation",
+      kind: { family: "operation", operation: "rectangle" },
+      bootstrap_origin: null,
+      suppressed: false,
+      inputs: [],
+      definition_fields: [],
+      instance_leaves: [],
+      operation_outputs: [{ kind: "curve", curve_span_count: 2 }],
+      children: [],
+      descriptor: emptyDescriptor,
+      dependencies: [],
+    }],
+  });
+  const client = new IntentClient(fixture.expected.session, {
+    apply: () => rpcSuccess({ result: "snapshot", snapshot }),
+  });
+
+  const response = await client.snapshot();
+  assert.equal(response.outcome, "success");
+  if (response.outcome === "success") {
+    const declaration = response.value.snapshot.graph.cells[0]?.declarations[0];
+    assert.equal(declaration?.kind.family, "bootstrap");
+    if (declaration?.kind.family === "bootstrap") {
+      assert.equal(declaration.kind.object.payload_bytes, 524288);
+      assert.equal("payload" in declaration.kind.object, false);
+    }
+    assert.equal(
+      declaration?.descriptor.fields[0]?.default.default,
+      "conditional",
+    );
+    assert.match(
+      response.value.snapshot.projection.structured_source.text,
+      /satisfies IntentSourceSnapshot/u,
+    );
+    const topology = response.value.snapshot.graph.cells[1]?.declarations;
+    assert.deepEqual(
+      topology?.[0]?.children.map((child) => ({
+        child: child.child,
+        ports: child.ports.map((port) => port.port),
+      })),
+      [{ child: "0000000000000010", ports: ["0000000000000020"] },
+        { child: "0000000000000011", ports: ["0000000000000021"] }],
+    );
+    assert.deepEqual(
+      topology?.[1]?.operation_outputs,
+      [{ kind: "curve", curve_span_count: 2 }],
+    );
+  }
+});
+
+test("snapshot accepts every declaration count admitted by the Rust graph contract", async () => {
+  const snapshot = rpcSnapshot();
+  const declaration = (index: number) => ({
+    node: (index + 2).toString(16).padStart(16, "0"),
+    symbol: `point.${index}`,
+    name: `Point ${index}`,
+    kind: { family: "geometry", recipe: "sketch_point" },
+    bootstrap_origin: null,
+    suppressed: false,
+    inputs: [],
+    definition_fields: [],
+    instance_leaves: [],
+    operation_outputs: [],
+    children: [],
+    descriptor: emptyDescriptor,
+    dependencies: [],
+  });
+  // This deliberately crosses the former presentation-only limit of 4,096.
+  // Rust's closed graph contract admits 65,536 declarations in total.
+  snapshot.graph.cells.push({
+    cell: "0000000000000001",
+    name: "Large graph",
+    declarations: Array.from({ length: 4_097 }, (_, index) => declaration(index)),
+  });
+  const client = new IntentClient(fixture.expected.session, {
+    apply: () => rpcSuccess({ result: "snapshot", snapshot }),
+  });
+
+  const response = await client.snapshot();
+  assert.equal(response.outcome, "success");
+  if (response.outcome === "success") {
+    assert.equal(response.value.snapshot.graph.cells[0]?.declarations.length, 4_097);
+  }
+});
+
+test("snapshot accepts operation port catalogs beyond the former UI convenience limit", async () => {
+  const snapshot = rpcSnapshot();
+  const node = "0000000000000002";
+  const outputCount = 16_385;
+  snapshot.graph.cells.push({
+    cell: "0000000000000001",
+    name: "Wide operation",
+    declarations: [{
+      node,
+      symbol: "operation.wide",
+      name: "Wide operation",
+      kind: { family: "operation", operation: "profile_offset" },
+      bootstrap_origin: null,
+      suppressed: false,
+      inputs: [],
+      definition_fields: [],
+      instance_leaves: [],
+      operation_outputs: [{ kind: "curve", curve_span_count: outputCount }],
+      children: [],
+      descriptor: {
+        ...emptyDescriptor,
+        outputs: Array.from({ length: outputCount }, (_, index) => ({
+          port: {
+            node,
+            port: (index + 3).toString(16).padStart(16, "0"),
+            kind: "curve_span",
+          },
+          selector: `node:span:${index.toString(16).padStart(4, "0")}`,
+          kind: "curve_span",
+          writable: [],
+          flow: { state: "owned_logical" },
+          native: null,
+          edit: "read_only",
+        })),
+      },
+      dependencies: [],
+    }],
+  });
+  const client = new IntentClient(fixture.expected.session, {
+    apply: () => rpcSuccess({ result: "snapshot", snapshot }),
+  });
+
+  const response = await client.snapshot();
+  assert.equal(response.outcome, "success");
+  if (response.outcome === "success") {
+    assert.equal(
+      response.value.snapshot.graph.cells[0]?.declarations[0]?.descriptor.outputs.length,
+      outputCount,
+    );
+  }
+});
+
+test("snapshot, Undo, Redo, and Inspector enforce method-specific success DTOs", async () => {
+  const requests: string[] = [];
+  const client = new IntentClient(fixture.expected.session, {
+    apply(request) {
+      requests.push(request);
+      const method = (JSON.parse(request) as { method: string }).method;
+      if (method === "snapshot") {
+        return rpcSuccess({ result: "snapshot", snapshot: rpcSnapshot() });
+      }
+      if (method === "undo") {
+        return rpcSuccess({
+          result: "history",
+          receipt: { identity: fixture.expected, moved: true },
+        });
+      }
+      if (method === "redo") {
+        return rpcSuccess({
+          result: "history",
+          receipt: { identity: fixture.expected, moved: false },
+        });
+      }
+      return rpcSuccess({
+        result: "inspector",
+        identity: fixture.expected,
+        inspector: {
+          node: "0000000000000042",
+          symbol: "point.main",
+          name: "Main point",
+          kind: { family: "geometry", recipe: "sketch_point" },
+          suppressed: false,
+          retained_failure: false,
+          inputs: [],
+          descriptor: emptyDescriptor,
+          fields: [],
+        },
+      });
+    },
+  });
+
+  const snapshot = await client.snapshot();
+  const undo = await client.undo();
+  const redo = await client.redo();
+  const inspector = await client.inspector(
+    stableNode(client.owner, "0000000000000042"),
+  );
+
+  assert.equal(snapshot.outcome === "success" && snapshot.value.result, "snapshot");
+  assert.equal(undo.outcome === "success" && undo.value.receipt.moved, true);
+  assert.equal(redo.outcome === "success" && redo.value.receipt.moved, false);
+  assert.equal(
+    inspector.outcome === "success" && inspector.value.inspector?.symbol,
+    "point.main",
+  );
+  assert.deepEqual(requests, [
+    '{"method":"snapshot"}',
+    '{"method":"undo"}',
+    '{"method":"redo"}',
+    '{"method":"inspector","node":"0000000000000042"}',
+  ]);
+});
+
+test("valid Rust failure envelopes remain typed and state-neutral to the caller", async () => {
+  const client = new IntentClient(fixture.expected.session, {
+    apply: () => JSON.stringify({
+      outcome: "failure",
+      failure: {
+        code: "source_edit_rejected",
+        message: "the structured-source projection is stale",
+        identity: fixture.expected,
+      },
+    }),
+  });
+
+  const response = await client.editSourceToken(
+    sessionIdentity(client.owner, fixture.expected),
+    1,
+    "2.0",
+  );
+  assert.equal(response.outcome, "failure");
+  if (response.outcome === "failure") {
+    assert.equal(response.failure.code, "source_edit_rejected");
+    assert.equal(response.failure.identity?.session, fixture.expected.session);
+  }
+});
+
+test("client rejects malformed, unknown-field, method-confused, and cross-session responses", async () => {
+  const owner = fixture.expected.session;
+  const invoke = async (response: string) => {
+    const client = new IntentClient(owner, { apply: () => response });
+    await client.snapshot();
+  };
+
+  await assert.rejects(() => invoke("not json"), IntentRpcProtocolError);
+  await assert.rejects(
+    () => invoke(JSON.stringify({
+      outcome: "failure",
+      failure: { code: "browser_guess", message: "unknown", identity: null },
+    })),
+    /failure code has unknown value/u,
+  );
+  await assert.rejects(
+    () => invoke(rpcSuccess({
+      result: "history",
+      receipt: { identity: fixture.expected, moved: false },
+    })),
+    /expected result snapshot/u,
+  );
+
+  const unknownFieldSnapshot = rpcSnapshot();
+  const invalidProjection = {
+    ...unknownFieldSnapshot.projection,
+    browser_only: true,
+  };
+  await assert.rejects(
+    () => invoke(rpcSuccess({
+      result: "snapshot",
+      snapshot: { ...unknownFieldSnapshot, projection: invalidProjection },
+    })),
+    /unknown or missing fields/u,
+  );
+
+  const foreignIdentity = {
+    ...fixture.expected,
+    session: "22222222222222222222222222222222",
+  };
+  await assert.rejects(
+    () => invoke(rpcSuccess({ result: "snapshot", snapshot: rpcSnapshot(foreignIdentity) })),
+    /cross-session intent identity/u,
+  );
+
+  const patchClient = new IntentClient(owner, { apply: () => patchSuccess(foreignIdentity) });
+  await assert.rejects(
+    () => patchClient.apply(representativePatch()),
+    /cross-session intent identity/u,
+  );
+
+  const obsoletePatchClient = new IntentClient(owner, {
+    apply: () => rpcSuccess({
+      result: "patch",
+      disposition: "accepted",
+      aliases: { nodes: {}, ports: {}, cells: {} },
+      snapshot: rpcSnapshot(),
+    }),
+  });
+  await assert.rejects(
+    () => obsoletePatchClient.apply(representativePatch()),
+    /patch RPC value has unknown or missing fields/u,
+  );
+
+  const mismatchedGraph = rpcSnapshot();
+  mismatchedGraph.graph.identity = {
+    ...fixture.expected,
+    revision: "ffffffffffffffff",
+  };
+  await assert.rejects(
+    () => invoke(rpcSuccess({ result: "snapshot", snapshot: mismatchedGraph })),
+    /graph identity does not match snapshot identity/u,
+  );
+
+  const staleSource = rpcSnapshot();
+  staleSource.projection.structured_source.identity = {
+    ...fixture.expected,
+    revision: "eeeeeeeeeeeeeeee",
+  };
+  await assert.rejects(
+    () => invoke(rpcSuccess({ result: "snapshot", snapshot: staleSource })),
+    /Structured Source identity does not match snapshot identity/u,
+  );
+});
+
+test("client rejects non-finite and unsafe-integer DTO coordinates", async () => {
+  const unsafe = rpcSnapshot();
+  unsafe.graph.cells.push({
+    cell: "0000000000000001",
+    name: "Point",
+    declarations: [{
+      node: "0000000000000002",
+      symbol: "point.main",
+      name: "Point",
+      kind: { family: "geometry", recipe: "sketch_point" },
+      bootstrap_origin: null,
+      suppressed: false,
+      inputs: [],
+      definition_fields: [{
+        field: "count",
+        value: { kind: "natural", value: Number.MAX_SAFE_INTEGER + 1 },
+      }],
+      instance_leaves: [],
+      operation_outputs: [],
+      children: [],
+      descriptor: emptyDescriptor,
+      dependencies: [],
+    }],
+  });
+  const client = new IntentClient(fixture.expected.session, {
+    apply: () => rpcSuccess({ result: "snapshot", snapshot: unsafe }),
+  });
+  await assert.rejects(
+    () => client.snapshot(),
+    /cannot be represented exactly/u,
   );
 });
 

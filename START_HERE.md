@@ -245,15 +245,38 @@ typed dependency graph, separate writable instance and presentation organization
 deterministic Rust materialization into the unchanged native solver, one composite history and
 prepared reverse-binding drag routes. The discarded candidate remains on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; do not restore it wholesale. The
-initial immutable nomination recorded by `232b83a` and post-F005 source `a621cdd` are withdrawn by
-M83-F001 through M83-F007. M83-F006 keeps preview/cold comparison exact while canonicalizing only
-same-cell recomputable Polyline/rectangle branch metadata; explicit Segment/Midpoint Line branches
-remain exact. M83-F007 restores New through the canonical empty projectional authority.
-Replacement source `fafea4e`, tree `ff75c36`, passes the complete clean gate, 5/5 frozen browser
-regressions and byte-verified no-rebuild Tailscale nomination at
-`http://100.94.63.83:8080/`. M83 is not accepted product behavior until explicit human UAT passes;
-Pages therefore remains on accepted M81 product bytes. The M76 annotation-layout cache stays
-disposable presentation-only workspace state outside graph/materialization/history authority.
+initial nomination recorded by `232b83a`, post-F005 source `a621cdd` and post-F007 source
+`fafea4e` are historical: M83-F001 through M83-F007 are implemented, but a later architecture-
+hardening pass supersedes the F007 nomination before human UAT.
+
+That post-F007 pass makes SHA-256 the canonical graph/session wire-v2 and semantic identity
+digest, while accepting canonical experimental wire-v1 only after its FNV-1a-derived digest and
+all nested authority validate, then migrating exact retained-failed checkpoint ledgers to v2.
+The legacy digest is deterministic integrity evidence, not a cryptographic authentication or
+security primitive. Ordinary session/semantic identity reads use mutation-refreshed caches;
+import, mutation planning and explicit validation still recompute and compare the full hashes.
+Decoded current, accepted, Undo and Redo state now receives complete graph, instance, reservation,
+host-input and materialization-evidence validation. Logical/native ownership validation checks
+exact port, span, feature, corner, reservation, writable-leaf and aggregate provenance rather than
+only kind-compatible existence.
+
+One central Rust declaration descriptor now supplies schemas, typed defaults, closed/contextual
+choices, output flow and edit classification to Inspector, graph snapshots and typed code clients.
+Structured Source projects the same validated stored data as a data-only `IntentSourceSnapshot`;
+explicit RPC Snapshot is the full read, while patches/source edits and Undo/Redo return bounded
+typed receipts instead of embedding another full projection. Opaque bootstrap payloads appear in
+read projections only as their byte length and SHA-256. Fillet/Offset Apply and accepted radius/
+distance drops publish the exact already cold-validated prepared transaction rather than planning
+it again at the terminal event. Requests/receipts are bounded at 16 MiB, all RPC responses at
+64 MiB, workspace admission at 64 MiB and disposable annotation-layout JSON at 4 MiB, with excess
+rejected before publication or nested cache parsing. No constraint, residual, priority, branch
+policy or JavaScript solver changes in this pass.
+
+The earlier F007 artifact remains historical rather than renewed hardening evidence. A fresh clean
+freeze and focused human UAT are still required before M83 becomes accepted product behavior;
+GitHub Pages therefore remains on accepted M81 product bytes. The M76 annotation-layout cache
+stays disposable presentation-only workspace state outside graph/materialization/history
+authority.
 
 ## Read first
 
@@ -287,8 +310,8 @@ disposable presentation-only workspace state outside graph/materialization/histo
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
 19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — active projectional
-    intent contract, F001-F007 replacement qualification/nomination ledger and pending focused
-    scorecard.
+    intent contract, F001-F007 historical nomination ledger, post-F007 architecture hardening and
+    pending focused scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -660,9 +683,9 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M82 are complete. M83 implementation and post-F007 replacement candidate nomination are
-complete; human acceptance remains pending. M82 closes by explicit deferral rather than feature
-acceptance:
+M1-M82 are complete. M83's projectional implementation and F001-F007 repairs are complete; its
+post-F007 architecture hardening supersedes the prior nomination and still requires a fresh clean
+freeze and human acceptance. M82 closes by explicit deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
 `archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
 qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
@@ -767,11 +790,12 @@ Durable milestone and cleanup records:
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
-- `docs/adr/0040-projectional-design-intent-graph.md` (active replacement architecture)
+- `docs/adr/0040-projectional-design-intent-graph.md` (active replacement and post-F007 hardening
+  architecture)
 - `docs/M83_GOALS.md` (active projectional intent contract)
-- `docs/M83_IMPLEMENTATION.md` (withdrawn initial/post-F005 nominations, F001-F007 repairs and
-  replacement qualification ledger)
-- `docs/M83_UAT.md` (exact replacement-candidate authority and pending focused scorecard)
+- `docs/M83_IMPLEMENTATION.md` (withdrawn initial/post-F005/post-F007 nominations, F001-F007
+  repairs, architecture hardening and qualification ledger)
+- `docs/M83_UAT.md` (replacement-candidate authority and pending focused scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

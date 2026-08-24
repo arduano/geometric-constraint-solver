@@ -34,15 +34,19 @@ construction/NURBS UAT and certified all-family visual profiles.
 - **Active target:** M83 has mechanically implemented ADR 0040's projectional Design Intent Graph
   above the unchanged native solver. Stable typed declaration/port/input/reservation identity,
   separately revisioned instance/organization/external state, deterministic Rust materialization,
-  one composite history,
-  TypeScript-shaped source projection and prepared reverse-binding drag routes replace the
-  rejected chronological JSON-owner-rewrite candidate. Canvas/tree and Design projections resolve
-  one visible stable declaration owner, including closure deletion for retained-invalid Profile
-  Offset. M76 annotation layout remains a disposable presentation-only workspace cache outside
-  graph, materialization and history identity. The initial `232b83a` nomination and post-F005
-  source `a621cdd` are withdrawn by M83-F001 through M83-F007. Replacement source `fafea4e`, tree
-  `ff75c36`, passes the complete clean gate, 5/5 frozen browser checks and immutable no-rebuild
-  Tailscale nomination; no M83 capability is accepted until explicit human UAT passes.
+  one composite history, a data-only TypeScript-shaped source projection and prepared reverse-
+  binding drag routes replace the rejected chronological JSON-owner-rewrite candidate. Canvas/tree
+  and Design projections resolve one visible stable declaration owner, including closure deletion
+  for retained-invalid Profile Offset. M76 annotation layout remains a disposable presentation-
+  only workspace cache outside graph, materialization and history identity. M83-F001 through
+  M83-F007 are implemented; the `232b83a`, `a621cdd` and `fafea4e` nominations are historical
+  because a post-F007 architecture-hardening pass now supersedes them before human UAT. That pass
+  introduces canonical SHA-256 graph/session wire v2 with strictly authenticated legacy-v1
+  migration, cached ordinary identity reads with independent validation hashing, complete nested-
+  checkpoint/evidence/ownership validation, central declaration descriptors, compact graph/source
+  reads, typed bounded RPC mutation receipts and exact prepared Fillet/Offset publication. It adds
+  no equation, constraint, priority or JavaScript solver. A fresh clean freeze and explicit human
+  UAT remain required; GitHub Pages continues to serve accepted M81.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -357,6 +361,26 @@ Dependency-DAG order and stable identity are semantic; display names, cells and 
 not. Accepted materialization evidence is opaque host-owned bytes at this layer, so the crate
 cannot solve, evaluate geometry or claim residual validity.
 
+Post-F007 hardening makes the canonical graph and session wires version 2 and hashes their exact
+content and component identities with SHA-256. The reader accepts experimental version 1 only when
+its canonical JSON, outer FNV-1a-derived digest, nested identities, evidence and checkpoint
+authority all match, then migrates every identity and the exact retained-failed reservation-ledger
+shape before emitting v2. That legacy digest is a deterministic integrity fingerprint, not a
+cryptographic authentication or security primitive. `IntentSession::identity()` and
+`semantic_identity()` are cached ordinary reads refreshed only by atomic mutation/restore paths;
+import and explicit session validation independently recompute all identities and reject a stale
+cache. Planning and materialization still hash their staged inputs and evidence rather than
+trusting the read cache.
+
+Decoded current, accepted, Undo and Redo checkpoints receive the same structural graph, instance,
+external-input and reservation-ledger validation. Accepted materialization artifacts are bounded
+and their digest is rederived before planning, import or publication. A central declaration
+descriptor derives field schema, typed required/literal/conditional/contextual defaults,
+closed/contextual choices, output identity flow/native reservation and edit classification from
+the same Rust catalog used to validate declarations. Inspector, graph/RPC snapshots and typed code
+clients consume that descriptor. Structured Source projects the same already validated nodes and
+stored values but owns no separate defaults or schema table.
+
 ### `geosolve-constraint-editor`
 
 Owns presentation-independent sketch interaction policy over public `geosolve-sketch` and
@@ -394,6 +418,34 @@ bindings read-only. Direct pointer previews reuse retained native solver state a
 authenticated gesture data transient; the latest accepted sample remains distinct from a later
 rejected attempt and owns exact-once terminal publication. They do not replay or serialize the
 graph per frame.
+
+The materialization map is accepted only after independent comparison with the exact semantic
+identity, declaration graph, instance values, reservation ledger, native sketch document and
+computed-feature document. Stable ordering, every port and identity-flow binding, exact reservation
+owner/port provenance, node ownership, reverse writable leaf, aggregate topology and native object
+existence must agree. Logical-only curve-span, computed-feature and Fillet-corner outputs are also
+matched to their exact owning declaration and ordinal; a kind-compatible permutation therefore
+rejects. Accepted evidence and the complete map are revalidated on cold restore, never installed
+because a digest alone matches.
+
+Property and authoring previews now retain an opaque `PreparedProjectionalTransaction`: the exact
+CAS plan and independently cold-validated materialization generated for the visible preview.
+Computed-Fillet Apply, Profile Offset Apply, accepted Fillet-radius drop and accepted Profile
+Offset-distance drop publish that same prepared transaction after terminal authentication. They
+do not plan or cold-solve a second nominally equivalent patch at release, and stale/foreign plans
+reject before either intent or accepted native authority changes.
+
+`IntentGraphSnapshot` is the explicit bounded data query for stable declarations, inputs,
+definition/instance values, dependencies and central descriptors. It substitutes only kind,
+codec, byte length and SHA-256 for an opaque bootstrap payload. Structured Source likewise emits
+a TypeScript-shaped object satisfying data-only `IntentSourceSnapshot`; it contains no callbacks,
+executable expressions or solver authority. DOM-free RPC reserves full graph/workbench/validation
+state for explicit Snapshot. Patch and source-edit success return identity/disposition/alias
+receipts, Undo/Redo return identity/moved receipts, and Inspector returns only its identity-stamped
+projection. The producer conservatively proves a mutation receipt is at most 16 MiB before
+planning/publication, and structured plus JSON producers share a 64 MiB response ceiling enforced
+before mutation publication. The TypeScript client strictly validates the same closed response
+shapes, resource bounds and session branding.
 
 M83-F006 keeps terminal preview/cold authority fail-closed without mistaking recomputable branch
 round-off for a semantic mismatch. Exact document equality remains the fast path. Only line-branch
@@ -815,8 +867,19 @@ compatibility-filtered presentation cache outside intent/materialization/history
 recomputed when absent or invalid. M83-F007 enables New through the same canonical empty
 projectional authority used by startup, clearing durable authored geometry/declarations/history
 and transient authoring state, returning to Select and autosaving workspace v8 without invoking
-the retired flat path. Post-F007 M83 source `fafea4e` is clean-nominated at the immutable Tailscale
-endpoint, but remains unaccepted until human UAT passes; public Pages still serves accepted M81.
+the retired flat path. Post-F007 hardening additionally rejects workspace v8 unless its nested
+intent session owns accepted authority; an absent nested authority cannot be replaced by the old
+flat design/accepted fields, including the all-absent case. The web adapter renders the data-only
+source and compact graph snapshot supplied by the editor and uses the strict typed RPC client; it
+does not expand bootstrap payload bytes or infer field defaults. The former `fafea4e` artifact is
+historical pre-hardening evidence. M83 remains unaccepted until a fresh freeze and human UAT pass;
+public Pages still serves accepted M81.
+
+Workspace encode/decode shares the reproduction codec's 64 MiB admitted-workspace ceiling. A
+narrow version probe and disposable-cache visitor avoid an arbitrary `serde_json::Value` tree;
+outer canonical comparison streams; one serialized digest payload serves SHA-first and conditional
+legacy checks; ordinary v2 intent is authenticated once and passed into snapshot validation. This
+keeps hostile-input cost explicitly bounded without making presentation cache state authoritative.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is
@@ -1634,3 +1697,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `d1e2613`; rollback `fa54f30` restores exact M81 tree `17b2eea` and passes the complete release
   gate. The rejected UAT service is retired and was never published to Pages. Any future attempt
   requires a newly approved architecture rather than reactivating ADR 0038.
+- M83: active and not yet accepted. ADR 0040's projectional graph, F001-F007 interaction repairs
+  and post-F007 architecture hardening are implemented over the unchanged M81 solver/domain
+  baseline. Prior nominations through `fafea4e` are historical; a fresh clean frozen candidate and
+  focused human UAT remain required. GitHub Pages continues to serve accepted M81.

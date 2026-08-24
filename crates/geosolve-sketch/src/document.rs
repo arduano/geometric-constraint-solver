@@ -3994,6 +3994,11 @@ struct DocumentHeader {
     version: u32,
 }
 
+fn directions_share_positive_cell(first: [f64; 2], second: [f64; 2]) -> bool {
+    first.into_iter().chain(second).all(f64::is_finite)
+        && first[0].mul_add(second[0], first[1] * second[1]) > 0.0
+}
+
 impl SketchDocument {
     pub(crate) fn validate_parameter_scalar_value(
         &self,
@@ -4097,6 +4102,73 @@ impl SketchDocument {
     #[must_use]
     pub fn curves(&self) -> &[DesignCurve] {
         &self.curves
+    }
+
+    /// Compares complete documents while permitting only caller-declared,
+    /// recomputable line-branch metadata to be replaced by the other
+    /// document's value within the same positive branch cell.
+    ///
+    /// This is a narrow projectional-host audit seam. It never normalizes an
+    /// undeclared curve, a non-line definition, a branch flip, or any other
+    /// persistent field.
+    #[must_use]
+    pub fn exact_except_recomputable_line_branches(
+        &self,
+        other: &Self,
+        recomputable: &BTreeSet<CurveId>,
+    ) -> bool {
+        if self == other {
+            return true;
+        }
+        let mut normalized = self.clone();
+        for curve in recomputable {
+            let Some(other_definition) = other.curve(*curve).map(|curve| &curve.definition) else {
+                return false;
+            };
+            let Some(definition) = normalized
+                .curves
+                .iter_mut()
+                .find(|candidate| candidate.id == *curve)
+                .map(|curve| &mut curve.definition)
+            else {
+                return false;
+            };
+            match (definition, other_definition) {
+                (
+                    CurveDefinition::Line {
+                        branch_direction: current,
+                        ..
+                    },
+                    CurveDefinition::Line {
+                        branch_direction: replacement,
+                        ..
+                    },
+                ) if directions_share_positive_cell(*current, *replacement) => {
+                    *current = *replacement;
+                }
+                (
+                    CurveDefinition::Polyline {
+                        branch_directions: current,
+                        ..
+                    },
+                    CurveDefinition::Polyline {
+                        branch_directions: replacement,
+                        ..
+                    },
+                ) if current.len() == replacement.len()
+                    && current
+                        .iter()
+                        .zip(replacement)
+                        .all(|(current, replacement)| {
+                            directions_share_positive_cell(*current, *replacement)
+                        }) =>
+                {
+                    current.clone_from(replacement);
+                }
+                _ => return false,
+            }
+        }
+        normalized == *other
     }
 
     /// Returns one curve's persistent profile/construction role.
@@ -14492,6 +14564,229 @@ fn retain_remove<T>(values: &mut Vec<T>, predicate: impl Fn(&T) -> bool) -> bool
     let before = values.len();
     values.retain(|value| !predicate(value));
     values.len() != before
+}
+
+#[cfg(test)]
+mod projectional_branch_audit_tests {
+    use super::*;
+
+    struct BranchAuditFixture {
+        document: SketchDocument,
+        line: CurveId,
+        line_end: DesignPointId,
+        polyline: CurveId,
+        unrelated_point: DesignPointId,
+    }
+
+    fn branch_audit_fixture() -> BranchAuditFixture {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let line_start = document.add_point("line start", [0.0, 0.0]).expect("point");
+        let line_end = document.add_point("line end", [4.0, 0.0]).expect("point");
+        let polyline_start = document
+            .add_point("polyline start", [0.0, 2.0])
+            .expect("point");
+        let polyline_corner = document
+            .add_point("polyline corner", [3.0, 2.0])
+            .expect("point");
+        let polyline_end = document
+            .add_point("polyline end", [3.0, 5.0])
+            .expect("point");
+        let unrelated_point = document.add_point("unrelated", [8.0, 8.0]).expect("point");
+        let line = document
+            .add_curve(
+                "segment-style line",
+                CurveDefinition::Line {
+                    start: line_start,
+                    end: line_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let polyline = document
+            .add_curve(
+                "polyline",
+                CurveDefinition::Polyline {
+                    points: vec![polyline_start, polyline_corner, polyline_end],
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+                },
+            )
+            .expect("polyline");
+        BranchAuditFixture {
+            document,
+            line,
+            line_end,
+            polyline,
+            unrelated_point,
+        }
+    }
+
+    fn replace_branch_without_geometry(
+        document: &mut SketchDocument,
+        span: CurveSpan,
+        replacement: [f64; 2],
+    ) {
+        match &mut document.curve_mut(span.curve).expect("curve").definition {
+            CurveDefinition::Line {
+                branch_direction, ..
+            } if span.segment == 0 => *branch_direction = replacement,
+            CurveDefinition::Polyline {
+                branch_directions, ..
+            } => {
+                branch_directions[usize::try_from(span.segment).expect("segment index")] =
+                    replacement;
+            }
+            _ => panic!("fixture span must be a line segment"),
+        }
+    }
+
+    #[test]
+    fn line_branch_roundoff_is_allowed_only_when_declared() {
+        let fixture = branch_audit_fixture();
+        let mut cold = fixture.document.clone();
+        let (sine, cosine) = 1.0e-10_f64.sin_cos();
+        replace_branch_without_geometry(&mut cold, CurveSpan::line(fixture.line), [cosine, sine]);
+
+        cold.validate().expect("same-cell line document");
+        assert_ne!(fixture.document, cold);
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches(&cold, &BTreeSet::new())
+        );
+        assert!(
+            fixture
+                .document
+                .exact_except_recomputable_line_branches(&cold, &BTreeSet::from([fixture.line]),)
+        );
+    }
+
+    #[test]
+    fn polyline_branch_roundoff_is_allowed_only_when_declared() {
+        let fixture = branch_audit_fixture();
+        let mut cold = fixture.document.clone();
+        let (sine, cosine) = 1.0e-10_f64.sin_cos();
+        replace_branch_without_geometry(
+            &mut cold,
+            CurveSpan {
+                curve: fixture.polyline,
+                segment: 0,
+            },
+            [cosine, sine],
+        );
+        replace_branch_without_geometry(
+            &mut cold,
+            CurveSpan {
+                curve: fixture.polyline,
+                segment: 1,
+            },
+            [-sine, cosine],
+        );
+
+        cold.validate().expect("same-cell polyline document");
+        assert_ne!(fixture.document, cold);
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches(&cold, &BTreeSet::new())
+        );
+        assert!(
+            fixture.document.exact_except_recomputable_line_branches(
+                &cold,
+                &BTreeSet::from([fixture.polyline]),
+            )
+        );
+    }
+
+    #[test]
+    fn declared_line_and_polyline_branch_flips_are_rejected() {
+        let fixture = branch_audit_fixture();
+
+        let mut flipped_line = fixture.document.clone();
+        replace_branch_without_geometry(
+            &mut flipped_line,
+            CurveSpan::line(fixture.line),
+            [-1.0, 0.0],
+        );
+        flipped_line.validate().expect("free flipped line document");
+        assert!(!fixture.document.exact_except_recomputable_line_branches(
+            &flipped_line,
+            &BTreeSet::from([fixture.line]),
+        ));
+
+        let mut flipped_polyline = fixture.document.clone();
+        replace_branch_without_geometry(
+            &mut flipped_polyline,
+            CurveSpan {
+                curve: fixture.polyline,
+                segment: 1,
+            },
+            [0.0, -1.0],
+        );
+        flipped_polyline
+            .validate()
+            .expect("free flipped polyline document");
+        assert!(!fixture.document.exact_except_recomputable_line_branches(
+            &flipped_polyline,
+            &BTreeSet::from([fixture.polyline]),
+        ));
+    }
+
+    #[test]
+    fn branch_normalization_never_hides_unrelated_point_label_or_geometry_changes() {
+        let fixture = branch_audit_fixture();
+        let mut cold = fixture.document.clone();
+        let (sine, cosine) = 1.0e-10_f64.sin_cos();
+        replace_branch_without_geometry(&mut cold, CurveSpan::line(fixture.line), [cosine, sine]);
+        let recomputable = BTreeSet::from([fixture.line]);
+
+        let mut changed_point_label = cold.clone();
+        changed_point_label
+            .point_mut(fixture.unrelated_point)
+            .expect("point")
+            .label = "renamed unrelated point".into();
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches(&changed_point_label, &recomputable)
+        );
+
+        let mut changed_curve_label = cold.clone();
+        changed_curve_label
+            .curve_mut(fixture.polyline)
+            .expect("curve")
+            .label = "renamed polyline".into();
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches(&changed_curve_label, &recomputable)
+        );
+
+        let mut changed_geometry = cold;
+        changed_geometry
+            .set_point_position(fixture.line_end, [4.0, 0.25])
+            .expect("valid point edit");
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches(&changed_geometry, &recomputable)
+        );
+    }
+
+    #[test]
+    fn undeclared_segment_style_line_branch_difference_remains_exact() {
+        let fixture = branch_audit_fixture();
+        let mut cold = fixture.document.clone();
+        let (sine, cosine) = 1.0e-10_f64.sin_cos();
+        replace_branch_without_geometry(&mut cold, CurveSpan::line(fixture.line), [cosine, sine]);
+
+        assert!(
+            !fixture.document.exact_except_recomputable_line_branches(
+                &cold,
+                &BTreeSet::from([fixture.polyline]),
+            )
+        );
+    }
 }
 
 const fn object_persistent(object: DocumentObjectId) -> PersistentId {

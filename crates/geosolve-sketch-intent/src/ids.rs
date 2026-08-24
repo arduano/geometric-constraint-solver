@@ -4,6 +4,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 /// Maximum byte length of a semantic schema, field, alias, or presentation key.
@@ -335,9 +336,12 @@ impl<'de> Deserialize<'de> for IntentKey {
 }
 
 pub(crate) fn digest_bytes(bytes: &[u8]) -> ContentDigest {
-    // Four stable independent FNV-1a-derived lanes avoid platform hashing and
-    // keep this crate dependency-light. This is an integrity fingerprint, not
-    // a security primitive.
+    ContentDigest::from_bytes(Sha256::digest(bytes).into())
+}
+
+/// Legacy M83 pre-hardening integrity fingerprint, retained only to
+/// authenticate and migrate canonical experimental wire versions.
+pub(crate) fn legacy_digest_bytes(bytes: &[u8]) -> ContentDigest {
     const OFFSETS: [u64; 4] = [
         0xcbf2_9ce4_8422_2325,
         0x8422_2325_cbf2_9ce4,
@@ -356,4 +360,17 @@ pub(crate) fn digest_bytes(bytes: &[u8]) -> ContentDigest {
         digest[lane_index * 8..lane_index * 8 + 8].copy_from_slice(&lane.to_be_bytes());
     }
     ContentDigest::from_bytes(digest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::digest_bytes;
+
+    #[test]
+    fn canonical_digest_matches_sha256_known_vector() {
+        assert_eq!(
+            digest_bytes(b"abc").to_string(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        );
+    }
 }

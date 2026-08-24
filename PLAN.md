@@ -5596,8 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation and post-F007 immutable Tailscale nomination complete; focused human UAT
-pending**. ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
+Status: **implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
+complete; fresh clean qualification and focused human UAT pending**. ADR 0040 and
+`docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
 
@@ -5655,23 +5656,40 @@ chronological owner-rewrite candidate remains archived at
 - [x] Resolve M83-F007: enable New on the projectional surface and reset through the canonical
   empty workspace-v8 authority, clearing authored geometry/declarations/history and transients,
   returning to Select and autosaving without falling back to the retired flat path.
+- [x] Complete the post-F007 trust-boundary audit without changing sketch mathematics: move
+  canonical graph/session identity to SHA-256 wire v2, strictly validate and migrate legacy-v1
+  FNV fingerprints, cache ordinary identity reads, and independently rederive every cached,
+  nested accepted/current/history/reservation/materialization authority before publication.
+- [x] Bind Undo/current/Redo checkpoint bodies, descriptor semantics and global revision chronology;
+  validate exact logical/native ownership; centralize complete declaration descriptors and
+  allocation-safe schema port counts; reject hostile shapes before allocation or publication.
+- [x] Separate explicit compact Snapshot reads from typed mutation receipts across Rust/WASM and
+  `@geosolve/intent`. Bound requests and mutation receipts at 16 MiB, every structured/JSON
+  response at 64 MiB, and prove an oversized response or receipt cannot publish a mutation.
+- [x] Publish computed Fillet/Profile Offset Apply and accepted radius/distance drops through the
+  exact already-cold-validated prepared transaction used by their visible preview. Bound workspace
+  v8 at the public 64 MiB reproduction envelope, its disposable annotation string at 4 MiB, and
+  remove avoidable whole-tree, canonical-string, legacy-digest and repeated nested-session decode
+  allocations.
 - [x] Preserve movable annotation layout as a compatible disposable presentation cache outside
   intent/materialization/history authority; cache loss or corruption recomputes placement.
 - [x] Add inventory, order-independence, stable-identity, retained-failure, deletion-closure,
   persistence/migration, cold/warm differential, native/WASM/TypeScript and complete golden
   coverage for every supported declaration family.
-- [x] Pass formatting, diff hygiene, warnings-denied Clippy/Rustdoc, locked all-feature workspace
-  tests, relevant WASM builds, unchanged milestone-neutral golden and the complete clean release
-  gate from committed source.
-- [x] Freeze the exact release output without rebuilding, pass the existing 3/3 and focused
-  F006/F007 2/2 browser checks on those bytes, byte-verify first on temporary listeners and then
-  independently at the retained UAT endpoint.
+- [x] Preserve the historical post-F007 formatting, diff-hygiene, Clippy/Rustdoc, workspace-test,
+  WASM, unchanged-golden and clean-release evidence; the later architecture hardening supersedes
+  that nomination without invalidating it as historical evidence.
+- [ ] Pass the same complete clean release gate from committed post-hardening source.
+- [x] Preserve the historical post-F007 no-rebuild freeze, existing 3/3 and focused F006/F007 2/2
+  browser checks and exact temporary/retained served-byte evidence.
+- [ ] Freeze the post-hardening gate output without rebuilding, re-run the focused frozen-browser
+  checks, byte-verify it first on a temporary listener and then replace the retained UAT service.
 - [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U9.
 - [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
   listener and close the milestone.
 
-Nomination record: the initial `232b83a` nomination and post-F005 source `a621cdd`, tree `f6d77b4`,
-are withdrawn and remain historical evidence only. Post-F007 product source
+Historical nomination record: the initial `232b83a` nomination and post-F005 source `a621cdd`,
+tree `f6d77b4`, are withdrawn and remain historical evidence only. Post-F007 product source
 `fafea4ebeddc295ca898258ac604858bcdd4db5f`, tree
 `ff75c36aacdabe601f34bb59baaba01f6c91687a`, passes the complete clean release gate (log SHA-256
 `20807697a2df8941d59c9033c1604063940284e7b89f10ad19b1aeddcf25a7f4`). Its no-rebuild snapshot
@@ -5680,9 +5698,10 @@ are withdrawn and remain historical evidence only. Post-F007 product source
 browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Temporary
 and final served-byte ledgers both have SHA-256
 `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`. The exact candidate is live
-at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `4006665`. All human UAT rows
-and Pages publication remain pending; the evidence-only documentation descendant does not replace
-the product source/tree.
+at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `4006665`. The architecture-
+hardening pass supersedes those bytes before human UAT; a fresh product source/tree, clean gate,
+freeze and service replacement are pending. All human UAT rows and Pages publication remain
+pending.
 
 Gate: organization, names and source row order cannot change materialization; exact before/after
 organization moves cannot change geometry; every accepted

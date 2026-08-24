@@ -4305,10 +4305,11 @@ M83 adds no residual equation and does not reinterpret any earlier geometric ora
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
 existing solver. G1-G6 implementation and focused/proportional coverage are complete through
 M83-F001 through M83-F007. Initial nomination `232b83a` and post-F005 source `a621cdd` are
-withdrawn. Replacement product source `fafea4e`, tree `ff75c36`, passes the final clean gate,
-no-rebuild freeze, existing 3/3 plus focused F006/F007 2/2 frozen browser checks, and independent
-temporary/retained Tailscale byte verification. Human UAT and targeted finding rechecks remain
-pending. M81 GitHub Pages bytes remain public authority.
+withdrawn. Replacement product source `fafea4e`, tree `ff75c36`, its clean gate, no-rebuild freeze,
+existing 3/3 plus focused F006/F007 2/2 frozen browser checks, and independent temporary/retained
+Tailscale byte verification remain historical evidence. Post-F007 architecture hardening
+supersedes that candidate before human UAT; fresh qualification/freeze plus targeted human rechecks
+remain pending. M81 GitHub Pages bytes remain public authority.
 
 ### M83-G1 — schema, alias and order independence
 
@@ -4442,15 +4443,57 @@ ordinary compatible workspace round trip solely as presentation state, is omitte
 reproduction authority, never affects materialization or Undo/Redo and is discarded so automatic
 placement can be recomputed when missing, stale or malformed.
 
-The exact replacement no-rebuild release output is frozen at
+### Post-F007 architecture hardening
+
+This is an automation-owned architecture qualification slice rather than M83-F008. It changes no
+solver equation, branch or product interaction contract.
+
+Round-trip canonical graph/session wire v2 and compare SHA-256 identities. Rewrite authentic v2
+fixtures into canonical legacy v1, including accepted and retained-failed current/Undo/Redo states,
+then require exact validated one-way migration back to v2. Tamper with nested graph, instance,
+reservation, host input, accepted evidence and cached identity fields while recomputing public
+outer digests; each import rejects. Repeated ordinary identity queries perform no retained-history
+rehash.
+
+Construct genuine Undo and Redo stacks, then independently reauthenticate checkpoint-body
+permutations, crossed or duplicate descriptor revisions and descriptors attached to another body.
+Import rejects causal-edge, chronology or descriptor/body inconsistency. Genuine full traversal,
+bounded-history eviction, divergent editing and canonical reload remain executable and preserve
+allocator/reservation tombstones.
+
+Enumerate all 109 declarations and maximum child/operation-output variants. Allocation-free port
+counts equal actual allocation; hostile invalid shapes reject before expansion. Project every
+central descriptor through Inspector, graph Snapshot and TypeScript. Large bootstrap payloads must
+appear only as kind, codec, byte length and SHA-256; stable ports, children and operation spans must
+remain complete.
+
+Exercise structured and JSON RPC at boundaries below, exactly at and above the 16 MiB mutation-
+receipt and 64 MiB response limits. Oversized success becomes one bounded `response_too_large`
+failure and leaves session/native authority unchanged. Rust and TypeScript accept all graph shapes
+inside the Rust catalog, reject unknown/method-confused/cross-session shapes and preserve integer
+fidelity. Native and WASM transcripts remain exact.
+
+For computed Fillet/Profile Offset Apply and radius/distance drop, prepare one accepted transaction,
+publish it exactly once, and prove no second patch plan occurs. Intervening accepted mutation makes
+the prepared object stale and atomically preserves newer intent/native authority.
+
+Feed workspace decode a 64 MiB-plus-one hostile payload and require rejection before JSON parsing.
+Within the bound, wide non-string annotation cache trees are consumed without allocation into a
+generic JSON `Value` and discarded. Annotation-layout strings above 4 MiB are discarded only after
+authenticated-v8 digest/canonical validation, and before cloning for flat legacy workspaces.
+Canonical v8, legacy-v8 migration, retained-invalid accepted authority and all v1-v6 bootstrap
+paths continue to pass. The complete demo library must pass on the ordinary test stack; no
+`RUST_MIN_STACK` override may hide a multi-fixture test overflow.
+
+The superseded post-F007 no-rebuild release output is frozen at
 `/tmp/geosolve-m83-f007-uat.52r7H7`, aggregate
 `bc04955f52ac14f3eba96637b23210772ab339e1a2f3ac60be59558bcb4c5973`. The existing 3/3 frozen
 browser suite and focused F006/F007 2/2 suite pass on temporary and retained endpoints. Both served-
 byte ledgers have SHA-256
 `9573901313adf09b23e93e27857639fa7bf96eb969121a6f22277cadb275b9ec`; the retained candidate is
-`http://100.94.63.83:8080/`, PID `4006665`. `docs/M83_UAT.md` owns the full source/tree/service
-evidence plus pending human scorecard. GitHub Pages remains on accepted M81 bytes until that
-candidate is explicitly approved.
+`http://100.94.63.83:8080/`, PID `4006665`. `docs/M83_UAT.md` owns the historical evidence plus the
+pending renewed source/tree/service record and human scorecard. GitHub Pages remains on accepted
+M81 bytes until the renewed candidate is explicitly approved.
 
 ### M83-F001 — deterministic accepted drag identity and exact-once terminal capture
 

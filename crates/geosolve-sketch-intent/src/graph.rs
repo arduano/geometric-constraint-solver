@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::ids::{
     ChildId, ComponentIdentity, ContentDigest, NodeId, PortId, ReservationId, Revision,
-    digest_bytes,
+    digest_bytes, legacy_digest_bytes,
 };
 use crate::model::{
     BootstrapNativeKind, GeometryRecipeKind, InputRole, InputSlot, IntentBootstrapObject,
@@ -20,7 +20,8 @@ use crate::model::{
 };
 
 /// Strict canonical graph wire version.
-pub const INTENT_GRAPH_VERSION: u32 = 1;
+pub const INTENT_GRAPH_VERSION: u32 = 2;
+const LEGACY_INTENT_GRAPH_VERSION: u32 = 1;
 /// Maximum canonical graph JSON accepted by this crate.
 pub const MAX_INTENT_GRAPH_JSON_BYTES: usize = 64 * 1024 * 1024;
 /// Maximum declarations retained in one graph.
@@ -185,6 +186,16 @@ impl IntentReservationLedger {
         IntentReservationLedgerIdentity(ComponentIdentity {
             revision: self.revision,
             digest: digest_bytes(
+                &serde_json::to_vec(&(self.revision, &self.entries))
+                    .expect("reservation ledger is infallibly serializable"),
+            ),
+        })
+    }
+
+    pub(crate) fn legacy_identity(&self) -> IntentReservationLedgerIdentity {
+        IntentReservationLedgerIdentity(ComponentIdentity {
+            revision: self.revision,
+            digest: legacy_digest_bytes(
                 &serde_json::to_vec(&(self.revision, &self.entries))
                     .expect("reservation ledger is infallibly serializable"),
             ),
@@ -1055,7 +1066,13 @@ impl IntentGraph {
             .retain(|leaf, _| !nodes.contains(&leaf.node));
     }
 
-    pub(crate) fn writable_leaf(&self, leaf: LeafRef) -> Result<&IntentPort, IntentGraphError> {
+    /// Resolves one declared writable leaf to its owning stable output.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed graph error when the node or port is absent, or when
+    /// the requested field is not writable on that output.
+    pub fn writable_leaf(&self, leaf: LeafRef) -> Result<&IntentPort, IntentGraphError> {
         let node = self
             .nodes
             .get(&leaf.node)
@@ -1108,13 +1125,21 @@ impl IntentGraph {
             });
         }
         let wire: IntentGraphWire = serde_json::from_str(json)?;
-        if wire.version != INTENT_GRAPH_VERSION {
+        if !matches!(
+            wire.version,
+            LEGACY_INTENT_GRAPH_VERSION | INTENT_GRAPH_VERSION
+        ) {
             return Err(IntentGraphError::UnsupportedVersion {
                 expected: INTENT_GRAPH_VERSION,
                 actual: wire.version,
             });
         }
-        if wire.digest != graph_wire_digest(&wire) {
+        let expected_digest = if wire.version == LEGACY_INTENT_GRAPH_VERSION {
+            legacy_graph_wire_digest(&wire)
+        } else {
+            graph_wire_digest(&wire)
+        };
+        if wire.digest != expected_digest {
             return Err(IntentGraphError::DigestMismatch);
         }
         if serde_json::to_string(&wire)? != json {
@@ -1141,6 +1166,13 @@ struct IntentGraphWire {
 
 fn graph_wire_digest(wire: &IntentGraphWire) -> ContentDigest {
     digest_bytes(
+        &serde_json::to_vec(&(wire.version, &wire.graph))
+            .expect("graph wire payload is infallibly serializable"),
+    )
+}
+
+fn legacy_graph_wire_digest(wire: &IntentGraphWire) -> ContentDigest {
+    legacy_digest_bytes(
         &serde_json::to_vec(&(wire.version, &wire.graph))
             .expect("graph wire payload is infallibly serializable"),
     )
@@ -1504,6 +1536,434 @@ fn validate_declaration_schema<T>(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, ExternalIntentKind,
+        IdentityTransitionKind, IntentEvaluation, IntentKey, IntentLiteralSchema, IntentPatch,
+        IntentPatchOperation, IntentPatchPolicy, IntentSession, IntentSessionId,
+        MaterializationEvidence, OperationKind, ParameterIntentKind,
+    };
+
+    fn key(value: &str) -> IntentKey {
+        IntentKey::new(value).unwrap()
+    }
+
+    fn accepted(candidate: &crate::IntentCandidate) -> IntentEvaluation {
+        IntentEvaluation::Accepted {
+            evidence: MaterializationEvidence::new_host_artifacts(
+                candidate.external_inputs().identity(),
+                b"legacy-graph-materialization".to_vec(),
+                b"legacy-graph-ownership".to_vec(),
+                b"legacy-graph-validation".to_vec(),
+            )
+            .unwrap(),
+        }
+    }
+
+    fn declaration_kinds() -> Vec<IntentNodeKind> {
+        let mut kinds = Vec::new();
+        kinds.extend(GeometryRecipeKind::ALL.map(|recipe| IntentNodeKind::Geometry { recipe }));
+        kinds.extend(
+            ConstraintKind::ALL.map(|constraint| IntentNodeKind::Constraint { constraint }),
+        );
+        kinds.extend(DimensionKind::ALL.map(|dimension| IntentNodeKind::Dimension { dimension }));
+        kinds.extend(OperationKind::ALL.map(|operation| IntentNodeKind::Operation { operation }));
+        kinds.extend(
+            ComputedFeatureKind::ALL.map(|feature| IntentNodeKind::ComputedFeature { feature }),
+        );
+        kinds.extend(AggregateKind::ALL.map(|aggregate| IntentNodeKind::Aggregate { aggregate }));
+        kinds.extend(
+            ParameterIntentKind::ALL.map(|parameter| IntentNodeKind::Parameter { parameter }),
+        );
+        kinds.extend(ExternalIntentKind::ALL.map(|external| IntentNodeKind::External { external }));
+        kinds.extend(BootstrapNativeKind::ALL.map(|kind| {
+            IntentNodeKind::Bootstrap {
+                object: IntentBootstrapObject::new(
+                    kind,
+                    key("geosolve-flat-object-v1"),
+                    format!("port-count:{kind:?}").into_bytes(),
+                )
+                .unwrap(),
+            }
+        }));
+        kinds.push(IntentNodeKind::Annotation);
+        kinds.extend(
+            [
+                IdentityTransitionKind::Alias,
+                IdentityTransitionKind::Continue,
+                IdentityTransitionKind::Retire,
+            ]
+            .map(|transition| IntentNodeKind::Identity {
+                transition,
+                port_kind: IntentPortKind::Point,
+            }),
+        );
+        kinds
+    }
+
+    fn literal_for_schema(schema: IntentLiteralSchema) -> IntentLiteral {
+        match schema {
+            IntentLiteralSchema::Boolean => IntentLiteral::Boolean(false),
+            IntentLiteralSchema::Integer => IntentLiteral::Integer(0),
+            IntentLiteralSchema::Natural => IntentLiteral::Natural(1),
+            IntentLiteralSchema::Text => IntentLiteral::Text(key("port-count-text")),
+            IntentLiteralSchema::Enum => IntentLiteral::Enum(key("port-count-enum")),
+            IntentLiteralSchema::Point => IntentLiteral::Point([1.0, 2.0]),
+            IntentLiteralSchema::Quantity(unit) => IntentLiteral::Quantity { value: 1.0, unit },
+        }
+    }
+
+    fn dummy_input(kind: &IntentNodeKind, slot: InputSlot) -> PatchPortRef {
+        let port_kind = slot.role.expected_kind().unwrap_or(match kind {
+            IntentNodeKind::Identity { port_kind, .. } => *port_kind,
+            _ => IntentPortKind::Point,
+        });
+        PatchPortRef::Stable {
+            port: IntentPortRef {
+                node: NodeId::from_raw(0x8300_0000 + slot.role as u64),
+                port: PortId::from_raw(1 + u64::from(slot.index) + (slot.role as u64) * 0x1_0000),
+                kind: port_kind,
+            },
+        }
+    }
+
+    fn allocatable_draft(
+        kind: &IntentNodeKind,
+        dynamic_children: u16,
+        symbol: &str,
+    ) -> IntentNodeDraft {
+        let schema = kind.schema(dynamic_children);
+        let mut draft =
+            IntentNodeDraft::new(kind.clone(), key(symbol)).with_dynamic_children(dynamic_children);
+        for cardinality in &schema.inputs {
+            for index in 0..cardinality.minimum {
+                let slot = InputSlot::new(cardinality.role, index);
+                draft.inputs.insert(slot, dummy_input(kind, slot));
+            }
+        }
+        for choice in &schema.input_choices {
+            let mut actual = choice
+                .alternatives
+                .iter()
+                .filter(|slot| draft.inputs.contains_key(slot))
+                .count();
+            for slot in &choice.alternatives {
+                if actual >= usize::from(choice.minimum) {
+                    break;
+                }
+                if !draft.inputs.contains_key(slot) {
+                    draft.inputs.insert(*slot, dummy_input(kind, *slot));
+                    actual += 1;
+                }
+            }
+        }
+        if matches!(
+            kind,
+            IntentNodeKind::Bootstrap {
+                object: IntentBootstrapObject {
+                    kind: BootstrapNativeKind::SemanticSource,
+                    ..
+                }
+            }
+        ) {
+            let slot = InputSlot::new(InputRole::Catalog, 0);
+            draft.inputs.insert(slot, dummy_input(kind, slot));
+        }
+        for field in schema.fields.iter().filter(|field| field.required) {
+            draft
+                .fields
+                .insert(field.field.clone(), literal_for_schema(field.literal));
+        }
+        draft
+    }
+
+    fn assert_count_matches_allocation(label: &str, draft: IntentNodeDraft) {
+        let expected = draft
+            .schema_generated_port_count()
+            .unwrap_or_else(|| panic!("{label} rejected its valid generated shape"));
+        let allocated = allocate_draft(draft, &mut IntentAllocatorHighWater::initial())
+            .unwrap_or_else(|error| panic!("{label} failed allocation: {error:?}"));
+        assert_eq!(allocated.ports.len(), expected, "{label}");
+    }
+
+    #[test]
+    fn allocation_free_port_count_matches_all_109_declaration_allocations() {
+        let kinds = declaration_kinds();
+        assert_eq!(kinds.len(), 109);
+        for (index, kind) in kinds.into_iter().enumerate() {
+            let dynamic_children = kind.schema(0).minimum_children;
+            let label = format!("declaration-{index:03}-{kind:?}");
+            let symbol = format!("port-count-{index:03}");
+            assert_count_matches_allocation(
+                &label,
+                allocatable_draft(&kind, dynamic_children, &symbol),
+            );
+        }
+    }
+
+    #[test]
+    fn port_count_matches_maximum_child_and_operation_output_allocations() {
+        let maximum_children = u16::try_from(crate::model::MAX_INTENT_NODE_CHILDREN).unwrap();
+        let maximum_children_cases = [
+            (
+                "maximum-closed-polyline",
+                GeometryRecipeKind::Polyline,
+                Some(("closed", IntentLiteral::Boolean(true))),
+            ),
+            (
+                "maximum-open-nurbs",
+                GeometryRecipeKind::OpenControlNurbs,
+                Some(("degree", IntentLiteral::Natural(1))),
+            ),
+            (
+                "maximum-periodic-nurbs",
+                GeometryRecipeKind::PeriodicControlNurbs,
+                Some(("degree", IntentLiteral::Natural(1))),
+            ),
+        ];
+        for (label, recipe, field) in maximum_children_cases {
+            let mut draft = allocatable_draft(
+                &IntentNodeKind::Geometry { recipe },
+                maximum_children,
+                label,
+            );
+            if let Some((name, value)) = field {
+                draft.fields.insert(IntentFieldKey(key(name)), value);
+            }
+            assert_count_matches_allocation(label, draft);
+        }
+
+        for recipe in [
+            GeometryRecipeKind::TwoPointAlignedRectangle,
+            GeometryRecipeKind::ThreePointCornerRectangle,
+            GeometryRecipeKind::CenterRectangle,
+            GeometryRecipeKind::ThreePointCenterRectangle,
+        ] {
+            let label = format!("maximum-regularized-{recipe:?}");
+            let mut draft = allocatable_draft(&IntentNodeKind::Geometry { recipe }, 0, &label);
+            draft.fields.insert(
+                IntentFieldKey(key("regularized")),
+                IntentLiteral::Boolean(true),
+            );
+            assert_count_matches_allocation(&label, draft);
+        }
+
+        let maximum_corners = u16::try_from(
+            (MAX_INTENT_NODE_FIELDS - 1) / crate::model::COMPUTED_FILLET_FIELDS_PER_CORNER,
+        )
+        .unwrap();
+        assert_count_matches_allocation(
+            "maximum-fillet-corners",
+            allocatable_draft(
+                &IntentNodeKind::ComputedFeature {
+                    feature: ComputedFeatureKind::FilletSet,
+                },
+                maximum_corners,
+                "maximum-fillet-corners",
+            ),
+        );
+
+        let mut outputs = vec![IntentOperationOutput::curve(u16::MAX)];
+        outputs.extend(std::iter::repeat_n(
+            IntentOperationOutput::native(IntentOperationOutputKind::Constraint),
+            MAX_INTENT_OPERATION_OUTPUTS - 1,
+        ));
+        let maximum_pattern = allocatable_draft(
+            &IntentNodeKind::Operation {
+                operation: OperationKind::LinearPattern,
+            },
+            maximum_children,
+            "maximum-linear-pattern",
+        )
+        .with_operation_outputs(outputs);
+        assert_eq!(maximum_pattern.schema_generated_port_count(), Some(77_824));
+        assert_count_matches_allocation("maximum-linear-pattern", maximum_pattern);
+
+        let every_output_kind = allocatable_draft(
+            &IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset,
+            },
+            0,
+            "every-operation-output-kind",
+        )
+        .with_operation_outputs(vec![
+            IntentOperationOutput::native(IntentOperationOutputKind::Point),
+            IntentOperationOutput::native(IntentOperationOutputKind::Scalar),
+            IntentOperationOutput::curve(3),
+            IntentOperationOutput::native(IntentOperationOutputKind::Contact),
+            IntentOperationOutput::native(IntentOperationOutputKind::Constraint),
+            IntentOperationOutput::native(IntentOperationOutputKind::Dimension),
+            IntentOperationOutput::native(IntentOperationOutputKind::Parameter),
+            IntentOperationOutput::native(IntentOperationOutputKind::ExternalBinding),
+        ]);
+        assert_count_matches_allocation("every-operation-output-kind", every_output_kind);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one hostile-shape table keeps every fail-fast resource branch explicit"
+    )]
+    fn port_count_rejects_hostile_and_schema_invalid_shapes_before_expansion() {
+        let point = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            key("hostile-point"),
+        );
+        assert_eq!(
+            point
+                .clone()
+                .with_dynamic_children(1)
+                .schema_generated_port_count(),
+            None
+        );
+        assert_eq!(
+            point
+                .with_operation_outputs(vec![IntentOperationOutput::curve(1)])
+                .schema_generated_port_count(),
+            None
+        );
+
+        for (kind, children) in [
+            (
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Polyline,
+                },
+                1,
+            ),
+            (
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::PeriodicControlNurbs,
+                },
+                2,
+            ),
+            (
+                IntentNodeKind::ComputedFeature {
+                    feature: ComputedFeatureKind::FilletSet,
+                },
+                0,
+            ),
+            (
+                IntentNodeKind::ComputedFeature {
+                    feature: ComputedFeatureKind::FilletSet,
+                },
+                187,
+            ),
+            (
+                IntentNodeKind::Operation {
+                    operation: OperationKind::LinearPattern,
+                },
+                0,
+            ),
+        ] {
+            assert_eq!(
+                IntentNodeDraft::new(kind, key("invalid-children"))
+                    .with_dynamic_children(children)
+                    .schema_generated_port_count(),
+                None
+            );
+        }
+
+        let operation = |operation, outputs| {
+            IntentNodeDraft::new(
+                IntentNodeKind::Operation { operation },
+                key("hostile-operation"),
+            )
+            .with_operation_outputs(outputs)
+        };
+        assert_eq!(
+            operation(
+                OperationKind::ProfileOffset,
+                vec![IntentOperationOutput::curve(u16::MAX); MAX_INTENT_OPERATION_OUTPUTS],
+            )
+            .schema_generated_port_count(),
+            None
+        );
+        assert_eq!(
+            operation(
+                OperationKind::ProfileOffset,
+                vec![
+                    IntentOperationOutput::native(IntentOperationOutputKind::Point,);
+                    MAX_INTENT_OPERATION_OUTPUTS + 1
+                ],
+            )
+            .schema_generated_port_count(),
+            None
+        );
+        assert_eq!(
+            operation(
+                OperationKind::ProfileOffset,
+                vec![IntentOperationOutput::curve(0)],
+            )
+            .schema_generated_port_count(),
+            None
+        );
+        assert_eq!(
+            operation(
+                OperationKind::ProfileOffset,
+                vec![IntentOperationOutput {
+                    kind: IntentOperationOutputKind::Point,
+                    curve_span_count: 1,
+                }],
+            )
+            .schema_generated_port_count(),
+            None
+        );
+        assert_eq!(
+            operation(
+                OperationKind::Split,
+                vec![IntentOperationOutput::native(
+                    IntentOperationOutputKind::Point,
+                )],
+            )
+            .schema_generated_port_count(),
+            None
+        );
+    }
+
+    #[test]
+    fn canonical_legacy_v1_graph_migrates_to_v2_sha_wire() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_0001)).unwrap();
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("legacy-graph-point"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key("legacy.graph.point"),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = session.plan_patch(patch, accepted).unwrap();
+        session.commit_plan(plan).unwrap();
+        let graph = session.graph().clone();
+
+        let mut legacy = IntentGraphWire {
+            version: LEGACY_INTENT_GRAPH_VERSION,
+            graph: graph.clone(),
+            digest: ContentDigest::zero(),
+        };
+        legacy.digest = legacy_graph_wire_digest(&legacy);
+        let legacy_json = serde_json::to_string(&legacy).unwrap();
+        let migrated = IntentGraph::from_json(&legacy_json).unwrap();
+        assert_eq!(migrated, graph);
+
+        let migrated_json = migrated.to_canonical_json().unwrap();
+        let migrated_wire: IntentGraphWire = serde_json::from_str(&migrated_json).unwrap();
+        assert_eq!(migrated_wire.version, INTENT_GRAPH_VERSION);
+        assert_eq!(migrated_wire.digest, graph_wire_digest(&migrated_wire));
+        assert_ne!(migrated_wire.digest, legacy.digest);
+        assert_eq!(IntentGraph::from_json(&migrated_json).unwrap(), graph);
+    }
+}
+
 fn validate_operation_outputs(
     node: NodeId,
     kind: &IntentNodeKind,
@@ -1856,18 +2316,30 @@ pub(crate) fn finish_allocated_draft(
 }
 
 pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(), IntentGraphError> {
+    validate_generation_references(graph)?;
     let schedule = graph.canonical_schedule()?;
     let mut generation = BTreeMap::<PortId, u64>::new();
     let mut token = BTreeMap::<PortId, PortId>::new();
     let mut current = BTreeMap::<PortId, u64>::new();
     for node_id in schedule {
-        let port_ids = graph.nodes[&node_id]
+        let port_ids = graph
+            .nodes
+            .get(&node_id)
+            .ok_or(IntentGraphError::UnknownNode(node_id))?
             .ports
             .keys()
             .copied()
             .collect::<Vec<_>>();
         for port_id in port_ids {
-            let flow = graph.nodes[&node_id].ports[&port_id].flow;
+            let flow = graph
+                .nodes
+                .get(&node_id)
+                .and_then(|node| node.ports.get(&port_id))
+                .ok_or(IntentGraphError::UnknownPort {
+                    node: node_id,
+                    port: port_id,
+                })?
+                .flow;
             match flow {
                 IntentIdentityFlow::OwnedLogical | IntentIdentityFlow::Created { .. } => {
                     token.insert(port_id, port_id);
@@ -1875,18 +2347,20 @@ pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(),
                     current.insert(port_id, 0);
                 }
                 IntentIdentityFlow::Aliased { source } => {
-                    let root = token[&source.port];
-                    if current[&root] != generation[&source.port] {
+                    let root = referenced_value(&token, source.port, source)?;
+                    let source_generation = referenced_value(&generation, source.port, source)?;
+                    let current_generation = referenced_value(&current, root, source)?;
+                    if current_generation != source_generation {
                         return Err(IntentGraphError::IdentityFork { port: source });
                     }
                     token.insert(port_id, root);
-                    generation.insert(port_id, generation[&source.port]);
+                    generation.insert(port_id, source_generation);
                 }
                 IntentIdentityFlow::Continued { source, .. }
                 | IntentIdentityFlow::Retired { source, .. } => {
-                    let root = token[&source.port];
-                    let source_generation = generation[&source.port];
-                    let expected = current[&root];
+                    let root = referenced_value(&token, source.port, source)?;
+                    let source_generation = referenced_value(&generation, source.port, source)?;
+                    let expected = referenced_value(&current, root, source)?;
                     if source_generation != expected {
                         return Err(IntentGraphError::IdentityFork { port: source });
                     }
@@ -1899,10 +2373,13 @@ pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(),
                     let port = graph
                         .nodes
                         .get_mut(&node_id)
-                        .unwrap()
+                        .ok_or(IntentGraphError::UnknownNode(node_id))?
                         .ports
                         .get_mut(&port_id)
-                        .unwrap();
+                        .ok_or(IntentGraphError::UnknownPort {
+                            node: node_id,
+                            port: port_id,
+                        })?;
                     port.flow = match flow {
                         IntentIdentityFlow::Continued { source, .. } => {
                             IntentIdentityFlow::Continued {
@@ -1919,6 +2396,65 @@ pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(),
                 }
             }
         }
+    }
+    Ok(())
+}
+
+fn referenced_value<T: Copy>(
+    values: &BTreeMap<PortId, T>,
+    port: PortId,
+    source: crate::IntentPortRef,
+) -> Result<T, IntentGraphError> {
+    values
+        .get(&port)
+        .copied()
+        .ok_or(IntentGraphError::UnknownPort {
+            node: source.node,
+            port: source.port,
+        })
+}
+
+fn validate_generation_references(graph: &IntentGraph) -> Result<(), IntentGraphError> {
+    for (node_id, node) in &graph.nodes {
+        for source in node.inputs.values() {
+            validate_generation_reference(graph, *node_id, *source)?;
+        }
+        for port in node.ports.values() {
+            match port.flow {
+                IntentIdentityFlow::Aliased { source }
+                | IntentIdentityFlow::Continued { source, .. }
+                | IntentIdentityFlow::Retired { source, .. } => {
+                    validate_generation_reference(graph, *node_id, source)?;
+                }
+                IntentIdentityFlow::OwnedLogical | IntentIdentityFlow::Created { .. } => {}
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_generation_reference(
+    graph: &IntentGraph,
+    node: NodeId,
+    source: crate::IntentPortRef,
+) -> Result<(), IntentGraphError> {
+    let owner = graph
+        .nodes
+        .get(&source.node)
+        .ok_or(IntentGraphError::UnknownNode(source.node))?;
+    let referenced = owner
+        .ports
+        .get(&source.port)
+        .ok_or(IntentGraphError::UnknownPort {
+            node: source.node,
+            port: source.port,
+        })?;
+    if referenced.kind != source.kind {
+        return Err(IntentGraphError::InputKindMismatch {
+            node,
+            expected: referenced.kind,
+            actual: source.kind,
+        });
     }
     Ok(())
 }

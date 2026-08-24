@@ -32,6 +32,7 @@ use crate::intent_bootstrap::{
     flat_intent_accepted_bootstrap_materialization_map,
     flat_intent_accepted_bootstrap_prefix_materialization_map,
 };
+use crate::intent_coordinator::PreparedProjectionalTransaction;
 use crate::{
     AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
     ConstraintEditor, EditorEffect, EditorError, EditorScene, FeatureAuthoringCandidate,
@@ -75,7 +76,7 @@ struct ActiveFilletRadiusDrag {
     expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
     feature: geosolve_sketch_features::ComputedFeatureId,
     latest_radius: Option<f64>,
-    latest: Option<ColdIntentMaterialization>,
+    latest: Option<PreparedProjectionalTransaction>,
 }
 
 #[derive(Debug)]
@@ -85,24 +86,38 @@ struct ActiveProfileOffsetDistanceDrag {
     expected: PreparedSketchInput,
     dimension: DocumentDimensionId,
     latest_distance: Option<f64>,
-    latest: Option<ColdIntentMaterialization>,
+    latest: Option<PreparedProjectionalTransaction>,
 }
 
 #[derive(Clone, Debug)]
 struct ProjectionalFilletAuthoringPreview {
     intent: IntentSessionIdentity,
+    symbol: IntentKey,
     candidate: FeatureAuthoringCandidate,
-    materialization: ColdIntentMaterialization,
+    prepared: PreparedProjectionalTransaction,
     feature: geosolve_sketch_features::ComputedFeatureId,
+}
+
+impl ProjectionalFilletAuthoringPreview {
+    fn materialization(&self) -> &ColdIntentMaterialization {
+        self.prepared.materialization()
+    }
 }
 
 #[derive(Clone, Debug)]
 struct ProjectionalProfileOffsetAuthoringPreview {
     intent: IntentSessionIdentity,
+    symbol: IntentKey,
     candidate: OffsetAuthoringCandidate,
-    materialization: ColdIntentMaterialization,
+    prepared: PreparedProjectionalTransaction,
     provisional_items: Vec<SelectionItem>,
     dimension: DocumentDimensionId,
+}
+
+impl ProjectionalProfileOffsetAuthoringPreview {
+    fn materialization(&self) -> &ColdIntentMaterialization {
+        self.prepared.materialization()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -315,6 +330,17 @@ impl ProjectionalEditorSession {
             },
             evidence: authority.evidence.clone(),
         };
+        materialization
+            .ownership
+            .validate_against(
+                semantic,
+                &authority.graph,
+                &authority.instance,
+                &authority.reservations,
+                materialization.session.design_document(),
+                &materialization.features,
+            )
+            .map_err(ProjectionalCoordinatorError::from)?;
         let materializer = ColdIntentMaterializer::with_default_policy(
             decoded.document.id(),
             decoded.document.model_scale(),
@@ -410,20 +436,22 @@ impl ProjectionalEditorSession {
         self.fillet_radius_drag
             .as_ref()
             .and_then(|drag| drag.latest.as_ref())
+            .map(PreparedProjectionalTransaction::materialization)
             .or_else(|| {
                 self.profile_offset_distance_drag
                     .as_ref()
                     .and_then(|drag| drag.latest.as_ref())
+                    .map(PreparedProjectionalTransaction::materialization)
             })
             .or_else(|| {
                 self.fillet_authoring_preview
                     .as_ref()
-                    .map(|preview| &preview.materialization)
+                    .map(ProjectionalFilletAuthoringPreview::materialization)
             })
             .or_else(|| {
                 self.profile_offset_authoring_preview
                     .as_ref()
-                    .map(|preview| &preview.materialization)
+                    .map(ProjectionalProfileOffsetAuthoringPreview::materialization)
             })
             .map(|materialization| &materialization.session)
             .or_else(|| self.coordinator.presentation_session())
@@ -467,19 +495,21 @@ impl ProjectionalEditorSession {
             .fillet_radius_drag
             .as_ref()
             .and_then(|drag| drag.latest.as_ref())
+            .map(PreparedProjectionalTransaction::materialization)
             .or_else(|| {
                 self.profile_offset_distance_drag
                     .as_ref()
                     .and_then(|drag| drag.latest.as_ref())
+                    .map(PreparedProjectionalTransaction::materialization)
             });
         let authoring_preview = self
             .fillet_authoring_preview
             .as_ref()
-            .map(|preview| &preview.materialization)
+            .map(ProjectionalFilletAuthoringPreview::materialization)
             .or_else(|| {
                 self.profile_offset_authoring_preview
                     .as_ref()
-                    .map(|preview| &preview.materialization)
+                    .map(ProjectionalProfileOffsetAuthoringPreview::materialization)
             });
         let materialization = property_preview.or(authoring_preview).unwrap_or(accepted);
         let session = self
@@ -813,11 +843,11 @@ impl ProjectionalEditorSession {
             .fillet_authoring_preview
             .as_ref()
             .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
-        if scene.computed_input != Some(preview.materialization.computed.input()) {
+        if scene.computed_input != Some(preview.materialization().computed.input()) {
             return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
         }
         let feature = preview
-            .materialization
+            .materialization()
             .features
             .feature(preview.feature)
             .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
@@ -870,7 +900,7 @@ impl ProjectionalEditorSession {
             .prepared_feature_radius_drag_route()
             .ok_or(ProjectionalEditorError::FilletRadiusDragRouteMismatch)?;
         if route.pointer_id != input.pointer_id
-            || route.expected != preview.materialization.computed.input()
+            || route.expected != preview.materialization().computed.input()
             || route.feature != preview.feature
             || route.origin_radius.to_bits() != preview.candidate.radius().to_bits()
         {
@@ -1110,14 +1140,15 @@ impl ProjectionalEditorSession {
             &accepted.ownership,
             accepted_input,
             accepted_state.identity(),
-            symbol,
+            symbol.clone(),
             candidate,
         )?;
-        let materialization = self
+        let prepared = self
             .coordinator
-            .preview_patch_materialization(translated.patch)?
+            .prepare_patch_transaction(translated.patch)?
             .ok_or(ProjectionalEditorError::AuthoringPreviewRejected)?;
-        let features = materialization
+        let features = prepared
+            .materialization()
             .features
             .features()
             .iter()
@@ -1129,8 +1160,9 @@ impl ProjectionalEditorSession {
         };
         Ok(ProjectionalFilletAuthoringPreview {
             intent: self.coordinator.intent().identity(),
+            symbol,
             candidate: candidate.clone(),
-            materialization,
+            prepared,
             feature: *feature,
         })
     }
@@ -1211,21 +1243,23 @@ impl ProjectionalEditorSession {
             &accepted.ownership,
             &accepted.session,
             state,
-            symbol,
+            symbol.clone(),
         )?;
-        let materialization = self
+        let prepared = self
             .coordinator
-            .preview_patch_materialization(translated.patch)?
+            .prepare_patch_transaction(translated.patch)?
             .ok_or(ProjectionalEditorError::AuthoringPreviewRejected)?;
+        let materialization = prepared.materialization();
         let provisional_items = provisional_items(&accepted.ownership, &materialization.ownership);
         if provisional_items.is_empty() {
             return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
         }
-        let dimension = provisional_profile_offset_dimension(&materialization, &provisional_items)?;
+        let dimension = provisional_profile_offset_dimension(materialization, &provisional_items)?;
         Ok(ProjectionalProfileOffsetAuthoringPreview {
             intent: self.coordinator.intent().identity(),
+            symbol,
             candidate,
-            materialization,
+            prepared,
             provisional_items,
             dimension,
         })
@@ -1302,7 +1336,7 @@ impl ProjectionalEditorSession {
             .prepared_accepted_offset_distance_drag_route()
             .ok_or(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch)?;
         let expected = preview
-            .materialization
+            .materialization()
             .session
             .accepted_prepared_input()
             .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
@@ -1523,6 +1557,18 @@ impl ProjectionalEditorSession {
         Ok(outcome)
     }
 
+    fn apply_prepared_patch(
+        &mut self,
+        prepared: PreparedProjectionalTransaction,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        self.cancel_interaction();
+        self.clear_authoring_previews();
+        let outcome = self.coordinator.commit_prepared_transaction(prepared)?;
+        self.clear_transient_selection();
+        self.reconcile_declaration_selection();
+        Ok(outcome)
+    }
+
     /// Publishes one grouped computed-Fillet candidate as a single typed
     /// declaration through the sole intent history.
     ///
@@ -1580,7 +1626,19 @@ impl ProjectionalEditorSession {
         if !self.feature_authoring_preview_matches(state) {
             return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
         }
-        let outcome = self.apply_computed_fillet(symbol, &candidate)?;
+        let preview = self
+            .fillet_authoring_preview
+            .take()
+            .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
+        if preview.candidate != candidate {
+            self.fillet_authoring_preview = Some(preview);
+            return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+        }
+        let outcome = if preview.symbol == symbol {
+            self.apply_prepared_patch(preview.prepared)?
+        } else {
+            self.apply_computed_fillet(symbol, &candidate)?
+        };
         if outcome.disposition == IntentPlanDisposition::Accepted {
             let _ = state.publication_succeeded();
         }
@@ -1675,7 +1733,25 @@ impl ProjectionalEditorSession {
         if !self.offset_authoring_preview_matches(state) {
             return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
         }
-        self.apply_profile_offset(state, symbol)
+        let candidate = state
+            .candidate()
+            .ok_or(ProjectionalEditorError::AuthoringCandidateIncomplete)?;
+        let preview = self
+            .profile_offset_authoring_preview
+            .take()
+            .ok_or(ProjectionalEditorError::AuthoringPreviewIdentityMismatch)?;
+        if preview.candidate != candidate {
+            self.profile_offset_authoring_preview = Some(preview);
+            return Err(ProjectionalEditorError::AuthoringPreviewIdentityMismatch);
+        }
+        if preview.symbol != symbol {
+            return self.apply_profile_offset(state, symbol);
+        }
+        let outcome = self.apply_prepared_patch(preview.prepared)?;
+        if outcome.disposition == IntentPlanDisposition::Accepted {
+            state.clear_after_apply();
+        }
+        Ok(outcome)
     }
 
     /// Edits the positive distance property owned by one accepted native
@@ -2546,7 +2622,10 @@ impl ProjectionalEditorSession {
                     let Some(drag) = self.fillet_radius_drag.take() else {
                         return Err(ProjectionalEditorError::MissingFilletRadiusDragRoute);
                     };
-                    let latest_input = drag.latest.as_ref().map(|latest| latest.computed.input());
+                    let latest_input = drag
+                        .latest
+                        .as_ref()
+                        .map(|latest| latest.materialization().computed.input());
                     if drag.pointer_id != input.pointer_id
                         || drag.intent != self.coordinator.intent().identity()
                         || drag.expected != expected
@@ -2559,7 +2638,10 @@ impl ProjectionalEditorSession {
                     {
                         return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
                     }
-                    transaction = Some(self.edit_computed_fillet_radius(feature, radius)?);
+                    let prepared = drag
+                        .latest
+                        .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?;
+                    transaction = Some(self.apply_prepared_patch(prepared)?);
                 }
                 EditorEffect::ClearComputedFeaturePreview => {
                     self.cancel_fillet_radius_drag();
@@ -2573,10 +2655,9 @@ impl ProjectionalEditorSession {
                     let Some(drag) = self.profile_offset_distance_drag.take() else {
                         return Err(ProjectionalEditorError::MissingProfileOffsetDistanceDragRoute);
                     };
-                    let latest_input = drag
-                        .latest
-                        .as_ref()
-                        .and_then(|latest| latest.session.accepted_prepared_input());
+                    let latest_input = drag.latest.as_ref().and_then(|latest| {
+                        latest.materialization().session.accepted_prepared_input()
+                    });
                     if drag.pointer_id != input.pointer_id
                         || drag.intent != self.coordinator.intent().identity()
                         || drag.expected != expected
@@ -2591,7 +2672,10 @@ impl ProjectionalEditorSession {
                             ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch,
                         );
                     }
-                    transaction = Some(self.edit_profile_offset_distance(dimension, distance)?);
+                    let prepared = drag
+                        .latest
+                        .ok_or(ProjectionalEditorError::MissingProfileOffsetDistanceDragRoute)?;
+                    transaction = Some(self.apply_prepared_patch(prepared)?);
                 }
                 EditorEffect::ClearAcceptedProfileOffsetPreview => {
                     self.cancel_profile_offset_distance_drag();
@@ -2708,7 +2792,7 @@ impl ProjectionalEditorSession {
                             radius,
                         )?
                     };
-                    if let Some(preview) = self.coordinator.preview_patch_materialization(patch)? {
+                    if let Some(preview) = self.coordinator.prepare_patch_transaction(patch)? {
                         if !self
                             .editor
                             .accept_computed_feature_radius_preview(&expected, feature, radius)
@@ -2751,7 +2835,7 @@ impl ProjectionalEditorSession {
                             distance,
                         )?
                     };
-                    if let Some(preview) = self.coordinator.preview_patch_materialization(patch)? {
+                    if let Some(preview) = self.coordinator.prepare_patch_transaction(patch)? {
                         if !self
                             .editor
                             .accept_profile_offset_distance_preview(&expected, dimension, distance)
@@ -3245,3 +3329,7 @@ pub enum ProjectionalEditorError {
     #[error("the independently accepted Profile Offset sample does not match editor state")]
     ProfileOffsetDistancePreviewMismatch,
 }
+
+#[cfg(test)]
+#[path = "intent_editor_prepared_tests.rs"]
+mod prepared_route_tests;

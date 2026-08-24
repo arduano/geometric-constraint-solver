@@ -55,7 +55,7 @@ pub struct ProjectionalCurveControlPreview {
 #[derive(Clone, Debug)]
 struct AcceptedPointDragSample {
     preview: ProjectionalPointDragPreview,
-    session: RetainedSketchDocumentSession,
+    session: Box<RetainedSketchDocumentSession>,
 }
 
 #[derive(Clone, Debug)]
@@ -64,7 +64,7 @@ struct ProjectionalPointDrag {
     intent: IntentSessionIdentity,
     point: DesignPointId,
     locality: DocumentDragLocalityPlan,
-    origin: RetainedSketchDocumentSession,
+    origin: Box<RetainedSketchDocumentSession>,
     origin_position: [f64; 2],
     latest_request_id: Option<u64>,
     latest: Option<AcceptedPointDragSample>,
@@ -96,7 +96,7 @@ enum ProjectionalCurveControlRoute {
 #[derive(Debug)]
 struct AcceptedCurveControlSample {
     preview: ProjectionalCurveControlPreview,
-    patch: PreparedSketchPatch,
+    patch: Box<PreparedSketchPatch>,
     operations: Vec<IntentPatchOperation>,
     changed: bool,
 }
@@ -109,7 +109,7 @@ struct ProjectionalCurveControlDrag {
     accepted_revision: u64,
     control: DocumentCurveControlId,
     route: ProjectionalCurveControlRoute,
-    origin: RetainedSketchDocumentSession,
+    origin: Box<RetainedSketchDocumentSession>,
     latest_request_id: Option<u64>,
     latest: Option<AcceptedCurveControlSample>,
 }
@@ -124,9 +124,56 @@ struct ProjectionalCurveControlDrag {
 pub struct ProjectionalIntentCoordinator {
     intent: IntentSession,
     materializer: ColdIntentMaterializer,
-    accepted: Option<ColdIntentMaterialization>,
+    accepted: Option<Box<ColdIntentMaterialization>>,
     point_drag: Option<ProjectionalPointDrag>,
     curve_control_drag: Option<ProjectionalCurveControlDrag>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PreparedProjectionalTransaction {
+    plan: IntentPatchPlan,
+    materialization: Box<ColdIntentMaterialization>,
+}
+
+impl PreparedProjectionalTransaction {
+    #[must_use]
+    pub(crate) fn materialization(&self) -> &ColdIntentMaterialization {
+        &self.materialization
+    }
+}
+
+#[derive(Debug)]
+enum PlannedProjectionalTransaction {
+    Accepted(PreparedProjectionalTransaction),
+    NonPublishing { plan: IntentPatchPlan },
+}
+
+impl PlannedProjectionalTransaction {
+    fn into_accepted(
+        self,
+    ) -> Result<PreparedProjectionalTransaction, ProjectionalCoordinatorError> {
+        match self {
+            Self::Accepted(prepared) => Ok(prepared),
+            Self::NonPublishing { .. } => {
+                Err(ProjectionalCoordinatorError::MissingAcceptedMaterialization)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static PLAN_PATCH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn reset_plan_patch_calls() {
+    PLAN_PATCH_CALLS.with(|calls| calls.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn plan_patch_calls() -> usize {
+    PLAN_PATCH_CALLS.with(std::cell::Cell::get)
 }
 
 impl ProjectionalIntentCoordinator {
@@ -167,7 +214,7 @@ impl ProjectionalIntentCoordinator {
         Ok(Self {
             intent,
             materializer,
-            accepted,
+            accepted: accepted.map(Box::new),
             point_drag: None,
             curve_control_drag: None,
         })
@@ -198,7 +245,7 @@ impl ProjectionalIntentCoordinator {
         Ok(Self {
             intent,
             materializer,
-            accepted: Some(accepted),
+            accepted: Some(Box::new(accepted)),
             point_drag: None,
             curve_control_drag: None,
         })
@@ -212,8 +259,8 @@ impl ProjectionalIntentCoordinator {
     /// Last independently accepted cold materialization. It remains available
     /// beneath a newer retained-failed intent transaction.
     #[must_use]
-    pub const fn accepted_materialization(&self) -> Option<&ColdIntentMaterialization> {
-        self.accepted.as_ref()
+    pub fn accepted_materialization(&self) -> Option<&ColdIntentMaterialization> {
+        self.accepted.as_deref()
     }
 
     /// Native scene currently suitable for presentation. A valid pointer
@@ -228,7 +275,7 @@ impl ProjectionalIntentCoordinator {
                 self.point_drag
                     .as_ref()
                     .and_then(|drag| drag.latest.as_ref())
-                    .map(|sample| &sample.session)
+                    .map(|sample| sample.session.as_ref())
             })
             .or_else(|| self.accepted.as_ref().map(|accepted| &accepted.session))
     }
@@ -245,33 +292,44 @@ impl ProjectionalIntentCoordinator {
         patch: IntentPatch,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
         self.cancel_interaction();
-        let (plan, materialized) = self.plan_patch(patch)?;
-        self.commit_planned(plan, materialized)
+        let planned = self.plan_patch(patch)?;
+        self.commit_planned(planned)
     }
 
-    /// Independently cold-materializes one typed patch without publishing its
-    /// intent plan, accepted authority, or history entry.
+    /// Plans and independently cold-materializes one typed patch without
+    /// publishing its intent plan, accepted authority, or history entry.
     ///
-    /// This is the projectional direct-manipulation preview seam. A retained
-    /// failure returns `None`; an accepted result returns the complete native
-    /// materialization which a presentation session may hold transiently. The
-    /// caller must still publish the same typed edit through an ordinary
-    /// terminal transaction.
+    /// This is the projectional property/authoring-preview seam. A retained
+    /// failure returns `None`; an accepted result retains the exact-CAS plan
+    /// together with its independently validated native materialization. The
+    /// same opaque transaction can therefore be committed after terminal
+    /// authentication without planning or cold-solving the candidate again.
     ///
     /// # Errors
     ///
     /// Returns the ordinary exact-CAS planning or cold-materialization error.
-    pub(crate) fn preview_patch_materialization(
+    pub(crate) fn prepare_patch_transaction(
         &self,
         patch: IntentPatch,
-    ) -> Result<Option<ColdIntentMaterialization>, ProjectionalCoordinatorError> {
-        let (plan, materialized) = self.plan_patch(patch)?;
-        if plan.disposition() == IntentPlanDisposition::Accepted {
-            return materialized
-                .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)
-                .map(Some);
+    ) -> Result<Option<PreparedProjectionalTransaction>, ProjectionalCoordinatorError> {
+        match self.plan_patch(patch)? {
+            PlannedProjectionalTransaction::Accepted(prepared) => Ok(Some(prepared)),
+            PlannedProjectionalTransaction::NonPublishing { .. } => Ok(None),
         }
-        Ok(None)
+    }
+
+    /// Publishes an exact previously prepared accepted transaction.
+    ///
+    /// The plan's normal exact-CAS base authentication rejects stale or
+    /// foreign previews before either intent or native accepted authority can
+    /// change. The native result was already independently validated while the
+    /// plan was prepared, so successful publication performs no second solve.
+    pub(crate) fn commit_prepared_transaction(
+        &mut self,
+        prepared: PreparedProjectionalTransaction,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.cancel_interaction();
+        self.commit_planned(PlannedProjectionalTransaction::Accepted(prepared))
     }
 
     /// Deletes one declaration and its exact Rust-computed dependent closure
@@ -304,8 +362,9 @@ impl ProjectionalIntentCoordinator {
     fn plan_patch(
         &self,
         patch: IntentPatch,
-    ) -> Result<(IntentPatchPlan, Option<ColdIntentMaterialization>), ProjectionalCoordinatorError>
-    {
+    ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
+        #[cfg(test)]
+        PLAN_PATCH_CALLS.with(|calls| calls.set(calls.get() + 1));
         let mut captured = None;
         let plan = self.intent.plan_patch(patch, |candidate| {
             let (evaluation, materialized) =
@@ -313,24 +372,39 @@ impl ProjectionalIntentCoordinator {
             captured = materialized;
             evaluation
         })?;
-        if plan.disposition() == IntentPlanDisposition::Accepted && captured.is_none() {
-            return Err(ProjectionalCoordinatorError::MissingAcceptedMaterialization);
+        if plan.disposition() == IntentPlanDisposition::Accepted {
+            return Ok(PlannedProjectionalTransaction::Accepted(
+                PreparedProjectionalTransaction {
+                    plan,
+                    materialization: Box::new(
+                        captured
+                            .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?,
+                    ),
+                },
+            ));
         }
-        Ok((plan, captured))
+        if captured.is_some() {
+            return Err(ProjectionalCoordinatorError::UnexpectedNonPublishingMaterialization);
+        }
+        Ok(PlannedProjectionalTransaction::NonPublishing { plan })
     }
 
     fn commit_planned(
         &mut self,
-        plan: IntentPatchPlan,
-        materialized: Option<ColdIntentMaterialization>,
+        planned: PlannedProjectionalTransaction,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        let (plan, materialization) = match planned {
+            PlannedProjectionalTransaction::Accepted(PreparedProjectionalTransaction {
+                plan,
+                materialization,
+            }) => (plan, Some(materialization)),
+            PlannedProjectionalTransaction::NonPublishing { plan } => (plan, None),
+        };
         let disposition = plan.disposition();
         let aliases = plan.aliases().clone();
         let identity = self.intent.commit_plan(plan)?;
-        if disposition == IntentPlanDisposition::Accepted {
-            self.accepted = Some(
-                materialized.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?,
-            );
+        if let Some(materialization) = materialization {
+            self.accepted = Some(materialization);
         }
         Ok(ProjectionalPatchOutcome {
             identity,
@@ -386,7 +460,7 @@ impl ProjectionalIntentCoordinator {
         };
         let identity = staged.identity();
         self.intent = staged;
-        self.accepted = accepted;
+        self.accepted = accepted.map(Box::new);
         Ok(Some(identity))
     }
 
@@ -435,7 +509,7 @@ impl ProjectionalIntentCoordinator {
             intent: self.intent.identity(),
             point,
             locality,
-            origin: accepted.session.clone(),
+            origin: Box::new(accepted.session.clone()),
             origin_position,
             latest_request_id: None,
             latest: None,
@@ -486,7 +560,7 @@ impl ProjectionalIntentCoordinator {
                 .request()
                 .without_temporary_targets()
                 .with_drag(drag.point, target);
-            let mut candidate = drag.origin.clone();
+            let mut candidate = drag.origin.as_ref().clone();
             let outcome = if let Some(previous) = &drag.latest {
                 candidate.reattempt_from_accepted_preview_with_drag_locality_controlled(
                     candidate.design_identity(),
@@ -522,7 +596,7 @@ impl ProjectionalIntentCoordinator {
                     };
                     drag.latest = Some(AcceptedPointDragSample {
                         preview,
-                        session: candidate,
+                        session: Box::new(candidate),
                     });
                     Ok(Some(preview))
                 }
@@ -606,9 +680,8 @@ impl ProjectionalIntentCoordinator {
             IntentPatchPolicy::RequireAccepted,
             operations,
         );
-        let (plan, materialized) = self.plan_patch(patch)?;
-        let materialized =
-            materialized.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
+        let prepared = self.plan_patch(patch)?.into_accepted()?;
+        let materialized = prepared.materialization();
         let preview_document = latest
             .session
             .accepted_state_for_current_input()
@@ -624,10 +697,10 @@ impl ProjectionalIntentCoordinator {
             ownership,
             preview_document,
             cold_document,
-        )? {
+        ) {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
-        self.commit_planned(plan, Some(materialized))
+        self.commit_planned(PlannedProjectionalTransaction::Accepted(prepared))
     }
 
     /// Cancels any active gesture without changing intent, accepted authority,
@@ -777,7 +850,7 @@ impl ProjectionalIntentCoordinator {
             accepted_revision,
             control,
             route,
-            origin: accepted.session.clone(),
+            origin: Box::new(accepted.session.clone()),
             latest_request_id: None,
             latest: None,
         });
@@ -874,7 +947,7 @@ impl ProjectionalIntentCoordinator {
             };
             drag.latest = Some(AcceptedCurveControlSample {
                 preview,
-                patch,
+                patch: Box::new(patch),
                 operations,
                 changed,
             });
@@ -927,9 +1000,8 @@ impl ProjectionalIntentCoordinator {
             IntentPatchPolicy::RequireAccepted,
             latest.operations,
         );
-        let (plan, materialized) = self.plan_patch(patch)?;
-        let materialized =
-            materialized.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
+        let prepared = self.plan_patch(patch)?.into_accepted()?;
+        let materialized = prepared.materialization();
         let ownership = &self
             .accepted
             .as_ref()
@@ -949,10 +1021,11 @@ impl ProjectionalIntentCoordinator {
             ownership,
             preview_document,
             cold_document,
-        )? {
+        ) {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
-        self.commit_planned(plan, Some(materialized)).map(Some)
+        self.commit_planned(PlannedProjectionalTransaction::Accepted(prepared))
+            .map(Some)
     }
 
     /// Cancels any prepared selected-curve control route without touching
@@ -1006,15 +1079,14 @@ fn direct_manipulation_preview_matches_cold(
     ownership: &crate::IntentMaterializationMap,
     preview: &SketchDocument,
     cold: &SketchDocument,
-) -> Result<bool, geosolve_sketch::DocumentError> {
+) -> bool {
     if preview == cold {
-        return Ok(true);
+        return true;
     }
-    let mut normalized: serde_json::Value = serde_json::from_str(&preview.to_draft_v5_json()?)?;
-    let cold: serde_json::Value = serde_json::from_str(&cold.to_draft_v5_json()?)?;
+    let mut recomputable = std::collections::BTreeSet::new();
     for materialization in &ownership.nodes {
         let Some(node) = intent.graph().node(materialization.node) else {
-            return Ok(false);
+            continue;
         };
         let IntentNodeKind::Geometry { recipe } = node.kind else {
             continue;
@@ -1030,115 +1102,10 @@ fn direct_manipulation_preview_matches_cold(
                 _ => None,
             })
         {
-            if !normalize_derived_curve_branches(&mut normalized, &cold, curve) {
-                return Ok(false);
-            }
+            recomputable.insert(curve);
         }
     }
-    Ok(serde_json::to_string(&normalized)? == serde_json::to_string(&cold)?)
-}
-
-fn normalize_derived_curve_branches(
-    preview: &mut serde_json::Value,
-    cold: &serde_json::Value,
-    curve: CurveId,
-) -> bool {
-    let Some(cold_curve) = draft_curve(cold, curve) else {
-        return false;
-    };
-    let Some(cold_definition) = cold_curve.get("definition").cloned() else {
-        return false;
-    };
-    let Some(preview_definition) =
-        draft_curve_mut(preview, curve).and_then(|curve| curve.get_mut("definition"))
-    else {
-        return false;
-    };
-    normalize_derived_branch_definition(preview_definition, &cold_definition)
-}
-
-fn draft_curve(document: &serde_json::Value, curve: CurveId) -> Option<&serde_json::Value> {
-    let id = serde_json::to_value(curve).ok()?;
-    document
-        .get("document")?
-        .get("curves")?
-        .as_array()?
-        .iter()
-        .find(|candidate| candidate.get("id") == Some(&id))
-}
-
-fn draft_curve_mut(
-    document: &mut serde_json::Value,
-    curve: CurveId,
-) -> Option<&mut serde_json::Value> {
-    let id = serde_json::to_value(curve).ok()?;
-    document
-        .get_mut("document")?
-        .get_mut("curves")?
-        .as_array_mut()?
-        .iter_mut()
-        .find(|candidate| candidate.get("id") == Some(&id))
-}
-
-fn normalize_derived_branch_definition(
-    preview: &mut serde_json::Value,
-    cold: &serde_json::Value,
-) -> bool {
-    let key = match cold.get("kind").and_then(serde_json::Value::as_str) {
-        Some("line") => "branch_direction",
-        Some("polyline") => "branch_directions",
-        _ => return false,
-    };
-    if preview.get("kind") != cold.get("kind") {
-        return false;
-    }
-    let Some(preview_branches) = preview.get(key) else {
-        return false;
-    };
-    let Some(cold_branches) = cold.get(key) else {
-        return false;
-    };
-    let same_positive_cell = if key == "branch_direction" {
-        json_branch_pair(preview_branches, cold_branches)
-            .is_some_and(|(preview, cold)| branch_dot(preview, cold) > 0.0)
-    } else {
-        let Some(preview) = preview_branches.as_array() else {
-            return false;
-        };
-        let Some(cold) = cold_branches.as_array() else {
-            return false;
-        };
-        preview.len() == cold.len()
-            && preview.iter().zip(cold).all(|(preview, cold)| {
-                json_branch_pair(preview, cold)
-                    .is_some_and(|(preview, cold)| branch_dot(preview, cold) > 0.0)
-            })
-    };
-    if !same_positive_cell {
-        return false;
-    }
-    let Some(definition) = preview.as_object_mut() else {
-        return false;
-    };
-    definition.insert(key.to_owned(), cold_branches.clone());
-    true
-}
-
-fn json_branch_pair(
-    preview: &serde_json::Value,
-    cold: &serde_json::Value,
-) -> Option<([f64; 2], [f64; 2])> {
-    let preview: [f64; 2] = serde_json::from_value(preview.clone()).ok()?;
-    let cold: [f64; 2] = serde_json::from_value(cold.clone()).ok()?;
-    preview
-        .into_iter()
-        .chain(cold)
-        .all(f64::is_finite)
-        .then_some((preview, cold))
-}
-
-fn branch_dot(first: [f64; 2], second: [f64; 2]) -> f64 {
-    first[0].mul_add(second[0], first[1] * second[1])
+    preview.exact_except_recomputable_line_branches(cold, &recomputable)
 }
 
 const fn geometry_recipe_has_derived_line_branches(recipe: GeometryRecipeKind) -> bool {
@@ -1155,69 +1122,6 @@ const fn geometry_recipe_has_derived_line_branches(recipe: GeometryRecipeKind) -
 #[cfg(test)]
 mod direct_manipulation_comparison_tests {
     use super::*;
-
-    #[test]
-    fn derived_line_branch_normalization_is_same_cell_and_field_local() {
-        let cold = serde_json::json!({
-            "kind": "line",
-            "start": 1,
-            "end": 2,
-            "branch_direction": [1.0, 0.0],
-        });
-        let mut noisy = serde_json::json!({
-            "kind": "line",
-            "start": 1,
-            "end": 2,
-            "branch_direction": [1.0, 1.0e-17],
-        });
-        assert!(normalize_derived_branch_definition(&mut noisy, &cold));
-        assert_eq!(noisy, cold);
-
-        let mut flipped = serde_json::json!({
-            "kind": "line",
-            "start": 1,
-            "end": 2,
-            "branch_direction": [-1.0, 0.0],
-        });
-        let flipped_before = flipped.clone();
-        assert!(!normalize_derived_branch_definition(&mut flipped, &cold));
-        assert_eq!(flipped, flipped_before);
-
-        let mut unrelated = serde_json::json!({
-            "kind": "line",
-            "start": 99,
-            "end": 2,
-            "branch_direction": [1.0, 1.0e-17],
-        });
-        assert!(normalize_derived_branch_definition(&mut unrelated, &cold));
-        assert_ne!(unrelated, cold, "unrelated document state remains exact");
-    }
-
-    #[test]
-    fn derived_polyline_requires_every_branch_to_remain_in_its_cell() {
-        let cold = serde_json::json!({
-            "kind": "polyline",
-            "points": [1, 2, 3],
-            "closed": false,
-            "branch_directions": [[1.0, 0.0], [0.0, 1.0]],
-        });
-        let mut noisy = serde_json::json!({
-            "kind": "polyline",
-            "points": [1, 2, 3],
-            "closed": false,
-            "branch_directions": [[1.0, 1.0e-17], [-1.0e-17, 1.0]],
-        });
-        assert!(normalize_derived_branch_definition(&mut noisy, &cold));
-        assert_eq!(noisy, cold);
-
-        let mut flipped = serde_json::json!({
-            "kind": "polyline",
-            "points": [1, 2, 3],
-            "closed": false,
-            "branch_directions": [[1.0, 0.0], [0.0, -1.0]],
-        });
-        assert!(!normalize_derived_branch_definition(&mut flipped, &cold));
-    }
 
     #[test]
     fn only_schema_derived_line_recipes_enter_branch_normalization() {
@@ -1241,6 +1145,139 @@ mod direct_manipulation_comparison_tests {
         assert!(!geometry_recipe_has_derived_line_branches(
             GeometryRecipeKind::MidpointLine
         ));
+    }
+}
+
+#[cfg(test)]
+mod prepared_transaction_tests {
+    use geosolve_sketch::{DocumentId, PersistentId};
+    use geosolve_sketch_intent::{
+        GeometryRecipeKind, IntentNodeDraft, IntentNodeKind, IntentPatchOperation, IntentPortRole,
+        IntentPortSelector,
+    };
+
+    use super::*;
+
+    fn coordinate(value: f64) -> IntentLiteral {
+        IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Length,
+        }
+    }
+
+    fn point_patch(
+        coordinator: &ProjectionalIntentCoordinator,
+        alias: &str,
+        position: [f64; 2],
+    ) -> IntentPatch {
+        let selector = IntentPortSelector::Node {
+            role: IntentPortRole::Primary,
+            index: 0,
+        };
+        let draft = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            IntentKey::new(alias).expect("test alias is valid"),
+        )
+        .with_instance_leaf(
+            selector,
+            geosolve_sketch_intent::LeafField::X,
+            coordinate(position[0]),
+        )
+        .with_instance_leaf(
+            selector,
+            geosolve_sketch_intent::LeafField::Y,
+            coordinate(position[1]),
+        );
+        IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: IntentKey::new(alias).expect("test alias is valid"),
+                draft: Box::new(draft),
+                cell: None,
+            }],
+        )
+    }
+
+    fn coordinator(raw: u128) -> ProjectionalIntentCoordinator {
+        ProjectionalIntentCoordinator::empty(
+            IntentSessionId::from_raw(raw),
+            ColdIntentMaterializer::with_default_policy(
+                DocumentId(PersistentId::from_u128(raw << 32)),
+                1.0,
+            )
+            .expect("test materializer"),
+        )
+        .expect("test coordinator")
+    }
+
+    #[test]
+    fn accepted_prepared_transaction_installs_its_exact_validated_materialization() {
+        let mut coordinator = coordinator(0x8300_7001);
+        PLAN_PATCH_CALLS.with(|calls| calls.set(0));
+        let prepared = coordinator
+            .prepare_patch_transaction(point_patch(&coordinator, "prepared.point", [2.0, 3.0]))
+            .expect("prepare")
+            .expect("accepted transaction");
+        assert_eq!(PLAN_PATCH_CALLS.with(std::cell::Cell::get), 1);
+        let expected_target = prepared.plan.target();
+        let expected_evidence = prepared.materialization().evidence.clone();
+        assert!(coordinator.accepted_materialization().is_none());
+
+        let outcome = coordinator
+            .commit_prepared_transaction(prepared)
+            .expect("commit exact prepared transaction");
+
+        assert_eq!(
+            PLAN_PATCH_CALLS.with(std::cell::Cell::get),
+            1,
+            "committing a prepared preview must not plan or cold-materialize again"
+        );
+        assert_eq!(outcome.identity, expected_target);
+        assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+        assert_eq!(coordinator.intent().undo_len(), 1);
+        assert_eq!(
+            coordinator
+                .accepted_materialization()
+                .expect("accepted materialization")
+                .evidence,
+            expected_evidence
+        );
+    }
+
+    #[test]
+    fn stale_prepared_transaction_cannot_replace_newer_intent_or_native_authority() {
+        let mut coordinator = coordinator(0x8300_7002);
+        let prepared = coordinator
+            .prepare_patch_transaction(point_patch(&coordinator, "stale.point", [2.0, 3.0]))
+            .expect("prepare")
+            .expect("accepted transaction");
+        coordinator
+            .apply_patch(point_patch(&coordinator, "newer.point", [5.0, 7.0]))
+            .expect("publish intervening mutation");
+        let identity = coordinator.intent().identity();
+        let evidence = coordinator
+            .accepted_materialization()
+            .expect("newer accepted authority")
+            .evidence
+            .clone();
+
+        assert!(matches!(
+            coordinator.commit_prepared_transaction(prepared),
+            Err(ProjectionalCoordinatorError::Intent(
+                IntentSessionError::StaleCas { .. }
+            ))
+        ));
+        assert_eq!(coordinator.intent().identity(), identity);
+        assert_eq!(
+            coordinator
+                .accepted_materialization()
+                .expect("newer authority retained")
+                .evidence,
+            evidence
+        );
     }
 }
 
@@ -1515,6 +1552,8 @@ pub enum ProjectionalCoordinatorError {
     Document(#[from] geosolve_sketch::DocumentError),
     #[error("an accepted plan omitted its independently validated native materialization")]
     MissingAcceptedMaterialization,
+    #[error("a non-publishing plan unexpectedly produced native materialization")]
+    UnexpectedNonPublishingMaterialization,
     #[error("there is no independently accepted intent authority")]
     NoAcceptedAuthority,
     #[error("the restored native bootstrap does not match its accepted intent authority")]

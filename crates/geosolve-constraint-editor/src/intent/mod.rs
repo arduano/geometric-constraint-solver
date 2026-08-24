@@ -40,15 +40,15 @@ use geosolve_sketch::{
     TangentOrientation,
 };
 use geosolve_sketch_intent::{
-    AggregateKind, ConstraintKind, DimensionKind, ExternalIntentKind, GeometryRecipeKind,
-    InputRole, InputSlot, IntentAcceptedAuthority, IntentCandidate, IntentEvaluation,
-    IntentEvaluationFailure, IntentEvaluationFailureKind, IntentExternalInputs, IntentGraph,
-    IntentGraphError, IntentIdentityFlow, IntentInstanceState, IntentKey, IntentLiteral,
-    IntentNativeReservationKind, IntentNode, IntentNodeKind, IntentOperationOutputKind, IntentPort,
-    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservationLedger,
-    IntentReservationRecord, IntentReservationState, IntentSemanticIdentity, IntentUnit, LeafField,
-    LeafRef, MaterializationEvidence, NodeId, OperationKind as IntentOperationKind,
-    ParameterIntentKind, ReservationId,
+    AggregateKind, BootstrapNativeKind, ConstraintKind, DimensionKind, ExternalIntentKind,
+    GeometryRecipeKind, InputRole, InputSlot, IntentAcceptedAuthority, IntentCandidate,
+    IntentEvaluation, IntentEvaluationFailure, IntentEvaluationFailureKind, IntentExternalInputs,
+    IntentGraph, IntentGraphError, IntentIdentityFlow, IntentInstanceState, IntentKey,
+    IntentLiteral, IntentNativeReservationKind, IntentNode, IntentNodeKind,
+    IntentOperationOutputKind, IntentPort, IntentPortKind, IntentPortRef, IntentPortRole,
+    IntentPortSelector, IntentReservationLedger, IntentReservationRecord, IntentReservationState,
+    IntentSemanticIdentity, IntentUnit, LeafField, LeafRef, MaterializationEvidence, NodeId,
+    OperationKind as IntentOperationKind, ParameterIntentKind, ReservationId,
 };
 use geosolve_sketch_ops::{
     LineEndpoint, SketchOperationKind, SketchOperationRequest, SketchOperationResult,
@@ -136,6 +136,27 @@ pub struct IntentMaterializationMap {
 }
 
 impl IntentMaterializationMap {
+    /// Resolves deterministic native ownership for one declaration.
+    #[must_use]
+    pub fn node(&self, node: NodeId) -> Option<&IntentNodeMaterialization> {
+        self.nodes
+            .binary_search_by_key(&node, |candidate| candidate.node)
+            .ok()
+            .map(|index| &self.nodes[index])
+    }
+
+    /// Returns the sole declaration owner of a native binding.
+    #[must_use]
+    pub fn exact_owner(&self, binding: IntentNativeBinding) -> Option<NodeId> {
+        let mut owners = self
+            .nodes
+            .iter()
+            .filter(|node| node.owned.binary_search(&binding).is_ok())
+            .map(|node| node.node);
+        let owner = owners.next()?;
+        owners.next().is_none().then_some(owner)
+    }
+
     /// Resolves one stable logical output.
     #[must_use]
     pub fn port(&self, port: IntentPortRef) -> Option<IntentNativeBinding> {
@@ -184,6 +205,827 @@ impl IntentMaterializationMap {
     pub fn aggregate_is_closed(&self, port: IntentPortRef) -> Option<bool> {
         self.aggregate(port).map(|aggregate| aggregate.closed)
     }
+
+    /// Independently checks decoded or freshly produced ownership evidence
+    /// against its exact intent and native authorities.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed materialization error when semantic identity, stable
+    /// ordering, graph/instance ownership, native existence, reservation
+    /// provenance, reverse writable ownership, or aggregate topology does not
+    /// match the supplied authorities.
+    pub fn validate_against(
+        &self,
+        expected_semantic: IntentSemanticIdentity,
+        graph: &IntentGraph,
+        instance: &IntentInstanceState,
+        reservations: &IntentReservationLedger,
+        document: &geosolve_sketch::SketchDocument,
+        features: &geosolve_sketch_features::ComputedFeatureDocument,
+    ) -> Result<(), IntentMaterializationError> {
+        if self.semantic != expected_semantic {
+            return Err(IntentMaterializationError::OwnershipSemanticMismatch);
+        }
+        graph.validate()?;
+        self.validate_ordering()?;
+        self.validate_reservations(graph, reservations, document, features)?;
+        self.validate_ports(graph, reservations, document, features)?;
+        self.validate_owned_logical_provenance(graph, document, features)?;
+        self.validate_nodes(graph, reservations, document, features)?;
+        self.validate_writable_leaves(graph, instance, document)?;
+        self.validate_aggregates(graph, document)
+    }
+
+    fn validate_ordering(&self) -> Result<(), IntentMaterializationError> {
+        if !strictly_sorted_unique_by(&self.nodes, |node| node.node)
+            || self
+                .nodes
+                .iter()
+                .any(|node| !strictly_sorted_unique(&node.owned))
+            || !strictly_sorted_unique_by(&self.ports, |(port, _)| *port)
+            || !strictly_sorted_unique_by(&self.reservations, |(reservation, _)| *reservation)
+            || !strictly_sorted_unique_by(&self.writable_leaves, |(native, _)| *native)
+            || !strictly_sorted_unique_by(&self.aggregates, |aggregate| aggregate.port)
+        {
+            return Err(IntentMaterializationError::InvalidOwnershipOrdering);
+        }
+        Ok(())
+    }
+
+    fn validate_reservations(
+        &self,
+        graph: &IntentGraph,
+        reservations: &IntentReservationLedger,
+        document: &geosolve_sketch::SketchDocument,
+        features: &geosolve_sketch_features::ComputedFeatureDocument,
+    ) -> Result<(), IntentMaterializationError> {
+        let mut native_reservations = BTreeMap::new();
+        for (reservation, binding) in &self.reservations {
+            let record = reservations.entries().get(reservation).ok_or(
+                IntentMaterializationError::UnknownOwnershipReservation {
+                    reservation: *reservation,
+                },
+            )?;
+            if !binding_matches_reservation(record.kind, *binding) {
+                return Err(
+                    IntentMaterializationError::OwnershipReservationKindMismatch {
+                        reservation: *reservation,
+                    },
+                );
+            }
+            if native_reservations.insert(*binding, *reservation).is_some() {
+                return Err(IntentMaterializationError::DuplicateReservationBinding {
+                    binding: *binding,
+                });
+            }
+            if record.state == IntentReservationState::Declared {
+                validate_native_binding(*binding, document, features)?;
+            }
+        }
+
+        for (reservation, record) in reservations.entries() {
+            if self.reservation(*reservation).is_none() {
+                return Err(IntentMaterializationError::MissingOwnershipReservation {
+                    reservation: *reservation,
+                });
+            }
+            if record.state == IntentReservationState::Tombstoned {
+                continue;
+            }
+            let reference = IntentPortRef {
+                node: record.owner_node,
+                port: record.owner_port,
+                kind: record.kind.port_kind(),
+            };
+            let Some(port) = graph.port(reference) else {
+                return Err(
+                    IntentMaterializationError::OwnershipReservationOwnerMismatch {
+                        reservation: *reservation,
+                    },
+                );
+            };
+            if port.flow
+                != (IntentIdentityFlow::Created {
+                    reservation: *reservation,
+                })
+            {
+                return Err(
+                    IntentMaterializationError::OwnershipReservationOwnerMismatch {
+                        reservation: *reservation,
+                    },
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_ports(
+        &self,
+        graph: &IntentGraph,
+        reservations: &IntentReservationLedger,
+        document: &geosolve_sketch::SketchDocument,
+        features: &geosolve_sketch_features::ComputedFeatureDocument,
+    ) -> Result<(), IntentMaterializationError> {
+        for (reference, binding) in &self.ports {
+            let port = graph
+                .port(*reference)
+                .ok_or(IntentMaterializationError::UnknownOwnershipPort { port: *reference })?;
+            if !binding_matches_port(*reference, port.kind, *binding) {
+                return Err(IntentMaterializationError::OwnershipPortKindMismatch {
+                    port: *reference,
+                });
+            }
+        }
+
+        for node in graph.nodes().values() {
+            for port in node.ports.values() {
+                let reference = port.as_ref(node.id);
+                let actual = self.port(reference);
+                if matches!(port.flow, IntentIdentityFlow::Retired { .. }) {
+                    if actual.is_some() {
+                        return Err(IntentMaterializationError::UnexpectedOwnershipPort {
+                            port: reference,
+                        });
+                    }
+                    continue;
+                }
+                let binding = actual
+                    .ok_or(IntentMaterializationError::MissingOwnershipPort { port: reference })?;
+                if !binding_matches_port(reference, port.kind, binding) {
+                    return Err(IntentMaterializationError::OwnershipPortKindMismatch {
+                        port: reference,
+                    });
+                }
+                let exact = match port.flow {
+                    IntentIdentityFlow::Created { reservation } => {
+                        let record = reservations.entries().get(&reservation).ok_or(
+                            IntentMaterializationError::MissingOwnershipReservation { reservation },
+                        )?;
+                        record.owner_node == node.id
+                            && record.owner_port == port.id
+                            && self.reservation(reservation) == Some(binding)
+                    }
+                    IntentIdentityFlow::Aliased { source }
+                    | IntentIdentityFlow::Continued { source, .. } => {
+                        self.port(source) == Some(binding)
+                    }
+                    IntentIdentityFlow::OwnedLogical => match binding {
+                        IntentNativeBinding::Logical(logical) => logical == reference,
+                        IntentNativeBinding::CurveSpan(_) => {
+                            port.kind == IntentPortKind::CurveSpan && !node.suppressed
+                        }
+                        IntentNativeBinding::ComputedFeature(_) => {
+                            port.kind == IntentPortKind::Feature
+                        }
+                        IntentNativeBinding::ComputedFeatureCorner(_) => {
+                            port.kind == IntentPortKind::FeatureCorner
+                        }
+                        _ => false,
+                    },
+                    IntentIdentityFlow::Retired { .. } => unreachable!("handled above"),
+                };
+                if !exact {
+                    return Err(IntentMaterializationError::OwnershipPortBindingMismatch {
+                        port: reference,
+                    });
+                }
+                if !node.suppressed {
+                    validate_native_binding(binding, document, features)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_nodes(
+        &self,
+        graph: &IntentGraph,
+        reservations: &IntentReservationLedger,
+        document: &geosolve_sketch::SketchDocument,
+        features: &geosolve_sketch_features::ComputedFeatureDocument,
+    ) -> Result<(), IntentMaterializationError> {
+        let mut actual = BTreeMap::<NodeId, Vec<IntentNativeBinding>>::new();
+        let mut native_owners = BTreeMap::new();
+        let reservation_dispositions = self
+            .reservations
+            .iter()
+            .filter_map(|(reservation, binding)| {
+                reservations
+                    .entries()
+                    .get(reservation)
+                    .map(|record| (*binding, record.state))
+            })
+            .collect::<BTreeMap<_, _>>();
+        for node in &self.nodes {
+            for binding in &node.owned {
+                let disposition = reservation_dispositions.get(binding).copied();
+                if disposition.is_none_or(|state| state == IntentReservationState::Declared) {
+                    validate_native_binding(*binding, document, features)?;
+                }
+                if native_owners.insert(*binding, node.node).is_some() {
+                    return Err(IntentMaterializationError::DuplicateNativeOwner {
+                        binding: *binding,
+                    });
+                }
+            }
+            actual.insert(node.node, node.owned.clone());
+        }
+
+        let mut expected = BTreeMap::<NodeId, Vec<IntentNativeBinding>>::new();
+        for (reservation, record) in reservations.entries() {
+            expected.entry(record.owner_node).or_default().push(
+                self.reservation(*reservation).ok_or(
+                    IntentMaterializationError::MissingOwnershipReservation {
+                        reservation: *reservation,
+                    },
+                )?,
+            );
+        }
+        for node in graph.nodes().values() {
+            if matches!(node.kind, IntentNodeKind::Bootstrap { .. })
+                || node.bootstrap_origin.is_some()
+            {
+                expected.entry(node.id).or_default();
+            }
+            for port in node.ports.values() {
+                let Some(binding) = self.port(port.as_ref(node.id)) else {
+                    continue;
+                };
+                if matches!(
+                    binding,
+                    IntentNativeBinding::ComputedFeature(_)
+                        | IntentNativeBinding::ComputedFeatureCorner(_)
+                ) {
+                    expected.entry(node.id).or_default().push(binding);
+                }
+                if matches!(node.kind, IntentNodeKind::Bootstrap { .. })
+                    && let IntentNativeBinding::ComputedFeature(feature) = binding
+                {
+                    let feature = features.feature(feature).ok_or(
+                        IntentMaterializationError::MissingNativeOwnershipBinding { binding },
+                    )?;
+                    let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+                        &feature.definition;
+                    expected.entry(node.id).or_default().extend(
+                        fillet
+                            .corners
+                            .iter()
+                            .map(|corner| IntentNativeBinding::ComputedFeatureCorner(corner.id)),
+                    );
+                }
+            }
+        }
+        for owned in expected.values_mut() {
+            owned.sort_unstable();
+            owned.dedup();
+        }
+        if actual != expected {
+            let node = actual
+                .keys()
+                .chain(expected.keys())
+                .copied()
+                .find(|node| actual.get(node) != expected.get(node))
+                .expect("different ownership maps have one differing node");
+            return Err(IntentMaterializationError::OwnershipNodeMismatch { node });
+        }
+        Ok(())
+    }
+
+    fn validate_owned_logical_provenance(
+        &self,
+        graph: &IntentGraph,
+        document: &geosolve_sketch::SketchDocument,
+        features: &geosolve_sketch_features::ComputedFeatureDocument,
+    ) -> Result<(), IntentMaterializationError> {
+        for node in graph.nodes().values() {
+            for port in node
+                .ports
+                .values()
+                .filter(|port| port.flow == IntentIdentityFlow::OwnedLogical)
+            {
+                let reference = port.as_ref(node.id);
+                let expected = match port.kind {
+                    IntentPortKind::CurveSpan if node.suppressed => {
+                        IntentNativeBinding::Logical(reference)
+                    }
+                    IntentPortKind::CurveSpan => IntentNativeBinding::CurveSpan(
+                        expected_logical_curve_span(node, port, self, document)?,
+                    ),
+                    IntentPortKind::Feature => IntentNativeBinding::ComputedFeature(
+                        expected_logical_feature(node, reference, features)?.id,
+                    ),
+                    IntentPortKind::FeatureCorner => {
+                        let feature = expected_logical_feature(node, reference, features)?;
+                        let ordinal = match port.selector {
+                            IntentPortSelector::InitialChild {
+                                ordinal,
+                                role: IntentPortRole::FeatureCorner,
+                                index: 0,
+                            } => usize::from(ordinal),
+                            _ => {
+                                return Err(
+                                    IntentMaterializationError::OwnershipPortBindingMismatch {
+                                        port: reference,
+                                    },
+                                );
+                            }
+                        };
+                        let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+                            &feature.definition;
+                        IntentNativeBinding::ComputedFeatureCorner(
+                            fillet
+                                .corners
+                                .get(ordinal)
+                                .ok_or(IntentMaterializationError::OwnershipPortBindingMismatch {
+                                    port: reference,
+                                })?
+                                .id,
+                        )
+                    }
+                    _ => IntentNativeBinding::Logical(reference),
+                };
+                if self.port(reference) != Some(expected) {
+                    return Err(IntentMaterializationError::OwnershipPortBindingMismatch {
+                        port: reference,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_writable_leaves(
+        &self,
+        graph: &IntentGraph,
+        instance: &IntentInstanceState,
+        document: &geosolve_sketch::SketchDocument,
+    ) -> Result<(), IntentMaterializationError> {
+        let mut leaves = BTreeSet::new();
+        let mut actual = BTreeMap::new();
+        for (native, leaf) in &self.writable_leaves {
+            graph.writable_leaf(*leaf)?;
+            if !leaves.insert(*leaf) {
+                return Err(IntentMaterializationError::DuplicateWritableLeaf { leaf: *leaf });
+            }
+            validate_writable_binding(*native, *leaf, self, instance, document)?;
+            actual.insert(*native, *leaf);
+        }
+
+        let mut expected = BTreeMap::new();
+        for node in graph.nodes().values().filter(|node| !node.suppressed) {
+            for port in node.ports.values() {
+                let reference = port.as_ref(node.id);
+                let Some(binding) = self.port(reference) else {
+                    continue;
+                };
+                for field in &port.writable {
+                    let leaf = LeafRef {
+                        node: node.id,
+                        port: port.id,
+                        field: *field,
+                    };
+                    let native = native_writable_leaf(binding, *field)
+                        .ok_or(IntentMaterializationError::InvalidWritableOwnership { leaf })?;
+                    if expected.insert(native, leaf).is_some() {
+                        return Err(IntentMaterializationError::DuplicateWritableOwner { native });
+                    }
+                }
+            }
+        }
+        for (native, leaf) in &expected {
+            if actual.get(native) != Some(leaf) {
+                return Err(IntentMaterializationError::MissingWritableOwnership { leaf: *leaf });
+            }
+        }
+        for (native, leaf) in actual {
+            if expected.get(&native) != Some(&leaf) {
+                return Err(IntentMaterializationError::InvalidWritableOwnership { leaf });
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_aggregates(
+        &self,
+        graph: &IntentGraph,
+        document: &geosolve_sketch::SketchDocument,
+    ) -> Result<(), IntentMaterializationError> {
+        let mut expected = BTreeMap::new();
+        for node in graph.nodes().values().filter(|node| !node.suppressed) {
+            let aggregate = match node.kind {
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Polyline,
+                } => {
+                    let port = require_port(node, IntentPortRole::Collection, 0)?.as_ref(node.id);
+                    let Some(IntentNativeBinding::Curve(curve)) =
+                        self.port(require_port(node, IntentPortRole::Curve, 0)?.as_ref(node.id))
+                    else {
+                        return Err(IntentMaterializationError::InvalidOwnershipAggregate { port });
+                    };
+                    let curve_value = document
+                        .curve(curve)
+                        .ok_or(IntentMaterializationError::InvalidOwnershipAggregate { port })?;
+                    let CurveDefinition::Polyline { closed, .. } = &curve_value.definition else {
+                        return Err(IntentMaterializationError::InvalidOwnershipAggregate { port });
+                    };
+                    let spans = document.curve_spans(curve).map_err(|_| {
+                        IntentMaterializationError::InvalidOwnershipAggregate { port }
+                    })?;
+                    Some(IntentAggregateMaterialization {
+                        port,
+                        spans,
+                        closed: *closed,
+                    })
+                }
+                IntentNodeKind::Aggregate { aggregate } => {
+                    let (role, closed) = match aggregate {
+                        AggregateKind::OpenChain => (IntentPortRole::Chain, false),
+                        AggregateKind::ClosedProfile => (IntentPortRole::Profile, true),
+                    };
+                    let port = require_port(node, role, 0)?.as_ref(node.id);
+                    let mut spans = Vec::with_capacity(node.inputs.len());
+                    for index in 0..node.inputs.len() {
+                        let index = u16::try_from(index).map_err(|_| {
+                            IntentMaterializationError::InvalidOwnershipAggregate { port }
+                        })?;
+                        let source = node
+                            .inputs
+                            .get(&InputSlot::new(InputRole::Span, index))
+                            .ok_or(IntentMaterializationError::InvalidOwnershipAggregate {
+                                port,
+                            })?;
+                        let span = match self.port(*source) {
+                            Some(IntentNativeBinding::CurveSpan(span)) => span,
+                            Some(IntentNativeBinding::Curve(curve)) => CurveSpan::line(curve),
+                            _ => {
+                                return Err(
+                                    IntentMaterializationError::InvalidOwnershipAggregate { port },
+                                );
+                            }
+                        };
+                        spans.push(span);
+                    }
+                    Some(IntentAggregateMaterialization {
+                        port,
+                        spans,
+                        closed,
+                    })
+                }
+                _ => None,
+            };
+            if let Some(aggregate) = aggregate {
+                expected.insert(aggregate.port, aggregate);
+            }
+        }
+
+        for aggregate in &self.aggregates {
+            let port = graph.port(aggregate.port).ok_or(
+                IntentMaterializationError::UnknownOwnershipPort {
+                    port: aggregate.port,
+                },
+            )?;
+            if !matches!(
+                port.kind,
+                IntentPortKind::Profile | IntentPortKind::Chain | IntentPortKind::Collection
+            ) || aggregate
+                .spans
+                .iter()
+                .any(|span| validate_curve_span(*span, document).is_err())
+                || expected.get(&aggregate.port) != Some(aggregate)
+            {
+                return Err(IntentMaterializationError::InvalidOwnershipAggregate {
+                    port: aggregate.port,
+                });
+            }
+        }
+        if let Some(port) = expected
+            .keys()
+            .find(|port| self.aggregate(**port).is_none())
+            .copied()
+        {
+            return Err(IntentMaterializationError::InvalidOwnershipAggregate { port });
+        }
+        Ok(())
+    }
+}
+
+fn expected_logical_curve_span(
+    node: &IntentNode,
+    port: &IntentPort,
+    ownership: &IntentMaterializationMap,
+    document: &geosolve_sketch::SketchDocument,
+) -> Result<CurveSpan, IntentMaterializationError> {
+    let reference = port.as_ref(node.id);
+    if let IntentNodeKind::Bootstrap { object } = &node.kind {
+        match object.kind {
+            BootstrapNativeKind::Curve => {
+                let curve: DesignCurve = serde_json::from_slice(&object.payload).map_err(|_| {
+                    IntentMaterializationError::OwnershipPortBindingMismatch { port: reference }
+                })?;
+                if document.curve(curve.id) != Some(&curve) {
+                    return Err(IntentMaterializationError::OwnershipPortBindingMismatch {
+                        port: reference,
+                    });
+                }
+            }
+            BootstrapNativeKind::CurveTrimView => {
+                let trim: DocumentCurveTrimView =
+                    serde_json::from_slice(&object.payload).map_err(|_| {
+                        IntentMaterializationError::OwnershipPortBindingMismatch { port: reference }
+                    })?;
+                validate_curve_span(trim.support, document)?;
+                return Ok(trim.support);
+            }
+            _ => {}
+        }
+    }
+
+    let mut curves = node
+        .ports
+        .values()
+        .filter_map(|candidate| {
+            let binding = ownership.port(candidate.as_ref(node.id));
+            match binding {
+                Some(IntentNativeBinding::Curve(curve)) => Some((candidate.selector, curve)),
+                _ => None,
+            }
+        })
+        .collect::<Vec<_>>();
+    curves.sort_unstable_by_key(|(selector, _)| *selector);
+    let mut spans = Vec::new();
+    for (_, curve) in curves {
+        spans.extend(document.curve_spans(curve).map_err(|_| {
+            IntentMaterializationError::OwnershipPortBindingMismatch { port: reference }
+        })?);
+    }
+    let ordinal = match port.selector {
+        IntentPortSelector::Node {
+            role: IntentPortRole::Span,
+            index,
+        } => usize::from(index),
+        IntentPortSelector::InitialChild {
+            ordinal,
+            role: IntentPortRole::Span,
+            index: 0,
+        } => usize::from(ordinal),
+        _ => {
+            return Err(IntentMaterializationError::OwnershipPortBindingMismatch {
+                port: reference,
+            });
+        }
+    };
+    spans
+        .get(ordinal)
+        .copied()
+        .ok_or(IntentMaterializationError::OwnershipPortBindingMismatch { port: reference })
+}
+
+fn expected_logical_feature<'a>(
+    node: &IntentNode,
+    reference: IntentPortRef,
+    features: &'a geosolve_sketch_features::ComputedFeatureDocument,
+) -> Result<&'a geosolve_sketch_features::ComputedFeature, IntentMaterializationError> {
+    if let IntentNodeKind::Bootstrap { object } = &node.kind
+        && object.kind == BootstrapNativeKind::ComputedFeature
+    {
+        let expected: geosolve_sketch_features::ComputedFeature =
+            serde_json::from_slice(&object.payload).map_err(|_| {
+                IntentMaterializationError::OwnershipPortBindingMismatch { port: reference }
+            })?;
+        let actual = features
+            .feature(expected.id)
+            .ok_or(IntentMaterializationError::OwnershipPortBindingMismatch { port: reference })?;
+        if actual != &expected {
+            return Err(IntentMaterializationError::OwnershipPortBindingMismatch {
+                port: reference,
+            });
+        }
+        return Ok(actual);
+    }
+    if !matches!(node.kind, IntentNodeKind::ComputedFeature { .. }) {
+        return Err(IntentMaterializationError::OwnershipPortBindingMismatch { port: reference });
+    }
+    let mut matching = features
+        .features()
+        .iter()
+        .filter(|feature| feature.label == node.symbol.as_str());
+    let feature = matching
+        .next()
+        .ok_or(IntentMaterializationError::OwnershipPortBindingMismatch { port: reference })?;
+    if matching.next().is_some() {
+        return Err(IntentMaterializationError::OwnershipPortBindingMismatch { port: reference });
+    }
+    Ok(feature)
+}
+
+fn strictly_sorted_unique<T: Ord>(values: &[T]) -> bool {
+    values.windows(2).all(|pair| pair[0] < pair[1])
+}
+
+fn strictly_sorted_unique_by<T, K: Ord + Copy>(values: &[T], key: impl Fn(&T) -> K) -> bool {
+    values.windows(2).all(|pair| key(&pair[0]) < key(&pair[1]))
+}
+
+fn binding_matches_port(
+    reference: IntentPortRef,
+    kind: IntentPortKind,
+    binding: IntentNativeBinding,
+) -> bool {
+    matches!(
+        (kind, binding),
+        (IntentPortKind::Point, IntentNativeBinding::Point(_))
+            | (IntentPortKind::Scalar, IntentNativeBinding::Scalar(_))
+            | (IntentPortKind::Curve, IntentNativeBinding::Curve(_))
+            | (IntentPortKind::CurveSpan, IntentNativeBinding::CurveSpan(_))
+            | (IntentPortKind::Contact, IntentNativeBinding::Contact(_))
+            | (
+                IntentPortKind::Constraint,
+                IntentNativeBinding::Constraint(_)
+            )
+            | (IntentPortKind::Dimension, IntentNativeBinding::Dimension(_))
+            | (
+                IntentPortKind::Source | IntentPortKind::SemanticCatalog,
+                IntentNativeBinding::Source(_)
+            )
+            | (IntentPortKind::Parameter, IntentNativeBinding::Parameter(_))
+            | (
+                IntentPortKind::ExternalBinding,
+                IntentNativeBinding::ExternalBinding(_)
+            )
+            | (
+                IntentPortKind::Feature,
+                IntentNativeBinding::ComputedFeature(_)
+            )
+            | (
+                IntentPortKind::FeatureCorner,
+                IntentNativeBinding::ComputedFeatureCorner(_)
+            )
+    ) || matches!(binding, IntentNativeBinding::Logical(logical) if logical == reference)
+}
+
+const fn binding_matches_reservation(
+    kind: IntentNativeReservationKind,
+    binding: IntentNativeBinding,
+) -> bool {
+    matches!(
+        (kind, binding),
+        (
+            IntentNativeReservationKind::Point,
+            IntentNativeBinding::Point(_)
+        ) | (
+            IntentNativeReservationKind::Scalar,
+            IntentNativeBinding::Scalar(_)
+        ) | (
+            IntentNativeReservationKind::Curve,
+            IntentNativeBinding::Curve(_)
+        ) | (
+            IntentNativeReservationKind::Contact,
+            IntentNativeBinding::Contact(_)
+        ) | (
+            IntentNativeReservationKind::Constraint,
+            IntentNativeBinding::Constraint(_)
+        ) | (
+            IntentNativeReservationKind::ConstraintSource
+                | IntentNativeReservationKind::DimensionSource
+                | IntentNativeReservationKind::SemanticCatalog
+                | IntentNativeReservationKind::SemanticSource,
+            IntentNativeBinding::Source(_)
+        ) | (
+            IntentNativeReservationKind::Dimension,
+            IntentNativeBinding::Dimension(_)
+        ) | (
+            IntentNativeReservationKind::Parameter,
+            IntentNativeBinding::Parameter(_)
+        ) | (
+            IntentNativeReservationKind::ExternalBinding,
+            IntentNativeBinding::ExternalBinding(_)
+        )
+    )
+}
+
+fn validate_native_binding(
+    binding: IntentNativeBinding,
+    document: &geosolve_sketch::SketchDocument,
+    features: &geosolve_sketch_features::ComputedFeatureDocument,
+) -> Result<(), IntentMaterializationError> {
+    let exists = match binding {
+        IntentNativeBinding::Point(id) => document.point(id).is_some(),
+        IntentNativeBinding::Scalar(id) => document.scalar(id).is_some(),
+        IntentNativeBinding::Curve(id) => document.curve(id).is_some(),
+        IntentNativeBinding::CurveSpan(span) => {
+            validate_curve_span(span, document)?;
+            true
+        }
+        IntentNativeBinding::Contact(id) => document.contact(id).is_some(),
+        IntentNativeBinding::Constraint(id) => document.constraint(id).is_some(),
+        IntentNativeBinding::Dimension(id) => document.dimension(id).is_some(),
+        IntentNativeBinding::Source(id) => document.source(id).is_some(),
+        IntentNativeBinding::Parameter(id) => document.parameter(id).is_some(),
+        IntentNativeBinding::ExternalBinding(id) => document.external_binding(id).is_some(),
+        IntentNativeBinding::ComputedFeature(id) => features.feature(id).is_some(),
+        IntentNativeBinding::ComputedFeatureCorner(id) => features
+            .features()
+            .iter()
+            .any(|feature| features.corner(feature.id, id).is_some()),
+        IntentNativeBinding::Logical(_) => true,
+    };
+    if exists {
+        Ok(())
+    } else {
+        Err(IntentMaterializationError::MissingNativeOwnershipBinding { binding })
+    }
+}
+
+fn validate_curve_span(
+    span: CurveSpan,
+    document: &geosolve_sketch::SketchDocument,
+) -> Result<(), IntentMaterializationError> {
+    if document.curve(span.curve).is_none() {
+        return Err(IntentMaterializationError::MissingNativeOwnershipBinding {
+            binding: IntentNativeBinding::CurveSpan(span),
+        });
+    }
+    let spans = document
+        .curve_spans(span.curve)
+        .map_err(|_| IntentMaterializationError::InvalidOwnershipCurveSpan { span })?;
+    if spans.contains(&span) {
+        Ok(())
+    } else {
+        Err(IntentMaterializationError::InvalidOwnershipCurveSpan { span })
+    }
+}
+
+const fn native_writable_leaf(
+    binding: IntentNativeBinding,
+    field: LeafField,
+) -> Option<IntentNativeWritableLeaf> {
+    match (binding, field) {
+        (IntentNativeBinding::Point(point), LeafField::X) => {
+            Some(IntentNativeWritableLeaf::PointX { point })
+        }
+        (IntentNativeBinding::Point(point), LeafField::Y) => {
+            Some(IntentNativeWritableLeaf::PointY { point })
+        }
+        (
+            IntentNativeBinding::Scalar(scalar),
+            LeafField::Value | LeafField::Angle | LeafField::Weight | LeafField::Parameter,
+        ) => Some(IntentNativeWritableLeaf::ScalarValue { scalar }),
+        _ => None,
+    }
+}
+
+fn validate_writable_binding(
+    native: IntentNativeWritableLeaf,
+    leaf: LeafRef,
+    ownership: &IntentMaterializationMap,
+    instance: &IntentInstanceState,
+    document: &geosolve_sketch::SketchDocument,
+) -> Result<(), IntentMaterializationError> {
+    let expected = ownership
+        .ports
+        .iter()
+        .find_map(|(reference, binding)| {
+            (reference.node == leaf.node && reference.port == leaf.port).then_some(*binding)
+        })
+        .ok_or(IntentMaterializationError::UnknownOwnershipLeaf { leaf })?;
+    let unit = match (native, expected, leaf.field) {
+        (
+            IntentNativeWritableLeaf::PointX { point },
+            IntentNativeBinding::Point(expected),
+            LeafField::X,
+        )
+        | (
+            IntentNativeWritableLeaf::PointY { point },
+            IntentNativeBinding::Point(expected),
+            LeafField::Y,
+        ) if point == expected && document.point(point).is_some() => IntentUnit::Length,
+        (
+            IntentNativeWritableLeaf::ScalarValue { scalar },
+            IntentNativeBinding::Scalar(expected),
+            field,
+        ) if scalar == expected && document.scalar(scalar).is_some() => match field {
+            LeafField::Angle => IntentUnit::Angle,
+            LeafField::Weight | LeafField::Parameter => IntentUnit::Dimensionless,
+            LeafField::Value => {
+                match document.scalar(scalar).expect("checked scalar exists").unit {
+                    ScalarUnit::Length => IntentUnit::Length,
+                    ScalarUnit::Angle => IntentUnit::Angle,
+                    ScalarUnit::Parameter => IntentUnit::Dimensionless,
+                }
+            }
+            LeafField::X | LeafField::Y => {
+                return Err(IntentMaterializationError::InvalidWritableOwnership { leaf });
+            }
+        },
+        _ => return Err(IntentMaterializationError::InvalidWritableOwnership { leaf }),
+    };
+    if let Some(IntentLiteral::Quantity { unit: actual, .. }) = instance.values().get(&leaf)
+        && *actual != unit
+    {
+        return Err(IntentMaterializationError::WritableOwnershipUnitMismatch { leaf });
+    }
+    Ok(())
 }
 
 /// Compact host-created proof that the materialized document was accepted by
@@ -530,6 +1372,14 @@ impl ColdIntentMaterializer {
             self.bootstrap
                 .as_ref()
                 .map(|seed| (&seed.features, seed.feature_lifecycle_high_water)),
+        )?;
+        ownership.validate_against(
+            candidate.semantic_identity(),
+            candidate.graph(),
+            candidate.instance(),
+            candidate.reservations(),
+            accepted.document(),
+            &computed.features,
         )?;
         let validation = IntentValidationEvidence {
             semantic: candidate.semantic_identity(),
@@ -882,6 +1732,52 @@ pub enum IntentMaterializationError {
     AcceptedAuthorityEvidenceMismatch,
     #[error("the immutable historical bootstrap seed does not match its typed declarations")]
     BootstrapSeedMismatch,
+    #[error("intent ownership evidence identifies a different semantic authority")]
+    OwnershipSemanticMismatch,
+    #[error("intent ownership evidence is not in strict stable-key order")]
+    InvalidOwnershipOrdering,
+    #[error("stable output {port:?} is absent from ownership evidence")]
+    UnknownOwnershipPort { port: IntentPortRef },
+    #[error("required stable output {port:?} is missing from ownership evidence")]
+    MissingOwnershipPort { port: IntentPortRef },
+    #[error("retired stable output {port:?} unexpectedly has ownership evidence")]
+    UnexpectedOwnershipPort { port: IntentPortRef },
+    #[error("stable output {port:?} has an incompatible native binding")]
+    OwnershipPortKindMismatch { port: IntentPortRef },
+    #[error("stable output {port:?} does not match its exact identity flow")]
+    OwnershipPortBindingMismatch { port: IntentPortRef },
+    #[error("reservation {reservation} is absent from ownership evidence")]
+    MissingOwnershipReservation { reservation: ReservationId },
+    #[error("ownership evidence names unknown reservation {reservation}")]
+    UnknownOwnershipReservation { reservation: ReservationId },
+    #[error("reservation {reservation} has an incompatible native binding")]
+    OwnershipReservationKindMismatch { reservation: ReservationId },
+    #[error("reservation {reservation} does not match its exact declaration owner and port")]
+    OwnershipReservationOwnerMismatch { reservation: ReservationId },
+    #[error("declaration {node} does not own exactly its reserved native objects")]
+    OwnershipNodeMismatch { node: NodeId },
+    #[error("native binding {binding:?} is assigned to multiple declaration owners")]
+    DuplicateNativeOwner { binding: IntentNativeBinding },
+    #[error("native binding {binding:?} is assigned to multiple reservations")]
+    DuplicateReservationBinding { binding: IntentNativeBinding },
+    #[error("native binding {binding:?} named by ownership evidence does not exist")]
+    MissingNativeOwnershipBinding { binding: IntentNativeBinding },
+    #[error("writable intent leaf {leaf} has multiple native owners")]
+    DuplicateWritableLeaf { leaf: LeafRef },
+    #[error("writable intent leaf {leaf} is missing its exact native owner")]
+    MissingWritableOwnership { leaf: LeafRef },
+    #[error("writable intent leaf {leaf} is absent from stable output evidence")]
+    UnknownOwnershipLeaf { leaf: LeafRef },
+    #[error("writable intent leaf {leaf} has an incompatible native owner")]
+    InvalidWritableOwnership { leaf: LeafRef },
+    #[error("writable intent leaf {leaf} has an incompatible unit")]
+    WritableOwnershipUnitMismatch { leaf: LeafRef },
+    #[error("aggregate output {port:?} has invalid native spans")]
+    InvalidOwnershipAggregate { port: IntentPortRef },
+    #[error("curve span {span:?} is outside its exact native curve topology")]
+    InvalidOwnershipCurveSpan { span: CurveSpan },
+    #[error("native writable target {native:?} already has a reverse owner")]
+    DuplicateWritableOwner { native: IntentNativeWritableLeaf },
 }
 
 impl From<crate::intent_computed::ComputedIntentMaterializationError>
@@ -1532,14 +2428,18 @@ impl LoweringState {
                 ) => IntentNativeWritableLeaf::ScalarValue { scalar },
                 _ => return Err(IntentMaterializationError::NativeKindMismatch { node }),
             };
-            self.reverse_leaves.insert(
-                native,
-                LeafRef {
-                    node,
-                    port: port.id,
-                    field: *field,
-                },
-            );
+            let leaf = LeafRef {
+                node,
+                port: port.id,
+                field: *field,
+            };
+            if self
+                .reverse_leaves
+                .insert(native, leaf)
+                .is_some_and(|existing| existing != leaf)
+            {
+                return Err(IntentMaterializationError::DuplicateWritableOwner { native });
+            }
         }
         Ok(())
     }

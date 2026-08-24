@@ -267,3 +267,149 @@ impl IntentSemanticDiff {
         self.organization_changed |= !nodes.is_empty();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{IntentPortKind, IntentPortRole, PortId};
+
+    const PORT_ROLES: [IntentPortRole; 29] = [
+        IntentPortRole::Primary,
+        IntentPortRole::Start,
+        IntentPortRole::End,
+        IntentPortRole::Center,
+        IntentPortRole::Midpoint,
+        IntentPortRole::Corner,
+        IntentPortRole::Control,
+        IntentPortRole::MajorAxisPoint,
+        IntentPortRole::MinorAxisPoint,
+        IntentPortRole::Curve,
+        IntentPortRole::Span,
+        IntentPortRole::Contact,
+        IntentPortRole::Target,
+        IntentPortRole::Constraint,
+        IntentPortRole::Dimension,
+        IntentPortRole::Source,
+        IntentPortRole::Catalog,
+        IntentPortRole::Operation,
+        IntentPortRole::Feature,
+        IntentPortRole::FeatureCorner,
+        IntentPortRole::Parameter,
+        IntentPortRole::Binding,
+        IntentPortRole::Output,
+        IntentPortRole::External,
+        IntentPortRole::Annotation,
+        IntentPortRole::Collection,
+        IntentPortRole::Profile,
+        IntentPortRole::Chain,
+        IntentPortRole::Result,
+    ];
+    const PORT_KINDS: [IntentPortKind; 21] = [
+        IntentPortKind::Point,
+        IntentPortKind::HandlePoint,
+        IntentPortKind::Scalar,
+        IntentPortKind::Curve,
+        IntentPortKind::CurveSpan,
+        IntentPortKind::Contact,
+        IntentPortKind::Constraint,
+        IntentPortKind::Dimension,
+        IntentPortKind::Source,
+        IntentPortKind::Parameter,
+        IntentPortKind::ParameterBinding,
+        IntentPortKind::ParameterOutput,
+        IntentPortKind::ExternalBinding,
+        IntentPortKind::SemanticCatalog,
+        IntentPortKind::Profile,
+        IntentPortKind::Chain,
+        IntentPortKind::Operation,
+        IntentPortKind::Feature,
+        IntentPortKind::FeatureCorner,
+        IntentPortKind::Annotation,
+        IntentPortKind::Collection,
+    ];
+
+    fn encoded_port_map(selector: IntentPortSelector, kind: IntentPortKind) -> usize {
+        serde_json::to_vec(&BTreeMap::from([(
+            selector,
+            IntentPortRef {
+                node: NodeId::from_raw(u64::MAX),
+                port: PortId::from_raw(u64::MAX),
+                kind,
+            },
+        )]))
+        .unwrap()
+        .len()
+    }
+
+    #[test]
+    fn every_selector_and_port_kind_encoding_fits_the_128_byte_receipt_charge() {
+        let mut maximum = 0;
+        for role in PORT_ROLES {
+            for kind in PORT_KINDS {
+                for selector in [
+                    IntentPortSelector::Node {
+                        role,
+                        index: u16::MAX,
+                    },
+                    IntentPortSelector::InitialChild {
+                        ordinal: u16::MAX,
+                        role,
+                        index: u16::MAX,
+                    },
+                ] {
+                    let encoded = encoded_port_map(selector, kind);
+                    maximum = maximum.max(encoded);
+                    assert!(
+                        encoded <= 128,
+                        "{selector} with {kind:?} encoded to {encoded} bytes"
+                    );
+                }
+            }
+        }
+        assert_eq!(maximum, 117);
+    }
+
+    #[test]
+    fn worst_json_escaped_aliases_fit_the_receipt_alias_charges() {
+        const ALIAS_FIXED_UPPER_BYTES: usize = 512;
+        const PORT_UPPER_BYTES: usize = 128;
+
+        let alias = IntentKey::new("\"".repeat(crate::ids::MAX_INTENT_KEY_BYTES)).unwrap();
+        let selector = IntentPortSelector::InitialChild {
+            ordinal: u16::MAX,
+            role: IntentPortRole::MinorAxisPoint,
+            index: u16::MAX,
+        };
+        let port = IntentPortRef {
+            node: NodeId::from_raw(u64::MAX),
+            port: PortId::from_raw(u64::MAX),
+            kind: IntentPortKind::ParameterBinding,
+        };
+        let node_aliases = IntentAliasMap {
+            nodes: BTreeMap::from([(alias.clone(), NodeId::from_raw(u64::MAX))]),
+            ports: BTreeMap::from([(alias.clone(), BTreeMap::from([(selector, port)]))]),
+            cells: BTreeMap::new(),
+        };
+        let node_bound = alias
+            .as_str()
+            .len()
+            .checked_mul(12)
+            .and_then(|bytes| bytes.checked_add(ALIAS_FIXED_UPPER_BYTES))
+            .and_then(|bytes| bytes.checked_add(PORT_UPPER_BYTES))
+            .unwrap();
+        assert!(serde_json::to_vec(&node_aliases).unwrap().len() <= node_bound);
+
+        let cell_aliases = IntentAliasMap {
+            nodes: BTreeMap::new(),
+            ports: BTreeMap::new(),
+            cells: BTreeMap::from([(alias.clone(), CellId::from_raw(u64::MAX))]),
+        };
+        let cell_bound = alias
+            .as_str()
+            .len()
+            .checked_mul(6)
+            .and_then(|bytes| bytes.checked_add(ALIAS_FIXED_UPPER_BYTES))
+            .unwrap();
+        assert!(serde_json::to_vec(&cell_aliases).unwrap().len() <= cell_bound);
+    }
+}

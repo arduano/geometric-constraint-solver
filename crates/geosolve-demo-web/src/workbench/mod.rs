@@ -707,18 +707,26 @@ fn decode_projectional_inspector_control(
                 })?)
                 .map_err(|error| error.to_string())?,
             );
-            let (schema, current) = inspector
+            let current = inspector
                 .fields
                 .iter()
                 .find_map(|candidate| match candidate {
-                    IntentInspectorField::Definition { schema, value } if schema.field == field => {
-                        Some((schema.literal, value.as_ref()))
-                    }
+                    IntentInspectorField::Definition {
+                        definition: candidate,
+                        value,
+                    } if *candidate == field => Some(value.as_ref()),
                     _ => None,
                 })
                 .ok_or_else(|| {
                     "the definition control is not present in the current schema".to_owned()
                 })?;
+            let schema = inspector
+                .definition_descriptor(&field)
+                .ok_or_else(|| {
+                    "the definition control has no central declaration descriptor".to_owned()
+                })?
+                .schema
+                .literal;
             let literal = decode_projectional_inspector_literal(schema, control)?;
             if current == Some(&literal) {
                 return Ok(None);
@@ -748,18 +756,21 @@ fn decode_projectional_inspector_control(
                 _ => return Err("the instance leaf coordinate is malformed".into()),
             };
             let leaf = LeafRef { node, port, field };
-            let (port_kind, current) = inspector
+            let current = inspector
                 .fields
                 .iter()
                 .find_map(|candidate| match candidate {
                     IntentInspectorField::Instance {
                         leaf: candidate,
-                        port_kind,
                         value,
-                    } if *candidate == leaf => Some((*port_kind, value.as_ref())),
+                    } if *candidate == leaf => Some(value.as_ref()),
                     _ => None,
                 })
                 .ok_or_else(|| "the instance control is not a current writable leaf".to_owned())?;
+            let port_kind = inspector
+                .output_descriptor(leaf)
+                .ok_or_else(|| "the instance control has no central output descriptor".to_owned())?
+                .kind;
             if control.port_kind.as_deref() != Some(format!("{port_kind:?}").as_str()) {
                 return Err("the instance control has the wrong port kind".into());
             }
@@ -14467,12 +14478,12 @@ mod tests {
         FeatureAuthoringPreviewMetadata, FeatureAuthoringStage, FeatureAuthoringState,
         FeatureAuthoringTool, GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus,
         GeometryInteractionPolicy, GeometryPickScope, GeometryToolVariant, GeometryVisibility,
-        IntentInspectorField, IntentInspectorProjection, Modifiers, OffsetAuthoringOutcome,
-        OffsetAuthoringState, OffsetAuthoringWarning, OffsetAuthoringWarningKind, PickTolerance,
-        PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator,
-        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
-        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneConstraintGlyph,
-        SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
+        IntentGraphNodeKind, IntentInspectorField, IntentInspectorProjection, Modifiers,
+        OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
+        OffsetAuthoringWarningKind, PickTolerance, PointerInput, ProjectionalEditorSession,
+        ProjectionalIntentCoordinator, RetainedEditorCoordinator, SceneAnnotationGeometry,
+        SceneAnnotationKind, SceneAnnotationOccurrence, SceneAnnotationVisibility,
+        SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -14484,8 +14495,10 @@ mod tests {
         SketchAcceptedStateIdentity, SketchDocument,
     };
     use geosolve_sketch_intent::{
-        GeometryRecipeKind, IntentDefinitionFieldSchema, IntentFieldKey, IntentKey, IntentLiteral,
-        IntentLiteralSchema, IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation,
+        GeometryRecipeKind, IntentDeclarationDescriptor, IntentDefinitionFieldDescriptor,
+        IntentDefinitionFieldSchema, IntentEditClassification, IntentFieldChoices,
+        IntentFieldDefault, IntentFieldKey, IntentKey, IntentLiteral, IntentLiteralSchema,
+        IntentNodeDraft, IntentNodeKind, IntentNodeSchema, IntentPatch, IntentPatchOperation,
         IntentPatchPolicy, IntentPlanDisposition, IntentPortRole, IntentPortSelector,
         IntentSessionId, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
     };
@@ -15302,28 +15315,26 @@ mod tests {
     ) -> ProjectionalInspectorControl {
         let projection = editor.workbench_projection();
         let inspector = editor.selected_inspector(&projection).unwrap();
-        let (leaf, port_kind) = inspector
+        let leaf = inspector
             .fields
             .iter()
             .find_map(|candidate| match candidate {
-                IntentInspectorField::Instance {
-                    leaf,
-                    port_kind,
-                    value,
-                } if leaf.field == field
-                    && current.is_none_or(|expected| {
-                        matches!(
-                            value,
-                            Some(IntentLiteral::Quantity { value, .. })
-                                if value.to_bits() == expected.to_bits()
-                        )
-                    }) =>
+                IntentInspectorField::Instance { leaf, value }
+                    if leaf.field == field
+                        && current.is_none_or(|expected| {
+                            matches!(
+                                value,
+                                Some(IntentLiteral::Quantity { value, .. })
+                                    if value.to_bits() == expected.to_bits()
+                            )
+                        }) =>
                 {
-                    Some((*leaf, *port_kind))
+                    Some(*leaf)
                 }
                 _ => None,
             })
             .unwrap();
+        let port_kind = inspector.output_descriptor(leaf).unwrap().kind;
         let current = inspector
             .fields
             .iter()
@@ -15378,11 +15389,16 @@ mod tests {
             .fields
             .iter()
             .find_map(|candidate| match candidate {
-                IntentInspectorField::Definition { schema, .. }
-                    if schema.field.0.as_str() == field =>
-                {
-                    Some(schema.literal)
-                }
+                IntentInspectorField::Definition {
+                    definition: candidate,
+                    ..
+                } if candidate.0.as_str() == field => Some(
+                    inspector
+                        .definition_descriptor(candidate)
+                        .unwrap()
+                        .schema
+                        .literal,
+                ),
                 _ => None,
             })
             .unwrap();
@@ -15457,22 +15473,49 @@ mod tests {
             ("digest", IntentLiteralSchema::Text),
             ("origin", IntentLiteralSchema::Point),
         ];
+        let definition_schemas = schemas
+            .iter()
+            .map(|(field, literal)| IntentDefinitionFieldSchema {
+                field: IntentFieldKey(IntentKey::new(*field).unwrap()),
+                literal: *literal,
+                required: false,
+            })
+            .collect::<Vec<_>>();
         let inspector = IntentInspectorProjection {
             node,
             symbol: IntentKey::new("fixture").unwrap(),
             name: IntentKey::new("Fixture").unwrap(),
-            kind: IntentNodeKind::Annotation,
+            kind: IntentGraphNodeKind::Annotation,
             suppressed: false,
             retained_failure: false,
             inputs: Vec::new(),
-            fields: schemas
+            descriptor: IntentDeclarationDescriptor {
+                schema: IntentNodeSchema {
+                    inputs: Vec::new(),
+                    input_choices: Vec::new(),
+                    fields: definition_schemas.clone(),
+                    minimum_children: 0,
+                    maximum_children: 0,
+                },
+                fields: definition_schemas
+                    .iter()
+                    .cloned()
+                    .map(|schema| IntentDefinitionFieldDescriptor {
+                        schema,
+                        default: IntentFieldDefault::Contextual,
+                        choices: IntentFieldChoices::NotApplicable,
+                        edit: IntentEditClassification::Definition,
+                    })
+                    .collect(),
+                outputs: Vec::new(),
+                suppression_edit: IntentEditClassification::Definition,
+                input_edit: IntentEditClassification::InputBinding,
+                name_edit: IntentEditClassification::Organization,
+            },
+            fields: definition_schemas
                 .iter()
-                .map(|(field, literal)| IntentInspectorField::Definition {
-                    schema: IntentDefinitionFieldSchema {
-                        field: IntentFieldKey(IntentKey::new(*field).unwrap()),
-                        literal: *literal,
-                        required: false,
-                    },
+                .map(|schema| IntentInspectorField::Definition {
+                    definition: schema.field.clone(),
                     value: None,
                 })
                 .collect(),
@@ -19337,7 +19380,7 @@ mod tests {
     }
 
     #[test]
-    fn native_profile_apply_action_uses_exact_headless_availability_reason() {
+    fn native_profile_apply_action_is_enabled_for_applicable_native_line_fillet() {
         let (coordinator, _, candidate, _, _, _) = native_line_fillet_fixture();
         let applicable = native_fillet_apply_presentation(
             &coordinator,
@@ -19347,7 +19390,10 @@ mod tests {
         assert!(applicable.visible);
         assert!(!applicable.disabled);
         assert_eq!(applicable.reason, None);
+    }
 
+    #[test]
+    fn native_profile_apply_action_reports_exact_grouped_fillet_unavailability() {
         let (mut grouped, _, points) = grouped_fillet_fixture();
         let mut grouped_state = FeatureAuthoringState::default();
         let (grouped_candidate, _) =
@@ -19363,7 +19409,10 @@ mod tests {
             unavailable.reason.as_deref(),
             Some("Native profile output currently requires exactly one line-line corner")
         );
+    }
 
+    #[test]
+    fn native_profile_apply_action_reports_exact_high_valence_unavailability() {
         let (high_valence, high_valence_candidate) = high_valence_native_line_fillet_fixture();
         let high_valence_unavailable = native_fillet_apply_presentation(
             &high_valence,
@@ -19376,7 +19425,11 @@ mod tests {
             high_valence_unavailable.reason.as_deref(),
             Some("shared corner must be owned only by the two selected source lines")
         );
+    }
 
+    #[test]
+    fn native_profile_apply_action_is_hidden_when_fillet_authoring_is_inactive() {
+        let (coordinator, _, _, _, _, _) = native_line_fillet_fixture();
         let inactive = native_fillet_apply_presentation(
             &coordinator,
             None,

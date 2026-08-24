@@ -10,13 +10,16 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use geosolve_sketch_intent::{
-    CellId, InputSlot, IntentAttemptDisposition, IntentDefinitionFieldSchema, IntentFieldKey,
-    IntentHistoryProjection, IntentKey, IntentLiteral, IntentNode, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRef, IntentSession,
+    CellId, InputSlot, IntentAttemptDisposition, IntentDeclarationDescriptor,
+    IntentDefinitionFieldDescriptor, IntentEditClassification, IntentFieldKey,
+    IntentHistoryProjection, IntentKey, IntentLiteral, IntentNode, IntentOutputDescriptor,
+    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRef, IntentSession,
     IntentSessionIdentity, LeafRef, NodeId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::IntentGraphNodeKind;
 
 /// One declaration row in the non-semantic Outline projection.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -25,7 +28,7 @@ pub struct IntentOutlineDeclaration {
     pub node: NodeId,
     pub symbol: IntentKey,
     pub name: IntentKey,
-    pub kind: IntentNodeKind,
+    pub kind: IntentGraphNodeKind,
     pub suppressed: bool,
     pub retained_failure: bool,
     pub dependencies: Vec<NodeId>,
@@ -45,12 +48,11 @@ pub struct IntentOutlineCell {
 #[serde(tag = "field", rename_all = "snake_case", deny_unknown_fields)]
 pub enum IntentInspectorField {
     Definition {
-        schema: IntentDefinitionFieldSchema,
+        definition: IntentFieldKey,
         value: Option<IntentLiteral>,
     },
     Instance {
         leaf: LeafRef,
-        port_kind: IntentPortKind,
         value: Option<IntentLiteral>,
     },
 }
@@ -62,10 +64,11 @@ pub struct IntentInspectorProjection {
     pub node: NodeId,
     pub symbol: IntentKey,
     pub name: IntentKey,
-    pub kind: IntentNodeKind,
+    pub kind: IntentGraphNodeKind,
     pub suppressed: bool,
     pub retained_failure: bool,
     pub inputs: Vec<(geosolve_sketch_intent::InputSlot, IntentPortRef)>,
+    pub descriptor: IntentDeclarationDescriptor,
     pub fields: Vec<IntentInspectorField>,
 }
 
@@ -87,6 +90,84 @@ pub enum IntentInspectorEditValue {
 }
 
 impl IntentInspectorProjection {
+    /// Builds one schema-generated Inspector directly from current intent.
+    ///
+    /// This declaration-local query avoids constructing Outline, Structured
+    /// Source, or History when a host requests only Inspector data.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if a session that already passed structural validation
+    /// contains more children than the public bounded schema permits.
+    #[must_use]
+    pub fn from_session(session: &IntentSession, node_id: NodeId) -> Option<Self> {
+        let node = session.graph().node(node_id)?;
+        let name = session.organization().node_names().get(&node_id)?.clone();
+        let retained_failure = session.latest_attempt().is_some_and(|attempt| {
+            attempt.disposition == IntentAttemptDisposition::RetainedFailed
+                && attempt.failed_nodes.contains(&node_id)
+        });
+        let descriptor = node.descriptor();
+        let mut fields = descriptor
+            .fields
+            .iter()
+            .map(|field| IntentInspectorField::Definition {
+                value: node.fields.get(&field.schema.field).cloned(),
+                definition: field.schema.field.clone(),
+            })
+            .collect::<Vec<_>>();
+        for port in node.ports.values() {
+            for field in &port.writable {
+                let leaf = LeafRef {
+                    node: node_id,
+                    port: port.id,
+                    field: *field,
+                };
+                fields.push(IntentInspectorField::Instance {
+                    leaf,
+                    value: session.instance().values().get(&leaf).cloned(),
+                });
+            }
+        }
+        Some(Self {
+            node: node_id,
+            symbol: node.symbol.clone(),
+            name,
+            kind: IntentGraphNodeKind::from_kind(&node.kind),
+            suppressed: node.suppressed,
+            retained_failure,
+            inputs: node
+                .inputs
+                .iter()
+                .map(|(slot, source)| (*slot, *source))
+                .collect(),
+            descriptor,
+            fields,
+        })
+    }
+
+    /// Returns the central schema/edit metadata for one projected definition field.
+    #[must_use]
+    pub fn definition_descriptor(
+        &self,
+        field: &IntentFieldKey,
+    ) -> Option<&IntentDefinitionFieldDescriptor> {
+        self.descriptor
+            .fields
+            .iter()
+            .find(|candidate| &candidate.schema.field == field)
+    }
+
+    /// Returns the central output metadata which owns one projected writable leaf.
+    #[must_use]
+    pub fn output_descriptor(&self, leaf: LeafRef) -> Option<&IntentOutputDescriptor> {
+        self.descriptor.outputs.iter().find(|output| {
+            output.port.node == leaf.node
+                && output.port.port == leaf.port
+                && output.writable.contains(&leaf.field)
+        })
+    }
+
     /// Converts one current schema-generated Inspector coordinate into the
     /// ordinary unordered exact-CAS patch vocabulary.
     ///
@@ -115,22 +196,33 @@ impl IntentInspectorProjection {
             (
                 IntentInspectorEditTarget::Suppressed,
                 IntentInspectorEditValue::Suppressed { suppressed },
-            ) => IntentPatchOperation::SetSuppressed {
-                node: self.node,
-                suppressed,
-            },
+            ) if self.descriptor.suppression_edit == IntentEditClassification::Definition => {
+                IntentPatchOperation::SetSuppressed {
+                    node: self.node,
+                    suppressed,
+                }
+            }
             (
                 IntentInspectorEditTarget::Definition { field },
                 IntentInspectorEditValue::Literal { literal },
             ) => {
-                let schema = self.fields.iter().find_map(|candidate| match candidate {
-                    IntentInspectorField::Definition { schema, .. } if &schema.field == field => {
-                        Some(schema)
-                    }
-                    _ => None,
-                });
-                let schema = schema.ok_or(IntentInspectorEditError::UnknownTarget)?;
-                if !inspector_literal_matches(schema.literal, &literal) {
+                let descriptor = self
+                    .definition_descriptor(field)
+                    .filter(|candidate| {
+                        candidate.edit == IntentEditClassification::Definition
+                            && self.fields.iter().any(|projected| {
+                                matches!(
+                                    projected,
+                                    IntentInspectorField::Definition {
+                                        definition: projected,
+                                        ..
+                                    }
+                                        if projected == field
+                                )
+                            })
+                    })
+                    .ok_or(IntentInspectorEditError::UnknownTarget)?;
+                if !inspector_literal_matches(descriptor.schema.literal, &literal) {
                     return Err(IntentInspectorEditError::InvalidLiteral);
                 }
                 IntentPatchOperation::SetDefinitionField {
@@ -147,11 +239,18 @@ impl IntentInspectorProjection {
                     IntentInspectorField::Instance {
                         leaf: candidate,
                         value,
-                        ..
                     } if candidate == leaf => Some(value.as_ref()),
                     _ => None,
                 });
                 let current = current.ok_or(IntentInspectorEditError::UnknownTarget)?;
+                let output = self
+                    .output_descriptor(*leaf)
+                    .filter(|output| {
+                        output.edit == IntentEditClassification::Instance
+                            && output.writable.contains(&leaf.field)
+                    })
+                    .ok_or(IntentInspectorEditError::UnknownTarget)?;
+                debug_assert_eq!(output.port.node, self.node);
                 if !inspector_leaf_literal_matches(leaf.field, current, &literal) {
                     return Err(IntentInspectorEditError::InvalidLiteral);
                 }
@@ -424,51 +523,7 @@ impl IntentWorkbenchProjection {
         if session.identity() != self.identity {
             return None;
         }
-        let node = session.graph().node(node_id)?;
-        let name = session.organization().node_names().get(&node_id)?.clone();
-        let retained_failure = session.latest_attempt().is_some_and(|attempt| {
-            attempt.disposition == IntentAttemptDisposition::RetainedFailed
-                && attempt.failed_nodes.contains(&node_id)
-        });
-        let schema = node
-            .kind
-            .schema(u16::try_from(node.child_order.len()).expect("validated child count fits u16"));
-        let mut fields = schema
-            .fields
-            .into_iter()
-            .map(|field| IntentInspectorField::Definition {
-                value: node.fields.get(&field.field).cloned(),
-                schema: field,
-            })
-            .collect::<Vec<_>>();
-        for port in node.ports.values() {
-            for field in &port.writable {
-                let leaf = LeafRef {
-                    node: node_id,
-                    port: port.id,
-                    field: *field,
-                };
-                fields.push(IntentInspectorField::Instance {
-                    leaf,
-                    port_kind: port.kind,
-                    value: session.instance().values().get(&leaf).cloned(),
-                });
-            }
-        }
-        Some(IntentInspectorProjection {
-            node: node_id,
-            symbol: node.symbol.clone(),
-            name,
-            kind: node.kind.clone(),
-            suppressed: node.suppressed,
-            retained_failure,
-            inputs: node
-                .inputs
-                .iter()
-                .map(|(slot, source)| (*slot, *source))
-                .collect(),
-            fields,
-        })
+        IntentInspectorProjection::from_session(session, node_id)
     }
 }
 
@@ -481,7 +536,7 @@ fn outline_declaration(
         node: node.id,
         symbol: node.symbol.clone(),
         name,
-        kind: node.kind.clone(),
+        kind: IntentGraphNodeKind::from_kind(&node.kind),
         suppressed: node.suppressed,
         retained_failure,
         dependencies: node.dependencies().into_iter().collect(),
@@ -513,8 +568,8 @@ impl SourceWriter {
 fn structured_source(session: &IntentSession) -> IntentStructuredSource {
     let mut writer = SourceWriter {
         text: concat!(
-            "import { design } from \"@geosolve/intent\";\n\n",
-            "export const sketch = design(({ cell, declare }) => {\n"
+            "import type { IntentSourceSnapshot } from \"@geosolve/intent\";\n\n",
+            "export const sketch = {\n  cells: [\n"
         )
         .to_owned(),
         tokens: Vec::new(),
@@ -523,25 +578,30 @@ fn structured_source(session: &IntentSession) -> IntentStructuredSource {
     let organization = session.organization();
     for cell_id in organization.cell_order() {
         let cell = &organization.cells()[cell_id];
-        writer.text.push_str("  cell(");
+        writer.text.push_str("    {\n      cell: ");
         writer.text.push_str(
             &serde_json::to_string(&cell.id.to_string())
                 .expect("cell identity is infallibly serializable"),
         );
-        writer.text.push_str(", ");
+        writer.text.push_str(",\n      name: ");
         writer.text.push_str(
             &serde_json::to_string(cell.name.as_str())
                 .expect("cell name is infallibly serializable"),
         );
-        writer.text.push_str(", () => {\n");
+        writer.text.push_str(",\n      declarations: [\n");
         for node_id in &cell.declarations {
             let node = &graph.nodes()[node_id];
-            writer.text.push_str("    declare(");
+            writer.text.push_str("        {\n          node: ");
             writer.text.push_str(
                 &serde_json::to_string(&node.id.to_string())
                     .expect("node identity is infallibly serializable"),
             );
-            writer.text.push_str(", ");
+            writer.text.push_str(",\n          symbol: ");
+            writer.text.push_str(
+                &serde_json::to_string(node.symbol.as_str())
+                    .expect("node symbol is infallibly serializable"),
+            );
+            writer.text.push_str(",\n          name: ");
             let name = &organization.node_names()[node_id];
             let name_json =
                 serde_json::to_string(name.as_str()).expect("node name is infallibly serializable");
@@ -549,11 +609,12 @@ fn structured_source(session: &IntentSession) -> IntentStructuredSource {
                 &name_json,
                 IntentSourceTokenTarget::NodeName { node: *node_id },
             );
-            writer.text.push_str(", ");
+            writer.text.push_str(",\n          kind: ");
             writer.text.push_str(
-                &serde_json::to_string(&node.kind).expect("node kind is infallibly serializable"),
+                &serde_json::to_string(&IntentGraphNodeKind::from_kind(&node.kind))
+                    .expect("compact node kind is infallibly serializable"),
             );
-            writer.text.push_str(", {\n      suppressed: ");
+            writer.text.push_str(",\n          suppressed: ");
             writer.token(
                 if node.suppressed { "true" } else { "false" },
                 IntentSourceTokenTarget::Suppressed { node: *node_id },
@@ -593,11 +654,13 @@ fn structured_source(session: &IntentSession) -> IntentStructuredSource {
                     })
                 });
             write_literal_map(&mut writer, "instance", instance);
-            writer.text.push_str("\n    });\n");
+            writer.text.push_str("\n        },\n");
         }
-        writer.text.push_str("  });\n");
+        writer.text.push_str("      ],\n    },\n");
     }
-    writer.text.push_str("});\n");
+    writer
+        .text
+        .push_str("  ],\n} satisfies IntentSourceSnapshot;\n");
     IntentStructuredSource {
         identity: session.identity(),
         text: writer.text,
@@ -606,12 +669,12 @@ fn structured_source(session: &IntentSession) -> IntentStructuredSource {
 }
 
 fn write_input_map(writer: &mut SourceWriter, inputs: &BTreeMap<InputSlot, IntentPortRef>) {
-    writer.text.push_str(",\n      inputs: {");
+    writer.text.push_str(",\n          inputs: {");
     for (index, (slot, source)) in inputs.iter().enumerate() {
         if index > 0 {
             writer.text.push(',');
         }
-        writer.text.push_str("\n        ");
+        writer.text.push_str("\n            ");
         writer.text.push_str(
             &serde_json::to_string(&slot.to_string())
                 .expect("input slot is infallibly serializable"),
@@ -623,7 +686,7 @@ fn write_input_map(writer: &mut SourceWriter, inputs: &BTreeMap<InputSlot, Inten
         );
     }
     if !inputs.is_empty() {
-        writer.text.push_str("\n      ");
+        writer.text.push_str("\n          ");
     }
     writer.text.push('}');
 }
@@ -633,7 +696,7 @@ fn write_literal_map<'a>(
     label: &str,
     values: impl IntoIterator<Item = (String, &'a IntentLiteral, IntentSourceTokenTarget)>,
 ) {
-    writer.text.push_str(",\n      ");
+    writer.text.push_str(",\n          ");
     writer.text.push_str(label);
     writer.text.push_str(": {");
     let mut values = values
@@ -644,7 +707,7 @@ fn write_literal_map<'a>(
         if index > 0 {
             writer.text.push(',');
         }
-        writer.text.push_str("\n        ");
+        writer.text.push_str("\n            ");
         writer
             .text
             .push_str(&serde_json::to_string(key).expect("literal key is infallibly serializable"));
@@ -654,7 +717,7 @@ fn write_literal_map<'a>(
         writer.token(&literal, target.clone());
     }
     if !values.is_empty() {
-        writer.text.push_str("\n      ");
+        writer.text.push_str("\n          ");
     }
     writer.text.push('}');
 }

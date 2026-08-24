@@ -2,8 +2,9 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation and post-F007 immutable Tailscale nomination complete; focused human UAT
-pending**. ADR 0040 is the active architecture. The rejected
+Status: **implementation, M83-F001 through M83-F007 repair and post-F007 architecture hardening
+complete; fresh clean qualification and focused human UAT pending**. ADR 0040 is the active
+architecture. The rejected
 chronological candidate is preserved only on `archive/m83-chronological-lineage-2026-08-23` at
 `be62a1c`; it is not a compatibility target.
 
@@ -94,6 +95,29 @@ validated flat accepted scene authoritative.
 - Round-trip graph/instance/organization/external identities, accepted evidence, reservations,
   tombstones and bounded history canonically.
 
+### Post-F007 architecture hardening
+
+- Use SHA-256 for canonical graph/session wire-v2 content identity. Accept experimental wire v1
+  only after its canonical FNV fingerprint plus every nested identity, checkpoint, reservation and
+  materialization authority validate; then emit v2 only.
+- Make ordinary session/semantic identity reads cached and constant-time with respect to retained
+  history, while import, planning and publication independently recompute and compare identities.
+- Bind every Undo/current/Redo checkpoint body to its causal edges, globally chronological unique
+  descriptor revision and body-derived semantic descriptor. Validate current and historical
+  accepted graphs, instances, host inputs, evidence and reservation-ledger provenance uniformly.
+- Derive declaration schema/default/choice/output/edit metadata from one central Rust descriptor;
+  expose bounded compact graph/source snapshots without duplicating opaque bootstrap payloads.
+- Keep explicit Snapshot as the complete read. Return closed typed receipts for mutations and
+  Undo/Redo, bound request/receipt/response bytes before publication, and validate identical
+  contracts in Rust, WASM and TypeScript.
+- Publish Fillet/Offset Apply and accepted property drops through the exact prepared transaction
+  already used for the visible preview. Reject stale or oversized output before changing intent or
+  native accepted authority.
+- Admit workspace v8 only inside the public 64 MiB reproduction envelope and avoid unbounded
+  version/cache trees, duplicate canonical strings, eager legacy hashing and repeated nested intent
+  parsing. Bound the disposable annotation-layout string independently at 4 MiB; cache corruption
+  or eviction remains non-semantic.
+
 ## Acceptance summary
 
 - Inventory-driven native tests cover every schema, dependency permutation, alias, reservation,
@@ -110,10 +134,12 @@ validated flat accepted scene authoritative.
   on the accepted M81 product until explicit M83 human approval.
 
 The initial `232b83a` nomination and post-F005 source `a621cdd` are withdrawn by M83-F001 through
-M83-F007. Implementation, the complete clean post-F007 replacement gate, exact no-rebuild freeze,
-5/5 frozen-browser checks and temporary/retained served-byte records satisfy the mechanical G1-G6
-nomination contract at source `fafea4e`, tree `ff75c36`. M83-U1 through M83-U9 and targeted finding
-rechecks remain pending human evidence; accepted M81 GitHub Pages bytes remain public authority.
+M83-F007. Source `fafea4e`, tree `ff75c36`, its complete clean gate, exact no-rebuild freeze, 5/5
+frozen-browser checks and temporary/retained served-byte records remain historical post-F007
+evidence. The later architecture-hardening pass supersedes that candidate before human UAT and
+requires a fresh clean gate, freeze and Tailscale replacement. M83-U1 through M83-U9 and targeted
+finding rechecks remain pending human evidence; accepted M81 GitHub Pages bytes remain public
+authority.
 
 ## Non-goals
 

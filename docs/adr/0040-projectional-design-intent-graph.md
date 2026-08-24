@@ -2,9 +2,10 @@
 
 # ADR 0040: Projectional design-intent graph
 
-Status: accepted for M83 implementation. This ADR supersedes the chronological owner-rewrite
-design preserved as ADR 0039 on `archive/m83-chronological-lineage-2026-08-23`; that archived
-candidate is not product authority and must not be restored wholesale.
+Status: accepted for M83 implementation and its post-F007 architecture hardening; human acceptance
+of M83 remains pending. This ADR supersedes the chronological owner-rewrite design preserved as
+ADR 0039 on `archive/m83-chronological-lineage-2026-08-23`; that archived candidate is not product
+authority and must not be restored wholesale.
 
 ## Context
 
@@ -52,6 +53,19 @@ compare-and-swap input identity and publishes atomically. Projection tokens addi
 the exact session, revision and digest from which their numeric token ID was generated; lookup
 never precedes that authentication.
 
+Canonical graph and session wires are version 2 and use SHA-256 for content/component identity.
+Ordinary current identity and semantic-identity queries read caches refreshed by each atomic
+mutation or restore, so a read does not rehash bounded history. Import, patch planning and explicit
+validation independently rederive the hashes and compare the retained caches; the cache is never
+validation authority.
+
+The experimental wire-v1 reader exists only for deterministic migration. It first requires exact
+canonical JSON, verifies the legacy FNV-1a-derived outer and nested identities, validates current,
+accepted, Undo and Redo checkpoint authority, and reconstructs the exact retained-failed
+reservation-ledger revision before translating every identity to SHA-256 v2. New output is v2
+only. The legacy FNV construction is an integrity fingerprint for canonical migration, not a
+cryptographic authentication or security primitive.
+
 ### Stable logical identity and native reservations
 
 Every declaration, port, variable-cardinality child and presentation cell has a never-reused
@@ -93,6 +107,16 @@ domain operations rather than a browser reconstruction. Cold reconstruction from
 intent and exact inputs is publication authority; a warm materializer may optimize work only when
 its result is semantically differential-equal to that cold result.
 
+Decoded or freshly generated materialization evidence is bounded and content-authenticated before
+planning or restore. The logical/native ownership map is independently checked against the exact
+semantic graph, instance values, reservation ledger, sketch document and computed-feature
+document: stable ordering, port kind and identity flow, reservation owner/port provenance, native
+existence, node ownership, reverse writable leaves and aggregate topology must all agree.
+Logical-only span, computed-feature and Fillet-corner bindings must additionally match the exact
+owning declaration and ordinal, so a same-kind permutation is not accepted as equivalent
+ownership. Current and every nested accepted/Undo/Redo graph, instance, external-input,
+reservation and evidence structure receive the same validation before publication.
+
 Invalid explicit intent remains retained and inspectable while the previous independently
 accepted materialization stays visible. Cancelled, exhausted or stale work publishes neither
 intent nor accepted evidence.
@@ -113,6 +137,12 @@ solve for an exact release coordinate, and retires capture exactly once. It conv
 result to one instance/property patch and commits one composite history entry. Cancellation with
 no accepted sample restores the accepted scene without a history entry.
 
+Fillet and Profile Offset authoring/property previews retain the exact planned CAS transaction
+together with its independently cold-validated materialization. Apply and accepted radius/distance
+pointer-up publish that same opaque prepared transaction after terminal identity checks; they do
+not plan or cold-solve a second equivalent patch. A stale or foreign prepared transaction changes
+neither the intent session nor accepted native authority.
+
 ### One history, non-semantic History panel
 
 The intent session owns one bounded composite Undo/Redo transaction over graph, instance,
@@ -128,11 +158,19 @@ allocator high-water remains monotonic.
 
 ### Structured source is a safe projection, not arbitrary execution
 
-Rust generates a deterministic TypeScript-shaped projection using branded stable references and
-the closed patch vocabulary. Editing a recognized token or schema field submits a typed patch;
-formatting and row movement affect organization only. M83 does not evaluate arbitrary TypeScript,
-run user code, permit user-defined constraints or introduce expressions such as
-`length = width * 2`.
+Rust generates a deterministic TypeScript-shaped, data-only `IntentSourceSnapshot` using branded
+stable references and the closed patch vocabulary. It contains current declarations, bindings and
+literal values, not a callback, executable design program or serialized solver. Editing a
+recognized token or schema field submits a typed patch; formatting and row movement affect
+organization only. M83 does not evaluate arbitrary TypeScript, run user code, permit user-defined
+constraints or introduce expressions such as `length = width * 2`.
+
+One central Rust declaration descriptor supplies structural schema, typed required/literal/
+conditional/contextual defaults, closed/contextual choices, stable output identity flow and edit
+classification to Inspector, graph/RPC snapshots and typed code clients. Structured Source emits
+stored data from those already validated declarations and owns no fallback defaults. The explicit
+graph snapshot includes stable dependencies and descriptor/value records while replacing opaque
+bootstrap payload bytes with only kind, codec, byte length and SHA-256.
 
 Numeric source token IDs are snapshot-local conveniences, never authority. Browser, native RPC and
 branded TypeScript requests must present the exact originating `IntentSessionIdentity` before the
@@ -140,8 +178,14 @@ token table is regenerated or indexed. Reordering may therefore make an old toke
 never retarget it to a different declaration.
 
 A DOM-free WASM/RPC surface exposes the same session identity, patch planning, materialization
-status, projections and typed failures. A small TypeScript package provides branded handles and
-builders over that RPC. It contains no geometry equations or solver fallback.
+status, projections and typed failures. Full graph/workbench/validation state is returned only by
+an explicit Snapshot request. Patch and source-edit success return bounded identity/disposition/
+alias receipts; Undo/Redo return identity/moved receipts; Inspector returns only its identity-
+stamped projection. A conservative producer-side estimate rejects any patch whose success receipt
+could exceed 16 MiB before planning or publication; structured and JSON responses share a 64 MiB
+ceiling enforced before mutation publication. The TypeScript package provides branded
+handles/builders plus a strict client which validates every closed response shape, enum, integer,
+resource bound and session owner. It contains no geometry equations or solver fallback.
 
 ### Existing workspaces and explicit ejection
 
@@ -160,6 +204,18 @@ native canvas authority from the authenticated accepted graph/bootstrap prefix, 
 the newer failed graph and its history verbatim. Missing, corrupt or mismatched accepted authority
 still rejects; retained invalidity never justifies a blank canvas.
 
+Workspace v8 never falls back to its historical flat design/accepted fields as peer authority. A
+v8 value without nested intent accepted authority rejects even when both flat fields are absent;
+only the strict v1-v6 migration path may use those historical fields to construct per-object
+bootstrap declarations and authenticated intent authority.
+
+The demo-local workspace envelope shares the existing 64 MiB reproduction-workspace limit, and
+its disposable annotation-layout string has an independent 4 MiB bound. Version probing and wrong-
+type cache discard do not materialize arbitrary JSON trees; canonical comparison streams; SHA is
+checked before the legacy fingerprint; and an already authenticated nested v2 intent session is
+reused for snapshot validation. These are host-envelope resource rules, not intent or solver
+semantics.
+
 This is intentionally a breaking experimental workspace boundary. Strict older migrations and
 malformed-input rejection remain tested, but compatibility cannot force the rejected ledger back
 into the design.
@@ -175,8 +231,13 @@ into the design.
 - The materializer is substantial and catalog-driven. Every existing family needs a differential
   golden case, while unsupported projectional editing must fail explicitly or remain inside the
   opaque bootstrap node.
+- Ordinary identity reads are constant-work cache reads, but import/mutation/validation and
+  materialization evidence retain independent SHA-256 verification.
+- RPC mutations no longer duplicate a potentially large snapshot; clients request Snapshot
+  explicitly after using a bounded typed receipt when they need refreshed read state.
 - Workspace v8 is experimental until the M83 human gate passes. GitHub Pages is not updated before
-  that approval; the frozen candidate is served over Tailscale.
+  that approval. Earlier nominations through post-F007 source `fafea4e` are historical; a fresh
+  hardening candidate must be frozen and served over Tailscale before focused UAT.
 
 ## Rejected alternatives
 

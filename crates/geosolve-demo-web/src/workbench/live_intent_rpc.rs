@@ -104,11 +104,11 @@ pub(super) fn request_may_change_identity(request: &str) -> bool {
 
 pub(super) fn failure_response(code: &str, message: &str) -> String {
     serde_json::to_string(&IntentRpcOutcome::Failure {
-        failure: IntentRpcFailure {
+        failure: Box::new(IntentRpcFailure {
             code: code.to_owned(),
             message: message.to_owned(),
             identity: None,
-        },
+        }),
     })
     .expect("closed RPC failure response is infallibly serializable")
 }

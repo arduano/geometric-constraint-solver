@@ -46,8 +46,9 @@ pub use patch::{
     IntentPatchOperationKind, IntentPatchPolicy, IntentSemanticDiff,
 };
 pub use schema::{
-    IntentDefinitionFieldSchema, IntentInputCardinality, IntentInputChoiceSchema,
-    IntentLiteralSchema, IntentNodeSchema,
+    IntentDeclarationDescriptor, IntentDefinitionFieldDescriptor, IntentDefinitionFieldSchema,
+    IntentEditClassification, IntentFieldChoices, IntentFieldDefault, IntentInputCardinality,
+    IntentInputChoiceSchema, IntentLiteralSchema, IntentNodeSchema, IntentOutputDescriptor,
 };
 pub use session::{
     INTENT_SESSION_VERSION, IntentAcceptedAuthority, IntentAttemptDisposition, IntentCandidate,
@@ -62,4 +63,12 @@ pub use session::{
 #[must_use]
 pub fn intent_content_digest(bytes: &[u8]) -> ContentDigest {
     ids::digest_bytes(bytes)
+}
+
+/// Computes the pre-hardening M83 fingerprint solely for strict migration of
+/// already-authenticated experimental workspace/session wires.
+#[doc(hidden)]
+#[must_use]
+pub fn intent_legacy_content_digest(bytes: &[u8]) -> ContentDigest {
+    ids::legacy_digest_bytes(bytes)
 }
