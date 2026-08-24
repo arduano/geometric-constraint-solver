@@ -270,12 +270,13 @@ pub fn projectional_profile_offset_delete_patch(
         ) {
             continue;
         }
-        let aggregate_closure = intent
-            .graph()
-            .dependent_closure([source.node])
-            .map_err(|error| {
-                ProjectionalProfileOffsetError::PreparationRejected(error.to_string())
-            })?;
+        let aggregate_closure =
+            intent
+                .graph()
+                .dependent_closure([source.node])
+                .map_err(|error| {
+                    ProjectionalProfileOffsetError::PreparationRejected(error.to_string())
+                })?;
         let mut exclusively_owned = operation_closure.clone();
         exclusively_owned.insert(source.node);
         if aggregate_closure == exclusively_owned {
