@@ -1719,6 +1719,29 @@ enum ProjectionalOutlineMove {
     },
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionalCellMove {
+    Up,
+    Down,
+    Drop {
+        before: Option<geosolve_sketch_intent::CellId>,
+    },
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionalOutlineDrag {
+    Declaration {
+        painted_identity: geosolve_sketch_intent::IntentSessionIdentity,
+        node: geosolve_sketch_intent::NodeId,
+    },
+    Cell {
+        painted_identity: geosolve_sketch_intent::IntentSessionIdentity,
+        cell: geosolve_sketch_intent::CellId,
+    },
+}
+
 /// Resolves one Outline organization gesture against the exact projection it
 /// was painted from. Geometry and dependency order never participate.
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1790,6 +1813,64 @@ fn projectional_outline_move_patch(
                 before,
             },
         ],
+    ))
+}
+
+/// Resolves one cell organization gesture against the exact painted
+/// projection. Cell order is presentation-only and never consults geometry or
+/// dependency order.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_cell_move_patch(
+    projection: &geosolve_constraint_editor::IntentWorkbenchProjection,
+    cell: geosolve_sketch_intent::CellId,
+    movement: ProjectionalCellMove,
+) -> Result<geosolve_sketch_intent::IntentPatch, &'static str> {
+    let original = projection
+        .outline
+        .iter()
+        .map(|candidate| candidate.cell)
+        .collect::<Vec<_>>();
+    let index = original
+        .iter()
+        .position(|candidate| *candidate == cell)
+        .ok_or("the moved cell belongs to a stale Outline")?;
+    let mut exact_order = original.clone();
+    match movement {
+        ProjectionalCellMove::Up => {
+            let previous = index.checked_sub(1).ok_or("the cell is already first")?;
+            exact_order.swap(previous, index);
+        }
+        ProjectionalCellMove::Down => {
+            if index + 1 >= exact_order.len() {
+                return Err("the cell is already last");
+            }
+            exact_order.swap(index, index + 1);
+        }
+        ProjectionalCellMove::Drop { before } => {
+            if before == Some(cell) {
+                return Err("the cell cannot be dropped before itself");
+            }
+            if before.is_some_and(|before| !original.contains(&before)) {
+                return Err("the drop cell belongs to a stale Outline");
+            }
+            exact_order.remove(index);
+            let insertion = before
+                .and_then(|before| {
+                    exact_order
+                        .iter()
+                        .position(|candidate| *candidate == before)
+                })
+                .unwrap_or(exact_order.len());
+            exact_order.insert(insertion, cell);
+        }
+    }
+    if exact_order == original {
+        return Err("the cell is already at that position");
+    }
+    Ok(geosolve_sketch_intent::IntentPatch::new(
+        projection.identity,
+        geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+        vec![geosolve_sketch_intent::IntentPatchOperation::ReorderCells { exact_order }],
     ))
 }
 
@@ -3269,7 +3350,7 @@ pub(crate) mod wasm {
         show_all_constraints: bool,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
         captured_pointer: Option<i32>,
-        outline_drag: Option<(geosolve_sketch_intent::IntentSessionIdentity, NodeId)>,
+        outline_drag: Option<super::ProjectionalOutlineDrag>,
         geometry_palette: super::geometry_palette::GeometryPaletteState,
         option_overlay: super::OptionOverlayState,
         construction_preview: Option<ConstructionPreview>,
@@ -4964,7 +5045,8 @@ pub(crate) mod wasm {
                     "[data-wb-tool], [data-wb-geometry-family], ",
                     "[data-wb-geometry-variant], [data-wb-authoring], ",
                     "[data-editor-item], [data-wb-action], [data-sample-id], ",
-                    "[data-sample-group-trigger], [data-intent-move], [data-wb-option]"
+                    "[data-sample-group-trigger], [data-intent-move], ",
+                    "[data-intent-cell-move], [data-wb-option]"
                 ))
                 .ok()
                 .flatten()
@@ -5016,6 +5098,39 @@ pub(crate) mod wasm {
                 match result {
                     Ok(()) => {
                         wb.notice = "Outline declaration order updated".into();
+                        save_projectional(&wb);
+                    }
+                    Err(error) => wb.notice = error,
+                }
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                return;
+            }
+            if let Some(movement) = target.get_attribute("data-intent-cell-move") {
+                let Some(cell) = target
+                    .get_attribute("data-intent-cell")
+                    .and_then(|cell| cell.parse().ok())
+                else {
+                    return;
+                };
+                let movement = match movement.as_str() {
+                    "up" => super::ProjectionalCellMove::Up,
+                    "down" => super::ProjectionalCellMove::Down,
+                    _ => return,
+                };
+                let mut wb = click_workbench.borrow_mut();
+                let projection = wb.editor().workbench_projection();
+                let result = super::projectional_cell_move_patch(&projection, cell, movement)
+                    .map_err(str::to_owned)
+                    .and_then(|patch| {
+                        wb.editor_mut()
+                            .apply_patch(patch)
+                            .map(|_| ())
+                            .map_err(|error| error.to_string())
+                    });
+                match result {
+                    Ok(()) => {
+                        wb.notice = "Outline cell order updated".into();
                         save_projectional(&wb);
                     }
                     Err(error) => wb.notice = error,
@@ -5421,29 +5536,45 @@ pub(crate) mod wasm {
 
         let drag_workbench = Rc::clone(workbench);
         let drag_start = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let node = event
+            let owner = event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
                 .and_then(|target| {
                     target
                         .closest(concat!(
                             ".wb-intent-row[draggable=\"true\"], ",
-                            ".wb-intent-source-line[draggable=\"true\"]"
+                            ".wb-intent-source-line[draggable=\"true\"], ",
+                            ".wb-intent-cell-header[draggable=\"true\"]"
                         ))
                         .ok()
                         .flatten()
-                })
-                .as_ref()
-                .and_then(parse_intent_node);
+                });
             let mut wb = drag_workbench.borrow_mut();
-            wb.outline_drag = node.and_then(|node| {
-                let projection = wb.editor().workbench_projection();
+            let projection = wb.editor().workbench_projection();
+            wb.outline_drag = owner.and_then(|owner| {
+                if let Some(node) = parse_intent_node(&owner)
+                    && projection
+                        .outline
+                        .iter()
+                        .flat_map(|cell| &cell.declarations)
+                        .any(|declaration| declaration.node == node)
+                {
+                    return Some(super::ProjectionalOutlineDrag::Declaration {
+                        painted_identity: projection.identity,
+                        node,
+                    });
+                }
+                let cell = owner
+                    .get_attribute("data-intent-cell-drag")
+                    .and_then(|cell| cell.parse().ok())?;
                 projection
                     .outline
                     .iter()
-                    .flat_map(|cell| &cell.declarations)
-                    .any(|declaration| declaration.node == node)
-                    .then_some((projection.identity, node))
+                    .any(|candidate| candidate.cell == cell)
+                    .then_some(super::ProjectionalOutlineDrag::Cell {
+                        painted_identity: projection.identity,
+                        cell,
+                    })
             });
         });
         root.add_event_listener_with_callback("dragstart", drag_start.as_ref().unchecked_ref())?;
@@ -5451,15 +5582,22 @@ pub(crate) mod wasm {
 
         let over_workbench = Rc::clone(workbench);
         let drag_over = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let owns_target = event
+            let Some(target) = event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
-                .is_some_and(|target| {
-                    target
-                        .closest("[data-intent-drop-before], [data-intent-drop-cell]")
-                        .is_ok_and(|target| target.is_some())
-                });
-            if owns_target && over_workbench.borrow().outline_drag.is_some() {
+            else {
+                return;
+            };
+            let owns_target = match over_workbench.borrow().outline_drag {
+                Some(super::ProjectionalOutlineDrag::Declaration { .. }) => target
+                    .closest("[data-intent-drop-before], [data-intent-drop-cell]")
+                    .is_ok_and(|target| target.is_some()),
+                Some(super::ProjectionalOutlineDrag::Cell { .. }) => target
+                    .closest("[data-intent-cell-drop-before], [data-intent-cell-drop-end]")
+                    .is_ok_and(|target| target.is_some()),
+                None => false,
+            };
+            if owns_target {
                 event.prevent_default();
             }
         });
@@ -5469,57 +5607,93 @@ pub(crate) mod wasm {
         let drop_document = document.clone();
         let drop_workbench = Rc::clone(workbench);
         let drop_handler = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event
+            let Some(origin) = event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
-                .and_then(|target| {
-                    target
-                        .closest("[data-intent-drop-before], [data-intent-drop-cell]")
-                        .ok()
-                        .flatten()
-                })
             else {
                 return;
             };
-            event.prevent_default();
-            let Some(cell) = target
-                .get_attribute("data-intent-cell")
-                .or_else(|| target.get_attribute("data-intent-drop-cell"))
-                .and_then(|cell| cell.parse().ok())
-            else {
-                return;
-            };
-            let before = target
-                .get_attribute("data-intent-drop-before")
-                .and_then(|node| node.parse().ok());
             let mut wb = drop_workbench.borrow_mut();
-            let Some((painted_identity, node)) = wb.outline_drag.take() else {
+            let Some(drag) = wb.outline_drag.take() else {
                 return;
             };
             let projection = wb.editor().workbench_projection();
-            let result = if projection.identity != painted_identity {
-                Err("the dragged declaration belongs to a stale Outline".to_owned())
-            } else {
-                super::projectional_outline_move_patch(
-                    &projection,
+            let (result, notice) = match drag {
+                super::ProjectionalOutlineDrag::Declaration {
+                    painted_identity,
                     node,
-                    super::ProjectionalOutlineMove::Drop { cell, before },
-                )
-                .map_err(str::to_owned)
-                .and_then(|patch| {
-                    wb.editor_mut()
-                        .apply_patch(patch)
-                        .map(|_| ())
-                        .map_err(|error| error.to_string())
-                })
+                } => {
+                    let Some(target) = origin
+                        .closest("[data-intent-drop-before], [data-intent-drop-cell]")
+                        .ok()
+                        .flatten()
+                    else {
+                        return;
+                    };
+                    event.prevent_default();
+                    let Some(cell) = target
+                        .get_attribute("data-intent-cell")
+                        .or_else(|| target.get_attribute("data-intent-drop-cell"))
+                        .and_then(|cell| cell.parse().ok())
+                    else {
+                        return;
+                    };
+                    let before = target
+                        .get_attribute("data-intent-drop-before")
+                        .and_then(|node| node.parse().ok());
+                    let result = if projection.identity != painted_identity {
+                        Err("the dragged declaration belongs to a stale Outline".to_owned())
+                    } else {
+                        super::projectional_outline_move_patch(
+                            &projection,
+                            node,
+                            super::ProjectionalOutlineMove::Drop { cell, before },
+                        )
+                        .map_err(str::to_owned)
+                    };
+                    (result, "Outline declaration order updated")
+                }
+                super::ProjectionalOutlineDrag::Cell {
+                    painted_identity,
+                    cell,
+                } => {
+                    let Some(target) = origin
+                        .closest("[data-intent-cell-drop-before], [data-intent-cell-drop-end]")
+                        .ok()
+                        .flatten()
+                    else {
+                        return;
+                    };
+                    event.prevent_default();
+                    let before = target
+                        .get_attribute("data-intent-cell-drop-before")
+                        .and_then(|cell| cell.parse().ok());
+                    let result = if projection.identity != painted_identity {
+                        Err("the dragged cell belongs to a stale Outline".to_owned())
+                    } else {
+                        super::projectional_cell_move_patch(
+                            &projection,
+                            cell,
+                            super::ProjectionalCellMove::Drop { before },
+                        )
+                        .map_err(str::to_owned)
+                    };
+                    (result, "Outline cell order updated")
+                }
             };
+            let result = result.and_then(|patch| {
+                wb.editor_mut()
+                    .apply_patch(patch)
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            });
             match result {
                 Ok(()) => {
-                    wb.notice = "Outline declaration order updated".into();
+                    wb.notice = notice.into();
                     save_projectional(&wb);
                 }
                 Err(error) => wb.notice = error,
-            }
+            };
             drop(wb);
             let _ = render_projectional(&drop_document, &drop_workbench);
         });
@@ -12499,6 +12673,7 @@ mod tests {
         IntentSessionId, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
     };
 
+    use super::ProjectionalCellMove;
     use super::persistence::WorkspaceSnapshot;
     use super::{
         AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
@@ -12524,14 +12699,14 @@ mod tests {
         geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
         native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
         offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
-        offset_target_for_selection, owns_authoring_pick, projectional_design_markup,
-        projectional_direct_gesture_is_capturable, projectional_outline_move_patch,
-        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
-        reproduction_focus_target_after_action, reproduction_overlay_presentation,
-        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
-        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
-        should_route_stationary_draft_inference,
+        offset_target_for_selection, owns_authoring_pick, projectional_cell_move_patch,
+        projectional_design_markup, projectional_direct_gesture_is_capturable,
+        projectional_outline_move_patch, rational_conic_construction_copy,
+        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
 
     #[test]
@@ -12713,6 +12888,147 @@ mod tests {
                     .evidence,
                 accepted_before,
             );
+        });
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one cell gesture contract keeps history and accepted authority checks together"
+    )]
+    fn projectional_cell_moves_are_one_organization_only_history_entry_and_stale_safe() {
+        run_projectional_test_with_large_stack("projectional-cell-organization", || {
+            let mut editor = projectional_authoring_fixture();
+            let first = editor
+                .apply_patch(IntentPatch::new(
+                    editor.coordinator().intent().identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateCell {
+                        alias: IntentKey::new("first-cell").unwrap(),
+                        name: IntentKey::new("First cell").unwrap(),
+                        before: None,
+                    }],
+                ))
+                .unwrap();
+            assert_eq!(first.disposition, IntentPlanDisposition::OrganizationOnly);
+            let first_cell = first
+                .aliases
+                .cell(&IntentKey::new("first-cell").unwrap())
+                .unwrap();
+            let second = editor
+                .apply_patch(IntentPatch::new(
+                    editor.coordinator().intent().identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateCell {
+                        alias: IntentKey::new("second-cell").unwrap(),
+                        name: IntentKey::new("Second cell").unwrap(),
+                        before: None,
+                    }],
+                ))
+                .unwrap();
+            assert_eq!(second.disposition, IntentPlanDisposition::OrganizationOnly);
+            let second_cell = second
+                .aliases
+                .cell(&IntentKey::new("second-cell").unwrap())
+                .unwrap();
+
+            let projection = editor.workbench_projection();
+            let original = projection
+                .outline
+                .iter()
+                .map(|cell| cell.cell)
+                .collect::<Vec<_>>();
+            assert_eq!(original.len(), 3);
+            assert_eq!(original[1..], [first_cell, second_cell]);
+            let markup = super::design_projection::outline_markup(&projection, None);
+            assert!(markup.contains("data-intent-cell-drag="));
+            assert!(markup.contains("data-intent-cell-drop-before="));
+            assert!(markup.contains("data-intent-cell-drop-end=\"true\""));
+            assert!(markup.contains("aria-label=\"Move cell up\""));
+            assert!(markup.contains("aria-label=\"Move cell down\""));
+            assert!(markup.contains(&format!(
+                "data-intent-cell-move=\"up\" data-intent-cell=\"{}\" disabled",
+                original[0],
+            )));
+            assert!(markup.contains(&format!(
+                "data-intent-cell-move=\"down\" data-intent-cell=\"{}\" disabled",
+                original[2],
+            )));
+
+            let accepted = editor.coordinator().accepted_materialization().unwrap();
+            let evidence_before = accepted.evidence.clone();
+            let ownership_before = accepted.ownership.clone();
+            let document_before = accepted.session.design_document().clone();
+            let history_before = editor.coordinator().intent().undo_len();
+
+            let stale_drop = projectional_cell_move_patch(
+                &projection,
+                second_cell,
+                ProjectionalCellMove::Drop {
+                    before: Some(original[0]),
+                },
+            )
+            .unwrap();
+            assert!(matches!(
+                stale_drop.operations(),
+                [IntentPatchOperation::ReorderCells { exact_order }]
+                    if exact_order == &vec![second_cell, original[0], first_cell]
+            ));
+            let down =
+                projectional_cell_move_patch(&projection, first_cell, ProjectionalCellMove::Down)
+                    .unwrap();
+            assert!(matches!(
+                down.operations(),
+                [IntentPatchOperation::ReorderCells { exact_order }]
+                    if exact_order == &vec![original[0], second_cell, first_cell]
+            ));
+            let moved =
+                projectional_cell_move_patch(&projection, second_cell, ProjectionalCellMove::Up)
+                    .unwrap();
+            assert!(matches!(
+                moved.operations(),
+                [IntentPatchOperation::ReorderCells { exact_order }]
+                    if exact_order == &vec![original[0], second_cell, first_cell]
+            ));
+            let outcome = editor.apply_patch(moved).unwrap();
+            assert_eq!(outcome.disposition, IntentPlanDisposition::OrganizationOnly);
+            assert_eq!(
+                editor
+                    .workbench_projection()
+                    .outline
+                    .iter()
+                    .map(|cell| cell.cell)
+                    .collect::<Vec<_>>(),
+                vec![original[0], second_cell, first_cell],
+            );
+            assert_eq!(editor.coordinator().intent().undo_len(), history_before + 1,);
+            let accepted = editor.coordinator().accepted_materialization().unwrap();
+            assert_eq!(accepted.evidence, evidence_before);
+            assert_eq!(accepted.ownership, ownership_before);
+            assert_eq!(accepted.session.design_document(), &document_before);
+
+            let history_after_move = editor.coordinator().intent().undo_len();
+            assert!(editor.apply_patch(stale_drop).is_err());
+            assert_eq!(editor.coordinator().intent().undo_len(), history_after_move,);
+            let accepted = editor.coordinator().accepted_materialization().unwrap();
+            assert_eq!(accepted.evidence, evidence_before);
+            assert_eq!(accepted.ownership, ownership_before);
+            assert_eq!(accepted.session.design_document(), &document_before);
+
+            assert!(editor.undo().unwrap().is_some());
+            assert_eq!(
+                editor
+                    .workbench_projection()
+                    .outline
+                    .iter()
+                    .map(|cell| cell.cell)
+                    .collect::<Vec<_>>(),
+                original,
+            );
+            let accepted = editor.coordinator().accepted_materialization().unwrap();
+            assert_eq!(accepted.evidence, evidence_before);
+            assert_eq!(accepted.ownership, ownership_before);
+            assert_eq!(accepted.session.design_document(), &document_before);
         });
     }
 

@@ -54,7 +54,7 @@ pub(crate) fn outline_markup(
         );
     }
     let hidden = grouped_outline_helper_nodes(projection);
-    for cell in &projection.outline {
+    for (cell_index, cell) in projection.outline.iter().enumerate() {
         let declarations = cell
             .declarations
             .iter()
@@ -64,13 +64,29 @@ pub(crate) fn outline_markup(
             markup,
             concat!(
                 "<section class=\"wb-intent-cell\" data-intent-cell=\"{}\" data-intent-drop-cell=\"{}\">",
-                "<header><h3>{}</h3><span>{} declaration{}</span></header>"
+                "<header class=\"wb-intent-cell-header\" draggable=\"true\" ",
+                "data-intent-cell-drag=\"{}\" data-intent-cell-drop-before=\"{}\">",
+                "<div><h3>{}</h3><span>{} declaration{}</span></div>",
+                "<span class=\"wb-intent-cell-actions\" aria-label=\"Reorder cell\">",
+                "<button type=\"button\" data-intent-cell-move=\"up\" data-intent-cell=\"{}\"{} aria-label=\"Move cell up\">↑</button>",
+                "<button type=\"button\" data-intent-cell-move=\"down\" data-intent-cell=\"{}\"{} aria-label=\"Move cell down\">↓</button>",
+                "</span></header>"
             ),
+            cell.cell,
+            cell.cell,
             cell.cell,
             cell.cell,
             escape_html(cell.name.as_str()),
             declarations.len(),
             if declarations.len() == 1 { "" } else { "s" },
+            cell.cell,
+            if cell_index > 0 { "" } else { " disabled" },
+            cell.cell,
+            if cell_index + 1 < projection.outline.len() {
+                ""
+            } else {
+                " disabled"
+            },
         );
         for (index, declaration) in declarations.iter().enumerate() {
             push_declaration_button(
@@ -83,6 +99,11 @@ pub(crate) fn outline_markup(
             );
         }
         markup.push_str("</section>");
+    }
+    if projection.outline.len() > 1 {
+        markup.push_str(
+            "<div class=\"wb-intent-cell-drop-end\" data-intent-cell-drop-end=\"true\" aria-label=\"Move cell to end\"></div>",
+        );
     }
     markup
 }

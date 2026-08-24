@@ -368,6 +368,14 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   outline: 1px dashed #7a653f;
   outline-offset: 2px;
 }
+.wb-intent-cell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  cursor: grab;
+}
+.wb-intent-cell-header:active { cursor: grabbing; }
 .wb-intent-cell h3,
 .wb-design-history h3 {
   margin: 0.25rem 0.25rem 0.2rem;
@@ -376,6 +384,28 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.wb-intent-cell-actions {
+  display: flex;
+  opacity: 0;
+}
+.wb-intent-cell-header:hover .wb-intent-cell-actions,
+.wb-intent-cell-header:focus-within .wb-intent-cell-actions { opacity: 1; }
+.wb-intent-cell-actions button {
+  min-width: 1.35rem;
+  min-height: 1.35rem;
+  padding: 0 0.18rem;
+  border-color: transparent;
+  color: #87918f;
+  background: transparent;
+  font-size: 0.58rem;
+}
+.wb-intent-cell-actions button:hover:not(:disabled) { color: #edca88; background: #312c24; }
+.wb-intent-cell-actions button:disabled { opacity: 0.2; }
+.wb-intent-cell-drop-end {
+  height: 0.4rem;
+  margin-top: -0.3rem;
+}
+.wb-intent-cell-drop-end[data-intent-drop-active="true"] { box-shadow: inset 0 -2px #d29a45; }
 .wb-intent-row {
   display: grid;
   width: 100%;
