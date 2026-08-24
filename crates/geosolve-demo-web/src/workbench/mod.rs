@@ -3369,6 +3369,7 @@ pub(crate) mod wasm {
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
         show_all_constraints: bool,
+        pan_gesture: Option<PanGesture>,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
         captured_pointer: Option<i32>,
         outline_drag: Option<super::ProjectionalOutlineDrag>,
@@ -3510,6 +3511,7 @@ pub(crate) mod wasm {
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
             show_all_constraints: false,
+            pan_gesture: None,
             pointer_moves: Rc::new(RefCell::new(super::ProjectionalPointerMoveQueue::default())),
             captured_pointer: None,
             outline_drag: None,
@@ -3649,21 +3651,23 @@ pub(crate) mod wasm {
         ] {
             set_disabled(&required(document, id)?, false)?;
         }
-        for action in [
-            "new",
-            "copy-repro",
-            "reproduction-open",
-            "problems",
-            "zoom-fit",
-            "zoom-origin",
-        ] {
+        for action in ["new", "reproduction-copy", "reproduction-open", "problems"] {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
             {
                 set_disabled(&button, true)?;
             }
         }
-        for action in ["cancel", "finish", "geometry-role", "options-close"] {
+        for action in [
+            "cancel",
+            "finish",
+            "geometry-role",
+            "options-close",
+            "zoom-in",
+            "zoom-out",
+            "zoom-fit",
+            "zoom-origin",
+        ] {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
             {
@@ -4219,6 +4223,17 @@ pub(crate) mod wasm {
         required(document, "wb-design-outline")?.set_inner_html(&design_markup.outline);
         required(document, "wb-design-source")?.set_inner_html(&design_markup.source);
         required(document, "wb-design-history")?.set_inner_html(&design_markup.history);
+        let history = wb.editor().coordinator().intent().history_projection();
+        for (action, disabled) in [
+            ("undo", history.applied.is_empty()),
+            ("redo", history.redoable.is_empty()),
+        ] {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
+            {
+                set_disabled(&button, disabled)?;
+            }
+        }
         render_sample_ui(document, &wb.samples)?;
         let intent_inspector = required(document, "wb-intent-inspector")?;
         intent_inspector.set_inner_html(&design_markup.inspector);
@@ -4241,8 +4256,11 @@ pub(crate) mod wasm {
             required(document, "wb-status-count")?.set_text_content(Some("0 points / 0 curves"));
         }
         let selected_declarations = usize::from(wb.editor().selected_declaration().is_some());
+        let selected_items = selection.len();
         required(document, "wb-selection")?.set_text_content(Some(&format!(
-            "{} declaration{} selected",
+            "{} sketch item{} · {} declaration{} selected",
+            selected_items,
+            if selected_items == 1 { "" } else { "s" },
             selected_declarations,
             if selected_declarations == 1 { "" } else { "s" },
         )));
@@ -5127,6 +5145,170 @@ pub(crate) mod wasm {
         changed
     }
 
+    fn cancel_projectional_before_camera_change(
+        viewport: &Element,
+        wb: &mut ProjectionalWorkbench,
+    ) {
+        if let Some(pan) = wb.pan_gesture.take() {
+            let _ = viewport.release_pointer_capture(pan.pointer_id);
+        }
+        let _ = cancel_projectional_interaction(
+            viewport,
+            wb,
+            None,
+            true,
+            "Active interaction canceled before camera change",
+        );
+        wb.pointer_moves.borrow_mut().clear_stationary_sample();
+        let effects = wb.editor_mut().editor_mut().invalidate_draft_inference();
+        let _ = dispatch_projectional_effects(wb, effects);
+    }
+
+    fn fit_projectional_camera(wb: &mut ProjectionalWorkbench) -> bool {
+        let scene = projectional_scene(wb);
+        wb.camera.fit_scene_or_reset(scene.as_ref())
+    }
+
+    fn install_projectional_navigation(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+        viewport: &Element,
+    ) -> Result<(), JsValue> {
+        for name in super::CANVAS_PAN_POINTER_EVENTS {
+            let callback_document = document.clone();
+            let callback_workbench = Rc::clone(workbench);
+            let callback_viewport = viewport.clone();
+            let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+                let mut wb = callback_workbench.borrow_mut();
+                match name {
+                    "pointerdown" if event.button() == 1 => {
+                        let Some(origin) = client_screen_point(
+                            &callback_viewport,
+                            wb.camera.viewport(),
+                            f64::from(event.client_x()),
+                            f64::from(event.client_y()),
+                        ) else {
+                            return;
+                        };
+                        event.prevent_default();
+                        cancel_projectional_before_camera_change(&callback_viewport, &mut wb);
+                        if callback_viewport
+                            .set_pointer_capture(event.pointer_id())
+                            .is_err()
+                        {
+                            wb.notice = "Canvas pan canceled because pointer capture failed".into();
+                            return;
+                        }
+                        wb.pan_gesture = Some(PanGesture {
+                            pointer_id: event.pointer_id(),
+                            origin,
+                            origin_center: wb.camera.model_center,
+                        });
+                        wb.notice = "Panning canvas".into();
+                    }
+                    "pointermove" => {
+                        let Some(gesture) = wb
+                            .pan_gesture
+                            .filter(|gesture| gesture.pointer_id == event.pointer_id())
+                        else {
+                            return;
+                        };
+                        let Some(current) = captured_client_screen_point(
+                            &callback_viewport,
+                            wb.camera.viewport(),
+                            f64::from(event.client_x()),
+                            f64::from(event.client_y()),
+                        ) else {
+                            return;
+                        };
+                        event.prevent_default();
+                        wb.camera
+                            .pan_from(gesture.origin_center, gesture.origin, current);
+                    }
+                    "pointerup"
+                        if wb
+                            .pan_gesture
+                            .is_some_and(|gesture| gesture.pointer_id == event.pointer_id()) =>
+                    {
+                        event.prevent_default();
+                        wb.pan_gesture = None;
+                        let _ = callback_viewport.release_pointer_capture(event.pointer_id());
+                        wb.notice = "Canvas pan complete".into();
+                    }
+                    _ => return,
+                }
+                drop(wb);
+                let _ = render_projectional_canvas(
+                    &callback_document,
+                    &callback_workbench.borrow(),
+                    super::WorkbenchRenderScope::Transient,
+                );
+            });
+            viewport.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
+            callback.forget();
+        }
+        for name in ["pointercancel", "lostpointercapture"] {
+            let cancel_document = document.clone();
+            let cancel_workbench = Rc::clone(workbench);
+            let cancel_viewport = viewport.clone();
+            let cancel = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+                let mut wb = cancel_workbench.borrow_mut();
+                if !wb
+                    .pan_gesture
+                    .is_some_and(|gesture| gesture.pointer_id == event.pointer_id())
+                {
+                    return;
+                }
+                wb.pan_gesture = None;
+                if name == "pointercancel" {
+                    let _ = cancel_viewport.release_pointer_capture(event.pointer_id());
+                }
+                wb.notice = "Canvas pan canceled".into();
+                drop(wb);
+                let _ = render_projectional_canvas(
+                    &cancel_document,
+                    &cancel_workbench.borrow(),
+                    super::WorkbenchRenderScope::Transient,
+                );
+            });
+            viewport.add_event_listener_with_callback(name, cancel.as_ref().unchecked_ref())?;
+            cancel.forget();
+        }
+
+        let wheel_document = document.clone();
+        let wheel_workbench = Rc::clone(workbench);
+        let wheel_viewport = viewport.clone();
+        let wheel = Closure::<dyn FnMut(WheelEvent)>::new(move |event: WheelEvent| {
+            let mut wb = wheel_workbench.borrow_mut();
+            let Some(anchor) = client_screen_point(
+                &wheel_viewport,
+                wb.camera.viewport(),
+                f64::from(event.client_x()),
+                f64::from(event.client_y()),
+            ) else {
+                return;
+            };
+            event.prevent_default();
+            cancel_projectional_before_camera_change(&wheel_viewport, &mut wb);
+            let factor = (-event.delta_y() * 0.0015).exp();
+            if wb.camera.zoom_about(anchor, factor) {
+                wb.notice = format!(
+                    "Canvas zoom {:.1} px / unit",
+                    wb.camera.pixels_per_model_unit
+                );
+            }
+            drop(wb);
+            let _ = render_projectional_canvas(
+                &wheel_document,
+                &wheel_workbench.borrow(),
+                super::WorkbenchRenderScope::Transient,
+            );
+        });
+        viewport.add_event_listener_with_callback("wheel", wheel.as_ref().unchecked_ref())?;
+        wheel.forget();
+        Ok(())
+    }
+
     fn schedule_projectional_pointer_move_frame(
         document: &Document,
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
@@ -5265,6 +5447,7 @@ pub(crate) mod wasm {
         let viewport = required(document, "wb-viewport")?;
         let pointer_moves = Rc::clone(&workbench.borrow().pointer_moves);
         install_canvas_browser_default_guards(&viewport)?;
+        install_projectional_navigation(document, workbench, &viewport)?;
 
         let down_document = document.clone();
         let down_workbench = Rc::clone(workbench);
@@ -5596,6 +5779,9 @@ pub(crate) mod wasm {
         let pointer_move = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             let input = {
                 let wb = move_workbench.borrow();
+                if wb.pan_gesture.is_some() {
+                    return;
+                }
                 if wb
                     .captured_pointer
                     .is_some_and(|pointer_id| pointer_id != event.pointer_id())
@@ -6508,6 +6694,7 @@ pub(crate) mod wasm {
                             "Active interaction canceled before history navigation",
                         );
                     }
+                    let before = wb.editor().coordinator().intent().identity();
                     projectional_history_action(
                         &mut wb,
                         if action.as_deref() == Some("undo") {
@@ -6516,11 +6703,12 @@ pub(crate) mod wasm {
                             super::HistoryShortcut::Redo
                         },
                     );
-                    durable = true;
+                    durable = before != wb.editor().coordinator().intent().identity();
                 }
                 Some("clear-selection") => {
                     wb.editor_mut().set_selected_declaration(None);
-                    wb.notice = "Design declaration selection cleared".into();
+                    wb.editor_mut().set_selection([]);
+                    wb.notice = "Sketch and declaration selection cleared".into();
                 }
                 Some("delete") => {
                     if let Ok(viewport) = required(&click_document, "wb-viewport") {
@@ -6681,21 +6869,68 @@ pub(crate) mod wasm {
                     wb.notice = "Tool options closed; Select active".into();
                 }
                 Some("geometry-role") => {
-                    let role = match wb.editor().editor().authoring_geometry_role() {
-                        GeometryRole::Profile => GeometryRole::Construction,
-                        GeometryRole::Construction => GeometryRole::Profile,
+                    match wb.editor_mut().toggle_selected_geometry_role() {
+                        Ok(_) => {
+                            wb.notice = "Selected curve roles updated".into();
+                            durable = true;
+                        }
+                        Err(
+                            geosolve_constraint_editor::ProjectionalEditorError::MissingGeometryRoleSelection,
+                        ) => {
+                            let role = match wb.editor().editor().authoring_geometry_role() {
+                                GeometryRole::Profile => GeometryRole::Construction,
+                                GeometryRole::Construction => GeometryRole::Profile,
+                            };
+                            wb.editor_mut()
+                                .editor_mut()
+                                .set_authoring_geometry_role(role);
+                            wb.notice = format!(
+                                "New curve authoring role set to {}",
+                                if role == GeometryRole::Construction {
+                                    "Construction"
+                                } else {
+                                    "Profile"
+                                },
+                            );
+                        }
+                        Err(error) => wb.notice = error.to_string(),
+                    }
+                }
+                Some("zoom-in") | Some("zoom-out") | Some("zoom-fit")
+                | Some("zoom-origin") => {
+                    let Ok(viewport) = required(&click_document, "wb-viewport") else {
+                        wb.notice = "Canvas viewport is unavailable".into();
+                        return;
                     };
-                    wb.editor_mut()
-                        .editor_mut()
-                        .set_authoring_geometry_role(role);
-                    wb.notice = format!(
-                        "New curve authoring role set to {}",
-                        if role == GeometryRole::Construction {
-                            "Construction"
-                        } else {
-                            "Profile"
-                        },
-                    );
+                    cancel_projectional_before_camera_change(&viewport, &mut wb);
+                    match action.as_deref() {
+                        Some("zoom-in") => {
+                            wb.camera.zoom_about(
+                                geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
+                                1.25,
+                            );
+                            wb.notice = "Canvas zoomed in".into();
+                        }
+                        Some("zoom-out") => {
+                            wb.camera.zoom_about(
+                                geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
+                                0.8,
+                            );
+                            wb.notice = "Canvas zoomed out".into();
+                        }
+                        Some("zoom-fit") => {
+                            wb.notice = if fit_projectional_camera(&mut wb) {
+                                "View fitted to sketch geometry".into()
+                            } else {
+                                "Empty sketch reset to the Origin view".into()
+                            };
+                        }
+                        Some("zoom-origin") => {
+                            wb.camera.center_origin();
+                            wb.notice = "View centred on Origin".into();
+                        }
+                        _ => unreachable!("guarded projectional camera action"),
+                    }
                 }
                 Some(_) | None => return,
             }
@@ -7142,14 +7377,17 @@ pub(crate) mod wasm {
                     "Active interaction canceled before the source edit",
                 );
             }
-            wb.notice = wb
+            match wb
                 .editor_mut()
                 .edit_source_token(&projection, token, &replacement)
-                .map_or_else(
-                    |error| error.to_string(),
-                    |_| "Recognized structured-source token updated".into(),
-                );
-            save_projectional(&wb);
+            {
+                Ok(_) => {
+                    wb.notice = "Recognized structured-source token updated".into();
+                    reconcile_projectional_authoring(&mut wb);
+                    save_projectional(&wb);
+                }
+                Err(error) => wb.notice = error.to_string(),
+            }
             drop(wb);
             let _ = render_projectional(&source_document, &source_workbench);
         });
