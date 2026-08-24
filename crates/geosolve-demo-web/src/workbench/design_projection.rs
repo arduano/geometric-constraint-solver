@@ -7,6 +7,7 @@
 //! recognized source tokens and read-only History all come from
 //! `geosolve-constraint-editor`'s equation-free projection.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use geosolve_constraint_editor::{
@@ -15,7 +16,7 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch_intent::{
     IntentLiteral, IntentLiteralSchema, IntentNodeKind, IntentPatchOperationKind,
-    IntentPlanDisposition, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
+    IntentPlanDisposition, IntentSessionIdentity, IntentUnit, LeafField, NodeId, OperationKind,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -24,10 +25,16 @@ pub(crate) struct DesignProjectionSelection {
 }
 
 pub(crate) fn declaration_count(projection: &IntentWorkbenchProjection) -> usize {
+    let hidden = grouped_outline_helper_nodes(projection);
     projection
         .outline
         .iter()
-        .map(|cell| cell.declarations.len())
+        .map(|cell| {
+            cell.declarations
+                .iter()
+                .filter(|declaration| !hidden.contains(&declaration.node))
+                .count()
+        })
         .sum()
 }
 
@@ -36,7 +43,23 @@ pub(crate) fn outline_markup(
     selection: Option<DesignProjectionSelection>,
 ) -> String {
     let mut markup = String::new();
+    if let Some(diagnostic) = &projection.latest_diagnostic {
+        let _ = write!(
+            markup,
+            concat!(
+                "<div class=\"wb-intent-diagnostic\" role=\"status\">",
+                "<strong>Retained intent needs attention</strong><span>{}</span></div>"
+            ),
+            escape_html(diagnostic.as_str()),
+        );
+    }
+    let hidden = grouped_outline_helper_nodes(projection);
     for cell in &projection.outline {
+        let declarations = cell
+            .declarations
+            .iter()
+            .filter(|declaration| !hidden.contains(&declaration.node))
+            .collect::<Vec<_>>();
         let _ = write!(
             markup,
             concat!(
@@ -46,26 +69,65 @@ pub(crate) fn outline_markup(
             cell.cell,
             cell.cell,
             escape_html(cell.name.as_str()),
-            cell.declarations.len(),
-            if cell.declarations.len() == 1 {
-                ""
-            } else {
-                "s"
-            },
+            declarations.len(),
+            if declarations.len() == 1 { "" } else { "s" },
         );
-        for (index, declaration) in cell.declarations.iter().enumerate() {
+        for (index, declaration) in declarations.iter().enumerate() {
             push_declaration_button(
                 &mut markup,
                 declaration,
                 cell.cell,
                 index > 0,
-                index + 1 < cell.declarations.len(),
+                index + 1 < declarations.len(),
                 selection,
             );
         }
         markup.push_str("</section>");
     }
     markup
+}
+
+/// Profile Offset authoring creates equation-free Profile/OpenChain operands
+/// in the same atomic patch as the user-facing operation. A helper with one
+/// exact Profile Offset consumer is presentation-owned by that operation and
+/// is grouped out of Outline. Reusable/shared aggregates remain visible.
+pub(crate) fn grouped_outline_helper_nodes(
+    projection: &IntentWorkbenchProjection,
+) -> BTreeSet<NodeId> {
+    let declarations = projection
+        .outline
+        .iter()
+        .flat_map(|cell| &cell.declarations)
+        .map(|declaration| (declaration.node, declaration))
+        .collect::<BTreeMap<_, _>>();
+    let consumer_count = declarations
+        .values()
+        .flat_map(|declaration| declaration.dependencies.iter().copied())
+        .fold(
+            BTreeMap::<NodeId, usize>::new(),
+            |mut counts, dependency| {
+                *counts.entry(dependency).or_default() += 1;
+                counts
+            },
+        );
+    declarations
+        .values()
+        .filter(|declaration| {
+            matches!(
+                &declaration.kind,
+                IntentNodeKind::Operation {
+                    operation: OperationKind::ProfileOffset
+                }
+            )
+        })
+        .flat_map(|operation| operation.dependencies.iter().copied())
+        .filter(|dependency| {
+            consumer_count.get(dependency) == Some(&1)
+                && declarations.get(dependency).is_some_and(|declaration| {
+                    matches!(&declaration.kind, IntentNodeKind::Aggregate { .. })
+                })
+        })
+        .collect()
 }
 
 fn push_declaration_button(
@@ -141,11 +203,30 @@ pub(crate) fn structured_source_markup(
             selection.is_some_and(|value| value.node == node)
         });
         let node = line_tokens.first().map(|token| token_node(&token.target));
+        let organization = node.and_then(|node| {
+            projection
+                .outline
+                .iter()
+                .find(|cell| {
+                    cell.declarations
+                        .iter()
+                        .any(|declaration| declaration.node == node)
+                })
+                .map(|cell| (node, cell.cell))
+        });
         let _ = write!(
             markup,
             "<div class=\"wb-intent-source-line{}\"{}><span>{}</span><code>",
             if selected { " selected" } else { "" },
-            node.map_or_else(String::new, |node| format!(" data-intent-node=\"{node}\"")),
+            organization.map_or_else(String::new, |(node, cell)| {
+                format!(
+                    concat!(
+                        " data-intent-node=\"{}\" data-intent-cell=\"{}\" ",
+                        "data-intent-drop-before=\"{}\" draggable=\"true\""
+                    ),
+                    node, cell, node,
+                )
+            }),
             line_number + 1,
         );
         push_source_line(&mut markup, line, line_start, &line_tokens);
@@ -569,12 +650,12 @@ fn escape_html(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use geosolve_constraint_editor::IntentWorkbenchProjection;
+    use geosolve_constraint_editor::{IntentOutlineDeclaration, IntentWorkbenchProjection};
     use geosolve_sketch_intent::{
-        GeometryRecipeKind, IntentEvaluation, IntentKey, IntentLiteral, IntentNodeDraft,
-        IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole,
-        IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
-        MaterializationEvidence,
+        AggregateKind, GeometryRecipeKind, IntentEvaluation, IntentKey, IntentLiteral,
+        IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+        IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
+        MaterializationEvidence, NodeId, OperationKind,
     };
 
     use super::{
@@ -686,7 +767,63 @@ mod tests {
         assert_eq!(first, structured_source_markup(&projection, None));
         assert!(first.contains("export const sketch = design"));
         assert!(first.contains("contenteditable=\"plaintext-only\""));
+        assert!(first.contains("data-intent-drop-before="));
+        assert!(first.contains("draggable=\"true\""));
         assert!(!first.contains("eval("));
         assert!(!first.contains("new Function"));
+    }
+
+    #[test]
+    fn outline_groups_private_offset_operands_and_renders_retained_diagnostic() {
+        let (_, mut projection, _) = fixture();
+        let aggregate = NodeId::from_raw(0x8305_1001);
+        let offset = NodeId::from_raw(0x8305_1002);
+        let declaration = |node, symbol: &str, kind, dependencies| IntentOutlineDeclaration {
+            node,
+            symbol: key(symbol),
+            name: key(symbol),
+            kind,
+            suppressed: false,
+            retained_failure: false,
+            dependencies,
+        };
+        projection.outline[0].declarations.extend([
+            declaration(
+                aggregate,
+                "offset_operand_helper",
+                IntentNodeKind::Aggregate {
+                    aggregate: AggregateKind::OpenChain,
+                },
+                Vec::new(),
+            ),
+            declaration(
+                offset,
+                "Offset 1",
+                IntentNodeKind::Operation {
+                    operation: OperationKind::ProfileOffset,
+                },
+                vec![aggregate],
+            ),
+        ]);
+        projection.latest_diagnostic = Some(key("offset-distance-invalid"));
+
+        let markup = outline_markup(&projection, None);
+        assert_eq!(declaration_count(&projection), 2);
+        assert!(markup.contains("Offset 1"));
+        assert!(!markup.contains("offset_operand_helper"));
+        assert!(markup.contains("Retained intent needs attention"));
+        assert!(markup.contains("offset-distance-invalid"));
+
+        projection.outline[0].declarations.push(declaration(
+            NodeId::from_raw(0x8305_1003),
+            "Offset 2",
+            IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset,
+            },
+            vec![aggregate],
+        ));
+        let shared_markup = outline_markup(&projection, None);
+        assert!(shared_markup.contains("offset_operand_helper"));
+        assert_eq!(declaration_count(&projection), 4);
     }
 }

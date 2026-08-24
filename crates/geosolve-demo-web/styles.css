@@ -349,6 +349,19 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-design-source:empty::before { content: "Structured source will appear for the current design."; }
 .wb-design-history:empty::before { content: "Committed design transactions will appear here."; }
+.wb-intent-diagnostic {
+  display: grid;
+  gap: 0.12rem;
+  margin: 0.15rem 0.15rem 0.5rem;
+  padding: 0.42rem 0.48rem;
+  border: 1px solid #70413e;
+  border-radius: 0.2rem;
+  color: #d5a39d;
+  background: #352625;
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+.wb-intent-diagnostic strong { color: #efb8b0; font-size: 0.64rem; }
 .wb-intent-cell { margin-bottom: 0.45rem; }
 .wb-intent-cell[data-intent-drop-active="true"] {
   border-radius: 0.2rem;
@@ -426,6 +439,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   line-height: 1.45;
 }
 .wb-intent-source-line:hover { background: #272c2c; }
+.wb-intent-source-line[draggable="true"] { cursor: grab; }
 .wb-intent-source-line.selected { border-left-color: #d29a45; background: #332e25; }
 .wb-intent-source-line > span { padding-right: 0.45rem; color: #56605e; text-align: right; user-select: none; }
 .wb-intent-source-line code { padding-right: 0.6rem; color: #abb8b5; white-space: pre; }

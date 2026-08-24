@@ -445,6 +445,9 @@ fn dispatch_projectional_construction_effects(
             | EditorEffect::PreviewOffsetAuthoringDistance { .. }
             | EditorEffect::FinishOffsetAuthoringDistance { .. }
             | EditorEffect::RestoreOffsetAuthoringDistance { .. }
+            | EditorEffect::PreviewAcceptedProfileOffsetDistance { .. }
+            | EditorEffect::CommitAcceptedProfileOffsetDistance { .. }
+            | EditorEffect::ClearAcceptedProfileOffsetPreview
             | EditorEffect::PreviewComputedFeatureRadius { .. }
             | EditorEffect::CommitComputedFeatureRadius { .. }
             | EditorEffect::RestoreComputedFeatureRadius { .. }
@@ -1690,7 +1693,94 @@ const fn projectional_direct_gesture_is_capturable(
         kind,
         geosolve_constraint_editor::ActivePointerGestureKind::Point
             | geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
+            | geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
+            | geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance
     )
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionalOutlineMove {
+    Up,
+    Down,
+    Drop {
+        cell: geosolve_sketch_intent::CellId,
+        before: Option<geosolve_sketch_intent::NodeId>,
+    },
+}
+
+/// Resolves one Outline organization gesture against the exact projection it
+/// was painted from. Geometry and dependency order never participate.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_outline_move_patch(
+    projection: &geosolve_constraint_editor::IntentWorkbenchProjection,
+    node: geosolve_sketch_intent::NodeId,
+    movement: ProjectionalOutlineMove,
+) -> Result<geosolve_sketch_intent::IntentPatch, &'static str> {
+    let grouped_helpers = design_projection::grouped_outline_helper_nodes(projection);
+    let (current_cell, index) = projection
+        .outline
+        .iter()
+        .find_map(|cell| {
+            cell.declarations
+                .iter()
+                .filter(|declaration| !grouped_helpers.contains(&declaration.node))
+                .position(|declaration| declaration.node == node)
+                .map(|index| (cell, index))
+        })
+        .ok_or("the dragged declaration belongs to a stale Outline")?;
+    let visible = current_cell
+        .declarations
+        .iter()
+        .filter(|declaration| !grouped_helpers.contains(&declaration.node))
+        .collect::<Vec<_>>();
+    let (cell, before) = match movement {
+        ProjectionalOutlineMove::Up => {
+            let before = index
+                .checked_sub(1)
+                .and_then(|index| visible.get(index))
+                .map(|declaration| declaration.node)
+                .ok_or("the declaration is already first in its cell")?;
+            (current_cell.cell, Some(before))
+        }
+        ProjectionalOutlineMove::Down => {
+            if index + 1 >= visible.len() {
+                return Err("the declaration is already last in its cell");
+            }
+            let before = visible.get(index + 2).map(|declaration| declaration.node);
+            (current_cell.cell, before)
+        }
+        ProjectionalOutlineMove::Drop { cell, before } => {
+            let target = projection
+                .outline
+                .iter()
+                .find(|candidate| candidate.cell == cell)
+                .ok_or("the drop cell belongs to a stale Outline")?;
+            if before == Some(node) {
+                return Err("the declaration cannot be dropped before itself");
+            }
+            if before.is_some_and(|before| {
+                !target
+                    .declarations
+                    .iter()
+                    .any(|declaration| declaration.node == before)
+            }) {
+                return Err("the drop target belongs to a different or stale cell");
+            }
+            (cell, before)
+        }
+    };
+    Ok(geosolve_sketch_intent::IntentPatch::new(
+        projection.identity,
+        geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+        vec![
+            geosolve_sketch_intent::IntentPatchOperation::MoveDeclaration {
+                node,
+                cell: geosolve_sketch_intent::CellTarget::Stable { cell },
+                before,
+            },
+        ],
+    ))
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -3168,6 +3258,7 @@ pub(crate) mod wasm {
         grid_visible: bool,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
         captured_pointer: Option<i32>,
+        outline_drag: Option<(geosolve_sketch_intent::IntentSessionIdentity, NodeId)>,
         geometry_palette: super::geometry_palette::GeometryPaletteState,
         option_overlay: super::OptionOverlayState,
         construction_preview: Option<ConstructionPreview>,
@@ -3302,6 +3393,7 @@ pub(crate) mod wasm {
             grid_visible: true,
             pointer_moves: Rc::new(RefCell::new(super::ProjectionalPointerMoveQueue::default())),
             captured_pointer: None,
+            outline_drag: None,
             geometry_palette: super::geometry_palette::GeometryPaletteState::default(),
             option_overlay: super::OptionOverlayState::default(),
             construction_preview: None,
@@ -3418,6 +3510,7 @@ pub(crate) mod wasm {
         wb.construction_preview = None;
         wb.pointer_moves.borrow_mut().invalidate();
         wb.captured_pointer = None;
+        wb.outline_drag = None;
         let scene = wb.authority.scene(
             wb.camera.viewport(),
             super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
@@ -3657,7 +3750,10 @@ pub(crate) mod wasm {
             ),
             ("wb-option-panel-fillet", false),
             ("wb-option-panel-offset", false),
-            ("wb-option-panel-construction-display", false),
+            (
+                "wb-option-panel-construction-display",
+                open == Some(super::OptionOverlayKind::ConstructionDisplay),
+            ),
         ] {
             set_hidden(&required(document, id)?, !visible)?;
         }
@@ -3673,6 +3769,36 @@ pub(crate) mod wasm {
         )?;
 
         let editor = wb.editor().editor();
+        let policy = editor.geometry_interaction_policy();
+        if let Ok(select) =
+            required(document, "wb-geometry-pick-scope")?.dyn_into::<HtmlSelectElement>()
+        {
+            select.set_value(match policy.scope {
+                GeometryPickScope::All => "all",
+                GeometryPickScope::Profile => "profile",
+                GeometryPickScope::Construction => "construction",
+            });
+        }
+        for (id, checked) in [
+            (
+                "wb-show-explicit-construction",
+                policy.visibility.explicit_construction,
+            ),
+            (
+                "wb-show-implicit-construction",
+                policy.visibility.implicit_construction,
+            ),
+            (
+                "wb-show-reference-geometry",
+                policy.visibility.reference_geometry,
+            ),
+            ("wb-show-grid", wb.grid_visible),
+            ("wb-show-all-constraints", false),
+        ] {
+            if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
+                input.set_checked(checked);
+            }
+        }
         let conic_tool = selected
             .map(GeometryToolVariant::editor_tool)
             .filter(|tool| {
@@ -4364,6 +4490,12 @@ pub(crate) mod wasm {
                             geosolve_constraint_editor::ActivePointerGestureKind::CurveControl => {
                                 "Projectional curve-control gesture prepared".into()
                             }
+                            geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius => {
+                                "Projectional Fillet-radius gesture prepared".into()
+                            }
+                            geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance => {
+                                "Projectional Profile-Offset distance gesture prepared".into()
+                            }
                             _ => unreachable!("guarded projectional direct gesture kind"),
                         };
                         super::WorkbenchPresentationEvent::PointerMoveFrame
@@ -4801,12 +4933,26 @@ pub(crate) mod wasm {
             else {
                 return;
             };
+            if super::change_owns_option_control_click(
+                &origin.tag_name(),
+                origin
+                    .closest(".wb-tool-options-overlay")
+                    .is_ok_and(|surface| surface.is_some()),
+                origin
+                    .closest(".wb-branch-editor")
+                    .is_ok_and(|surface| surface.is_some()),
+            ) {
+                // The browser-updated checkbox/select value is owned by the
+                // later `change` event. Repainting it during this bubbled click
+                // would restore the old headless value first.
+                return;
+            }
             let target = origin
                 .closest(concat!(
                     "[data-wb-tool], [data-wb-geometry-family], ",
                     "[data-wb-geometry-variant], [data-wb-authoring], ",
                     "[data-editor-item], [data-wb-action], [data-sample-id], ",
-                    "[data-sample-group-trigger], [data-intent-move]"
+                    "[data-sample-group-trigger], [data-intent-move], [data-wb-option]"
                 ))
                 .ok()
                 .flatten()
@@ -4833,6 +4979,51 @@ pub(crate) mod wasm {
                 }
                 drop(wb);
                 let _ = render_projectional(&click_document, &click_workbench);
+                return;
+            }
+            if let Some(movement) = target.get_attribute("data-intent-move") {
+                let Some(node) = parse_intent_node(&target) else {
+                    return;
+                };
+                let movement = match movement.as_str() {
+                    "up" => super::ProjectionalOutlineMove::Up,
+                    "down" => super::ProjectionalOutlineMove::Down,
+                    _ => return,
+                };
+                let mut wb = click_workbench.borrow_mut();
+                let projection = wb.editor().workbench_projection();
+                let result =
+                    match super::projectional_outline_move_patch(&projection, node, movement) {
+                        Ok(patch) => wb
+                            .editor_mut()
+                            .apply_patch(patch)
+                            .map(|_| ())
+                            .map_err(|error| error.to_string()),
+                        Err(error) => Err(error.into()),
+                    };
+                match result {
+                    Ok(()) => {
+                        wb.notice = "Outline declaration order updated".into();
+                        save_projectional(&wb);
+                    }
+                    Err(error) => wb.notice = error,
+                }
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                return;
+            }
+            if let Some(kind) = target
+                .get_attribute("data-wb-option")
+                .as_deref()
+                .and_then(super::OptionOverlayKind::from_key)
+            {
+                let mut wb = click_workbench.borrow_mut();
+                wb.option_overlay.open(kind);
+                wb.notice = format!("{} open", kind.title());
+                let focus = kind.first_control_id().to_owned();
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                focus_by_id(&click_document, &focus);
                 return;
             }
 
@@ -5087,10 +5278,53 @@ pub(crate) mod wasm {
                         let _ = render_projectional(&click_document, &click_workbench);
                         return;
                     };
-                    wb.notice = wb.editor_mut().delete_declaration(node).map_or_else(
-                        |error| error.to_string(),
-                        |_| "Design declaration and dependent closure deleted".into(),
-                    );
+                    let offset_dimension = wb
+                        .editor()
+                        .coordinator()
+                        .intent()
+                        .graph()
+                        .node(node)
+                        .filter(|declaration| {
+                            matches!(
+                                &declaration.kind,
+                                geosolve_sketch_intent::IntentNodeKind::Operation {
+                                    operation: geosolve_sketch_intent::OperationKind::ProfileOffset
+                                }
+                            )
+                        })
+                        .and_then(|_| {
+                            wb.editor()
+                                .coordinator()
+                                .accepted_materialization()
+                                .and_then(|accepted| {
+                                    accepted
+                                        .ownership
+                                        .nodes
+                                        .iter()
+                                        .find(|owner| owner.node == node)
+                                        .and_then(|owner| {
+                                            owner.owned.iter().find_map(|binding| match binding {
+                                                geosolve_constraint_editor::IntentNativeBinding::Dimension(
+                                                    dimension,
+                                                ) => Some(*dimension),
+                                                _ => None,
+                                            })
+                                        })
+                                })
+                        });
+                    wb.notice = if let Some(dimension) = offset_dimension {
+                        wb.editor_mut()
+                            .delete_profile_offset(dimension)
+                            .map_or_else(
+                                |error| error.to_string(),
+                                |_| "Profile Offset and its owned operands deleted".into(),
+                            )
+                    } else {
+                        wb.editor_mut().delete_declaration(node).map_or_else(
+                            |error| error.to_string(),
+                            |_| "Design declaration and dependent closure deleted".into(),
+                        )
+                    };
                     reconcile_projectional_authoring(&mut wb);
                     durable = true;
                 }
@@ -5173,6 +5407,120 @@ pub(crate) mod wasm {
         root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
         click.forget();
 
+        let drag_workbench = Rc::clone(workbench);
+        let drag_start = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let node = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| {
+                    target
+                        .closest(concat!(
+                            ".wb-intent-row[draggable=\"true\"], ",
+                            ".wb-intent-source-line[draggable=\"true\"]"
+                        ))
+                        .ok()
+                        .flatten()
+                })
+                .as_ref()
+                .and_then(parse_intent_node);
+            let mut wb = drag_workbench.borrow_mut();
+            wb.outline_drag = node.and_then(|node| {
+                let projection = wb.editor().workbench_projection();
+                projection
+                    .outline
+                    .iter()
+                    .flat_map(|cell| &cell.declarations)
+                    .any(|declaration| declaration.node == node)
+                    .then_some((projection.identity, node))
+            });
+        });
+        root.add_event_listener_with_callback("dragstart", drag_start.as_ref().unchecked_ref())?;
+        drag_start.forget();
+
+        let over_workbench = Rc::clone(workbench);
+        let drag_over = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let owns_target = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .is_some_and(|target| {
+                    target
+                        .closest("[data-intent-drop-before], [data-intent-drop-cell]")
+                        .is_ok_and(|target| target.is_some())
+                });
+            if owns_target && over_workbench.borrow().outline_drag.is_some() {
+                event.prevent_default();
+            }
+        });
+        root.add_event_listener_with_callback("dragover", drag_over.as_ref().unchecked_ref())?;
+        drag_over.forget();
+
+        let drop_document = document.clone();
+        let drop_workbench = Rc::clone(workbench);
+        let drop_handler = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let Some(target) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| {
+                    target
+                        .closest("[data-intent-drop-before], [data-intent-drop-cell]")
+                        .ok()
+                        .flatten()
+                })
+            else {
+                return;
+            };
+            event.prevent_default();
+            let Some(cell) = target
+                .get_attribute("data-intent-cell")
+                .or_else(|| target.get_attribute("data-intent-drop-cell"))
+                .and_then(|cell| cell.parse().ok())
+            else {
+                return;
+            };
+            let before = target
+                .get_attribute("data-intent-drop-before")
+                .and_then(|node| node.parse().ok());
+            let mut wb = drop_workbench.borrow_mut();
+            let Some((painted_identity, node)) = wb.outline_drag.take() else {
+                return;
+            };
+            let projection = wb.editor().workbench_projection();
+            let result = if projection.identity != painted_identity {
+                Err("the dragged declaration belongs to a stale Outline".to_owned())
+            } else {
+                super::projectional_outline_move_patch(
+                    &projection,
+                    node,
+                    super::ProjectionalOutlineMove::Drop { cell, before },
+                )
+                .map_err(str::to_owned)
+                .and_then(|patch| {
+                    wb.editor_mut()
+                        .apply_patch(patch)
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                })
+            };
+            match result {
+                Ok(()) => {
+                    wb.notice = "Outline declaration order updated".into();
+                    save_projectional(&wb);
+                }
+                Err(error) => wb.notice = error,
+            }
+            drop(wb);
+            let _ = render_projectional(&drop_document, &drop_workbench);
+        });
+        root.add_event_listener_with_callback("drop", drop_handler.as_ref().unchecked_ref())?;
+        drop_handler.forget();
+
+        let end_workbench = Rc::clone(workbench);
+        let drag_end = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+            end_workbench.borrow_mut().outline_drag = None;
+        });
+        root.add_event_listener_with_callback("dragend", drag_end.as_ref().unchecked_ref())?;
+        drag_end.forget();
+
         let change_document = document.clone();
         let change_workbench = Rc::clone(workbench);
         let change = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
@@ -5230,11 +5578,55 @@ pub(crate) mod wasm {
                         )
                         .map(|()| "Dimension options updated".to_owned())
                     }
-                    Some(
-                        super::OptionOverlayKind::Fillet
-                        | super::OptionOverlayKind::Offset
-                        | super::OptionOverlayKind::ConstructionDisplay,
-                    ) => Err("This projectional tool is not active yet".to_owned()),
+                    Some(super::OptionOverlayKind::ConstructionDisplay) => {
+                        let scope = match select_value(&change_document, "wb-geometry-pick-scope")
+                            .as_deref()
+                        {
+                            Some("all") => Ok(GeometryPickScope::All),
+                            Some("profile") => Ok(GeometryPickScope::Profile),
+                            Some("construction") => Ok(GeometryPickScope::Construction),
+                            _ => Err("geometry pick scope is unavailable".to_owned()),
+                        };
+                        scope.and_then(|scope| {
+                            let visibility = GeometryVisibility {
+                                explicit_construction: checkbox_checked(
+                                    &change_document,
+                                    "wb-show-explicit-construction",
+                                )
+                                .ok_or_else(|| {
+                                    "explicit Construction visibility is unavailable".to_owned()
+                                })?,
+                                implicit_construction: checkbox_checked(
+                                    &change_document,
+                                    "wb-show-implicit-construction",
+                                )
+                                .ok_or_else(|| {
+                                    "Fillet-hidden visibility is unavailable".to_owned()
+                                })?,
+                                reference_geometry: checkbox_checked(
+                                    &change_document,
+                                    "wb-show-reference-geometry",
+                                )
+                                .ok_or_else(|| {
+                                    "reference geometry visibility is unavailable".to_owned()
+                                })?,
+                            };
+                            wb.grid_visible = checkbox_checked(&change_document, "wb-show-grid")
+                                .ok_or_else(|| "grid visibility is unavailable".to_owned())?;
+                            let effects = wb
+                                .editor_mut()
+                                .editor_mut()
+                                .set_geometry_interaction_policy(GeometryInteractionPolicy {
+                                    scope,
+                                    visibility,
+                                });
+                            let _ = dispatch_projectional_effects(&mut wb, effects);
+                            Ok("Canvas geometry scope updated".to_owned())
+                        })
+                    }
+                    Some(super::OptionOverlayKind::Fillet | super::OptionOverlayKind::Offset) => {
+                        Err("This projectional tool is not active yet".to_owned())
+                    }
                     None => Ok("Tool options closed".to_owned()),
                 };
                 wb.notice = result.unwrap_or_else(|error| error);
@@ -8334,6 +8726,14 @@ pub(crate) mod wasm {
                         }
                         Err(error) => format!("Offset distance restore was rejected: {error}"),
                     };
+                }
+                EditorEffect::PreviewAcceptedProfileOffsetDistance { distance, .. } => {
+                    wb.notice = format!("Profile Offset distance preview {distance:.4}");
+                }
+                EditorEffect::CommitAcceptedProfileOffsetDistance { .. }
+                | EditorEffect::ClearAcceptedProfileOffsetPreview => {
+                    wb.notice =
+                        "Profile Offset property gesture is owned by projectional mode".into();
                 }
                 EditorEffect::PreviewComputedFeatureRadius { radius, .. } => {
                     match apply_computed_feature_editor_effect(wb, &effect) {
@@ -12108,12 +12508,12 @@ mod tests {
         observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
         offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
         owns_authoring_pick, projectional_design_markup, projectional_direct_gesture_is_capturable,
-        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
-        reproduction_focus_target_after_action, reproduction_overlay_presentation,
-        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
-        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
-        should_route_stationary_draft_inference,
+        projectional_outline_move_patch, rational_conic_construction_copy,
+        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
 
     #[test]
@@ -12194,6 +12594,111 @@ mod tests {
     }
 
     #[test]
+    fn projectional_outline_moves_are_organization_only_and_stale_safe() {
+        run_projectional_test_with_large_stack("projectional-outline-organization", || {
+            let mut editor = projectional_authoring_fixture();
+            let projection = editor.workbench_projection();
+            let original = projection.outline[0]
+                .declarations
+                .iter()
+                .map(|declaration| declaration.node)
+                .collect::<Vec<_>>();
+            assert_eq!(original.len(), 2);
+            let accepted_before = editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .evidence
+                .clone();
+
+            let moved = projectional_outline_move_patch(
+                &projection,
+                original[1],
+                super::ProjectionalOutlineMove::Up,
+            )
+            .unwrap();
+            let outcome = editor.apply_patch(moved).unwrap();
+            assert_eq!(outcome.disposition, IntentPlanDisposition::OrganizationOnly);
+            assert_eq!(
+                editor.workbench_projection().outline[0]
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.node)
+                    .collect::<Vec<_>>(),
+                vec![original[1], original[0]],
+            );
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+                    .evidence,
+                accepted_before,
+            );
+
+            let moved = projectional_outline_move_patch(
+                &editor.workbench_projection(),
+                original[1],
+                super::ProjectionalOutlineMove::Down,
+            )
+            .unwrap();
+            assert_eq!(
+                editor.apply_patch(moved).unwrap().disposition,
+                IntentPlanDisposition::OrganizationOnly,
+            );
+            assert_eq!(
+                editor.workbench_projection().outline[0]
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.node)
+                    .collect::<Vec<_>>(),
+                original,
+            );
+
+            let projection = editor.workbench_projection();
+            let dropped = projectional_outline_move_patch(
+                &projection,
+                original[1],
+                super::ProjectionalOutlineMove::Drop {
+                    cell: projection.outline[0].cell,
+                    before: Some(original[0]),
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                editor.apply_patch(dropped).unwrap().disposition,
+                IntentPlanDisposition::OrganizationOnly,
+            );
+            assert_eq!(
+                editor.workbench_projection().outline[0]
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.node)
+                    .collect::<Vec<_>>(),
+                vec![original[1], original[0]],
+            );
+
+            let stale_patch = projectional_outline_move_patch(
+                &projection,
+                original[1],
+                super::ProjectionalOutlineMove::Up,
+            )
+            .unwrap();
+            let history_before = editor.coordinator().intent().undo_len();
+            assert!(editor.apply_patch(stale_patch).is_err());
+            assert_eq!(editor.coordinator().intent().undo_len(), history_before);
+            assert_eq!(
+                editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+                    .evidence,
+                accepted_before,
+            );
+        });
+    }
+
+    #[test]
     fn projectional_browser_captures_every_supported_direct_manipulation_route() {
         assert!(projectional_direct_gesture_is_capturable(
             ActivePointerGestureKind::Point,
@@ -12201,11 +12706,15 @@ mod tests {
         assert!(projectional_direct_gesture_is_capturable(
             ActivePointerGestureKind::CurveControl,
         ));
+        assert!(projectional_direct_gesture_is_capturable(
+            ActivePointerGestureKind::FilletRadius,
+        ));
+        assert!(projectional_direct_gesture_is_capturable(
+            ActivePointerGestureKind::OffsetDistance,
+        ));
         for unsupported in [
             ActivePointerGestureKind::Annotation,
-            ActivePointerGestureKind::FilletRadius,
             ActivePointerGestureKind::FilletContact,
-            ActivePointerGestureKind::OffsetDistance,
         ] {
             assert!(!projectional_direct_gesture_is_capturable(unsupported));
         }
