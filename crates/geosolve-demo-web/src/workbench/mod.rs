@@ -2843,6 +2843,13 @@ struct ProblemSetIdentity {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProjectionalProblemIdentity {
+    session: geosolve_sketch_intent::IntentSessionIdentity,
+    diagnostic: geosolve_sketch_intent::IntentKey,
+}
+
+#[cfg(target_arch = "wasm32")]
 impl ProblemSetIdentity {
     fn current(
         coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
@@ -3378,6 +3385,7 @@ pub(crate) mod wasm {
         option_overlay: super::OptionOverlayState,
         construction_preview: Option<ConstructionPreview>,
         notice: String,
+        problems: super::DismissibleDisclosure<super::ProjectionalProblemIdentity>,
     }
 
     impl ProjectionalWorkbench {
@@ -3520,6 +3528,7 @@ pub(crate) mod wasm {
             option_overlay: super::OptionOverlayState::default(),
             construction_preview: None,
             notice,
+            problems: super::DismissibleDisclosure::default(),
         };
         let scene = workbench.authority.scene(
             workbench.camera.viewport(),
@@ -3652,7 +3661,7 @@ pub(crate) mod wasm {
         ] {
             set_disabled(&required(document, id)?, false)?;
         }
-        for action in ["new", "reproduction-copy", "reproduction-open", "problems"] {
+        for action in ["new", "reproduction-copy", "reproduction-open"] {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
             {
@@ -3668,6 +3677,8 @@ pub(crate) mod wasm {
             "zoom-out",
             "zoom-fit",
             "zoom-origin",
+            "problems",
+            "problems-close",
         ] {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
@@ -4206,6 +4217,20 @@ pub(crate) mod wasm {
         document: &Document,
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
     ) -> Result<(), JsValue> {
+        let problem_identity = {
+            let wb = workbench.borrow();
+            let projection = wb.editor().workbench_projection();
+            projection
+                .latest_diagnostic
+                .map(|diagnostic| super::ProjectionalProblemIdentity {
+                    session: projection.identity,
+                    diagnostic,
+                })
+        };
+        let show_problems = workbench
+            .borrow_mut()
+            .problems
+            .reconcile(problem_identity.as_ref());
         let wb = workbench.borrow();
         render_projectional_canvas(document, &wb, super::WorkbenchRenderScope::Durable)?;
         let source = wb.editor().coordinator().presentation_session();
@@ -4288,6 +4313,23 @@ pub(crate) mod wasm {
         } else {
             "Accepted"
         }));
+        let problem_text = problem_identity.as_ref().map_or_else(
+            || "No current projectional intent problem".to_owned(),
+            |problem| {
+                format!(
+                    "The latest intent attempt was retained but could not materialize: {}",
+                    problem.diagnostic
+                )
+            },
+        );
+        required(document, "wb-problem-text")?
+            .set_inner_html(&super::panels::problem_markup(&problem_text));
+        let problems = required(document, "wb-problems")?;
+        if show_problems {
+            problems.remove_attribute("hidden")?;
+        } else {
+            problems.set_attribute("hidden", "")?;
+        }
         required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
         required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
             "{:.1} px / unit",
@@ -6753,6 +6795,21 @@ pub(crate) mod wasm {
                         "Annotations already use automatic placement".into()
                     };
                     durable = changed;
+                }
+                Some("problems") => {
+                    wb.problems.reopen();
+                    wb.notice = "Current projectional problem opened".into();
+                }
+                Some("problems-close") => {
+                    let projection = wb.editor().workbench_projection();
+                    let current = projection.latest_diagnostic.map(|diagnostic| {
+                        super::ProjectionalProblemIdentity {
+                            session: projection.identity,
+                            diagnostic,
+                        }
+                    });
+                    wb.problems.dismiss(current.as_ref());
+                    wb.notice = "Current projectional problem dismissed".into();
                 }
                 Some("delete") => {
                     if let Ok(viewport) = required(&click_document, "wb-viewport") {
