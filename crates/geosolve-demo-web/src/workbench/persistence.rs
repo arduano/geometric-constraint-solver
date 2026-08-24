@@ -1162,18 +1162,54 @@ pub(crate) fn projectional_editor_from_legacy_snapshot(
         .ok_or_else(|| "workspace is not a strict v1-v6 legacy bootstrap".to_owned())?;
     let native =
         snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
+    projectional_editor_from_flat_parts(
+        native,
+        bootstrap.feature_document()?,
+        bootstrap.feature_lifecycle_high_water(),
+        snapshot.annotation_layout(),
+        bootstrap.source_version(),
+    )
+}
+
+/// Normalizes one already accepted in-process flat coordinator, such as a
+/// sample-library fixture, into the same history-free per-object projectional
+/// bootstrap used by strict v1-v6 workspace migration.
+///
+/// The coordinator is borrowed only as authenticated native input. Its flat
+/// Undo/Redo stack is deliberately not copied into the returned authority.
+pub(crate) fn projectional_editor_from_flat_coordinator(
+    coordinator: &RetainedEditorCoordinator,
+) -> Result<ProjectionalEditorSession, String> {
+    let checkpoint = coordinator
+        .persistence_checkpoint()
+        .map_err(|error| error.to_string())?;
+    projectional_editor_from_flat_parts(
+        coordinator.session().clone(),
+        coordinator.feature_document().clone(),
+        checkpoint.feature_lifecycle_high_water(),
+        coordinator.editor().annotation_layout().clone(),
+        FLAT_WORKSPACE_VERSION,
+    )
+}
+
+fn projectional_editor_from_flat_parts(
+    native: RetainedSketchDocumentSession,
+    features: ComputedFeatureDocument,
+    feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
+    annotation_layout: AnnotationLayoutState,
+    source_version: u32,
+) -> Result<ProjectionalEditorSession, String> {
     let accepted = native
         .accepted_state_for_current_input()
         .ok_or_else(|| {
             format!(
                 "legacy workspace v{} has no current accepted scene for safe projectional bootstrap activation",
-                bootstrap.source_version()
+                source_version
             )
         })?
         .document()
         .clone();
     let design = native.design_document().clone();
-    let features = bootstrap.feature_document()?;
     let session_id = IntentSessionId::from_raw(
         (design.id().0.as_u128() ^ 0x6765_6f73_6f6c_7665_2d6d_3833_2d76_3800_u128).max(1),
     );
@@ -1182,13 +1218,12 @@ pub(crate) fn projectional_editor_from_legacy_snapshot(
         &design,
         &accepted,
         &features,
-        bootstrap.feature_lifecycle_high_water(),
+        feature_lifecycle_high_water,
     )
     .map_err(|error| error.to_string())?;
     let mut projectional = ProjectionalEditorSession::restore_native_bootstrap(intent, native)
         .map_err(|error| error.to_string())?;
-    let layout =
-        compatible_annotation_layout_for_projectional(&projectional, &snapshot.annotation_layout());
+    let layout = compatible_annotation_layout_for_projectional(&projectional, &annotation_layout);
     projectional.editor_mut().restore_annotation_layout(layout);
     Ok(projectional)
 }

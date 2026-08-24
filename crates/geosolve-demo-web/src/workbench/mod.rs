@@ -142,11 +142,9 @@ impl WorkbenchRenderScope {
 
 /// Exactly one durable document/history authority installed in the workbench.
 ///
-/// Strict v1-v6 workspaces normalize into a history-free projectional editor.
-/// A canonical v8 workspace installs only the projectional editor session
-/// whose native materialization was independently cold-authenticated. Fresh
-/// in-process sample coordinators remain flat until their authoring bridge is
-/// deliberately activated.
+/// Strict v1-v6 workspaces and in-process samples normalize into a history-free
+/// projectional editor. A canonical v8 workspace installs only the projectional
+/// editor session whose native materialization was independently cold-authenticated.
 #[cfg(any(target_arch = "wasm32", test))]
 enum WorkbenchDocumentAuthority {
     Flat(Box<geosolve_constraint_editor::RetainedEditorCoordinator>),
@@ -191,6 +189,28 @@ impl WorkbenchDocumentAuthority {
             computed_evaluation_high_water,
             revisions,
         }
+    }
+
+    fn from_flat_coordinator(
+        coordinator: geosolve_constraint_editor::RetainedEditorCoordinator,
+    ) -> Result<Self, String> {
+        let checkpoint = coordinator
+            .persistence_checkpoint()
+            .map_err(|error| error.to_string())?;
+        let computed_evaluation_high_water = checkpoint.computed_evaluation_high_water();
+        let revisions = checkpoint.revisions();
+        let editor = persistence::projectional_editor_from_flat_coordinator(&coordinator)?;
+        Ok(Self::projectional(
+            editor,
+            computed_evaluation_high_water,
+            persistence::WorkspaceRevisions {
+                design: revisions.design().get(),
+                attempt: revisions.attempt().get(),
+                accepted: revisions
+                    .accepted()
+                    .map(geosolve_sketch::SketchAcceptedRevision::get),
+            },
+        ))
     }
 
     const fn is_projectional(&self) -> bool {
@@ -3143,6 +3163,7 @@ pub(crate) mod wasm {
     struct ProjectionalWorkbench {
         authority: super::WorkbenchDocumentAuthority,
         authoring: AuthoringState,
+        samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
@@ -3208,20 +3229,23 @@ pub(crate) mod wasm {
             WorkspaceSnapshot::decode(snapshot)
                 .and_then(|value| super::WorkbenchDocumentAuthority::from_snapshot(&value))
         } else {
-            empty_coordinator().map(super::WorkbenchDocumentAuthority::flat)
+            empty_coordinator().and_then(super::WorkbenchDocumentAuthority::from_flat_coordinator)
         };
         match restored {
             Ok(authority) if authority.is_projectional() => {
                 install_projectional(document, authority, "Projectional workspace ready".into())
             }
             Ok(authority) => install_flat(document, authority, "Ready".to_owned()),
-            Err(error) => install_flat(
-                document,
-                super::WorkbenchDocumentAuthority::flat(
-                    empty_coordinator().map_err(|error| JsValue::from_str(&error))?,
-                ),
-                format!("Stored workbench could not be restored: {error}"),
-            ),
+            Err(error) => {
+                let fresh = empty_coordinator()
+                    .and_then(super::WorkbenchDocumentAuthority::from_flat_coordinator)
+                    .map_err(|fresh_error| JsValue::from_str(&fresh_error))?;
+                install_projectional(
+                    document,
+                    fresh,
+                    format!("Stored workbench could not be restored: {error}"),
+                )
+            }
         }
     }
 
@@ -3273,6 +3297,7 @@ pub(crate) mod wasm {
         let mut workbench = ProjectionalWorkbench {
             authority,
             authoring: AuthoringState::default(),
+            samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
             pointer_moves: Rc::new(RefCell::new(super::ProjectionalPointerMoveQueue::default())),
@@ -3290,6 +3315,7 @@ pub(crate) mod wasm {
         let workbench = Rc::new(RefCell::new(workbench));
         install_palette_icons(document)?;
         install_design_projection_tabs(document)?;
+        install_sample_flyout_state(document)?;
         set_projectional_surface_availability(document)?;
         render_projectional(document, &workbench)?;
         install_projectional_events(document, &workbench)?;
@@ -3382,6 +3408,26 @@ pub(crate) mod wasm {
 
     fn projectional_ordinary_authoring_active(wb: &ProjectionalWorkbench) -> bool {
         wb.authoring.active_tool().is_some()
+    }
+
+    fn open_projectional_sample(wb: &mut ProjectionalWorkbench, key: &str) -> Result<(), String> {
+        let coordinator = wb.samples.open_key(key)?;
+        wb.authority = super::WorkbenchDocumentAuthority::from_flat_coordinator(coordinator)?;
+        wb.authoring.deactivate();
+        wb.option_overlay.close();
+        wb.construction_preview = None;
+        wb.pointer_moves.borrow_mut().invalidate();
+        wb.captured_pointer = None;
+        let scene = wb.authority.scene(
+            wb.camera.viewport(),
+            super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+        );
+        let _ = wb.camera.fit_scene_or_reset(scene.as_ref());
+        wb.notice = format!(
+            "{} opened as a projectional editable workspace",
+            wb.samples.selected_title().unwrap_or("Sample")
+        );
+        Ok(())
     }
 
     fn render_projectional_authoring_status(
@@ -3733,6 +3779,7 @@ pub(crate) mod wasm {
         required(document, "wb-design-outline")?.set_inner_html(&design_markup.outline);
         required(document, "wb-design-source")?.set_inner_html(&design_markup.source);
         required(document, "wb-design-history")?.set_inner_html(&design_markup.history);
+        render_sample_ui(document, &wb.samples)?;
         let intent_inspector = required(document, "wb-intent-inspector")?;
         intent_inspector.set_inner_html(&design_markup.inspector);
         set_hidden(&intent_inspector, design_markup.inspector.is_empty())?;
@@ -4758,11 +4805,36 @@ pub(crate) mod wasm {
                 .closest(concat!(
                     "[data-wb-tool], [data-wb-geometry-family], ",
                     "[data-wb-geometry-variant], [data-wb-authoring], ",
-                    "[data-editor-item], [data-wb-action]"
+                    "[data-editor-item], [data-wb-action], [data-sample-id], ",
+                    "[data-sample-group-trigger], [data-intent-move]"
                 ))
                 .ok()
                 .flatten()
                 .unwrap_or(origin);
+
+            if target.has_attribute("data-sample-group-trigger") {
+                return;
+            }
+            if let Some(key) = target.get_attribute("data-sample-id") {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before opening a sample",
+                    );
+                }
+                if let Err(error) = open_projectional_sample(&mut wb, &key) {
+                    wb.notice = error;
+                } else {
+                    save_projectional(&wb);
+                }
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                return;
+            }
 
             if target.get_attribute("data-wb-tool").as_deref() == Some("select") {
                 let mut wb = click_workbench.borrow_mut();
@@ -12069,6 +12141,56 @@ mod tests {
         assert_eq!(Outline.button_id(), "wb-design-tab-outline");
         assert_eq!(StructuredSource.panel_id(), "wb-design-source");
         assert_eq!(History.panel_id(), "wb-design-history");
+    }
+
+    #[test]
+    fn fresh_and_sample_flat_inputs_activate_history_free_projectional_authority() {
+        run_projectional_test_with_large_stack("projectional-startup-and-sample-bootstrap", || {
+            let document = SketchDocument::with_id(
+                10.0,
+                DocumentId(PersistentId::from_u128(0x8308_0001_u128 << 64)),
+            )
+            .unwrap();
+            let native = RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .unwrap();
+            let authority = WorkbenchDocumentAuthority::from_flat_coordinator(
+                RetainedEditorCoordinator::new(native).unwrap(),
+            )
+            .unwrap();
+            let fresh = authority.projectional_ref().unwrap();
+            assert!(authority.is_projectional());
+            assert!(authority.flat_ref().is_none());
+            assert!(fresh.coordinator().presentation_session().is_some());
+            assert!(fresh.coordinator().intent().undo_len() == 0);
+
+            let mut samples = super::samples::SampleCatalogState::default();
+            let sample = samples.open_key("constraint-dimension-sampler").unwrap();
+            let expected_document = sample.session().design_document().clone();
+            let authority = WorkbenchDocumentAuthority::from_flat_coordinator(sample).unwrap();
+            let projectional = authority.projectional_ref().unwrap();
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .presentation_session()
+                    .unwrap()
+                    .design_document(),
+                &expected_document,
+            );
+            assert_eq!(projectional.coordinator().intent().undo_len(), 0);
+            assert!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .nodes()
+                    .values()
+                    .all(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
+            );
+        });
     }
 
     #[test]
