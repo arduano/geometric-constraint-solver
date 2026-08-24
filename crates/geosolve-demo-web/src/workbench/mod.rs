@@ -14332,7 +14332,7 @@ mod tests {
             assert!(authority.is_projectional());
             assert!(authority.flat_ref().is_none());
             assert!(fresh.coordinator().presentation_session().is_some());
-            assert!(fresh.coordinator().intent().undo_len() == 0);
+            assert_eq!(fresh.coordinator().intent().undo_len(), 0);
 
             let mut samples = super::samples::SampleCatalogState::default();
             let sample = samples.open_key("constraint-dimension-sampler").unwrap();
