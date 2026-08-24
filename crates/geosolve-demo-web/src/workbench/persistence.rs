@@ -1168,11 +1168,13 @@ pub(crate) fn projectional_editor_from_legacy_snapshot(
         .ok_or_else(|| "workspace is not a strict v1-v6 legacy bootstrap".to_owned())?;
     let native =
         snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
+    let features = bootstrap.feature_document()?;
+    let annotation_layout = snapshot.annotation_layout();
     projectional_editor_from_flat_parts(
         native,
-        bootstrap.feature_document()?,
+        &features,
         bootstrap.feature_lifecycle_high_water(),
-        snapshot.annotation_layout(),
+        &annotation_layout,
         bootstrap.source_version(),
     )
 }
@@ -1191,26 +1193,25 @@ pub(crate) fn projectional_editor_from_flat_coordinator(
         .map_err(|error| error.to_string())?;
     projectional_editor_from_flat_parts(
         coordinator.session().clone(),
-        coordinator.feature_document().clone(),
+        coordinator.feature_document(),
         checkpoint.feature_lifecycle_high_water(),
-        coordinator.editor().annotation_layout().clone(),
+        coordinator.editor().annotation_layout(),
         FLAT_WORKSPACE_VERSION,
     )
 }
 
 fn projectional_editor_from_flat_parts(
     native: RetainedSketchDocumentSession,
-    features: ComputedFeatureDocument,
+    features: &ComputedFeatureDocument,
     feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
-    annotation_layout: AnnotationLayoutState,
+    annotation_layout: &AnnotationLayoutState,
     source_version: u32,
 ) -> Result<ProjectionalEditorSession, String> {
     let accepted = native
         .accepted_state_for_current_input()
         .ok_or_else(|| {
             format!(
-                "legacy workspace v{} has no current accepted scene for safe projectional bootstrap activation",
-                source_version
+                "legacy workspace v{source_version} has no current accepted scene for safe projectional bootstrap activation"
             )
         })?
         .document()
@@ -1223,13 +1224,13 @@ fn projectional_editor_from_flat_parts(
         session_id,
         &design,
         &accepted,
-        &features,
+        features,
         feature_lifecycle_high_water,
     )
     .map_err(|error| error.to_string())?;
     let mut projectional = ProjectionalEditorSession::restore_native_bootstrap(intent, native)
         .map_err(|error| error.to_string())?;
-    let layout = compatible_annotation_layout_for_projectional(&projectional, &annotation_layout);
+    let layout = compatible_annotation_layout_for_projectional(&projectional, annotation_layout);
     projectional.editor_mut().restore_annotation_layout(layout);
     Ok(projectional)
 }
@@ -3707,6 +3708,11 @@ mod tests {
         });
     }
 
+    #[allow(
+        clippy::float_cmp,
+        clippy::too_many_lines,
+        reason = "one migration transcript keeps exact legacy scalar identity and complete continuation evidence contiguous"
+    )]
     fn m83_migrated_v6_continues_through_edit_undo_redo_and_cold_v8_reload_body() {
         let mut document = SketchDocument::new(1.0).expect("document");
         let historical = document

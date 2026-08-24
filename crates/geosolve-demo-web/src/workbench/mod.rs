@@ -194,14 +194,14 @@ impl WorkbenchDocumentAuthority {
     }
 
     fn from_flat_coordinator(
-        coordinator: geosolve_constraint_editor::RetainedEditorCoordinator,
+        coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
     ) -> Result<Self, String> {
         let checkpoint = coordinator
             .persistence_checkpoint()
             .map_err(|error| error.to_string())?;
         let computed_evaluation_high_water = checkpoint.computed_evaluation_high_water();
         let revisions = checkpoint.revisions();
-        let editor = persistence::projectional_editor_from_flat_coordinator(&coordinator)?;
+        let editor = persistence::projectional_editor_from_flat_coordinator(coordinator)?;
         Ok(Self::projectional(
             editor,
             computed_evaluation_high_water,
@@ -3444,7 +3444,9 @@ pub(crate) mod wasm {
             WorkspaceSnapshot::decode(snapshot)
                 .and_then(|value| super::WorkbenchDocumentAuthority::from_snapshot(&value))
         } else {
-            empty_coordinator().and_then(super::WorkbenchDocumentAuthority::from_flat_coordinator)
+            empty_coordinator().and_then(|coordinator| {
+                super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)
+            })
         };
         match restored {
             Ok(authority) if authority.is_projectional() => {
@@ -3453,7 +3455,9 @@ pub(crate) mod wasm {
             Ok(authority) => install_flat(document, authority, "Ready".to_owned()),
             Err(error) => {
                 let fresh = empty_coordinator()
-                    .and_then(super::WorkbenchDocumentAuthority::from_flat_coordinator)
+                    .and_then(|coordinator| {
+                        super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)
+                    })
                     .map_err(|fresh_error| JsValue::from_str(&fresh_error))?;
                 install_projectional(
                     document,
@@ -3720,7 +3724,7 @@ pub(crate) mod wasm {
 
     fn open_projectional_sample(wb: &mut ProjectionalWorkbench, key: &str) -> Result<(), String> {
         let coordinator = wb.samples.open_key(key)?;
-        wb.authority = super::WorkbenchDocumentAuthority::from_flat_coordinator(coordinator)?;
+        wb.authority = super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)?;
         wb.authoring.deactivate();
         wb.feature_authoring.deactivate();
         let _ = wb.offset_authoring.cancel();
@@ -14326,10 +14330,9 @@ mod tests {
                 SolverConfig::default(),
             )
             .unwrap();
-            let authority = WorkbenchDocumentAuthority::from_flat_coordinator(
-                RetainedEditorCoordinator::new(native).unwrap(),
-            )
-            .unwrap();
+            let coordinator = RetainedEditorCoordinator::new(native).unwrap();
+            let authority =
+                WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator).unwrap();
             let fresh = authority.projectional_ref().unwrap();
             assert!(authority.is_projectional());
             assert!(authority.flat_ref().is_none());
@@ -14339,7 +14342,7 @@ mod tests {
             let mut samples = super::samples::SampleCatalogState::default();
             let sample = samples.open_key("constraint-dimension-sampler").unwrap();
             let expected_document = sample.session().design_document().clone();
-            let authority = WorkbenchDocumentAuthority::from_flat_coordinator(sample).unwrap();
+            let authority = WorkbenchDocumentAuthority::from_flat_coordinator(&sample).unwrap();
             let projectional = authority.projectional_ref().unwrap();
             assert_eq!(
                 projectional
@@ -14625,9 +14628,9 @@ mod tests {
         assert!(projectional_direct_gesture_is_capturable(
             ActivePointerGestureKind::Annotation,
         ));
-        for unsupported in [ActivePointerGestureKind::FilletContact] {
-            assert!(!projectional_direct_gesture_is_capturable(unsupported));
-        }
+        assert!(!projectional_direct_gesture_is_capturable(
+            ActivePointerGestureKind::FilletContact,
+        ));
     }
 
     #[test]
