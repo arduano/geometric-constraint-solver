@@ -220,7 +220,7 @@ impl ProjectionalEditorSession {
     ) -> Result<Self, ProjectionalEditorError> {
         let decoded = decode_flat_intent_bootstrap(&intent)?;
         let ownership = flat_intent_bootstrap_materialization_map(&intent)?;
-        Self::restore_authenticated_native_bootstrap(intent, native, decoded, ownership)
+        Self::restore_authenticated_native_bootstrap(intent, native, &decoded, ownership)
     }
 
     /// Restores the exact accepted bootstrap authority beneath a newer
@@ -241,13 +241,13 @@ impl ProjectionalEditorSession {
     ) -> Result<Self, ProjectionalEditorError> {
         let decoded = decode_flat_intent_accepted_bootstrap(&intent)?;
         let ownership = flat_intent_accepted_bootstrap_materialization_map(&intent)?;
-        Self::restore_authenticated_native_bootstrap(intent, native, decoded, ownership)
+        Self::restore_authenticated_native_bootstrap(intent, native, &decoded, ownership)
     }
 
     fn restore_authenticated_native_bootstrap(
         intent: IntentSession,
         native: RetainedSketchDocumentSession,
-        decoded: crate::DecodedFlatIntentBootstrap,
+        decoded: &crate::DecodedFlatIntentBootstrap,
         mut ownership: crate::IntentMaterializationMap,
     ) -> Result<Self, ProjectionalEditorError> {
         if native.design_document() != &decoded.document {
@@ -320,7 +320,7 @@ impl ProjectionalEditorSession {
             decoded.document.model_scale(),
         )
         .and_then(|materializer| {
-            materializer.with_authenticated_bootstrap(&decoded, materialization.ownership.clone())
+            materializer.with_authenticated_bootstrap(decoded, materialization.ownership.clone())
         })
         .map_err(ProjectionalCoordinatorError::from)?;
         Ok(Self::new(

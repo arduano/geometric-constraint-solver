@@ -1044,6 +1044,10 @@ pub(crate) fn coordinator_from_snapshot(
 /// installed into a parallel retained editor coordinator. Computed-feature
 /// sidecars fail closed until their declarations have an authenticated
 /// projectional materializer path.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one cold-restore boundary validates every persisted authority before installing the projectional editor"
+)]
 pub(crate) fn projectional_editor_from_snapshot(
     snapshot: &WorkspaceSnapshot,
 ) -> Result<ProjectionalEditorSession, String> {
@@ -3723,6 +3727,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one retained-invalid reload regression preserves canonical intent, accepted geometry, history, Undo and corruption rejection together"
+    )]
     fn m83_retained_invalid_migrated_bootstrap_v8_reload_preserves_scene_intent_and_undo() {
         run_m83_persistence_test("m83-retained-invalid-bootstrap-v8", || {
             let mut document = SketchDocument::new(1.0).expect("document");
@@ -3838,8 +3846,9 @@ mod tests {
                     .document()
                     .point(historical)
                     .expect("historical accepted point")
-                    .position,
-                [1.25, -2.5]
+                    .position
+                    .map(f64::to_bits),
+                [1.25, -2.5].map(f64::to_bits),
             );
             let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
             assert!(

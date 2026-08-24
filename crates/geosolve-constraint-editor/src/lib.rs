@@ -22138,6 +22138,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one point-gesture regression keeps request identity, rejection retention, exact release and cancellation together"
+    )]
     fn projected_drag_retains_last_valid_preview_and_requires_matching_pointer() {
         let (document, _, points) = line_document();
         let scene = scene(&document);
