@@ -10,17 +10,18 @@
 use std::sync::Arc;
 
 use geosolve_sketch::{
-    DesignPointId, DocumentCurveControlId, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentId, OperationControl, OperationOutcome, PreparedSketchInput,
-    RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity,
-    SketchHardValidity,
+    CurveId, DesignPointId, DocumentCurveControlId, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentId, GeometryRole, OperationControl, OperationOutcome,
+    PreparedSketchInput, RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE,
+    SketchDesignIdentity, SketchHardValidity,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedFeatureAuthoringSnapshot, ComputedFeatureDefinition,
     ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
 };
 use geosolve_sketch_intent::{
-    IntentKey, IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
+    IntentFieldKey, IntentKey, IntentLiteral, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+    IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
 };
 use geosolve_sketch_topology::{OffsetOperandRequest, PreparedOffsetOperandQuery};
 use thiserror::Error;
@@ -32,9 +33,9 @@ use crate::{
     AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
     ConstraintEditor, EditorEffect, EditorError, EditorScene, FeatureAuthoringCandidate,
     FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
-    IntentBootstrapError, IntentInspectorEditError, IntentInspectorEditTarget,
-    IntentInspectorEditValue, IntentInspectorProjection, IntentNativeBinding,
-    IntentSourceEditError, IntentSourceTokenId, IntentValidationEvidence,
+    GeometryRoleSelectionState, IntentBootstrapError, IntentInspectorEditError,
+    IntentInspectorEditTarget, IntentInspectorEditValue, IntentInspectorProjection,
+    IntentNativeBinding, IntentSourceEditError, IntentSourceTokenId, IntentValidationEvidence,
     IntentWorkbenchProjection, Modifiers, OffsetAuthoringCandidate, OffsetAuthoringOutcome,
     OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
     ProjectionalAuthoringError, ProjectionalCoordinatorError, ProjectionalFilletAuthoringError,
@@ -1971,6 +1972,134 @@ impl ProjectionalEditorSession {
         self.editor.select_item(item, modifiers);
     }
 
+    /// Returns the aggregate persistent role of the currently selected
+    /// projectional geometry declarations.
+    ///
+    /// Repeated spans of one native curve and several output curves owned by
+    /// one recipe count once. A selected curve whose exact intent owner does
+    /// not expose the closed `role` field is reported as unsupported rather
+    /// than being mistaken for the role used by future authoring.
+    ///
+    /// # Errors
+    ///
+    /// Returns an ownership error when a selected accepted curve has no one
+    /// exact role-bearing declaration in the accepted materialization.
+    pub fn selected_geometry_role_state(
+        &self,
+    ) -> Result<Option<GeometryRoleSelectionState>, ProjectionalEditorError> {
+        let owners = self.selected_geometry_role_owners()?;
+        let roles = owners
+            .into_iter()
+            .map(|node| {
+                self.coordinator
+                    .intent()
+                    .graph()
+                    .node(node)
+                    .ok_or(ProjectionalEditorError::GeometryRoleOwnerMismatch)
+                    .and_then(node_geometry_role)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut roles = roles.into_iter();
+        let Some(first) = roles.next() else {
+            return Ok(None);
+        };
+        if roles.all(|role| role == first) {
+            return Ok(Some(match first {
+                GeometryRole::Profile => GeometryRoleSelectionState::Profile,
+                GeometryRole::Construction => GeometryRoleSelectionState::Construction,
+            }));
+        }
+        Ok(Some(GeometryRoleSelectionState::Mixed))
+    }
+
+    /// Atomically toggles every selected projectional geometry declaration.
+    /// An all-Construction selection becomes Profile; Profile or mixed
+    /// selections become Construction, matching the accepted flat workbench.
+    ///
+    /// # Errors
+    ///
+    /// Rejects empty, protected, ambiguous, or non-role-bearing selection and
+    /// ordinary exact-CAS/materialization failures without changing intent.
+    pub fn toggle_selected_geometry_role(
+        &mut self,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        if self
+            .editor
+            .selection()
+            .iter()
+            .any(|item| matches!(item, SelectionItem::Datum(_)))
+        {
+            return Err(ProjectionalEditorError::ProtectedGeometryRoleSelection);
+        }
+        let owners = self.selected_geometry_role_owners()?;
+        if owners.is_empty() {
+            return Err(ProjectionalEditorError::MissingGeometryRoleSelection);
+        }
+        let state = self
+            .selected_geometry_role_state()?
+            .ok_or(ProjectionalEditorError::MissingGeometryRoleSelection)?;
+        let target = match state {
+            GeometryRoleSelectionState::Construction => GeometryRole::Profile,
+            GeometryRoleSelectionState::Profile | GeometryRoleSelectionState::Mixed => {
+                GeometryRole::Construction
+            }
+        };
+        let value = IntentLiteral::Enum(
+            IntentKey::new(match target {
+                GeometryRole::Profile => "profile",
+                GeometryRole::Construction => "construction",
+            })
+            .map_err(|_| ProjectionalEditorError::InvalidBuiltInGeometryRoleSchema)?,
+        );
+        let field = IntentFieldKey(
+            IntentKey::new("role")
+                .map_err(|_| ProjectionalEditorError::InvalidBuiltInGeometryRoleSchema)?,
+        );
+        let patch = IntentPatch::new(
+            self.coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            owners
+                .into_iter()
+                .map(|node| IntentPatchOperation::SetDefinitionField {
+                    node,
+                    field: field.clone(),
+                    value: value.clone(),
+                })
+                .collect(),
+        );
+        self.apply_patch(patch)
+    }
+
+    fn selected_geometry_role_owners(
+        &self,
+    ) -> Result<std::collections::BTreeSet<NodeId>, ProjectionalEditorError> {
+        let curves = self
+            .editor
+            .selection()
+            .iter()
+            .filter_map(|item| match item {
+                SelectionItem::Curve(span) => Some(span.curve),
+                SelectionItem::Point(_)
+                | SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        if curves.is_empty() {
+            return Ok(std::collections::BTreeSet::new());
+        }
+        let accepted = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        curves
+            .into_iter()
+            .map(|curve| exact_role_owner(self.coordinator.intent(), &accepted.ownership, curve))
+            .collect()
+    }
+
     /// Publishes the exact compatible native item that the current relation or
     /// dimension authoring state would consume on pointer-down.
     ///
@@ -2682,6 +2811,60 @@ impl ProjectionalEditorSession {
     }
 }
 
+fn node_geometry_role(
+    node: &geosolve_sketch_intent::IntentNode,
+) -> Result<GeometryRole, ProjectionalEditorError> {
+    let role = IntentFieldKey(
+        IntentKey::new("role")
+            .map_err(|_| ProjectionalEditorError::InvalidBuiltInGeometryRoleSchema)?,
+    );
+    if !node
+        .kind
+        .schema(u16::try_from(node.children.len()).unwrap_or(u16::MAX))
+        .fields
+        .iter()
+        .any(|field| field.field == role)
+    {
+        return Err(ProjectionalEditorError::UnsupportedGeometryRoleOwner);
+    }
+    match node.fields.get(&role) {
+        None => Ok(GeometryRole::Profile),
+        Some(IntentLiteral::Enum(value)) if value.as_str() == "profile" => {
+            Ok(GeometryRole::Profile)
+        }
+        Some(IntentLiteral::Enum(value)) if value.as_str() == "construction" => {
+            Ok(GeometryRole::Construction)
+        }
+        Some(_) => Err(ProjectionalEditorError::InvalidGeometryRoleOwner),
+    }
+}
+
+fn exact_role_owner(
+    intent: &IntentSession,
+    ownership: &crate::IntentMaterializationMap,
+    curve: CurveId,
+) -> Result<NodeId, ProjectionalEditorError> {
+    let owners = ownership
+        .nodes
+        .iter()
+        .filter(|owner| owner.owned.contains(&IntentNativeBinding::Curve(curve)))
+        .map(|owner| owner.node)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut owners = owners.into_iter();
+    let owner = owners
+        .next()
+        .ok_or(ProjectionalEditorError::GeometryRoleOwnerMismatch)?;
+    if owners.next().is_some() {
+        return Err(ProjectionalEditorError::GeometryRoleOwnerMismatch);
+    }
+    let node = intent
+        .graph()
+        .node(owner)
+        .ok_or(ProjectionalEditorError::GeometryRoleOwnerMismatch)?;
+    node_geometry_role(node)?;
+    Ok(owner)
+}
+
 fn provisional_items(
     accepted: &crate::IntentMaterializationMap,
     preview: &crate::IntentMaterializationMap,
@@ -2785,6 +2968,18 @@ pub enum ProjectionalEditorError {
     ConstructionAcknowledgementMismatch,
     #[error("there is no independently accepted projectional scene")]
     NoAcceptedAuthority,
+    #[error("no projectional curve with an editable persistent role is selected")]
+    MissingGeometryRoleSelection,
+    #[error("intrinsic reference geometry has a protected role")]
+    ProtectedGeometryRoleSelection,
+    #[error("a selected curve does not have one exact projectional role owner")]
+    GeometryRoleOwnerMismatch,
+    #[error("the selected declaration does not expose an editable geometry role")]
+    UnsupportedGeometryRoleOwner,
+    #[error("the selected declaration contains an invalid geometry role")]
+    InvalidGeometryRoleOwner,
+    #[error("the built-in geometry-role schema is invalid")]
+    InvalidBuiltInGeometryRoleSchema,
     #[error("the accepted scene does not match its retained native authority")]
     SceneAuthorityMismatch,
     #[error("computed scene evaluation rejected: {0}")]

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, EditorEffect, IntentNativeBinding, IntentSourceTokenTarget, Modifiers,
-    PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint,
-    SelectionItem, Viewport,
+    ColdIntentMaterializer, EditorEffect, GeometryRoleSelectionState, IntentNativeBinding,
+    IntentSourceTokenTarget, Modifiers, PointerInput, ProjectionalEditorError,
+    ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
-use geosolve_sketch::{DesignPointId, DocumentId, PersistentId};
+use geosolve_sketch::{DesignPointId, DocumentId, GeometryRole, PersistentId, SketchDatum};
 use geosolve_sketch_intent::{
     GeometryRecipeKind, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
     IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
@@ -19,6 +19,27 @@ fn key(value: &str) -> IntentKey {
 const fn primary() -> IntentPortSelector {
     IntentPortSelector::Node {
         role: IntentPortRole::Primary,
+        index: 0,
+    }
+}
+
+const fn start() -> IntentPortSelector {
+    IntentPortSelector::Node {
+        role: IntentPortRole::Start,
+        index: 0,
+    }
+}
+
+const fn end() -> IntentPortSelector {
+    IntentPortSelector::Node {
+        role: IntentPortRole::End,
+        index: 0,
+    }
+}
+
+const fn span() -> IntentPortSelector {
+    IntentPortSelector::Node {
+        role: IntentPortRole::Span,
         index: 0,
     }
 }
@@ -409,6 +430,118 @@ fn logical_selection_source_edit_and_closure_delete_share_the_intent_history() {
         2,
         "create plus organization rename remain after undoing deletion",
     );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn selected_curve_role_toggle_edits_owning_declarations_atomically() {
+    let mut coordinator = ProjectionalIntentCoordinator::empty(
+        IntentSessionId::from_raw(0x8300_4002),
+        ColdIntentMaterializer::with_default_policy(
+            DocumentId(PersistentId::from_u128(0x8300_4002_u128 << 32)),
+            1.0,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let segment = |symbol: &str, y: f64, role: Option<&str>| {
+        let draft = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            key(symbol),
+        )
+        .with_instance_leaf(start(), LeafField::X, coordinate(0.0))
+        .with_instance_leaf(start(), LeafField::Y, coordinate(y))
+        .with_instance_leaf(end(), LeafField::X, coordinate(2.0))
+        .with_instance_leaf(end(), LeafField::Y, coordinate(y));
+        if let Some(role) = role {
+            draft.with_field(IntentFieldKey(key("role")), IntentLiteral::Enum(key(role)))
+        } else {
+            draft
+        }
+    };
+    let outcome = coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("profile"),
+                    draft: Box::new(segment("profile", 0.0, None)),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("construction"),
+                    draft: Box::new(segment("construction", 1.0, Some("construction"))),
+                    cell: None,
+                },
+            ],
+        ))
+        .unwrap();
+    let native_span = |alias: &str| {
+        let port = outcome.aliases.port(&key(alias), span()).unwrap();
+        let IntentNativeBinding::CurveSpan(span) = coordinator
+            .accepted_materialization()
+            .unwrap()
+            .ownership
+            .port(port)
+            .unwrap()
+        else {
+            panic!("segment span must bind one native curve")
+        };
+        span
+    };
+    let profile = native_span("profile");
+    let construction = native_span("construction");
+    let mut editor = ProjectionalEditorSession::new(coordinator);
+    editor.set_selection([
+        SelectionItem::Curve(profile),
+        SelectionItem::Curve(construction),
+    ]);
+    assert_eq!(
+        editor.selected_geometry_role_state().unwrap(),
+        Some(GeometryRoleSelectionState::Mixed)
+    );
+    let history_before = editor.coordinator().intent().undo_len();
+    let toggled = editor.toggle_selected_geometry_role().unwrap();
+    assert_eq!(toggled.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(editor.coordinator().intent().undo_len(), history_before + 1);
+    let document = editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    assert_eq!(
+        document.geometry_role(profile.curve),
+        Some(GeometryRole::Construction)
+    );
+    assert_eq!(
+        document.geometry_role(construction.curve),
+        Some(GeometryRole::Construction)
+    );
+    editor.undo().unwrap().unwrap();
+    let document = editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    assert_eq!(
+        document.geometry_role(profile.curve),
+        Some(GeometryRole::Profile)
+    );
+    assert_eq!(
+        document.geometry_role(construction.curve),
+        Some(GeometryRole::Construction)
+    );
+
+    editor.set_selection([SelectionItem::Datum(SketchDatum::XAxis)]);
+    assert!(matches!(
+        editor.toggle_selected_geometry_role(),
+        Err(ProjectionalEditorError::ProtectedGeometryRoleSelection)
+    ));
 }
 
 #[test]
