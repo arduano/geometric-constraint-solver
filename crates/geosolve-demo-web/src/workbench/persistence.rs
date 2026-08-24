@@ -1055,7 +1055,14 @@ pub(crate) fn projectional_editor_from_snapshot(
         .graph()
         .nodes()
         .values()
-        .any(intent_node_requires_bootstrap_seed);
+        .any(intent_node_requires_bootstrap_seed)
+        || intent.accepted().is_some_and(|accepted| {
+            accepted
+                .graph
+                .nodes()
+                .values()
+                .any(intent_node_requires_bootstrap_seed)
+        });
     if contains_bootstrap {
         let canonical_bootstrap = decode_flat_intent_bootstrap(&intent).ok();
         let mut projectional = if let Some(decoded) = canonical_bootstrap {
@@ -1075,8 +1082,14 @@ pub(crate) fn projectional_editor_from_snapshot(
         } else {
             let stored_design = snapshot.design_document()?;
             let stored_accepted = snapshot.accepted_document()?;
-            let projectional = ProjectionalEditorSession::restore_with_bootstrap_prefix(intent)
-                .map_err(|error| error.to_string())?;
+            let retained_native = snapshot
+                .restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
+            let projectional = ProjectionalEditorSession::restore_retained_native_bootstrap(
+                intent.clone(),
+                retained_native,
+            )
+            .or_else(|_| ProjectionalEditorSession::restore_with_bootstrap_prefix(intent))
+            .map_err(|error| error.to_string())?;
             let rebuilt = projectional
                 .coordinator()
                 .accepted_materialization()
@@ -1516,9 +1529,10 @@ mod tests {
         alpha_scenario,
     };
     use geosolve_sketch_intent::{
-        DeletePolicy, GeometryRecipeKind, IntentEvaluation, IntentKey, IntentLiteral,
-        IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
-        IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
+        BootstrapNativeKind, DeletePolicy, GeometryRecipeKind, IntentEvaluation, IntentKey,
+        IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation,
+        IntentPatchPolicy, IntentPlanDisposition, IntentPortRole, IntentPortSelector,
+        IntentSession, IntentSessionId, IntentUnit, LeafField,
     };
 
     use super::{
@@ -3705,6 +3719,284 @@ mod tests {
     fn m83_migrated_v6_continues_through_edit_undo_redo_and_cold_v8_reload() {
         run_m83_persistence_test("m83-mixed-bootstrap-v8", || {
             m83_migrated_v6_continues_through_edit_undo_redo_and_cold_v8_reload_body();
+        });
+    }
+
+    #[test]
+    fn m83_retained_invalid_migrated_bootstrap_v8_reload_preserves_scene_intent_and_undo() {
+        run_m83_persistence_test("m83-retained-invalid-bootstrap-v8", || {
+            let mut document = SketchDocument::new(1.0).expect("document");
+            let historical = document
+                .add_point("historical point", [1.25, -2.5])
+                .expect("historical point");
+            let native = RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("accepted native session");
+            let flat = WorkspaceSnapshot::from_coordinator(
+                &RetainedEditorCoordinator::new(native).expect("flat coordinator"),
+            )
+            .expect("flat v6 workspace");
+            let migrated = WorkspaceSnapshot::decode(&flat.encode().expect("encode v6"))
+                .expect("strict v6 decode");
+            let mut projectional =
+                projectional_editor_from_legacy_snapshot(&migrated).expect("activate v6 bootstrap");
+
+            let accepted_before = projectional
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted bootstrap scene")
+                .clone();
+            let point_node = projectional
+                .coordinator()
+                .intent()
+                .graph()
+                .nodes()
+                .values()
+                .find(|node| {
+                    matches!(
+                        &node.kind,
+                        IntentNodeKind::Bootstrap { object }
+                            if object.kind == BootstrapNativeKind::Point
+                    )
+                })
+                .expect("historical point declaration")
+                .id;
+            let outcome = projectional
+                .apply_patch(IntentPatch::new(
+                    projectional.coordinator().intent().identity(),
+                    IntentPatchPolicy::RetainFailedIntent,
+                    vec![IntentPatchOperation::SetSuppressed {
+                        node: point_node,
+                        suppressed: true,
+                    }],
+                ))
+                .expect("retain explicitly invalid imported declaration");
+            assert_eq!(outcome.disposition, IntentPlanDisposition::RetainedFailed);
+            assert!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node(point_node)
+                    .expect("current failed declaration")
+                    .suppressed
+            );
+            assert!(
+                !projectional
+                    .coordinator()
+                    .intent()
+                    .accepted()
+                    .expect("accepted bootstrap authority")
+                    .graph
+                    .node(point_node)
+                    .expect("accepted declaration")
+                    .suppressed
+            );
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .accepted_materialization()
+                    .expect("retained accepted scene")
+                    .evidence,
+                accepted_before.evidence
+            );
+            let retained_invalid_json = projectional
+                .coordinator()
+                .intent()
+                .to_canonical_json()
+                .expect("retained-invalid canonical intent");
+
+            let snapshot = WorkspaceSnapshot::from_projectional_editor(&projectional)
+                .expect("capture retained-invalid v8");
+            let encoded = snapshot.encode().expect("encode retained-invalid v8");
+            let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode retained-invalid v8");
+            let mut restored = projectional_editor_from_snapshot(&decoded)
+                .expect("cold restore retained-invalid bootstrap authority");
+
+            assert_eq!(
+                restored
+                    .coordinator()
+                    .intent()
+                    .to_canonical_json()
+                    .expect("restored retained-invalid intent"),
+                retained_invalid_json,
+                "cold reload must keep the failed current graph inspectable",
+            );
+            let restored_accepted = restored
+                .coordinator()
+                .accepted_materialization()
+                .expect("restored accepted scene");
+            assert_eq!(restored_accepted.evidence, accepted_before.evidence);
+            assert_eq!(
+                restored_accepted
+                    .session
+                    .accepted_state_for_current_input()
+                    .expect("accepted native scene")
+                    .document()
+                    .point(historical)
+                    .expect("historical accepted point")
+                    .position,
+                [1.25, -2.5]
+            );
+            let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+            assert!(
+                restored
+                    .scene(viewport, 0.5)
+                    .expect("retained accepted canvas")
+                    .points
+                    .iter()
+                    .any(|point| point.id == historical),
+                "retained-invalid reload must not blank accepted geometry",
+            );
+
+            assert!(restored.undo().expect("undo retained failure").is_some());
+            let intent = restored.coordinator().intent();
+            assert_eq!(
+                intent
+                    .accepted()
+                    .expect("accepted authority after Undo")
+                    .target,
+                intent.semantic_identity(),
+            );
+            assert!(
+                !intent
+                    .graph()
+                    .node(point_node)
+                    .expect("restored imported declaration")
+                    .suppressed
+            );
+            let accepted_after_undo = restored
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted scene after Undo");
+            assert_eq!(
+                accepted_after_undo.session.design_document(),
+                accepted_before.session.design_document(),
+            );
+            assert_eq!(
+                accepted_after_undo
+                    .session
+                    .accepted_state_for_current_input()
+                    .expect("accepted native scene after Undo")
+                    .document(),
+                accepted_before
+                    .session
+                    .accepted_state_for_current_input()
+                    .expect("original accepted native scene")
+                    .document(),
+            );
+
+            let primary = IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            };
+            let ordinary = IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::SketchPoint,
+                },
+                IntentKey::new("ordinary point").expect("symbol"),
+            )
+            .with_instance_leaf(
+                primary,
+                LeafField::X,
+                IntentLiteral::Quantity {
+                    value: 4.0,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_instance_leaf(
+                primary,
+                LeafField::Y,
+                IntentLiteral::Quantity {
+                    value: 3.0,
+                    unit: IntentUnit::Length,
+                },
+            );
+            restored
+                .apply_patch(IntentPatch::new(
+                    restored.coordinator().intent().identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new("ordinary-point").expect("alias"),
+                        draft: Box::new(ordinary),
+                        cell: None,
+                    }],
+                ))
+                .expect("add ordinary declaration after imported bootstrap");
+
+            let bootstrap_nodes = restored
+                .coordinator()
+                .intent()
+                .graph()
+                .nodes()
+                .iter()
+                .filter_map(|(node, value)| {
+                    intent_node_requires_bootstrap_seed(value).then_some(*node)
+                })
+                .collect::<std::collections::BTreeSet<_>>();
+            let exact_nodes = restored
+                .coordinator()
+                .intent()
+                .graph()
+                .dependent_closure(bootstrap_nodes.iter().copied())
+                .expect("bootstrap dependent closure");
+            let root = *bootstrap_nodes.iter().next().expect("bootstrap root");
+            let deletion = restored
+                .apply_patch(IntentPatch::new(
+                    restored.coordinator().intent().identity(),
+                    IntentPatchPolicy::RetainFailedIntent,
+                    vec![IntentPatchOperation::DeleteNode {
+                        node: root,
+                        policy: DeletePolicy::CascadeRoots {
+                            exact_roots: bootstrap_nodes,
+                            exact_nodes,
+                        },
+                    }],
+                ))
+                .expect("retain deletion of every current bootstrap declaration");
+            assert_eq!(deletion.disposition, IntentPlanDisposition::RetainedFailed);
+            assert!(
+                restored
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .nodes()
+                    .values()
+                    .all(|node| !intent_node_requires_bootstrap_seed(node))
+            );
+
+            let deleted_snapshot = WorkspaceSnapshot::from_projectional_editor(&restored)
+                .expect("capture bootstrap-free retained-invalid v8");
+            let deleted_snapshot = WorkspaceSnapshot::decode(
+                &deleted_snapshot
+                    .encode()
+                    .expect("encode bootstrap-free retained-invalid v8"),
+            )
+            .expect("decode bootstrap-free retained-invalid v8");
+            let restored_deleted = projectional_editor_from_snapshot(&deleted_snapshot)
+                .expect("accepted bootstrap graph must route bootstrap-free current reload");
+            assert!(
+                restored_deleted
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .nodes()
+                    .values()
+                    .all(|node| !intent_node_requires_bootstrap_seed(node)),
+                "the retained failed current graph remains inspectable",
+            );
+            assert!(
+                restored_deleted
+                    .scene(viewport, 0.5)
+                    .expect("accepted canvas beneath bootstrap-free current graph")
+                    .points
+                    .iter()
+                    .any(|point| point.id == historical),
+                "bootstrap routing must inspect accepted as well as current intent",
+            );
         });
     }
 

@@ -22,11 +22,12 @@ use geosolve_sketch_features::{
     ComputedFeatureObjectBootstrap, ComputedFeatureRevision,
 };
 use geosolve_sketch_intent::{
-    BootstrapNativeKind, InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentKey,
-    IntentKeyError, IntentLiteral, IntentModelError, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPlanError, IntentPortRole, IntentPortSelector,
-    IntentSession, IntentSessionError, IntentSessionId, IntentUnit, LeafField,
-    MaterializationEvidence, PatchPortRef,
+    BootstrapNativeKind, InputRole, InputSlot, IntentAcceptedAuthority, IntentBootstrapObject,
+    IntentEvaluation, IntentGraph, IntentKey, IntentKeyError, IntentLiteral, IntentModelError,
+    IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+    IntentPlanError, IntentPortRole, IntentPortSelector, IntentReservationLedger, IntentSession,
+    IntentSessionError, IntentSessionId, IntentUnit, LeafField, MaterializationEvidence,
+    PatchPortRef,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
@@ -144,30 +145,52 @@ pub fn flat_intent_bootstrap_materialization_map(
     bootstrap_materialization_map(session, false)
 }
 
-/// Builds the exact native bindings owned by a previously authenticated
-/// bootstrap prefix while ignoring later ordinary declarations.
-///
-/// # Errors
-///
-/// Returns a typed payload error when any admitted bootstrap object cannot be
-/// bound to its exact persistent native identity.
-pub(crate) fn flat_intent_bootstrap_prefix_materialization_map(
+/// Builds exact ownership from a canonical bootstrap-only accepted authority.
+pub(crate) fn flat_intent_accepted_bootstrap_materialization_map(
     session: &IntentSession,
 ) -> Result<IntentMaterializationMap, IntentBootstrapError> {
-    bootstrap_materialization_map(session, true)
+    let accepted = session
+        .accepted()
+        .ok_or(IntentBootstrapError::MissingAcceptedAuthority)?;
+    bootstrap_materialization_map_from_graph(&accepted.graph, accepted.target, false)
+}
+
+/// Builds bootstrap ownership from the exact last accepted semantic graph.
+///
+/// Retained-invalid current intent may deliberately differ from that graph.
+/// Cold reload must still authenticate and reconstruct the accepted scene
+/// beneath it instead of deriving an unusable seed from the failed candidate.
+pub(crate) fn flat_intent_accepted_bootstrap_prefix_materialization_map(
+    session: &IntentSession,
+) -> Result<IntentMaterializationMap, IntentBootstrapError> {
+    let accepted = session
+        .accepted()
+        .ok_or(IntentBootstrapError::MissingAcceptedAuthority)?;
+    bootstrap_materialization_map_from_graph(&accepted.graph, accepted.target, true)
 }
 
 fn bootstrap_materialization_map(
     session: &IntentSession,
     allow_later_declarations: bool,
 ) -> Result<IntentMaterializationMap, IntentBootstrapError> {
-    let semantic = session.semantic_identity();
+    bootstrap_materialization_map_from_graph(
+        session.graph(),
+        session.semantic_identity(),
+        allow_later_declarations,
+    )
+}
+
+fn bootstrap_materialization_map_from_graph(
+    graph: &IntentGraph,
+    semantic: geosolve_sketch_intent::IntentSemanticIdentity,
+    allow_later_declarations: bool,
+) -> Result<IntentMaterializationMap, IntentBootstrapError> {
     let mut nodes = Vec::new();
     let mut ports = Vec::new();
     let mut reservations = Vec::new();
     let mut writable_leaves = Vec::new();
 
-    for node in session.graph().nodes().values() {
+    for node in graph.nodes().values() {
         let Some(object) = bootstrap_object_for_node(node, allow_later_declarations)? else {
             continue;
         };
@@ -517,6 +540,8 @@ pub enum IntentBootstrapError {
     UnknownDependency,
     #[error("bootstrap session differs from canonical per-object state")]
     NonCanonicalBootstrap,
+    #[error("bootstrap session has no accepted authority to reconstruct")]
+    MissingAcceptedAuthority,
 }
 
 /// Normalizes one strict flat sketch plus its exact computed-feature sidecar
@@ -824,26 +849,84 @@ pub fn normalize_flat_sketch_intent_with_accepted_materialization(
 pub fn decode_flat_intent_bootstrap(
     session: &IntentSession,
 ) -> Result<DecodedFlatIntentBootstrap, IntentBootstrapError> {
-    decode_flat_intent_bootstrap_impl(session, false)
+    decode_flat_intent_bootstrap_impl(BootstrapDecodeView::current(session), false)
 }
 
-/// Strictly reconstructs the immutable per-object bootstrap prefix of a mixed
-/// projectional graph.
-///
-/// Unlike [`decode_flat_intent_bootstrap`], this seam admits later ordinary
-/// declarations. It still requires the complete bootstrap node/reservation set
-/// to be byte-for-byte equal to the canonical history-free normalization, so a
-/// later declaration cannot mutate, add, remove, or impersonate a historical
-/// native object.
-///
-/// # Errors
-///
-/// Returns the ordinary bootstrap decoding failures, including a noncanonical
-/// prefix. The supplied session is never mutated.
-pub fn decode_flat_intent_bootstrap_prefix(
+/// Strictly decodes a canonical bootstrap-only accepted authority beneath a
+/// newer retained-invalid current graph.
+pub(crate) fn decode_flat_intent_accepted_bootstrap(
     session: &IntentSession,
 ) -> Result<DecodedFlatIntentBootstrap, IntentBootstrapError> {
-    decode_flat_intent_bootstrap_impl(session, true)
+    let accepted = session
+        .accepted()
+        .ok_or(IntentBootstrapError::MissingAcceptedAuthority)?;
+    decode_flat_intent_bootstrap_impl(
+        BootstrapDecodeView::accepted(session.id(), accepted, true),
+        false,
+    )
+}
+
+/// Decodes the immutable bootstrap prefix owned by the last accepted graph.
+///
+/// This is the cold-reload counterpart to retained-invalid intent: the current
+/// failed graph remains durable and inspectable, while its older accepted graph
+/// supplies the only bootstrap seed eligible to reproduce the visible scene.
+pub(crate) fn decode_flat_intent_accepted_bootstrap_prefix(
+    session: &IntentSession,
+) -> Result<DecodedFlatIntentBootstrap, IntentBootstrapError> {
+    let accepted = session
+        .accepted()
+        .ok_or(IntentBootstrapError::MissingAcceptedAuthority)?;
+    decode_flat_intent_bootstrap_impl(
+        BootstrapDecodeView::accepted(session.id(), accepted, false),
+        true,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum BootstrapDecodeAuthority<'a> {
+    Current(&'a IntentSession),
+    Accepted(&'a IntentAcceptedAuthority),
+    Prefix,
+}
+
+#[derive(Clone, Copy)]
+struct BootstrapDecodeView<'a> {
+    id: IntentSessionId,
+    graph: &'a IntentGraph,
+    reservations: &'a IntentReservationLedger,
+    accepted: Option<&'a IntentAcceptedAuthority>,
+    authority: BootstrapDecodeAuthority<'a>,
+}
+
+impl<'a> BootstrapDecodeView<'a> {
+    fn current(session: &'a IntentSession) -> Self {
+        Self {
+            id: session.id(),
+            graph: session.graph(),
+            reservations: session.reservations(),
+            accepted: session.accepted(),
+            authority: BootstrapDecodeAuthority::Current(session),
+        }
+    }
+
+    const fn accepted(
+        id: IntentSessionId,
+        accepted: &'a IntentAcceptedAuthority,
+        exact: bool,
+    ) -> Self {
+        Self {
+            id,
+            graph: &accepted.graph,
+            reservations: &accepted.reservations,
+            accepted: Some(accepted),
+            authority: if exact {
+                BootstrapDecodeAuthority::Accepted(accepted)
+            } else {
+                BootstrapDecodeAuthority::Prefix
+            },
+        }
+    }
 }
 
 #[allow(
@@ -851,7 +934,7 @@ pub fn decode_flat_intent_bootstrap_prefix(
     reason = "one exhaustive strict-codec dispatch keeps the migration boundary auditable"
 )]
 fn decode_flat_intent_bootstrap_impl(
-    session: &IntentSession,
+    view: BootstrapDecodeView<'_>,
     allow_later_declarations: bool,
 ) -> Result<DecodedFlatIntentBootstrap, IntentBootstrapError> {
     let mut header = None;
@@ -874,7 +957,7 @@ fn decode_flat_intent_bootstrap_impl(
     let mut activation_overrides = BTreeMap::<u32, HostActivationOverride>::new();
     let mut semantic_reservations = BTreeMap::<DocumentSourceId, DocumentSourceId>::new();
 
-    for node in session.graph().nodes().values() {
+    for node in view.graph.nodes().values() {
         let Some(object) = bootstrap_object_for_node(node, allow_later_declarations)? else {
             continue;
         };
@@ -1046,7 +1129,7 @@ fn decode_flat_intent_bootstrap_impl(
     validate_feature_bundle(&document, &features, header.feature_lifecycle_high_water)?;
 
     let evidence_document = (!allow_later_declarations)
-        .then(|| session.accepted())
+        .then_some(view.accepted)
         .flatten()
         .and_then(|authority| {
             std::str::from_utf8(&authority.evidence.materialization)
@@ -1058,7 +1141,7 @@ fn decode_flat_intent_bootstrap_impl(
                 })
         });
     let canonical = normalize_flat_sketch_intent_with_accepted_materialization(
-        session.id(),
+        view.id,
         &document,
         evidence_document.as_ref().unwrap_or(&document),
         &features,
@@ -1068,8 +1151,8 @@ fn decode_flat_intent_bootstrap_impl(
     let nodes = declarations.keys().copied().collect::<BTreeSet<_>>();
     let reservations = canonical.reservations().entries().clone();
     if allow_later_declarations {
-        let actual_nodes = session
-            .graph()
+        let actual_nodes = view
+            .graph
             .nodes()
             .iter()
             .filter_map(|(id, node)| match bootstrap_object_for_node(node, true) {
@@ -1084,8 +1167,8 @@ fn decode_flat_intent_bootstrap_impl(
             .iter()
             .map(|(id, node)| (*id, node))
             .collect::<BTreeMap<_, _>>();
-        let actual_reservations = session
-            .reservations()
+        let actual_reservations = view
+            .reservations
             .entries()
             .iter()
             .filter(|(_, record)| nodes.contains(&record.owner_node))
@@ -1100,14 +1183,28 @@ fn decode_flat_intent_bootstrap_impl(
         if !declarations_match || actual_reservations != reservations {
             return Err(IntentBootstrapError::NonCanonicalBootstrap);
         }
-    } else if canonical.graph() != session.graph()
-        || canonical.instance() != session.instance()
-        || canonical.reservations() != session.reservations()
-        || canonical.external_inputs() != session.external_inputs()
-        || canonical.latest_attempt() != session.latest_attempt()
-        || canonical.accepted() != session.accepted()
-    {
-        return Err(IntentBootstrapError::NonCanonicalBootstrap);
+    } else {
+        let canonical_matches = match view.authority {
+            BootstrapDecodeAuthority::Current(session) => {
+                canonical.graph() == session.graph()
+                    && canonical.instance() == session.instance()
+                    && canonical.reservations() == session.reservations()
+                    && canonical.external_inputs() == session.external_inputs()
+                    && canonical.latest_attempt() == session.latest_attempt()
+                    && canonical.accepted() == session.accepted()
+            }
+            BootstrapDecodeAuthority::Accepted(accepted) => {
+                canonical.graph() == &accepted.graph
+                    && canonical.instance() == &accepted.instance
+                    && canonical.reservations() == &accepted.reservations
+                    && canonical.external_inputs() == &accepted.external_inputs
+                    && canonical.accepted() == Some(accepted)
+            }
+            BootstrapDecodeAuthority::Prefix => false,
+        };
+        if !canonical_matches {
+            return Err(IntentBootstrapError::NonCanonicalBootstrap);
+        }
     }
 
     Ok(DecodedFlatIntentBootstrap {

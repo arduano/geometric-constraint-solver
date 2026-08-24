@@ -28,7 +28,9 @@ use geosolve_sketch_topology::{OffsetOperandRequest, PreparedOffsetOperandQuery}
 use thiserror::Error;
 
 use crate::intent_bootstrap::{
-    decode_flat_intent_bootstrap_prefix, flat_intent_bootstrap_prefix_materialization_map,
+    decode_flat_intent_accepted_bootstrap, decode_flat_intent_accepted_bootstrap_prefix,
+    flat_intent_accepted_bootstrap_materialization_map,
+    flat_intent_accepted_bootstrap_prefix_materialization_map,
 };
 use crate::{
     AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
@@ -217,6 +219,37 @@ impl ProjectionalEditorSession {
         native: RetainedSketchDocumentSession,
     ) -> Result<Self, ProjectionalEditorError> {
         let decoded = decode_flat_intent_bootstrap(&intent)?;
+        let ownership = flat_intent_bootstrap_materialization_map(&intent)?;
+        Self::restore_authenticated_native_bootstrap(intent, native, decoded, ownership)
+    }
+
+    /// Restores the exact accepted bootstrap authority beneath a newer
+    /// retained-invalid current graph.
+    ///
+    /// This v8 reload seam admits only an independently canonical, bootstrap-
+    /// only accepted authority. The failed current graph is retained verbatim
+    /// for inspection and Undo while the already authenticated native scene is
+    /// installed as presentation authority.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed bootstrap, native-authority, computed-feature, or
+    /// independent-validation mismatch without installing partial state.
+    pub fn restore_retained_native_bootstrap(
+        intent: IntentSession,
+        native: RetainedSketchDocumentSession,
+    ) -> Result<Self, ProjectionalEditorError> {
+        let decoded = decode_flat_intent_accepted_bootstrap(&intent)?;
+        let ownership = flat_intent_accepted_bootstrap_materialization_map(&intent)?;
+        Self::restore_authenticated_native_bootstrap(intent, native, decoded, ownership)
+    }
+
+    fn restore_authenticated_native_bootstrap(
+        intent: IntentSession,
+        native: RetainedSketchDocumentSession,
+        decoded: crate::DecodedFlatIntentBootstrap,
+        mut ownership: crate::IntentMaterializationMap,
+    ) -> Result<Self, ProjectionalEditorError> {
         if native.design_document() != &decoded.document {
             return Err(ProjectionalEditorError::BootstrapDocumentMismatch);
         }
@@ -249,9 +282,8 @@ impl ProjectionalEditorSession {
             return Err(ProjectionalEditorError::BootstrapDocumentMismatch);
         }
         let semantic = authority.target;
-        let mut ownership = flat_intent_bootstrap_materialization_map(&intent)?;
         let computed = crate::intent_computed::materialize_computed_features(
-            intent.graph(),
+            &authority.graph,
             decoded.document.id(),
             &native,
             &mut ownership,
@@ -314,8 +346,8 @@ impl ProjectionalEditorSession {
     pub fn restore_with_bootstrap_prefix(
         intent: IntentSession,
     ) -> Result<Self, ProjectionalEditorError> {
-        let decoded = decode_flat_intent_bootstrap_prefix(&intent)?;
-        let ownership = flat_intent_bootstrap_prefix_materialization_map(&intent)?;
+        let decoded = decode_flat_intent_accepted_bootstrap_prefix(&intent)?;
+        let ownership = flat_intent_accepted_bootstrap_prefix_materialization_map(&intent)?;
         let materializer = ColdIntentMaterializer::with_default_policy(
             decoded.document.id(),
             decoded.document.model_scale(),
