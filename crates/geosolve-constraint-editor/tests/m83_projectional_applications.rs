@@ -4,17 +4,19 @@ use geosolve_constraint_editor::{
     AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
     ColdIntentMaterializer, ConstraintIntent, DimensionKind as AuthoringDimensionKind,
     IntentInspectorEditTarget, IntentInspectorEditValue, IntentInspectorField, IntentNativeBinding,
-    ProjectionalAuthoringError, ProjectionalEditorSession, ProjectionalIntentCoordinator,
-    ResolvedConstraintKind, SelectionItem, projectional_application_patch,
+    IntentNativeWritableLeaf, ProjectionalAuthoringError, ProjectionalCoordinatorError,
+    ProjectionalEditorSession, ProjectionalIntentCoordinator, ResolvedConstraintKind,
+    SelectionItem, projectional_application_patch,
 };
 use geosolve_sketch::{
-    CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentId, PersistentId,
+    CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentId,
+    OperationControl, PersistentId,
 };
 use geosolve_sketch_intent::{
     ConstraintKind, DimensionKind as IntentDimensionKind, GeometryRecipeKind, IntentAliasMap,
-    IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation,
-    IntentPatchPolicy, IntentPlanDisposition, IntentPortRole, IntentPortSelector, IntentSessionId,
-    IntentUnit, LeafField,
+    IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
+    IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
+    IntentPortSelector, IntentSessionId, IntentUnit, LeafField,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -729,6 +731,197 @@ fn relation_and_dimension_authoring_share_one_typed_intent_history() {
             .dimensions()
             .len(),
         1
+    );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one direct-manipulation matrix keeps constrained motion, driver and branch invariants contiguous"
+)]
+fn constrained_endpoint_drag_changes_only_its_reverse_leaves_and_never_rewrites_drivers() {
+    let mut coordinator = coordinator(0x8300_7208);
+    let aliases = create(
+        &mut coordinator,
+        [(
+            "edge",
+            segment("edge", [0.0, 0.0], [4.0, 0.0]).with_field(
+                IntentFieldKey(key("branch_direction")),
+                IntentLiteral::Point([1.0, 0.0]),
+            ),
+        )],
+    );
+    let edge_node = aliases.node(&key("edge")).unwrap();
+    let IntentNativeBinding::Point(start) =
+        alias_binding(&coordinator, &aliases, "edge", IntentPortRole::Start)
+    else {
+        panic!("segment start must own one native point")
+    };
+    let IntentNativeBinding::Point(end) =
+        alias_binding(&coordinator, &aliases, "edge", IntentPortRole::End)
+    else {
+        panic!("segment end must own one native point")
+    };
+    let edge = span(&coordinator, 0);
+
+    let horizontal = translate(
+        &coordinator,
+        &relation(
+            ConstraintIntent::Horizontal,
+            vec![AuthoringOperand::selected(SelectionItem::Curve(edge))],
+            ResolvedConstraintKind::HorizontalLine,
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        coordinator
+            .apply_patch(horizontal.patch)
+            .unwrap()
+            .disposition,
+        IntentPlanDisposition::Accepted,
+    );
+    let dimension = translate(
+        &coordinator,
+        &AuthoringApplication {
+            tool: AuthoringTool::Dimension(AuthoringDimensionKind::SegmentLength),
+            operands: vec![AuthoringOperand::selected(SelectionItem::Curve(edge))],
+            options: AuthoringOptions::default(),
+            resolved_constraint: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        coordinator
+            .apply_patch(dimension.patch)
+            .unwrap()
+            .disposition,
+        IntentPlanDisposition::Accepted,
+    );
+
+    let ownership = &coordinator.accepted_materialization().unwrap().ownership;
+    let start_x = ownership
+        .writable_leaf(IntentNativeWritableLeaf::PointX { point: start })
+        .unwrap();
+    let start_y = ownership
+        .writable_leaf(IntentNativeWritableLeaf::PointY { point: start })
+        .unwrap();
+    let end_x = ownership
+        .writable_leaf(IntentNativeWritableLeaf::PointX { point: end })
+        .unwrap();
+    let end_y = ownership
+        .writable_leaf(IntentNativeWritableLeaf::PointY { point: end })
+        .unwrap();
+    let branch_before = coordinator.intent().graph().node(edge_node).unwrap().fields
+        [&IntentFieldKey(key("branch_direction"))]
+        .clone();
+    let instance_before = coordinator.intent().instance().values().clone();
+    let document = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    let DocumentDimensionDefinition::CurveLength { target, .. } =
+        document.dimensions()[0].definition
+    else {
+        panic!("fixture must own one driving curve-length dimension")
+    };
+    let driver_before = document.scalar(target).unwrap().value;
+
+    coordinator.begin_point_drag(83, end).unwrap();
+    let preview = coordinator
+        .preview_point_drag(83, 1, [6.0, 2.0], OperationControl::unlimited())
+        .unwrap()
+        .expect("the constrained endpoint still has rigid translation freedom");
+    assert_eq!(
+        preview.accepted_position.map(f64::to_bits),
+        [6.0, 2.0].map(f64::to_bits)
+    );
+    coordinator.finish_point_drag(83, 1).unwrap();
+
+    let instance_after = coordinator.intent().instance().values();
+    let changed = instance_before
+        .iter()
+        .filter_map(|(leaf, value)| (instance_after.get(leaf) != Some(value)).then_some(*leaf))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        changed,
+        [start_x, start_y, end_x, end_y].into_iter().collect(),
+        "the translated rigid segment may rewrite only its four free placement leaves",
+    );
+    assert_eq!(
+        coordinator.intent().graph().node(edge_node).unwrap().fields
+            [&IntentFieldKey(key("branch_direction"))],
+        branch_before,
+    );
+    let accepted = coordinator.accepted_materialization().unwrap();
+    let accepted_document = accepted
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    assert_eq!(
+        accepted_document.scalar(target).unwrap().value.to_bits(),
+        driver_before.to_bits(),
+    );
+    assert_eq!(
+        accepted_document
+            .point(end)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        [6.0, 2.0].map(f64::to_bits),
+    );
+    let fixed_start = accepted_document.point(start).unwrap().position;
+    assert!((fixed_start[0] - 2.0).abs() <= 1.0e-12);
+    assert!((fixed_start[1] - 2.0).abs() <= 1.0e-12);
+    assert!(accepted.validation.hard_residuals_validated);
+
+    let lock = translate(
+        &coordinator,
+        &relation(
+            ConstraintIntent::Lock,
+            vec![AuthoringOperand::selected(SelectionItem::Point(start))],
+            ResolvedConstraintKind::FixedPoint,
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        coordinator.apply_patch(lock.patch).unwrap().disposition,
+        IntentPlanDisposition::Accepted,
+    );
+    let fixed_identity = coordinator.intent().identity();
+    let fixed_history = coordinator.intent().history_projection();
+    let fixed_document = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document()
+        .clone();
+    coordinator.begin_point_drag(84, start).unwrap();
+    let fixed_preview = coordinator
+        .preview_point_drag(84, 2, [10.0, 10.0], OperationControl::unlimited())
+        .unwrap();
+    if let Some(preview) = fixed_preview {
+        assert_eq!(
+            preview.accepted_position.map(f64::to_bits),
+            fixed_start.map(f64::to_bits),
+        );
+        assert!(matches!(
+            coordinator.finish_point_drag(84, 2),
+            Err(ProjectionalCoordinatorError::DragDidNotMove)
+        ));
+    } else {
+        coordinator.cancel_point_drag();
+    }
+    assert_eq!(coordinator.intent().identity(), fixed_identity);
+    assert_eq!(coordinator.intent().history_projection(), fixed_history);
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document(),
+        &fixed_document,
     );
 }
 

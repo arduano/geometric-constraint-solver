@@ -62,8 +62,6 @@ struct ProjectionalPointDrag {
     pointer_id: u64,
     intent: IntentSessionIdentity,
     point: DesignPointId,
-    x: LeafRef,
-    y: LeafRef,
     locality: DocumentDragLocalityPlan,
     origin: RetainedSketchDocumentSession,
     origin_position: [f64; 2],
@@ -435,8 +433,6 @@ impl ProjectionalIntentCoordinator {
             pointer_id,
             intent: self.intent.identity(),
             point,
-            x,
-            y,
             locality,
             origin: accepted.session.clone(),
             origin_position,
@@ -542,7 +538,14 @@ impl ProjectionalIntentCoordinator {
         result
     }
 
-    /// Commits the newest exact accepted sample as one two-leaf instance patch.
+    /// Commits the newest exact accepted sample as one reverse-bound instance patch.
+    ///
+    /// A constrained drag may move more than the clicked point (for example a
+    /// horizontal length-driven segment may translate rigidly). Every native
+    /// point/scalar change is projected back only through the accepted
+    /// materialization's writable reverse map. Driving targets, fixed-target
+    /// fields and explicit branch fields therefore cannot be rewritten merely
+    /// because the native solver used them while resolving the gesture.
     /// The cold result must reproduce the complete preview document byte-for-byte
     /// before either intent or native authority is published.
     ///
@@ -576,19 +579,26 @@ impl ProjectionalIntentCoordinator {
         if pair_bits(latest.preview.accepted_position) == pair_bits(drag.origin_position) {
             return Err(ProjectionalCoordinatorError::DragDidNotMove);
         }
-        let operations = [
-            (drag.x, latest.preview.accepted_position[0]),
-            (drag.y, latest.preview.accepted_position[1]),
-        ]
-        .into_iter()
-        .map(|(leaf, value)| IntentPatchOperation::SetInstanceLeaf {
-            leaf,
-            value: IntentLiteral::Quantity {
-                value,
-                unit: IntentUnit::Length,
-            },
-        })
-        .collect();
+        let ownership = &self
+            .accepted
+            .as_ref()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
+            .ownership;
+        let origin_document = drag
+            .origin
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
+            .document();
+        let preview_document = latest
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedDragSample)?
+            .document();
+        let operations =
+            point_drag_intent_operations(ownership, origin_document, preview_document)?;
+        if operations.is_empty() {
+            return Err(ProjectionalCoordinatorError::DragDidNotMove);
+        }
         let patch = IntentPatch::new(
             self.intent.identity(),
             IntentPatchPolicy::RequireAccepted,
@@ -964,6 +974,64 @@ fn pair_bits(value: [f64; 2]) -> [u64; 2] {
     value.map(f64::to_bits)
 }
 
+fn point_drag_intent_operations(
+    ownership: &crate::IntentMaterializationMap,
+    origin: &geosolve_sketch::SketchDocument,
+    preview: &geosolve_sketch::SketchDocument,
+) -> Result<Vec<IntentPatchOperation>, ProjectionalCoordinatorError> {
+    let mut operations = Vec::new();
+    for (native, leaf) in &ownership.writable_leaves {
+        let (origin_value, preview_value, unit) = match *native {
+            IntentNativeWritableLeaf::PointX { point } => (
+                origin
+                    .point(point)
+                    .ok_or(ProjectionalCoordinatorError::PointNotWritable { point })?
+                    .position[0],
+                preview
+                    .point(point)
+                    .ok_or(ProjectionalCoordinatorError::PointNotWritable { point })?
+                    .position[0],
+                IntentUnit::Length,
+            ),
+            IntentNativeWritableLeaf::PointY { point } => (
+                origin
+                    .point(point)
+                    .ok_or(ProjectionalCoordinatorError::PointNotWritable { point })?
+                    .position[1],
+                preview
+                    .point(point)
+                    .ok_or(ProjectionalCoordinatorError::PointNotWritable { point })?
+                    .position[1],
+                IntentUnit::Length,
+            ),
+            IntentNativeWritableLeaf::ScalarValue { scalar } => {
+                let origin = origin
+                    .scalar(scalar)
+                    .ok_or(ProjectionalCoordinatorError::WritableScalarMissing { scalar })?;
+                let preview = preview
+                    .scalar(scalar)
+                    .ok_or(ProjectionalCoordinatorError::WritableScalarMissing { scalar })?;
+                if origin.unit != preview.unit {
+                    return Err(ProjectionalCoordinatorError::WritableScalarUnitMismatch {
+                        scalar,
+                    });
+                }
+                (origin.value, preview.value, intent_unit(preview.unit))
+            }
+        };
+        if origin_value.to_bits() != preview_value.to_bits() {
+            operations.push(IntentPatchOperation::SetInstanceLeaf {
+                leaf: *leaf,
+                value: IntentLiteral::Quantity {
+                    value: preview_value,
+                    unit,
+                },
+            });
+        }
+    }
+    Ok(operations)
+}
+
 const fn intent_unit(unit: ScalarUnit) -> IntentUnit {
     match unit {
         ScalarUnit::Length => IntentUnit::Length,
@@ -1191,6 +1259,10 @@ pub enum ProjectionalCoordinatorError {
     PointNotWritable { point: DesignPointId },
     #[error("native point {point} has split Cartesian ownership")]
     SplitPointOwnership { point: DesignPointId },
+    #[error("native writable scalar {scalar} is absent from one point-drag authority")]
+    WritableScalarMissing { scalar: DesignScalarId },
+    #[error("native writable scalar {scalar} changed unit during one point drag")]
+    WritableScalarUnitMismatch { scalar: DesignScalarId },
     #[error("pointer mismatch: expected {expected}, received {actual}")]
     PointerMismatch { expected: u64, actual: u64 },
     #[error("the point-drag route is stale")]
