@@ -1698,6 +1698,16 @@ const fn projectional_direct_gesture_is_capturable(
     )
 }
 
+/// Applies the projectional browser's presentation-only constraint-mark
+/// policy to the same scene DTO used by paint and picking.
+#[cfg(any(target_arch = "wasm32", test))]
+fn apply_projectional_scene_display(
+    scene: &mut geosolve_constraint_editor::EditorScene,
+    show_all_constraints: bool,
+) {
+    scene.set_show_all_constraint_annotations(show_all_constraints);
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ProjectionalOutlineMove {
@@ -3256,6 +3266,7 @@ pub(crate) mod wasm {
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
+        show_all_constraints: bool,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
         captured_pointer: Option<i32>,
         outline_drag: Option<(geosolve_sketch_intent::IntentSessionIdentity, NodeId)>,
@@ -3391,6 +3402,7 @@ pub(crate) mod wasm {
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
+            show_all_constraints: false,
             pointer_moves: Rc::new(RefCell::new(super::ProjectionalPointerMoveQueue::default())),
             captured_pointer: None,
             outline_drag: None,
@@ -3485,12 +3497,15 @@ pub(crate) mod wasm {
     }
 
     fn projectional_scene(wb: &ProjectionalWorkbench) -> Option<EditorScene> {
-        wb.editor()
+        let mut scene = wb
+            .editor()
             .scene(
                 wb.camera.viewport(),
                 super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
             )
-            .ok()
+            .ok()?;
+        super::apply_projectional_scene_display(&mut scene, wb.show_all_constraints);
+        Some(scene)
     }
 
     fn projectional_geometry_authoring_active(wb: &ProjectionalWorkbench) -> bool {
@@ -3793,7 +3808,7 @@ pub(crate) mod wasm {
                 policy.visibility.reference_geometry,
             ),
             ("wb-show-grid", wb.grid_visible),
-            ("wb-show-all-constraints", false),
+            ("wb-show-all-constraints", wb.show_all_constraints),
         ] {
             if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
                 input.set_checked(checked);
@@ -3985,10 +4000,7 @@ pub(crate) mod wasm {
         wb: &ProjectionalWorkbench,
         scope: super::WorkbenchRenderScope,
     ) -> Result<(), JsValue> {
-        let mut scene = projectional_scene(&wb);
-        if let Some(scene) = scene.as_mut() {
-            scene.set_show_all_constraint_annotations(false);
-        }
+        let scene = projectional_scene(&wb);
         let source = wb.editor().coordinator().presentation_session();
         let accepted = source.and_then(
             geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
@@ -5613,6 +5625,11 @@ pub(crate) mod wasm {
                             };
                             wb.grid_visible = checkbox_checked(&change_document, "wb-show-grid")
                                 .ok_or_else(|| "grid visibility is unavailable".to_owned())?;
+                            wb.show_all_constraints =
+                                checkbox_checked(&change_document, "wb-show-all-constraints")
+                                    .ok_or_else(|| {
+                                        "constraint annotation visibility is unavailable".to_owned()
+                                    })?;
                             let effects = wb
                                 .editor_mut()
                                 .editor_mut()
@@ -12496,24 +12513,25 @@ mod tests {
         ProjectionalPointerMoveQueue, ReproductionFocusReturn, WorkbenchDocumentAuthority,
         WorkbenchPresentationCounters, WorkbenchPresentationEvent, WorkbenchRenderScope,
         annotation_family_name, annotation_inspector_presentation, apply_native_fillet_profile,
-        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
-        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
-        compose_editor_scene, coordinate_hud, current_problem_items,
-        curve_control_inspector_detail, curve_control_inspector_markup,
-        decode_projectional_inspector_control, dispatch_projectional_authoring_application,
-        dispatch_projectional_construction_effects, dispatch_projectional_inspector_control,
-        draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
-        foreground_overlay_escape_owner, geometry_sweep_flip_available,
-        geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
-        observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
-        offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
-        owns_authoring_pick, projectional_design_markup, projectional_direct_gesture_is_capturable,
-        projectional_outline_move_patch, rational_conic_construction_copy,
-        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
-        reproduction_overlay_presentation, reproduction_payload_size_label,
-        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
-        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
-        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
+        apply_projectional_scene_display, apply_validated_reproduction, canvas_cursor_key,
+        canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
+        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
+        coordinate_hud, current_problem_items, curve_control_inspector_detail,
+        curve_control_inspector_markup, decode_projectional_inspector_control,
+        dispatch_projectional_authoring_application, dispatch_projectional_construction_effects,
+        dispatch_projectional_inspector_control, draft_inference_preference_is_stale,
+        feature_apply_returns_focus_to_select, foreground_overlay_escape_owner,
+        geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
+        native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
+        offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
+        offset_target_for_selection, owns_authoring_pick, projectional_design_markup,
+        projectional_direct_gesture_is_capturable, projectional_outline_move_patch,
+        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
+        reproduction_focus_target_after_action, reproduction_overlay_presentation,
+        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
+        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
+        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
+        should_route_stationary_draft_inference,
     };
 
     #[test]
@@ -12718,6 +12736,25 @@ mod tests {
         ] {
             assert!(!projectional_direct_gesture_is_capturable(unsupported));
         }
+    }
+
+    #[test]
+    fn projectional_canvas_display_owns_constraint_mark_visibility() {
+        run_projectional_test_with_large_stack("projectional-constraint-display", || {
+            let editor = projectional_authoring_fixture();
+            let mut scene = editor
+                .scene(
+                    Viewport::new([800.0, 600.0], [0.0, 0.0], 50.0).unwrap(),
+                    0.5,
+                )
+                .unwrap();
+            assert!(!scene.show_all_constraint_annotations);
+
+            apply_projectional_scene_display(&mut scene, true);
+            assert!(scene.show_all_constraint_annotations);
+            apply_projectional_scene_display(&mut scene, false);
+            assert!(!scene.show_all_constraint_annotations);
+        });
     }
 
     fn test_viewport() -> Viewport {
