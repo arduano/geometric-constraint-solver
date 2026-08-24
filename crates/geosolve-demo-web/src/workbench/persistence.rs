@@ -1653,7 +1653,17 @@ fn layout_form_is_compatible(
 pub(crate) fn reproduction_payload_from_coordinator(
     coordinator: &RetainedEditorCoordinator,
 ) -> Result<String, String> {
-    let mut snapshot = WorkspaceSnapshot::from_coordinator(coordinator)?;
+    reproduction_payload_from_snapshot(WorkspaceSnapshot::from_coordinator(coordinator)?)
+}
+
+/// Encodes one already-authenticated application workspace as a bounded reproduction capsule.
+///
+/// This boundary deliberately accepts the complete workspace snapshot rather than a flat editor
+/// coordinator so the projectional v8 authority and its unified intent history travel through the
+/// same transport. Annotation placement remains a disposable viewport cache for either authority.
+pub(crate) fn reproduction_payload_from_snapshot(
+    mut snapshot: WorkspaceSnapshot,
+) -> Result<String, String> {
     // A reproduction capsule carries authoritative/reconstructable workspace state, not the
     // disposable per-viewport annotation cache retained by ordinary local workspace saves.
     snapshot.annotation_layout_json = None;
@@ -1664,13 +1674,23 @@ pub(crate) fn reproduction_payload_from_coordinator(
 pub(crate) fn coordinator_from_reproduction_payload(
     payload: &str,
 ) -> Result<RetainedEditorCoordinator, String> {
+    let snapshot = snapshot_from_reproduction_payload(payload)?;
+    coordinator_from_snapshot(&snapshot)
+}
+
+/// Decodes and validates a bounded reproduction capsule before any live workbench authority is
+/// replaced. The returned snapshot has no presentation cache, including when an older capsule
+/// carried one, so the receiving viewport recomputes annotation placement deterministically.
+pub(crate) fn snapshot_from_reproduction_payload(
+    payload: &str,
+) -> Result<WorkspaceSnapshot, String> {
     let workspace =
         crate::reproduction::decode_workspace(payload).map_err(|error| error.to_string())?;
     let mut snapshot = WorkspaceSnapshot::decode(&workspace)?;
     // Older capsules may have embedded this optional presentation cache. Ignore it so restoration
     // always recomputes placement from the accepted scene under the receiving viewport.
     snapshot.annotation_layout_json = None;
-    coordinator_from_snapshot(&snapshot)
+    snapshot.validated()
 }
 
 fn derive_sketch_identity_high_water(
@@ -1802,7 +1822,8 @@ mod tests {
         default_evaluation_high_water, derive_sketch_identity_high_water,
         intent_node_requires_bootstrap_seed, legacy_workspace_v8_digest, parse_annotation_kind,
         projectional_editor_from_legacy_snapshot, projectional_editor_from_snapshot,
-        reproduction_payload_from_coordinator, workspace_v8_digest,
+        reproduction_payload_from_coordinator, reproduction_payload_from_snapshot,
+        snapshot_from_reproduction_payload, workspace_v8_digest,
     };
 
     fn restored_annotation_layout(
@@ -4070,6 +4091,64 @@ mod tests {
     fn m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly() {
         run_m83_persistence_test("m83-v8-round-trip", || {
             m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly_body(
+            );
+        });
+    }
+
+    #[test]
+    fn m83_projectional_reproduction_round_trips_v8_authority_without_annotation_cache() {
+        run_m83_persistence_test("m83-v8-reproduction-round-trip", || {
+            let (mut snapshot, intent, accepted) = m83_projectional_fixture();
+            snapshot.annotation_layout_json = Some(
+                serde_json::to_string(&super::WorkspaceAnnotationLayoutCache {
+                    version: AnnotationLayoutState::VERSION,
+                    entries: Vec::new(),
+                })
+                .expect("annotation cache"),
+            );
+
+            let payload = reproduction_payload_from_snapshot(snapshot)
+                .expect("projectional reproduction payload");
+            assert!(payload.starts_with("GEOSOLVE_REPRO_V1:"));
+            let workspace = crate::reproduction::decode_workspace(&payload)
+                .expect("decode reproduction transport");
+            assert!(workspace.contains("\"version\":8"));
+
+            let decoded = snapshot_from_reproduction_payload(&payload)
+                .expect("decode projectional reproduction snapshot");
+            assert!(
+                decoded.annotation_layout_json.is_none(),
+                "reproduction transport must discard disposable annotation placement",
+            );
+            assert_eq!(
+                decoded
+                    .intent_session()
+                    .expect("intent decode")
+                    .expect("projectional intent")
+                    .to_canonical_json()
+                    .expect("canonical intent"),
+                intent.to_canonical_json().expect("source intent"),
+            );
+            assert_eq!(
+                decoded.accepted_document().expect("accepted evidence"),
+                Some(accepted.clone()),
+            );
+            let restored = projectional_editor_from_snapshot(&decoded)
+                .expect("restore projectional reproduction authority");
+            assert_eq!(
+                restored.coordinator().intent().identity(),
+                intent.identity()
+            );
+            assert_eq!(
+                restored
+                    .coordinator()
+                    .accepted_materialization()
+                    .expect("accepted materialization")
+                    .session
+                    .accepted_state_for_current_input()
+                    .expect("accepted state")
+                    .document(),
+                &accepted,
             );
         });
     }

@@ -142,6 +142,61 @@ impl WorkbenchRenderScope {
     }
 }
 
+/// One frame's projectional canvas authority and any presentation-only failure.
+///
+/// Scene-composition failures must not be collapsed into the same `None` used
+/// for a legitimate history position with no accepted authority. The error is
+/// deliberately frame-local rather than copied into the durable workbench
+/// notice, so the next successful composition restores the ordinary status.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Debug)]
+struct ProjectionalScenePresentation {
+    scene: Option<geosolve_constraint_editor::EditorScene>,
+    status_override: Option<String>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl ProjectionalScenePresentation {
+    fn from_editor(
+        editor: &geosolve_constraint_editor::ProjectionalEditorSession,
+        viewport: geosolve_constraint_editor::Viewport,
+        chord_tolerance_pixels: f64,
+        show_all_constraints: bool,
+    ) -> Self {
+        match editor.scene(viewport, chord_tolerance_pixels) {
+            Ok(mut scene) => {
+                apply_projectional_scene_display(&mut scene, show_all_constraints);
+                Self {
+                    scene: Some(scene),
+                    status_override: None,
+                }
+            }
+            Err(geosolve_constraint_editor::ProjectionalEditorError::NoAcceptedAuthority) => Self {
+                scene: None,
+                status_override: None,
+            },
+            Err(error) => Self {
+                scene: None,
+                status_override: Some(format!("Canvas scene unavailable: {error}")),
+            },
+        }
+    }
+
+    fn status_message<'a>(&'a self, notice: &'a str) -> &'a str {
+        self.status_override.as_deref().unwrap_or(notice)
+    }
+
+    const fn state_key(&self) -> &'static str {
+        if self.status_override.is_some() {
+            "unavailable"
+        } else if self.scene.is_some() {
+            "ready"
+        } else {
+            "empty"
+        }
+    }
+}
+
 /// Exactly one durable document/history authority installed in the workbench.
 ///
 /// Strict v1-v6 workspaces and in-process samples normalize into a history-free
@@ -263,18 +318,22 @@ impl WorkbenchDocumentAuthority {
         }
     }
 
-    fn scene(
+    fn scene_presentation(
         &self,
         viewport: geosolve_constraint_editor::Viewport,
         chord_tolerance_pixels: f64,
-    ) -> Option<geosolve_constraint_editor::EditorScene> {
+    ) -> ProjectionalScenePresentation {
         match self {
-            Self::Flat(coordinator) => {
-                compose_editor_scene(coordinator, viewport, chord_tolerance_pixels)
-            }
-            Self::Projectional { editor, .. } => {
-                editor.scene(viewport, chord_tolerance_pixels).ok()
-            }
+            Self::Flat(coordinator) => ProjectionalScenePresentation {
+                scene: compose_editor_scene(coordinator, viewport, chord_tolerance_pixels),
+                status_override: None,
+            },
+            Self::Projectional { editor, .. } => ProjectionalScenePresentation::from_editor(
+                editor,
+                viewport,
+                chord_tolerance_pixels,
+                false,
+            ),
         }
     }
 
@@ -3471,6 +3530,7 @@ pub(crate) mod wasm {
         LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, OLDER_V3_STORAGE_KEY,
         PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
         coordinator_from_reproduction_payload, reproduction_payload_from_coordinator,
+        reproduction_payload_from_snapshot, snapshot_from_reproduction_payload,
     };
 
     struct Workbench {
@@ -3515,6 +3575,9 @@ pub(crate) mod wasm {
         outline_drag: Option<super::ProjectionalOutlineDrag>,
         geometry_palette: super::geometry_palette::GeometryPaletteState,
         option_overlay: super::OptionOverlayState,
+        reproduction_overlay_open: bool,
+        reproduction_focus_return: super::ReproductionFocusReturn,
+        reproduction_copy_request: u64,
         construction_preview: Option<ConstructionPreview>,
         notice: String,
         problems: super::DismissibleDisclosure<super::ProjectionalProblemIdentity>,
@@ -3657,15 +3720,18 @@ pub(crate) mod wasm {
             outline_drag: None,
             geometry_palette: super::geometry_palette::GeometryPaletteState::default(),
             option_overlay: super::OptionOverlayState::default(),
+            reproduction_overlay_open: false,
+            reproduction_focus_return: super::ReproductionFocusReturn::default(),
+            reproduction_copy_request: 0,
             construction_preview: None,
             notice,
             problems: super::DismissibleDisclosure::default(),
         };
-        let scene = workbench.authority.scene(
+        let scene = workbench.authority.scene_presentation(
             workbench.camera.viewport(),
             super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
         );
-        let _ = workbench.camera.fit_scene_or_reset(scene.as_ref());
+        let _ = workbench.camera.fit_scene_or_reset(scene.scene.as_ref());
         let workbench = Rc::new(RefCell::new(workbench));
         install_palette_icons(document)?;
         install_design_projection_tabs(document)?;
@@ -3796,7 +3862,7 @@ pub(crate) mod wasm {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
             {
-                set_disabled(&button, true)?;
+                set_disabled(&button, false)?;
             }
         }
         for action in [
@@ -3822,20 +3888,30 @@ pub(crate) mod wasm {
     }
 
     fn projectional_scene(wb: &ProjectionalWorkbench) -> Option<EditorScene> {
-        let mut scene = wb
-            .editor()
-            .scene(
-                wb.camera.viewport(),
-                super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
-            )
-            .ok()?;
-        super::apply_projectional_scene_display(&mut scene, wb.show_all_constraints);
-        Some(scene)
+        projectional_scene_presentation(wb).scene
+    }
+
+    fn projectional_scene_presentation(
+        wb: &ProjectionalWorkbench,
+    ) -> super::ProjectionalScenePresentation {
+        super::ProjectionalScenePresentation::from_editor(
+            wb.editor(),
+            wb.camera.viewport(),
+            super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            wb.show_all_constraints,
+        )
     }
 
     fn projectional_geometry_authoring_active(wb: &ProjectionalWorkbench) -> bool {
         wb.editor().editor().geometry_tool_variant().is_some()
             && wb.editor().editor().tool() != EditorTool::Select
+    }
+
+    fn projectional_owns_stationary_draft_inference(wb: &ProjectionalWorkbench) -> bool {
+        super::should_route_stationary_draft_inference(
+            wb.reproduction_overlay_open,
+            projectional_geometry_authoring_active(wb),
+        )
     }
 
     fn projectional_ordinary_authoring_active(wb: &ProjectionalWorkbench) -> bool {
@@ -3875,6 +3951,8 @@ pub(crate) mod wasm {
         wb.captured_pointer = None;
         wb.outline_drag = None;
         wb.option_overlay.close();
+        wb.reproduction_overlay_open = false;
+        wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
         wb.construction_preview = None;
         wb.problems = super::DismissibleDisclosure::default();
         wb.notice = "New sketch created".into();
@@ -3890,19 +3968,180 @@ pub(crate) mod wasm {
         wb.feature_candidate = None;
         wb.feature_pending.clear();
         wb.option_overlay.close();
+        wb.reproduction_overlay_open = false;
+        wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
         wb.construction_preview = None;
         wb.pointer_moves.borrow_mut().invalidate();
         wb.captured_pointer = None;
         wb.outline_drag = None;
-        let scene = wb.authority.scene(
+        let scene = wb.authority.scene_presentation(
             wb.camera.viewport(),
             super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
         );
-        let _ = wb.camera.fit_scene_or_reset(scene.as_ref());
+        let _ = wb.camera.fit_scene_or_reset(scene.scene.as_ref());
         wb.notice = format!(
             "{} opened as a projectional editable workspace",
             wb.samples.selected_title().unwrap_or("Sample")
         );
+        Ok(())
+    }
+
+    fn copy_projectional_reproduction_payload(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+    ) {
+        let payload = {
+            let wb = workbench.borrow();
+            wb.authority
+                .snapshot()
+                .and_then(reproduction_payload_from_snapshot)
+        };
+        let payload = match payload {
+            Ok(payload) => payload,
+            Err(error) => {
+                workbench.borrow_mut().notice =
+                    format!("Reproduction payload could not be created: {error}");
+                let _ = render_projectional(document, workbench);
+                return;
+            }
+        };
+        let payload_size = super::reproduction_payload_size_label(payload.len());
+        close_sample_selector(document);
+        let request = {
+            let mut wb = workbench.borrow_mut();
+            wb.reproduction_overlay_open = true;
+            wb.reproduction_focus_return = super::ReproductionFocusReturn::Copy;
+            wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+            wb.notice =
+                format!("Reproduction payload ready · {payload_size}; requesting clipboard access");
+            wb.reproduction_copy_request
+        };
+        if render_projectional(document, workbench).is_err() {
+            workbench.borrow_mut().notice =
+                "Reproduction payload is ready, but its editor could not be shown".into();
+            return;
+        }
+        let Ok(textarea) = reproduction_payload_textarea(document) else {
+            workbench.borrow_mut().notice =
+                "Reproduction payload is ready, but its editor is unavailable".into();
+            let _ = render_projectional(document, workbench);
+            return;
+        };
+        textarea.set_value(&payload);
+        let _ = focus_and_select_reproduction_payload(document);
+
+        let Ok(window) = super::platform::window() else {
+            workbench.borrow_mut().notice = format!(
+                "Clipboard access is unavailable; all {payload_size} are selected for manual copy"
+            );
+            let _ = render_projectional(document, workbench);
+            return;
+        };
+        if !window.is_secure_context() {
+            workbench.borrow_mut().notice = format!(
+                "Clipboard access requires a secure page; all {payload_size} are selected for manual copy"
+            );
+            let _ = render_projectional(document, workbench);
+            return;
+        }
+        let promise = window.navigator().clipboard().write_text(&payload);
+        let completion_document = document.clone();
+        let completion_workbench = Rc::clone(workbench);
+        let copied_payload = payload;
+        spawn_local(async move {
+            let copied = JsFuture::from(promise).await.is_ok();
+            if reproduction_payload_textarea(&completion_document)
+                .is_ok_and(|textarea| textarea.value() != copied_payload)
+            {
+                return;
+            }
+            {
+                let mut wb = completion_workbench.borrow_mut();
+                if wb.reproduction_copy_request != request {
+                    return;
+                }
+                wb.notice = if copied {
+                    format!("Reproduction payload copied · {payload_size}")
+                } else {
+                    format!(
+                        "Clipboard access was blocked; all {payload_size} are selected for manual copy"
+                    )
+                };
+            }
+            let _ = render_projectional(&completion_document, &completion_workbench);
+            if !copied {
+                let _ = focus_and_select_reproduction_payload(&completion_document);
+            }
+        });
+    }
+
+    fn load_projectional_reproduction_payload(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+    ) -> Result<(), String> {
+        let payload = reproduction_payload_textarea(document)?.value();
+        if payload.trim().is_empty() {
+            return Err("paste a reproduction payload before loading".into());
+        }
+        super::apply_validated_reproduction(
+            wb,
+            || {
+                let snapshot = snapshot_from_reproduction_payload(&payload)
+                    .map_err(|error| format!("Reproduction payload was not loaded: {error}"))?;
+                let authority = super::WorkbenchDocumentAuthority::from_snapshot(&snapshot)
+                    .map_err(|error| format!("Reproduction payload was not loaded: {error}"))?;
+                if !authority.is_projectional() {
+                    return Err(
+                        "Reproduction payload was not loaded: workspace did not normalize to projectional authority"
+                            .into(),
+                    );
+                }
+                Ok(authority)
+            },
+            |wb, authority| commit_projectional_reproduction_load(document, wb, authority),
+        )
+    }
+
+    fn commit_projectional_reproduction_load(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+        authority: super::WorkbenchDocumentAuthority,
+    ) -> Result<(), String> {
+        let viewport = required(document, "wb-viewport")
+            .map_err(|_| "the canvas viewport is unavailable".to_owned())?;
+        cancel_projectional_before_camera_change(&viewport, wb);
+
+        wb.authority = authority;
+        wb.authoring = AuthoringState::default();
+        wb.feature_authoring = FeatureAuthoringState::default();
+        wb.offset_authoring = OffsetAuthoringState::default();
+        wb.feature_candidate = None;
+        wb.feature_pending.clear();
+        wb.samples = super::samples::SampleCatalogState::default();
+        wb.camera.reset();
+        wb.pan_gesture = None;
+        *wb.pointer_moves.borrow_mut() = super::ProjectionalPointerMoveQueue::default();
+        wb.captured_pointer = None;
+        wb.outline_drag = None;
+        wb.geometry_palette = super::geometry_palette::GeometryPaletteState::default();
+        wb.option_overlay = super::OptionOverlayState::default();
+        wb.reproduction_overlay_open = false;
+        wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+        wb.construction_preview = None;
+        wb.problems = super::DismissibleDisclosure::default();
+        wb.editor_mut().set_selected_declaration(None);
+        wb.editor_mut().set_selection([]);
+        let effects = wb
+            .editor_mut()
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        let _ = dispatch_projectional_effects(wb, effects);
+        close_sample_selector(document);
+        if let Ok(textarea) = reproduction_payload_textarea(document) {
+            textarea.set_value("");
+        }
+        let _ = fit_projectional_camera(wb);
+        wb.notice = "Reproduction payload loaded as a fresh editable projectional workspace".into();
         Ok(())
     }
 
@@ -4493,12 +4732,12 @@ pub(crate) mod wasm {
         } else {
             problems.set_attribute("hidden", "")?;
         }
-        required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
         required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
             "{:.1} px / unit",
             wb.camera.pixels_per_model_unit,
         )));
         render_projectional_authoring_status(document, &wb)?;
+        render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
         render_projectional_tool_options_overlay(document, &wb)?;
         let root = required(document, "workbench-root")?;
         root.set_attribute("data-editor-adapter", "projectional-intent")?;
@@ -4523,7 +4762,7 @@ pub(crate) mod wasm {
         wb: &ProjectionalWorkbench,
         scope: super::WorkbenchRenderScope,
     ) -> Result<(), JsValue> {
-        let scene = projectional_scene(&wb);
+        let presentation = projectional_scene_presentation(wb);
         let source = wb.editor().presentation_session();
         let accepted = source.and_then(
             geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
@@ -4554,7 +4793,7 @@ pub(crate) mod wasm {
         let hover = wb.editor().editor().hover_state();
         required(document, "wb-viewport")?.set_inner_html(
             &super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
-                scene.as_ref(),
+                presentation.scene.as_ref(),
                 accepted,
                 &[],
                 &canvas_selection,
@@ -4575,6 +4814,7 @@ pub(crate) mod wasm {
             ),
         );
         let root = required(document, "workbench-root")?;
+        root.set_attribute("data-scene-state", presentation.state_key())?;
         root.set_attribute(
             "data-render-scope",
             match scope {
@@ -4582,7 +4822,8 @@ pub(crate) mod wasm {
                 super::WorkbenchRenderScope::Durable => "durable",
             },
         )?;
-        required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
+        required(document, "wb-status-message")?
+            .set_text_content(Some(presentation.status_message(&wb.notice)));
         let coordinate = super::coordinate_hud(
             wb.camera.viewport(),
             wb.pointer_moves.borrow().last_input(),
@@ -6941,8 +7182,13 @@ pub(crate) mod wasm {
                 .ok()
                 .flatten()
                 .and_then(|target| target.get_attribute("data-wb-action"));
+            if action.as_deref() == Some("reproduction-copy") {
+                copy_projectional_reproduction_payload(&click_document, &click_workbench);
+                return;
+            }
             let mut wb = click_workbench.borrow_mut();
             let mut durable = false;
+            let mut focus_reproduction_text = false;
             match action.as_deref() {
                 Some("new") => match reset_projectional_workbench(&click_document, &mut wb) {
                     Ok(()) => durable = true,
@@ -7153,6 +7399,31 @@ pub(crate) mod wasm {
                         Err(error) => wb.notice = error.to_string(),
                     }
                 }
+                Some("reproduction-open") => {
+                    close_sample_selector(&click_document);
+                    wb.reproduction_overlay_open = true;
+                    wb.reproduction_focus_return = super::ReproductionFocusReturn::Load;
+                    wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                    wb.notice = "Paste a reproduction payload, then load it atomically".into();
+                    focus_reproduction_text = true;
+                }
+                Some("reproduction-select") => {
+                    wb.reproduction_overlay_open = true;
+                    wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                    wb.notice = "Reproduction payload selected; press Ctrl/Cmd+C to copy".into();
+                    focus_reproduction_text = true;
+                }
+                Some("reproduction-close") => {
+                    wb.reproduction_overlay_open = false;
+                    wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                }
+                Some("reproduction-load") => {
+                    wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                    match load_projectional_reproduction_payload(&click_document, &mut wb) {
+                        Ok(()) => durable = true,
+                        Err(error) => wb.notice = error,
+                    }
+                }
                 Some("zoom-in") | Some("zoom-out") | Some("zoom-fit")
                 | Some("zoom-origin") => {
                     let Ok(viewport) = required(&click_document, "wb-viewport") else {
@@ -7194,8 +7465,18 @@ pub(crate) mod wasm {
             if durable {
                 save_projectional(&wb);
             }
+            let focus_reproduction_return = super::reproduction_focus_target_after_action(
+                action.as_deref().unwrap_or_default(),
+                wb.reproduction_overlay_open,
+                wb.reproduction_focus_return,
+            );
             drop(wb);
             let _ = render_projectional(&click_document, &click_workbench);
+            if focus_reproduction_text {
+                let _ = focus_and_select_reproduction_payload(&click_document);
+            } else if let Some(id) = focus_reproduction_return {
+                focus_by_id(&click_document, id);
+            }
         });
         root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
         click.forget();
@@ -7719,6 +8000,41 @@ pub(crate) mod wasm {
         let keyboard_document = document.clone();
         let keyboard_workbench = Rc::clone(workbench);
         let keyboard = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if event.key() == "Escape" && event.repeat() {
+                event.prevent_default();
+                return;
+            }
+            let escape_owner = if event.key() == "Escape" {
+                super::foreground_overlay_escape_owner(
+                    keyboard_workbench.borrow().reproduction_overlay_open,
+                    required(&keyboard_document, "wb-sample-selector")
+                        .is_ok_and(|selector| selector.has_attribute("open")),
+                )
+            } else {
+                super::ForegroundOverlayEscapeOwner::None
+            };
+            if escape_owner == super::ForegroundOverlayEscapeOwner::Reproduction {
+                event.prevent_default();
+                let focus_return = {
+                    let mut wb = keyboard_workbench.borrow_mut();
+                    wb.reproduction_overlay_open = false;
+                    wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                    wb.reproduction_focus_return.element_id()
+                };
+                let _ = render_projectional(&keyboard_document, &keyboard_workbench);
+                focus_by_id(&keyboard_document, focus_return);
+                return;
+            }
+            if event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("#wb-reproduction-overlay").ok().flatten())
+                .is_some()
+            {
+                // Text editing and native button activation inside this dialog
+                // must never fall through to sketch keyboard behavior.
+                return;
+            }
             if !event.ctrl_key()
                 && !event.meta_key()
                 && !event.alt_key()
@@ -7747,7 +8063,7 @@ pub(crate) mod wasm {
             if event.key() == "Tab" {
                 let pending = {
                     let wb = keyboard_workbench.borrow();
-                    let owns = projectional_geometry_authoring_active(&wb);
+                    let owns = projectional_owns_stationary_draft_inference(&wb);
                     wb.pointer_moves
                         .borrow_mut()
                         .drain_before_stationary_cycle(owns)
@@ -7778,7 +8094,7 @@ pub(crate) mod wasm {
                     event.prevent_default();
                     let sample = {
                         let wb = keyboard_workbench.borrow();
-                        let owns = projectional_geometry_authoring_active(&wb);
+                        let owns = projectional_owns_stationary_draft_inference(&wb);
                         wb.pointer_moves
                             .borrow_mut()
                             .stationary_candidate(next, owns)
@@ -8056,7 +8372,7 @@ pub(crate) mod wasm {
                 }
                 let sample = {
                     let wb = modifier_workbench.borrow();
-                    let owns = projectional_geometry_authoring_active(&wb);
+                    let owns = projectional_owns_stationary_draft_inference(&wb);
                     wb.pointer_moves.borrow_mut().stationary_authoring_state(
                         Modifiers {
                             shift: event.shift_key(),
@@ -12458,10 +12774,13 @@ pub(crate) mod wasm {
     }
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
-        let mut scene = wb.coordinator.scene(
-            wb.camera.viewport(),
-            super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
-        )?;
+        let mut scene = wb
+            .coordinator
+            .scene_presentation(
+                wb.camera.viewport(),
+                super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            )
+            .scene?;
         scene.set_show_all_constraint_annotations(wb.show_all_constraints);
         Some(scene)
     }
@@ -14695,6 +15014,69 @@ mod tests {
     }
 
     #[test]
+    fn projectional_reproduction_controls_are_enabled_and_route_complete_transport() {
+        let source = include_str!("mod.rs");
+        let availability = source
+            .split("fn set_projectional_surface_availability")
+            .nth(1)
+            .and_then(|source| source.split("fn projectional_scene").next())
+            .expect("projectional availability implementation");
+        let controls = availability
+            .split("for action in [\"reproduction-copy\", \"reproduction-open\"]")
+            .nth(1)
+            .and_then(|source| source.split("for action in [").next())
+            .expect("projectional reproduction availability block");
+        assert!(
+            controls.contains("set_disabled(&button, false)?"),
+            "Copy/Load triggers must be enabled on the projectional surface",
+        );
+
+        let events = source
+            .split("fn install_projectional_events")
+            .nth(1)
+            .expect("projectional event implementation");
+        for route in [
+            "copy_projectional_reproduction_payload(&click_document, &click_workbench)",
+            "Some(\"reproduction-open\")",
+            "Some(\"reproduction-select\")",
+            "Some(\"reproduction-close\")",
+            "Some(\"reproduction-load\")",
+            "load_projectional_reproduction_payload(&click_document, &mut wb)",
+        ] {
+            assert!(
+                events.contains(route),
+                "missing projectional route `{route}`"
+            );
+        }
+        let load = source
+            .split("fn load_projectional_reproduction_payload")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("fn commit_projectional_reproduction_load")
+                    .next()
+            })
+            .expect("projectional reproduction load implementation");
+        assert!(
+            load.contains("snapshot_from_reproduction_payload(&payload)"),
+            "Load must validate the complete workspace snapshot before replacement",
+        );
+        assert!(
+            load.contains("commit_projectional_reproduction_load(document, wb, authority)"),
+            "Load must use the isolated post-validation commit boundary",
+        );
+        let render = source
+            .split("fn render_projectional(")
+            .nth(1)
+            .and_then(|source| source.split("fn render_projectional_canvas").next())
+            .expect("projectional durable render implementation");
+        assert!(
+            render.contains("render_reproduction_overlay("),
+            "the projectional durable render must own the shared payload dialog",
+        );
+    }
+
+    #[test]
     fn projectional_outline_moves_are_organization_only_and_stale_safe() {
         run_projectional_test_with_large_stack("projectional-outline-organization", || {
             let mut editor = projectional_authoring_fixture();
@@ -15174,6 +15556,61 @@ mod tests {
             assert!(scene.show_all_constraint_annotations);
             apply_projectional_scene_display(&mut scene, false);
             assert!(!scene.show_all_constraint_annotations);
+        });
+    }
+
+    #[test]
+    fn projectional_scene_failure_is_visible_and_frame_local() {
+        run_projectional_test_with_large_stack("projectional-scene-status", || {
+            let editor = projectional_authoring_fixture();
+            let ordinary_notice = "Ready for the next edit";
+
+            let unavailable = super::ProjectionalScenePresentation::from_editor(
+                &editor,
+                test_viewport(),
+                0.0,
+                false,
+            );
+            assert!(unavailable.scene.is_none());
+            assert_eq!(unavailable.state_key(), "unavailable");
+            assert_eq!(
+                unavailable.status_message(ordinary_notice),
+                "Canvas scene unavailable: interaction tolerances must be finite and non-negative"
+            );
+
+            let ready = super::ProjectionalScenePresentation::from_editor(
+                &editor,
+                test_viewport(),
+                0.5,
+                false,
+            );
+            assert!(ready.scene.is_some());
+            assert_eq!(ready.state_key(), "ready");
+            assert_eq!(ready.status_message(ordinary_notice), ordinary_notice);
+
+            let html = include_str!("../../index.html");
+            assert_eq!(html.matches("id=\"wb-status-message\"").count(), 1);
+            assert!(
+                html.contains("<span id=\"wb-status-message\" aria-live=\"polite\">Ready</span>")
+            );
+
+            let source = include_str!("mod.rs");
+            let durable = source
+                .split("fn render_projectional(")
+                .nth(1)
+                .and_then(|source| source.split("fn render_projectional_canvas").next())
+                .expect("projectional durable render");
+            assert!(
+                !durable.contains("wb-status-message"),
+                "the durable panel pass must not overwrite the frame-local canvas status",
+            );
+            let canvas = source
+                .split("fn render_projectional_canvas")
+                .nth(1)
+                .and_then(|source| source.split("fn save_projectional").next())
+                .expect("projectional canvas render");
+            assert!(canvas.contains("presentation.status_message(&wb.notice)"));
+            assert!(canvas.contains("data-scene-state"));
         });
     }
 
@@ -15945,7 +16382,12 @@ mod tests {
             let (mut authority, node) = projectional_workbench_fixture();
             assert!(authority.is_projectional());
             assert!(authority.flat_ref().is_none());
-            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(
+                authority
+                    .scene_presentation(test_viewport(), 0.5)
+                    .scene
+                    .is_some()
+            );
             assert!(
                 authority
                     .snapshot()
@@ -15992,13 +16434,33 @@ mod tests {
             );
 
             assert!(authority.step_history(true).unwrap());
-            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(
+                authority
+                    .scene_presentation(test_viewport(), 0.5)
+                    .scene
+                    .is_some()
+            );
             assert!(authority.step_history(true).unwrap());
-            assert!(authority.scene(test_viewport(), 0.5).is_none());
+            assert!(
+                authority
+                    .scene_presentation(test_viewport(), 0.5)
+                    .scene
+                    .is_none()
+            );
             assert!(authority.step_history(false).unwrap());
-            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(
+                authority
+                    .scene_presentation(test_viewport(), 0.5)
+                    .scene
+                    .is_some()
+            );
             assert!(authority.step_history(false).unwrap());
-            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(
+                authority
+                    .scene_presentation(test_viewport(), 0.5)
+                    .scene
+                    .is_some()
+            );
         });
     }
 
@@ -16693,7 +17155,12 @@ mod tests {
                     .len(),
                 0
             );
-            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(
+                authority
+                    .scene_presentation(test_viewport(), 0.5)
+                    .scene
+                    .is_some()
+            );
             assert!(
                 authority
                     .snapshot()
