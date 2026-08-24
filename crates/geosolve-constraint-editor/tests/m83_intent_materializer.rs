@@ -3,8 +3,8 @@
 use std::cell::RefCell;
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
-    IntentNativeBinding, IntentNativeWritableLeaf,
+    BOOTSTRAP_POINT_CODEC_V1, ColdIntentMaterialization, ColdIntentMaterializer,
+    IntentMaterializationError, IntentNativeBinding, IntentNativeWritableLeaf,
 };
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, DocumentArcTangencySide,
@@ -50,6 +50,18 @@ fn coordinate(value: f64) -> IntentLiteral {
     IntentLiteral::Quantity {
         value,
         unit: IntentUnit::Length,
+    }
+}
+
+fn synthetic_acceptance(candidate: &geosolve_sketch_intent::IntentCandidate) -> IntentEvaluation {
+    IntentEvaluation::Accepted {
+        evidence: geosolve_sketch_intent::MaterializationEvidence::new_host_artifacts(
+            candidate.external_inputs().identity(),
+            format!("synthetic:{:?}", candidate.semantic_identity()).into_bytes(),
+            b"synthetic-ownership".to_vec(),
+            b"synthetic-validation".to_vec(),
+        )
+        .expect("bounded synthetic evidence"),
     }
 }
 
@@ -715,6 +727,170 @@ fn cold_reconstruction_is_order_independent_and_rejected_intent_has_no_native_pu
     assert!(rejected.is_err());
     assert!(retained.accepted().is_none());
     assert!(retained.graph().nodes().is_empty());
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one hostile seedless-origin fixture preserves the exact provenance transition"
+)]
+fn ejected_bootstrap_origin_requires_an_authenticated_native_seed() {
+    let mut native = geosolve_sketch::SketchDocument::new(1.0).expect("native fixture");
+    let native_point = native
+        .add_point("historical point", [1.25, -2.5])
+        .expect("historical point");
+    let point_payload = serde_json::to_vec(
+        native
+            .point(native_point)
+            .expect("historical point payload"),
+    )
+    .expect("canonical point payload");
+
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_0104)).unwrap();
+    let document = IntentNodeDraft::new(
+        IntentNodeKind::Bootstrap {
+            object: IntentBootstrapObject::new(
+                BootstrapNativeKind::Document,
+                key("test-document-codec"),
+                Vec::new(),
+            )
+            .unwrap(),
+        },
+        key("historical-document"),
+    );
+    let point = IntentNodeDraft::new(
+        IntentNodeKind::Bootstrap {
+            object: IntentBootstrapObject::new(
+                BootstrapNativeKind::Point,
+                key(BOOTSTRAP_POINT_CODEC_V1),
+                point_payload,
+            )
+            .unwrap(),
+        },
+        key("historical-point"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Identity, 0),
+        alias("historical-document", IntentPortRole::Result),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Primary),
+        LeafField::X,
+        coordinate(1.25),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Primary),
+        LeafField::Y,
+        coordinate(-2.5),
+    );
+    let initialization = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![
+                    IntentPatchOperation::CreateNode {
+                        alias: key("historical-document"),
+                        draft: Box::new(document),
+                        cell: None,
+                    },
+                    IntentPatchOperation::CreateNode {
+                        alias: key("historical-point"),
+                        draft: Box::new(point),
+                        cell: None,
+                    },
+                ],
+            ),
+            synthetic_acceptance,
+        )
+        .expect("synthetic bootstrap initialization");
+    let document_node = initialization.aliases().nodes[&key("historical-document")];
+    let point_node = initialization.aliases().nodes[&key("historical-point")];
+    session
+        .commit_initialization_plan(initialization)
+        .expect("commit synthetic bootstrap");
+
+    let ejection = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::EjectBootstrapPoint { node: point_node }],
+            ),
+            synthetic_acceptance,
+        )
+        .expect("eject synthetic point");
+    session.commit_plan(ejection).expect("commit ejection");
+    let delete_root = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::DeleteNode {
+                    node: document_node,
+                    policy: DeletePolicy::RejectDependents,
+                }],
+            ),
+            synthetic_acceptance,
+        )
+        .expect("detached bootstrap root is deletable");
+    session.commit_plan(delete_root).expect("delete root");
+    assert_eq!(session.graph().nodes().len(), 1);
+    assert!(
+        session
+            .graph()
+            .node(point_node)
+            .expect("ejected point")
+            .bootstrap_origin
+            .is_some()
+    );
+    assert!(
+        !session
+            .graph()
+            .nodes()
+            .values()
+            .any(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
+    );
+
+    let x_leaf = *session
+        .instance()
+        .values()
+        .keys()
+        .find(|leaf| leaf.node == point_node && leaf.field == LeafField::X)
+        .expect("ejected x leaf");
+    let materializer = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(0x8300_0104_0000)),
+        1.0,
+    )
+    .unwrap();
+    let before = session
+        .to_canonical_json()
+        .expect("canonical pre-rejection authority");
+    let attempted = session.plan_patch(
+        IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetInstanceLeaf {
+                leaf: x_leaf,
+                value: coordinate(2.0),
+            }],
+        ),
+        |candidate| {
+            assert!(matches!(
+                materializer.materialize(candidate),
+                Err(IntentMaterializationError::BootstrapSeedMismatch)
+            ));
+            synthetic_acceptance(candidate)
+        },
+    );
+    assert!(attempted.is_ok(), "the synthetic evaluator should complete");
+    assert_eq!(
+        session
+            .to_canonical_json()
+            .expect("canonical retained authority"),
+        before,
+        "seedless bootstrap-origin rejection must not mutate intent authority"
+    );
 }
 
 #[test]

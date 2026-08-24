@@ -1051,12 +1051,11 @@ pub(crate) fn projectional_editor_from_snapshot(
         .intent_session()?
         .ok_or_else(|| "workspace does not contain projectional intent authority".to_owned())?;
     let features = snapshot.feature_document()?;
-    let contains_bootstrap = intent.graph().nodes().values().any(|node| {
-        matches!(
-            node.kind,
-            geosolve_sketch_intent::IntentNodeKind::Bootstrap { .. }
-        )
-    });
+    let contains_bootstrap = intent
+        .graph()
+        .nodes()
+        .values()
+        .any(intent_node_requires_bootstrap_seed);
     if contains_bootstrap {
         let canonical_bootstrap = decode_flat_intent_bootstrap(&intent).ok();
         let mut projectional = if let Some(decoded) = canonical_bootstrap {
@@ -1144,6 +1143,13 @@ pub(crate) fn projectional_editor_from_snapshot(
         compatible_annotation_layout_for_projectional(&projectional, &snapshot.annotation_layout());
     projectional.editor_mut().restore_annotation_layout(layout);
     Ok(projectional)
+}
+
+fn intent_node_requires_bootstrap_seed(node: &geosolve_sketch_intent::IntentNode) -> bool {
+    matches!(
+        node.kind,
+        geosolve_sketch_intent::IntentNodeKind::Bootstrap { .. }
+    ) || node.bootstrap_origin.is_some()
 }
 
 /// Strictly restores and normalizes one historical flat workspace into a
@@ -1497,7 +1503,7 @@ mod tests {
         FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool, Modifiers,
         PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator,
         RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
-        SceneConstraintGlyph, ScreenPoint, SelectionItem, Viewport,
+        SceneConstraintGlyph, ScreenPoint, SelectionItem, Viewport, normalize_flat_sketch_intent,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1509,15 +1515,16 @@ mod tests {
         alpha_scenario,
     };
     use geosolve_sketch_intent::{
-        GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-        IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSession,
-        IntentSessionId, IntentUnit, LeafField,
+        DeletePolicy, GeometryRecipeKind, IntentEvaluation, IntentKey, IntentLiteral,
+        IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+        IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
     };
 
     use super::{
         WorkspaceSnapshot, WorkspaceSnapshotV8, annotation_kind_key,
         coordinator_from_reproduction_payload, coordinator_from_snapshot,
-        default_evaluation_high_water, derive_sketch_identity_high_water, parse_annotation_kind,
+        default_evaluation_high_water, derive_sketch_identity_high_water,
+        intent_node_requires_bootstrap_seed, parse_annotation_kind,
         projectional_editor_from_legacy_snapshot, projectional_editor_from_snapshot,
         reproduction_payload_from_coordinator, workspace_v8_digest,
     };
@@ -1597,6 +1604,20 @@ mod tests {
         let snapshot =
             WorkspaceSnapshot::from_projectional_editor(&projectional).expect("workspace v8");
         (snapshot, intent, accepted)
+    }
+
+    fn synthetic_intent_acceptance(
+        candidate: &geosolve_sketch_intent::IntentCandidate,
+    ) -> IntentEvaluation {
+        IntentEvaluation::Accepted {
+            evidence: geosolve_sketch_intent::MaterializationEvidence::new_host_artifacts(
+                candidate.external_inputs().identity(),
+                format!("synthetic:{:?}", candidate.semantic_identity()).into_bytes(),
+                b"synthetic-ownership".to_vec(),
+                b"synthetic-validation".to_vec(),
+            )
+            .expect("bounded synthetic evidence"),
+        }
     }
 
     fn run_m83_persistence_test(name: &str, test: impl FnOnce() + Send + 'static) {
@@ -3540,6 +3561,87 @@ mod tests {
             m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly_body(
             );
         });
+    }
+
+    #[test]
+    fn m83_workspace_v8_bootstrap_routing_recognizes_a_fully_ejected_graph() {
+        let mut document = SketchDocument::new(1.0).expect("historical document");
+        let point = document
+            .add_point("historical point", [1.25, -2.5])
+            .expect("historical point");
+        let features = geosolve_sketch_features::ComputedFeatureDocument::new(document.id());
+        let mut intent = normalize_flat_sketch_intent(
+            IntentSessionId::from_raw(0x8308_0002),
+            &document,
+            &features,
+            features.lifecycle_high_water(),
+        )
+        .expect("normalized bootstrap");
+        let point_node = intent
+            .graph()
+            .nodes()
+            .values()
+            .find(|node| node.symbol.as_str() == format!("legacy-point-{point}"))
+            .expect("historical point declaration")
+            .id;
+        let ejection = intent
+            .plan_patch(
+                IntentPatch::new(
+                    intent.identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::EjectBootstrapPoint { node: point_node }],
+                ),
+                synthetic_intent_acceptance,
+            )
+            .expect("eject historical point");
+        intent.commit_plan(ejection).expect("commit ejection");
+
+        let bootstrap_nodes = intent
+            .graph()
+            .nodes()
+            .values()
+            .filter(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
+            .map(|node| node.id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            bootstrap_nodes.len(),
+            1,
+            "a point-only flat document should retain only its document header"
+        );
+        let delete_header = intent
+            .plan_patch(
+                IntentPatch::new(
+                    intent.identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::DeleteNode {
+                        node: bootstrap_nodes[0],
+                        policy: DeletePolicy::RejectDependents,
+                    }],
+                ),
+                synthetic_intent_acceptance,
+            )
+            .expect("detached bootstrap header is deletable");
+        intent
+            .commit_plan(delete_header)
+            .expect("commit header deletion");
+
+        assert!(
+            intent
+                .graph()
+                .nodes()
+                .values()
+                .all(|node| !matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
+        );
+        let ejected = intent.graph().node(point_node).expect("ejected point");
+        assert!(ejected.bootstrap_origin.is_some());
+        assert!(intent_node_requires_bootstrap_seed(ejected));
+        assert!(
+            intent
+                .graph()
+                .nodes()
+                .values()
+                .any(intent_node_requires_bootstrap_seed)
+        );
     }
 
     fn m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly_body() {

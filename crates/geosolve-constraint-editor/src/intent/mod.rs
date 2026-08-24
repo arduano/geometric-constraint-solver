@@ -427,11 +427,10 @@ impl ColdIntentMaterializer {
         candidate.graph().validate()?;
         preflight_supported(candidate)?;
         if self.bootstrap.is_none()
-            && candidate
-                .graph()
-                .nodes()
-                .values()
-                .any(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
+            && candidate.graph().nodes().values().any(|node| {
+                matches!(node.kind, IntentNodeKind::Bootstrap { .. })
+                    || node.bootstrap_origin.is_some()
+            })
         {
             return Err(IntentMaterializationError::BootstrapSeedMismatch);
         }
