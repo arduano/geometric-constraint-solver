@@ -14,8 +14,9 @@ use std::fmt::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_constraint_editor::{
-    ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFeatureEvaluationState,
-    ComputedFeatureSnapshot, IntentNativeBinding, ProjectionalEditorSession, SelectionItem,
+    BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1, ComputedFeatureDefinition, ComputedFeatureDocument,
+    ComputedFeatureEvaluationState, ComputedFeatureSnapshot, IntentNativeBinding,
+    ProjectionalEditorSession, SelectionItem,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
@@ -29,8 +30,8 @@ use geosolve_sketch_code::{
     rehydrate_materialized_code_project, required_generated_members,
 };
 use geosolve_sketch_intent::{
-    GeometryRecipeKind, IntentLiteral, IntentNodeKind, IntentPortRole, IntentPortSelector,
-    IntentSession, IntentSessionId, IntentUnit, LeafField, LeafRef, NodeId,
+    BootstrapNativeKind, GeometryRecipeKind, IntentLiteral, IntentNodeKind, IntentPortRole,
+    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField, LeafRef, NodeId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -1522,11 +1523,34 @@ fn projected_code_project(editor: &ProjectionalEditorSession) -> Result<CodeProj
 
     let mut base_counts = BTreeMap::<String, usize>::new();
     let mut declarations = Vec::with_capacity(ordered.len());
+    let mut document_foundations = 0_usize;
     for projected in ordered {
         let node = intent
             .graph()
             .node(projected.node)
             .ok_or_else(|| "an ordinary declaration disappeared during code preview".to_owned())?;
+        let is_document_foundation = matches!(
+            node.kind,
+            IntentNodeKind::Bootstrap { ref object }
+                if object.kind == BootstrapNativeKind::Document
+                    && object.codec.as_str() == BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1
+        ) && node.bootstrap_origin.is_none()
+            && !node.suppressed
+            && node.inputs.is_empty()
+            && node.fields.is_empty()
+            && node.operation_outputs.is_empty()
+            && node.child_order.is_empty()
+            && node.children.is_empty();
+        if is_document_foundation {
+            // A fresh M83 workspace owns one logical native-document header
+            // beneath every later recipe. It is materializer seed metadata,
+            // not authored geometry, and the promoted CodeProject creates its
+            // own independently validated document authority. No other
+            // bootstrap object is omitted: legacy points/curves/constraints
+            // continue through the unsupported-declaration failure below.
+            document_foundations = document_foundations.saturating_add(1);
+            continue;
+        }
         let base = match node.kind {
             IntentNodeKind::Geometry {
                 recipe: GeometryRecipeKind::TwoPointAlignedRectangle,
@@ -1563,6 +1587,12 @@ fn projected_code_project(editor: &ProjectionalEditorSession) -> Result<CodeProj
             node.id,
             SemanticSymbol(symbol),
         ));
+    }
+    if document_foundations > 1 {
+        return Err("the ordinary sketch has more than one document foundation".into());
+    }
+    if declarations.is_empty() {
+        return Err("the ordinary sketch has no authored declarations to promote".into());
     }
     initialize_code_project_from_editor(
         editor,
@@ -2617,6 +2647,11 @@ mod tests {
             1.0,
         )
         .unwrap();
+        add_ordinary_rectangle_diagonal(&mut editor);
+        editor
+    }
+
+    fn add_ordinary_rectangle_diagonal(editor: &mut ProjectionalEditorSession) {
         let selector = |role, index| IntentPortSelector::Node { role, index };
         let length = |value| IntentLiteral::Quantity {
             value,
@@ -2705,7 +2740,6 @@ mod tests {
                 }],
             ))
             .unwrap();
-        editor
     }
 
     fn open_with_editor(key: &str) -> (CodeProjectWorkbench, Box<ProjectionalEditorSession>) {
@@ -4552,6 +4586,107 @@ mod tests {
         assert!(markup.contains("data-code-action=\"promote-ordinary\""));
         assert!(markup.contains("Read-only · not authority"));
         assert!(!markup.contains("<textarea"));
+    }
+
+    #[test]
+    fn fresh_workspace_foundation_does_not_hide_complete_lexical_code_preview() {
+        std::thread::Builder::new()
+            .name("m84-f003-fresh-workspace-code-preview".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| {
+                let mut authority = super::super::fresh_projectional_authority().unwrap();
+                let editor = authority.projectional_mut().unwrap();
+                let foundation = editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .nodes()
+                    .values()
+                    .collect::<Vec<_>>();
+                assert_eq!(foundation.len(), 1);
+                assert!(matches!(
+                    foundation[0].kind,
+                    IntentNodeKind::Bootstrap { ref object }
+                        if object.kind == BootstrapNativeKind::Document
+                            && object.codec.as_str() == BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1
+                ));
+                let Err(empty_error) = OrdinaryCodePreview::from_editor(editor) else {
+                    panic!("an infrastructure-only workspace must not expose an empty project")
+                };
+                assert_eq!(
+                    empty_error,
+                    "the ordinary sketch has no authored declarations to promote",
+                );
+
+                add_ordinary_rectangle_diagonal(editor);
+                assert_eq!(
+                    editor.coordinator().intent().graph().nodes().len(),
+                    3,
+                    "fresh authority must retain its foundation beside both authored declarations",
+                );
+                let preview = OrdinaryCodePreview::from_editor(editor).unwrap();
+                assert_eq!(preview.declaration_count, 2);
+                assert!(
+                    preview
+                        .source
+                        .contains("const frame = $.geometry.rectangle")
+                );
+                assert!(preview.source.contains("const diagonal = $.geometry.line"));
+                assert!(preview.source.contains("start: frame.corners.lowerLeft"));
+                assert!(preview.source.contains("end: frame.corners.upperRight"));
+
+                let (promoted, promoted_editor) =
+                    CodeProjectWorkbench::promote_from_editor(editor).unwrap();
+                assert_eq!(promoted.demo_key(), None);
+                assert_eq!(promoted.project.managed.program.declarations.len(), 2);
+                assert!(
+                    promoted_editor
+                        .coordinator()
+                        .accepted_materialization()
+                        .unwrap()
+                        .validation
+                        .hard_residuals_validated
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn ordinary_projection_never_omits_nonfoundation_bootstrap_objects() {
+        let mut document = geosolve_sketch::SketchDocument::new(1.0).unwrap();
+        document.add_point("legacy point", [2.0, 3.0]).unwrap();
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_core::SolverConfig::default(),
+        )
+        .unwrap();
+        let coordinator =
+            geosolve_constraint_editor::RetainedEditorCoordinator::new(session).unwrap();
+        let authority =
+            super::super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator).unwrap();
+        let editor = authority.projectional_ref().unwrap();
+        let bootstrap_kinds = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .nodes()
+            .values()
+            .filter_map(|node| match node.kind {
+                IntentNodeKind::Bootstrap { ref object } => Some(object.kind),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            bootstrap_kinds,
+            BTreeSet::from([BootstrapNativeKind::Document, BootstrapNativeKind::Point])
+        );
+        let Err(error) = OrdinaryCodePreview::from_editor(editor) else {
+            panic!("a legacy point bootstrap must not disappear from managed promotion")
+        };
+        assert!(error.contains("depends on unselected declaration node"));
     }
 
     #[test]
