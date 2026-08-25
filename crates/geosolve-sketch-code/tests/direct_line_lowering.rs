@@ -325,3 +325,52 @@ fn direct_line_rejects_a_foreign_lexical_reference_before_expansion() {
             .contains("does not name an earlier declaration")
     );
 }
+
+#[test]
+fn direct_line_rejects_raw_ids_transport_dtos_and_misspelled_members() {
+    let cases = [
+        (
+            "raw-string-id",
+            r#""frame.corners.lowerLeft""#,
+            "invalid.start",
+        ),
+        (
+            "transport-dto",
+            r#"{ declaration: "frame", output: ["corners", "lowerLeft"], kind: "point" }"#,
+            "invalid.start",
+        ),
+        (
+            "misspelled-member",
+            "frame.corners.lowerleft",
+            "frame.corners.lowerleft",
+        ),
+    ];
+
+    for (key, endpoint, expected_reference) in cases {
+        let project = project(
+            key,
+            &format!(
+                r#"  const frame = $.geometry.rectangle("frame", {{
+    lowerLeft: [0, 0],
+    upperRight: [60, 35],
+  }});
+  const invalid = $.geometry.line("invalid", {{
+    start: {endpoint},
+    end: frame.corners.upperRight,
+  }});
+  return $.outputs({{ invalid }});
+"#,
+            ),
+        );
+        let generated = KeyedReconcileState::empty();
+        let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84f0_0305)).unwrap();
+
+        assert_eq!(
+            expand_code_project(&project, &generated, intent.identity()),
+            Err(CodeExpansionError::UnresolvedReference {
+                reference: expected_reference.into(),
+            }),
+            "managed source case `{key}` must fail closed before materialization",
+        );
+    }
+}
