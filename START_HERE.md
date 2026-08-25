@@ -309,6 +309,17 @@ immutable snapshot remains preserved. Pages is final M83 public-byte authority. 
 annotation-layout cache stays disposable presentation-only workspace state outside graph,
 materialization and history authority.
 
+M84 is the active optional code/GUI authoring milestone under ADR 0041. A new
+`geosolve-sketch-code` crate and `@geosolve/sketch-code` package sit beside, never beneath, the
+solver/intent/editor layers. Managed `sketch.ts` and caller-compiled canonical data artifacts lower
+through `AuthoringProgram` and deterministic keyed expansion into the ordinary M83 `IntentGraph`;
+the unchanged Rust materializer/solver and independent validation remain sole geometry authority.
+Custom TypeScript is never executed by Rust, WASM, browser runtime or workspace load. Typed
+semantic references, keyed generations/tombstones, edit lenses/overrides and one code/editor
+history support four genuine demonstrations. Implementation and focused qualification pass; final
+clean qualification and UAT remain open. No candidate is nominated, Pages remains on accepted M83
+and an eventual candidate stays on Tailscale until approval and exact public verification.
+
 ## Read first
 
 1. `AGENTS.md`
@@ -317,7 +328,7 @@ materialization and history authority.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, plus active ADR 0040.
+7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, accepted ADR 0040 and active ADR 0041.
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
@@ -343,6 +354,9 @@ materialization and history authority.
 19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — completed
     projectional-intent contract, F001-F010 historical nomination/finding ledger, accepted F010
     scorecard and exact public closeout.
+20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
+    `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
+    execution ledger and prepared scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -716,7 +730,9 @@ qualification, immutable Tailscale nomination and supervising-human UAT; approva
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
 M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
-acceptance and exact Pages publication. M82 closes by explicit
+acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen;
+implementation and focused qualification pass while final clean nomination and UAT remain open.
+M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
 `archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
@@ -829,6 +845,12 @@ Durable milestone and cleanup records:
   F001-F010 repairs, architecture hardening, qualification and public-closeout ledger)
 - `docs/M83_UAT.md` (accepted immutable F010 candidate, milestone-level scorecard and exact public
   verification)
+- `docs/adr/0041-optional-code-gui-sketch-authoring.md` (active optional code/GUI authoring
+  architecture)
+- `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
+  contract)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, finding and qualification ledger)
+- `docs/M84_UAT.md` (prepared four-demo code/GUI scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -3384,6 +3384,64 @@ ledger `/tmp/geosolve-m83-pages-verify.trWHdsHU/results.tsv` has SHA-256
 the endpoint refuses connections and the immutable snapshot remains. Qualified product source
 remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance gates pass.
 
+### M84: optional code/GUI sketch authoring
+
+Status: active and unaccepted. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the
+acceptance contract. Accepted M83 remains public product authority.
+
+Implementation status (2026-08-25): all structural slices and four genuine projects are
+implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
+checks pass while the milestone-neutral 271-row golden remains byte-identical. Final clean release
+qualification, immutable Tailscale nomination and M84-U1 through M84-U10 remain open; none of this
+focused evidence changes accepted M83 public authority.
+
+Focused findings are closed before nomination: M84-F001 publishes the fully parity-checked warm
+terminal checkpoint so a valid generated-point release cannot inherit stale reconstructed Segment
+branch metadata; M84-F002 applies managed aggregate reverse edits through their authenticated
+semantic value spans while preserving stale-source compare-and-swap and all unowned bytes.
+
+- `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
+  linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace
+  operation remains directly buildable and tested.
+- Code-enabled authority is managed `sketch.ts` plus pinned data-only artifacts → bounded
+  `AuthoringProgram`/keyed expansion → ordinary `IntentGraph` → unchanged Rust materializer/native
+  solver → independent validation. No JavaScript equation or runtime solve exists.
+- The pure-Rust managed-v1 parser accepts only ADR 0041's bounded lossless CST subset. GUI reverse
+  edits rewrite authenticated declaration/organization/lens/override spans and preserve comments,
+  formatting and user-owned custom files. Unsupported or stale edits publish nothing.
+- Custom TypeScript runs only in an explicit caller-owned Node build step. Runtime consumes
+  canonical artifacts pinned to source/interface/SDK ABI and validates their existing-family DAG,
+  schema, lenses, digests and resource bounds before expansion.
+- TypeScript exposes project-branded semantic references and descriptor-generated fixed, mapped
+  record and keyed/derived result types. Raw IDs, cross-project references, kind mismatch and
+  schema drift reject. Adaptive corner Fillets retain source vertex keys.
+- Dynamic identity is invocation/template/member-key/output based. Reorder preserves identity;
+  insertion uses allocator high-water; removal tombstones; retired-key reuse gets a new generation;
+  outside dependents prevent silent deletion or retargeting.
+- One `SketchCodeSession` history covers source/artifacts/program/expansion/overrides and a delegated
+  nested editor checkpoint. One accepted action is one Undo entry. Retained-invalid code keeps the
+  previous accepted scene and exact diagnostics.
+- Pointer frames do no parsing, expansion, persistence or durable-panel rebuilding. The existing
+  retained native solve owns preview; terminal managed edits/overrides publish the newest accepted
+  preview once after exact cold validation parity.
+- Managed source is at most 4 MiB, each artifact 16 MiB and the complete project 64 MiB. Save,
+  reload and repro restore complete offline authority/history atomically; malformed, missing,
+  tampered or oversized inputs reject before replacement.
+- All four genuine demonstrations pass: adaptive rounded Polyline; typed panel/keyed Fillets;
+  GUI→code→GUI braced frame; reusable AI-authored mounting plate with byte-invariant custom helper.
+- The milestone-neutral 271-row golden remains byte-identical. A separate reviewed code-project
+  ledger plus native/WASM/RPC/TypeScript parity, type-failure, reconciliation, tombstone, history,
+  failure, bound, persistence and performance owners pass.
+- Formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests, actual WASM, TypeScript,
+  golden require-clean, Trunk and the complete clean release gate pass before nomination.
+- One exact no-rebuild candidate passes local and retained-Tailscale byte/browser verification.
+  M84-U1 through M84-U10 and explicit supervising-user approval pass before GitHub Pages
+  publication, exact hosted verification, service retirement and closure.
+
+No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
+Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep
+feature or general topological-naming claim is accepted by M84.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.

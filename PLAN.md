@@ -5791,6 +5791,69 @@ bindings remain visible across rebind, semantic projections use named fields and
 without leaking padded storage selectors, one coherent history spans GUI/source/code edits, and
 all existing constraint mathematics remain solely in the native Rust solver.
 
+### M84: optional code/GUI sketch authoring
+
+Status: **active; ADR 0041 and the acceptance contract are frozen, implementation is complete and
+under final clean qualification; no candidate or human approval exists**. Accepted M83 remains
+public Pages authority.
+
+- [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
+  scorecard.
+- [x] Add optional `geosolve-sketch-code` and `@geosolve/sketch-code` layers. Enforce that core,
+  sketch, linkage, intent and editor modules never depend back on them and plain workspace-v8
+  deployments remain unchanged.
+- [x] Implement the pure-Rust, 4 MiB bounded, lossless `"use geosolve managed-v1";` CST subset and
+  exact authenticated rewrites for declarations, organization, edit lenses and overrides.
+- [x] Compile managed source to `AuthoringProgram`, bounded equation-free keyed expansion and an
+  ordinary `IntentGraph`, then use the unchanged cold materializer/native solver/independent
+  validation. Retain syntax drafts and valid failed code intent under their distinct authorities.
+- [x] Implement caller-owned Node compilation of user/AI `patches/*.patch.ts` into canonical
+  16 MiB-bounded data-only artifacts with source/interface/ABI pins, schemas, lenses and only
+  existing declaration templates. Never execute custom code in Rust, WASM, browser or load.
+- [x] Generate project-branded `FeatureRef`/`OutputRef`, named fixed results, mapped record results
+  and keyed/derived collection types from central Rust descriptors. Reject raw IDs, cross-project
+  refs, kind mismatch and Rust/TypeScript schema drift.
+- [x] Reconcile dynamic expansion by invocation/template/member-key/output path. Preserve
+  unaffected identity, advance allocator high-water, tombstone removals, create a new generation
+  for reused retired keys and reject removal with outside dependents.
+- [x] Implement explicit keyed Polyline vertex/segment/corner continuation so
+  Fillet-every-corner adapts to insertion/removal/reorder without ordinal retargeting.
+- [x] Add one `SketchCodeSession` history around project files/artifacts/program/expansion/
+  overrides plus a delegated nested editor checkpoint; one GUI/code/organization/terminal action
+  creates one Undo entry.
+- [x] Keep pointer frames on the existing retained native preview with no parsing/expansion. Stage
+  the terminal managed edit or override against the newest authenticated accepted preview and
+  publish once only after cold parity.
+- [x] Add bounded code-project save/reload/repro and the focused Design-panel file/artifact/
+  ownership/generated-member/lens/override UI. Custom helpers remain read-only; no browser IDE or
+  `eval` is introduced.
+- [x] Ship the four genuine code-project demonstrations: adaptive rounded Polyline, typed panel
+  with keyed Fillets, GUI→code→GUI braced frame and reusable AI-authored mounting plate.
+- [x] Preserve the milestone-neutral 271-row golden byte-for-byte; add a separate reviewed code-
+  project ledger and complete parser/rewrite, artifact, type-failure, keyed identity, history,
+  retained-failure, bound, parity, persistence and performance qualification.
+- [ ] Pass format, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, actual WASM,
+  TypeScript, golden require-clean, Trunk and the complete clean release gate.
+- [ ] Freeze one no-rebuild candidate and verify its exact bytes locally and through retained
+  Tailscale.
+- [ ] Receive explicit M84-U1 through M84-U10 approval, then publish/exact-verify Pages, retire the
+  service and close M84.
+
+Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
+artifact contract, typed SDK, keyed reconciler, composite session, four workbench projects and
+offline persistence are implemented. Focused code/package/workbench/WASM/TypeScript suites and the
+unchanged 271-row golden pass. `M84-F001` repairs generated-point terminal publication by installing
+the fully parity-checked warm checkpoint; `M84-F002` routes aggregate reverse edits through their
+authenticated semantic value spans. Final clean workspace qualification and immutable nomination
+remain the next gate; this record claims neither human UAT nor M84 Pages publication.
+
+Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
+is deterministic and equation-free; ordinary intent/materialization/solver validation remains the
+sole accepted geometry path; plain deployments do not link the code layer; one history spans
+source and nested editor state; pointer frames never parse or expand; all four demonstrations,
+type failures, bounds, golden preservation, clean qualification and explicit UAT pass before
+publication.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

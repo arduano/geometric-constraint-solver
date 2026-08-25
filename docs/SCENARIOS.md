@@ -4679,6 +4679,94 @@ have SHA-256 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`.
 This mechanical qualification plus the milestone-level acceptance and exact Pages closeout above
 complete the F010 disposition without claiming a separate row-by-row replay.
 
+## M84 optional code/GUI authoring fixtures
+
+M84 adds no residual equation and does not reinterpret the 271-row milestone-neutral golden. Its
+separate reviewed ledger owns managed-source parsing, data-artifact expansion, typed references,
+keyed reconciliation, unified history and code-project persistence. ADR 0041 and
+`docs/M84_GOALS.md` are authoritative. Every fixture below is implemented and passes its focused
+owner suite; final clean candidate qualification and human presentation UAT remain pending.
+
+### M84-G1 — optional dependency boundary
+
+Build/test core, sketch, linkage, intent and constraint-editor without `geosolve-sketch-code` and
+prove no reverse dependency or code/module/parser type appears. Separately compose the optional
+crate and `@geosolve/sketch-code`. Both paths must use the same public intent/materializer audit
+authority; plain M83 workspace-v8 transcripts remain unchanged.
+
+### M84-G2 — managed source and artifact authority
+
+Round-trip the complete accepted managed-v1 CST subset with comments/formatting byte-identical,
+then perform exact authenticated declaration, organization, lens and override rewrites. Reject
+unsupported syntax, forward/duplicate symbols, stale spans and files over 4 MiB without canonical
+mutation. Compile custom helpers only in the caller-owned Node step; validate artifact source/
+interface/ABI digests, existing-family templates and 16 MiB bound. Rust/WASM/browser/load must
+consume only the canonical artifact and expose no TypeScript execution path.
+
+### M84-G3 — typed semantic results
+
+Type-check named rectangle corners/edges/profile, a Fillet record keyed exactly by
+`lowerLeft | upperRight`, and a derived Fillet collection keyed by Polyline corners. Compile-fail
+raw IDs, misspelled paths, cross-project refs and point/curve/corner mismatch. Generated
+TypeScript result descriptors and the central Rust declaration catalog must agree exactly.
+
+### M84-G4 — adaptive keyed reconciliation
+
+Start **Rounded polyline · dynamic corners** with six keyed vertices, five spans and four Fillets.
+Insert `crest` and require seven/six/five; reorder, remove, reinsert outside Undo and Undo/Redo.
+Unchanged invocation/template/member/output paths retain every logical/native identity. Allocation
+advances only for new keys, removal tombstones, retired-key reuse gets a new generation and an
+outside dependent blocks deletion without cascade or retarget. Open/closed mode, radius lens,
+point override/reset and impossible-radius retained failure remain deterministic.
+
+### M84-G5 — one transaction and retained interaction
+
+Mix managed Apply, canvas/Inspector edit, organization, lens, override/reset and adaptive
+cardinality changes. Each accepted action produces one code-session history row containing one
+nested delegated editor checkpoint; Undo/Redo restores source/artifacts/program/expansion/
+overrides/accepted scene together. Pointer-frame instrumentation must show zero parsing, expansion,
+project serialization or durable-panel rebuild. Exact release commits the newest authenticated
+accepted preview once after cold parity; existing M83 frame/terminal ceilings remain green.
+
+### M84-G6 — genuine demos and offline persistence
+
+Qualify all four code-project sessions rather than equivalent flat imports:
+
+1. adaptive rounded Polyline with keyed corner Fillets;
+2. typed aligned panel with mapped named Fillets and compile-fail cases;
+3. GUI rectangle → `crossBrace(frame)` → ordinary GUI dimension/constraint on
+   `brace.diagonals.rising`;
+4. reusable AI-authored mounting plate with rounded profile and keyed `nw/ne/se/sw` holes.
+
+The mounting helper remains byte-identical after GUI edits. Save/reload/repro restores every file,
+artifact, lock, expansion provenance, override, nested accepted intent and unified history
+offline. Missing/tampered artifacts, retained-invalid geometry, corrupt payloads and the 64 MiB
+project boundary reject atomically while preserving the previous accepted scene.
+
+### M84-F001 — generated-point terminal checkpoint parity
+
+Drag one generated rounded-Polyline point through the ordinary retained preview and release a
+valid newest sample. Terminal publication must install exactly one fully parity-checked warm
+checkpoint, retain explicit final Segment branches and computed ownership, and never reconstruct
+stale schema-derived branch metadata that rejects the release. A rejected final pointer sample
+retains the newest accepted preview; Undo/Redo restores the override and complete native scene.
+
+### M84-F002 — authenticated aggregate reverse edit
+
+Drag Corner 0 or Corner 2 of a managed rectangle. The reverse edit must target the authenticated
+semantic value span for `lowerLeft` or `upperRight`, preserve every unowned/custom byte and reject
+a stale source digest. Sequential X/Y rewrites must reparse and authenticate their fresh spans,
+publish once, update generated dependents and round-trip through exact outer Undo/Redo.
+
+### M84 release gate
+
+The separate code-project ledger, native/WASM/RPC/TypeScript parity, type failures, finite geometry,
+explicit branches and normalized Hard residual `<= 1e-9` pass alongside the byte-identical
+milestone-neutral golden. Focused format, warnings-denied Clippy/Rustdoc, locked all-feature,
+actual-WASM, TypeScript and package-closure checks pass. Trunk and the complete clean gate still
+precede one no-rebuild local/Tailscale nomination. `docs/M84_UAT.md` and explicit approval precede
+Pages; the retained service stays live until exact public verification.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

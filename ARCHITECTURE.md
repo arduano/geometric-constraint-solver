@@ -57,6 +57,12 @@ construction/NURBS UAT and certified all-family visual profiles.
   supervising user accepts it at milestone level without claiming a separate row-by-row replay;
   approval descendant `2006c86`, Pages run `32817232564` and exact hosted-byte verification pass.
   The retained UAT service is retired, Pages is final M83 public-byte authority and M83 is closed.
+- **Active target:** M84 implements an optional code/GUI authoring layer under ADR 0041. Managed source
+  and caller-compiled data-only artifacts expand deterministically into the ordinary M83 intent
+  graph; the unchanged Rust materializer/solver remains sole equation and accepted-scene authority.
+  Base solver/sketch/intent/editor deployments do not depend on this layer. Implementation and
+  focused subsystem qualification pass; final clean candidate qualification and UAT remain open,
+  and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -782,6 +788,36 @@ fresh endpoints, closure, orientation/area and output limits. Complete output ma
 B-rep feature, but the companion owns no B-rep entities and never changes sketch solve state.
 Cancelled, exhausted, truncated, skipped, ambiguous or stale results cannot be consumed as a
 production profile.
+
+### `geosolve-sketch-code` (optional M84 layer)
+
+ADR 0041 places `geosolve-sketch-code` adjacent to the intent graph and headless editor. It may
+depend on their public APIs; neither they nor core/sketch/linkage may depend back on it. Plain M83
+sessions, workspace v8 and direct solver deployments therefore remain available without code
+authoring. `@geosolve/sketch-code` has the same optional relationship to `@geosolve/intent`.
+
+For a code-enabled project, managed `sketch.ts` plus pinned `PatchModuleArtifact` values lower to
+an `AuthoringProgram`, an equation-free keyed expansion and an ordinary `IntentGraph`. The existing
+editor-owned cold materializer, native solver and independent validation then produce accepted
+authority. The code layer owns no geometry equation, priority or branch heuristic.
+
+The pure-Rust managed-v1 parser accepts one bounded lossless CST subset and rewrites only
+authenticated declaration, organization, declared-lens and explicit-override spans. Custom
+`patches/*.patch.ts` files are user/AI-owned and never rewritten. They run only in an explicit
+caller-owned Node build step which emits canonical, digest/ABI-pinned, data-only templates;
+Rust/WASM/browser runtime and workspace restore validate artifacts but never execute TypeScript.
+
+Generated members reconcile by invocation/template/member-key/output paths. Matching paths retain
+logical/native identities; insertion advances high-water; removal tombstones; reused retired keys
+receive a new generation. Typed clients expose project-branded semantic refs, fixed named outputs,
+mapped records and keyed/derived collections rather than raw wire IDs.
+
+`SketchCodeSession` owns one history over project files, artifact locks, program, expansion,
+overrides and one delegated nested editor checkpoint. Pointer frames continue to use the existing
+retained native preview and never parse/expand code. Terminal publication stages the matching
+managed edit or override and commits exactly once after cold validation parity. Code-project save,
+reload and repro contain complete offline authority within the 64 MiB envelope; managed files and
+individual artifacts are bounded at 4 MiB and 16 MiB respectively.
 
 ### `geosolve-sketch-features`
 
@@ -1738,3 +1774,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   domain baseline. Prior nominations through `b0de5af` are historical; F010 is clean-qualified,
   immutably nominated, accepted by the supervising user and exact-verified on GitHub Pages through
   approval descendant `2006c86` and run `32817232564`.
+- M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
+  typed semantic references, keyed reconciliation, one code/editor history and four required
+  demonstrations are implemented and pass focused qualification. Final clean release
+  qualification, retained Tailscale nomination and UAT remain pending; accepted M83 remains Pages
+  authority.
