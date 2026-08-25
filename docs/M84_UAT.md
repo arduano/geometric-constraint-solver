@@ -2,22 +2,46 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **prepared, not yet run**. No candidate is nominated and no row is accepted. Pages remains
-on accepted M83; an eventual immutable M84 candidate must stay available over Tailscale through
+Status: **immutable candidate nominated; focused human UAT pending**. No row is accepted. Pages
+remains on accepted M83; the nominated M84 candidate stays available over Tailscale through any
 finding repair and explicit approval.
 
 ## Candidate authority
 
-To be filled only after one committed product source passes the complete clean release gate and its
-exact no-rebuild distribution passes local/Tailscale byte and focused-browser verification. Record
-source/tree, gate log/hash, seven-file manifest, endpoint/service identity and browser/HTTP evidence
-before beginning this scorecard.
+Qualified product source: `79078eca44a5af4de5cccd92bf6fee570c473624`; tree:
+`05aefb0cbd3972d423f1713df1e58628b24ec216`. The clean Nix release gate passed on 2026-08-25;
+its 6,107-line, 414,758-byte log `/tmp/geosolve-m84-release-gate.GOEuXP.log` has SHA-256
+`0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`. This includes
+workspace Clippy/tests/Rustdoc, clean 271-row golden, actual WASM, both TypeScript suites, package
+closure, benchmarks/performance, licensing and Trunk 0.21.14. M84-F001 and M84-F002 are closed by
+owning-layer regressions.
 
-Pre-nomination evidence: implementation and focused owner qualification pass, including 65
-`geosolve-sketch-code` tests, the 26-test code-project workbench subset, TypeScript build/runtime/
-negative-type fixtures, extracted-package closure, actual-WASM authority checks, the separate M84
-ledger and the byte-identical 271-row compatibility golden. M84-F001 and M84-F002 are closed by
-focused regressions. These results do not nominate browser bytes or mark any row below complete.
+The gate output was frozen without rebuilding at `/tmp/geosolve-m84-uat.aHw5ePSW`, with directory
+mode `0555`, seven regular non-symlink files at `0444`, freeze evidence at
+`/tmp/geosolve-m84-freeze-evidence.7loLImo2`, and ordered-manifest aggregate
+`99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`:
+
+```text
+bc99bec852a174e58de5027da25cffd31a5e21580fff4f4cba80e700a3d5f252  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+57918914596207c2a3aa27abae8cbce1e321a54d797620e0ea7e66900d940732  geosolve-demo-web-e0d2c05fe4bed1f4.js
+15cdf9f3ecabd8c0b42e419009af43065686a2d66a8f6209a48ae57449bc172e  geosolve-demo-web-e0d2c05fe4bed1f4_bg.wasm
+2afe27a4143da8521f07945cb0671e3412985b05d3ab035a26255196079776fe  index.html
+9c4cc19e4ead8b15276095c81983cd0824f792e580e5929adc75f979264e2952  styles-5c4359127dc3a0bb.css
+```
+
+Local and Tailscale eight-path ledgers both have SHA-256
+`dd8e6c1350f56cb6e7a483892a188187edc68ddcb63ee8ba9335401432ba8895`: every request returns
+HTTP 200 with zero redirects, exact MIME/length/hash, no `Location`/`Content-Encoding`, and `/`
+equals `index.html`. Focused Playwright passes 4/4 locally and 4/4 on Tailscale, including its
+bounded-surface check at both required sizes; log hashes are
+`54858c5a1f75cc2e286d07360ed8342c7f8a09290a8f3e7ee1c4d295afe91d9e` and
+`37f289b62adc02362e8c34a1ea23377c2a3fc5446d43ac262a5b075c1652f4c0`.
+
+Current UAT authority is `geosolve-m84-uat.service`, PID `2426265`, at
+`http://100.94.63.83:8080/`. It serves the immutable snapshot above; the temporary `:18084`
+listener is retired. These facts nominate the candidate mechanically and do not accept any row.
 
 Run the ordinary desktop workbench at approximately `1440x900` and `1024x720`. Use actual
 code-project samples rather than importing equivalent flat scenes. Direct tests, not visual

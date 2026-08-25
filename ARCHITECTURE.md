@@ -60,9 +60,9 @@ construction/NURBS UAT and certified all-family visual profiles.
 - **Active target:** M84 implements an optional code/GUI authoring layer under ADR 0041. Managed source
   and caller-compiled data-only artifacts expand deterministically into the ordinary M83 intent
   graph; the unchanged Rust materializer/solver remains sole equation and accepted-scene authority.
-  Base solver/sketch/intent/editor deployments do not depend on this layer. Implementation and
-  focused subsystem qualification pass; final clean candidate qualification and UAT remain open,
-  and Pages stays on accepted M83.
+  Base solver/sketch/intent/editor deployments do not depend on this layer. Implementation, clean
+  release qualification and immutable Tailscale nomination pass at exact source `79078ec`; focused
+  human UAT remains open, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -1776,6 +1776,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   approval descendant `2006c86` and run `32817232564`.
 - M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
   typed semantic references, keyed reconciliation, one code/editor history and four required
-  demonstrations are implemented and pass focused qualification. Final clean release
-  qualification, retained Tailscale nomination and UAT remain pending; accepted M83 remains Pages
-  authority.
+  demonstrations are implemented. Exact source `79078ec`, tree `05aefb0`, passes complete clean
+  qualification; no-rebuild snapshot `/tmp/geosolve-m84-uat.aHw5ePSW`, aggregate
+  `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, passes local and
+  retained-Tailscale byte/browser verification. Human UAT remains pending; accepted M83 remains
+  Pages authority.

@@ -5793,9 +5793,9 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active; ADR 0041 and the acceptance contract are frozen, implementation is complete and
-under final clean qualification; no candidate or human approval exists**. Accepted M83 remains
-public Pages authority.
+Status: **active; ADR 0041 and the acceptance contract are frozen, implementation is complete,
+clean-qualified and immutably nominated on Tailscale; human approval remains pending**. Accepted
+M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5832,9 +5832,9 @@ public Pages authority.
 - [x] Preserve the milestone-neutral 271-row golden byte-for-byte; add a separate reviewed code-
   project ledger and complete parser/rewrite, artifact, type-failure, keyed identity, history,
   retained-failure, bound, parity, persistence and performance qualification.
-- [ ] Pass format, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, actual WASM,
+- [x] Pass format, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, actual WASM,
   TypeScript, golden require-clean, Trunk and the complete clean release gate.
-- [ ] Freeze one no-rebuild candidate and verify its exact bytes locally and through retained
+- [x] Freeze one no-rebuild candidate and verify its exact bytes locally and through retained
   Tailscale.
 - [ ] Receive explicit M84-U1 through M84-U10 approval, then publish/exact-verify Pages, retire the
   service and close M84.
@@ -5844,8 +5844,22 @@ artifact contract, typed SDK, keyed reconciler, composite session, four workbenc
 offline persistence are implemented. Focused code/package/workbench/WASM/TypeScript suites and the
 unchanged 271-row golden pass. `M84-F001` repairs generated-point terminal publication by installing
 the fully parity-checked warm checkpoint; `M84-F002` routes aggregate reverse edits through their
-authenticated semantic value spans. Final clean workspace qualification and immutable nomination
-remain the next gate; this record claims neither human UAT nor M84 Pages publication.
+authenticated semantic value spans.
+
+Qualification/nomination record (2026-08-25): exact committed product source
+`79078eca44a5af4de5cccd92bf6fee570c473624`, tree
+`05aefb0cbd3972d423f1713df1e58628b24ec216`, passes the complete clean Nix release gate. Its
+6,107-line, 414,758-byte log `/tmp/geosolve-m84-release-gate.GOEuXP.log` has SHA-256
+`0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`. Without rebuilding,
+the exact seven-file output is frozen at `/tmp/geosolve-m84-uat.aHw5ePSW` with directory/files
+`0555`/`0444` and ordered-manifest aggregate
+`99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`. Local and retained-
+Tailscale eight-path ledgers byte-match at SHA-256
+`dd8e6c1350f56cb6e7a483892a188187edc68ddcb63ee8ba9335401432ba8895`; focused browser checks
+pass 4/4 locally and 4/4 on Tailscale, including bounded-surface checks at both required desktop
+sizes. `geosolve-m84-uat.service`, PID `2426265`, retains those immutable bytes at
+`http://100.94.63.83:8080/`. M84-U1 through M84-U10, explicit approval, Pages publication,
+service retirement and closure remain open.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

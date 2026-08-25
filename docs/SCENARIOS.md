@@ -4685,7 +4685,8 @@ M84 adds no residual equation and does not reinterpret the 271-row milestone-neu
 separate reviewed ledger owns managed-source parsing, data-artifact expansion, typed references,
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
 `docs/M84_GOALS.md` are authoritative. Every fixture below is implemented and passes its focused
-owner suite; final clean candidate qualification and human presentation UAT remain pending.
+owner suite. Complete clean candidate qualification and immutable local/Tailscale nomination pass;
+human presentation UAT remains pending.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4763,9 +4764,14 @@ publish once, update generated dependents and round-trip through exact outer Und
 The separate code-project ledger, native/WASM/RPC/TypeScript parity, type failures, finite geometry,
 explicit branches and normalized Hard residual `<= 1e-9` pass alongside the byte-identical
 milestone-neutral golden. Focused format, warnings-denied Clippy/Rustdoc, locked all-feature,
-actual-WASM, TypeScript and package-closure checks pass. Trunk and the complete clean gate still
-precede one no-rebuild local/Tailscale nomination. `docs/M84_UAT.md` and explicit approval precede
-Pages; the retained service stays live until exact public verification.
+actual-WASM, TypeScript and package-closure checks pass. Exact source `79078ec`, tree `05aefb0`,
+also passes Trunk and the complete clean gate (log SHA-256
+`0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`). The no-rebuild
+snapshot `/tmp/geosolve-m84-uat.aHw5ePSW`, aggregate
+`99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, passes exact local and
+retained-Tailscale HTTP verification plus focused browser 4/4 on each endpoint and is live at
+`http://100.94.63.83:8080/`. `docs/M84_UAT.md` and explicit approval still precede Pages; the
+retained service stays live until exact public verification.
 
 ## Frozen near-singular fixtures
 

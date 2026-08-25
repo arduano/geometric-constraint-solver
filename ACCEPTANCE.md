@@ -3386,19 +3386,21 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the
-acceptance contract. Accepted M83 remains public product authority.
+Status: active and unaccepted, with a clean-qualified immutable Tailscale candidate nominated.
+ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract. Accepted
+M83 remains public product authority.
 
 Implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
-checks pass while the milestone-neutral 271-row golden remains byte-identical. Final clean release
-qualification, immutable Tailscale nomination and M84-U1 through M84-U10 remain open; none of this
-focused evidence changes accepted M83 public authority.
+checks pass while the milestone-neutral 271-row golden remains byte-identical. Complete clean
+release qualification and immutable Tailscale nomination also pass; M84-U1 through M84-U10 remain
+open, and none of this evidence changes accepted M83 public authority.
 
-Focused findings are closed before nomination: M84-F001 publishes the fully parity-checked warm
-terminal checkpoint so a valid generated-point release cannot inherit stale reconstructed Segment
-branch metadata; M84-F002 applies managed aggregate reverse edits through their authenticated
-semantic value spans while preserving stale-source compare-and-swap and all unowned bytes.
+Focused findings incorporated into the nominated source are closed: M84-F001 publishes the fully
+parity-checked warm terminal checkpoint so a valid generated-point release cannot inherit stale
+reconstructed Segment branch metadata; M84-F002 applies managed aggregate reverse edits through
+their authenticated semantic value spans while preserving stale-source compare-and-swap and all
+unowned bytes.
 
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace
@@ -3433,10 +3435,18 @@ semantic value spans while preserving stale-source compare-and-swap and all unow
   ledger plus native/WASM/RPC/TypeScript parity, type-failure, reconciliation, tombstone, history,
   failure, bound, persistence and performance owners pass.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests, actual WASM, TypeScript,
-  golden require-clean, Trunk and the complete clean release gate pass before nomination.
+  golden require-clean, Trunk and the complete clean release gate pass.
 - One exact no-rebuild candidate passes local and retained-Tailscale byte/browser verification.
-  M84-U1 through M84-U10 and explicit supervising-user approval pass before GitHub Pages
-  publication, exact hosted verification, service retirement and closure.
+  M84-U1 through M84-U10 and explicit supervising-user approval remain mandatory before GitHub
+  Pages publication, exact hosted verification, service retirement and closure.
+
+Nomination authority is exact product source `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
+`05aefb0cbd3972d423f1713df1e58628b24ec216`. The clean-gate log SHA-256 is
+`0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`; immutable snapshot
+`/tmp/geosolve-m84-uat.aHw5ePSW` has ordered-manifest aggregate
+`99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`. Exact local/Tailscale
+HTTP ledgers match, browser checks pass 4/4 on each endpoint, and retained service PID `2426265`
+serves the candidate at `http://100.94.63.83:8080/`. No human row or Pages publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

@@ -2,9 +2,9 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active; architecture and acceptance contract frozen, implementation complete and under
-final clean qualification; no M84 candidate or human acceptance exists**. Accepted M83 remains
-GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active; architecture and acceptance contract frozen, implementation complete,
+clean-qualified and nominated as an immutable Tailscale UAT candidate; human acceptance remains
+pending**. Accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -109,6 +109,14 @@ layer optional.
   golden require-clean, Trunk and the complete clean release gate.
 - Freeze one no-rebuild M84 candidate, verify it locally and through retained Tailscale UAT, and
   publish to Pages only after explicit supervising-user approval and exact hosted-byte proof.
+
+Nomination record (2026-08-25): exact product source
+`79078eca44a5af4de5cccd92bf6fee570c473624`, tree
+`05aefb0cbd3972d423f1713df1e58628b24ec216`, passes the complete clean release gate. Its exact
+no-rebuild seven-file output is frozen read-only at `/tmp/geosolve-m84-uat.aHw5ePSW`, ordered-
+manifest aggregate `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, and is
+byte/browser-verified locally and at `http://100.94.63.83:8080/`. This is mechanical nomination
+only: M84-U1 through M84-U10, explicit approval, GitHub Pages publication and closure remain open.
 
 ## Bounds and non-goals
 

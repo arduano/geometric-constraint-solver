@@ -316,9 +316,11 @@ through `AuthoringProgram` and deterministic keyed expansion into the ordinary M
 the unchanged Rust materializer/solver and independent validation remain sole geometry authority.
 Custom TypeScript is never executed by Rust, WASM, browser runtime or workspace load. Typed
 semantic references, keyed generations/tombstones, edit lenses/overrides and one code/editor
-history support four genuine demonstrations. Implementation and focused qualification pass; final
-clean qualification and UAT remain open. No candidate is nominated, Pages remains on accepted M83
-and an eventual candidate stays on Tailscale until approval and exact public verification.
+history support four genuine demonstrations. Implementation and complete clean qualification pass
+at exact source `79078ec`; immutable snapshot `/tmp/geosolve-m84-uat.aHw5ePSW`, aggregate
+`99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, is nominated at
+`http://100.94.63.83:8080/`. Human UAT remains open, Pages remains on accepted M83 and the
+candidate stays on Tailscale until approval and exact public verification.
 
 ## Read first
 
@@ -356,7 +358,7 @@ and an eventual candidate stays on Tailscale until approval and exact public ver
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    execution ledger and prepared scorecard.
+    clean-qualified immutable nomination ledger and pending scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -731,7 +733,8 @@ qualification, immutable Tailscale nomination and supervising-human UAT; approva
 M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen;
-implementation and focused qualification pass while final clean nomination and UAT remain open.
+implementation, clean qualification and immutable Tailscale nomination pass while human UAT
+remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -849,8 +852,8 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, finding and qualification ledger)
-- `docs/M84_UAT.md` (prepared four-demo code/GUI scorecard)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, findings and exact nomination ledger)
+- `docs/M84_UAT.md` (nominated immutable candidate and pending four-demo scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

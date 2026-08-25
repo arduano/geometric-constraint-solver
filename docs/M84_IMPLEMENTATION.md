@@ -2,8 +2,8 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **implementation complete; focused qualification passes and final clean release
-qualification is pending**. No frozen M84 candidate, human UAT result or M84 Pages publication is
+Status: **implementation complete; focused and complete clean qualification pass, and an immutable
+Tailscale candidate is nominated for UAT**. No human UAT result or M84 Pages publication is
 claimed. Accepted M83 remains public authority.
 
 ## Baseline and authority
@@ -149,8 +149,60 @@ remain exact.
 - All-feature WASM check and the shell-provided actual-WASM suite pass. `cargo fmt --all -- --check`,
   `git diff --check`, focused warnings-denied Rustdoc and shell syntax checks pass.
 
-These are development/focused results, not a substitute for the pending clean committed-source
-release gate.
+These development/focused results are incorporated into, but do not substitute for, the clean
+committed-source gate and frozen nomination below.
+
+## Clean qualification and frozen nomination
+
+Exact committed product source `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
+`05aefb0cbd3972d423f1713df1e58628b24ec216`, passed:
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run ./scripts/release-gate.sh
+```
+
+The gate ran on 2026-08-25 from 21:31:20 to 21:51:56 AEST. Its 6,107-line, 414,758-byte log is
+`/tmp/geosolve-m84-release-gate.GOEuXP.log`, SHA-256
+`0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`. Workspace
+warnings-denied Clippy, locked all-feature tests, Rustdoc, the clean 271-row golden, actual WASM,
+both TypeScript suites, package closure, performance/benchmark gates, licensing and Trunk 0.21.14
+release assembly all passed. The separate workspace-test log
+`/tmp/geosolve-m84-workspace-tests.bQDpzA.log` has SHA-256
+`72e9c6efd229b7441f00da5b13c4381e01cb1386c5aac87d2d257981a6306689`. A standalone host
+`trunk build` was unavailable because Trunk is not on the host `PATH`; the canonical Nix gate
+provided Trunk and passed.
+
+Without rebuilding, the exact gate output was copied to `/tmp/geosolve-m84-uat.aHw5ePSW`. The
+directory is mode `0555`; its seven regular non-symlink files are mode `0444`. Freeze evidence is
+retained at `/tmp/geosolve-m84-freeze-evidence.7loLImo2`. The ordered-manifest aggregate is
+`99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`:
+
+```text
+bc99bec852a174e58de5027da25cffd31a5e21580fff4f4cba80e700a3d5f252  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+57918914596207c2a3aa27abae8cbce1e321a54d797620e0ea7e66900d940732  geosolve-demo-web-e0d2c05fe4bed1f4.js
+15cdf9f3ecabd8c0b42e419009af43065686a2d66a8f6209a48ae57449bc172e  geosolve-demo-web-e0d2c05fe4bed1f4_bg.wasm
+2afe27a4143da8521f07945cb0671e3412985b05d3ab035a26255196079776fe  index.html
+9c4cc19e4ead8b15276095c81983cd0824f792e580e5929adc75f979264e2952  styles-5c4359127dc3a0bb.css
+```
+
+Local and retained-Tailscale verification covered `/` and all seven files: HTTP 200, zero
+redirects, exact MIME type/length/hash, no `Location` or `Content-Encoding`, and root equality with
+`index.html`. Ledgers `/tmp/geosolve-m84-temp-verify.dowsOmMZ/results.tsv` and
+`/tmp/geosolve-m84-final-verify.HlnJrbWo/results.tsv` both have SHA-256
+`dd8e6c1350f56cb6e7a483892a188187edc68ddcb63ee8ba9335401432ba8895`. Focused Playwright
+passes 4/4 locally and 4/4 over Tailscale. Its bounded-surface check passes at `1440x900` and
+`1024x720`; the suite also covers managed-lens/native/history publication and all four genuine
+projects. Config/spec hashes are `f0308eb1d706ead212d370963f9b6b6c87fe8488923a02e9efe62d2d1f457ee0` and
+`5ef1b00cc17073a789c8f86af2e29a225f5f1d091941b28172e1546ceba181a0`; local/final log hashes
+are `54858c5a1f75cc2e286d07360ed8342c7f8a09290a8f3e7ee1c4d295afe91d9e` and
+`37f289b62adc02362e8c34a1ea23377c2a3fc5446d43ac262a5b075c1652f4c0`.
+
+`geosolve-m84-uat.service`, PID `2426265`, serves only that immutable directory at
+`http://100.94.63.83:8080/` and remains retained through UAT. The temporary `:18084` listener was
+retired. This nomination claims no human UAT, approval, Pages publication or milestone closure.
 
 ## Known bounds and truthful limitations
 
@@ -169,11 +221,7 @@ release gate.
 
 ## Remaining release sequence
 
-1. Commit the implemented source and this evidence ledger with a clean worktree.
-2. Run the complete locked workspace Clippy/Rustdoc/tests, actual WASM, both TypeScript packages,
-   unchanged golden, Trunk build and clean Nix release gate.
-3. Freeze the gate-produced seven-file `dist` without rebuilding, make it immutable and record its
-   SHA-256 manifest/aggregate.
-4. Verify the exact bytes locally, through `100.94.63.83:8080`, and with focused two-size browser
-   checks; then bind them in `docs/M84_UAT.md`.
-5. Stop for M84-U1 through M84-U10 and explicit approval. Do not publish M84 to GitHub Pages yet.
+1. Complete M84-U1 through M84-U10 against the retained exact candidate and record explicit
+   supervising-user approval or open a numbered finding and withdraw the candidate.
+2. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+   built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

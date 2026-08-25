@@ -2,9 +2,10 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted and implemented for M84. M84 remains active and unaccepted while clean candidate
-qualification and human UAT are pending; GitHub Pages remains on accepted M83 until explicit
-supervising-user approval and exact publication.
+Status: accepted and implemented for M84. Exact source `79078eca44a5af4de5cccd92bf6fee570c473624`
+is clean-qualified and immutably nominated on Tailscale; M84 remains active and unaccepted while
+human UAT is pending. GitHub Pages remains on accepted M83 until explicit supervising-user approval
+and exact publication.
 
 ## Context
 
