@@ -10,6 +10,7 @@ use crate::FeatureKind;
 /// Closed direct-managed lowering routes owned by the optional adapter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DirectDeclarationLowering {
+    Line,
     Polyline,
     Rectangle,
 }
@@ -74,7 +75,7 @@ pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 7] = [
     },
     CodeDeclarationFamilyDescriptor {
         family: "geometry.line",
-        direct: None,
+        direct: Some(DirectDeclarationLowering::Line),
         template: Some(TemplateDeclarationLowering::Line),
         native: NativeDeclarationContract::Geometry(GeometryRecipeKind::Segment),
     },

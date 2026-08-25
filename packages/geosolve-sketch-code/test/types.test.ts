@@ -7,11 +7,14 @@ import {
   point,
   polyline,
   rectangle,
+  sketch,
 } from "../src/index.js";
 import type {
   CurveSpanRef,
   FeatureRecord,
   KeyedFeatureCollection,
+  LineFeature,
+  ManagedSketchProject,
   OutputRef,
   RectangleFeature,
 } from "../src/index.js";
@@ -59,3 +62,44 @@ panel.corners.lowerleft;
 type MappedRecord = FeatureRecord<typeof mapped>;
 const mappedRecord: MappedRecord = mapped;
 mappedRecord;
+
+const managedRectangleDiagonal = sketch(($) => {
+  const frame = $.geometry.rectangle("frame", {
+    lowerLeft: [0, 0],
+    upperRight: [60, 35],
+  });
+  const diagonal = $.geometry.line("diagonal", {
+    start: frame.corners.lowerLeft,
+    end: frame.corners.upperRight,
+  });
+  const mixedEndpointLine = $.geometry.line("mixedEndpointLine", {
+    start: [10, 12],
+    end: frame.corners.lowerRight,
+  });
+  const literalLine = $.geometry.line("literalLine", {
+    start: [0, 0],
+    end: [10, 12],
+  });
+
+  const managedLine: LineFeature<ManagedSketchProject> = diagonal;
+  managedLine;
+
+  // @ts-expect-error Managed line endpoints reject curve outputs.
+  $.geometry.line("wrongKind", { start: frame.edges.bottom, end: frame.corners.upperRight });
+  // @ts-expect-error Managed line endpoints reject references from another project.
+  $.geometry.line("foreign", { start: alphaStart, end: frame.corners.upperRight });
+  // @ts-expect-error Managed line endpoints reject raw semantic ID strings.
+  $.geometry.line("rawId", { start: "frame.corners.lowerLeft", end: frame.corners.upperRight });
+  const rawDto = {
+    declaration: "frame",
+    output: ["corners", "lowerLeft"],
+    kind: "point",
+  } as const;
+  // @ts-expect-error Managed line endpoints reject transport DTOs in place of lexical references.
+  $.geometry.line("rawDto", { start: rawDto, end: frame.corners.upperRight });
+  // @ts-expect-error Rectangle named outputs reject misspellings in managed source.
+  $.geometry.line("misspelled", { start: frame.corners.lowerleft, end: frame.corners.upperRight });
+
+  return $.outputs({ frame, diagonal, mixedEndpointLine, literalLine });
+});
+managedRectangleDiagonal;

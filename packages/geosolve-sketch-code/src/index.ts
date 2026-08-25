@@ -616,6 +616,11 @@ export interface ManagedPolylineVertex<Key extends string = string> {
   readonly position: readonly [number, number];
 }
 
+/** A managed line endpoint is either literal geometry or a lexical point output. */
+export type ManagedLineEndpoint<Project> =
+  | PointLikeRef<NoInfer<Project>>
+  | readonly [number, number];
+
 export interface ManagedGeometryBuilder<Project> {
   rectangle(
     symbol: string,
@@ -624,6 +629,13 @@ export interface ManagedGeometryBuilder<Project> {
       readonly upperRight: readonly [number, number];
     },
   ): RectangleFeature<Project>;
+  line(
+    symbol: string,
+    values: {
+      readonly start: ManagedLineEndpoint<Project>;
+      readonly end: ManagedLineEndpoint<Project>;
+    },
+  ): LineFeature<Project>;
   polyline<const Vertices extends readonly ManagedPolylineVertex[]>(
     symbol: string,
     values: {

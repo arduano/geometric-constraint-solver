@@ -799,6 +799,7 @@ fn lower_direct_geometry(
 ) -> Result<(), CodeExpansionError> {
     let family = declaration.builder_path.join(".");
     match code_declaration_family(&family).and_then(|descriptor| descriptor.direct) {
+        Some(DirectDeclarationLowering::Line) => lower_direct_line(builder, declaration),
         Some(DirectDeclarationLowering::Polyline) => {
             lower_direct_polyline(builder, declaration, reconciliation)
         }
@@ -807,6 +808,100 @@ fn lower_direct_geometry(
             "managed geometry family `{family}`"
         ))),
     }
+}
+
+fn lower_direct_line(
+    builder: &mut ExpansionBuilder,
+    declaration: &AuthoringDeclaration,
+) -> Result<(), CodeExpansionError> {
+    let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
+    let alias = semantic_alias("decl", &builder.project, &declaration.symbol, &[])?;
+    let mut draft = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        alias.clone(),
+    );
+    let mut literal_positions = [None, None];
+    for (index, (name, role)) in [
+        ("start", IntentPortRole::Start),
+        ("end", IntentPortRole::End),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let value = required(arguments, name, &declaration.symbol.0)?;
+        let reference = format!("{}.{}", declaration.symbol.0, name);
+        let resolved =
+            builder.resolve_managed(value, &SemanticOutputPath::default(), &reference)?;
+        match resolved {
+            SemanticValue::PointLiteral(position) => {
+                let selector = node_selector(role, 0);
+                draft = draft
+                    .with_instance_leaf(selector, LeafField::X, length(position[0]))
+                    .with_instance_leaf(selector, LeafField::Y, length(position[1]));
+                literal_positions[index] = Some(position);
+            }
+            value => {
+                let point = value.as_port(IntentPortKind::Point, &reference)?;
+                draft = draft.with_input(
+                    InputSlot::new(
+                        InputRole::Point,
+                        u16::try_from(index).expect("two endpoints"),
+                    ),
+                    point.patch_ref(),
+                );
+            }
+        }
+    }
+    if let [Some(start), Some(end)] = literal_positions {
+        let direction =
+            unit_direction(start, end).ok_or_else(|| CodeExpansionError::InvalidDeclaration {
+                declaration: declaration.symbol.0.clone(),
+                message: "line endpoints must be finite and distinct".into(),
+            })?;
+        draft = draft.with_field(
+            field_key("branch_direction")?,
+            IntentLiteral::Point(direction),
+        );
+    }
+    builder.push_node(alias.clone(), draft)?;
+
+    builder.insert_declaration(
+        declaration.symbol.clone(),
+        SemanticDeclaration {
+            root: SemanticValue::Declaration {
+                alias: alias.clone(),
+                kind: FeatureKind::Feature,
+            },
+            paths: BTreeMap::from([
+                (
+                    fields_path(&["end"]),
+                    SemanticValue::Port(port(
+                        &alias,
+                        node_selector(IntentPortRole::End, 0),
+                        IntentPortKind::Point,
+                    )),
+                ),
+                (
+                    fields_path(&["span"]),
+                    SemanticValue::Port(port(
+                        &alias,
+                        node_selector(IntentPortRole::Span, 0),
+                        IntentPortKind::CurveSpan,
+                    )),
+                ),
+                (
+                    fields_path(&["start"]),
+                    SemanticValue::Port(port(
+                        &alias,
+                        node_selector(IntentPortRole::Start, 0),
+                        IntentPortKind::Point,
+                    )),
+                ),
+            ]),
+        },
+    )
 }
 
 #[allow(

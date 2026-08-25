@@ -11,7 +11,8 @@ use std::fmt::Write as _;
 
 use geosolve_constraint_editor::{IntentNativeBinding, ProjectionalEditorSession};
 use geosolve_sketch_intent::{
-    GeometryRecipeKind, IntentNodeKind, IntentPortRole, IntentPortSelector, NodeId,
+    GeometryRecipeKind, InputRole, InputSlot, IntentNode, IntentNodeKind, IntentPortRole,
+    IntentPortSelector, NodeId,
 };
 use thiserror::Error;
 
@@ -52,6 +53,10 @@ pub enum EditorBootstrapError {
     MissingNode(NodeId),
     #[error("GUI declaration `{symbol}` uses unsupported recipe `{recipe}`")]
     UnsupportedRecipe { symbol: String, recipe: String },
+    #[error("GUI declaration `{symbol}` depends on unselected declaration node {dependency}")]
+    MissingDependency { symbol: String, dependency: NodeId },
+    #[error("GUI declaration `{symbol}` has an unsupported `{input}` dependency")]
+    UnsupportedReference { symbol: String, input: &'static str },
     #[error("GUI declaration `{symbol}` has no accepted native `{output}` point")]
     MissingNativePoint {
         symbol: String,
@@ -99,61 +104,18 @@ pub fn initialize_code_project_from_editor(
     validate_selection(declarations)?;
 
     let intent = editor.coordinator().intent();
+    let declarations = dependency_order(editor, declarations)?;
+    let selected = declarations
+        .iter()
+        .map(|declaration| (declaration.node, *declaration))
+        .collect::<BTreeMap<_, _>>();
     let mut body = String::new();
-    for declaration in declarations {
+    for declaration in &declarations {
         let node = intent
             .graph()
             .node(declaration.node)
             .ok_or(EditorBootstrapError::MissingNode(declaration.node))?;
-        match node.kind {
-            IntentNodeKind::Geometry {
-                recipe: GeometryRecipeKind::TwoPointAlignedRectangle,
-            } => {
-                let lower_left = accepted_point(
-                    editor,
-                    declaration,
-                    IntentPortSelector::Node {
-                        role: IntentPortRole::Corner,
-                        index: 0,
-                    },
-                    "lower-left corner",
-                )?;
-                let upper_right = accepted_point(
-                    editor,
-                    declaration,
-                    IntentPortSelector::Node {
-                        role: IntentPortRole::Corner,
-                        index: 2,
-                    },
-                    "upper-right corner",
-                )?;
-                if lower_left
-                    .into_iter()
-                    .chain(upper_right)
-                    .any(|coordinate| !coordinate.is_finite())
-                {
-                    return Err(EditorBootstrapError::NonFiniteGeometry {
-                        symbol: declaration.symbol.0.clone(),
-                    });
-                }
-                let lower_x = managed_number(lower_left[0]);
-                let lower_y = managed_number(lower_left[1]);
-                let upper_x = managed_number(upper_right[0]);
-                let upper_y = managed_number(upper_right[1]);
-                write!(
-                    body,
-                    "  const {symbol} = $.geometry.rectangle(\"{symbol}\", {{\n    lowerLeft: [{lower_x}, {lower_y}],\n    upperRight: [{upper_x}, {upper_y}],\n  }});\n",
-                    symbol = declaration.symbol.0,
-                )
-                .expect("writing managed source to a String cannot fail");
-            }
-            ref kind => {
-                return Err(EditorBootstrapError::UnsupportedRecipe {
-                    symbol: declaration.symbol.0.clone(),
-                    recipe: intent_kind_name(kind),
-                });
-            }
-        }
+        write_managed_declaration(&mut body, editor, declaration, node, &selected)?;
     }
 
     let output = declarations
@@ -180,6 +142,291 @@ pub fn initialize_code_project_from_editor(
         .validate()
         .map_err(|error| EditorBootstrapError::InvalidManagedSource(error.to_string()))?;
     Ok(code_project)
+}
+
+fn write_managed_declaration(
+    body: &mut String,
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    selected: &BTreeMap<NodeId, &EditorBootstrapDeclaration>,
+) -> Result<(), EditorBootstrapError> {
+    match node.kind {
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::TwoPointAlignedRectangle,
+        } => {
+            let bounds = accepted_rectangle_bounds(editor, declaration)?;
+            let lower_x = managed_number(bounds.lower_left[0]);
+            let lower_y = managed_number(bounds.lower_left[1]);
+            let upper_x = managed_number(bounds.upper_right[0]);
+            let upper_y = managed_number(bounds.upper_right[1]);
+            write!(
+                body,
+                "  const {symbol} = $.geometry.rectangle(\"{symbol}\", {{\n    lowerLeft: [{lower_x}, {lower_y}],\n    upperRight: [{upper_x}, {upper_y}],\n  }});\n",
+                symbol = declaration.symbol.0,
+            )
+            .expect("writing managed source to a String cannot fail");
+        }
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        } => {
+            let start = segment_endpoint_expression(
+                editor,
+                declaration,
+                node,
+                selected,
+                0,
+                IntentPortRole::Start,
+                "start",
+            )?;
+            let end = segment_endpoint_expression(
+                editor,
+                declaration,
+                node,
+                selected,
+                1,
+                IntentPortRole::End,
+                "end",
+            )?;
+            write!(
+                body,
+                "  const {symbol} = $.geometry.line(\"{symbol}\", {{\n    start: {start},\n    end: {end},\n  }});\n",
+                symbol = declaration.symbol.0,
+            )
+            .expect("writing managed source to a String cannot fail");
+        }
+        ref kind => {
+            return Err(EditorBootstrapError::UnsupportedRecipe {
+                symbol: declaration.symbol.0.clone(),
+                recipe: intent_kind_name(kind),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn dependency_order<'a>(
+    editor: &ProjectionalEditorSession,
+    declarations: &'a [EditorBootstrapDeclaration],
+) -> Result<Vec<&'a EditorBootstrapDeclaration>, EditorBootstrapError> {
+    let selected = declarations
+        .iter()
+        .map(|declaration| (declaration.node, declaration))
+        .collect::<BTreeMap<_, _>>();
+    let mut emitted = BTreeSet::new();
+    let mut ordered = Vec::with_capacity(declarations.len());
+    while ordered.len() < declarations.len() {
+        let mut progress = false;
+        for declaration in declarations {
+            if emitted.contains(&declaration.node) {
+                continue;
+            }
+            let node = editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node(declaration.node)
+                .ok_or(EditorBootstrapError::MissingNode(declaration.node))?;
+            for dependency in node.dependencies() {
+                if !selected.contains_key(&dependency) {
+                    return Err(EditorBootstrapError::MissingDependency {
+                        symbol: declaration.symbol.0.clone(),
+                        dependency,
+                    });
+                }
+            }
+            if node
+                .dependencies()
+                .iter()
+                .all(|dependency| emitted.contains(dependency))
+            {
+                emitted.insert(declaration.node);
+                ordered.push(declaration);
+                progress = true;
+            }
+        }
+        if !progress {
+            return Err(EditorBootstrapError::InvalidManagedSource(
+                "selected GUI declarations contain a dependency cycle".into(),
+            ));
+        }
+    }
+    Ok(ordered)
+}
+
+#[derive(Clone, Copy)]
+struct RectangleBounds {
+    lower_left: [f64; 2],
+    upper_right: [f64; 2],
+}
+
+#[allow(
+    clippy::float_cmp,
+    reason = "equal finite bounds are the exact zero-extent invalid rectangle boundary"
+)]
+fn accepted_rectangle_bounds(
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+) -> Result<RectangleBounds, EditorBootstrapError> {
+    let mut corners = [[0.0; 2]; 4];
+    for (index, corner) in corners.iter_mut().enumerate() {
+        *corner = accepted_point(
+            editor,
+            declaration,
+            IntentPortSelector::Node {
+                role: IntentPortRole::Corner,
+                index: u16::try_from(index).expect("four rectangle corners fit u16"),
+            },
+            "rectangle corner",
+        )?;
+    }
+    if corners
+        .iter()
+        .flatten()
+        .any(|coordinate| !coordinate.is_finite())
+    {
+        return Err(EditorBootstrapError::NonFiniteGeometry {
+            symbol: declaration.symbol.0.clone(),
+        });
+    }
+    let min_x = corners
+        .iter()
+        .map(|corner| corner[0])
+        .fold(f64::INFINITY, f64::min);
+    let max_x = corners
+        .iter()
+        .map(|corner| corner[0])
+        .fold(f64::NEG_INFINITY, f64::max);
+    let min_y = corners
+        .iter()
+        .map(|corner| corner[1])
+        .fold(f64::INFINITY, f64::min);
+    let max_y = corners
+        .iter()
+        .map(|corner| corner[1])
+        .fold(f64::NEG_INFINITY, f64::max);
+    if min_x == max_x || min_y == max_y {
+        return Err(EditorBootstrapError::NonFiniteGeometry {
+            symbol: declaration.symbol.0.clone(),
+        });
+    }
+    Ok(RectangleBounds {
+        lower_left: [min_x, min_y],
+        upper_right: [max_x, max_y],
+    })
+}
+
+fn segment_endpoint_expression(
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    selected: &BTreeMap<NodeId, &EditorBootstrapDeclaration>,
+    input_index: u16,
+    role: IntentPortRole,
+    input: &'static str,
+) -> Result<String, EditorBootstrapError> {
+    if let Some(source) = node
+        .inputs
+        .get(&InputSlot::new(InputRole::Point, input_index))
+    {
+        let source_declaration =
+            selected
+                .get(&source.node)
+                .ok_or(EditorBootstrapError::MissingDependency {
+                    symbol: declaration.symbol.0.clone(),
+                    dependency: source.node,
+                })?;
+        let source_node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(source.node)
+            .ok_or(EditorBootstrapError::MissingNode(source.node))?;
+        if !matches!(
+            source_node.kind,
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::TwoPointAlignedRectangle
+            }
+        ) {
+            return Err(EditorBootstrapError::UnsupportedReference {
+                symbol: declaration.symbol.0.clone(),
+                input,
+            });
+        }
+        let port =
+            source_node
+                .port(source.port)
+                .ok_or(EditorBootstrapError::UnsupportedReference {
+                    symbol: declaration.symbol.0.clone(),
+                    input,
+                })?;
+        let IntentPortSelector::Node {
+            role: IntentPortRole::Corner,
+            index,
+        } = port.selector
+        else {
+            return Err(EditorBootstrapError::UnsupportedReference {
+                symbol: declaration.symbol.0.clone(),
+                input,
+            });
+        };
+        let position = accepted_point(
+            editor,
+            source_declaration,
+            IntentPortSelector::Node {
+                role: IntentPortRole::Corner,
+                index,
+            },
+            "referenced rectangle corner",
+        )?;
+        let bounds = accepted_rectangle_bounds(editor, source_declaration)?;
+        let member = rectangle_corner_member(bounds, position).ok_or(
+            EditorBootstrapError::UnsupportedReference {
+                symbol: declaration.symbol.0.clone(),
+                input,
+            },
+        )?;
+        return Ok(format!("{}.corners.{member}", source_declaration.symbol.0));
+    }
+
+    let position = accepted_point(
+        editor,
+        declaration,
+        IntentPortSelector::Node { role, index: 0 },
+        input,
+    )?;
+    if position
+        .into_iter()
+        .any(|coordinate| !coordinate.is_finite())
+    {
+        return Err(EditorBootstrapError::NonFiniteGeometry {
+            symbol: declaration.symbol.0.clone(),
+        });
+    }
+    Ok(format!(
+        "[{}, {}]",
+        managed_number(position[0]),
+        managed_number(position[1]),
+    ))
+}
+
+fn rectangle_corner_member(bounds: RectangleBounds, position: [f64; 2]) -> Option<&'static str> {
+    if position
+        .into_iter()
+        .any(|coordinate| !coordinate.is_finite())
+    {
+        return None;
+    }
+    let middle = [
+        bounds.lower_left[0].mul_add(0.5, bounds.upper_right[0] * 0.5),
+        bounds.lower_left[1].mul_add(0.5, bounds.upper_right[1] * 0.5),
+    ];
+    match (position[0] <= middle[0], position[1] <= middle[1]) {
+        (true, true) => Some("lowerLeft"),
+        (false, true) => Some("lowerRight"),
+        (false, false) => Some("upperRight"),
+        (true, false) => Some("upperLeft"),
+    }
 }
 
 fn validate_selection(
