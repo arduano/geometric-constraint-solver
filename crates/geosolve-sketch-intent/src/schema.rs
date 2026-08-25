@@ -422,10 +422,8 @@ fn computed_fillet_projection_path(name: &str) -> Option<IntentProjectionPath> {
 fn parent_projection_path(name: &str) -> Option<IntentProjectionPath> {
     let (index, suffix) = if let Some(suffix) = name.strip_prefix("first_") {
         (0, suffix)
-    } else if let Some(suffix) = name.strip_prefix("second_") {
-        (1, suffix)
     } else {
-        return None;
+        (1, name.strip_prefix("second_")?)
     };
     Some(nested_contact_component(
         indexed_projection_path("parents", index),
@@ -439,10 +437,8 @@ fn parent_projection_path_from_base(
 ) -> Option<IntentProjectionPath> {
     let (index, suffix) = if let Some(suffix) = name.strip_prefix("first_") {
         (0, suffix)
-    } else if let Some(suffix) = name.strip_prefix("second_") {
-        (1, suffix)
     } else {
-        return None;
+        (1, name.strip_prefix("second_")?)
     };
     let parent = base.with_field(projection_key("parents")).with_index(index);
     Some(nested_contact_component(parent, suffix))
