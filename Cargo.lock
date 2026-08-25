@@ -669,6 +669,7 @@ dependencies = [
  "geosolve-constraint-editor",
  "geosolve-core",
  "geosolve-sketch",
+ "geosolve-sketch-code",
  "geosolve-sketch-features",
  "geosolve-sketch-intent",
  "miniz_oxide",
@@ -715,6 +716,18 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "geosolve-sketch-code"
+version = "0.2.0"
+dependencies = [
+ "geosolve-constraint-editor",
+ "geosolve-sketch",
+ "geosolve-sketch-intent",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 

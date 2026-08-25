@@ -1690,6 +1690,55 @@ impl IntentSession {
         Ok(json)
     }
 
+    /// Returns an authenticated clone with identical current/accepted intent
+    /// and monotonic allocator authority but no nested user Undo/Redo.
+    ///
+    /// This is the neutral delegated-checkpoint seam for an adjacent composite
+    /// session which owns the one user-visible history. It does not rewrite
+    /// graph, instance, organization, reservations, accepted evidence or the
+    /// overall revision, and it never mutates the source session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the source session or the resulting history-free
+    /// authority fails validation.
+    pub fn delegated_checkpoint(&self) -> Result<Self, IntentSessionError> {
+        self.validate()?;
+        let mut delegated = self.clone();
+        delegated.undo.clear();
+        delegated.redo.clear();
+        delegated.refresh_cached_identities();
+        delegated.validate()?;
+        Ok(delegated)
+    }
+
+    /// Encodes [`Self::delegated_checkpoint`] using the ordinary strict
+    /// canonical session wire, with authenticated empty Undo and Redo arrays.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the source session, delegated checkpoint, or
+    /// canonical encoding fails validation or its resource bound.
+    pub fn to_delegated_checkpoint_json(&self) -> Result<String, IntentSessionError> {
+        self.delegated_checkpoint()?.to_canonical_json()
+    }
+
+    /// Decodes a strict canonical session only when it contains no nested
+    /// user history. This prevents a composite history owner from
+    /// accidentally accepting an ordinary self-owning session checkpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for malformed, non-canonical, unauthenticated, or
+    /// history-bearing session JSON.
+    pub fn from_delegated_checkpoint_json(json: &str) -> Result<Self, IntentSessionError> {
+        let session = Self::from_json(json)?;
+        if !session.undo.is_empty() || !session.redo.is_empty() {
+            return Err(IntentSessionError::DelegatedCheckpointContainsHistory);
+        }
+        Ok(session)
+    }
+
     /// Imports strict canonical intent-session JSON and authenticates all
     /// current/history structure and high-water state.
     ///
@@ -2685,7 +2734,15 @@ fn apply_patch_operations(
         }
     }
 
-    for operation in operations {
+    // Creation was resolved above in dependency order. Apply every retained
+    // mutation before evaluating deletion closures so one unordered atomic
+    // patch may rebind a surviving dependent away from a source that the same
+    // patch then removes. Deletion policy still authenticates the exact
+    // post-rebind closure; patch-array order remains non-semantic.
+    let (deletions, mutations): (Vec<_>, Vec<_>) = operations
+        .into_iter()
+        .partition(|operation| matches!(operation, IntentPatchOperation::DeleteNode { .. }));
+    for operation in mutations.into_iter().chain(deletions) {
         match operation {
             IntentPatchOperation::CreateNode { .. } | IntentPatchOperation::CreateCell { .. } => {}
             IntentPatchOperation::SetSuppressed { node, suppressed } => {
@@ -3333,6 +3390,8 @@ pub enum IntentSessionError {
     DigestMismatch,
     #[error("intent session JSON is not canonical")]
     NonCanonicalJson,
+    #[error("delegated intent checkpoint contains nested Undo/Redo history")]
+    DelegatedCheckpointContainsHistory,
     #[error(transparent)]
     Graph(#[from] IntentGraphError),
     #[error(transparent)]
@@ -3408,6 +3467,140 @@ mod tests {
             "retained-failure",
         );
         session
+    }
+
+    #[test]
+    fn delegated_checkpoint_is_history_free_but_retains_current_and_allocator_authority() {
+        let session = session_with_undo_and_redo();
+        let delegated = session.delegated_checkpoint().unwrap();
+        assert_eq!(session.undo_len(), 2);
+        assert_eq!(session.redo_len(), 1);
+        assert_eq!(delegated.undo_len(), 0);
+        assert_eq!(delegated.redo_len(), 0);
+        assert_eq!(delegated.id(), session.id());
+        assert_eq!(delegated.graph(), session.graph());
+        assert_eq!(delegated.instance(), session.instance());
+        assert_eq!(delegated.reservations(), session.reservations());
+        assert_eq!(delegated.organization(), session.organization());
+        assert_eq!(delegated.external_inputs(), session.external_inputs());
+        assert_eq!(delegated.latest_attempt(), session.latest_attempt());
+        assert_eq!(delegated.accepted(), session.accepted());
+        assert_eq!(
+            delegated.allocator_high_water(),
+            session.allocator_high_water()
+        );
+        assert_eq!(delegated.identity().revision, session.identity().revision);
+        assert_ne!(delegated.identity().digest, session.identity().digest);
+
+        let json = session.to_delegated_checkpoint_json().unwrap();
+        let restored = IntentSession::from_delegated_checkpoint_json(&json).unwrap();
+        assert_eq!(restored, delegated);
+        assert_eq!(restored.to_canonical_json().unwrap(), json);
+        assert!(matches!(
+            IntentSession::from_delegated_checkpoint_json(&session.to_canonical_json().unwrap()),
+            Err(IntentSessionError::DelegatedCheckpointContainsHistory)
+        ));
+    }
+
+    #[test]
+    fn unordered_patch_rebinds_survivor_before_validating_old_source_deletion() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x84_0041)).unwrap();
+        let point_ref = |alias: &str| PatchPortRef::Alias {
+            node: key(alias),
+            selector: crate::IntentPortSelector::Node {
+                role: crate::IntentPortRole::Primary,
+                index: 0,
+            },
+        };
+        let point = |symbol: &str| {
+            IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::SketchPoint,
+                },
+                key(symbol),
+            )
+        };
+        let line = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            key("warm.line"),
+        )
+        .with_input(InputSlot::new(InputRole::Point, 0), point_ref("old"))
+        .with_input(InputSlot::new(InputRole::Point, 1), point_ref("end"));
+        let create = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("old"),
+                    draft: Box::new(point("warm.old")),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("replacement"),
+                    draft: Box::new(point("warm.replacement")),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("end"),
+                    draft: Box::new(point("warm.end")),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("line"),
+                    draft: Box::new(line),
+                    cell: None,
+                },
+            ],
+        );
+        let create_plan = session.plan_patch(create, accepted).unwrap();
+        let old = create_plan.aliases().node(&key("old")).unwrap();
+        let line = create_plan.aliases().node(&key("line")).unwrap();
+        let replacement = create_plan
+            .aliases()
+            .port(
+                &key("replacement"),
+                crate::IntentPortSelector::Node {
+                    role: crate::IntentPortRole::Primary,
+                    index: 0,
+                },
+            )
+            .unwrap();
+        session.commit_plan(create_plan).unwrap();
+        assert_eq!(
+            session.graph().dependent_closure([old]).unwrap().len(),
+            2,
+            "the old point initially owns the retained line dependent",
+        );
+
+        // Delete deliberately precedes RebindInput. Patch-array order is not
+        // semantic: the transaction must first detach the retained line, then
+        // authenticate RejectDependents against the resulting graph.
+        let edit = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::DeleteNode {
+                    node: old,
+                    policy: DeletePolicy::RejectDependents,
+                },
+                IntentPatchOperation::RebindInput {
+                    node: line,
+                    slot: InputSlot::new(InputRole::Point, 0),
+                    source: PatchPortRef::Stable { port: replacement },
+                },
+            ],
+        );
+        let edit_plan = session.plan_patch(edit, accepted).unwrap();
+        session.commit_plan(edit_plan).unwrap();
+
+        assert!(session.graph().node(old).is_none());
+        assert_eq!(
+            session.graph().node(line).unwrap().inputs[&InputSlot::new(InputRole::Point, 0)],
+            replacement,
+        );
+        session.validate().unwrap();
     }
 
     fn commit_retained_failure(

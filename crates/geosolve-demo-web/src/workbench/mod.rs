@@ -3,6 +3,8 @@
 #[cfg(any(target_arch = "wasm32", test))]
 mod action_surface;
 #[cfg(any(target_arch = "wasm32", test))]
+mod code_projects;
+#[cfg(any(target_arch = "wasm32", test))]
 mod design_projection;
 #[cfg(any(target_arch = "wasm32", test))]
 mod effect_adapter;
@@ -90,17 +92,24 @@ enum DesignProjectionTab {
     Outline,
     StructuredSource,
     History,
+    Code,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
 impl DesignProjectionTab {
-    const ALL: [Self; 3] = [Self::Outline, Self::StructuredSource, Self::History];
+    const ALL: [Self; 4] = [
+        Self::Outline,
+        Self::StructuredSource,
+        Self::History,
+        Self::Code,
+    ];
 
     const fn key(self) -> &'static str {
         match self {
             Self::Outline => "outline",
             Self::StructuredSource => "source",
             Self::History => "history",
+            Self::Code => "code",
         }
     }
 
@@ -113,6 +122,7 @@ impl DesignProjectionTab {
             Self::Outline => "wb-design-tab-outline",
             Self::StructuredSource => "wb-design-tab-source",
             Self::History => "wb-design-tab-history",
+            Self::Code => "wb-design-tab-code",
         }
     }
 
@@ -121,15 +131,17 @@ impl DesignProjectionTab {
             Self::Outline => "wb-design-outline",
             Self::StructuredSource => "wb-design-source",
             Self::History => "wb-design-history",
+            Self::Code => "wb-design-code",
         }
     }
 
     const fn adjacent(self, direction: i8) -> Self {
         match (self, direction.signum()) {
-            (Self::Outline, -1) => Self::History,
-            (Self::History, 1) | (Self::StructuredSource, -1) => Self::Outline,
+            (Self::Outline, -1) => Self::Code,
+            (Self::StructuredSource, -1) | (Self::Code, 1) => Self::Outline,
             (Self::Outline, 1) | (Self::History, -1) => Self::StructuredSource,
-            (Self::StructuredSource, 1) => Self::History,
+            (Self::StructuredSource, 1) | (Self::Code, -1) => Self::History,
+            (Self::History, 1) => Self::Code,
             (_, _) => self,
         }
     }
@@ -246,6 +258,21 @@ impl WorkbenchDocumentAuthority {
             computed_evaluation_high_water,
             revisions,
         }
+    }
+
+    #[cfg_attr(
+        test,
+        allow(dead_code, reason = "used by the WASM code-project adapter")
+    )]
+    fn from_projectional_editor(
+        editor: geosolve_constraint_editor::ProjectionalEditorSession,
+    ) -> Result<Self, String> {
+        let snapshot = persistence::WorkspaceSnapshot::from_projectional_editor(&editor)?;
+        Ok(Self::projectional(
+            editor,
+            snapshot.computed_evaluation_high_water(),
+            snapshot.revisions,
+        ))
     }
 
     fn from_flat_coordinator(
@@ -3530,7 +3557,7 @@ pub(crate) mod wasm {
         LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, OLDER_V3_STORAGE_KEY,
         PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
         coordinator_from_reproduction_payload, reproduction_payload_from_coordinator,
-        reproduction_payload_from_snapshot, snapshot_from_reproduction_payload,
+        reproduction_payload_from_snapshot,
     };
 
     struct Workbench {
@@ -3560,6 +3587,7 @@ pub(crate) mod wasm {
 
     struct ProjectionalWorkbench {
         authority: super::WorkbenchDocumentAuthority,
+        code_project: Option<super::code_projects::CodeProjectWorkbench>,
         authoring: AuthoringState,
         feature_authoring: FeatureAuthoringState,
         offset_authoring: OffsetAuthoringState,
@@ -3635,6 +3663,27 @@ pub(crate) mod wasm {
                 .or_else(|| storage.get_item(OLDER_V2_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(LEGACY_STORAGE_KEY).ok().flatten())
         });
+        if let Some(snapshot) = snapshot.as_deref()
+            && let Ok(code_project) =
+                super::code_projects::CodeProjectWorkbench::from_persistence_json(snapshot)
+        {
+            let restored = code_project
+                .accepted_editor_checkpoint()
+                .as_str()
+                .ok_or_else(|| "code-project editor checkpoint is not encoded text".to_owned())
+                .and_then(WorkspaceSnapshot::decode)
+                .and_then(|snapshot| super::WorkbenchDocumentAuthority::from_snapshot(&snapshot));
+            if let Ok(authority) = restored
+                && authority.is_projectional()
+            {
+                return install_projectional(
+                    document,
+                    authority,
+                    Some(code_project),
+                    "Offline code project restored".into(),
+                );
+            }
+        }
         let restored = if let Some(snapshot) = snapshot.as_deref() {
             WorkspaceSnapshot::decode(snapshot)
                 .and_then(|value| super::WorkbenchDocumentAuthority::from_snapshot(&value))
@@ -3642,9 +3691,12 @@ pub(crate) mod wasm {
             super::fresh_projectional_authority()
         };
         match restored {
-            Ok(authority) if authority.is_projectional() => {
-                install_projectional(document, authority, "Projectional workspace ready".into())
-            }
+            Ok(authority) if authority.is_projectional() => install_projectional(
+                document,
+                authority,
+                None,
+                "Projectional workspace ready".into(),
+            ),
             Ok(authority) => install_flat(document, authority, "Ready".to_owned()),
             Err(error) => {
                 let fresh = super::fresh_projectional_authority()
@@ -3652,6 +3704,7 @@ pub(crate) mod wasm {
                 install_projectional(
                     document,
                     fresh,
+                    None,
                     format!("Stored workbench could not be restored: {error}"),
                 )
             }
@@ -3701,16 +3754,24 @@ pub(crate) mod wasm {
     fn install_projectional(
         document: &Document,
         authority: super::WorkbenchDocumentAuthority,
+        code_project: Option<super::code_projects::CodeProjectWorkbench>,
         notice: String,
     ) -> Result<(), JsValue> {
+        let mut samples = super::samples::SampleCatalogState::default();
+        if let Some(project) = &code_project {
+            samples
+                .select_code_key(project.demo_key())
+                .map_err(|error| JsValue::from_str(&error))?;
+        }
         let mut workbench = ProjectionalWorkbench {
             authority,
+            code_project,
             authoring: AuthoringState::default(),
             feature_authoring: FeatureAuthoringState::default(),
             offset_authoring: OffsetAuthoringState::default(),
             feature_candidate: None,
             feature_pending: Vec::new(),
-            samples: super::samples::SampleCatalogState::default(),
+            samples,
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
             show_all_constraints: false,
@@ -3798,7 +3859,7 @@ pub(crate) mod wasm {
         drop(wb);
 
         if policy.save_workspace {
-            save_projectional(&workbench.borrow());
+            save_projectional(&mut workbench.borrow_mut());
         }
         if policy.render_durable {
             let _ = render_projectional(document, workbench);
@@ -3936,6 +3997,7 @@ pub(crate) mod wasm {
         cancel_projectional_before_camera_change(&viewport, wb);
 
         wb.authority = authority;
+        wb.code_project = None;
         wb.authoring.deactivate();
         clear_projectional_feature_authoring(wb);
         clear_projectional_offset_authoring(wb);
@@ -3962,6 +4024,7 @@ pub(crate) mod wasm {
     fn open_projectional_sample(wb: &mut ProjectionalWorkbench, key: &str) -> Result<(), String> {
         let coordinator = wb.samples.open_key(key)?;
         wb.authority = super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)?;
+        wb.code_project = None;
         wb.authoring.deactivate();
         wb.feature_authoring.deactivate();
         let _ = wb.offset_authoring.cancel();
@@ -3986,15 +4049,70 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn projectional_code_checkpoint(
+        wb: &ProjectionalWorkbench,
+    ) -> Result<serde_json::Value, String> {
+        let snapshot = match &wb.authority {
+            super::WorkbenchDocumentAuthority::Projectional {
+                editor,
+                computed_evaluation_high_water,
+                revisions,
+            } => super::persistence::WorkspaceSnapshot::from_delegated_projectional_editor(
+                editor,
+                *computed_evaluation_high_water,
+                *revisions,
+            )?,
+            super::WorkbenchDocumentAuthority::Flat(_) => {
+                return Err("code projects require projectional editor authority".into());
+            }
+        };
+        snapshot.encode().map(serde_json::Value::String)
+    }
+
+    fn open_projectional_code_project(
+        wb: &mut ProjectionalWorkbench,
+        key: &str,
+    ) -> Result<(), String> {
+        let (code_project, editor) = super::code_projects::CodeProjectWorkbench::open_key(key)?;
+        let authority = super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
+        wb.samples.select_code_key(key)?;
+        wb.authority = authority;
+        wb.code_project = Some(code_project);
+        wb.authoring.deactivate();
+        wb.feature_authoring.deactivate();
+        let _ = wb.offset_authoring.cancel();
+        wb.feature_candidate = None;
+        wb.feature_pending.clear();
+        wb.option_overlay.close();
+        wb.reproduction_overlay_open = false;
+        wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+        wb.construction_preview = None;
+        wb.pointer_moves.borrow_mut().invalidate();
+        wb.captured_pointer = None;
+        wb.outline_drag = None;
+        wb.camera.reset();
+        wb.notice = format!(
+            "{} opened as an offline code project",
+            wb.samples.selected_title().unwrap_or("Code project")
+        );
+        Ok(())
+    }
+
     fn copy_projectional_reproduction_payload(
         document: &Document,
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
     ) {
         let payload = {
             let wb = workbench.borrow();
-            wb.authority
-                .snapshot()
-                .and_then(reproduction_payload_from_snapshot)
+            if let Some(code_project) = &wb.code_project {
+                code_project.to_persistence_json().and_then(|json| {
+                    crate::reproduction::encode_workspace(&json).map_err(|error| error.to_string())
+                })
+            } else {
+                wb.authority
+                    .snapshot()
+                    .and_then(reproduction_payload_from_snapshot)
+            }
         };
         let payload = match payload {
             Ok(payload) => payload,
@@ -4086,8 +4204,24 @@ pub(crate) mod wasm {
         super::apply_validated_reproduction(
             wb,
             || {
-                let snapshot = snapshot_from_reproduction_payload(&payload)
+                let decoded = crate::reproduction::decode_workspace(&payload)
                     .map_err(|error| format!("Reproduction payload was not loaded: {error}"))?;
+                let code_project =
+                    super::code_projects::CodeProjectWorkbench::from_persistence_json(&decoded)
+                        .ok();
+                let snapshot = if let Some(code_project) = &code_project {
+                    code_project
+                        .accepted_editor_checkpoint()
+                        .as_str()
+                        .ok_or_else(|| {
+                            "Reproduction payload was not loaded: code-project editor checkpoint is not encoded text"
+                                .to_owned()
+                        })
+                        .and_then(WorkspaceSnapshot::decode)?
+                } else {
+                    WorkspaceSnapshot::decode(&decoded)
+                        .map_err(|error| format!("Reproduction payload was not loaded: {error}"))?
+                };
                 let authority = super::WorkbenchDocumentAuthority::from_snapshot(&snapshot)
                     .map_err(|error| format!("Reproduction payload was not loaded: {error}"))?;
                 if !authority.is_projectional() {
@@ -4096,28 +4230,36 @@ pub(crate) mod wasm {
                             .into(),
                     );
                 }
-                Ok(authority)
+                Ok((authority, code_project))
             },
-            |wb, authority| commit_projectional_reproduction_load(document, wb, authority),
+            |wb, candidate| commit_projectional_reproduction_load(document, wb, candidate),
         )
     }
 
     fn commit_projectional_reproduction_load(
         document: &Document,
         wb: &mut ProjectionalWorkbench,
-        authority: super::WorkbenchDocumentAuthority,
+        candidate: (
+            super::WorkbenchDocumentAuthority,
+            Option<super::code_projects::CodeProjectWorkbench>,
+        ),
     ) -> Result<(), String> {
+        let (authority, code_project) = candidate;
         let viewport = required(document, "wb-viewport")
             .map_err(|_| "the canvas viewport is unavailable".to_owned())?;
         cancel_projectional_before_camera_change(&viewport, wb);
 
         wb.authority = authority;
+        wb.code_project = code_project;
         wb.authoring = AuthoringState::default();
         wb.feature_authoring = FeatureAuthoringState::default();
         wb.offset_authoring = OffsetAuthoringState::default();
         wb.feature_candidate = None;
         wb.feature_pending.clear();
         wb.samples = super::samples::SampleCatalogState::default();
+        if let Some(code_project) = &wb.code_project {
+            wb.samples.select_code_key(code_project.demo_key())?;
+        }
         wb.camera.reset();
         wb.pan_gesture = None;
         *wb.pointer_moves.borrow_mut() = super::ProjectionalPointerMoveQueue::default();
@@ -4141,7 +4283,11 @@ pub(crate) mod wasm {
             textarea.set_value("");
         }
         let _ = fit_projectional_camera(wb);
-        wb.notice = "Reproduction payload loaded as a fresh editable projectional workspace".into();
+        wb.notice = if wb.code_project.is_some() {
+            "Reproduction payload loaded as a complete offline code project".into()
+        } else {
+            "Reproduction payload loaded as a fresh editable projectional workspace".into()
+        };
         Ok(())
     }
 
@@ -4651,10 +4797,26 @@ pub(crate) mod wasm {
         required(document, "wb-design-outline")?.set_inner_html(&design_markup.outline);
         required(document, "wb-design-source")?.set_inner_html(&design_markup.source);
         required(document, "wb-design-history")?.set_inner_html(&design_markup.history);
+        let code_tab = required(document, "wb-design-tab-code")?;
+        let code_panel = required(document, "wb-design-code")?;
+        if let Some(code_project) = &wb.code_project {
+            set_hidden(&code_tab, false)?;
+            code_panel.set_inner_html(&code_project.panel_markup());
+        } else {
+            code_panel.set_inner_html(super::code_projects::inactive_panel_markup());
+            if code_tab.get_attribute("aria-selected").as_deref() == Some("true") {
+                select_design_projection_tab(document, super::DesignProjectionTab::Outline, false)?;
+            }
+            set_hidden(&code_tab, true)?;
+        }
         let history = wb.editor().coordinator().intent().history_projection();
+        let history_availability = wb.code_project.as_ref().map_or(
+            (history.applied.is_empty(), history.redoable.is_empty()),
+            |code_project| (!code_project.can_undo(), !code_project.can_redo()),
+        );
         for (action, disabled) in [
-            ("undo", history.applied.is_empty()),
-            ("redo", history.redoable.is_empty()),
+            ("undo", history_availability.0),
+            ("redo", history_availability.1),
         ] {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
@@ -4877,12 +5039,75 @@ pub(crate) mod wasm {
         Ok(())
     }
 
-    fn save_projectional(wb: &ProjectionalWorkbench) {
-        let Ok(snapshot) = wb.authority.snapshot() else {
-            return;
-        };
-        let Ok(json) = snapshot.encode() else {
-            return;
+    fn save_projectional(wb: &mut ProjectionalWorkbench) {
+        if wb.code_project.is_some() {
+            let checkpoint = match projectional_code_checkpoint(wb) {
+                Ok(checkpoint) => checkpoint,
+                Err(error) => {
+                    wb.notice = format!(
+                        "Code-project workspace could not stage its native checkpoint: {error}"
+                    );
+                    return;
+                }
+            };
+            let publication = wb
+                .code_project
+                .as_mut()
+                .expect("code-project presence was checked")
+                .publish_delegated_editor_checkpoint(checkpoint, "Direct GUI sketch edit");
+            match publication {
+                Ok(Some(publication)) => {
+                    match super::WorkbenchDocumentAuthority::from_projectional_editor(
+                        *publication.editor,
+                    ) {
+                        Ok(authority) => wb.authority = authority,
+                        Err(error) => {
+                            wb.notice = format!(
+                                "Accepted code-owned edit could not install its validated native authority: {error}"
+                            );
+                            return;
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    let restored = wb
+                        .code_project
+                        .as_ref()
+                        .expect("code-project presence was checked")
+                        .restore_accepted_editor()
+                        .and_then(|editor| {
+                            super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                        });
+                    wb.notice = match restored {
+                        Ok(authority) => {
+                            wb.authority = authority;
+                            format!("Code-owned edit was not applied: {error}")
+                        }
+                        Err(restore_error) => format!(
+                            "Code-owned edit was rejected ({error}); accepted authority could not be restored: {restore_error}"
+                        ),
+                    };
+                    return;
+                }
+            }
+        }
+        let json = if let Some(code_project) = &wb.code_project {
+            match code_project.to_persistence_json() {
+                Ok(json) => json,
+                Err(error) => {
+                    wb.notice = format!("Code-project workspace could not be saved: {error}");
+                    return;
+                }
+            }
+        } else {
+            let Ok(snapshot) = wb.authority.snapshot() else {
+                return;
+            };
+            let Ok(json) = snapshot.encode() else {
+                return;
+            };
+            json
         };
         let Ok(window) = super::platform::window() else {
             return;
@@ -4899,7 +5124,7 @@ pub(crate) mod wasm {
     ) -> Result<(), JsValue> {
         let policy = event.policy();
         if policy.saves_workspace {
-            save_projectional(&workbench.borrow());
+            save_projectional(&mut workbench.borrow_mut());
         }
         match policy.render_scope {
             super::WorkbenchRenderScope::Transient => render_projectional_canvas(
@@ -6172,7 +6397,44 @@ pub(crate) mod wasm {
                     return;
                 }
             };
+            if let Some(route) = wb.editor().editor().prepared_point_drag_route()
+                && let Some(code_project) = wb.code_project.as_ref()
+                && let Err(error) = code_project.point_drag_permission(wb.editor(), route.point)
+            {
+                wb.editor_mut().cancel_interaction();
+                wb.notice = format!("Code-owned point gesture is unavailable: {error}");
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &down_document,
+                    &down_workbench,
+                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                );
+                return;
+            }
             let active = wb.editor().editor().active_pointer_gesture();
+            if active.is_some_and(|active| {
+                matches!(
+                    active.kind,
+                    geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
+                        | geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
+                        | geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance
+                )
+            }) && wb.code_project.is_some()
+                && let Err(error) =
+                    super::code_projects::CodeProjectWorkbench::selected_code_geometry_mutation_permission(
+                        wb.editor(),
+                    )
+            {
+                wb.editor_mut().cancel_interaction();
+                wb.notice = format!("Code-owned property gesture is unavailable: {error}");
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &down_document,
+                    &down_workbench,
+                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                );
+                return;
+            }
             let presentation = match active {
                 Some(active)
                     if active.pointer_id == input.pointer_id
@@ -6460,7 +6722,7 @@ pub(crate) mod wasm {
                         // Annotation layout is explicit presentation state,
                         // not graph/solver intent, but it is part of workspace
                         // v8 and therefore persists on its terminal release.
-                        save_projectional(&wb);
+                        save_projectional(&mut wb);
                         super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
                     } else {
                         wb.notice = "Canvas selection updated".into();
@@ -6661,11 +6923,63 @@ pub(crate) mod wasm {
         Ok(())
     }
 
-    fn projectional_history_action(wb: &mut ProjectionalWorkbench, action: super::HistoryShortcut) {
+    /// Moves the owning history authority and reports whether a durable
+    /// checkpoint was actually installed. Code-project history can change
+    /// managed source/session state while restoring the same nested Intent
+    /// identity (for example, Undo of a retained materialization failure), so
+    /// callers must not infer durability from the nested editor alone.
+    fn projectional_history_action(
+        wb: &mut ProjectionalWorkbench,
+        action: super::HistoryShortcut,
+    ) -> bool {
+        if wb.code_project.is_some() {
+            let undo = matches!(action, super::HistoryShortcut::Undo);
+            let outcome = wb
+                .code_project
+                .as_mut()
+                .expect("code-project presence was checked")
+                .step_history(undo);
+            let changed = match outcome {
+                Ok(Some(publication)) => {
+                    match super::WorkbenchDocumentAuthority::from_projectional_editor(
+                        *publication.editor,
+                    ) {
+                        Ok(authority) => {
+                            wb.authority = authority;
+                            wb.notice = if undo {
+                                "Code-project action undone".into()
+                            } else {
+                                "Code-project action redone".into()
+                            };
+                            true
+                        }
+                        Err(error) => {
+                            wb.notice = error;
+                            false
+                        }
+                    }
+                }
+                Ok(None) => {
+                    wb.notice = if undo {
+                        "Nothing to undo".into()
+                    } else {
+                        "Nothing to redo".into()
+                    };
+                    false
+                }
+                Err(error) => {
+                    wb.notice = error;
+                    false
+                }
+            };
+            reconcile_projectional_authoring(wb);
+            return changed;
+        }
         let outcome = wb
             .authority
             .step_history(matches!(action, super::HistoryShortcut::Undo));
-        wb.notice = match outcome {
+        let changed = matches!(outcome, Ok(true));
+        wb.notice = match &outcome {
             Ok(true) => match action {
                 super::HistoryShortcut::Undo => "Design intent undone".into(),
                 super::HistoryShortcut::Redo => "Design intent redone".into(),
@@ -6677,6 +6991,7 @@ pub(crate) mod wasm {
             Err(error) => error.to_string(),
         };
         reconcile_projectional_authoring(wb);
+        changed
     }
 
     fn parse_intent_node(element: &Element) -> Option<NodeId> {
@@ -6787,15 +7102,43 @@ pub(crate) mod wasm {
                     "[data-wb-tool], [data-wb-geometry-family], ",
                     "[data-wb-geometry-variant], [data-wb-authoring], ",
                     "[data-wb-feature], [data-wb-offset], ",
-                    "[data-editor-item], [data-wb-action], [data-sample-id], ",
+                    "[data-editor-item], [data-wb-action], [data-sample-id], [data-code-sample-id], ",
                     "[data-sample-group-trigger], [data-intent-move], ",
-                    "[data-intent-cell-move], [data-wb-option]"
+                    "[data-intent-cell-move], [data-wb-option], [data-code-file], [data-code-action]"
                 ))
                 .ok()
                 .flatten()
                 .unwrap_or(origin);
 
             if target.has_attribute("data-sample-group-trigger") {
+                return;
+            }
+            if let Some(key) = target.get_attribute("data-code-sample-id") {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before opening a code project",
+                    );
+                }
+                if let Err(error) = open_projectional_code_project(&mut wb, &key) {
+                    wb.notice = error;
+                } else {
+                    save_projectional(&mut wb);
+                }
+                drop(wb);
+                close_sample_selector(&click_document);
+                let _ = render_projectional(&click_document, &click_workbench);
+                if click_workbench.borrow().code_project.is_some() {
+                    let _ = select_design_projection_tab(
+                        &click_document,
+                        super::DesignProjectionTab::Code,
+                        true,
+                    );
+                }
                 return;
             }
             if let Some(key) = target.get_attribute("data-sample-id") {
@@ -6812,10 +7155,94 @@ pub(crate) mod wasm {
                 if let Err(error) = open_projectional_sample(&mut wb, &key) {
                     wb.notice = error;
                 } else {
-                    save_projectional(&wb);
+                    save_projectional(&mut wb);
                 }
                 drop(wb);
                 let _ = render_projectional(&click_document, &click_workbench);
+                return;
+            }
+            if let Some(path) = target.get_attribute("data-code-file") {
+                let mut wb = click_workbench.borrow_mut();
+                if let Some(code_project) = wb.code_project.as_mut()
+                    && let Err(error) = code_project.select_file(&path)
+                {
+                    wb.notice = error;
+                }
+                save_projectional(&mut wb);
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                return;
+            }
+            if let Some(code_action) = target.get_attribute("data-code-action") {
+                let mut wb = click_workbench.borrow_mut();
+                let focus_code_source = code_action == "open-managed-lens";
+                let result: Result<String, String> = match code_action.as_str() {
+                    "apply" => wb
+                        .code_project
+                        .as_mut()
+                        .ok_or_else(|| "no code project is open".to_owned())
+                        .and_then(|code_project| code_project.apply_managed_draft())
+                        .and_then(|outcome| match outcome {
+                            super::code_projects::CodeApplyOutcome::Accepted(publication) => {
+                                let revision = publication.receipt.after.revision;
+                                wb.authority =
+                                    super::WorkbenchDocumentAuthority::from_projectional_editor(
+                                        *publication.editor,
+                                    )?;
+                                Ok(format!(
+                                    "Managed source and native scene applied atomically · revision {revision}"
+                                ))
+                            }
+                            super::code_projects::CodeApplyOutcome::RetainedFailure {
+                                receipt,
+                                diagnostic,
+                            } => Ok(format!(
+                                "Managed source retained at revision {}; accepted scene unchanged: {diagnostic}",
+                                receipt.after.revision,
+                            )),
+                        }),
+                    "revert" => wb
+                        .code_project
+                        .as_mut()
+                        .ok_or_else(|| "no code project is open".to_owned())
+                        .map(|code_project| {
+                            let _ = code_project.revert_managed_draft();
+                            "Managed draft reverted".into()
+                        }),
+                    "open-managed-lens" => wb
+                        .code_project
+                        .as_mut()
+                        .ok_or_else(|| "no code project is open".to_owned())
+                        .and_then(|code_project| code_project.select_file("sketch.ts"))
+                        .map(|()| "Managed edit-lens source opened".into()),
+                    "reset-override" => target
+                        .get_attribute("data-code-member")
+                        .ok_or_else(|| "generated override target is unavailable".to_owned())
+                        .and_then(|path| {
+                            wb.code_project
+                                .as_mut()
+                                .ok_or_else(|| "no code project is open".to_owned())?
+                                .reset_override(&path)
+                        })
+                        .and_then(|publication| {
+                            let Some(publication) = publication else {
+                                return Ok("Generated member is already code-owned".into());
+                            };
+                            wb.authority =
+                                super::WorkbenchDocumentAuthority::from_projectional_editor(
+                                    *publication.editor,
+                                )?;
+                            Ok("Generated placement reset to code".into())
+                        }),
+                    _ => Err(format!("unknown code-project action `{code_action}`")),
+                };
+                wb.notice = result.unwrap_or_else(|error| error);
+                save_projectional(&mut wb);
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                if focus_code_source {
+                    focus_by_id(&click_document, "wb-code-managed-source");
+                }
                 return;
             }
             if let Some(movement) = target.get_attribute("data-intent-move") {
@@ -6841,7 +7268,7 @@ pub(crate) mod wasm {
                 match result {
                     Ok(()) => {
                         wb.notice = "Outline declaration order updated".into();
-                        save_projectional(&wb);
+                        save_projectional(&mut wb);
                     }
                     Err(error) => wb.notice = error,
                 }
@@ -6874,7 +7301,7 @@ pub(crate) mod wasm {
                 match result {
                     Ok(()) => {
                         wb.notice = "Outline cell order updated".into();
-                        save_projectional(&wb);
+                        save_projectional(&mut wb);
                     }
                     Err(error) => wb.notice = error,
                 }
@@ -7030,7 +7457,7 @@ pub(crate) mod wasm {
                 clear_projectional_offset_authoring(&mut wb);
                 let committed = activate_projectional_authoring(&click_document, &mut wb, tool);
                 if committed {
-                    save_projectional(&wb);
+                    save_projectional(&mut wb);
                 }
                 let focus = super::OptionOverlayKind::for_authoring_tool(tool)
                     .map(|kind| kind.first_control_id().to_owned());
@@ -7134,7 +7561,7 @@ pub(crate) mod wasm {
                             .pick(&document, AuthoringOperand::selected(item));
                         let committed = handle_projectional_authoring_outcome(&mut wb, outcome);
                         if committed {
-                            save_projectional(&wb);
+                            save_projectional(&mut wb);
                         }
                         drop(wb);
                         let _ = render_projectional(&click_document, &click_workbench);
@@ -7206,8 +7633,7 @@ pub(crate) mod wasm {
                             "Active interaction canceled before history navigation",
                         );
                     }
-                    let before = wb.editor().coordinator().intent().identity();
-                    projectional_history_action(
+                    durable = projectional_history_action(
                         &mut wb,
                         if action.as_deref() == Some("undo") {
                             super::HistoryShortcut::Undo
@@ -7215,7 +7641,6 @@ pub(crate) mod wasm {
                             super::HistoryShortcut::Redo
                         },
                     );
-                    durable = before != wb.editor().coordinator().intent().identity();
                 }
                 Some("clear-selection") => {
                     wb.editor_mut().set_selected_declaration(None);
@@ -7463,7 +7888,7 @@ pub(crate) mod wasm {
                 Some(_) | None => return,
             }
             if durable {
-                save_projectional(&wb);
+                save_projectional(&mut wb);
             }
             let focus_reproduction_return = super::reproduction_focus_target_after_action(
                 action.as_deref().unwrap_or_default(),
@@ -7480,6 +7905,38 @@ pub(crate) mod wasm {
         });
         root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
         click.forget();
+
+        let code_input_document = document.clone();
+        let code_input_workbench = Rc::clone(workbench);
+        let code_input = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let Some(textarea) = event
+                .target()
+                .and_then(|target| target.dyn_into::<HtmlTextAreaElement>().ok())
+                .filter(|target| target.id() == "wb-code-managed-source")
+            else {
+                return;
+            };
+            let mut wb = code_input_workbench.borrow_mut();
+            let Some(code_project) = wb.code_project.as_mut() else {
+                return;
+            };
+            code_project.set_managed_draft(textarea.value());
+            let dirty = code_project.is_dirty();
+            drop(wb);
+            for action in ["apply", "revert"] {
+                if let Ok(Some(button)) =
+                    code_input_document.query_selector(&format!("[data-code-action=\"{action}\"]"))
+                {
+                    let _ = set_disabled(&button, !dirty);
+                }
+            }
+            if let Ok(Some(diagnostic)) = code_input_document.query_selector(".wb-code-diagnostic")
+            {
+                let _ = set_hidden(&diagnostic, true);
+            }
+        });
+        root.add_event_listener_with_callback("input", code_input.as_ref().unchecked_ref())?;
+        code_input.forget();
 
         let drag_workbench = Rc::clone(workbench);
         let drag_start = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
@@ -7687,7 +8144,7 @@ pub(crate) mod wasm {
             match result {
                 Ok(()) => {
                     wb.notice = notice.into();
-                    save_projectional(&wb);
+                    save_projectional(&mut wb);
                 }
                 Err(error) => wb.notice = error,
             };
@@ -7715,6 +8172,56 @@ pub(crate) mod wasm {
             else {
                 return;
             };
+            if let (Some(declaration), Some(path), Some(input)) = (
+                target.get_attribute("data-code-lens-declaration"),
+                target.get_attribute("data-code-lens-path"),
+                target.dyn_ref::<HtmlInputElement>(),
+            ) {
+                let result = input
+                    .value()
+                    .parse::<f64>()
+                    .map_err(|_| "edit-lens value must be a finite number".to_owned())
+                    .and_then(|value| {
+                        let mut wb = change_workbench.borrow_mut();
+                        let outcome = wb
+                            .code_project
+                            .as_mut()
+                            .ok_or_else(|| "no code project is open".to_owned())?
+                            .apply_scalar_lens(&declaration, &path, value)?;
+                        match outcome {
+                            super::code_projects::CodeApplyOutcome::Accepted(publication) => {
+                                let revision = publication.receipt.after.revision;
+                                wb.authority =
+                                    super::WorkbenchDocumentAuthority::from_projectional_editor(
+                                        *publication.editor,
+                                    )?;
+                                wb.notice = format!(
+                                    "Edit lens applied to managed source and native scene · revision {revision}"
+                                );
+                            }
+                            super::code_projects::CodeApplyOutcome::RetainedFailure {
+                                receipt,
+                                diagnostic,
+                            } => {
+                                wb.notice = format!(
+                                    "Edit-lens intent retained at revision {}; accepted scene unchanged: {diagnostic}",
+                                    receipt.after.revision,
+                                );
+                            }
+                        }
+                        save_projectional(&mut wb);
+                        Ok(())
+                    });
+                if let Err(error) = result {
+                    change_workbench.borrow_mut().notice = error;
+                }
+                let _ = render_projectional(&change_document, &change_workbench);
+                return;
+            }
+            if target.id() == "wb-code-managed-source" {
+                save_projectional(&mut change_workbench.borrow_mut());
+                return;
+            }
             if target
                 .closest("#wb-tool-options-overlay")
                 .is_ok_and(|owner| owner.is_some())
@@ -7854,7 +8361,7 @@ pub(crate) mod wasm {
                             }
                         };
                         reconcile_projectional_authoring(&mut wb);
-                        save_projectional(&wb);
+                        save_projectional(&mut wb);
                     }
                     super::ProjectionalInspectorDispatch::Rejected(error) => {
                         wb.notice = error;
@@ -7917,7 +8424,7 @@ pub(crate) mod wasm {
             match wb.editor_mut().apply_patch(patch) {
                 Ok(_) => {
                     wb.notice = "Design declaration renamed".into();
-                    save_projectional(&wb);
+                    save_projectional(&mut wb);
                 }
                 Err(error) => wb.notice = error.to_string(),
             }
@@ -7987,7 +8494,7 @@ pub(crate) mod wasm {
                 Ok(_) => {
                     wb.notice = "Recognized structured-source token updated".into();
                     reconcile_projectional_authoring(&mut wb);
-                    save_projectional(&wb);
+                    save_projectional(&mut wb);
                 }
                 Err(error) => wb.notice = error.to_string(),
             }
@@ -8155,7 +8662,7 @@ pub(crate) mod wasm {
                 event.prevent_default();
                 let mut wb = keyboard_workbench.borrow_mut();
                 match apply_projectional_feature_authoring(&mut wb) {
-                    Ok(()) => save_projectional(&wb),
+                    Ok(()) => save_projectional(&mut wb),
                     Err(error) => wb.notice = error,
                 }
                 drop(wb);
@@ -8168,7 +8675,7 @@ pub(crate) mod wasm {
                 event.prevent_default();
                 let mut wb = keyboard_workbench.borrow_mut();
                 match apply_projectional_offset_authoring(&mut wb) {
-                    Ok(true) => save_projectional(&wb),
+                    Ok(true) => save_projectional(&mut wb),
                     Ok(false) => {}
                     Err(error) => wb.notice = error,
                 }
@@ -8255,7 +8762,7 @@ pub(crate) mod wasm {
                     match delete_projectional_selection(&mut wb) {
                         Ok(notice) => {
                             wb.notice = notice;
-                            save_projectional(&wb);
+                            save_projectional(&mut wb);
                         }
                         Err(error) => wb.notice = error,
                     }
@@ -8353,8 +8860,8 @@ pub(crate) mod wasm {
                     "Active interaction canceled before history navigation",
                 );
             }
-            projectional_history_action(&mut wb, action);
-            save_projectional(&wb);
+            let _ = projectional_history_action(&mut wb, action);
+            save_projectional(&mut wb);
             drop(wb);
             let _ = render_projectional(&keyboard_document, &keyboard_workbench);
         });
@@ -8484,13 +8991,35 @@ pub(crate) mod wasm {
             else {
                 return;
             };
-            let next = match event.key().as_str() {
+            let direction = match event.key().as_str() {
+                "ArrowLeft" => Some(-1),
+                "ArrowRight" => Some(1),
+                _ => None,
+            };
+            let mut next = match event.key().as_str() {
                 "ArrowLeft" => current.adjacent(-1),
                 "ArrowRight" => current.adjacent(1),
                 "Home" => super::DesignProjectionTab::Outline,
-                "End" => super::DesignProjectionTab::History,
+                "End" => {
+                    if required(
+                        &keyboard_document,
+                        super::DesignProjectionTab::Code.button_id(),
+                    )
+                    .is_ok_and(|button| !button.has_attribute("hidden"))
+                    {
+                        super::DesignProjectionTab::Code
+                    } else {
+                        super::DesignProjectionTab::History
+                    }
+                }
                 _ => return,
             };
+            if required(&keyboard_document, next.button_id())
+                .is_ok_and(|button| button.has_attribute("hidden"))
+                && let Some(direction) = direction
+            {
+                next = next.adjacent(direction);
+            }
             event.prevent_default();
             let _ = select_design_projection_tab(&keyboard_document, next, true);
         });
@@ -14863,9 +15392,9 @@ mod tests {
 
     #[test]
     fn design_projection_tabs_are_closed_and_presentation_only() {
-        use super::DesignProjectionTab::{History, Outline, StructuredSource};
+        use super::DesignProjectionTab::{Code, History, Outline, StructuredSource};
 
-        assert_eq!(super::DesignProjectionTab::ALL.len(), 3);
+        assert_eq!(super::DesignProjectionTab::ALL.len(), 4);
         assert_eq!(
             super::DesignProjectionTab::from_key("outline"),
             Some(Outline)
@@ -14878,14 +15407,17 @@ mod tests {
             super::DesignProjectionTab::from_key("history"),
             Some(History)
         );
+        assert_eq!(super::DesignProjectionTab::from_key("code"), Some(Code));
         assert_eq!(super::DesignProjectionTab::from_key("solver"), None);
-        assert_eq!(Outline.adjacent(-1), History);
-        assert_eq!(History.adjacent(1), Outline);
+        assert_eq!(Outline.adjacent(-1), Code);
+        assert_eq!(History.adjacent(1), Code);
+        assert_eq!(Code.adjacent(1), Outline);
         assert_eq!(StructuredSource.adjacent(-1), Outline);
         assert_eq!(StructuredSource.adjacent(1), History);
         assert_eq!(Outline.button_id(), "wb-design-tab-outline");
         assert_eq!(StructuredSource.panel_id(), "wb-design-source");
         assert_eq!(History.panel_id(), "wb-design-history");
+        assert_eq!(Code.panel_id(), "wb-design-code");
     }
 
     #[test]
@@ -15010,7 +15542,32 @@ mod tests {
             "Some(\"new\") => match reset_projectional_workbench(&click_document, &mut wb)"
         ));
         assert!(
-            events.contains("if durable {\n                save_projectional(&wb);\n            }")
+            events.contains(
+                "if durable {\n                save_projectional(&mut wb);\n            }"
+            )
+        );
+    }
+
+    #[test]
+    fn projectional_click_history_uses_outer_code_history_as_durability_authority() {
+        let source = include_str!("mod.rs");
+        let history = source
+            .split("fn projectional_history_action(")
+            .nth(1)
+            .and_then(|source| source.split("fn parse_intent_node").next())
+            .expect("projectional history implementation");
+        assert!(history.contains("-> bool"));
+        assert!(history.contains("return changed;"));
+
+        let click = source
+            .split("Some(\"undo\") | Some(\"redo\") => {")
+            .nth(1)
+            .and_then(|source| source.split("Some(\"clear-selection\")").next())
+            .expect("projectional click history route");
+        assert!(click.contains("durable = projectional_history_action("));
+        assert!(
+            !click.contains("coordinator().intent().identity()"),
+            "outer code history may change while nested Intent identity stays unchanged",
         );
     }
 
@@ -15059,11 +15616,11 @@ mod tests {
             })
             .expect("projectional reproduction load implementation");
         assert!(
-            load.contains("snapshot_from_reproduction_payload(&payload)"),
-            "Load must validate the complete workspace snapshot before replacement",
+            load.contains("crate::reproduction::decode_workspace(&payload)"),
+            "Load must decode the bounded complete envelope before replacement",
         );
         assert!(
-            load.contains("commit_projectional_reproduction_load(document, wb, authority)"),
+            load.contains("commit_projectional_reproduction_load(document, wb, candidate)"),
             "Load must use the isolated post-validation commit boundary",
         );
         let render = source

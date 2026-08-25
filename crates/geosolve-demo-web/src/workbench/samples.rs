@@ -296,19 +296,27 @@ const fn sample(id: SampleId, title: &'static str, kind: AlphaScenarioKind) -> S
 #[derive(Default)]
 pub(crate) struct SampleCatalogState {
     selected: Option<SampleId>,
+    selected_code: Option<geosolve_sketch_code::CodeProjectDemoId>,
 }
 
 impl SampleCatalogState {
     pub(crate) const fn selected_key(&self) -> Option<&'static str> {
-        match self.selected {
-            Some(id) => Some(id.key()),
-            None => None,
+        match (self.selected, self.selected_code) {
+            (Some(id), None) => Some(id.key()),
+            (None, Some(id)) => Some(id.key()),
+            (None, None) | (Some(_), Some(_)) => None,
         }
     }
 
     pub(crate) fn selected_title(&self) -> Option<&'static str> {
-        let selected = self.selected?;
-        definition(selected).map(|definition| definition.title)
+        if let Some(selected) = self.selected {
+            return definition(selected).map(|definition| definition.title);
+        }
+        let selected = self.selected_code?;
+        geosolve_sketch_code::bundled_code_project_demos()
+            .into_iter()
+            .find(|demo| demo.id == selected)
+            .map(|demo| demo.title)
     }
 
     pub(crate) fn open_key(&mut self, key: &str) -> Result<RetainedEditorCoordinator, String> {
@@ -316,7 +324,22 @@ impl SampleCatalogState {
         let definition = definition(id).ok_or_else(|| format!("sample `{key}` is unavailable"))?;
         let coordinator = coordinator_from_source(definition.source)?;
         self.selected = Some(id);
+        self.selected_code = None;
         Ok(coordinator)
+    }
+
+    pub(crate) fn select_code_key(
+        &mut self,
+        key: &str,
+    ) -> Result<geosolve_sketch_code::CodeProjectDemoId, String> {
+        let id = geosolve_sketch_code::bundled_code_project_demos()
+            .into_iter()
+            .find(|demo| demo.id.key() == key)
+            .map(|demo| demo.id)
+            .ok_or_else(|| format!("code project `{key}` is unavailable"))?;
+        self.selected = None;
+        self.selected_code = Some(id);
+        Ok(id)
     }
 
     pub(crate) fn menu_markup(&self) -> String {
@@ -344,6 +367,9 @@ impl SampleCatalogState {
             }
             markup.push_str("</ul></li>");
         }
+        markup.push_str(&super::code_projects::sample_group_markup(
+            self.selected_code,
+        ));
         markup
     }
 }

@@ -777,6 +777,29 @@ impl WorkspaceSnapshot {
         .validated()
     }
 
+    /// Captures the same authenticated projectional materialization while
+    /// stripping nested intent Undo/Redo. The adjacent code session owns the
+    /// sole composite history for this delegated checkpoint.
+    pub(crate) fn from_delegated_projectional_editor(
+        projectional: &ProjectionalEditorSession,
+        computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
+        retained_revisions: WorkspaceRevisions,
+    ) -> Result<Self, String> {
+        let mut snapshot = Self::from_projectional_editor_with_persistence_high_water(
+            projectional,
+            computed_evaluation_high_water,
+            retained_revisions,
+        )?;
+        snapshot.intent_session_json = Some(
+            projectional
+                .coordinator()
+                .intent()
+                .to_delegated_checkpoint_json()
+                .map_err(|error| error.to_string())?,
+        );
+        snapshot.validated()
+    }
+
     fn from_checkpoint(
         checkpoint: &RestoreCheckpoint,
         annotation_layout: &AnnotationLayoutState,
@@ -1183,6 +1206,15 @@ impl WorkspaceSnapshot {
             .as_deref()
             .map(IntentSession::from_json)
             .transpose()
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn validate_delegated_intent_checkpoint(&self) -> Result<(), String> {
+        let json = self.intent_session_json.as_deref().ok_or_else(|| {
+            "delegated workspace requires projectional intent authority".to_owned()
+        })?;
+        IntentSession::from_delegated_checkpoint_json(json)
+            .map(|_| ())
             .map_err(|error| error.to_string())
     }
 
@@ -1817,7 +1849,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::{
-        WorkspaceSnapshot, WorkspaceSnapshotV8, annotation_kind_key,
+        WorkspaceRevisions, WorkspaceSnapshot, WorkspaceSnapshotV8, annotation_kind_key,
         coordinator_from_reproduction_payload, coordinator_from_snapshot,
         default_evaluation_high_water, derive_sketch_identity_high_water,
         intent_node_requires_bootstrap_seed, legacy_workspace_v8_digest, parse_annotation_kind,
@@ -1901,6 +1933,86 @@ mod tests {
         let snapshot =
             WorkspaceSnapshot::from_projectional_editor(&projectional).expect("workspace v8");
         (snapshot, intent, accepted)
+    }
+
+    #[test]
+    fn delegated_projectional_checkpoint_has_no_nested_history_and_cold_restores() {
+        let (_, _, _) = m83_projectional_fixture();
+        let document = DocumentId(PersistentId::from_u128(0x84_d1_u128 << 64));
+        let mut coordinator = ProjectionalIntentCoordinator::empty(
+            IntentSessionId::from_raw(0x84_d1),
+            ColdIntentMaterializer::with_default_policy(document, 1.0).unwrap(),
+        )
+        .unwrap();
+        for (index, x) in [1.0, 2.0].into_iter().enumerate() {
+            let primary = IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            };
+            let draft = IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::SketchPoint,
+                },
+                IntentKey::new(format!("delegated.point.{index}")).unwrap(),
+            )
+            .with_instance_leaf(
+                primary,
+                LeafField::X,
+                IntentLiteral::Quantity {
+                    value: x,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_instance_leaf(
+                primary,
+                LeafField::Y,
+                IntentLiteral::Quantity {
+                    value: 0.0,
+                    unit: IntentUnit::Length,
+                },
+            );
+            coordinator
+                .apply_patch(IntentPatch::new(
+                    coordinator.intent().identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new(format!("point-{index}")).unwrap(),
+                        draft: Box::new(draft),
+                        cell: None,
+                    }],
+                ))
+                .unwrap();
+        }
+        let projectional = ProjectionalEditorSession::new(coordinator);
+        assert_eq!(projectional.coordinator().intent().undo_len(), 2);
+        let snapshot = WorkspaceSnapshot::from_delegated_projectional_editor(
+            &projectional,
+            default_evaluation_high_water(),
+            WorkspaceRevisions {
+                design: 2,
+                attempt: 2,
+                accepted: Some(2),
+            },
+        )
+        .unwrap();
+        snapshot.validate_delegated_intent_checkpoint().unwrap();
+        let encoded = snapshot.encode().unwrap();
+        let decoded = WorkspaceSnapshot::decode(&encoded).unwrap();
+        decoded.validate_delegated_intent_checkpoint().unwrap();
+        let delegated = decoded.intent_session().unwrap().unwrap();
+        assert_eq!(delegated.undo_len(), 0);
+        assert_eq!(delegated.redo_len(), 0);
+        assert_eq!(
+            delegated.graph(),
+            projectional.coordinator().intent().graph()
+        );
+        assert_eq!(
+            delegated.allocator_high_water(),
+            projectional.coordinator().intent().allocator_high_water()
+        );
+        let restored = projectional_editor_from_snapshot(&decoded).unwrap();
+        assert_eq!(restored.coordinator().intent().undo_len(), 0);
+        assert!(restored.coordinator().accepted_materialization().is_some());
     }
 
     #[derive(Deserialize, Serialize)]

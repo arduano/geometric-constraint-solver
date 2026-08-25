@@ -308,7 +308,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-tree { height: calc(100% - 2.4rem); overflow: auto; padding: 0.35rem; }
 .wb-design-tabs {
   display: grid;
-  grid-template-columns: 0.85fr 1.5fr 0.85fr;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   border-bottom: 1px solid #353b3c;
 }
 .wb-design-tabs button {
@@ -349,6 +350,267 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-design-source:empty::before { content: "Structured source will appear for the current design."; }
 .wb-design-history:empty::before { content: "Committed design transactions will appear here."; }
+.wb-design-code { padding: 0; background: #191d1e; }
+.wb-code-project {
+  display: grid;
+  min-height: 100%;
+  align-content: start;
+  color: #cbd4d2;
+}
+.wb-code-project-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.65rem;
+  border-bottom: 1px solid #353b3c;
+  background: linear-gradient(135deg, #242929, #1b2021);
+}
+.wb-code-project-header > div { display: grid; min-width: 0; gap: 0.15rem; }
+.wb-code-project-header strong {
+  overflow: hidden;
+  color: #eef3ef;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-code-project-header small { color: #7f8b88; font: 0.54rem ui-monospace, monospace; }
+.wb-code-eyebrow {
+  color: #d3a95f;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.wb-code-runtime-badge,
+.wb-code-readonly,
+.wb-code-ownership-badge {
+  flex: 0 0 auto;
+  padding: 0.16rem 0.28rem;
+  border: 1px solid #466366;
+  border-radius: 999px;
+  color: #91c2c3;
+  background: #1d2b2c;
+  font-size: 0.48rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.wb-code-file-tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid #353b3c;
+  background: #1c2021;
+}
+.wb-code-file-tabs button {
+  display: grid;
+  min-width: 7rem;
+  min-height: 2.45rem;
+  gap: 0.08rem;
+  padding: 0.35rem 0.48rem;
+  border: 0;
+  border-right: 1px solid #343a3b;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.wb-code-file-tabs button span {
+  overflow: hidden;
+  color: #bdc7c4;
+  font: 0.59rem ui-monospace, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-code-file-tabs button small { color: #697472; font-size: 0.48rem; }
+.wb-code-file-tabs button[aria-selected="true"] {
+  background: #2c2923;
+  box-shadow: inset 0 -2px #d29a45;
+}
+.wb-code-file-tabs button[aria-selected="true"] span { color: #f0cf91; }
+.wb-code-editor { display: grid; min-height: 18rem; border-bottom: 1px solid #353b3c; }
+.wb-code-editor-toolbar {
+  display: flex;
+  min-height: 2.3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  padding: 0.35rem 0.55rem;
+  background: #222728;
+}
+.wb-code-editor-toolbar > div { display: flex; min-width: 0; align-items: center; gap: 0.4rem; }
+.wb-code-editor-toolbar strong {
+  overflow: hidden;
+  color: #d8e0dd;
+  font: 0.59rem ui-monospace, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-code-editor-toolbar span { color: #788481; font-size: 0.51rem; white-space: nowrap; }
+.wb-code-editor-toolbar button { min-height: 1.55rem; padding: 0.2rem 0.4rem; font-size: 0.56rem; }
+.wb-code-editor textarea,
+.wb-code-editor pre {
+  width: 100%;
+  min-height: 15rem;
+  max-height: 27rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.65rem;
+  border: 0;
+  border-radius: 0;
+  color: #b9c9c5;
+  background: #15191a;
+  font: 0.58rem/1.55 "IBM Plex Mono", ui-monospace, monospace;
+  tab-size: 2;
+  white-space: pre;
+}
+.wb-code-editor textarea { resize: vertical; }
+.wb-code-editor pre code { font: inherit; }
+.wb-code-editor-note {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  color: #707b79;
+  background: #1c2122;
+  font-size: 0.52rem;
+  line-height: 1.4;
+}
+.wb-code-diagnostic {
+  display: grid;
+  gap: 0.14rem;
+  padding: 0.45rem 0.6rem;
+  border-top: 1px solid #754842;
+  color: #e4aaa0;
+  background: #342423;
+  font-size: 0.55rem;
+  line-height: 1.4;
+}
+.wb-code-diagnostic strong { color: #f2c0b7; font-size: 0.52rem; }
+.wb-code-artifact-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid #353b3c;
+  background: #1e2423;
+}
+.wb-code-artifact-status > div { display: flex; min-width: 0; align-items: center; gap: 0.45rem; }
+.wb-code-artifact-status > div > div { display: grid; gap: 0.08rem; }
+.wb-code-artifact-status strong { color: #a8d1b6; font-size: 0.58rem; }
+.wb-code-artifact-status small,
+.wb-code-artifact-status > span { color: #71807b; font-size: 0.49rem; }
+.wb-code-status-dot {
+  width: 0.46rem;
+  height: 0.46rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #79c394;
+  box-shadow: 0 0 0 3px rgb(121 195 148 / 12%);
+}
+.wb-code-lenses {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.6rem 0.65rem;
+  border-bottom: 1px solid #353b3c;
+  background: #1d2223;
+}
+.wb-code-lenses > header { display: grid; gap: 0.08rem; }
+.wb-code-lenses > header strong { color: #d0d8d5; font-size: 0.6rem; }
+.wb-code-lenses > header span { color: #707b79; font-size: 0.49rem; }
+.wb-code-lens {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid #343b3c;
+  border-radius: 3px;
+  background: #222728;
+}
+.wb-code-lens > div { display: grid; min-width: 0; gap: 0.08rem; }
+.wb-code-lens strong { color: #c4b184; font: 0.57rem ui-monospace, monospace; }
+.wb-code-lens small { overflow: hidden; color: #6e7977; font-size: 0.46rem; text-overflow: ellipsis; white-space: nowrap; }
+.wb-code-lens button { min-height: 1.55rem; padding: 0.2rem 0.35rem; font-size: 0.5rem; }
+.wb-code-lens-control {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.wb-code-lens-control input {
+  width: 4.6rem;
+  min-height: 1.55rem;
+  padding: 0.2rem 0.3rem;
+  border: 1px solid #48504f;
+  border-radius: 3px;
+  color: #e2e8e5;
+  background: #181c1d;
+  font: 0.55rem ui-monospace, monospace;
+}
+.wb-code-lens-control input:focus-visible {
+  outline: 2px solid #c4a965;
+  outline-offset: 1px;
+}
+.wb-code-lens-control small { color: #8f9a97; }
+.wb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.wb-code-generated { display: grid; gap: 0.4rem; padding: 0.65rem; }
+.wb-code-generated > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
+.wb-code-generated > header > div { display: grid; gap: 0.1rem; }
+.wb-code-generated > header strong { color: #d3dbd8; font-size: 0.62rem; }
+.wb-code-generated > header span,
+.wb-code-generated > header small { color: #707c79; font-size: 0.5rem; }
+.wb-code-member-group { display: grid; gap: 0.18rem; }
+.wb-code-member-group h3 {
+  margin: 0.25rem 0 0.05rem;
+  color: #9a8260;
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.wb-code-member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 0.4rem;
+  align-items: center;
+  padding: 0.38rem 0.45rem;
+  border: 1px solid #343b3b;
+  border-radius: 3px;
+  background: #222727;
+}
+.wb-code-member > div { display: grid; min-width: 0; gap: 0.08rem; }
+.wb-code-member strong { color: #b9c5c2; font: 0.58rem ui-monospace, monospace; }
+.wb-code-member small { overflow: hidden; color: #687370; font-size: 0.47rem; text-overflow: ellipsis; white-space: nowrap; }
+.wb-code-member[data-code-ownership="override"] { border-color: #7f643a; background: #2e2921; }
+.wb-code-member[data-code-ownership="override"] .wb-code-ownership-badge { border-color: #8a6835; color: #e2bd78; background: #342c1f; }
+.wb-code-member button { grid-column: 1 / -1; min-height: 1.55rem; font-size: 0.54rem; }
+.wb-code-history-note { margin: 0.25rem 0 0; color: #727d7a; font-size: 0.51rem; }
+.wb-code-history-note strong { color: #b9a171; }
+.wb-code-empty { color: #727d7a; font-size: 0.55rem; }
+.wb-code-project-empty {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem 0.8rem;
+}
+.wb-code-project-empty strong { color: #cbd4d1; font-size: 0.72rem; }
+.wb-code-project-empty p { margin: 0; color: #74807d; font-size: 0.62rem; line-height: 1.5; }
+.wb-code-sample-mark {
+  display: inline-grid;
+  width: 1.3rem;
+  height: 1.05rem;
+  place-items: center;
+  margin-right: 0.38rem;
+  border: 1px solid #4b6a6e;
+  border-radius: 2px;
+  color: #8cc6cb;
+  background: #203033;
+  font: 0.45rem ui-monospace, monospace;
+}
 .wb-intent-diagnostic {
   display: grid;
   gap: 0.12rem;

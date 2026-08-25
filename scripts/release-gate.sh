@@ -48,6 +48,11 @@ cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown
   npm ci --ignore-scripts
   npm test
 )
+(
+  cd packages/geosolve-sketch-code
+  npm ci --ignore-scripts
+  npm test
+)
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run
 
@@ -75,12 +80,15 @@ for package in \
   geosolve-sketch-intent \
   geosolve-sketch-ops \
   geosolve-sketch-topology \
-  geosolve-constraint-editor
+  geosolve-constraint-editor \
+  geosolve-sketch-code
 do
   contents="$(cargo package --locked --allow-dirty --list -p "$package")"
   grep -qx 'LICENSE' <<<"$contents"
   grep -qx 'README.md' <<<"$contents"
 done
+
+./scripts/verify-geosolve-sketch-code-package.sh
 
 nix-shell "$root/shell.nix" --run \
   "cd '$root/crates/geosolve-demo-web' && env -u NO_COLOR trunk build --release"

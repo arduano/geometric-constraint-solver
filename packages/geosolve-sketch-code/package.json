@@ -1,0 +1,35 @@
+{
+  "name": "@geosolve/sketch-code",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Typed semantic sketch builders and explicit data-only patch compiler for GeoSolve",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./compiler": {
+      "types": "./dist/src/compiler.d.ts",
+      "default": "./dist/src/compiler.js"
+    }
+  },
+  "scripts": {
+    "clean": "node --eval \"import('node:fs').then(({rmSync}) => rmSync('dist', { recursive: true, force: true }))\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "generate:fixtures": "npm run build && node scripts/generate-artifact-fixtures.mjs",
+    "test:fixtures": "node scripts/generate-artifact-fixtures.mjs --check",
+    "test:runtime": "node --test dist/test/runtime.test.js",
+    "test:types": "tsc -p tsconfig.json --noEmit",
+    "test:managed": "tsc -p tsconfig.managed.json",
+    "test": "npm run build && npm run test:fixtures && npm run test:runtime && npm run test:types && npm run test:managed"
+  },
+  "dependencies": {
+    "@geosolve/intent": "file:../geosolve-intent"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "typescript": "5.9.2"
+  },
+  "license": "GPL-3.0-or-later"
+}
