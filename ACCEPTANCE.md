@@ -3234,11 +3234,10 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 passes clean qualification and immutable Tailscale replacement nomination;
-focused human UAT remains pending.
-ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no
-human evidence or accepted product claim exists yet.
+Status: complete and closed 2026-08-25. M83-F001 through M83-F010 repair, post-F007 architecture
+hardening, supervising-user milestone-level acceptance, GitHub Pages publication and exact
+hosted-byte verification pass.
+ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own the accepted contract.
 
 - The canonical design is an unordered typed dependency graph with stable never-reused
   declarations, ports, children, input-slot bindings and native reservations. Instance values,
@@ -3325,8 +3324,9 @@ human evidence or accepted product claim exists yet.
   performance, unchanged milestone-neutral golden, locked workspace tests, Clippy/Rustdoc/WASM and
   the complete clean release gate all pass before nomination.
 - The exact no-rebuild release artifact passes the focused frozen-browser checks and independent
-  temporary/retained Tailscale byte verification for M83 UAT. GitHub Pages remains on the accepted
-  M81 product until explicit supervising-human approval.
+  temporary/retained Tailscale byte verification for M83 UAT. Supervising-user acceptance, exact
+  GitHub Pages publication/hosted verification and retained-service retirement pass before
+  closure.
 
 Historical nomination evidence: initial nomination commit `232b83a` and post-F005 source `a621cdd`/tree
 `f6d77b4` are withdrawn by F001-F007. Replacement source
@@ -3364,11 +3364,25 @@ aggregate `e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. Al
 checks pass locally, on the temporary listener and on the retained Tailscale endpoint. Temporary
 and final eight-path served-byte ledgers have identical SHA-256
 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`; the temporary service is
-retired, while `geosolve-m83-uat.service`, PID `276377`, serves the immutable candidate at
-`http://100.94.63.83:8080/`. Complete evidence is in
-`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`. M83-U1 through M83-U10 and F001-F010 human
-rechecks, Pages publication and milestone closure remain pending. No automated result is human
-acceptance evidence, and GitHub Pages continues to serve accepted M81.
+retired. `geosolve-m83-uat.service`, PID `276377`, then served the immutable candidate at
+`http://100.94.63.83:8080/` through supervising-user acceptance. Complete nomination evidence is
+in `/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`. On 2026-08-25 the supervising user accepted
+M83-U1 through M83-U10 and F001-F010 at milestone level without claiming a separately logged
+row-by-row hands-on replay.
+
+Approval descendant `2006c86b936c3522cc48fbf26cf78664d5e31e90`, tree
+`c4a59d252ec94cd9344acf1646efd3fcc62d39df`, passes Pages run `32817232564`, build job
+`97707877103`, deploy job `97709242120` and artifact `9551973351` (API size 3,960,865 bytes). Its
+downloaded 12,288,000-byte artifact tar has SHA-256
+`06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`; extraction yields exactly
+seven regular files, no symlinks, and ordered-manifest aggregate
+`75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`. Proxy-disabled,
+cache-bypassed public verification passes HTTP 200, zero redirects, exact media/length/artifact
+bytes, no `Location`/`Content-Encoding`, and root equality across `/` plus all seven files. Results
+ledger `/tmp/geosolve-m83-pages-verify.trWHdsHU/results.tsv` has SHA-256
+`bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`. PID `276377` is retired,
+the endpoint refuses connections and the immutable snapshot remains. Qualified product source
+remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance gates pass.
 
 ## Regression and oracle policy
 

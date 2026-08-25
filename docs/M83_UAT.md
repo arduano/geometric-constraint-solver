@@ -2,10 +2,10 @@
 
 # M83 focused UAT — Projectional sketch design intent
 
-Status: **accepted by the supervising user on 2026-08-25 for milestone-level closure; F010 clean
-qualification and immutable Tailscale replacement nomination are complete; final GitHub Pages
-publication remains pending**. Automation owns exact identities, equations, residuals,
-persistence and deterministic reconstruction; human review owns clarity and interaction feel.
+Status: **accepted and closed 2026-08-25; F010 clean qualification, immutable Tailscale
+nomination, supervising-user acceptance, GitHub Pages publication and exact hosted-byte
+verification pass**. Automation owns exact identities, equations, residuals, persistence and
+deterministic reconstruction; human review owns clarity and interaction feel.
 
 ## Candidate authority
 
@@ -66,7 +66,7 @@ Superseded post-hardening mechanical authority:
 - Retained exact served-byte verification:
   `/tmp/geosolve-m83-post-hardening-final-verify.456o9Uey/results.tsv`, with the same SHA-256.
 - Historical retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, retired
-  PID `2404961`); that URL now serves the current authority below.
+  PID `2404961`); later candidates replaced it and final closeout retired the listener.
 - Complete freeze, browser, service and byte evidence:
   `/tmp/geosolve-m83-post-hardening-freeze-evidence.BlN1Fo2q`.
 
@@ -105,7 +105,7 @@ exact media type/length/body and root equality with `index.html`. Temporary list
 only after passing; the retained service then passed independent byte and focused-browser
 verification.
 
-Current F010 mechanical UAT authority:
+Accepted F010 mechanical UAT authority:
 
 - Product source: `ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`.
 - Product tree: `889f730e033ce5c728fddbac345263d8c26b8b93`.
@@ -125,22 +125,24 @@ Current F010 mechanical UAT authority:
   is retired after its byte and browser passes.
 - Retained exact served-byte verification:
   `/tmp/geosolve-m83-f010-final-verify.jKSWm8xi/results.tsv`, with the same SHA-256.
-- Current retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, PID
-  `276377`).
+- Historical retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, retired
+  PID `276377`; the endpoint now refuses connections and the immutable snapshot remains).
 - Complete freeze, browser, service and byte evidence:
   `/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`.
 
-Both current byte-verification passes cover `/` plus all seven assets: HTTP 200, zero redirects,
+Both F010 byte-verification passes cover `/` plus all seven assets: HTTP 200, zero redirects,
 exact media type/length/body and root equality with `index.html`. The temporary listener was
 retired only after passing; historical retained PID `3376452` was then retired and preserved, and
-the current retained service passed independent byte and 9/9 browser verification.
+the retained F010 service passed independent byte and 9/9 browser verification before closeout.
 
 | Mechanical nomination | Status |
 | --- | --- |
 | M83-F010 clean qualification, no-rebuild freeze and immutable Tailscale replacement | complete |
+| Supervising-user milestone-level acceptance | complete |
+| GitHub Pages publication, exact hosted-byte verification and service retirement | complete |
 
-GitHub Pages deliberately remains on accepted M81 bytes until the standard publication closeout.
-No automated result below is presented as human evidence.
+No automated result below is presented as human evidence. Pages is final M83 public-byte
+authority.
 
 ## Supervising-user acceptance
 
@@ -149,10 +151,30 @@ from the existing F010 qualification, frozen-artifact and review evidence, and i
 plan to be implemented. That milestone-level decision accepts M83-U1 through M83-U10 and the
 F001-F010 replacement disposition for closure. It does **not** claim a separate row-by-row
 hands-on replay or invent observations that were not logged. The statuses below therefore say
-`accepted by milestone-level approval`, not `manually passed`. Exact GitHub Pages publication,
-hosted-byte verification and retained-service retirement remain the only standard closeout work.
+`accepted by milestone-level approval`, not `manually passed`.
 
-The current F010 candidate mechanically preserves the automation-only architecture contract:
+## Final GitHub Pages publication
+
+Documentation-only approval descendant `2006c86b936c3522cc48fbf26cf78664d5e31e90`, tree
+`c4a59d252ec94cd9344acf1646efd3fcc62d39df`, passes Pages run `32817232564`, build job
+`97707877103`, deploy job `97709242120` and artifact `9551973351` (Actions API size 3,960,865
+bytes). Downloaded artifact
+`/tmp/geosolve-m83-pages-artifact.NgAszX6o/artifact.tar` is 12,288,000 bytes with SHA-256
+`06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`. It extracts to exactly
+seven regular files, no symlinks, with ordered-manifest aggregate
+`75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`.
+
+Proxy-disabled, cache-bypassed hosted verification at
+`https://arduano.github.io/geometric-constraint-solver/` passes for `/` and all seven files: HTTP
+200, zero redirects, exact type/length/artifact bytes, no `Location` or `Content-Encoding`, and
+root bytes equal `index.html`. Results
+`/tmp/geosolve-m83-pages-verify.trWHdsHU/results.tsv` have SHA-256
+`bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`. Retained PID `276377`
+was retired only after that proof passed; the endpoint refuses connections and the immutable F010
+snapshot remains preserved. Qualified product source `ee18dbd` remains implementation authority,
+while approval descendant `2006c86` records acceptance and publication. M83 is closed.
+
+The accepted F010 candidate mechanically preserves the automation-only architecture contract:
 strict SHA-256 v2/legacy-v1 migration, independently validated accepted/current/history authority,
 descriptor/body chronology, exact ownership, prepared Fillet/Offset publication, compact explicit
 Snapshot reads, typed bounded receipts/responses, the 64 MiB workspace admission boundary and 4 MiB

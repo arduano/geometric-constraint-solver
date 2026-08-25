@@ -2,11 +2,10 @@
 
 # M83 implementation ledger — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F010 repair, post-F007 architecture hardening and
-supervising-user acceptance are complete; F010 is clean-qualified and immutably nominated as the
-Tailscale replacement; final GitHub Pages publication remains pending**. This ledger records
-implementation and qualification against ADR 0040 and `docs/M83_GOALS.md`. Accepted M81 GitHub
-Pages bytes remain public authority until the M83 publication closeout completes.
+Status: **complete and closed 2026-08-25; implementation, M83-F001 through M83-F010 repair,
+post-F007 architecture hardening, supervising-user acceptance, GitHub Pages publication and exact
+hosted-byte verification pass**. This ledger records implementation and qualification against ADR
+0040 and `docs/M83_GOALS.md`. Pages is final M83 public-byte authority.
 
 ## Baseline and disposition
 
@@ -827,6 +826,29 @@ This completes the F010 mechanical qualification and immutable replacement nomin
 2026-08-25 the supervising user explicitly approved the implementation plan that closes M83 from
 this evidence and instructed it to be implemented. The decision accepts M83-U1 through M83-U10
 and F001-F010 at milestone level without claiming a separately logged row-by-row hands-on replay.
-GitHub Pages deliberately remains on accepted M81 until the exact F010 publication, hosted-byte
-verification and retained-service retirement complete. A documentation-only approval descendant
-does not replace the qualified product source/tree or rebuild or mutate the frozen artifact.
+The documentation-only approval descendant does not replace the qualified product source/tree or
+rebuild or mutate the frozen F010 artifact.
+
+## Final GitHub Pages publication and closeout
+
+Approval descendant `2006c86b936c3522cc48fbf26cf78664d5e31e90`, tree
+`c4a59d252ec94cd9344acf1646efd3fcc62d39df`, passes GitHub Pages run `32817232564`, build job
+`97707877103` and deploy job `97709242120`. Artifact `9551973351` reports 3,960,865 bytes through
+the Actions API. The downloaded 12,288,000-byte
+`/tmp/geosolve-m83-pages-artifact.NgAszX6o/artifact.tar` has SHA-256
+`06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`; extraction yields exactly
+seven regular files, no symlinks, and ordered-manifest aggregate
+`75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`.
+
+Proxy-disabled, cache-bypassed verification at
+`https://arduano.github.io/geometric-constraint-solver/` proves `/` and all seven artifact paths
+return HTTP 200 with zero redirects, exact media type/length/artifact body, no `Location` or
+`Content-Encoding`, and root bytes equal artifact `index.html`. The 1,005-byte results ledger
+`/tmp/geosolve-m83-pages-verify.trWHdsHU/results.tsv` has SHA-256
+`bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`.
+
+Only after public verification passed was retained `geosolve-m83-uat.service`, PID `276377`,
+retired. Its former endpoint now refuses connections, while immutable snapshot
+`/tmp/geosolve-m83-f010-uat.Qmrz2R36` remains preserved. Qualified product source `ee18dbd`, tree
+`889f730`, remains implementation authority; approval descendant `2006c86` records acceptance and
+publication without replacing it. Pages is final M83 public-byte authority and M83 is closed.

@@ -239,7 +239,7 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 `archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
-M83 is the active, mechanically implemented projectional design-intent milestone. ADR 0040
+M83 is complete and closed as the accepted projectional design-intent milestone. ADR 0040
 replaces the rejected chronological snapshot/JSON-owner-rewrite candidate with an order-independent
 typed dependency graph, separate writable instance and presentation organization state,
 deterministic Rust materialization into the unchanged native solver, one composite history and
@@ -297,11 +297,17 @@ no-rebuild snapshot `/tmp/geosolve-m83-f010-uat.Qmrz2R36` is immutable at ordere
 aggregate `e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`; all 9/9 frozen-browser
 checks pass locally and on both temporary and retained Tailscale listeners. Both eight-path served-
 byte ledgers have SHA-256 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`.
-The temporary service is retired; `geosolve-m83-uat.service`, PID `276377`, serves the frozen F010
-candidate at `http://100.94.63.83:8080/`. Focused human UAT is still required before M83 becomes
-accepted product behavior; GitHub Pages therefore remains on accepted M81 product bytes. The M76
-annotation-layout cache stays disposable presentation-only workspace state outside graph/
-materialization/history authority.
+The supervising user accepted M83 on 2026-08-25 without claiming a separate row-by-row hands-on
+replay. Approval descendant `2006c86b936c3522cc48fbf26cf78664d5e31e90`, tree
+`c4a59d252ec94cd9344acf1646efd3fcc62d39df`, passes Pages run `32817232564`, build/deploy jobs
+`97707877103`/`97709242120` and artifact `9551973351`. The downloaded artifact tar has SHA-256
+`06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`, seven regular files with
+aggregate `75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`, and exact hosted
+results SHA-256 `bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`.
+`geosolve-m83-uat.service`, PID `276377`, is retired, its endpoint refuses connections and its
+immutable snapshot remains preserved. Pages is final M83 public-byte authority. The M76
+annotation-layout cache stays disposable presentation-only workspace state outside graph,
+materialization and history authority.
 
 ## Read first
 
@@ -334,9 +340,9 @@ materialization/history authority.
     accepted focused scorecard and exact public closeout.
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
-19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — active projectional
-    intent contract, F001-F010 historical nomination/finding ledger, qualified immutable F010
-    nomination and pending focused scorecard.
+19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — completed
+    projectional-intent contract, F001-F010 historical nomination/finding ledger, accepted F010
+    scorecard and exact public closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -708,9 +714,9 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M82 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
-architecture hardening are implemented; F010 passes clean qualification and immutable Tailscale
-replacement nomination, while focused human acceptance remains pending. M82 closes by explicit
+M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
+architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
+acceptance and exact Pages publication. M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
 `archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
@@ -816,12 +822,13 @@ Durable milestone and cleanup records:
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
-- `docs/adr/0040-projectional-design-intent-graph.md` (active replacement and post-F007 hardening
+- `docs/adr/0040-projectional-design-intent-graph.md` (accepted replacement and post-F007 hardening
   architecture)
-- `docs/M83_GOALS.md` (active projectional intent contract)
+- `docs/M83_GOALS.md` (completed projectional intent contract)
 - `docs/M83_IMPLEMENTATION.md` (withdrawn initial/post-F005/post-F007/post-hardening nominations,
-  F001-F010 repairs, architecture hardening and replacement qualification ledger)
-- `docs/M83_UAT.md` (current immutable F010 candidate authority and pending focused scorecard)
+  F001-F010 repairs, architecture hardening, qualification and public-closeout ledger)
+- `docs/M83_UAT.md` (accepted immutable F010 candidate, milestone-level scorecard and exact public
+  verification)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -5596,9 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F010 repair, post-F007 architecture hardening and
-supervising-user acceptance are complete; F010 passes clean qualification and immutable Tailscale
-replacement nomination; final GitHub Pages publication remains pending**.
+Status: **complete and closed 2026-08-25; implementation, M83-F001 through M83-F010 repair,
+post-F007 architecture hardening, supervising-user acceptance, GitHub Pages publication and exact
+hosted-byte verification pass**.
 ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
@@ -5705,7 +5705,7 @@ chronological owner-rewrite candidate remains archived at
 - [x] Receive explicit supervising-user milestone-level acceptance against M83-U1 through M83-U10
   on 2026-08-25. This scoped disposition does not claim a separately logged row-by-row hands-on
   replay.
-- [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
+- [x] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
   listener and close the milestone.
 
 Historical nomination record: the initial `232b83a` nomination and post-F005 source `a621cdd`,
@@ -5752,14 +5752,30 @@ served-byte ledgers
 `/tmp/geosolve-m83-f010-temp-verify.fa7xynxe/results.tsv` and
 `/tmp/geosolve-m83-f010-final-verify.jKSWm8xi/results.tsv` both have SHA-256
 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`. Temporary PID `224467`
-is retired; `geosolve-m83-uat.service`, PID `276377`, serves that immutable snapshot at
-`http://100.94.63.83:8080/`. Complete F010 evidence is in
+is retired; `geosolve-m83-uat.service`, PID `276377`, served that immutable snapshot at
+`http://100.94.63.83:8080/` through acceptance and is now retired. Complete F010 nomination
+evidence is in
 `/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`. On 2026-08-25 the supervising user explicitly
 accepted M83 at milestone level and instructed the approved closeout plan to be implemented. That
 decision accepts M83-U1 through M83-U10 and F001-F010 for closure without claiming a separately
-logged row-by-row hands-on replay. Pages publication, exact hosted-byte verification, retained-
-service retirement and final milestone closeout remain pending; GitHub Pages continues to serve
-accepted M81 at this checkpoint.
+logged row-by-row hands-on replay.
+
+Final closeout evidence (2026-08-25): documentation-only approval descendant
+`2006c86b936c3522cc48fbf26cf78664d5e31e90`, tree
+`c4a59d252ec94cd9344acf1646efd3fcc62d39df`, passes GitHub Pages run `32817232564`, build job
+`97707877103`, deploy job `97709242120` and artifact `9551973351` (API-reported size 3,960,865
+bytes). Downloaded `artifact.tar` is 12,288,000 bytes with SHA-256
+`06bce15ddea6d21048a25e3630a368ebe0ba883be98ee296869f77c47b86218b`; it contains exactly seven
+regular files, no symlinks, and extracted ordered-manifest aggregate
+`75234fd6ff4349e4b75c858b90e90630002a7dd9b9171e47dfe28bc253cf23fc`. Proxy-disabled,
+cache-bypassed verification of `https://arduano.github.io/geometric-constraint-solver/` proves `/`
+and all seven artifact paths return HTTP 200 with zero redirects, exact media type/length/body,
+no `Location` or `Content-Encoding`, and root bytes equal `index.html`; results ledger
+`/tmp/geosolve-m83-pages-verify.trWHdsHU/results.tsv` has SHA-256
+`bb7423477868aafc7752b766ea2f6fb5461e1d31846dd14f9ebafad7ede42ace`. Retained
+`geosolve-m83-uat.service`, PID `276377`, is retired and its endpoint refuses connections; the
+immutable F010 snapshot remains preserved. Qualified product source remains `ee18dbd`; Pages is
+final M83 public-byte authority and the milestone is closed.
 
 Gate: organization, names and source row order cannot change materialization; exact before/after
 organization moves cannot change geometry; every accepted
