@@ -278,8 +278,9 @@ the `@geosolve/intent` TypeScript package. These surfaces do not change canonica
 the native solver equation/priority catalog or the accepted M81 Pages product. M83-F001 through
 M83-F010 are implemented, but nominations through F008/F009 source `b0de5af` are historical
 because architecture hardening and later findings supersede them. The committed F010 replacement
-must pass a fresh clean gate, no-rebuild freeze and exact Tailscale verification before focused
-human UAT. Public GitHub Pages continues to serve M81.
+supersedes those bytes; exact clean-gate, immutable-candidate and UAT authority is recorded in the
+M83 implementation/UAT ledgers. Public GitHub Pages continues to serve M81 until explicit human
+approval.
 
 Canonical intent graph/session output is wire v2 and uses SHA-256 for component/content identity.
 The importer accepts canonical experimental v1 only after its FNV-1a-derived outer and nested

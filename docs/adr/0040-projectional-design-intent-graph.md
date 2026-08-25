@@ -244,8 +244,9 @@ into the design.
 - RPC mutations no longer duplicate a potentially large snapshot; clients request Snapshot
   explicitly after using a bounded typed receipt when they need refreshed read state.
 - Workspace v8 is experimental until the M83 human gate passes. GitHub Pages is not updated before
-  that approval. Earlier nominations through post-F007 source `fafea4e` are historical; a fresh
-  hardening candidate must be frozen and served over Tailscale before focused UAT.
+  that approval. Earlier nominations through F008/F009 source `b0de5af` are historical; the F010
+  replacement must pass fresh clean qualification, a no-rebuild freeze and exact Tailscale
+  verification before focused UAT.
 
 ## Rejected alternatives
 
