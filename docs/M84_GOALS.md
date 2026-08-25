@@ -2,9 +2,9 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active; architecture and acceptance contract frozen, implementation complete,
-clean-qualified and nominated as an immutable Tailscale UAT candidate; human acceptance remains
-pending**. Accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; M84-F003 withdrew the former immutable Tailscale candidate because
+ordinary GUI dependencies were not projected as lexical managed TypeScript**. Accepted M83 remains
+GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -35,6 +35,9 @@ layer optional.
   changing canonical state.
 - Retain valid-but-failed code intent above the previous accepted canvas; retain syntax-invalid
   text only as an editor draft.
+- Keep the data-only M83 source projection as honestly labelled Intent IR. For every supported GUI
+  conversion, emit dependency-ordered lexical declarations and member expressions; never expose a
+  transport reference object or repeated string identity as authored code.
 
 ### M84-G3 — reusable custom patches
 
@@ -110,13 +113,15 @@ layer optional.
 - Freeze one no-rebuild M84 candidate, verify it locally and through retained Tailscale UAT, and
   publish to Pages only after explicit supervising-user approval and exact hosted-byte proof.
 
-Nomination record (2026-08-25): exact product source
+Withdrawn nomination record (2026-08-25): exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
 `05aefb0cbd3972d423f1713df1e58628b24ec216`, passes the complete clean release gate. Its exact
 no-rebuild seven-file output is frozen read-only at `/tmp/geosolve-m84-uat.aHw5ePSW`, ordered-
 manifest aggregate `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, and is
-byte/browser-verified locally and at `http://100.94.63.83:8080/`. This is mechanical nomination
-only: M84-U1 through M84-U10, explicit approval, GitHub Pages publication and closure remain open.
+byte/browser-verified locally and at `http://100.94.63.83:8080/`. Human UAT then opened M84-F003,
+so those bytes are historical defect evidence rather than a current candidate. Replacement
+qualification/nomination, M84-U1 through M84-U10, explicit approval, GitHub Pages publication and
+closure remain open.
 
 ## Bounds and non-goals
 

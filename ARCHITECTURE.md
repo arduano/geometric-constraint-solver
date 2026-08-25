@@ -397,8 +397,8 @@ semantic projection path for each canonical input, definition field, output and 
 from the same Rust catalog used to validate declarations. Paths are bounded non-empty field-rooted
 sequences of named object members and numeric array indices. The 109-family audit rejects
 duplicates, leaf/container prefixes and locations which change between object and array.
-Inspector, graph/RPC snapshots and typed code clients consume that descriptor. Structured Source
-projects the same already validated nodes and stored values as nested ordered `inputs`,
+Inspector, graph/RPC snapshots and typed code clients consume that descriptor. The low-level
+Intent IR projection projects the same already validated nodes and stored values as nested ordered `inputs`,
 `definition` and `instance` trees but owns no separate defaults or schema table.
 
 ### `geosolve-constraint-editor`
@@ -818,6 +818,15 @@ retained native preview and never parse/expand code. Terminal publication stages
 managed edit or override and commits exactly once after cold validation parity. Code-project save,
 reload and repro contain complete offline authority within the 64 MiB envelope; managed files and
 individual artifacts are bounded at 4 MiB and 16 MiB respectively.
+
+M84-F003 separates transport IR from the user-facing code projection. The M83
+`IntentSourceSnapshot` and `IntentProjectedPortReference` remain bounded data DTOs for audit, RPC
+and Inspector consumers; they are not authored TypeScript. The optional code layer explicitly
+bootstraps a supported accepted GUI dependency closure into managed-v1 source. It emits
+declarations in dependency order and expresses dependencies only as lexical branded results, for
+example `frame.corners.lowerLeft`, never by repeating a serialized declaration/output identity.
+Promotion constructs a real `CodeProject` and `SketchCodeSession` before the Code surface becomes
+editable.
 
 ### `geosolve-sketch-features`
 

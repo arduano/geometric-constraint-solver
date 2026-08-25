@@ -3386,21 +3386,31 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted, with a clean-qualified immutable Tailscale candidate nominated.
+Status: active and unaccepted. Human UAT opened M84-F003 and withdrew the former clean-qualified
+immutable Tailscale candidate; no M84 source is currently nominated.
 ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract. Accepted
 M83 remains public product authority.
 
-Implementation status (2026-08-25): all structural slices and four genuine projects are
+Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
 checks pass while the milestone-neutral 271-row golden remains byte-identical. Complete clean
 release qualification and immutable Tailscale nomination also pass; M84-U1 through M84-U10 remain
-open, and none of this evidence changes accepted M83 public authority.
+open, and none of this evidence changes accepted M83 public authority. That candidate is now
+historical defect evidence because it did not satisfy ordinary GUI-to-code lexical projection.
 
 Focused findings incorporated into the nominated source are closed: M84-F001 publishes the fully
 parity-checked warm terminal checkpoint so a valid generated-point release cannot inherit stale
 reconstructed Segment branch metadata; M84-F002 applies managed aggregate reverse edits through
 their authenticated semantic value spans while preserving stale-source compare-and-swap and all
 unowned bytes.
+
+Open finding M84-F003 requires an ordinary GUI-authored aligned rectangle plus shared-corner
+Segment to project as real managed code: the Segment endpoints must parse as
+`ManagedValue::Reference` expressions such as `frame.corners.lowerLeft`, not serialized
+`IntentProjectedPortReference` objects or branded strings. Direct managed line expansion must
+retain exact native shared-point ownership, finite accepted geometry and independently validated
+Hard residuals. The low-level M83 projection remains available under the truthful Intent IR label;
+promotion must create one genuine code project/session with coherent persistence and history.
 
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace
@@ -3436,17 +3446,22 @@ unowned bytes.
   failure, bound, persistence and performance owners pass.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests, actual WASM, TypeScript,
   golden require-clean, Trunk and the complete clean release gate pass.
-- One exact no-rebuild candidate passes local and retained-Tailscale byte/browser verification.
-  M84-U1 through M84-U10 and explicit supervising-user approval remain mandatory before GitHub
-  Pages publication, exact hosted verification, service retirement and closure.
+- The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
+  verification but is withdrawn by M84-F003. A replacement must repeat complete qualification and
+  immutable nomination. M84-U1 through M84-U10 and explicit supervising-user approval remain
+  mandatory before GitHub Pages publication, exact hosted verification, service retirement and
+  closure.
 
-Nomination authority is exact product source `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
+Withdrawn historical nomination authority is exact product source
+`79078eca44a5af4de5cccd92bf6fee570c473624`, tree
 `05aefb0cbd3972d423f1713df1e58628b24ec216`. The clean-gate log SHA-256 is
 `0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`; immutable snapshot
 `/tmp/geosolve-m84-uat.aHw5ePSW` has ordered-manifest aggregate
 `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`. Exact local/Tailscale
 HTTP ledgers match, browser checks pass 4/4 on each endpoint, and retained service PID `2426265`
-serves the candidate at `http://100.94.63.83:8080/`. No human row or Pages publication is claimed.
+served the withdrawn bytes at `http://100.94.63.83:8080/`. Those bytes may remain temporarily
+reachable only as defect evidence until replacement; they are not UAT or publication authority.
+No human row or Pages publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

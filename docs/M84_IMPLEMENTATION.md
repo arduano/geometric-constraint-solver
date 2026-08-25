@@ -2,9 +2,9 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **implementation complete; focused and complete clean qualification pass, and an immutable
-Tailscale candidate is nominated for UAT**. No human UAT result or M84 Pages publication is
-claimed. Accepted M83 remains public authority.
+Status: **implementation reopened for M84-F003; the former clean-qualified immutable Tailscale
+candidate is withdrawn**. No M84 Pages publication is claimed. Accepted M83 remains public
+authority.
 
 ## Baseline and authority
 
@@ -128,6 +128,22 @@ Repair: `ManagedEditPlan` retains its semantic value target and applies through
 reparse and reauthenticate fresh CST spans; comments, custom source and unrelated managed bytes
 remain exact.
 
+### M84-F003 — transport-shaped Structured Source was not lexical authoring code
+
+Reproduction owner: optional GUI-to-code projection. Draw an aligned rectangle, then a Segment
+between two rectangle corners. The ordinary Structured Source route serialized
+`IntentProjectedPortReference { declaration, output, kind }` into a TypeScript-shaped object. That
+is valid bounded transport IR, but it is not a variable-driven reference coupled to the rectangle's
+inferred result type. The bundled Braced Frame began as managed code and therefore did not cover
+ordinary GUI conversion.
+
+Required repair: retain the original DTO as labelled Intent IR, add direct managed
+`$.geometry.line`, dependency-order supported GUI bootstrap declarations, and emit endpoint
+expressions such as `frame.corners.lowerLeft`. Direct expansion must alias the exact owning native
+point rather than copy its coordinates. Ordinary Code preview/promotion must create one genuine
+code project/session. Focused Rust, TypeScript, workbench/persistence and browser tests precede a
+new complete qualification and nomination.
+
 ## Focused evidence observed before final nomination
 
 - `cargo test --locked -p geosolve-sketch-code --all-features` — 44 unit and 21 integration tests
@@ -152,7 +168,7 @@ remain exact.
 These development/focused results are incorporated into, but do not substitute for, the clean
 committed-source gate and frozen nomination below.
 
-## Clean qualification and frozen nomination
+## Withdrawn clean qualification and frozen nomination
 
 Exact committed product source `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
 `05aefb0cbd3972d423f1713df1e58628b24ec216`, passed:
@@ -204,6 +220,9 @@ are `54858c5a1f75cc2e286d07360ed8342c7f8a09290a8f3e7ee1c4d295afe91d9e` and
 `http://100.94.63.83:8080/` and remains retained through UAT. The temporary `:18084` listener was
 retired. This nomination claims no human UAT, approval, Pages publication or milestone closure.
 
+Human UAT subsequently opened M84-F003. This snapshot is preserved as historical defect evidence
+and claims no current nomination, approval, Pages publication or milestone closure.
+
 ## Known bounds and truthful limitations
 
 - Managed-v1 is intentionally a closed projectional subset. Arbitrary custom code is caller build
@@ -221,7 +240,9 @@ retired. This nomination claims no human UAT, approval, Pages publication or mil
 
 ## Remaining release sequence
 
-1. Complete M84-U1 through M84-U10 against the retained exact candidate and record explicit
-   supervising-user approval or open a numbered finding and withdraw the candidate.
-2. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+1. Repair and fully qualify M84-F003, freeze replacement bytes and resume M84-U1 through M84-U10
+   against only that replacement.
+2. Record explicit supervising-user approval or open another numbered finding and withdraw the
+   replacement candidate.
+3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

@@ -2,10 +2,10 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted and implemented for M84. Exact source `79078eca44a5af4de5cccd92bf6fee570c473624`
-is clean-qualified and immutably nominated on Tailscale; M84 remains active and unaccepted while
-human UAT is pending. GitHub Pages remains on accepted M83 until explicit supervising-user approval
-and exact publication.
+Status: accepted for M84 and under M84-F003 repair. Exact source
+`79078eca44a5af4de5cccd92bf6fee570c473624` was clean-qualified and immutably nominated, but human
+UAT withdrew it after ordinary GUI Structured Source exposed transport DTOs instead of lexical
+managed references. M84 remains active and unaccepted; GitHub Pages remains on accepted M83.
 
 ## Context
 
@@ -88,6 +88,14 @@ explicit managed `overrides` entry; Reset to code removes that override. A targe
 or permitted override is visibly read-only. An explicit conversion API may initialize a code
 project from an M83 editor checkpoint using descriptor-backed managed declarations and honest
 bootstrap declarations; conversion is never implicit.
+
+The M83 `IntentSourceSnapshot` remains a data-only audit/RPC/Inspector projection and is labelled
+**Intent IR** in code-enabled presentation. It is never presented as authoring TypeScript. The
+optional conversion API projects supported declarations in dependency order and emits every
+dependency as an earlier lexical branded value, for example
+`start: frame.corners.lowerLeft`. It never embeds `{ declaration, output, kind }` transport objects
+or repeats a dependency identity string in managed source. Promotion creates a genuine
+`CodeProject`/`SketchCodeSession`; a read-only preview alone does not acquire code authority.
 
 Invalid-subset text remains a non-canonical editor draft and changes no project or scene. Valid
 source with a missing/tampered artifact, expansion error, dangling dependency or invalid geometry

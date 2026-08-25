@@ -316,11 +316,13 @@ through `AuthoringProgram` and deterministic keyed expansion into the ordinary M
 the unchanged Rust materializer/solver and independent validation remain sole geometry authority.
 Custom TypeScript is never executed by Rust, WASM, browser runtime or workspace load. Typed
 semantic references, keyed generations/tombstones, edit lenses/overrides and one code/editor
-history support four genuine demonstrations. Implementation and complete clean qualification pass
-at exact source `79078ec`; immutable snapshot `/tmp/geosolve-m84-uat.aHw5ePSW`, aggregate
-`99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, is nominated at
-`http://100.94.63.83:8080/`. Human UAT remains open, Pages remains on accepted M83 and the
-candidate stays on Tailscale until approval and exact public verification.
+history support four genuine demonstrations. The former clean-qualified source `79078ec` and
+immutable snapshot `/tmp/geosolve-m84-uat.aHw5ePSW` are withdrawn after human UAT opened
+`M84-F003`: ordinary GUI Structured Source still exposed the data-only M83 intent-reference DTO
+rather than real lexical managed TypeScript. The repair keeps that projection as honestly labelled
+Intent IR, adds direct managed lines and projects GUI dependencies as variable/member expressions
+such as `frame.corners.lowerLeft`. Pages remains on accepted M83; no M84 candidate is currently
+nominated.
 
 ## Read first
 

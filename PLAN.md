@@ -5793,9 +5793,9 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active; ADR 0041 and the acceptance contract are frozen, implementation is complete,
-clean-qualified and immutably nominated on Tailscale; human approval remains pending**. Accepted
-M83 remains public Pages authority.
+Status: **active and unaccepted; M84-F003 withdrew the former Tailscale candidate after human UAT
+proved that ordinary GUI Structured Source still serialized intent-reference DTOs instead of
+projecting genuinely lexical managed TypeScript**. Accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5836,6 +5836,13 @@ M83 remains public Pages authority.
   TypeScript, golden require-clean, Trunk and the complete clean release gate.
 - [x] Freeze one no-rebuild candidate and verify its exact bytes locally and through retained
   Tailscale.
+- [ ] Resolve M84-F003: preserve the M83 data-only projection as honestly labelled **Intent IR**;
+  add direct managed `geometry.line` lowering; project a dependency-ordered GUI rectangle plus
+  shared-corner line as lexical `frame.corners.*` references; and let an ordinary sketch promote
+  that projection into one genuine `CodeProject`/`SketchCodeSession`.
+- [ ] Qualify M84-F003 with focused Rust ownership/materialization, TypeScript compile-pass/fail,
+  workbench/persistence and browser regressions; then pass the unchanged golden, WASM, formatting,
+  Clippy, locked workspace and clean release gates and nominate replacement bytes.
 - [ ] Receive explicit M84-U1 through M84-U10 approval, then publish/exact-verify Pages, retire the
   service and close M84.
 
@@ -5846,7 +5853,7 @@ unchanged 271-row golden pass. `M84-F001` repairs generated-point terminal publi
 the fully parity-checked warm checkpoint; `M84-F002` routes aggregate reverse edits through their
 authenticated semantic value spans.
 
-Qualification/nomination record (2026-08-25): exact committed product source
+Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
 `05aefb0cbd3972d423f1713df1e58628b24ec216`, passes the complete clean Nix release gate. Its
 6,107-line, 414,758-byte log `/tmp/geosolve-m84-release-gate.GOEuXP.log` has SHA-256
@@ -5858,8 +5865,14 @@ Tailscale eight-path ledgers byte-match at SHA-256
 `dd8e6c1350f56cb6e7a483892a188187edc68ddcb63ee8ba9335401432ba8895`; focused browser checks
 pass 4/4 locally and 4/4 on Tailscale, including bounded-surface checks at both required desktop
 sizes. `geosolve-m84-uat.service`, PID `2426265`, retains those immutable bytes at
-`http://100.94.63.83:8080/`. M84-U1 through M84-U10, explicit approval, Pages publication,
-service retirement and closure remain open.
+`http://100.94.63.83:8080/`. Human UAT then opened `M84-F003`: the ordinary GUI rectangle plus
+shared-corner Segment path displayed the M83 `IntentSourceSnapshot` reference DTO as if it were
+authoring TypeScript, so its dependency appeared as `{ declaration, output, kind }` data rather
+than a lexical `frame.corners.*` expression coupled to the rectangle result type. The frozen bytes
+and evidence remain historical defect evidence only; they are not a current UAT candidate and
+must not reach Pages. The retained service may remain temporarily reachable only until replacement
+bytes take its place. M84-U1 through M84-U10, replacement qualification/nomination, explicit
+approval, Pages publication, service retirement and closure remain open.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

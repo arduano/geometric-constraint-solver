@@ -4685,8 +4685,9 @@ M84 adds no residual equation and does not reinterpret the 271-row milestone-neu
 separate reviewed ledger owns managed-source parsing, data-artifact expansion, typed references,
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
 `docs/M84_GOALS.md` are authoritative. Every fixture below is implemented and passes its focused
-owner suite. Complete clean candidate qualification and immutable local/Tailscale nomination pass;
-human presentation UAT remains pending.
+owner suite. The former complete clean candidate qualification and immutable local/Tailscale
+nomination are withdrawn by M84-F003; human presentation UAT remains pending against future
+replacement bytes.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4759,19 +4760,32 @@ semantic value span for `lowerLeft` or `upperRight`, preserve every unowned/cust
 a stale source digest. Sequential X/Y rewrites must reparse and authenticate their fresh spans,
 publish once, update generated dependents and round-trip through exact outer Undo/Redo.
 
+### M84-F003 — ordinary GUI dependencies become lexical managed references
+
+Draw an aligned rectangle, then draw a Segment whose endpoints alias two rectangle corners.
+Ordinary Intent IR may continue to describe each binding with a serializable declaration/output/
+kind DTO, but the optional authoring-code projection must instead emit a dependency-ordered
+rectangle variable and `$.geometry.line` call whose endpoints are lexical members such as
+`frame.corners.lowerLeft` and `frame.corners.upperRight`. Parsed endpoint values must be
+`ManagedValue::Reference`; raw strings/DTOs, wrong kinds, cross-project values and misspelled
+members reject. Cold rematerialization must preserve exact shared native point ownership, finite
+geometry, current feature state and normalized Hard residual `<= 1e-9`. Promotion from the
+ordinary scene creates one genuine code project/session, persists/reproduces coherently and keeps
+the rectangle-to-line dependency live under later managed edits.
+
 ### M84 release gate
 
 The separate code-project ledger, native/WASM/RPC/TypeScript parity, type failures, finite geometry,
 explicit branches and normalized Hard residual `<= 1e-9` pass alongside the byte-identical
 milestone-neutral golden. Focused format, warnings-denied Clippy/Rustdoc, locked all-feature,
-actual-WASM, TypeScript and package-closure checks pass. Exact source `79078ec`, tree `05aefb0`,
-also passes Trunk and the complete clean gate (log SHA-256
+actual-WASM, TypeScript and package-closure checks pass. Withdrawn historical source `79078ec`,
+tree `05aefb0`, passed Trunk and the complete clean gate (log SHA-256
 `0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`). The no-rebuild
 snapshot `/tmp/geosolve-m84-uat.aHw5ePSW`, aggregate
 `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, passes exact local and
 retained-Tailscale HTTP verification plus focused browser 4/4 on each endpoint and is live at
-`http://100.94.63.83:8080/`. `docs/M84_UAT.md` and explicit approval still precede Pages; the
-retained service stays live until exact public verification.
+`http://100.94.63.83:8080/`. Those bytes are now defect evidence only. M84-F003 requires complete
+replacement qualification and nomination before UAT resumes; Pages remains M83.
 
 ## Frozen near-singular fixtures
 

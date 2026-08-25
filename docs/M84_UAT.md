@@ -2,11 +2,11 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **immutable candidate nominated; focused human UAT pending**. No row is accepted. Pages
-remains on accepted M83; the nominated M84 candidate stays available over Tailscale through any
-finding repair and explicit approval.
+Status: **former immutable candidate withdrawn by M84-F003; replacement focused UAT pending**. No
+row is accepted. Pages remains on accepted M83. The old bytes may remain available over Tailscale
+temporarily as historical defect evidence, not as current UAT authority.
 
-## Candidate authority
+## Withdrawn candidate evidence
 
 Qualified product source: `79078eca44a5af4de5cccd92bf6fee570c473624`; tree:
 `05aefb0cbd3972d423f1713df1e58628b24ec216`. The clean Nix release gate passed on 2026-08-25;
@@ -39,11 +39,16 @@ bounded-surface check at both required sizes; log hashes are
 `54858c5a1f75cc2e286d07360ed8342c7f8a09290a8f3e7ee1c4d295afe91d9e` and
 `37f289b62adc02362e8c34a1ea23377c2a3fc5446d43ac262a5b075c1652f4c0`.
 
-Current UAT authority is `geosolve-m84-uat.service`, PID `2426265`, at
+The withdrawn snapshot is still served temporarily by `geosolve-m84-uat.service`, PID `2426265`, at
 `http://100.94.63.83:8080/`. It serves the immutable snapshot above; the temporary `:18084`
 listener is retired. These facts nominate the candidate mechanically and do not accept any row.
 
-Run the ordinary desktop workbench at approximately `1440x900` and `1024x720`. Use actual
+M84-F003 reproduction: draw an aligned rectangle, then a Segment between two rectangle corners.
+The old source view shows a serialized `{ declaration, output, kind }` dependency rather than a
+lexical `frame.corners.*` expression. This disproves the code-authoring claim and withdraws the
+complete snapshot despite its earlier mechanical qualification.
+
+Run the replacement ordinary desktop workbench at approximately `1440x900` and `1024x720`. Use actual
 code-project samples rather than importing equivalent flat scenes. Direct tests, not visual
 judgment, own exact identities, generations, residuals, payload bounds and byte parity.
 
@@ -61,6 +66,7 @@ judgment, own exact identities, generations, residuals, payload bounds and byte 
 | M84-U8 | Save/reload and Copy/New/Load repro for valid and retained-invalid code projects; remove/tamper an artifact and try a corrupt/oversized payload. | Complete offline authority/history returns; invalid intent keeps its accepted scene; missing/tampered/corrupt/oversized inputs reject before atomic replacement. | pending |
 | M84-U9 | Drag repeatedly in the largest code sample while watching source/History, including rapid reversals and a rejected final pointer sample. | Preview remains at the M83 interaction quality; pointer frames do not parse/expand or churn panels; release commits the newest accepted preview once and exact Undo restores it. | pending |
 | M84-U10 | Start a plain M83 workspace/build without code support, then a code-enabled one. Inspect the browser file/artifact UI at both sizes. | Plain solver/editor behavior and persistence remain available without code-module linkage; code UI is polished and bounded, custom files are clearly read-only, and it does not pretend to be a general IDE. | pending |
+| M84-U11 | In an ordinary sketch, draw an aligned rectangle and a line between two rectangle corners; inspect Intent IR and Code, then promote the preview and edit the rectangle. | Intent IR is labelled as transport data; Code uses lexical `frame.corners.*` values with no serialized dependency DTO; promotion creates one real managed project and the dependent line follows later edits. | pending |
 
 Any JavaScript runtime solve, browser `eval`, raw code-facing ID, cross-project retarget, ordinal
 identity churn, silent cascade, duplicate history, blank accepted scene or pointer-frame expansion
@@ -68,6 +74,6 @@ withdraws the candidate and opens an owning-layer regression.
 
 ## Final disposition
 
-- Supervising-user UAT: pending.
+- Supervising-user UAT: pending against replacement bytes; former candidate withdrawn by M84-F003.
 - M84 GitHub Pages publication: prohibited before explicit approval.
 - Tailscale candidate retirement: prohibited until accepted Pages bytes are independently verified.
