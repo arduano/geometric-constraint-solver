@@ -245,14 +245,22 @@ typed dependency graph, separate writable instance and presentation organization
 deterministic Rust materialization into the unchanged native solver, one composite history and
 prepared reverse-binding drag routes. The discarded candidate remains on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; do not restore it wholesale. The
-initial nomination recorded by `232b83a`, post-F005 source `a621cdd`, post-F007 source `fafea4e`
-and post-hardening source `1e70f3f` are historical. M83-F001 through M83-F009 and the architecture-
-hardening pass are implemented; clean-qualified source `b0de5af`, tree `ff0b29d`, now owns
-mechanical UAT authority. F008 restores enabled Copy/Load repro controls around the complete
+initial nomination recorded by `232b83a`, post-F005 source `a621cdd`, post-F007 source `fafea4e`,
+post-hardening source `1e70f3f` and F008/F009 source `b0de5af` are historical. M83-F001 through
+M83-F010 and the architecture-hardening pass are implemented; F010 clean replacement nomination
+is pending. F008 restores enabled Copy/Load repro controls around the complete
 validated workspace-v8 projectional authority, including unified intent history and manual-copy
 fallback. F009 prevents a suppressed computed Fillet from hiding its native parents and presents
 non-empty scene-composition failures as frame-local canvas errors which clear on the next valid
 frame.
+
+F010 separates canonical mutation coordinates from presentation semantics. The exact padded
+input slots, definition keys, port selectors, node/port IDs and writable leaves remain graph,
+persistence and exact-CAS authority. One bounded descriptor path now projects each target as named
+objects and real arrays—such as `start`, `controls[2].position` and
+`corners[1].parents[0].parameter`—through Structured Source, Inspector, RPC and TypeScript. The
+109-family audit rejects collisions and object/array ambiguity; sparse arrays retain explicit
+`null` holes. No solver, materialization, persistence-wire or patch authority changes.
 
 That post-F007 pass makes SHA-256 the canonical graph/session wire-v2 and semantic identity
 digest, while accepting canonical experimental wire-v1 only after its FNV-1a-derived digest and
@@ -266,8 +274,9 @@ exact port, span, feature, corner, reservation, writable-leaf and aggregate prov
 only kind-compatible existence.
 
 One central Rust declaration descriptor now supplies schemas, typed defaults, closed/contextual
-choices, output flow and edit classification to Inspector, graph snapshots and typed code clients.
-Structured Source projects the same validated stored data as a data-only `IntentSourceSnapshot`;
+choices, output flow, edit classification and semantic paths to Inspector, graph snapshots and
+typed code clients. Structured Source projects nested `inputs`, `definition` and `instance`
+objects/arrays from the same validated stored data as a data-only `IntentSourceSnapshot`;
 explicit RPC Snapshot is the full read, while patches/source edits and Undo/Redo return bounded
 typed receipts instead of embedding another full projection. Opaque bootstrap payloads appear in
 read projections only as their byte length and SHA-256. Fillet/Offset Apply and accepted radius/
@@ -277,10 +286,11 @@ it again at the terminal event. Requests/receipts are bounded at 16 MiB, all RPC
 rejected before publication or nested cache parsing. No constraint, residual, priority, branch
 policy or JavaScript solver changes in this pass.
 
-The earlier F007 and post-hardening artifacts remain historical. The exact F008/F009 gate output
+The earlier F007, post-hardening and F008/F009 artifacts remain historical. The exact F008/F009 gate output
 is frozen without rebuilding at `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK`, aggregate
 `f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`, passes 7/7 local plus 4/4
-temporary and 4/4 retained Tailscale browser checks, and is live for UAT at
+temporary and 4/4 retained Tailscale browser checks, and remains live only until the F010
+replacement is ready at
 `http://100.94.63.83:8080/`, PID `3376452`. Both temporary/final eight-path byte ledgers have
 SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. Focused human UAT is
 still required before M83 becomes accepted product behavior; GitHub Pages therefore remains on
@@ -319,8 +329,8 @@ workspace state outside graph/materialization/history authority.
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
 19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — active projectional
-    intent contract, F001-F009 historical nomination/finding ledger, clean-qualified F008/F009
-    replacement nomination and pending focused scorecard.
+    intent contract, F001-F010 historical nomination/finding ledger, pending F010 replacement
+    nomination and focused scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -692,9 +702,9 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M82 are complete. M83's projectional implementation, F001-F009 repairs and post-F007
-architecture hardening are clean-qualified and immutably nominated on Tailscale at exact source
-`b0de5af`, tree `ff0b29d`; focused human acceptance remains pending. M82 closes by explicit
+M1-M82 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
+architecture hardening are implemented; F010 clean qualification and immutable Tailscale
+replacement nomination remain pending before focused human acceptance. M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
 `archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
@@ -804,8 +814,8 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M83_GOALS.md` (active projectional intent contract)
 - `docs/M83_IMPLEMENTATION.md` (withdrawn initial/post-F005/post-F007/post-hardening nominations,
-  F001-F009 repairs, architecture hardening and current clean-qualified nomination ledger)
-- `docs/M83_UAT.md` (current immutable candidate authority and pending focused scorecard)
+  F001-F010 repairs, architecture hardening and replacement qualification ledger)
+- `docs/M83_UAT.md` (historical immutable candidate authority and pending focused scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

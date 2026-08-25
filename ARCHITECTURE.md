@@ -39,8 +39,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   and Design projections resolve one visible stable declaration owner, including closure deletion
   for retained-invalid Profile Offset. M76 annotation layout remains a disposable presentation-
   only workspace cache outside graph, materialization and history identity. M83-F001 through
-  M83-F009 are implemented; the `232b83a`, `a621cdd`, `fafea4e` and `1e70f3f` nominations are
-  historical because architecture hardening and the later F008/F009 replacement supersede them.
+  M83-F010 are implemented; the `232b83a`, `a621cdd`, `fafea4e`, `1e70f3f` and `b0de5af`
+  nominations are historical because architecture hardening and later replacements supersede
+  them.
   The hardening pass
   introduces canonical SHA-256 graph/session wire v2 with strictly authenticated legacy-v1
   migration, cached ordinary identity reads with independent validation hashing, complete nested-
@@ -49,10 +50,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   no equation, constraint, priority or JavaScript solver. F008 carries the complete validated
   workspace-v8 projectional authority and unified history through the existing bounded
   `GEOSOLVE_REPRO_V1` envelope; F009 excludes suppressed computed Fillets from native-parent
-  hiding and distinguishes empty accepted authority from a frame-local scene-composition error.
-  Source `b0de5af`, tree `ff0b29d`, passes the complete clean gate and owns the frozen Tailscale
-  UAT candidate; explicit human UAT remains required and GitHub Pages continues to serve accepted
-  M81.
+  hiding and distinguishes empty accepted authority from a frame-local scene-composition error;
+  F010 gives every descriptor target one bounded semantic object/array path while retaining the
+  canonical slot/field/port/leaf as exact mutation authority. F010 clean replacement nomination
+  and explicit human UAT remain required; GitHub Pages continues to serve accepted M81.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -382,10 +383,14 @@ Decoded current, accepted, Undo and Redo checkpoints receive the same structural
 external-input and reservation-ledger validation. Accepted materialization artifacts are bounded
 and their digest is rederived before planning, import or publication. A central declaration
 descriptor derives field schema, typed required/literal/conditional/contextual defaults,
-closed/contextual choices, output identity flow/native reservation and edit classification from
-the same Rust catalog used to validate declarations. Inspector, graph/RPC snapshots and typed code
-clients consume that descriptor. Structured Source projects the same already validated nodes and
-stored values but owns no separate defaults or schema table.
+closed/contextual choices, output identity flow/native reservation, edit classification and one
+semantic projection path for each canonical input, definition field, output and writable leaf
+from the same Rust catalog used to validate declarations. Paths are bounded non-empty field-rooted
+sequences of named object members and numeric array indices. The 109-family audit rejects
+duplicates, leaf/container prefixes and locations which change between object and array.
+Inspector, graph/RPC snapshots and typed code clients consume that descriptor. Structured Source
+projects the same already validated nodes and stored values as nested ordered `inputs`,
+`definition` and `instance` trees but owns no separate defaults or schema table.
 
 ### `geosolve-constraint-editor`
 
@@ -420,7 +425,9 @@ evidence only after existing independent finite/residual/domain/branch validatio
 Inspector, structured source, operations and DOM-free RPC submit one closed patch vocabulary and
 share the intent session's composite history. Structured-source token edits carry their exact
 originating session/revision/digest identity, and both source and Inspector project stable input
-bindings read-only. Direct pointer previews reuse retained native solver state and keep only
+bindings read-only through declaration symbols and semantic output paths. Canonical padded storage
+slots/selectors never become presentation field names. Direct pointer previews reuse retained
+native solver state and keep only
 authenticated gesture data transient; the latest accepted sample remains distinct from a later
 rejected attempt and owns exact-once terminal publication. They do not replay or serialize the
 graph per frame.
@@ -444,8 +451,9 @@ reject before either intent or accepted native authority changes.
 `IntentGraphSnapshot` is the explicit bounded data query for stable declarations, inputs,
 definition/instance values, dependencies and central descriptors. It substitutes only kind,
 codec, byte length and SHA-256 for an opaque bootstrap payload. Structured Source likewise emits
-a TypeScript-shaped object satisfying data-only `IntentSourceSnapshot`; it contains no callbacks,
-executable expressions or solver authority. DOM-free RPC reserves full graph/workbench/validation
+a TypeScript-shaped object satisfying data-only `IntentSourceSnapshot`; fixed semantic roles are
+named members, repeated cardinality uses actual arrays and sparse indices retain `null` holes. It
+contains no callbacks, executable expressions or solver authority. DOM-free RPC reserves full graph/workbench/validation
 state for explicit Snapshot. Patch and source-edit success return identity/disposition/alias
 receipts, Undo/Redo return identity/moved receipts, and Inspector returns only its identity-stamped
 projection. The producer conservatively proves a mutation receipt is at most 16 MiB before
@@ -885,10 +893,12 @@ disposable cache. Clipboard denial or an insecure origin leaves the complete pay
 manual copy. F009 composes native-parent hiding only from active computed Fillets. Projectional
 scene errors are never erased with `.ok()`: legitimate missing accepted authority renders an empty
 state, other failures render `data-scene-state="unavailable"` and a frame-local `Canvas scene
-unavailable: ...` status, and the next successful frame clears it. Exact replacement source
-`b0de5af`, tree `ff0b29d`, passes the clean gate, no-rebuild freeze, focused browser checks and
-temporary/retained byte verification. M83 remains unaccepted until human UAT passes; public Pages
-still serves accepted M81.
+unavailable: ...` status, and the next successful frame clears it. F010 renders Inspector fields
+as the same nested semantic object/array tree, uses one-based labels only for human display while
+typed paths remain zero-based and exact, renders closed enums as selects, and authenticates edits
+with the Inspector projection's own identity. The historical `b0de5af` bytes remain on Tailscale
+only until F010 replacement qualification passes. M83 remains unaccepted until human UAT passes;
+public Pages still serves accepted M81.
 
 Workspace encode/decode shares the reproduction codec's 64 MiB admitted-workspace ceiling. A
 narrow version probe and disposable-cache visitor avoid an arbitrary `serde_json::Value` tree;
@@ -1712,8 +1722,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `d1e2613`; rollback `fa54f30` restores exact M81 tree `17b2eea` and passes the complete release
   gate. The rejected UAT service is retired and was never published to Pages. Any future attempt
   requires a newly approved architecture rather than reactivating ADR 0038.
-- M83: active and not yet accepted. ADR 0040's projectional graph, F001-F009 interaction repairs
+- M83: active and not yet accepted. ADR 0040's projectional graph, F001-F010 interaction repairs
   and post-F007 architecture hardening are implemented over the unchanged M81 solver/domain
-  baseline. Prior nominations through `1e70f3f` are historical; source `b0de5af`, tree `ff0b29d`,
-  is the clean-qualified frozen Tailscale candidate. Focused human UAT remains required, and GitHub
-  Pages continues to serve accepted M81.
+  baseline. Prior nominations through `b0de5af` are historical; F010 clean replacement nomination
+  and focused human UAT remain required, and GitHub Pages continues to serve accepted M81.

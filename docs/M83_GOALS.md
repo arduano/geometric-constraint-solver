@@ -2,9 +2,9 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F009 repair, post-F007 architecture hardening,
-clean qualification and immutable F008/F009 Tailscale replacement nomination complete; focused
-human UAT pending**.
+Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
+complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
+focused human UAT**.
 ADR 0040 is the active architecture. The rejected chronological candidate is preserved only on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; it is not a compatibility target.
 
@@ -77,6 +77,11 @@ validated flat accepted scene authoritative.
   while whitespace/order edits cannot affect geometry. Do not execute arbitrary TypeScript.
 - Project exact stable input-slot-to-port bindings in both Structured Source and Inspector; rebind
   updates both and Inspector presents these references read-only.
+- Present schema-derived semantic field paths rather than canonical padded storage selectors.
+  Fixed semantic roles use named object members; repeated children, contacts, operands and outputs
+  use real arrays with stable numeric indices and explicit `null` holes when sparse. Structured
+  Source, Inspector and typed clients must share the same collision-free path derivation while the
+  exact canonical slot/field/port/leaf remains hidden mutation authority.
 - Show retained invalid declarations and their diagnostics while the accepted canvas remains
   usable.
 - Keep M76 annotation layout as a disposable presentation cache beside the intent session. It may
@@ -135,6 +140,9 @@ validated flat accepted scene authoritative.
   corpus, including native Fillet, Profile Offset and host inputs.
 - Native and WASM/RPC transcripts are byte-stable and the TypeScript package passes runtime and
   type-level tests.
+- An exhaustive descriptor audit covers all 109 declaration families, every input-choice branch
+  and maximum Polyline/NURBS/Fillet/pattern/output shapes; malformed, duplicate, prefix-colliding
+  or object/array-conflicting semantic paths reject at every decoded boundary.
 - Drag performance is measured separately for pointer frames and exact terminal publication; the
   workbench remains visually responsive on the representative sample corpus.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM
@@ -142,16 +150,17 @@ validated flat accepted scene authoritative.
 - The exact no-rebuild candidate is frozen and byte-verified over Tailscale. GitHub Pages remains
   on the accepted M81 product until explicit M83 human approval.
 
-The initial `232b83a` nomination, post-F005 source `a621cdd`, post-F007 source `fafea4e` and post-
-hardening source `1e70f3f` remain historical evidence after M83-F001 through M83-F009. Current
-source `b0de5af`, tree `ff0b29d`, passes the fresh clean gate; its exact no-rebuild snapshot
+The initial `232b83a` nomination, post-F005 source `a621cdd`, post-F007 source `fafea4e`, post-
+hardening source `1e70f3f` and F008/F009 source `b0de5af` remain historical evidence after
+M83-F001 through M83-F010. The last clean-qualified no-rebuild snapshot
 `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK`, aggregate
 `f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`, passes 7/7 local browser
 checks and 4/4 on both temporary and retained Tailscale listeners. Both temporary/final eight-path
 byte ledgers have SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`;
-the candidate is live at `http://100.94.63.83:8080/`, PID `3376452`. M83-U1 through M83-U9 and
-F001-F009 human rechecks remain pending evidence; accepted M81 GitHub Pages bytes remain public
-authority.
+those historical bytes remain live at `http://100.94.63.83:8080/`, PID `3376452`, only until the
+F010 replacement passes clean qualification, freeze and served-byte verification. M83-U1 through
+M83-U10 and F001-F010 human rechecks remain pending evidence; accepted M81 GitHub Pages bytes
+remain public authority.
 
 ## Non-goals
 

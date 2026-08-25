@@ -13,9 +13,10 @@ use geosolve_sketch_intent::{
     IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentOperationOutput,
     IntentOperationOutputKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind,
     IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRef,
-    IntentPortRole, IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId,
-    IntentSessionIdentity, IntentUnit, LeafField, LeafRef, MaterializationEvidence, NodeId,
-    OperationKind, ParameterIntentKind, PatchPortRef, PortId,
+    IntentPortRole, IntentPortSelector, IntentProjectionPath, IntentReservationState,
+    IntentSession, IntentSessionId, IntentSessionIdentity, IntentUnit, LeafField, LeafRef,
+    MAX_INTENT_PROJECTION_PATH_SEGMENTS, MaterializationEvidence, NodeId, OperationKind,
+    ParameterIntentKind, PatchPortRef, PortId,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -36,6 +37,10 @@ fn point_selector() -> IntentPortSelector {
         role: IntentPortRole::Primary,
         index: 0,
     }
+}
+
+const fn selector(role: IntentPortRole, index: u16) -> IntentPortSelector {
+    IntentPortSelector::Node { role, index }
 }
 
 fn identity_result_selector() -> IntentPortSelector {
@@ -221,6 +226,149 @@ fn different_unit(unit: IntentUnit) -> IntentUnit {
         IntentUnit::Length => IntentUnit::Angle,
         IntentUnit::Angle => IntentUnit::Dimensionless,
         IntentUnit::Dimensionless => IntentUnit::Length,
+    }
+}
+
+fn leaf_projection_key(field: LeafField) -> IntentKey {
+    key(match field {
+        LeafField::X => "x",
+        LeafField::Y => "y",
+        LeafField::Value => "value",
+        LeafField::Angle => "angle",
+        LeafField::Weight => "weight",
+        LeafField::Parameter => "parameter",
+    })
+}
+
+fn assert_semantic_path(path: &IntentProjectionPath, expected: &serde_json::Value) {
+    let actual = serde_json::to_value(path).expect("semantic path serializes");
+    assert_eq!(&actual, expected);
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one audit helper proves the complete input, definition, output, and writable-leaf path bijection"
+)]
+fn assert_descriptor_target_paths_are_bijective(node: &geosolve_sketch_intent::IntentNode) {
+    let descriptor = node.descriptor();
+
+    assert_eq!(descriptor.inputs.len(), node.inputs.len());
+    assert_eq!(
+        descriptor
+            .inputs
+            .iter()
+            .map(|input| input.slot)
+            .collect::<BTreeSet<_>>()
+            .len(),
+        descriptor.inputs.len(),
+        "each canonical input slot must appear once"
+    );
+    assert_eq!(
+        descriptor
+            .inputs
+            .iter()
+            .map(|input| input.path.clone())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        descriptor.inputs.len(),
+        "each canonical input slot must have one unique semantic path"
+    );
+    assert!(
+        descriptor
+            .inputs
+            .iter()
+            .all(|input| node.inputs.contains_key(&input.slot))
+    );
+
+    assert_eq!(descriptor.fields.len(), descriptor.schema.fields.len());
+    assert_eq!(
+        descriptor
+            .fields
+            .iter()
+            .map(|field| field.schema.field.clone())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        descriptor.fields.len(),
+        "each canonical definition field must appear once"
+    );
+    assert_eq!(
+        descriptor
+            .fields
+            .iter()
+            .map(|field| field.path.clone())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        descriptor.fields.len(),
+        "each canonical definition field must have one unique semantic path"
+    );
+
+    assert_eq!(descriptor.outputs.len(), node.ports.len());
+    assert_eq!(
+        descriptor
+            .outputs
+            .iter()
+            .map(|output| output.port)
+            .collect::<BTreeSet<_>>()
+            .len(),
+        descriptor.outputs.len(),
+        "each canonical stable port must appear once"
+    );
+    assert_eq!(
+        descriptor
+            .outputs
+            .iter()
+            .map(|output| output.path.clone())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        descriptor.outputs.len(),
+        "each stable output must have one unique semantic path"
+    );
+
+    let instance_leaf_count = descriptor
+        .outputs
+        .iter()
+        .map(|output| output.writable.len())
+        .sum::<usize>();
+    let instance_paths = descriptor
+        .outputs
+        .iter()
+        .flat_map(|output| {
+            output.writable.iter().map(|field| {
+                if output.writable.len() == 1 {
+                    output.path.clone()
+                } else {
+                    output.path.clone().with_field(leaf_projection_key(*field))
+                }
+            })
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        instance_paths.len(),
+        instance_leaf_count,
+        "each canonical writable leaf must have one unique semantic path"
+    );
+
+    for path in descriptor
+        .inputs
+        .iter()
+        .map(|input| &input.path)
+        .chain(descriptor.fields.iter().map(|field| &field.path))
+        .chain(descriptor.outputs.iter().map(|output| &output.path))
+        .chain(instance_paths.iter())
+    {
+        let projected = serde_json::to_string(path).expect("semantic path serializes");
+        assert!(
+            !projected.contains(":0000"),
+            "pseudo slot leaked: {projected}"
+        );
+        assert!(
+            !projected.contains("corner_0000"),
+            "flattened corner field leaked: {projected}"
+        );
+        assert!(
+            !projected.contains("node:"),
+            "raw node key leaked: {projected}"
+        );
     }
 }
 
@@ -2156,6 +2304,323 @@ fn concrete_descriptor_projects_the_allocated_output_and_edit_contract() {
         IntentIdentityFlow::Created { reservation }
             if declaration.reservations.contains_key(&reservation)
     ));
+    assert_semantic_path(&output.path, &serde_json::json!(["point"]));
+    assert_descriptor_target_paths_are_bijective(declaration);
+}
+
+#[test]
+fn semantic_projection_path_deserialization_enforces_its_public_shape_and_bound() {
+    let valid: IntentProjectionPath =
+        serde_json::from_str(r#"["corners",1,"parents",0,"parameter"]"#).unwrap();
+    assert_semantic_path(
+        &valid,
+        &serde_json::json!(["corners", 1, "parents", 0, "parameter"]),
+    );
+
+    for malformed in ["[]", "[0,\"point\"]", "[\"\"]"] {
+        assert!(
+            serde_json::from_str::<IntentProjectionPath>(malformed).is_err(),
+            "malformed semantic path was admitted: {malformed}"
+        );
+    }
+    let oversized = serde_json::Value::Array(
+        std::iter::repeat_n(
+            serde_json::Value::String("nested".to_owned()),
+            MAX_INTENT_PROJECTION_PATH_SEGMENTS + 1,
+        )
+        .collect(),
+    );
+    assert!(serde_json::from_value::<IntentProjectionPath>(oversized).is_err());
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one focused output-shape fixture compares singleton contact objects with repeated contact arrays"
+)]
+fn singleton_contacts_are_objects_while_repeated_contacts_are_arrays() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_51)).unwrap();
+    let point_on_curve = IntentNodeDraft::new(
+        IntentNodeKind::Constraint {
+            constraint: ConstraintKind::PointOnCurve,
+        },
+        key("semantic.point-on-curve"),
+    )
+    .with_input(InputSlot::new(InputRole::Point, 0), alias_point("point"))
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias_port("first", IntentPortRole::Span, 0),
+    );
+    let curve_contact = IntentNodeDraft::new(
+        IntentNodeKind::Constraint {
+            constraint: ConstraintKind::CurveCurveContact,
+        },
+        key("semantic.curve-contact"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias_port("first", IntentPortRole::Span, 0),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 1),
+        alias_port("second", IntentPortRole::Span, 0),
+    );
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("point"),
+                draft: Box::new(point_draft("semantic.contact-point")),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("first"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    },
+                    key("semantic.first-span"),
+                )),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("second"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    },
+                    key("semantic.second-span"),
+                )),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("singleton"),
+                draft: Box::new(point_on_curve),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("repeated"),
+                draft: Box::new(curve_contact),
+                cell: None,
+            },
+        ],
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    let singleton = plan.aliases().node(&key("singleton")).unwrap();
+    let repeated = plan.aliases().node(&key("repeated")).unwrap();
+    session.commit_plan(plan).unwrap();
+
+    let singleton = session.graph().node(singleton).unwrap().descriptor();
+    let singleton_contact = singleton
+        .outputs
+        .iter()
+        .find(|output| output.selector == selector(IntentPortRole::Contact, 0))
+        .unwrap();
+    let singleton_parameter = singleton
+        .outputs
+        .iter()
+        .find(|output| output.selector == selector(IntentPortRole::Parameter, 0))
+        .unwrap();
+    assert_semantic_path(&singleton_contact.path, &serde_json::json!(["contact"]));
+    assert_semantic_path(
+        &singleton_parameter.path,
+        &serde_json::json!(["contact", "parameter"]),
+    );
+
+    let repeated = session.graph().node(repeated).unwrap().descriptor();
+    for index in 0..2_u16 {
+        let contact = repeated
+            .outputs
+            .iter()
+            .find(|output| output.selector == selector(IntentPortRole::Contact, index))
+            .unwrap();
+        let parameter = repeated
+            .outputs
+            .iter()
+            .find(|output| output.selector == selector(IntentPortRole::Parameter, index))
+            .unwrap();
+        assert_semantic_path(&contact.path, &serde_json::json!(["contacts", index]));
+        assert_semantic_path(
+            &parameter.path,
+            &serde_json::json!(["contacts", index, "parameter"]),
+        );
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one integrated semantic fixture reviews fixed inputs, repeated children, NURBS controls, and nested Fillet parents together"
+)]
+fn semantic_descriptor_uses_named_fields_and_real_arrays_for_repeated_structure() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_50)).unwrap();
+    let mut operations = vec![
+        IntentPatchOperation::CreateNode {
+            alias: key("start"),
+            draft: Box::new(point_draft("semantic.start")),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("end"),
+            draft: Box::new(point_draft("semantic.end")),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("segment"),
+            draft: Box::new(
+                IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    },
+                    key("semantic.segment"),
+                )
+                .with_input(InputSlot::new(InputRole::Point, 0), alias_point("start"))
+                .with_input(InputSlot::new(InputRole::Point, 1), alias_point("end")),
+            ),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("polyline"),
+            draft: Box::new(
+                IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Polyline,
+                    },
+                    key("semantic.polyline"),
+                )
+                .with_dynamic_children(3),
+            ),
+            cell: None,
+        },
+        IntentPatchOperation::CreateNode {
+            alias: key("nurbs"),
+            draft: Box::new(
+                IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::OpenControlNurbs,
+                    },
+                    key("semantic.nurbs"),
+                )
+                .with_dynamic_children(4),
+            ),
+            cell: None,
+        },
+    ];
+
+    for index in 0..4_u16 {
+        operations.push(IntentPatchOperation::CreateNode {
+            alias: key(&format!("parent-{index}")),
+            draft: Box::new(IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Segment,
+                },
+                key(&format!("semantic.parent{index}")),
+            )),
+            cell: None,
+        });
+    }
+    let fillet_kind = IntentNodeKind::ComputedFeature {
+        feature: ComputedFeatureKind::FilletSet,
+    };
+    let mut fillet =
+        IntentNodeDraft::new(fillet_kind.clone(), key("semantic.fillet")).with_dynamic_children(2);
+    for index in 0..4_u16 {
+        fillet = fillet.with_input(
+            InputSlot::new(InputRole::Span, index),
+            alias_port(&format!("parent-{index}"), IntentPortRole::Span, 0),
+        );
+    }
+    for schema in fillet_kind.schema(2).fields {
+        if schema.required {
+            fillet = fillet.with_field(schema.field, literal_for_schema(schema.literal));
+        }
+    }
+    operations.push(IntentPatchOperation::CreateNode {
+        alias: key("fillet"),
+        draft: Box::new(fillet),
+        cell: None,
+    });
+
+    let plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                operations,
+            ),
+            accepted,
+        )
+        .unwrap();
+    let segment = plan.aliases().node(&key("segment")).unwrap();
+    let polyline = plan.aliases().node(&key("polyline")).unwrap();
+    let nurbs = plan.aliases().node(&key("nurbs")).unwrap();
+    let fillet = plan.aliases().node(&key("fillet")).unwrap();
+    session.commit_plan(plan).unwrap();
+
+    for node in session.graph().nodes().values() {
+        assert_descriptor_target_paths_are_bijective(node);
+    }
+
+    let segment = session.graph().node(segment).unwrap().descriptor();
+    assert_semantic_path(&segment.inputs[0].path, &serde_json::json!(["start"]));
+    assert_semantic_path(&segment.inputs[1].path, &serde_json::json!(["end"]));
+
+    let polyline = session.graph().node(polyline).unwrap().descriptor();
+    let first_vertex = polyline
+        .outputs
+        .iter()
+        .find(|output| {
+            output.selector
+                == IntentPortSelector::InitialChild {
+                    ordinal: 0,
+                    role: IntentPortRole::Corner,
+                    index: 0,
+                }
+        })
+        .unwrap();
+    assert_semantic_path(
+        &first_vertex.path,
+        &serde_json::json!(["vertices", 0, "position"]),
+    );
+
+    let nurbs = session.graph().node(nurbs).unwrap().descriptor();
+    let second_weight = nurbs
+        .outputs
+        .iter()
+        .find(|output| {
+            output.selector
+                == IntentPortSelector::InitialChild {
+                    ordinal: 1,
+                    role: IntentPortRole::Target,
+                    index: 0,
+                }
+        })
+        .unwrap();
+    assert_semantic_path(
+        &second_weight.path,
+        &serde_json::json!(["controls", 1, "weight"]),
+    );
+
+    let fillet = session.graph().node(fillet).unwrap().descriptor();
+    let fourth_parent = fillet
+        .inputs
+        .iter()
+        .find(|input| input.slot == InputSlot::new(InputRole::Span, 3))
+        .unwrap();
+    assert_semantic_path(
+        &fourth_parent.path,
+        &serde_json::json!(["corners", 1, "parents", 1]),
+    );
+    let second_corner_parameter = fillet
+        .fields
+        .iter()
+        .find(|field| field.schema.field.0.as_str() == "corner_0001_second_parameter")
+        .unwrap();
+    assert_semantic_path(
+        &second_corner_parameter.path,
+        &serde_json::json!(["corners", 1, "parents", 1, "parameter"]),
+    );
 }
 
 #[test]

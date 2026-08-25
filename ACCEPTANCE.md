@@ -3234,9 +3234,9 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M83: projectional sketch design intent
 
-Status: implementation, M83-F001 through M83-F009 repair, post-F007 architecture hardening,
-clean qualification and immutable F008/F009 Tailscale replacement nomination complete; focused
-human UAT pending.
+Status: implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
+complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
+focused human UAT.
 ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no
 human evidence or accepted product claim exists yet.
 
@@ -3279,8 +3279,10 @@ human evidence or accepted product claim exists yet.
   not arbitrary TypeScript execution. Every token edit authenticates the exact originating
   session/revision/digest before numeric token lookup; stale reorder tokens reject atomically.
   Structured Source and Inspector expose every stable input-slot-to-port binding across rebind,
-  and Inspector input references are read-only. Native, DOM-free WASM/RPC and branded TypeScript
-  builders produce the same patch identities and typed outcomes.
+  and Inspector input references are read-only. User-facing paths are schema-derived named object
+  members and genuine numeric arrays rather than padded canonical storage selectors. Sparse
+  repeated values retain their exact indices with `null` holes. Native, DOM-free WASM/RPC and
+  branded TypeScript builders produce the same patch identities and typed outcomes.
 - Workspace v8 round-trips intent, accepted evidence, reservations, tombstones and bounded history.
   Abandoned v7 rejects. Strict v1-v6 restoration remains available and is normalized honestly as
   typed per-object bootstrap declarations with exact native identity bindings rather than an
@@ -3291,10 +3293,13 @@ human evidence or accepted product claim exists yet.
 - Undo/current/Redo causal edges, global descriptor chronology and body-derived descriptor effects
   validate before import or restore. Accepted logical/native ownership is exact across ports,
   reservations, writable leaves, spans, computed features, Fillet corners and aggregates.
-- One central declaration descriptor supplies schema/default/choice/output/edit metadata to compact
-  graph/source snapshots and typed clients. Explicit Snapshot is the complete read; mutations use
-  bounded typed receipts. Requests and mutation receipts are at most 16 MiB and every structured/
-  JSON response at most 64 MiB, with oversize rejection before publication.
+- One central declaration descriptor supplies schema/default/choice/output/edit metadata and one
+  bounded semantic path for every canonical input, definition field, output and writable leaf to
+  compact graph/source snapshots and typed clients. The complete 109-family catalog rejects
+  duplicate, prefix-colliding, object/array-conflicting or malformed decoded paths. Explicit
+  Snapshot is the complete read; mutations use bounded typed receipts. Requests and mutation
+  receipts are at most 16 MiB and every structured/JSON response at most 64 MiB, with oversize
+  rejection before publication.
 - Fillet/Offset Apply and accepted radius/distance releases publish the exact already validated
   prepared transaction used by their preview. Workspace admission is 64 MiB and its version/cache/
   canonical/digest/nested-intent validation avoids the superseded unbounded-amplification paths;
@@ -3337,7 +3342,7 @@ PID `4006665`, is retired and its snapshot remains historical evidence.
 
 Post-hardening product source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
 `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, is superseded historical evidence after F008/F009.
-The current product source is `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
+The F008/F009 product source is `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
 `ff0b29dee074bc67a136c23feb5ee56c99deeba1`. Its complete clean release gate passes; the
 381,514-byte, 5,645-line log `/tmp/geosolve-m83-f008-f009-release-gate.log` has SHA-256
 `fc07730eed2c158c234828700ea9fbed1b6c7f0e396c5464baab20063e967ed1`. The exact no-rebuild
@@ -3346,11 +3351,11 @@ snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` has ordered-manifest aggrega
 F006/F007 2/2 and focused F008/F009 2/2 browser suites pass locally (7/7 total); both focused
 suites pass on temporary and retained Tailscale listeners (4/4 each). Both eight-path served-byte
 ledgers have SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`.
-The retained candidate is `http://100.94.63.83:8080/`, service `geosolve-m83-uat.service`, PID
-`3376452`; complete evidence is in `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`.
-M83-U1 through M83-U9 and F001-F009 human rechecks, Pages publication and milestone closure remain
-pending. No automated result is human acceptance evidence, and GitHub Pages continues to serve
-accepted M81.
+Those historical bytes remain at `http://100.94.63.83:8080/`, service
+`geosolve-m83-uat.service`, PID `3376452`, only until the F010 replacement passes. Complete prior
+evidence is in `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. M83-U1 through M83-U10 and
+F001-F010 human rechecks, Pages publication and milestone closure remain pending. No automated
+result is human acceptance evidence, and GitHub Pages continues to serve accepted M81.
 
 ## Regression and oracle policy
 

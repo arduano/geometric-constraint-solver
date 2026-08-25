@@ -5596,9 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F009 repair, post-F007 architecture hardening,
-clean qualification and immutable F008/F009 Tailscale replacement nomination complete; focused
-human UAT pending**.
+Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
+complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
+focused human UAT**.
 ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
@@ -5663,6 +5663,11 @@ chronological owner-rewrite candidate remains archived at
 - [x] Resolve M83-F009: exclude suppressed computed Fillets from active native-parent hiding so
   suppression restores their ordinary parents; distinguish legitimate empty authority from
   frame-local scene-composition failure and clear that failure on the next valid frame.
+- [x] Resolve M83-F010: replace presentation use of padded canonical slots/fields/selectors with
+  one bounded schema-derived semantic path contract. Project named fixed fields and genuine
+  object/array structure consistently through Structured Source, Inspector, RPC and TypeScript;
+  retain exact canonical IDs only as persistence and mutation authority, and reject path
+  collisions, prefix ambiguity, object/array conflicts and malformed decoded paths.
 - [x] Complete the post-F007 trust-boundary audit without changing sketch mathematics: move
   canonical graph/session identity to SHA-256 wire v2, strictly validate and migrate legacy-v1
   FNV fingerprints, cache ordinary identity reads, and independently rederive every cached,
@@ -5694,7 +5699,10 @@ chronological owner-rewrite candidate remains archived at
 - [x] Pass one fresh clean release gate from committed F008/F009 source, freeze its exact output
   without rebuilding, pass 7/7 local plus 4/4 temporary and 4/4 retained Tailscale browser checks,
   and byte-verify `/` plus all seven files before replacing the retained service.
-- [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U9.
+- [ ] Run one fresh clean release gate from committed F010 source, freeze its exact output without
+  rebuilding, pass focused semantic-source/Inspector browser checks and exact temporary/retained
+  served-byte verification before replacing the retained UAT service.
+- [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U10.
 - [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
   listener and close the milestone.
 
@@ -5712,7 +5720,7 @@ PID `4006665`, is retired and its immutable snapshot remains preserved.
 
 The post-hardening source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
 `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, and its immutable snapshot remain historical evidence
-after F008/F009. Current mechanical UAT authority is product source
+after F008/F009. The F008/F009 mechanical authority is product source
 `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
 `ff0b29dee074bc67a136c23feb5ee56c99deeba1`. Its fresh complete clean release gate passes; the
 381,514-byte, 5,645-line log `/tmp/geosolve-m83-f008-f009-release-gate.log` has SHA-256
@@ -5722,12 +5730,12 @@ snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` is frozen at ordered-manifes
 focused F006/F007 2/2 and focused F008/F009 2/2 suites pass locally (7/7 total); the two focused
 suites pass on both temporary and retained Tailscale listeners (4/4 each). Temporary and final
 eight-path served-byte ledgers both have SHA-256
-`b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. The exact candidate is live
-at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `3376452`. Complete evidence is
-in `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. All M83-U1 through M83-U9 rows,
-F001-F009 human rechecks, Pages publication and milestone closure remain pending; GitHub Pages
-continues to serve accepted M81. The documentation-only descendant recording this evidence does
-not replace product source `b0de5af`, tree `ff0b29d`, or rebuild or mutate the frozen artifact.
+`b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. Those now-historical bytes
+remain live at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `3376452`, until the
+F010 candidate passes its replacement gate. Complete prior evidence is in
+`/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. All M83-U1 through M83-U10 rows, F001-F010
+human rechecks, Pages publication and milestone closure remain pending; GitHub Pages continues to
+serve accepted M81.
 
 Gate: organization, names and source row order cannot change materialization; exact before/after
 organization moves cannot change geometry; every accepted
@@ -5739,8 +5747,9 @@ commit while explicit Segment/Midpoint Line branches remain exact; New produces 
 projectional workspace; Copy/Load transports complete validated projectional authority without
 making annotation layout authoritative; suppressed Fillets reveal finite native parents; scene
 composition failures are visible and non-stale; stale source tokens fail exact CAS, stable input
-bindings remain visible across rebind, one coherent history spans GUI/source/code edits, and all
-existing constraint mathematics remain solely in the native Rust solver.
+bindings remain visible across rebind, semantic projections use named fields and actual arrays
+without leaking padded storage selectors, one coherent history spans GUI/source/code edits, and
+all existing constraint mathematics remain solely in the native Rust solver.
 
 ## Explicit non-goals
 

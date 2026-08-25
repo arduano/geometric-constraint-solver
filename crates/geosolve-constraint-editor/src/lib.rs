@@ -139,9 +139,10 @@ pub use intent_offset_authoring::{
 };
 pub use intent_projection::{
     IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,
-    IntentInspectorField, IntentInspectorProjection, IntentOutlineCell, IntentOutlineDeclaration,
-    IntentSourceEditError, IntentSourceToken, IntentSourceTokenId, IntentSourceTokenTarget,
-    IntentStructuredSource, IntentWorkbenchProjection,
+    IntentInspectorField, IntentInspectorInput, IntentInspectorProjection, IntentOutlineCell,
+    IntentOutlineDeclaration, IntentProjectedPortReference, IntentSourceEditError,
+    IntentSourceToken, IntentSourceTokenId, IntentSourceTokenTarget, IntentStructuredSource,
+    IntentWorkbenchProjection,
 };
 pub use intent_rpc::{
     IntentRpcFailure, IntentRpcHistoryReceipt, IntentRpcOutcome, IntentRpcPatchReceipt,

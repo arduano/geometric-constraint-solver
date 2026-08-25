@@ -37,8 +37,9 @@ pub use model::{
     IntentInstanceState, IntentLiteral, IntentModelError, IntentNativeReservationKind,
     IntentNodeDraft, IntentNodeKind, IntentOperationOutput, IntentOperationOutputKind,
     IntentOrganization, IntentOrganizationIdentity, IntentPortKind, IntentPortRef, IntentPortRole,
-    IntentPortSelector, IntentReservationLedgerIdentity, IntentSemanticIdentity, IntentUnit,
-    LeafField, LeafRef, MaterializationEvidence, OperationKind, OrganizationCell,
+    IntentPortSelector, IntentProjectionPath, IntentProjectionPathSegment,
+    IntentReservationLedgerIdentity, IntentSemanticIdentity, IntentUnit, LeafField, LeafRef,
+    MAX_INTENT_PROJECTION_PATH_SEGMENTS, MaterializationEvidence, OperationKind, OrganizationCell,
     ParameterIntentKind, PatchPortRef,
 };
 pub use patch::{
@@ -48,7 +49,8 @@ pub use patch::{
 pub use schema::{
     IntentDeclarationDescriptor, IntentDefinitionFieldDescriptor, IntentDefinitionFieldSchema,
     IntentEditClassification, IntentFieldChoices, IntentFieldDefault, IntentInputCardinality,
-    IntentInputChoiceSchema, IntentLiteralSchema, IntentNodeSchema, IntentOutputDescriptor,
+    IntentInputChoiceSchema, IntentInputDescriptor, IntentLiteralSchema, IntentNodeSchema,
+    IntentOutputDescriptor,
 };
 pub use session::{
     INTENT_SESSION_VERSION, IntentAcceptedAuthority, IntentAttemptDisposition, IntentCandidate,

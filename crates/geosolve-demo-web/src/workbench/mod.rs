@@ -421,7 +421,7 @@ fn projectional_design_markup(
         outline: design_projection::outline_markup(&projection, selection),
         source: design_projection::structured_source_markup(&projection, selection),
         history: design_projection::history_markup(&projection),
-        inspector: design_projection::inspector_markup(inspector.as_ref(), projection.identity),
+        inspector: design_projection::inspector_markup(inspector.as_ref()),
     }
 }
 
@@ -14819,7 +14819,8 @@ mod tests {
         IntentFieldDefault, IntentFieldKey, IntentKey, IntentLiteral, IntentLiteralSchema,
         IntentNodeDraft, IntentNodeKind, IntentNodeSchema, IntentPatch, IntentPatchOperation,
         IntentPatchPolicy, IntentPlanDisposition, IntentPortRole, IntentPortSelector,
-        IntentSessionId, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
+        IntentProjectionPath, IntentSession, IntentSessionId, IntentSessionIdentity, IntentUnit,
+        LeafField, NodeId,
     };
 
     use super::ProjectionalCellMove;
@@ -15919,6 +15920,9 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let inspector = IntentInspectorProjection {
+            identity: IntentSession::with_id(IntentSessionId::from_raw(0x8308_1100))
+                .unwrap()
+                .identity(),
             node,
             symbol: IntentKey::new("fixture").unwrap(),
             name: IntentKey::new("Fixture").unwrap(),
@@ -15934,10 +15938,12 @@ mod tests {
                     minimum_children: 0,
                     maximum_children: 0,
                 },
+                inputs: Vec::new(),
                 fields: definition_schemas
                     .iter()
                     .cloned()
                     .map(|schema| IntentDefinitionFieldDescriptor {
+                        path: IntentProjectionPath::field(schema.field.0.clone()),
                         schema,
                         default: IntentFieldDefault::Contextual,
                         choices: IntentFieldChoices::NotApplicable,

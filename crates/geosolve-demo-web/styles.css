@@ -497,6 +497,15 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-intent-inspector p { margin: 0; color: #788481; font-size: 0.64rem; }
 .wb-intent-inspector fieldset { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin: 0; padding: 0.35rem; border: 1px solid #3a4141; }
 .wb-intent-inspector legend { padding: 0 0.25rem; color: #aeb7b5; font-size: 0.62rem; }
+.wb-intent-inspector :is(.wb-intent-path-group, .wb-intent-array-item) { grid-column: 1 / -1; border-color: #303737; background: #1d2223; }
+.wb-intent-inspector .wb-intent-array-item { background: #202526; }
+.wb-intent-inspector .wb-intent-path-group > legend { color: #c3a971; }
+.wb-intent-inspector .wb-intent-array-item > legend { color: #94a19f; }
+.wb-intent-inspector label { display: grid; min-width: 0; gap: 0.22rem; color: #8f9b99; font-size: 0.61rem; line-height: 1.25; }
+.wb-intent-inspector label > :is(input, select) { min-width: 0; }
+.wb-intent-input { display: grid; min-width: 0; gap: 0.15rem; padding: 0.25rem 0.3rem; border-radius: 3px; background: #202526; }
+.wb-intent-input span { color: #99a5a3; font-size: 0.6rem; }
+.wb-intent-input code { overflow: hidden; color: #cfb77f; font-size: 0.58rem; text-overflow: ellipsis; white-space: nowrap; }
 .wb-tree-group-label {
   display: flex;
   align-items: center;

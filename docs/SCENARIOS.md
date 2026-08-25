@@ -4304,12 +4304,10 @@ Pages publication is claimed; existing accepted M81 Pages bytes remain public au
 M83 adds no residual equation and does not reinterpret any earlier geometric oracle. The corpus
 qualifies semantic ownership, deterministic lowering and accepted-scene authority around the
 existing solver. G1-G6 implementation and focused/proportional coverage are complete through
-M83-F001 through M83-F009. Initial nomination `232b83a` plus sources `a621cdd`, `fafea4e` and
-`1e70f3f` are superseded historical evidence. Current product source `b0de5af`, tree `ff0b29d`,
-passes the complete clean gate, exact no-rebuild freeze, 7/7 local frozen-browser checks, 4/4
-temporary Tailscale checks, 4/4 retained Tailscale checks and independent temporary/retained byte
-verification. Targeted F001-F009 human rechecks remain pending. M81 GitHub Pages bytes remain
-public authority.
+M83-F001 through M83-F010. Initial nomination `232b83a` plus sources `a621cdd`, `fafea4e`,
+`1e70f3f` and `b0de5af` are superseded historical evidence. F010 replacement qualification and
+immutable nomination are pending; targeted F001-F010 human rechecks remain pending. M81 GitHub
+Pages bytes remain public authority.
 
 ### M83-G1 — schema, alias and order independence
 
@@ -4324,6 +4322,15 @@ remain logical-only.
 Every canonical input slot/reference appears in Structured Source and Inspector as the exact
 stable typed port. Rebinding switches both projections from the old port to the new port without
 an editable Inspector input control.
+
+Enumerate the concrete descriptors for all 109 declaration families, every input-choice branch,
+maximum Polyline/NURBS/Fillet/LinearPattern children and sparse/mixed operation outputs. Each
+canonical input, definition field, stable output and writable leaf has one bounded semantic path.
+Inputs, definitions and instance leaves admit neither duplicate/prefix coordinates nor a location
+that is an object in one path and an array in another. Fixed roles project as named members;
+repeated operands, children, contacts and results project as real numeric arrays, including stable
+`null` holes for sparse indices. Padded slot/field/selector strings remain internal authority and
+do not appear as Structured Source keys, Inspector labels/breadcrumbs or projected references.
 
 Create the same dependency graph from several patch-array, alias-name, cell, declaration and
 source-display orders. Canonical dependency scheduling, semantic identity, native reservations,
@@ -4399,6 +4406,14 @@ source token, reorder so that ID would name a different owner, and submit the ol
 session identity: exact CAS rejects before lookup with source, history and accepted evidence
 unchanged. Source and Inspector expose identical stable input bindings after rebind, and Inspector
 bindings remain read-only.
+
+Project Segment start/end, sparse Polyline vertices, NURBS controls/weights, aggregate spans and a
+two-corner Fillet. Structured Source uses nested `inputs`, `definition` and `instance` objects and
+arrays in schema/CAD order. Inspector groups the same paths as named fieldsets and one-based human
+array-item labels while retaining zero-based typed path indices. A malformed, empty, index-rooted,
+oversized, duplicate, prefix-colliding or object/array-conflicting decoded path rejects before it
+can become presentation or mutation authority. Inspector edits also authenticate the exact
+identity stamped on their own projection.
 
 The `Outline | Structured source | History` projection selects the same stable declaration.
 Inspector fields are schema-derived, retained invalid intent stays inspectable and History is
@@ -4496,17 +4511,17 @@ PID `4006665` is retired; its immutable snapshot remains historical evidence.
 
 Source `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
 `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, and its post-hardening snapshot remain superseded
-historical evidence after F008/F009. Current source
+historical evidence after F008/F009. The superseded F008/F009 source
 `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
 `ff0b29dee074bc67a136c23feb5ee56c99deeba1`, passes the fresh clean gate. Its exact no-rebuild
 snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` has aggregate
 `f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`; the existing 3/3, focused
 F006/F007 2/2 and focused F008/F009 2/2 suites pass locally, and both focused suites pass on
 temporary and retained Tailscale listeners. Both temporary/final eight-path byte ledgers have
-SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. The retained candidate
-is `http://100.94.63.83:8080/`, PID `3376452`. `docs/M83_UAT.md` owns historical evidence, current
-mechanical authority and the pending U1-U9/F001-F009 human scorecard. GitHub Pages remains on
-accepted M81 until the current candidate is explicitly approved.
+SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. Those historical bytes
+remain at `http://100.94.63.83:8080/`, PID `3376452`, until the F010 replacement passes.
+`docs/M83_UAT.md` owns historical evidence and the pending U1-U10/F001-F010 human scorecard.
+GitHub Pages remains on accepted M81 until a current candidate is explicitly approved.
 
 ### M83-F001 — deterministic accepted drag identity and exact-once terminal capture
 
@@ -4612,6 +4627,29 @@ unavailable: ...` message instead of disappearing through `.ok()`. A valid next 
 The projectional Fillet owner regression covers suppression, restore and Undo/Redo. The demo owner
 test covers empty/unavailable/ready status semantics, and the frozen browser scenario covers the
 reported rectangle-Fillet suppression path without blank geometry or stale canvas failure.
+
+### M83-F010 — semantic fields and genuine arrays
+
+Status: repaired; focused Rust/editor/web/TypeScript qualification passes, clean replacement
+nomination and human recheck pending. Reproduce by opening Structured Source or Inspector for a
+repeated declaration such as a computed Fillet or NURBS. Before repair the presentation exposed
+canonical storage coordinates such as `point:0000`, `child:0001` and
+`corner_0000_first_parameter` as if they were user-authored field names.
+
+`IntentProjectionPath` is now the one bounded semantic presentation coordinate. The central Rust
+descriptor maps it bijectively back to canonical `InputSlot`, `IntentFieldKey`, stable output and
+`LeafRef`; those exact canonical values continue to own persistence, validation and patches.
+Structured Source and Inspector build nested ordered trees from the descriptor, references use a
+declaration symbol plus semantic output path, and TypeScript parses the same recursive object/
+array shapes. Closed enum definitions render as selects with schema defaults; Inspector uses its
+own exact session identity and rejects a stale projection.
+
+The owning exhaustive oracle covers 109 declarations, input-choice variants and maximum/sparse
+shapes. Adapter fixtures cover sparse Polyline inputs and writable vertices, NURBS controls,
+aggregate spans, two-corner Fillet fields/parents and array `null` holes. Rust and TypeScript
+decoders independently reject malformed paths and tree ambiguity. No graph identity, persistence
+wire, patch vocabulary, materialization, solver equation, Jacobian, priority, tolerance or branch
+rule changes.
 
 ## Frozen near-singular fixtures
 

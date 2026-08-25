@@ -549,6 +549,38 @@ export interface IntentPortReference {
   readonly kind: PortKind;
 }
 
+/** One semantic object member or ordered collection index in a projection. */
+export type IntentProjectionPathSegment = string | number;
+
+/** Schema-derived path such as `["corners", 0, "parents", 1]`. */
+export type IntentProjectionPath = readonly IntentProjectionPathSegment[];
+
+/** Stable output reference used by source and Inspector presentation. */
+export interface IntentProjectedPortReference {
+  readonly declaration: string;
+  readonly output: IntentProjectionPath;
+  readonly kind: PortKind;
+}
+
+/** Recursive semantic object member used by generated Structured Source. */
+export type IntentSourceValue<Leaf> =
+  | Leaf
+  | IntentSourceObject<Leaf>
+  | IntentSourceArray<Leaf>;
+
+/** Semantic object used by generated Structured Source. */
+export interface IntentSourceObject<Leaf> {
+  readonly [field: string]: IntentSourceValue<Leaf>;
+  /** Storage selectors such as `point:0000` are not semantic object fields. */
+  readonly [storageSelector: `${string}:${string}`]: never;
+  /** Ordered members belong in arrays rather than zero-padded object keys. */
+  readonly [stringEncodedIndex: `${number}`]: never;
+}
+
+/** Semantic ordered collection used by generated Structured Source. */
+export interface IntentSourceArray<Leaf>
+  extends ReadonlyArray<IntentSourceValue<Leaf> | null> {}
+
 /** Compact metadata substituted for opaque bootstrap payload bytes. */
 export interface IntentBootstrapMetadata {
   readonly kind: BootstrapNativeKind;
@@ -567,14 +599,13 @@ export type IntentGraphNodeKind =
 
 /** One declaration in Rust-generated, TypeScript-shaped Structured Source. */
 export interface IntentSourceDeclaration {
-  readonly node: string;
   readonly symbol: string;
   readonly name: string;
   readonly kind: IntentGraphNodeKind;
   readonly suppressed: boolean;
-  readonly inputs: Readonly<Record<InputSlot, IntentPortReference>>;
-  readonly fields: Readonly<Record<string, IntentLiteral>>;
-  readonly instance: Readonly<Record<string, IntentLiteral>>;
+  readonly inputs: IntentSourceObject<IntentProjectedPortReference>;
+  readonly definition: IntentSourceObject<IntentLiteral>;
+  readonly instance: IntentSourceObject<IntentLiteral>;
 }
 
 /** One organization cell in Rust-generated Structured Source. */
@@ -665,14 +696,21 @@ export type IntentFieldChoices =
 
 export interface IntentDefinitionFieldDescriptor {
   readonly schema: IntentDefinitionFieldSchema;
+  readonly path: IntentProjectionPath;
   readonly default: IntentFieldDefault;
   readonly choices: IntentFieldChoices;
   readonly edit: IntentEditClassification;
 }
 
+export interface IntentInputDescriptor {
+  readonly slot: InputSlot;
+  readonly path: IntentProjectionPath;
+}
+
 export interface IntentOutputDescriptor {
   readonly port: IntentPortReference;
   readonly selector: IntentPortSelector;
+  readonly path: IntentProjectionPath;
   readonly kind: PortKind;
   readonly writable: readonly LeafField[];
   readonly flow: IntentIdentityFlow;
@@ -682,6 +720,7 @@ export interface IntentOutputDescriptor {
 
 export interface IntentDeclarationDescriptor {
   readonly schema: IntentNodeSchema;
+  readonly inputs: readonly IntentInputDescriptor[];
   readonly fields: readonly IntentDefinitionFieldDescriptor[];
   readonly outputs: readonly IntentOutputDescriptor[];
   readonly suppression_edit: IntentEditClassification;
@@ -839,14 +878,20 @@ export type IntentInspectorField =
       readonly value: IntentLiteral | null;
     };
 
+export interface IntentInspectorInput {
+  readonly path: IntentProjectionPath;
+  readonly source: IntentProjectedPortReference;
+}
+
 export interface IntentInspectorProjection<S extends string> {
+  readonly identity: IntentSessionIdentity<S>;
   readonly node: string;
   readonly symbol: string;
   readonly name: string;
   readonly kind: IntentGraphNodeKind;
   readonly suppressed: boolean;
   readonly retained_failure: boolean;
-  readonly inputs: readonly (readonly [InputSlot, IntentPortReference])[];
+  readonly inputs: readonly IntentInspectorInput[];
   readonly descriptor: IntentDeclarationDescriptor;
   readonly fields: readonly IntentInspectorField[];
   readonly [sessionBrand]: S;
@@ -1426,7 +1471,15 @@ export class IntentClient<const S extends string> {
     const response = await this.transport.apply(
       encodeIntentRpcRequest({ method: "inspector", node: node.id }),
     );
-    return decodeIntentRpcResponse(this.owner, response, "inspector");
+    const decoded = decodeIntentRpcResponse(this.owner, response, "inspector");
+    if (
+      decoded.outcome === "success"
+      && decoded.value.inspector !== null
+      && decoded.value.inspector.node !== node.id
+    ) {
+      throw new IntentRpcProtocolError("Inspector projection does not match the requested node");
+    }
+    return decoded;
   }
 
   async editSourceToken(
@@ -1617,12 +1670,17 @@ function parseRpcSuccess<S extends string>(
     }
     case "inspector": {
       rpcExactKeys(value, ["result", "identity", "inspector"], "Inspector RPC value");
+      const identity = parseRpcIdentity(owner, value.identity, "Inspector identity");
+      const inspector = value.inspector === null
+        ? null
+        : parseInspector(owner, value.inspector);
+      if (inspector !== null && !rpcIdentityEquals(identity, inspector.identity)) {
+        throw new IntentRpcProtocolError("Inspector projection identity does not match receipt");
+      }
       return {
         result: "inspector" as const,
-        identity: parseRpcIdentity(owner, value.identity, "Inspector identity"),
-        inspector: value.inspector === null
-          ? null
-          : parseInspector(owner, value.inspector),
+        identity,
+        inspector,
       } satisfies IntentRpcInspectorSuccess<S>;
     }
   }
@@ -1925,26 +1983,68 @@ function parseDeclarationDescriptor(value: unknown): IntentDeclarationDescriptor
   const descriptor = rpcRecord(value, "intent declaration descriptor");
   rpcExactKeys(descriptor, [
     "schema",
+    "inputs",
     "fields",
     "outputs",
     "suppression_edit",
     "input_edit",
     "name_edit",
   ], "intent declaration descriptor");
+  const schema = parseNodeSchema(descriptor.schema);
+  const inputs = rpcArray(
+    descriptor.inputs,
+    MAX_INTENT_NODE_COMPONENTS,
+    "input descriptors",
+  ).map(parseInputDescriptor);
+  const fields = rpcArray(
+    descriptor.fields,
+    MAX_INTENT_NODE_COMPONENTS,
+    "definition descriptors",
+  ).map(parseDefinitionDescriptor);
+  const outputs = rpcArray(
+    descriptor.outputs,
+    MAX_INTENT_DECLARATION_OUTPUTS,
+    "output descriptors",
+  ).map(parseOutputDescriptor);
+
+  assertUniqueStrings(inputs.map((input) => input.slot), "input descriptor slots");
+  assertUnambiguousProjectionPaths(
+    inputs.map((input) => input.path),
+    "input descriptor paths",
+  );
+  assertUniqueStrings(
+    fields.map((field) => field.schema.field),
+    "definition descriptor fields",
+  );
+  assertUnambiguousProjectionPaths(
+    fields.map((field) => field.path),
+    "definition descriptor paths",
+  );
+  assertDescriptorFieldsMatchSchema(schema, fields);
+  assertUniqueStrings(
+    outputs.map((output) => `${output.port.node}:${output.port.port}`),
+    "output descriptor ports",
+  );
+  assertUniqueStrings(
+    outputs.map((output) => output.selector),
+    "output descriptor selectors",
+  );
+  assertUniqueProjectionPaths(
+    outputs.map((output) => output.path),
+    "output descriptor paths",
+  );
+  assertUnambiguousProjectionPaths(
+    outputs.flatMap((output) => output.writable.map((leaf) =>
+      output.writable.length === 1 ? output.path : [...output.path, leaf]
+    )),
+    "writable instance paths",
+  );
+
   return {
-    schema: parseNodeSchema(descriptor.schema),
-    fields: rpcArray(
-      descriptor.fields,
-      MAX_INTENT_NODE_COMPONENTS,
-      "definition descriptors",
-    )
-      .map(parseDefinitionDescriptor),
-    outputs: rpcArray(
-      descriptor.outputs,
-      MAX_INTENT_DECLARATION_OUTPUTS,
-      "output descriptors",
-    )
-      .map(parseOutputDescriptor),
+    schema,
+    inputs,
+    fields,
+    outputs,
     suppression_edit: rpcEnum(
       descriptor.suppression_edit,
       EDIT_CLASSIFICATIONS,
@@ -1960,6 +2060,137 @@ function parseDeclarationDescriptor(value: unknown): IntentDeclarationDescriptor
       EDIT_CLASSIFICATIONS,
       "name edit classification",
     ),
+  };
+}
+
+function parseProjectionPath(value: unknown, label: string): IntentProjectionPath {
+  const segments = rpcArray(value, 32, label);
+  if (segments.length === 0) {
+    throw new IntentRpcProtocolError(`${label} must not be empty`);
+  }
+  if (typeof segments[0] !== "string") {
+    throw new IntentRpcProtocolError(`${label} must begin with an object field`);
+  }
+  return segments.map((segment, index) => {
+    if (typeof segment === "string") {
+      return rpcKey(segment, `${label} field`);
+    }
+    if (typeof segment === "number") {
+      return rpcSafeUint(segment, 0xffff, `${label} index`);
+    }
+    throw new IntentRpcProtocolError(`${label} segment ${index} is not a field or index`);
+  });
+}
+
+function projectionPathSegmentKey(segment: IntentProjectionPathSegment): string {
+  return typeof segment === "string" ? `field:${segment}` : `index:${segment}`;
+}
+
+function projectionPathKey(path: IntentProjectionPath): string {
+  return path.map(projectionPathSegmentKey).join("\u0000");
+}
+
+function assertUniqueStrings(values: readonly string[], label: string): void {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      throw new IntentRpcProtocolError(`${label} contain duplicate coordinate ${JSON.stringify(value)}`);
+    }
+    seen.add(value);
+  }
+}
+
+function assertUniqueProjectionPaths(
+  paths: readonly IntentProjectionPath[],
+  label: string,
+): void {
+  assertUniqueStrings(paths.map(projectionPathKey), label);
+}
+
+interface ProjectionPathTrie {
+  terminal: boolean;
+  readonly children: Map<string, ProjectionPathTrie>;
+}
+
+function assertUnambiguousProjectionPaths(
+  paths: readonly IntentProjectionPath[],
+  label: string,
+): void {
+  const root: ProjectionPathTrie = { terminal: false, children: new Map() };
+  for (const path of paths) {
+    let node = root;
+    for (const segment of path) {
+      if (node.terminal) {
+        throw new IntentRpcProtocolError(`${label} contain a prefix collision`);
+      }
+      const key = projectionPathSegmentKey(segment);
+      let child = node.children.get(key);
+      if (child === undefined) {
+        child = { terminal: false, children: new Map() };
+        node.children.set(key, child);
+      }
+      node = child;
+    }
+    if (node.terminal) {
+      throw new IntentRpcProtocolError(`${label} contain a duplicate path`);
+    }
+    if (node.children.size !== 0) {
+      throw new IntentRpcProtocolError(`${label} contain a prefix collision`);
+    }
+    node.terminal = true;
+  }
+}
+
+function literalSchemasEqual(
+  left: IntentLiteralSchema,
+  right: IntentLiteralSchema,
+): boolean {
+  return left.kind === right.kind
+    && (left.kind !== "quantity"
+      || (right.kind === "quantity" && left.unit === right.unit));
+}
+
+function assertDescriptorFieldsMatchSchema(
+  schema: IntentNodeSchema,
+  fields: readonly IntentDefinitionFieldDescriptor[],
+): void {
+  assertUniqueStrings(schema.fields.map((field) => field.field), "definition schema fields");
+  if (schema.fields.length !== fields.length) {
+    throw new IntentRpcProtocolError("definition descriptors do not match the declaration schema");
+  }
+  const descriptors = new Map(fields.map((field) => [field.schema.field, field.schema]));
+  for (const expected of schema.fields) {
+    const actual = descriptors.get(expected.field);
+    if (
+      actual === undefined
+      || actual.required !== expected.required
+      || !literalSchemasEqual(actual.literal, expected.literal)
+    ) {
+      throw new IntentRpcProtocolError("definition descriptors do not match the declaration schema");
+    }
+  }
+}
+
+function parseProjectedPortReference(value: unknown): IntentProjectedPortReference {
+  const reference = rpcRecord(value, "projected port reference");
+  rpcExactKeys(
+    reference,
+    ["declaration", "output", "kind"],
+    "projected port reference",
+  );
+  return {
+    declaration: rpcKey(reference.declaration, "projected declaration symbol"),
+    output: parseProjectionPath(reference.output, "projected output path"),
+    kind: rpcEnum(reference.kind, PORT_KINDS, "projected port kind"),
+  };
+}
+
+function parseInputDescriptor(value: unknown): IntentInputDescriptor {
+  const descriptor = rpcRecord(value, "input descriptor");
+  rpcExactKeys(descriptor, ["slot", "path"], "input descriptor");
+  return {
+    slot: rpcInputSlot(descriptor.slot),
+    path: parseProjectionPath(descriptor.path, "input descriptor path"),
   };
 }
 
@@ -2041,11 +2272,12 @@ function parseDefinitionDescriptor(value: unknown): IntentDefinitionFieldDescrip
   const descriptor = rpcRecord(value, "definition field descriptor");
   rpcExactKeys(
     descriptor,
-    ["schema", "default", "choices", "edit"],
+    ["schema", "path", "default", "choices", "edit"],
     "definition field descriptor",
   );
   return {
     schema: parseDefinitionFieldSchema(descriptor.schema),
+    path: parseProjectionPath(descriptor.path, "definition descriptor path"),
     default: parseFieldDefault(descriptor.default),
     choices: parseFieldChoices(descriptor.choices),
     edit: rpcEnum(descriptor.edit, EDIT_CLASSIFICATIONS, "definition edit classification"),
@@ -2086,7 +2318,7 @@ function parseOutputDescriptor(value: unknown): IntentOutputDescriptor {
   const output = rpcRecord(value, "intent output descriptor");
   rpcExactKeys(
     output,
-    ["port", "selector", "kind", "writable", "flow", "native", "edit"],
+    ["port", "selector", "path", "kind", "writable", "flow", "native", "edit"],
     "intent output descriptor",
   );
   const kind = rpcEnum(output.kind, PORT_KINDS, "output port kind");
@@ -2097,6 +2329,7 @@ function parseOutputDescriptor(value: unknown): IntentOutputDescriptor {
   return {
     port,
     selector: rpcPortSelector(output.selector),
+    path: parseProjectionPath(output.path, "output descriptor path"),
     kind,
     writable: rpcArray(output.writable, LEAF_FIELDS.length, "writable output fields")
       .map((field) => rpcEnum(field, LEAF_FIELDS, "writable leaf field")),
@@ -2370,6 +2603,7 @@ function parseInspector<S extends string>(
 ): IntentInspectorProjection<S> {
   const inspector = rpcRecord(value, "intent Inspector projection");
   rpcExactKeys(inspector, [
+    "identity",
     "node",
     "symbol",
     "name",
@@ -2385,13 +2619,21 @@ function parseInspector<S extends string>(
     MAX_INTENT_NODE_COMPONENTS,
     "Inspector inputs",
   ).map((candidate) => {
-    const pair = rpcArray(candidate, 2, "Inspector input pair");
-    if (pair.length !== 2) {
-      throw new IntentRpcProtocolError("Inspector input must be a two-element tuple");
-    }
-    return [rpcInputSlot(pair[0]), parsePortReference(pair[1])] as const;
+    const input = rpcRecord(candidate, "Inspector input");
+    rpcExactKeys(input, ["path", "source"], "Inspector input");
+    return {
+      path: parseProjectionPath(input.path, "Inspector input path"),
+      source: parseProjectedPortReference(input.source),
+    };
   });
+  assertUnambiguousProjectionPaths(
+    inputs.map((input) => input.path),
+    "Inspector input paths",
+  );
+  const descriptor = parseDeclarationDescriptor(inspector.descriptor);
+  assertInspectorInputsMatchDescriptor(inputs, descriptor.inputs);
   return own(owner.id, {
+    identity: parseRpcIdentity(owner, inspector.identity, "Inspector projection identity"),
     node: rpcHex(inspector.node, 16, "Inspector node ID"),
     symbol: rpcKey(inspector.symbol, "Inspector symbol"),
     name: rpcKey(inspector.name, "Inspector name"),
@@ -2399,9 +2641,23 @@ function parseInspector<S extends string>(
     suppressed: rpcBoolean(inspector.suppressed, "Inspector suppression flag"),
     retained_failure: rpcBoolean(inspector.retained_failure, "Inspector retained failure flag"),
     inputs,
-    descriptor: parseDeclarationDescriptor(inspector.descriptor),
+    descriptor,
     fields: rpcArray(inspector.fields, 16_384, "Inspector fields").map(parseInspectorField),
   }) as unknown as IntentInspectorProjection<S>;
+}
+
+function assertInspectorInputsMatchDescriptor(
+  inputs: readonly IntentInspectorInput[],
+  descriptors: readonly IntentInputDescriptor[],
+): void {
+  if (inputs.length !== descriptors.length) {
+    throw new IntentRpcProtocolError("Inspector inputs do not match descriptor inputs");
+  }
+  const descriptorPaths = new Set(descriptors.map((descriptor) =>
+    projectionPathKey(descriptor.path)));
+  if (inputs.some((input) => !descriptorPaths.has(projectionPathKey(input.path)))) {
+    throw new IntentRpcProtocolError("Inspector inputs do not match descriptor inputs");
+  }
 }
 
 function parseInspectorField(value: unknown): IntentInspectorField {

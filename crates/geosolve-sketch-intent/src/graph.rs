@@ -1567,8 +1567,9 @@ mod tests {
     use crate::{
         AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, ExternalIntentKind,
         IdentityTransitionKind, IntentEvaluation, IntentKey, IntentLiteralSchema, IntentPatch,
-        IntentPatchOperation, IntentPatchPolicy, IntentSession, IntentSessionId,
-        MaterializationEvidence, OperationKind, ParameterIntentKind,
+        IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentProjectionPath,
+        IntentProjectionPathSegment, IntentSession, IntentSessionId, MaterializationEvidence,
+        OperationKind, ParameterIntentKind,
     };
 
     fn key(value: &str) -> IntentKey {
@@ -1704,6 +1705,176 @@ mod tests {
         draft
     }
 
+    fn maximal_input_draft(
+        kind: &IntentNodeKind,
+        dynamic_children: u16,
+        symbol: &str,
+    ) -> IntentNodeDraft {
+        let schema = kind.schema(dynamic_children);
+        let mut draft = allocatable_draft(kind, dynamic_children, symbol);
+        let choice_slots = schema
+            .input_choices
+            .iter()
+            .flat_map(|choice| choice.alternatives.iter().copied())
+            .collect::<BTreeSet<_>>();
+        for cardinality in &schema.inputs {
+            for index in 0..cardinality.maximum {
+                let slot = InputSlot::new(cardinality.role, index);
+                if !choice_slots.contains(&slot) {
+                    draft.inputs.insert(slot, dummy_input(kind, slot));
+                }
+            }
+        }
+        draft
+    }
+
+    fn descriptor_node(draft: IntentNodeDraft) -> IntentNode {
+        let inputs = draft
+            .inputs
+            .iter()
+            .map(|(slot, source)| {
+                let PatchPortRef::Stable { port } = source else {
+                    panic!("descriptor audit uses only exact stable dummy inputs")
+                };
+                (*slot, *port)
+            })
+            .collect();
+        let allocated = allocate_draft(draft, &mut IntentAllocatorHighWater::initial()).unwrap();
+        finish_allocated_draft(allocated, inputs, &mut IntentInstanceState::empty()).unwrap()
+    }
+
+    fn assert_projection_path_shape(label: &str, category: &str, path: &IntentProjectionPath) {
+        assert!(
+            matches!(
+                path.segments().first(),
+                Some(IntentProjectionPathSegment::Field(_))
+            ),
+            "{label} {category} path must begin with an object field"
+        );
+        assert!(
+            path.segments().len() <= crate::MAX_INTENT_PROJECTION_PATH_SEGMENTS,
+            "{label} {category} path exceeds the public bound"
+        );
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum ProjectionContainerKind {
+        Object,
+        Array,
+    }
+
+    #[derive(Default)]
+    struct ProjectionPathTrie {
+        leaf: bool,
+        container: Option<ProjectionContainerKind>,
+        children: BTreeMap<IntentProjectionPathSegment, ProjectionPathTrie>,
+    }
+
+    impl ProjectionPathTrie {
+        fn insert(&mut self, label: &str, category: &str, path: &IntentProjectionPath) {
+            let mut node = self;
+            for segment in path.segments() {
+                assert!(
+                    !node.leaf,
+                    "{label} has a {category} leaf/container prefix collision at {path:?}"
+                );
+                let container = match segment {
+                    IntentProjectionPathSegment::Field(_) => ProjectionContainerKind::Object,
+                    IntentProjectionPathSegment::Index(_) => ProjectionContainerKind::Array,
+                };
+                if let Some(existing) = node.container {
+                    assert_eq!(
+                        existing, container,
+                        "{label} {category} path changes one container between object and array at {path:?}"
+                    );
+                } else {
+                    node.container = Some(container);
+                }
+                node = node.children.entry(segment.clone()).or_default();
+            }
+            assert!(
+                !node.leaf,
+                "{label} repeats one {category} semantic path: {path:?}"
+            );
+            assert!(
+                node.children.is_empty(),
+                "{label} has a {category} container/leaf prefix collision at {path:?}"
+            );
+            node.leaf = true;
+        }
+    }
+
+    fn assert_no_exact_or_prefix_collision(
+        label: &str,
+        category: &str,
+        paths: &[IntentProjectionPath],
+    ) {
+        let mut trie = ProjectionPathTrie::default();
+        for path in paths {
+            assert_projection_path_shape(label, category, path);
+            trie.insert(label, category, path);
+        }
+    }
+
+    fn assert_descriptor_projection_is_total_and_collision_free(label: &str, node: &IntentNode) {
+        let descriptor = node.descriptor();
+        assert_eq!(descriptor.inputs.len(), node.inputs.len(), "{label}");
+        assert_eq!(
+            descriptor.fields.len(),
+            descriptor.schema.fields.len(),
+            "{label}"
+        );
+        assert_eq!(descriptor.outputs.len(), node.ports.len(), "{label}");
+
+        assert_no_exact_or_prefix_collision(
+            label,
+            "input",
+            &descriptor
+                .inputs
+                .iter()
+                .map(|input| input.path.clone())
+                .collect::<Vec<_>>(),
+        );
+        assert_no_exact_or_prefix_collision(
+            label,
+            "definition",
+            &descriptor
+                .fields
+                .iter()
+                .map(|field| field.path.clone())
+                .collect::<Vec<_>>(),
+        );
+        let output_paths = descriptor
+            .outputs
+            .iter()
+            .map(|output| output.path.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            output_paths.iter().cloned().collect::<BTreeSet<_>>().len(),
+            descriptor.outputs.len(),
+            "{label} repeats one stable-output semantic path"
+        );
+        for path in &output_paths {
+            assert_projection_path_shape(label, "output", path);
+        }
+        let instance_paths = descriptor
+            .outputs
+            .iter()
+            .flat_map(|output| {
+                output.writable.iter().map(|field| {
+                    output
+                        .path_for_leaf(LeafRef {
+                            node: output.port.node,
+                            port: output.port.port,
+                            field: *field,
+                        })
+                        .expect("descriptor output owns its declared writable leaf")
+                })
+            })
+            .collect::<Vec<_>>();
+        assert_no_exact_or_prefix_collision(label, "instance", &instance_paths);
+    }
+
     fn assert_count_matches_allocation(label: &str, draft: IntentNodeDraft) {
         let expected = draft
             .schema_generated_port_count()
@@ -1726,6 +1897,362 @@ mod tests {
                 allocatable_draft(&kind, dynamic_children, &symbol),
             );
         }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exhaustive declaration oracle is kept together so every semantic-path family is reviewed as one closed matrix"
+    )]
+    fn all_declaration_projection_paths_are_total_bijective_and_tree_safe() {
+        let kinds = declaration_kinds();
+        assert_eq!(kinds.len(), 109);
+        for (index, kind) in kinds.into_iter().enumerate() {
+            let dynamic_children = kind.schema(0).minimum_children;
+            let label = format!("declaration-{index:03}-{kind:?}-minimal");
+            let node = descriptor_node(allocatable_draft(
+                &kind,
+                dynamic_children,
+                &format!("projection-minimal-{index:03}"),
+            ));
+            assert_descriptor_projection_is_total_and_collision_free(&label, &node);
+
+            let label = format!("declaration-{index:03}-{kind:?}-maximal-inputs");
+            let node = descriptor_node(maximal_input_draft(
+                &kind,
+                dynamic_children,
+                &format!("projection-maximal-inputs-{index:03}"),
+            ));
+            assert_descriptor_projection_is_total_and_collision_free(&label, &node);
+        }
+
+        for recipe in [
+            GeometryRecipeKind::Polyline,
+            GeometryRecipeKind::OpenControlNurbs,
+            GeometryRecipeKind::PeriodicControlNurbs,
+        ] {
+            let kind = IntentNodeKind::Geometry { recipe };
+            let dynamic_children = kind.schema(0).maximum_children;
+            let mut draft = maximal_input_draft(
+                &kind,
+                dynamic_children,
+                &format!("projection-maximum-{recipe:?}"),
+            );
+            if matches!(
+                recipe,
+                GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+            ) {
+                draft
+                    .fields
+                    .insert(IntentFieldKey(key("degree")), IntentLiteral::Natural(3));
+            }
+            let node = descriptor_node(draft);
+            assert_descriptor_projection_is_total_and_collision_free(
+                &format!("maximum-{recipe:?}"),
+                &node,
+            );
+        }
+
+        let maximum_children = u16::try_from(crate::model::MAX_INTENT_NODE_CHILDREN).unwrap();
+        let mut closed_polyline = allocatable_draft(
+            &IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Polyline,
+            },
+            maximum_children,
+            "projection-maximum-closed-polyline",
+        );
+        closed_polyline
+            .fields
+            .insert(IntentFieldKey(key("closed")), IntentLiteral::Boolean(true));
+        assert_descriptor_projection_is_total_and_collision_free(
+            "maximum-closed-polyline",
+            &descriptor_node(closed_polyline),
+        );
+
+        for recipe in [
+            GeometryRecipeKind::TwoPointAlignedRectangle,
+            GeometryRecipeKind::ThreePointCornerRectangle,
+            GeometryRecipeKind::CenterRectangle,
+            GeometryRecipeKind::ThreePointCenterRectangle,
+        ] {
+            let label = format!("regularized-{recipe:?}");
+            let mut draft = allocatable_draft(&IntentNodeKind::Geometry { recipe }, 0, &label);
+            draft.fields.insert(
+                IntentFieldKey(key("regularized")),
+                IntentLiteral::Boolean(true),
+            );
+            assert_descriptor_projection_is_total_and_collision_free(
+                &label,
+                &descriptor_node(draft),
+            );
+        }
+
+        let binding_kind = IntentNodeKind::Parameter {
+            parameter: ParameterIntentKind::Binding,
+        };
+        let binding_schema = binding_kind.schema(0);
+        let binding_targets = &binding_schema.input_choices[0].alternatives;
+        for target in binding_targets {
+            let label = format!("parameter-binding-choice-{:?}", target.role);
+            let mut draft = allocatable_draft(&binding_kind, 0, &label);
+            for alternative in binding_targets {
+                draft.inputs.remove(alternative);
+            }
+            draft
+                .inputs
+                .insert(*target, dummy_input(&binding_kind, *target));
+            assert_descriptor_projection_is_total_and_collision_free(
+                &label,
+                &descriptor_node(draft),
+            );
+        }
+
+        for owner_role in [InputRole::Constraint, InputRole::Dimension] {
+            let annotation_kind = IntentNodeKind::Annotation;
+            let owner = InputSlot::new(owner_role, 0);
+            let label = format!("annotation-choice-{owner_role:?}");
+            let mut draft = allocatable_draft(&annotation_kind, 0, &label);
+            draft
+                .inputs
+                .insert(owner, dummy_input(&annotation_kind, owner));
+            assert_descriptor_projection_is_total_and_collision_free(
+                &label,
+                &descriptor_node(draft),
+            );
+        }
+
+        let maximum_pattern = allocatable_draft(
+            &IntentNodeKind::Operation {
+                operation: OperationKind::LinearPattern,
+            },
+            maximum_children,
+            "projection-maximum-linear-pattern",
+        );
+        assert_descriptor_projection_is_total_and_collision_free(
+            "maximum-linear-pattern",
+            &descriptor_node(maximum_pattern),
+        );
+
+        let single_curve_output = allocatable_draft(
+            &IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset,
+            },
+            0,
+            "projection-single-curve-operation-output",
+        )
+        .with_operation_outputs(vec![IntentOperationOutput::curve(1)]);
+        let single_curve_output = descriptor_node(single_curve_output);
+        let single_curve_descriptor = single_curve_output.descriptor();
+        assert_eq!(
+            single_curve_descriptor
+                .outputs
+                .iter()
+                .find(|output| {
+                    output.selector
+                        == IntentPortSelector::Node {
+                            role: IntentPortRole::Result,
+                            index: 0,
+                        }
+                })
+                .unwrap()
+                .path,
+            IntentProjectionPath::field(key("result"))
+        );
+        assert_eq!(
+            single_curve_descriptor
+                .outputs
+                .iter()
+                .find(|output| {
+                    output.selector
+                        == IntentPortSelector::Node {
+                            role: IntentPortRole::Span,
+                            index: 0,
+                        }
+                })
+                .unwrap()
+                .path,
+            IntentProjectionPath::field(key("span"))
+        );
+        assert_descriptor_projection_is_total_and_collision_free(
+            "single-curve-operation-output",
+            &single_curve_output,
+        );
+
+        let every_output_kind = allocatable_draft(
+            &IntentNodeKind::Operation {
+                operation: OperationKind::ProfileOffset,
+            },
+            0,
+            "projection-every-operation-output-kind",
+        )
+        .with_operation_outputs(vec![
+            IntentOperationOutput::native(IntentOperationOutputKind::Point),
+            IntentOperationOutput::native(IntentOperationOutputKind::Scalar),
+            IntentOperationOutput::curve(3),
+            IntentOperationOutput::native(IntentOperationOutputKind::Contact),
+            IntentOperationOutput::native(IntentOperationOutputKind::Constraint),
+            IntentOperationOutput::native(IntentOperationOutputKind::Dimension),
+            IntentOperationOutput::native(IntentOperationOutputKind::Parameter),
+            IntentOperationOutput::native(IntentOperationOutputKind::ExternalBinding),
+        ]);
+        let every_output_kind = descriptor_node(every_output_kind);
+        let every_output_descriptor = every_output_kind.descriptor();
+        for (role, index, collection, collection_index) in [
+            (IntentPortRole::Result, 0, "results", 0),
+            (IntentPortRole::Span, 2, "spans", 2),
+            (IntentPortRole::Source, 4, "sources", 4),
+            (IntentPortRole::Source, 5, "sources", 5),
+        ] {
+            assert_eq!(
+                every_output_descriptor
+                    .outputs
+                    .iter()
+                    .find(|output| { output.selector == IntentPortSelector::Node { role, index } })
+                    .unwrap()
+                    .path,
+                IntentProjectionPath::indexed(key(collection), collection_index)
+            );
+        }
+        assert_descriptor_projection_is_total_and_collision_free(
+            "every-operation-output-kind",
+            &every_output_kind,
+        );
+
+        let fillet = IntentNodeKind::ComputedFeature {
+            feature: ComputedFeatureKind::FilletSet,
+        };
+        let maximum_corners = fillet.schema(0).maximum_children;
+        let node = descriptor_node(maximal_input_draft(
+            &fillet,
+            maximum_corners,
+            "projection-maximum-fillet",
+        ));
+        assert_descriptor_projection_is_total_and_collision_free("maximum-fillet", &node);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact source-path regression keeps all singular, repeated, and sparse source cases visible in one semantic contract"
+    )]
+    fn choice_sources_and_schema_less_repeated_inputs_use_semantic_objects_and_arrays() {
+        let profile_slot = InputSlot::new(InputRole::Profile, 0);
+        let chain_slot = InputSlot::new(InputRole::Chain, 0);
+        let operation_kind = IntentNodeKind::Operation {
+            operation: OperationKind::ProfileOffset,
+        };
+
+        let singular_profile = descriptor_node(allocatable_draft(
+            &operation_kind,
+            0,
+            "projection-single-profile-offset",
+        ));
+        assert_eq!(
+            singular_profile.descriptor().inputs,
+            vec![crate::IntentInputDescriptor {
+                slot: profile_slot,
+                path: IntentProjectionPath::field(key("source")),
+            }]
+        );
+        assert_descriptor_projection_is_total_and_collision_free(
+            "single-profile-offset",
+            &singular_profile,
+        );
+
+        let mut singular_chain =
+            allocatable_draft(&operation_kind, 0, "projection-single-chain-offset");
+        singular_chain.inputs.remove(&profile_slot);
+        singular_chain
+            .inputs
+            .insert(chain_slot, dummy_input(&operation_kind, chain_slot));
+        let singular_chain = descriptor_node(singular_chain);
+        assert_eq!(
+            singular_chain.descriptor().inputs,
+            vec![crate::IntentInputDescriptor {
+                slot: chain_slot,
+                path: IntentProjectionPath::field(key("source")),
+            }]
+        );
+        assert_descriptor_projection_is_total_and_collision_free(
+            "single-chain-offset",
+            &singular_chain,
+        );
+
+        let second_profile = InputSlot::new(InputRole::Profile, 1);
+        let mut plural_profiles =
+            allocatable_draft(&operation_kind, 0, "projection-multiple-profile-offset");
+        plural_profiles
+            .inputs
+            .insert(second_profile, dummy_input(&operation_kind, second_profile));
+        let plural_profiles = descriptor_node(plural_profiles);
+        assert_eq!(
+            plural_profiles.descriptor().inputs,
+            vec![
+                crate::IntentInputDescriptor {
+                    slot: profile_slot,
+                    path: IntentProjectionPath::indexed(key("sources"), 0),
+                },
+                crate::IntentInputDescriptor {
+                    slot: second_profile,
+                    path: IntentProjectionPath::indexed(key("sources"), 1),
+                },
+            ]
+        );
+        assert_descriptor_projection_is_total_and_collision_free(
+            "multiple-profile-offset",
+            &plural_profiles,
+        );
+
+        let dimension_kind = IntentNodeKind::Dimension {
+            dimension: DimensionKind::ProfileOffset,
+        };
+        let dimension = descriptor_node(allocatable_draft(
+            &dimension_kind,
+            0,
+            "projection-profile-offset-dimension",
+        ));
+        assert_eq!(
+            dimension
+                .descriptor()
+                .inputs
+                .into_iter()
+                .find(|input| input.slot == profile_slot)
+                .unwrap()
+                .path,
+            IntentProjectionPath::field(key("source"))
+        );
+
+        let bootstrap_kind = IntentNodeKind::Bootstrap {
+            object: IntentBootstrapObject::new(
+                BootstrapNativeKind::Document,
+                key("geosolve-flat-object-v1"),
+                b"projection-bootstrap-inputs".to_vec(),
+            )
+            .unwrap(),
+        };
+        let first_curve = InputSlot::new(InputRole::Curve, 0);
+        let third_curve = InputSlot::new(InputRole::Curve, 2);
+        let mut bootstrap =
+            allocatable_draft(&bootstrap_kind, 0, "projection-bootstrap-repeated-curves");
+        bootstrap
+            .inputs
+            .insert(first_curve, dummy_input(&bootstrap_kind, first_curve));
+        bootstrap
+            .inputs
+            .insert(third_curve, dummy_input(&bootstrap_kind, third_curve));
+        assert_eq!(
+            descriptor_node(bootstrap).descriptor().inputs,
+            vec![
+                crate::IntentInputDescriptor {
+                    slot: first_curve,
+                    path: IntentProjectionPath::indexed(key("curves"), 0),
+                },
+                crate::IntentInputDescriptor {
+                    slot: third_curve,
+                    path: IntentProjectionPath::indexed(key("curves"), 2),
+                },
+            ]
+        );
     }
 
     #[test]

@@ -2,9 +2,9 @@
 
 # M83 implementation ledger — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F009 repair, post-F007 architecture hardening,
-clean qualification and immutable F008/F009 Tailscale replacement nomination complete; human UAT
-pending**. This ledger records implementation and qualification against ADR 0040 and
+Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
+complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
+human UAT**. This ledger records implementation and qualification against ADR 0040 and
 `docs/M83_GOALS.md`. Accepted M81 GitHub Pages bytes remain public authority.
 
 ## Baseline and disposition
@@ -27,7 +27,7 @@ pending**. This ledger records implementation and qualification against ADR 0040
 - Post-hardening product source, now superseded by F008/F009:
   `1e70f3f4dc6778881ce180b2922235a6cc103cf7`; tree
   `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`.
-- Current F008/F009 product source:
+- F008/F009 product source, now superseded by F010:
   `b0de5af55a8c9fe3550137cda91dae63c87666b1`; tree
   `ff0b29dee074bc67a136c23feb5ee56c99deeba1`.
 
@@ -120,6 +120,15 @@ token edit with exact `IntentSessionIdentity` before token lookup across DOM, Ru
 TypeScript. M83-F005 exposes canonical input-slot-to-stable-port bindings in Structured Source and
 Inspector; rebind updates both deterministically and Inspector references remain read-only.
 
+M83-F010 adds a separate semantic presentation coordinate without changing those canonical
+bindings. `IntentProjectionPath` is a bounded field/index sequence assigned centrally to every
+present input, definition field, stable output and writable leaf. Fixed roles receive CAD names;
+repeated operands, contacts, dynamic children and outputs receive actual arrays, with explicit
+`null` holes for sparse values. Structured Source now emits nested `inputs`, `definition` and
+`instance` trees; Inspector renders the same trees as grouped object/array fieldsets and references
+source declarations by symbol plus semantic output path. Closed enum definitions render as
+selects, and the Inspector authenticates edits using its own stamped session identity.
+
 ### I6 — historical pre-hardening qualification and nominations
 
 Post-F005 mechanical qualification and nomination completed. Inventory, order-independence,
@@ -130,8 +139,8 @@ without rebuilding, verified first on a temporary Tailscale listener and indepen
 again at the retained UAT endpoint. F006/F007 subsequently withdraw that candidate. The clean
 post-F007 gate, no-rebuild freeze, 5/5 frozen-browser checks and temporary/retained served-byte
 verification pass; F008/F009 later supersede that candidate. Human M83-U1 through M83-U9 review
-remains pending. Do not publish Pages before human approval; neither earlier nomination supplies
-current UAT authority.
+was not performed before F010 superseded those projections. Do not publish Pages before human
+approval; neither earlier nomination supplies current UAT authority.
 
 ### I7 — post-F007 architecture hardening
 
@@ -247,7 +256,7 @@ served-byte evidence are recorded in the F008/F009 qualification section below.
 
 ## Findings
 
-All nine replacement findings are mechanically resolved; their human rechecks remain pending. The
+All ten replacement findings are mechanically resolved; their human rechecks remain pending. The
 I7 work predates and is separate from the actual M83-F008/F009 findings: its regressions were found
 by independent review before renewed UAT rather than by a shipped or human-reported product defect.
 
@@ -288,10 +297,19 @@ by independent review before renewed UAT rather than by a shipped or human-repor
   and making the canvas appear blank. Suppressed features are excluded from that set. Non-empty
   scene-composition errors are now visible for the failing frame rather than silently collapsed
   into absent authority, and clear on a valid subsequent frame.
+- **M83-F010 — semantic fields and genuine arrays.** Structured Source and Inspector formerly
+  presented canonical storage coordinates such as `point:0000`, `child:0001` and
+  `corner_0000_first_parameter` as user-facing fields. One central bounded semantic-path mapping
+  now projects named object members and numeric arrays while canonical slot/field/port/leaf values
+  retain exact persistence and patch authority. Rust exhaustively audits all 109 declaration
+  families and maximum/sparse shapes; Rust and TypeScript reject malformed or ambiguous decoded
+  paths; adapter fixtures cover sparse Polyline/NURBS, aggregate spans and two-corner Fillets.
 
 No finding changes a solver equation, residual, priority, tolerance or accepted M81 public
 behavior. F006 preserves existing explicit branch rules; it narrows comparison normalization to
 derived same-cell metadata and corrects Midpoint Line materialization to honor its stored branch.
+F010 changes projection DTOs and presentation only; canonical graph/session persistence and patch
+coordinates remain unchanged.
 
 ## Withdrawn initial qualification record
 
@@ -641,7 +659,7 @@ therefore retains the exact `API_COMPATIBILITY.md` bytes produced by that qualif
 
 ## F008/F009 qualification and immutable replacement nomination
 
-Current product source `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
+F008/F009 product source `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
 `ff0b29dee074bc67a136c23feb5ee56c99deeba1`, passes this exact clean command:
 
 ```bash
@@ -706,10 +724,41 @@ Only after those checks passed was historical PID `2404961` retired and
 evidence `/tmp/geosolve-m83-f008-f009-final-verify.na1TWg0E/results.tsv` has the identical SHA-256.
 Both ledgers cover `/` plus all seven assets with HTTP 200, zero redirects, exact media type,
 length and body, and root equality with `index.html`. The retained service remains live for
-focused human UAT. GitHub Pages deliberately remains on accepted M81, and M83-U1 through M83-U9,
-F001-F009 human rechecks, publication and milestone closure remain pending.
+historical comparison until F010 replacement qualification passes. GitHub Pages deliberately
+remains on accepted M81, and M83-U1 through M83-U10, F001-F010 human rechecks, publication and
+milestone closure remain pending.
 
 The documentation-only descendant recording this qualification does not replace product source
 `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
 `ff0b29dee074bc67a136c23feb5ee56c99deeba1`, or rebuild or mutate the frozen artifact. The artifact
 therefore retains the exact `API_COMPATIBILITY.md` bytes produced by that qualified product source.
+
+## F010 semantic-projection implementation evidence
+
+The product implementation is complete; clean release, no-rebuild freeze and served-byte
+replacement evidence are pending. Focused development evidence from the combined candidate:
+
+```text
+cargo test --locked -q -p geosolve-sketch-intent -p geosolve-constraint-editor \
+  -p geosolve-demo-web --all-features
+pass: geosolve-sketch-intent 35 unit + 47 integration + 7 TypeScript-wire; affected editor and
+demo suites including 421 editor-library and 208 demo-library tests all pass
+
+(cd packages/geosolve-intent && npm test)
+40 passed
+
+cargo clippy --locked -q -p geosolve-sketch-intent -p geosolve-constraint-editor \
+  -p geosolve-demo-web --all-targets --all-features -- -D warnings
+pass
+
+cargo fmt --all -- --check
+git diff --check
+pass
+```
+
+The exhaustive Rust oracle covers all 109 declaration kinds, every choice source, maximum closed
+Polyline, open/periodic NURBS, regularized rectangles, maximum LinearPattern and Fillet plus
+mixed/sparse operation outputs. The editor projection fixture combines sparse bound and writable
+Polyline vertices, sparse NURBS inputs, aggregate spans and a true two-corner Fillet. TypeScript
+adds runtime protocol rejection and compile-time recursive object/array shape tests. No equation,
+Jacobian, branch, materialization or golden-scene row changes.

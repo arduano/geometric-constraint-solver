@@ -67,6 +67,7 @@ const emptyDescriptor = {
     minimum_children: 0,
     maximum_children: 0,
   },
+  inputs: [],
   fields: [],
   outputs: [],
   suppression_edit: "definition",
@@ -120,6 +121,43 @@ function patchSuccess(identity = fixture.expected): string {
       disposition: "accepted",
       aliases: { nodes: {}, ports: {}, cells: {} },
     },
+  });
+}
+
+function rpcInspectorProjection(options: {
+  readonly node?: string;
+  readonly identity?: typeof fixture.expected;
+  readonly inputs?: readonly unknown[];
+  readonly descriptor?: unknown;
+} = {}) {
+  const descriptor = options.descriptor ?? {
+    ...emptyDescriptor,
+    inputs: [{ slot: "point:0000", path: ["start"] }],
+  };
+  return {
+    identity: options.identity ?? fixture.expected,
+    node: options.node ?? "0000000000000042",
+    symbol: "segment.main",
+    name: "Main segment",
+    kind: { family: "geometry", recipe: "segment" },
+    suppressed: false,
+    retained_failure: false,
+    inputs: options.inputs ?? [{
+      path: ["start"],
+      source: {
+        declaration: "source.point",
+        output: ["point"],
+        kind: "point",
+      },
+    }],
+    descriptor,
+    fields: [],
+  };
+}
+
+function inspectorClient(inspector: unknown, identity = fixture.expected) {
+  return new IntentClient(fixture.expected.session, {
+    apply: () => rpcSuccess({ result: "inspector", identity, inspector }),
   });
 }
 
@@ -468,6 +506,7 @@ test("snapshot parses the compact stable graph projection without bootstrap payl
             literal: { kind: "text" },
             required: false,
           },
+          path: ["topologyDigest"],
           default: { default: "conditional" },
           choices: { choices: "not_applicable" },
           edit: "definition",
@@ -625,6 +664,7 @@ test("snapshot accepts operation port catalogs beyond the former UI convenience 
             kind: "curve_span",
           },
           selector: `node:span:${index.toString(16).padStart(4, "0")}`,
+          path: ["spans", index],
           kind: "curve_span",
           writable: [],
           flow: { state: "owned_logical" },
@@ -674,14 +714,28 @@ test("snapshot, Undo, Redo, and Inspector enforce method-specific success DTOs",
         result: "inspector",
         identity: fixture.expected,
         inspector: {
+          identity: fixture.expected,
           node: "0000000000000042",
           symbol: "point.main",
           name: "Main point",
           kind: { family: "geometry", recipe: "sketch_point" },
           suppressed: false,
           retained_failure: false,
-          inputs: [],
-          descriptor: emptyDescriptor,
+          inputs: [{
+            path: ["corners", 0, "parents", 1],
+            source: {
+              declaration: "segment.main",
+              output: ["spans", 0],
+              kind: "curve_span",
+            },
+          }],
+          descriptor: {
+            ...emptyDescriptor,
+            inputs: [{
+              slot: "span:0003",
+              path: ["corners", 0, "parents", 1],
+            }],
+          },
           fields: [],
         },
       });
@@ -701,6 +755,17 @@ test("snapshot, Undo, Redo, and Inspector enforce method-specific success DTOs",
   assert.equal(
     inspector.outcome === "success" && inspector.value.inspector?.symbol,
     "point.main",
+  );
+  assert.deepEqual(
+    inspector.outcome === "success" && inspector.value.inspector?.inputs[0],
+    {
+      path: ["corners", 0, "parents", 1],
+      source: {
+        declaration: "segment.main",
+        output: ["spans", 0],
+        kind: "curve_span",
+      },
+    },
   );
   assert.deepEqual(requests, [
     '{"method":"snapshot"}',
@@ -731,6 +796,215 @@ test("valid Rust failure envelopes remain typed and state-neutral to the caller"
   if (response.outcome === "failure") {
     assert.equal(response.failure.code, "source_edit_rejected");
     assert.equal(response.failure.identity?.session, fixture.expected.session);
+  }
+});
+
+test("Inspector rejects malformed semantic projection paths", async (context) => {
+  const cases: readonly (readonly [string, unknown, RegExp])[] = [
+    ["empty", [], /must not be empty/u],
+    ["index first", [0, "point"], /must begin with an object field/u],
+    ["negative index", ["points", -1], /exactly represented unsigned integer/u],
+    ["fractional index", ["points", 0.5], /exactly represented unsigned integer/u],
+    ["out-of-range index", ["points", 0x1_0000], /exactly represented unsigned integer/u],
+    ["excessive depth", Array.from({ length: 33 }, () => "nested"), /exceeds 32 entries/u],
+    ["invalid field", [" padded"], /not a valid bounded intent key/u],
+  ];
+  for (const [name, path, expected] of cases) {
+    await context.test(name, async () => {
+      const projection = rpcInspectorProjection({
+        inputs: [{
+          path,
+          source: {
+            declaration: "source.point",
+            output: ["point"],
+            kind: "point",
+          },
+        }],
+      });
+      const client = inspectorClient(projection);
+      await assert.rejects(
+        () => client.inspector(stableNode(client.owner, "0000000000000042")),
+        expected,
+      );
+    });
+  }
+
+  await context.test("malformed projected output", async () => {
+    const projection = rpcInspectorProjection({
+      inputs: [{
+        path: ["start"],
+        source: {
+          declaration: "source.point",
+          output: [],
+          kind: "point",
+        },
+      }],
+    });
+    const client = inspectorClient(projection);
+    await assert.rejects(
+      () => client.inspector(stableNode(client.owner, "0000000000000042")),
+      /projected output path must not be empty/u,
+    );
+  });
+});
+
+test("Inspector binds the response to the exact requested node and inner identity", async () => {
+  const wrongNode = inspectorClient(rpcInspectorProjection({ node: "0000000000000043" }));
+  await assert.rejects(
+    () => wrongNode.inspector(stableNode(wrongNode.owner, "0000000000000042")),
+    /does not match the requested node/u,
+  );
+
+  const staleIdentity = {
+    ...fixture.expected,
+    revision: "ffffffffffffffff",
+  };
+  const wrongIdentity = inspectorClient(rpcInspectorProjection({ identity: staleIdentity }));
+  await assert.rejects(
+    () => wrongIdentity.inspector(stableNode(wrongIdentity.owner, "0000000000000042")),
+    /projection identity does not match receipt/u,
+  );
+});
+
+test("descriptor mappings reject duplicate and prefix-colliding semantic coordinates", async (context) => {
+  const cases = [
+    {
+      name: "duplicate canonical input slot",
+      inputs: [
+        { slot: "point:0000", path: ["start"] },
+        { slot: "point:0000", path: ["end"] },
+      ],
+      expected: /input descriptor slots contain duplicate coordinate/u,
+    },
+    {
+      name: "duplicate input path",
+      inputs: [
+        { slot: "point:0000", path: ["points", 0] },
+        { slot: "point:0001", path: ["points", 0] },
+      ],
+      expected: /input descriptor paths contain a duplicate path/u,
+    },
+    {
+      name: "prefix-colliding input path",
+      inputs: [
+        { slot: "point:0000", path: ["corners", 0] },
+        { slot: "point:0001", path: ["corners", 0, "position"] },
+      ],
+      expected: /input descriptor paths contain a prefix collision/u,
+    },
+  ] as const;
+  for (const candidate of cases) {
+    await context.test(candidate.name, async () => {
+      const inspectorInputs = candidate.inputs.map((input, index) => ({
+        path: index === 0 ? ["first"] : ["second"],
+        source: {
+          declaration: `source.${index}`,
+          output: ["point"],
+          kind: "point",
+        },
+      }));
+      const projection = rpcInspectorProjection({
+        inputs: inspectorInputs,
+        descriptor: { ...emptyDescriptor, inputs: candidate.inputs },
+      });
+      const client = inspectorClient(projection);
+      await assert.rejects(
+        () => client.inspector(stableNode(client.owner, "0000000000000042")),
+        candidate.expected,
+      );
+    });
+  }
+
+  await context.test("prefix-colliding definition paths", async () => {
+    const schemas = [
+      { field: "corner", literal: { kind: "point" }, required: false },
+      { field: "corner_x", literal: { kind: "quantity", unit: "length" }, required: false },
+    ];
+    const projection = rpcInspectorProjection({
+      descriptor: {
+        ...emptyDescriptor,
+        schema: { ...emptyDescriptor.schema, fields: schemas },
+        fields: schemas.map((schema, index) => ({
+          schema,
+          path: index === 0 ? ["corners", 0] : ["corners", 0, "x"],
+          default: { default: "contextual" },
+          choices: { choices: "not_applicable" },
+          edit: "definition",
+        })),
+      },
+    });
+    const client = inspectorClient(projection);
+    await assert.rejects(
+      () => client.inspector(stableNode(client.owner, "0000000000000042")),
+      /definition descriptor paths contain a prefix collision/u,
+    );
+  });
+});
+
+test("output descriptors may name a semantic object and one of its members", async () => {
+  const node = "0000000000000042";
+  const descriptor = {
+    ...emptyDescriptor,
+    outputs: [{
+      port: { node, port: "0000000000000051", kind: "contact" },
+      selector: "node:contact:0000",
+      path: ["contact"],
+      kind: "contact",
+      writable: [],
+      flow: { state: "owned_logical" },
+      native: null,
+      edit: "read_only",
+    }, {
+      port: { node, port: "0000000000000052", kind: "scalar" },
+      selector: "node:parameter:0000",
+      path: ["contact", "parameter"],
+      kind: "scalar",
+      writable: ["parameter"],
+      flow: { state: "owned_logical" },
+      native: null,
+      edit: "instance",
+    }],
+  };
+  const client = inspectorClient(rpcInspectorProjection({ inputs: [], descriptor }));
+  const response = await client.inspector(stableNode(client.owner, node));
+  assert.equal(response.outcome, "success");
+  assert.deepEqual(
+    response.outcome === "success"
+      && response.value.inspector?.descriptor.outputs.map((output) => output.path),
+    [["contact"], ["contact", "parameter"]],
+  );
+});
+
+test("Inspector inputs correspond one-to-one with descriptor semantic paths", async (context) => {
+  const descriptor = {
+    ...emptyDescriptor,
+    inputs: [
+      { slot: "point:0000", path: ["start"] },
+      { slot: "point:0001", path: ["end"] },
+    ],
+  };
+  const source = (path: readonly (string | number)[], index: number) => ({
+    path,
+    source: {
+      declaration: `source.${index}`,
+      output: ["point"],
+      kind: "point",
+    },
+  });
+  const cases = [
+    ["missing", [source(["start"], 0)]],
+    ["extra", [source(["start"], 0), source(["end"], 1), source(["third"], 2)]],
+    ["path mismatch", [source(["start"], 0), source(["finish"], 1)]],
+    ["duplicate", [source(["start"], 0), source(["start"], 1)]],
+  ] as const;
+  for (const [name, inputs] of cases) {
+    await context.test(name, async () => {
+      const client = inspectorClient(rpcInspectorProjection({ inputs, descriptor }));
+      await assert.rejects(
+        () => client.inspector(stableNode(client.owner, "0000000000000042")),
+        /Inspector input paths contain a duplicate path|Inspector inputs do not match descriptor inputs/u,
+      );
+    });
   }
 });
 

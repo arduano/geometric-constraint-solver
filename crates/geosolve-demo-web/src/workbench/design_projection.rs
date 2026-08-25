@@ -15,8 +15,10 @@ use geosolve_constraint_editor::{
     IntentSourceToken, IntentSourceTokenTarget, IntentWorkbenchProjection,
 };
 use geosolve_sketch_intent::{
-    IntentLiteral, IntentLiteralSchema, IntentPatchOperationKind, IntentPlanDisposition,
-    IntentSessionIdentity, IntentUnit, LeafField, NodeId, OperationKind,
+    IntentFieldChoices, IntentFieldDefault, IntentKey, IntentLiteral, IntentLiteralSchema,
+    IntentPatchOperationKind, IntentPlanDisposition, IntentProjectionPath,
+    IntentProjectionPathSegment, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
+    OperationKind,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -372,13 +374,11 @@ fn push_history_row(
     );
 }
 
-pub(crate) fn inspector_markup(
-    inspector: Option<&IntentInspectorProjection>,
-    identity: IntentSessionIdentity,
-) -> String {
+pub(crate) fn inspector_markup(inspector: Option<&IntentInspectorProjection>) -> String {
     let Some(inspector) = inspector else {
         return String::new();
     };
+    let identity = inspector.identity;
     let mut markup = format!(
         concat!(
             "<section class=\"wb-intent-inspector\" data-intent-inspector-node=\"{}\" ",
@@ -417,56 +417,72 @@ fn push_inspector_inputs(markup: &mut String, inspector: &IntentInspectorProject
     if inspector.inputs.is_empty() {
         return;
     }
-    markup.push_str("<fieldset class=\"wb-intent-inputs\"><legend>Inputs</legend>");
-    for (slot, source) in &inspector.inputs {
+    let mut tree = InspectorMarkupTree::object();
+    for input in &inspector.inputs {
+        let input_path = projection_path_code(&input.path);
+        let output_path = projection_path_code(&input.source.output);
+        let label = projection_path_terminal_label(&input.path);
+        let mut chip = String::new();
         let _ = write!(
-            markup,
+            chip,
             concat!(
-                "<div class=\"wb-intent-input\" data-intent-input-slot=\"{}\" ",
-                "data-intent-source-node=\"{}\" data-intent-source-port=\"{}\" ",
+                "<div class=\"wb-intent-input\" data-intent-input-path=\"{}\" ",
+                "data-intent-source-declaration=\"{}\" data-intent-source-output=\"{}\" ",
                 "data-intent-source-kind=\"{:?}\"><span>{}</span>",
-                "<code>{}.{} · {:?}</code></div>"
+                "<code>{} → {} · {:?}</code></div>"
             ),
-            escape_attribute(&slot.to_string()),
-            source.node,
-            source.port,
-            source.kind,
-            escape_html(&slot.to_string()),
-            source.node,
-            source.port,
-            source.kind,
+            escape_attribute(&input_path),
+            escape_attribute(input.source.declaration.as_str()),
+            escape_attribute(&output_path),
+            input.source.kind,
+            escape_html(&label),
+            escape_html(input.source.declaration.as_str()),
+            escape_html(&output_path),
+            input.source.kind,
         );
+        tree.insert(&input.path, chip);
     }
+    markup.push_str("<fieldset class=\"wb-intent-inputs\"><legend>Inputs</legend>");
+    push_inspector_tree(markup, &tree, &mut Vec::new(), None);
     markup.push_str("</fieldset>");
 }
 
 fn push_inspector_fields(markup: &mut String, inspector: &IntentInspectorProjection) {
+    let mut definitions = InspectorMarkupTree::object();
+    let mut instances = InspectorMarkupTree::object();
     for field in &inspector.fields {
         match field {
             IntentInspectorField::Definition { definition, value } => {
-                let schema = &inspector
+                let descriptor = inspector
                     .definition_descriptor(definition)
-                    .expect("projected Inspector field has central descriptor")
-                    .schema;
+                    .expect("projected Inspector field has central descriptor");
+                let schema = &descriptor.schema;
                 let identity = format!(
                     "data-intent-node=\"{}\" data-intent-field=\"{}\"",
                     inspector.node,
                     escape_attribute(schema.field.0.as_str()),
                 );
+                let mut control = String::new();
                 push_optional_literal_editor(
-                    markup,
-                    schema.field.0.as_str(),
+                    &mut control,
+                    &projection_path_leaf_label(&descriptor.path),
                     "definition",
                     &identity,
                     schema.literal,
+                    Some(&descriptor.choices),
+                    Some(&descriptor.default),
                     value.as_ref(),
                 );
+                definitions.insert(&descriptor.path, control);
             }
             IntentInspectorField::Instance { leaf, value } => {
-                let port_kind = inspector
+                let output = inspector
                     .output_descriptor(*leaf)
-                    .expect("projected Inspector leaf has central output descriptor")
-                    .kind;
+                    .expect("projected Inspector leaf has central output descriptor");
+                let port_kind = output.kind;
+                let path = output
+                    .path_for_leaf(*leaf)
+                    .expect("projected Inspector leaf is owned by its descriptor output");
                 let identity = format!(
                     concat!(
                         "data-intent-node=\"{}\" data-intent-port=\"{}\" ",
@@ -477,25 +493,169 @@ fn push_inspector_fields(markup: &mut String, inspector: &IntentInspectorProject
                     leaf_field_label(leaf.field),
                     port_kind,
                 );
+                let mut control = String::new();
                 push_optional_literal_editor(
-                    markup,
-                    leaf_field_label(leaf.field),
+                    &mut control,
+                    &projection_path_leaf_label(&path),
                     "instance",
                     &identity,
                     literal_schema_for_instance(leaf.field, value.as_ref()),
+                    None,
+                    None,
                     value.as_ref(),
                 );
+                instances.insert(&path, control);
+            }
+        }
+    }
+    push_inspector_tree_section(markup, "Definition", "definition", &definitions);
+    push_inspector_tree_section(markup, "Instance", "instance", &instances);
+}
+
+enum InspectorMarkupTree {
+    Object(Vec<(IntentKey, Self)>),
+    Array(BTreeMap<u16, Self>),
+    Leaf(String),
+}
+
+impl InspectorMarkupTree {
+    fn object() -> Self {
+        Self::Object(Vec::new())
+    }
+
+    fn is_empty(&self) -> bool {
+        matches!(self, Self::Object(values) if values.is_empty())
+    }
+
+    fn insert(&mut self, path: &IntentProjectionPath, markup: String) {
+        self.insert_segments(path.segments(), markup);
+    }
+
+    fn insert_segments(&mut self, segments: &[IntentProjectionPathSegment], markup: String) {
+        let (head, tail) = segments
+            .split_first()
+            .expect("validated Inspector path is non-empty");
+        match (self, head) {
+            (Self::Object(values), IntentProjectionPathSegment::Field(field)) => {
+                let position = values.iter().position(|(candidate, _)| candidate == field);
+                if tail.is_empty() {
+                    assert!(position.is_none(), "Inspector paths must be unique");
+                    values.push((field.clone(), Self::Leaf(markup)));
+                } else if let Some(position) = position {
+                    values[position].1.insert_segments(tail, markup);
+                } else {
+                    let mut next = match tail[0] {
+                        IntentProjectionPathSegment::Field(_) => Self::object(),
+                        IntentProjectionPathSegment::Index(_) => Self::Array(BTreeMap::new()),
+                    };
+                    next.insert_segments(tail, markup);
+                    values.push((field.clone(), next));
+                }
+            }
+            (Self::Array(values), IntentProjectionPathSegment::Index(index)) => {
+                if tail.is_empty() {
+                    let replaced = values.insert(*index, Self::Leaf(markup));
+                    assert!(replaced.is_none(), "Inspector paths must be unique");
+                } else {
+                    let next = values.entry(*index).or_insert_with(|| match tail[0] {
+                        IntentProjectionPathSegment::Field(_) => Self::object(),
+                        IntentProjectionPathSegment::Index(_) => Self::Array(BTreeMap::new()),
+                    });
+                    next.insert_segments(tail, markup);
+                }
+            }
+            _ => panic!("Inspector path changes container kind"),
+        }
+    }
+}
+
+fn push_inspector_tree_section(
+    markup: &mut String,
+    title: &str,
+    owner: &str,
+    tree: &InspectorMarkupTree,
+) {
+    if tree.is_empty() {
+        return;
+    }
+    let _ = write!(
+        markup,
+        "<fieldset class=\"wb-intent-fields wb-intent-{}\"><legend>{}</legend>",
+        owner,
+        escape_html(title),
+    );
+    push_inspector_tree(markup, tree, &mut Vec::new(), None);
+    markup.push_str("</fieldset>");
+}
+
+fn push_inspector_tree(
+    markup: &mut String,
+    tree: &InspectorMarkupTree,
+    path: &mut Vec<IntentProjectionPathSegment>,
+    array_name: Option<&str>,
+) {
+    match tree {
+        InspectorMarkupTree::Leaf(control) => markup.push_str(control),
+        InspectorMarkupTree::Object(values) => {
+            for (field, value) in values {
+                path.push(IntentProjectionPathSegment::Field(field.clone()));
+                if matches!(value, InspectorMarkupTree::Leaf(_)) {
+                    push_inspector_tree(markup, value, path, None);
+                } else {
+                    let code = projection_path_segments_code(path);
+                    let _ = write!(
+                        markup,
+                        concat!(
+                            "<fieldset class=\"wb-intent-path-group\" ",
+                            "data-intent-group-path=\"{}\"><legend>{}</legend>"
+                        ),
+                        escape_attribute(&code),
+                        escape_html(&humanize_identifier(field.as_str())),
+                    );
+                    push_inspector_tree(markup, value, path, Some(field.as_str()));
+                    markup.push_str("</fieldset>");
+                }
+                path.pop();
+            }
+        }
+        InspectorMarkupTree::Array(values) => {
+            let item = singular_projection_label(array_name.unwrap_or("item"));
+            for (index, value) in values {
+                path.push(IntentProjectionPathSegment::Index(*index));
+                let code = projection_path_segments_code(path);
+                let visible = u32::from(*index) + 1;
+                let _ = write!(
+                    markup,
+                    concat!(
+                        "<fieldset class=\"wb-intent-array-item\" data-intent-array-index=\"{}\" ",
+                        "data-intent-group-path=\"{}\"><legend>{} {}</legend>"
+                    ),
+                    index,
+                    escape_attribute(&code),
+                    escape_html(&item),
+                    visible,
+                );
+                push_inspector_tree(markup, value, path, None);
+                markup.push_str("</fieldset>");
+                path.pop();
             }
         }
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one closed literal-schema renderer keeps optional state and typed controls consistent across every Inspector literal family"
+)]
 fn push_optional_literal_editor(
     markup: &mut String,
     label: &str,
     owner: &str,
     identity: &str,
     schema: IntentLiteralSchema,
+    choices: Option<&IntentFieldChoices>,
+    default: Option<&IntentFieldDefault>,
     literal: Option<&IntentLiteral>,
 ) {
     let schema_key = literal_schema_key(schema);
@@ -528,9 +688,66 @@ fn push_optional_literal_editor(
                 escape_html(label),
             );
         }
-        IntentLiteralSchema::Enum | IntentLiteralSchema::Text => {
+        IntentLiteralSchema::Enum => {
             let value = match literal {
                 Some(IntentLiteral::Enum(value) | IntentLiteral::Text(value)) => value.as_str(),
+                _ => "",
+            };
+            if let Some(IntentFieldChoices::Closed(choices)) = choices {
+                let placeholder = match default {
+                    Some(IntentFieldDefault::Literal(IntentLiteral::Enum(value))) => {
+                        format!("Default ({})", humanize_identifier(value.as_str()))
+                    }
+                    Some(IntentFieldDefault::Contextual) => "Automatic".to_owned(),
+                    Some(IntentFieldDefault::Conditional) => "Not applicable".to_owned(),
+                    Some(IntentFieldDefault::Required | IntentFieldDefault::Literal(_)) => {
+                        "Choose…".to_owned()
+                    }
+                    None => "Not set".to_owned(),
+                };
+                let _ = write!(
+                    markup,
+                    "<label>{}<select data-intent-edit=\"{}\" {} data-intent-schema=\"{}\">",
+                    escape_html(label),
+                    owner,
+                    identity,
+                    schema_key,
+                );
+                let _ = write!(
+                    markup,
+                    "<option value=\"\" disabled{}>{}</option>",
+                    if value.is_empty() { " selected" } else { "" },
+                    escape_html(&placeholder),
+                );
+                for choice in choices {
+                    let _ = write!(
+                        markup,
+                        "<option value=\"{}\"{}>{}</option>",
+                        escape_attribute(choice.as_str()),
+                        if choice.as_str() == value {
+                            " selected"
+                        } else {
+                            ""
+                        },
+                        escape_html(&humanize_identifier(choice.as_str())),
+                    );
+                }
+                markup.push_str("</select></label>");
+            } else {
+                let _ = write!(
+                    markup,
+                    "<label>{}<input type=\"text\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
+                    escape_html(label),
+                    owner,
+                    identity,
+                    schema_key,
+                    escape_attribute(value),
+                );
+            }
+        }
+        IntentLiteralSchema::Text => {
+            let value = match literal {
+                Some(IntentLiteral::Text(value)) => value.as_str(),
                 _ => "",
             };
             let _ = write!(
@@ -703,6 +920,77 @@ const fn leaf_field_label(field: LeafField) -> &'static str {
     }
 }
 
+fn projection_path_code(path: &IntentProjectionPath) -> String {
+    projection_path_segments_code(path.segments())
+}
+
+fn projection_path_segments_code(segments: &[IntentProjectionPathSegment]) -> String {
+    let mut output = String::new();
+    for segment in segments {
+        match segment {
+            IntentProjectionPathSegment::Field(field) => {
+                if !output.is_empty() {
+                    output.push('.');
+                }
+                output.push_str(field.as_str());
+            }
+            IntentProjectionPathSegment::Index(index) => {
+                let _ = write!(output, "[{index}]");
+            }
+        }
+    }
+    output
+}
+
+fn projection_path_leaf_label(path: &IntentProjectionPath) -> String {
+    path.segments()
+        .iter()
+        .rev()
+        .find_map(|segment| match segment {
+            IntentProjectionPathSegment::Field(field) => Some(humanize_identifier(field.as_str())),
+            IntentProjectionPathSegment::Index(_) => None,
+        })
+        .expect("validated projection path begins with a field")
+}
+
+fn projection_path_terminal_label(path: &IntentProjectionPath) -> String {
+    match path.segments().last() {
+        Some(IntentProjectionPathSegment::Field(field)) => humanize_identifier(field.as_str()),
+        Some(IntentProjectionPathSegment::Index(_)) => "Reference".to_owned(),
+        None => unreachable!("validated projection path is non-empty"),
+    }
+}
+
+fn singular_projection_label(value: &str) -> String {
+    let singular = match value {
+        "vertices" => "vertex",
+        "indices" => "index",
+        candidate => candidate.strip_suffix('s').unwrap_or(candidate),
+    };
+    humanize_identifier(singular)
+}
+
+fn humanize_identifier(value: &str) -> String {
+    let mut output = String::with_capacity(value.len() + 4);
+    let mut previous_lower = false;
+    for character in value.chars() {
+        if character == '_' || character == '-' {
+            output.push(' ');
+            previous_lower = false;
+            continue;
+        }
+        if character.is_ascii_uppercase() && previous_lower {
+            output.push(' ');
+        }
+        output.push(character.to_ascii_lowercase());
+        previous_lower = character.is_ascii_lowercase() || character.is_ascii_digit();
+    }
+    if let Some(first) = output.get_mut(0..1) {
+        first.make_ascii_uppercase();
+    }
+    output
+}
+
 fn humanize_debug(value: &impl std::fmt::Debug) -> String {
     let debug = format!("{value:?}");
     let mut output = String::with_capacity(debug.len() + 4);
@@ -733,15 +1021,17 @@ fn escape_html(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        IntentGraphNodeKind, IntentOutlineDeclaration, IntentSourceToken, IntentSourceTokenId,
+        IntentGraphNodeKind, IntentInspectorField, IntentInspectorInput, IntentOutlineDeclaration,
+        IntentProjectedPortReference, IntentSourceToken, IntentSourceTokenId,
         IntentSourceTokenTarget, IntentWorkbenchProjection,
     };
     use geosolve_sketch_intent::{
-        AggregateKind, GeometryRecipeKind, InputRole, InputSlot, IntentDeclarationDescriptor,
-        IntentEditClassification, IntentEvaluation, IntentKey, IntentLiteral, IntentNodeDraft,
-        IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortKind,
-        IntentPortRef, IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId,
-        IntentUnit, LeafField, MaterializationEvidence, NodeId, OperationKind, PortId,
+        AggregateKind, ComputedFeatureKind, GeometryRecipeKind, InputRole, InputSlot,
+        IntentDeclarationDescriptor, IntentEditClassification, IntentEvaluation,
+        IntentInputDescriptor, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+        IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRole,
+        IntentPortSelector, IntentProjectionPath, IntentSession, IntentSessionId, IntentUnit,
+        LeafField, MaterializationEvidence, NodeId, OperationKind,
     };
 
     use super::{
@@ -824,7 +1114,7 @@ mod tests {
         let source = structured_source_markup(&projection, selection);
         let history = history_markup(&projection);
         let inspector = projection.inspector(&session, node);
-        let inspector = inspector_markup(inspector.as_ref(), projection.identity);
+        let inspector = inspector_markup(inspector.as_ref());
         assert_eq!(declaration_count(&projection), 1);
         assert!(outline.contains(&format!("data-intent-node=\"{node}\"")));
         assert!(outline.contains("aria-selected=\"true\""));
@@ -852,6 +1142,15 @@ mod tests {
             inspector.matches("data-intent-edit=\"instance\"").count(),
             2
         );
+        assert!(inspector.contains("data-intent-group-path=\"point\"><legend>Point</legend>"));
+        assert!(inspector.contains(">X<input"));
+        assert!(inspector.contains(">Y<input"));
+        assert!(inspector.contains("<select data-intent-edit=\"definition\""));
+        assert!(
+            inspector.contains("<option value=\"\" disabled selected>Default (Profile)</option>")
+        );
+        assert!(inspector.contains("<option value=\"profile\">Profile</option>"));
+        assert!(inspector.contains("<option value=\"construction\">Construction</option>"));
         assert!(!inspector.contains("onclick="));
     }
 
@@ -859,17 +1158,18 @@ mod tests {
     fn inspector_renders_stable_input_bindings_as_read_only_references() {
         let (session, _, _) = fixture();
         let node = NodeId::from_raw(0x8305_0011);
-        let source_node = NodeId::from_raw(0x8305_0010);
         let slot = InputSlot::new(InputRole::Point, 0);
-        let source = IntentPortRef {
-            node: source_node,
-            port: PortId::from_raw(0x8305_1010),
+        let input_path = IntentProjectionPath::field(key("start"));
+        let source = IntentProjectedPortReference {
+            declaration: key("source.point"),
+            output: IntentProjectionPath::field(key("point")),
             kind: IntentPortKind::Point,
         };
         let kind = IntentNodeKind::Geometry {
             recipe: GeometryRecipeKind::Segment,
         };
         let inspector = geosolve_constraint_editor::IntentInspectorProjection {
+            identity: session.identity(),
             node,
             symbol: key("bound_segment"),
             name: key("Bound segment"),
@@ -878,9 +1178,16 @@ mod tests {
             },
             suppressed: false,
             retained_failure: false,
-            inputs: vec![(slot, source)],
+            inputs: vec![IntentInspectorInput {
+                path: input_path.clone(),
+                source: source.clone(),
+            }],
             descriptor: IntentDeclarationDescriptor {
                 schema: kind.schema(0),
+                inputs: vec![IntentInputDescriptor {
+                    slot,
+                    path: input_path,
+                }],
                 fields: kind.field_descriptors(0),
                 outputs: Vec::new(),
                 suppression_edit: IntentEditClassification::Definition,
@@ -890,7 +1197,7 @@ mod tests {
             fields: Vec::new(),
         };
 
-        let markup = inspector_markup(Some(&inspector), session.identity());
+        let markup = inspector_markup(Some(&inspector));
         let inputs = markup
             .split_once("<fieldset class=\"wb-intent-inputs\">")
             .unwrap()
@@ -900,15 +1207,77 @@ mod tests {
             .0;
 
         assert!(inputs.contains("<legend>Inputs</legend>"));
-        assert!(inputs.contains(&format!("data-intent-input-slot=\"{slot}\"")));
-        assert!(inputs.contains(&format!("data-intent-source-node=\"{source_node}\"")));
-        assert!(inputs.contains(&format!("data-intent-source-port=\"{}\"", source.port)));
+        assert!(inputs.contains("data-intent-input-path=\"start\""));
+        assert!(inputs.contains("data-intent-source-declaration=\"source.point\""));
+        assert!(inputs.contains("data-intent-source-output=\"point\""));
         assert!(inputs.contains("data-intent-source-kind=\"Point\""));
-        assert!(inputs.contains(&format!("{source_node}.{} · Point", source.port)));
+        assert!(inputs.contains("<span>Start</span>"));
+        assert!(inputs.contains("<code>source.point → point · Point</code>"));
+        assert!(!inputs.contains("point:0000"));
+        assert!(!inputs.contains("data-intent-source-node"));
+        assert!(!inputs.contains("data-intent-source-port"));
         assert!(!inputs.contains("<input"));
         assert!(!inputs.contains("<button"));
         assert!(!inputs.contains("contenteditable"));
         assert!(!inputs.contains("data-intent-edit"));
+    }
+
+    #[test]
+    fn inspector_groups_repeated_fillet_fields_as_nested_objects_and_arrays() {
+        let (session, _, _) = fixture();
+        let node = NodeId::from_raw(0x8305_0020);
+        let kind = IntentNodeKind::ComputedFeature {
+            feature: ComputedFeatureKind::FilletSet,
+        };
+        let descriptors = kind.field_descriptors(2);
+        let fields = descriptors
+            .iter()
+            .map(|descriptor| IntentInspectorField::Definition {
+                definition: descriptor.schema.field.clone(),
+                value: None,
+            })
+            .collect();
+        let inspector = geosolve_constraint_editor::IntentInspectorProjection {
+            identity: session.identity(),
+            node,
+            symbol: key("fillet.main"),
+            name: key("Two corner fillet"),
+            kind: IntentGraphNodeKind::ComputedFeature {
+                feature: ComputedFeatureKind::FilletSet,
+            },
+            suppressed: false,
+            retained_failure: false,
+            inputs: Vec::new(),
+            descriptor: IntentDeclarationDescriptor {
+                schema: kind.schema(2),
+                inputs: Vec::new(),
+                fields: descriptors,
+                outputs: Vec::new(),
+                suppression_edit: IntentEditClassification::Definition,
+                input_edit: IntentEditClassification::InputBinding,
+                name_edit: IntentEditClassification::Organization,
+            },
+            fields,
+        };
+
+        let markup = inspector_markup(Some(&inspector));
+        assert!(markup.contains("data-intent-group-path=\"corners\"><legend>Corners</legend>"));
+        assert!(markup.contains(
+            "data-intent-array-index=\"0\" data-intent-group-path=\"corners[0]\"><legend>Corner 1</legend>"
+        ));
+        assert!(markup.contains(
+            "data-intent-array-index=\"1\" data-intent-group-path=\"corners[1]\"><legend>Corner 2</legend>"
+        ));
+        assert!(
+            markup
+                .contains("data-intent-group-path=\"corners[0].parents\"><legend>Parents</legend>")
+        );
+        assert!(markup.contains(
+            "data-intent-group-path=\"corners[0].parents[1]\"><legend>Parent 2</legend>"
+        ));
+        assert!(markup.contains(">Parameter<input"));
+        assert!(!markup.contains(">Corner 0000"));
+        assert!(!markup.contains(">Parent 0001"));
     }
 
     #[test]

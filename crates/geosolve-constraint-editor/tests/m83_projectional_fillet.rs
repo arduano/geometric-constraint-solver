@@ -4,9 +4,10 @@ use geosolve_constraint_editor::{
     ActivePointerGestureKind, ColdIntentMaterializer, EditorEffect, EditorHoverTarget,
     FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
     FeatureAuthoringState, FeatureAuthoringTool, IntentMaterializationError,
-    IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf, Modifiers,
-    PickTolerance, PointerInput, ProjectionalEditorError, ProjectionalEditorSession,
-    ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
+    IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf,
+    IntentSourceTokenTarget, IntentWorkbenchProjection, Modifiers, PickTolerance, PointerInput,
+    ProjectionalEditorError, ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint,
+    SelectionItem, Viewport,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_features::{
@@ -422,6 +423,76 @@ fn create_fillet(
         1
     );
     node.id
+}
+
+#[test]
+fn computed_fillet_source_projects_corner_parent_arrays_and_keeps_exact_token_authority() {
+    let (mut session, viewport) = fixture();
+    let node = create_fillet(&mut session, viewport);
+    let before = IntentWorkbenchProjection::from_session(session.coordinator().intent());
+    let text = &before.structured_source.text;
+    assert!(text.contains("corners: ["));
+    assert!(text.contains("parents: ["));
+    assert!(text.contains("parameter:"));
+    assert!(!text.contains("corner_0000"));
+    assert!(!text.contains("span:0000"));
+    assert!(!text.contains("node:span"));
+
+    let inspector = before
+        .inspector(session.coordinator().intent(), node)
+        .unwrap();
+    let parameter = inspector
+        .descriptor
+        .fields
+        .iter()
+        .find(|field| field.schema.field.0.as_str() == "corner_0000_first_parameter")
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&parameter.path).unwrap(),
+        serde_json::json!(["corners", 0, "parents", 0, "parameter"]),
+    );
+
+    let radius = before
+        .structured_source
+        .tokens
+        .iter()
+        .find(|token| {
+            matches!(
+                &token.target,
+                IntentSourceTokenTarget::Definition { node: target, field }
+                    if *target == node && field.0.as_str() == "radius"
+            )
+        })
+        .unwrap();
+    let patch = before
+        .structured_source
+        .patch_for_edit(
+            session.coordinator().intent(),
+            radius.id,
+            &serde_json::to_string(&IntentLiteral::Quantity {
+                value: 1.25,
+                unit: IntentUnit::Length,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    session.apply_patch(patch).unwrap();
+    let edited = IntentWorkbenchProjection::from_session(session.coordinator().intent());
+    assert_ne!(edited.structured_source.text, before.structured_source.text);
+    session.undo().unwrap().unwrap();
+    assert_eq!(
+        IntentWorkbenchProjection::from_session(session.coordinator().intent())
+            .structured_source
+            .text,
+        before.structured_source.text,
+    );
+    session.redo().unwrap().unwrap();
+    assert_eq!(
+        IntentWorkbenchProjection::from_session(session.coordinator().intent())
+            .structured_source
+            .text,
+        edited.structured_source.text,
+    );
 }
 
 fn complete_projectional_fillet_authoring(

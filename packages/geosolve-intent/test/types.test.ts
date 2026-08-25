@@ -129,7 +129,6 @@ const generatedSource = {
     cell: "0000000000000001",
     name: "Imported",
     declarations: [{
-      node: "0000000000000002",
       symbol: "bootstrap.point",
       name: "Bootstrap point",
       kind: {
@@ -143,13 +142,115 @@ const generatedSource = {
       },
       suppressed: false,
       inputs: {},
-      fields: {},
+      definition: {},
       instance: {},
     }],
   }],
 } as const satisfies IntentSourceSnapshot;
 
 generatedSource.cells[0].declarations[0].kind.object.payload_sha256;
+
+const semanticArrays = {
+  cells: [{
+    cell: "0000000000000003",
+    name: "Semantic arrays",
+    declarations: [{
+      symbol: "fillet.main",
+      name: "Fillet",
+      kind: { family: "computed_feature", feature: "fillet_set" },
+      suppressed: false,
+      inputs: {
+        corners: [{
+          parents: [{
+            declaration: "segment.first",
+            output: ["segments", 0],
+            kind: "curve_span",
+          }, {
+            declaration: "segment.second",
+            output: ["segments", 1],
+            kind: "curve_span",
+          }],
+        }],
+      },
+      definition: {
+        corners: [{
+          parents: [{
+            parameter: {
+              kind: "quantity",
+              value: { value: 0.25, unit: "dimensionless" },
+            },
+          }, null],
+        }],
+      },
+      instance: {
+        controls: [{
+          position: {
+            x: { kind: "quantity", value: { value: 1, unit: "length" } },
+            y: { kind: "quantity", value: { value: 2, unit: "length" } },
+          },
+          weight: { kind: "quantity", value: { value: 1, unit: "dimensionless" } },
+        }, null, {
+          position: {
+            x: { kind: "quantity", value: { value: 3, unit: "length" } },
+            y: { kind: "quantity", value: { value: 4, unit: "length" } },
+          },
+        }],
+      },
+    }],
+  }],
+} as const satisfies IntentSourceSnapshot;
+
+semanticArrays.cells[0].declarations[0].inputs.corners[0].parents[1].output[1];
+semanticArrays.cells[0].declarations[0].instance.controls[2]?.position.x;
+
+const obsoleteGeneratedSource: IntentSourceSnapshot = {
+  cells: [{
+    cell: "0000000000000004",
+    name: "Obsolete projection",
+    declarations: [{
+      symbol: "segment.obsolete",
+      name: "Obsolete segment",
+      kind: { family: "geometry", recipe: "segment" },
+      suppressed: false,
+      inputs: {},
+      // @ts-expect-error Structured Source calls this semantic tree `definition`, not `fields`.
+      fields: {},
+      instance: {},
+    }],
+  }],
+};
+obsoleteGeneratedSource;
+
+const pseudoFieldProjection: IntentSourceSnapshot = {
+  cells: [{
+    cell: "0000000000000005",
+    name: "Pseudo field",
+    declarations: [{
+      symbol: "segment.pseudo",
+      name: "Pseudo segment",
+      kind: { family: "geometry", recipe: "segment" },
+      suppressed: false,
+      inputs: {
+        // @ts-expect-error Canonical storage slots cannot masquerade as semantic object fields.
+        "point:0000": {
+          declaration: "point.start",
+          output: ["point"],
+          kind: "point",
+        },
+      },
+      definition: {},
+      instance: {
+        // @ts-expect-error Repeated values use actual arrays, not zero-padded object keys.
+        controls: {
+          "0000": {
+            x: { kind: "quantity", value: { value: 0, unit: "length" } },
+          },
+        },
+      },
+    }],
+  }],
+};
+pseudoFieldProjection;
 
 const rawBootstrapKind: IntentGraphNodeKind = {
   family: "bootstrap",

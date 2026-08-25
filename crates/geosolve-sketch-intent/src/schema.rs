@@ -12,8 +12,9 @@ use crate::{
     AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, ExternalIntentKind,
     GeometryRecipeKind, InputRole, InputSlot, IntentChildSchema, IntentFieldKey,
     IntentIdentityFlow, IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNode,
-    IntentNodeKind, IntentPortKind, IntentPortRef, IntentPortSelector, IntentUnit, LeafField,
-    OperationKind, ParameterIntentKind,
+    IntentNodeKind, IntentPortKind, IntentPortRef, IntentPortSelector, IntentProjectionPath,
+    IntentProjectionPathSegment, IntentUnit, LeafField, LeafRef, OperationKind,
+    ParameterIntentKind,
 };
 
 #[allow(
@@ -158,9 +159,18 @@ pub enum IntentFieldChoices {
 #[serde(deny_unknown_fields)]
 pub struct IntentDefinitionFieldDescriptor {
     pub schema: IntentDefinitionFieldSchema,
+    pub path: IntentProjectionPath,
     pub default: IntentFieldDefault,
     pub choices: IntentFieldChoices,
     pub edit: IntentEditClassification,
+}
+
+/// One present dependency binding and its schema-derived semantic path.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentInputDescriptor {
+    pub slot: InputSlot,
+    pub path: IntentProjectionPath,
 }
 
 /// One currently materialized stable output in a declaration descriptor.
@@ -173,11 +183,37 @@ pub struct IntentDefinitionFieldDescriptor {
 pub struct IntentOutputDescriptor {
     pub port: IntentPortRef,
     pub selector: IntentPortSelector,
+    pub path: IntentProjectionPath,
     pub kind: IntentPortKind,
     pub writable: Vec<LeafField>,
     pub flow: IntentIdentityFlow,
     pub native: Option<IntentNativeReservationKind>,
     pub edit: IntentEditClassification,
+}
+
+impl IntentOutputDescriptor {
+    /// Returns the schema-derived semantic path for one exact writable leaf
+    /// owned by this output.
+    ///
+    /// Canonical mutation authority remains the supplied [`LeafRef`]. This
+    /// helper only prevents source, Inspector, and typed clients from
+    /// independently re-deriving a second presentation coordinate.
+    #[must_use]
+    pub fn path_for_leaf(&self, leaf: LeafRef) -> Option<IntentProjectionPath> {
+        if leaf.node != self.port.node
+            || leaf.port != self.port.port
+            || !self.writable.contains(&leaf.field)
+        {
+            return None;
+        }
+        Some(if self.writable.len() == 1 {
+            self.path.clone()
+        } else {
+            self.path
+                .clone()
+                .with_field(projection_key(leaf_field_projection_key(leaf.field)))
+        })
+    }
 }
 
 /// Complete schema and output metadata for one concrete declaration.
@@ -189,6 +225,7 @@ pub struct IntentOutputDescriptor {
 #[serde(deny_unknown_fields)]
 pub struct IntentDeclarationDescriptor {
     pub schema: IntentNodeSchema,
+    pub inputs: Vec<IntentInputDescriptor>,
     pub fields: Vec<IntentDefinitionFieldDescriptor>,
     pub outputs: Vec<IntentOutputDescriptor>,
     pub suppression_edit: IntentEditClassification,
@@ -222,6 +259,7 @@ impl IntentNodeKind {
             .fields
             .into_iter()
             .map(|schema| IntentDefinitionFieldDescriptor {
+                path: definition_projection_path(self, &schema.field),
                 default: definition_field_default(self, &schema, dynamic_children),
                 choices: definition_field_choices(self, &schema),
                 schema,
@@ -244,6 +282,15 @@ impl IntentNode {
         let dynamic_children = u16::try_from(self.child_order.len())
             .expect("validated declaration child count fits u16");
         let schema = self.kind.schema(dynamic_children);
+        let inputs = self
+            .inputs
+            .keys()
+            .copied()
+            .map(|slot| IntentInputDescriptor {
+                path: input_projection_path(self, slot, &schema),
+                slot,
+            })
+            .collect();
         let fields = self.kind.field_descriptors(dynamic_children);
         let outputs = self
             .ports
@@ -262,6 +309,7 @@ impl IntentNode {
                 IntentOutputDescriptor {
                     port: port.as_ref(self.id),
                     selector: port.selector,
+                    path: output_projection_path(self, port.selector),
                     kind: port.kind,
                     writable: port.writable.clone(),
                     flow: port.flow,
@@ -276,12 +324,717 @@ impl IntentNode {
             .collect();
         IntentDeclarationDescriptor {
             schema,
+            inputs,
             fields,
             outputs,
             suppression_edit: IntentEditClassification::Definition,
             input_edit: IntentEditClassification::InputBinding,
             name_edit: IntentEditClassification::Organization,
         }
+    }
+}
+
+fn projection_key(value: &str) -> IntentKey {
+    IntentKey::new(value).expect("source-controlled projection path key is valid")
+}
+
+const fn leaf_field_projection_key(field: LeafField) -> &'static str {
+    match field {
+        LeafField::X => "x",
+        LeafField::Y => "y",
+        LeafField::Value => "value",
+        LeafField::Angle => "angle",
+        LeafField::Weight => "weight",
+        LeafField::Parameter => "parameter",
+    }
+}
+
+fn projection_path(fields: &[&str]) -> IntentProjectionPath {
+    IntentProjectionPath::new(
+        fields
+            .iter()
+            .map(|field| IntentProjectionPathSegment::Field(projection_key(field)))
+            .collect(),
+    )
+}
+
+fn indexed_projection_path(collection: &str, index: u16) -> IntentProjectionPath {
+    IntentProjectionPath::indexed(projection_key(collection), index)
+}
+
+fn camel_case(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut uppercase = false;
+    for character in value.chars() {
+        if character == '_' {
+            uppercase = true;
+        } else if uppercase {
+            result.extend(character.to_uppercase());
+            uppercase = false;
+        } else {
+            result.push(character);
+        }
+    }
+    result
+}
+
+fn definition_projection_path(
+    kind: &IntentNodeKind,
+    field: &IntentFieldKey,
+) -> IntentProjectionPath {
+    let name = field.0.as_str();
+    if matches!(
+        kind,
+        IntentNodeKind::ComputedFeature {
+            feature: ComputedFeatureKind::FilletSet
+        }
+    ) && let Some(path) = computed_fillet_projection_path(name)
+    {
+        return path;
+    }
+    if matches!(
+        kind,
+        IntentNodeKind::Operation {
+            operation: OperationKind::AssociativeFillet
+        }
+    ) && let Some(path) = parent_projection_path(name)
+    {
+        return path;
+    }
+    if let Some(path) = contact_projection_path(name) {
+        return path;
+    }
+    if let Some(suffix) = name.strip_prefix("source_") {
+        return nested_contact_component(projection_path(&["source"]), suffix);
+    }
+    IntentProjectionPath::field(projection_key(&camel_case(name)))
+}
+
+fn computed_fillet_projection_path(name: &str) -> Option<IntentProjectionPath> {
+    let remainder = name.strip_prefix("corner_")?;
+    let (ordinal, suffix) = remainder.split_once('_')?;
+    let ordinal = ordinal.parse::<u16>().ok()?;
+    let base = indexed_projection_path("corners", ordinal);
+    parent_projection_path_from_base(base.clone(), suffix)
+        .or_else(|| Some(base.with_field(projection_key(&camel_case(suffix)))))
+}
+
+fn parent_projection_path(name: &str) -> Option<IntentProjectionPath> {
+    let (index, suffix) = if let Some(suffix) = name.strip_prefix("first_") {
+        (0, suffix)
+    } else if let Some(suffix) = name.strip_prefix("second_") {
+        (1, suffix)
+    } else {
+        return None;
+    };
+    Some(nested_contact_component(
+        indexed_projection_path("parents", index),
+        suffix,
+    ))
+}
+
+fn parent_projection_path_from_base(
+    base: IntentProjectionPath,
+    name: &str,
+) -> Option<IntentProjectionPath> {
+    let (index, suffix) = if let Some(suffix) = name.strip_prefix("first_") {
+        (0, suffix)
+    } else if let Some(suffix) = name.strip_prefix("second_") {
+        (1, suffix)
+    } else {
+        return None;
+    };
+    let parent = base.with_field(projection_key("parents")).with_index(index);
+    Some(nested_contact_component(parent, suffix))
+}
+
+fn contact_projection_path(name: &str) -> Option<IntentProjectionPath> {
+    if let Some(suffix) = name.strip_prefix("first_contact_") {
+        return Some(nested_contact_component(
+            indexed_projection_path("contacts", 0),
+            suffix,
+        ));
+    }
+    if let Some(suffix) = name.strip_prefix("second_contact_") {
+        return Some(nested_contact_component(
+            indexed_projection_path("contacts", 1),
+            suffix,
+        ));
+    }
+    name.strip_prefix("contact_")
+        .map(|suffix| nested_contact_component(projection_path(&["contact"]), suffix))
+}
+
+fn nested_contact_component(base: IntentProjectionPath, suffix: &str) -> IntentProjectionPath {
+    match suffix {
+        "domain" => base
+            .with_field(projection_key("domain"))
+            .with_field(projection_key("kind")),
+        "domain_lower" => base
+            .with_field(projection_key("domain"))
+            .with_field(projection_key("lower")),
+        "domain_upper" => base
+            .with_field(projection_key("domain"))
+            .with_field(projection_key("upper")),
+        "domain_period" => base
+            .with_field(projection_key("domain"))
+            .with_field(projection_key("period")),
+        "neighborhood" => base
+            .with_field(projection_key("neighborhood"))
+            .with_field(projection_key("kind")),
+        "neighborhood_lower" | "local_lower" => base
+            .with_field(projection_key("neighborhood"))
+            .with_field(projection_key("lower")),
+        "neighborhood_upper" | "local_upper" => base
+            .with_field(projection_key("neighborhood"))
+            .with_field(projection_key("upper")),
+        "periodic_anchor" => base
+            .with_field(projection_key("anchor"))
+            .with_field(projection_key("enabled")),
+        "anchor_parameter" => base
+            .with_field(projection_key("anchor"))
+            .with_field(projection_key("parameter")),
+        "anchor_winding" => base
+            .with_field(projection_key("anchor"))
+            .with_field(projection_key("winding")),
+        _ => base.with_field(projection_key(&camel_case(suffix))),
+    }
+}
+
+fn input_projection_path(
+    node: &IntentNode,
+    slot: InputSlot,
+    schema: &IntentNodeSchema,
+) -> IntentProjectionPath {
+    match &node.kind {
+        IntentNodeKind::ComputedFeature {
+            feature: ComputedFeatureKind::FilletSet,
+        } if slot.role == InputRole::Span => {
+            return indexed_projection_path("corners", slot.index / 2)
+                .with_field(projection_key("parents"))
+                .with_index(slot.index % 2);
+        }
+        IntentNodeKind::Operation {
+            operation: OperationKind::AssociativeFillet,
+        } if slot.role == InputRole::Span => {
+            return indexed_projection_path("parents", slot.index);
+        }
+        IntentNodeKind::Operation {
+            operation: OperationKind::ProfileOffset,
+        } if matches!(slot.role, InputRole::Profile | InputRole::Chain) => {
+            let source_count = node
+                .inputs
+                .keys()
+                .filter(|candidate| matches!(candidate.role, InputRole::Profile | InputRole::Chain))
+                .count();
+            return if source_count > 1 {
+                indexed_projection_path("sources", slot.index)
+            } else {
+                projection_path(&["source"])
+            };
+        }
+        IntentNodeKind::Dimension {
+            dimension: DimensionKind::ProfileOffset,
+        } if matches!(slot.role, InputRole::Profile | InputRole::Chain) => {
+            return projection_path(&["source"]);
+        }
+        IntentNodeKind::Geometry { recipe } if slot.role == InputRole::Point => {
+            return geometry_point_input_projection_path(*recipe, slot.index);
+        }
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::TangentArc,
+        } if slot.role == InputRole::Span => return projection_path(&["source"]),
+        _ => {}
+    }
+    let role = input_role_projection_key(slot.role);
+    let repeated = schema.input(slot.role).map_or_else(
+        || {
+            slot.index > 0
+                || node
+                    .inputs
+                    .keys()
+                    .filter(|candidate| candidate.role == slot.role)
+                    .nth(1)
+                    .is_some()
+        },
+        |input| input.maximum > 1,
+    );
+    if repeated {
+        indexed_projection_path(plural_projection_key(role), slot.index)
+    } else {
+        projection_path(&[role])
+    }
+}
+
+fn geometry_point_input_projection_path(
+    recipe: GeometryRecipeKind,
+    index: u16,
+) -> IntentProjectionPath {
+    use GeometryRecipeKind as G;
+    let fixed = match recipe {
+        G::SketchPoint => ["point", "point", "point", "point", "point"],
+        G::Segment | G::TwoPointDiameterCircle | G::TangentArc | G::RationalQuadraticConic => {
+            ["start", "end", "point", "point", "point"]
+        }
+        G::MidpointLine => ["midpoint", "end", "point", "point", "point"],
+        G::TwoPointAlignedRectangle => ["firstCorner", "oppositeCorner", "point", "point", "point"],
+        G::ThreePointCornerRectangle => [
+            "firstCorner",
+            "secondCorner",
+            "thirdCorner",
+            "point",
+            "point",
+        ],
+        G::CenterRectangle | G::ThreePointCenterRectangle => {
+            ["center", "corner", "point", "point", "point"]
+        }
+        G::CenterRadiusCircle => ["center", "radiusPoint", "point", "point", "point"],
+        G::ThreePointCircle | G::ThreePointArc => ["first", "second", "third", "point", "point"],
+        G::CenterArc => ["center", "start", "end", "point", "point"],
+        G::CenterAxesEllipse | G::CenterAxesEllipticalArc => {
+            ["center", "majorAxisPoint", "minorAxisPoint", "start", "end"]
+        }
+        G::AxisEndpointsEllipse | G::AxisEndpointsEllipticalArc => [
+            "majorAxisStart",
+            "majorAxisEnd",
+            "minorAxisPoint",
+            "start",
+            "end",
+        ],
+        G::QuadraticBezier => ["start", "control", "end", "point", "point"],
+        G::CubicBezier => ["start", "firstControl", "secondControl", "end", "point"],
+        G::Parabola => ["vertex", "focus", "point", "point", "point"],
+        G::Hyperbola => ["center", "transverseAxisPoint", "point", "point", "point"],
+        G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs => {
+            return indexed_projection_path(
+                if recipe == G::Polyline {
+                    "vertices"
+                } else {
+                    "controls"
+                },
+                index,
+            );
+        }
+    };
+    let name = fixed.get(usize::from(index)).copied().unwrap_or("point");
+    projection_path(&[name])
+}
+
+fn output_projection_path(node: &IntentNode, selector: IntentPortSelector) -> IntentProjectionPath {
+    if let Some(path) = specialized_output_projection_path(&node.kind, selector) {
+        return path;
+    }
+    match selector {
+        IntentPortSelector::Node { role, index } => {
+            let count = node
+                .ports
+                .values()
+                .filter(|port| {
+                    matches!(
+                        port.selector,
+                        IntentPortSelector::Node {
+                            role: candidate,
+                            ..
+                        } if candidate == role
+                    )
+                })
+                .count();
+            let role = port_role_projection_key(role);
+            if count > 1 {
+                indexed_projection_path(plural_projection_key(role), index)
+            } else {
+                projection_path(&[role])
+            }
+        }
+        IntentPortSelector::InitialChild {
+            ordinal,
+            role,
+            index,
+        } => child_output_projection_path(node.kind.child_schema(), ordinal, role, index),
+    }
+}
+
+#[allow(
+    clippy::match_same_arms,
+    clippy::too_many_lines,
+    reason = "the exhaustive semantic output catalog keeps each distinct recipe and canonical port role independently reviewable"
+)]
+fn specialized_output_projection_path(
+    kind: &IntentNodeKind,
+    selector: IntentPortSelector,
+) -> Option<IntentProjectionPath> {
+    use crate::IntentPortRole as R;
+    use GeometryRecipeKind as G;
+
+    let IntentPortSelector::Node { role, index } = selector else {
+        return None;
+    };
+    match (kind, role, index) {
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::SketchPoint,
+            },
+            R::Primary,
+            0,
+        ) => Some(projection_path(&["point"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::CenterRadiusCircle,
+            },
+            R::Control,
+            0,
+        ) => Some(projection_path(&["radiusPoint"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::ThreePointCircle,
+            },
+            R::Control,
+            index,
+        ) => Some(indexed_projection_path("points", index)),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::AxisEndpointsEllipse | G::AxisEndpointsEllipticalArc,
+            },
+            R::MajorAxisPoint,
+            0,
+        ) => Some(projection_path(&["majorAxisStart"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::AxisEndpointsEllipse,
+            },
+            R::End,
+            0,
+        ) => Some(projection_path(&["majorAxisEnd"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::AxisEndpointsEllipticalArc,
+            },
+            R::Control,
+            0,
+        ) => Some(projection_path(&["majorAxisEnd"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::RationalQuadraticConic,
+            },
+            R::Control,
+            0,
+        ) => Some(projection_path(&["weightedMiddle"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Parabola,
+            },
+            R::Center,
+            0,
+        ) => Some(projection_path(&["vertex"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Parabola,
+            },
+            R::Control,
+            0,
+        ) => Some(projection_path(&["focus"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Hyperbola,
+            },
+            R::Control,
+            0,
+        ) => Some(projection_path(&["transverseAxisPoint"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe:
+                    G::TwoPointAlignedRectangle
+                    | G::ThreePointCornerRectangle
+                    | G::CenterRectangle
+                    | G::ThreePointCenterRectangle,
+            },
+            R::Corner,
+            index,
+        ) => Some(indexed_projection_path("corners", index)),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::CenterRadiusCircle | G::TwoPointDiameterCircle | G::ThreePointCircle,
+            },
+            R::Target,
+            0,
+        ) => Some(projection_path(&["radius"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::CenterArc | G::ThreePointArc | G::TangentArc,
+            },
+            R::Target,
+            0,
+        ) => Some(projection_path(&["radius"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::CenterArc | G::ThreePointArc | G::TangentArc,
+            },
+            R::Target,
+            1,
+        ) => Some(projection_path(&["startAngle"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::CenterArc | G::ThreePointArc | G::TangentArc,
+            },
+            R::Target,
+            2,
+        ) => Some(projection_path(&["endAngle"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe:
+                    G::CenterAxesEllipse
+                    | G::AxisEndpointsEllipse
+                    | G::CenterAxesEllipticalArc
+                    | G::AxisEndpointsEllipticalArc,
+            },
+            R::Target,
+            0,
+        ) => Some(projection_path(&["minorAxisRatio"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::CenterAxesEllipticalArc | G::AxisEndpointsEllipticalArc,
+            },
+            R::Target,
+            1,
+        ) => Some(projection_path(&["startAngle"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::CenterAxesEllipticalArc | G::AxisEndpointsEllipticalArc,
+            },
+            R::Target,
+            2,
+        ) => Some(projection_path(&["endAngle"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::RationalQuadraticConic,
+            },
+            R::Target,
+            0,
+        ) => Some(projection_path(&["middleWeight"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Parabola,
+            },
+            R::Target,
+            0,
+        ) => Some(projection_path(&["trimStart"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Parabola,
+            },
+            R::Target,
+            1,
+        ) => Some(projection_path(&["trimEnd"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Hyperbola,
+            },
+            R::Target,
+            0,
+        ) => Some(projection_path(&["semiConjugate"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Hyperbola,
+            },
+            R::Target,
+            1,
+        ) => Some(projection_path(&["trimStart"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::Hyperbola,
+            },
+            R::Target,
+            2,
+        ) => Some(projection_path(&["trimEnd"])),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::TangentArc,
+            },
+            R::Contact,
+            index,
+        ) => Some(indexed_projection_path("contacts", index)),
+        (
+            IntentNodeKind::Geometry {
+                recipe: G::TangentArc,
+            },
+            R::Parameter,
+            index,
+        ) => {
+            Some(indexed_projection_path("contacts", index).with_field(projection_key("parameter")))
+        }
+        (
+            IntentNodeKind::Constraint {
+                constraint:
+                    ConstraintKind::PointOnCurve
+                    | ConstraintKind::LineCurveTangency
+                    | ConstraintKind::CurveDirection,
+            },
+            R::Contact,
+            0,
+        ) => Some(projection_path(&["contact"])),
+        (
+            IntentNodeKind::Constraint {
+                constraint:
+                    ConstraintKind::PointOnCurve
+                    | ConstraintKind::LineCurveTangency
+                    | ConstraintKind::CurveDirection,
+            },
+            R::Parameter,
+            0,
+        ) => Some(projection_path(&["contact", "parameter"])),
+        (IntentNodeKind::Constraint { .. }, R::Contact, index) => {
+            Some(indexed_projection_path("contacts", index))
+        }
+        (IntentNodeKind::Constraint { .. }, R::Parameter, index) => {
+            Some(indexed_projection_path("contacts", index).with_field(projection_key("parameter")))
+        }
+        (IntentNodeKind::Dimension { .. }, R::Target, 0) => Some(projection_path(&["value"])),
+        (IntentNodeKind::Bootstrap { object }, R::Primary, 0)
+            if object.kind == crate::BootstrapNativeKind::Point =>
+        {
+            Some(projection_path(&["point"]))
+        }
+        (IntentNodeKind::Bootstrap { object }, R::Target, 0)
+            if object.kind == crate::BootstrapNativeKind::Scalar =>
+        {
+            Some(projection_path(&["value"]))
+        }
+        _ => None,
+    }
+}
+
+fn child_output_projection_path(
+    schema: IntentChildSchema,
+    ordinal: u16,
+    role: crate::IntentPortRole,
+    index: u16,
+) -> IntentProjectionPath {
+    use crate::IntentPortRole as R;
+    match (schema, role) {
+        (IntentChildSchema::PolylineVertex, R::Corner) => {
+            indexed_projection_path("vertices", ordinal).with_field(projection_key("position"))
+        }
+        (IntentChildSchema::PolylineVertex, R::Span) => {
+            indexed_projection_path("segments", ordinal)
+        }
+        (IntentChildSchema::SplineControl, R::Control) => {
+            indexed_projection_path("controls", ordinal).with_field(projection_key("position"))
+        }
+        (IntentChildSchema::SplineControl, R::Target) => {
+            indexed_projection_path("controls", ordinal).with_field(projection_key("weight"))
+        }
+        (IntentChildSchema::FilletCorner, R::FeatureCorner) => {
+            indexed_projection_path("corners", ordinal)
+        }
+        (IntentChildSchema::PatternInstance, R::Result) => {
+            indexed_projection_path("instances", ordinal)
+        }
+        _ => indexed_projection_path(child_schema_projection_key(schema), ordinal)
+            .with_field(projection_key(port_role_projection_key(role)))
+            .with_index(index),
+    }
+}
+
+const fn input_role_projection_key(role: InputRole) -> &'static str {
+    match role {
+        InputRole::Point => "point",
+        InputRole::Contact => "contact",
+        InputRole::Curve => "curve",
+        InputRole::Span => "span",
+        InputRole::Scalar => "scalar",
+        InputRole::Constraint => "constraint",
+        InputRole::Dimension => "dimension",
+        InputRole::Feature => "feature",
+        InputRole::Profile => "profile",
+        InputRole::Chain => "chain",
+        InputRole::Parameter => "parameter",
+        InputRole::External => "external",
+        InputRole::Source => "source",
+        InputRole::Catalog => "catalog",
+        InputRole::Identity => "identity",
+    }
+}
+
+const fn port_role_projection_key(role: crate::IntentPortRole) -> &'static str {
+    use crate::IntentPortRole as R;
+    match role {
+        R::Primary => "primary",
+        R::Start => "start",
+        R::End => "end",
+        R::Center => "center",
+        R::Midpoint => "midpoint",
+        R::Corner => "corner",
+        R::Control => "control",
+        R::MajorAxisPoint => "majorAxisPoint",
+        R::MinorAxisPoint => "minorAxisPoint",
+        R::Curve => "curve",
+        R::Span => "span",
+        R::Contact => "contact",
+        R::Target => "target",
+        R::Constraint => "constraint",
+        R::Dimension => "dimension",
+        R::Source => "source",
+        R::Catalog => "catalog",
+        R::Operation => "operation",
+        R::Feature => "feature",
+        R::FeatureCorner => "featureCorner",
+        R::Parameter => "parameter",
+        R::Binding => "binding",
+        R::Output => "output",
+        R::External => "external",
+        R::Annotation => "annotation",
+        R::Collection => "collection",
+        R::Profile => "profile",
+        R::Chain => "chain",
+        R::Result => "result",
+    }
+}
+
+fn plural_projection_key(value: &str) -> &'static str {
+    match value {
+        "point" => "points",
+        "contact" => "contacts",
+        "curve" => "curves",
+        "span" => "spans",
+        "scalar" => "scalars",
+        "constraint" => "constraints",
+        "dimension" => "dimensions",
+        "feature" => "features",
+        "profile" => "profiles",
+        "chain" => "chains",
+        "parameter" => "parameters",
+        "external" => "externals",
+        "source" => "sources",
+        "catalog" => "catalogs",
+        "identity" => "identities",
+        "primary" => "primaries",
+        "start" => "starts",
+        "end" => "ends",
+        "center" => "centers",
+        "midpoint" => "midpoints",
+        "corner" => "corners",
+        "control" => "controls",
+        "majorAxisPoint" => "majorAxisPoints",
+        "minorAxisPoint" => "minorAxisPoints",
+        "target" => "targets",
+        "operation" => "operations",
+        "featureCorner" => "featureCorners",
+        "binding" => "bindings",
+        "output" => "outputs",
+        "annotation" => "annotations",
+        "collection" => "collections",
+        "result" => "results",
+        _ => "values",
+    }
+}
+
+const fn child_schema_projection_key(schema: IntentChildSchema) -> &'static str {
+    match schema {
+        IntentChildSchema::None => "children",
+        IntentChildSchema::PolylineVertex => "vertices",
+        IntentChildSchema::SplineControl => "controls",
+        IntentChildSchema::FilletCorner => "corners",
+        IntentChildSchema::PatternInstance => "instances",
     }
 }
 
