@@ -2,9 +2,9 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F003 withdrew the former immutable Tailscale candidate because
-ordinary GUI dependencies were not projected as lexical managed TypeScript**. Accepted M83 remains
-GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; M84-F003 is repaired, clean-qualified and immutably nominated for
+replacement UAT**. M84-U1 through M84-U11 and explicit approval remain pending. Accepted M83
+remains GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -38,6 +38,10 @@ layer optional.
 - Keep the data-only M83 source projection as honestly labelled Intent IR. For every supported GUI
   conversion, emit dependency-ordered lexical declarations and member expressions; never expose a
   transport reference object or repeated string identity as authored code.
+- Promote the complete supported ordinary sketch atomically into one genuine persisted code
+  project. Omit only the exact canonical fresh-workspace document foundation; never discard other
+  bootstrap objects. Limit recomputable line-branch normalization to current code-expansion-owned
+  Segments so ordinary GUI Segments retain explicit branch authority.
 
 ### M84-G3 — reusable custom patches
 
@@ -53,6 +57,9 @@ layer optional.
 
 - Expose project-branded `FeatureRef`, `OutputRef`, fixed named result objects, mapped
   `FeatureRecord` results and keyed/derived collections; raw wire IDs are not code-facing inputs.
+- Require dependencies to parse from lexical declaration/member expressions as
+  `ManagedValue::Reference`; branded raw strings are insufficient. Reject raw strings, transport
+  DTOs, foreign-project and forged reserved-project values, wrong kinds and misspelled members.
 - Generate high-level TypeScript output definitions from central Rust declaration descriptors and
   reject schema drift, raw IDs, cross-project references and port-kind mismatch.
 - Give rectangles named corner/edge/profile outputs, preserve exact keys for named Fillet records,
@@ -119,9 +126,18 @@ Withdrawn nomination record (2026-08-25): exact product source
 no-rebuild seven-file output is frozen read-only at `/tmp/geosolve-m84-uat.aHw5ePSW`, ordered-
 manifest aggregate `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, and is
 byte/browser-verified locally and at `http://100.94.63.83:8080/`. Human UAT then opened M84-F003,
-so those bytes are historical defect evidence rather than a current candidate. Replacement
-qualification/nomination, M84-U1 through M84-U10, explicit approval, GitHub Pages publication and
-closure remain open.
+so those bytes are historical defect evidence rather than a current candidate.
+
+Replacement nomination record (2026-08-26): exact product source
+`b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
+`7062806695e1e134c339cfa47903145d321f6350`, passes the complete clean release gate. Its exact
+no-rebuild seven-file output `/tmp/geosolve-m84-f003-uat.mO67NI` is frozen at directory/file modes
+`0555`/`0444`, ordered-manifest aggregate
+`38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`, and byte/browser-verified
+on temporary and retained endpoints. Existing browser checks pass 4/4 and the F003 flow passes 1/1
+on both. Retained service PID `3736900` serves only those exact bytes at
+`http://100.94.63.83:8080/`. M84-U1 through M84-U11, explicit approval, GitHub Pages publication,
+service retirement and closure remain open; accepted M83 remains public authority.
 
 ## Bounds and non-goals
 

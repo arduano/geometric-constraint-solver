@@ -5793,9 +5793,10 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F003 withdrew the former Tailscale candidate after human UAT
-proved that ordinary GUI Structured Source still serialized intent-reference DTOs instead of
-projecting genuinely lexical managed TypeScript**. Accepted M83 remains public Pages authority.
+Status: **active and unaccepted; M84-F003 is repaired, clean-qualified and immutably nominated for
+replacement UAT**. Ordinary GUI dependencies now project as lexical managed TypeScript while the
+low-level transport remains truthfully labelled Intent IR. M84-U1 through M84-U11 and explicit
+approval remain pending; accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5836,14 +5837,14 @@ projecting genuinely lexical managed TypeScript**. Accepted M83 remains public P
   TypeScript, golden require-clean, Trunk and the complete clean release gate.
 - [x] Freeze one no-rebuild candidate and verify its exact bytes locally and through retained
   Tailscale.
-- [ ] Resolve M84-F003: preserve the M83 data-only projection as honestly labelled **Intent IR**;
+- [x] Resolve M84-F003: preserve the M83 data-only projection as honestly labelled **Intent IR**;
   add direct managed `geometry.line` lowering; project a dependency-ordered GUI rectangle plus
   shared-corner line as lexical `frame.corners.*` references; and let an ordinary sketch promote
   that projection into one genuine `CodeProject`/`SketchCodeSession`.
-- [ ] Qualify M84-F003 with focused Rust ownership/materialization, TypeScript compile-pass/fail,
+- [x] Qualify M84-F003 with focused Rust ownership/materialization, TypeScript compile-pass/fail,
   workbench/persistence and browser regressions; then pass the unchanged golden, WASM, formatting,
   Clippy, locked workspace and clean release gates and nominate replacement bytes.
-- [ ] Receive explicit M84-U1 through M84-U10 approval, then publish/exact-verify Pages, retire the
+- [ ] Receive explicit M84-U1 through M84-U11 approval, then publish/exact-verify Pages, retire the
   service and close M84.
 
 Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
@@ -5870,9 +5871,31 @@ shared-corner Segment path displayed the M83 `IntentSourceSnapshot` reference DT
 authoring TypeScript, so its dependency appeared as `{ declaration, output, kind }` data rather
 than a lexical `frame.corners.*` expression coupled to the rectangle result type. The frozen bytes
 and evidence remain historical defect evidence only; they are not a current UAT candidate and
-must not reach Pages. The retained service may remain temporarily reachable only until replacement
-bytes take its place. M84-U1 through M84-U10, replacement qualification/nomination, explicit
-approval, Pages publication, service retirement and closure remain open.
+must not reach Pages. Its retained PID `2426265` was retired only after the replacement passed its
+temporary verification.
+
+M84-F003 replacement record (2026-08-26): exact product source
+`b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
+`7062806695e1e134c339cfa47903145d321f6350`, emits dependency-ordered declarations such as
+`const frame = $.geometry.rectangle(...)` followed by `start: frame.corners.lowerLeft`. Endpoints
+are `ManagedValue::Reference` values and alias the exact native rectangle points; raw strings,
+transport DTOs, foreign-project or forged reserved-project references, wrong kinds and misspelled
+members fail closed. The workbench presents the old DTO only as Intent IR, offers a read-only
+lexical Code preview and promotes it atomically into a genuine persisted code project whose
+dependent line follows later managed rectangle edits. Only the exact canonical fresh-workspace
+document foundation is omitted, and line-branch normalization is restricted to current code-
+expansion-owned Segments so ordinary GUI Segments retain explicit branch authority.
+
+The clean replacement gate passes in about 22m19s with log
+`/tmp/geosolve-m84-f003b-release-gate.log` (6,192 lines, 414,397 bytes, SHA-256
+`eb05d3c1e460f5cb7be410dc44d0af0c4b4eaf4fd775423b676c77a84a433f90`), the unchanged 271-row
+golden and separate M84 ledger. Its exact no-rebuild seven-file snapshot
+`/tmp/geosolve-m84-f003-uat.mO67NI`, aggregate
+`38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`, is immutable and exact-
+verified on temporary and retained endpoints. Existing browser checks pass 4/4 and the F003 flow
+passes 1/1 on each endpoint. `geosolve-m84-uat.service`, PID `3736900`, serves the replacement at
+`http://100.94.63.83:8080/`. M84-U1 through M84-U11, explicit approval, Pages publication, service
+retirement and closure remain open; no M84 Pages authority is claimed.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

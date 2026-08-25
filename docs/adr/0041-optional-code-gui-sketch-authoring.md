@@ -2,10 +2,11 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84 and under M84-F003 repair. Exact source
-`79078eca44a5af4de5cccd92bf6fee570c473624` was clean-qualified and immutably nominated, but human
-UAT withdrew it after ordinary GUI Structured Source exposed transport DTOs instead of lexical
-managed references. M84 remains active and unaccepted; GitHub Pages remains on accepted M83.
+Status: accepted for M84. M84-F003 is repaired, clean-qualified and immutably nominated at exact
+replacement source `b9e67bad7f4935b1e0591ea4f149fae478b32675`. The former `79078ec` candidate
+remains withdrawn historical evidence because ordinary GUI Structured Source exposed transport
+DTOs instead of lexical managed references. M84 remains active and unaccepted with U1-U11 pending;
+GitHub Pages remains on accepted M83.
 
 ## Context
 
@@ -95,7 +96,11 @@ optional conversion API projects supported declarations in dependency order and 
 dependency as an earlier lexical branded value, for example
 `start: frame.corners.lowerLeft`. It never embeds `{ declaration, output, kind }` transport objects
 or repeats a dependency identity string in managed source. Promotion creates a genuine
-`CodeProject`/`SketchCodeSession`; a read-only preview alone does not acquire code authority.
+`CodeProject`/`SketchCodeSession`; a read-only preview alone does not acquire code authority. The
+all-or-nothing promotion may omit only the exact canonical fresh-workspace document foundation;
+other bootstrap geometry remains unsupported rather than disappearing. Direct line expansion
+aliases the exact referenced native points, and same-cell line-branch normalization is limited to
+Segments owned by the current code expansion so ordinary GUI Segments remain explicit.
 
 Invalid-subset text remains a non-canonical editor draft and changes no project or scene. Valid
 source with a missing/tampered artifact, expansion error, dangling dependency or invalid geometry
@@ -133,7 +138,10 @@ type DerivedFeatureCollection<Owner, Key, V>
 ```
 
 Semantic references encode declaration symbol, semantic output path, expected port kind and
-identity generation internally. They reject raw IDs, cross-project references and kind mismatch.
+identity generation internally. A code-facing dependency must originate as a lexical declaration/
+member expression whose parsed value is `ManagedValue::Reference`; branding a raw string is not
+sufficient. Raw strings, transport DTOs, foreign-project and forged reserved-project references,
+kind mismatch and misspelled members reject before expansion.
 High-level result definitions are generated from the central Rust declaration descriptors and
 checked for Rust/TypeScript schema parity. An axis-aligned rectangle exposes
 `corners.{lowerLeft,lowerRight,upperRight,upperLeft}`,

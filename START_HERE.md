@@ -321,8 +321,16 @@ immutable snapshot `/tmp/geosolve-m84-uat.aHw5ePSW` are withdrawn after human UA
 `M84-F003`: ordinary GUI Structured Source still exposed the data-only M83 intent-reference DTO
 rather than real lexical managed TypeScript. The repair keeps that projection as honestly labelled
 Intent IR, adds direct managed lines and projects GUI dependencies as variable/member expressions
-such as `frame.corners.lowerLeft`. Pages remains on accepted M83; no M84 candidate is currently
-nominated.
+such as `frame.corners.lowerLeft`. Exact replacement source `b9e67bad`, tree `7062806`, passes the
+complete clean gate and immutable no-rebuild nomination. Its exact seven-file snapshot
+`/tmp/geosolve-m84-f003-uat.mO67NI`, aggregate
+`38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`, passes temporary and
+retained byte verification plus existing browser 4/4 and F003 1/1 on each endpoint. Promotion now
+creates a genuine persisted code project; lexical endpoints alias exact native points. Raw strings,
+transport DTOs, foreign or forged reserved-project references, wrong kinds and misspelled members
+fail closed. Only the exact canonical fresh-workspace document foundation is omitted, and line-
+branch normalization is limited to current expansion-owned Segments. M84 remains active and
+unaccepted with U1-U11 pending. Pages remains on accepted M83; no M84 publication is claimed.
 
 ## Read first
 
@@ -854,8 +862,9 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, findings and exact nomination ledger)
-- `docs/M84_UAT.md` (nominated immutable candidate and pending four-demo scorecard)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F003 repairs and exact replacement
+  nomination ledger)
+- `docs/M84_UAT.md` (replacement immutable candidate and pending U1-U11 scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -2,9 +2,9 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **former immutable candidate withdrawn by M84-F003; replacement focused UAT pending**. No
-row is accepted. Pages remains on accepted M83. The old bytes may remain available over Tailscale
-temporarily as historical defect evidence, not as current UAT authority.
+Status: **M84-F003 replacement is clean-qualified and immutably nominated; focused UAT U1-U11 is
+pending**. No row is accepted. Pages remains on accepted M83. The former candidate is preserved
+only as historical defect evidence.
 
 ## Withdrawn candidate evidence
 
@@ -39,14 +39,63 @@ bounded-surface check at both required sizes; log hashes are
 `54858c5a1f75cc2e286d07360ed8342c7f8a09290a8f3e7ee1c4d295afe91d9e` and
 `37f289b62adc02362e8c34a1ea23377c2a3fc5446d43ac262a5b075c1652f4c0`.
 
-The withdrawn snapshot is still served temporarily by `geosolve-m84-uat.service`, PID `2426265`, at
-`http://100.94.63.83:8080/`. It serves the immutable snapshot above; the temporary `:18084`
-listener is retired. These facts nominate the candidate mechanically and do not accept any row.
+Historical `geosolve-m84-uat.service` PID `2426265` served the immutable snapshot above at
+`http://100.94.63.83:8080/`; it was retired only after replacement temporary byte and browser
+verification passed. Those facts preserve historical mechanical evidence and do not accept any
+row.
 
 M84-F003 reproduction: draw an aligned rectangle, then a Segment between two rectangle corners.
 The old source view shows a serialized `{ declaration, output, kind }` dependency rather than a
 lexical `frame.corners.*` expression. This disproves the code-authoring claim and withdraws the
 complete snapshot despite its earlier mechanical qualification.
+
+## Replacement candidate evidence
+
+Qualified product source: `b9e67bad7f4935b1e0591ea4f149fae478b32675`; tree:
+`7062806695e1e134c339cfa47903145d321f6350`. The exact clean gate
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY -u NO_COLOR \
+  nix-shell shell.nix --run ./scripts/release-gate.sh
+```
+
+ran on 2026-08-26 from 00:24:02 through 00:46:20.940662 AEST, approximately 22m19s, and exited 0.
+Its 6,192-line, 414,397-byte log `/tmp/geosolve-m84-f003b-release-gate.log` has SHA-256
+`eb05d3c1e460f5cb7be410dc44d0af0c4b4eaf4fd775423b676c77a84a433f90`. The unchanged 271-row
+golden remains SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`;
+the separate M84 ledger remains
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+The gate output was frozen without rebuilding at `/tmp/geosolve-m84-f003-uat.mO67NI`. Source,
+copied and frozen manifests are identical. The directory is `0555`; exactly seven regular non-
+symlink files are `0444`. Complete evidence is retained at
+`/tmp/geosolve-m84-f003-freeze-evidence.Ue4SCM`, and the ordered-manifest aggregate is
+`38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`:
+
+```text
+bc99bec852a174e58de5027da25cffd31a5e21580fff4f4cba80e700a3d5f252  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+8c06f0303535f09aa7bec53703136f5e29625c0aa193abff945bc867ab13af99  geosolve-demo-web-c14103084aedc965.js
+178016828122190de25998de41a9a1991028a0180da0ff665a843fc170c9b85f  geosolve-demo-web-c14103084aedc965_bg.wasm
+d8faa1ccc37a0758aaf8ba94d45cfd12661ba42bc4f80b35d754ae59897311fe  index.html
+5b30ea9a86e4be495437705c2b2a9cb30800068ff5a27bcd61a408e13d7e1700  styles-4a93ed51c1144512.css
+```
+
+Temporary `:18084` and retained `:8080` eight-path HTTP ledgers are byte-identical at SHA-256
+`438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`: every request returns
+HTTP 200 with zero redirects, exact MIME/length/hash, no `Location`/`Content-Encoding`, and `/`
+equals `index.html`. Existing browser qualification passes 4/4 and the dedicated F003 flow passes
+1/1 on both endpoints. Temporary PID `3728373` and worktree PID `2872083` are retired. Retained
+`geosolve-m84-uat.service`, PID `3736900`, serves only this immutable snapshot at
+`http://100.94.63.83:8080/`.
+
+The replacement emits lexical variable/member expressions, aliases exact native rectangle points,
+labels low-level transport as Intent IR, provides a read-only Code preview and promotes into a real
+persistent project whose dependent line follows managed rectangle edits. It omits only the exact
+canonical fresh document foundation and normalizes only expansion-owned Segment branches. Raw
+strings, DTOs, foreign-project and forged reserved-project references, wrong kinds and misspelled
+members fail closed. These are automated qualification facts, not accepted human rows.
 
 Run the replacement ordinary desktop workbench at approximately `1440x900` and `1024x720`. Use actual
 code-project samples rather than importing equivalent flat scenes. Direct tests, not visual
@@ -74,6 +123,7 @@ withdraws the candidate and opens an owning-layer regression.
 
 ## Final disposition
 
-- Supervising-user UAT: pending against replacement bytes; former candidate withdrawn by M84-F003.
+- Supervising-user UAT: M84-U1 through M84-U11 pending against replacement bytes; former candidate
+  remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
 - Tailscale candidate retirement: prohibited until accepted Pages bytes are independently verified.

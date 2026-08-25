@@ -4686,8 +4686,9 @@ separate reviewed ledger owns managed-source parsing, data-artifact expansion, t
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
 `docs/M84_GOALS.md` are authoritative. Every fixture below is implemented and passes its focused
 owner suite. The former complete clean candidate qualification and immutable local/Tailscale
-nomination are withdrawn by M84-F003; human presentation UAT remains pending against future
-replacement bytes.
+nomination are withdrawn historical evidence. M84-F003 is repaired and the replacement passes
+complete clean qualification plus immutable local/Tailscale nomination; human presentation UAT
+U1-U11 remains pending against only those replacement bytes.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4771,7 +4772,12 @@ rectangle variable and `$.geometry.line` call whose endpoints are lexical member
 members reject. Cold rematerialization must preserve exact shared native point ownership, finite
 geometry, current feature state and normalized Hard residual `<= 1e-9`. Promotion from the
 ordinary scene creates one genuine code project/session, persists/reproduces coherently and keeps
-the rectangle-to-line dependency live under later managed edits.
+the rectangle-to-line dependency live under later managed edits. The exact canonical fresh-
+workspace document foundation may be omitted as infrastructure, but every other bootstrap object
+must make promotion fail atomically rather than disappearing. Current code-expansion ownership is
+also required before a Segment branch may be normalized; an ordinary GUI Segment retains exact
+explicit branch authority. Focused owner coverage rejects raw strings, DTO-shaped objects,
+foreign-project and forged reserved-project references, wrong kinds and misspelled members.
 
 ### M84 release gate
 
@@ -4783,9 +4789,25 @@ tree `05aefb0`, passed Trunk and the complete clean gate (log SHA-256
 `0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`). The no-rebuild
 snapshot `/tmp/geosolve-m84-uat.aHw5ePSW`, aggregate
 `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`, passes exact local and
-retained-Tailscale HTTP verification plus focused browser 4/4 on each endpoint and is live at
-`http://100.94.63.83:8080/`. Those bytes are now defect evidence only. M84-F003 requires complete
-replacement qualification and nomination before UAT resumes; Pages remains M83.
+retained-Tailscale HTTP verification plus focused browser 4/4 on each endpoint. Those bytes are
+defect evidence only; old PID `2426265` was retired after the replacement passed temporary
+verification.
+
+Replacement source `b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
+`7062806695e1e134c339cfa47903145d321f6350`, passes the complete clean gate from 00:24:02 through
+00:46:20.940662 AEST on 2026-08-26, exit 0. Its 6,192-line, 414,397-byte log
+`/tmp/geosolve-m84-f003b-release-gate.log` has SHA-256
+`eb05d3c1e460f5cb7be410dc44d0af0c4b4eaf4fd775423b676c77a84a433f90`. The unchanged 271-row
+golden has SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and the separate
+M84 ledger remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+The exact no-rebuild snapshot `/tmp/geosolve-m84-f003-uat.mO67NI`, directory/files `0555`/`0444`,
+has seven regular non-symlink files and aggregate
+`38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`; source, copied and frozen
+manifests match. Temporary and retained eight-path HTTP ledgers match at
+`438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`, existing browser 4/4 and
+F003 1/1 pass on both, and retained service PID `3736900` serves the snapshot at
+`http://100.94.63.83:8080/`. M84 remains active and unaccepted with U1-U11 pending; Pages remains
+M83.
 
 ## Frozen near-singular fixtures
 

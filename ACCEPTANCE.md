@@ -3386,15 +3386,15 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. Human UAT opened M84-F003 and withdrew the former clean-qualified
-immutable Tailscale candidate; no M84 source is currently nominated.
+Status: active and unaccepted. M84-F003 is repaired, clean-qualified and immutably nominated for
+replacement UAT. M84-U1 through M84-U11 and explicit approval remain pending.
 ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract. Accepted
 M83 remains public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
 checks pass while the milestone-neutral 271-row golden remains byte-identical. Complete clean
-release qualification and immutable Tailscale nomination also pass; M84-U1 through M84-U10 remain
+release qualification and immutable Tailscale nomination also pass; M84-U1 through M84-U11 remain
 open, and none of this evidence changes accepted M83 public authority. That candidate is now
 historical defect evidence because it did not satisfy ordinary GUI-to-code lexical projection.
 
@@ -3404,13 +3404,17 @@ reconstructed Segment branch metadata; M84-F002 applies managed aggregate revers
 their authenticated semantic value spans while preserving stale-source compare-and-swap and all
 unowned bytes.
 
-Open finding M84-F003 requires an ordinary GUI-authored aligned rectangle plus shared-corner
-Segment to project as real managed code: the Segment endpoints must parse as
+Resolved finding M84-F003 requires and now proves that an ordinary GUI-authored aligned rectangle
+plus shared-corner Segment projects as real managed code: the Segment endpoints parse as
 `ManagedValue::Reference` expressions such as `frame.corners.lowerLeft`, not serialized
 `IntentProjectedPortReference` objects or branded strings. Direct managed line expansion must
 retain exact native shared-point ownership, finite accepted geometry and independently validated
 Hard residuals. The low-level M83 projection remains available under the truthful Intent IR label;
-promotion must create one genuine code project/session with coherent persistence and history.
+promotion creates one genuine code project/session with coherent persistence and history. Raw
+strings, transport DTOs, foreign-project and forged reserved-project references, wrong kinds and
+misspelled members reject before materialization. Only the exact canonical fresh-workspace document
+foundation may be omitted during all-or-nothing promotion, and branch normalization applies only to
+current code-expansion-owned Segments so an ordinary GUI Segment retains explicit branch authority.
 
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace
@@ -3447,8 +3451,8 @@ promotion must create one genuine code project/session with coherent persistence
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests, actual WASM, TypeScript,
   golden require-clean, Trunk and the complete clean release gate pass.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
-  verification but is withdrawn by M84-F003. A replacement must repeat complete qualification and
-  immutable nomination. M84-U1 through M84-U10 and explicit supervising-user approval remain
+  verification but is withdrawn by M84-F003. The replacement passes complete qualification and
+  immutable nomination. M84-U1 through M84-U11 and explicit supervising-user approval remain
   mandatory before GitHub Pages publication, exact hosted verification, service retirement and
   closure.
 
@@ -3458,10 +3462,25 @@ Withdrawn historical nomination authority is exact product source
 `0f50e6bcdf019c71d70497acc301dcdfd194db1142b248bcd469d0f3ed9efda0`; immutable snapshot
 `/tmp/geosolve-m84-uat.aHw5ePSW` has ordered-manifest aggregate
 `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a64f34`. Exact local/Tailscale
-HTTP ledgers match, browser checks pass 4/4 on each endpoint, and retained service PID `2426265`
-served the withdrawn bytes at `http://100.94.63.83:8080/`. Those bytes may remain temporarily
-reachable only as defect evidence until replacement; they are not UAT or publication authority.
-No human row or Pages publication is claimed.
+HTTP ledgers match and browser checks pass 4/4 on each endpoint. Retained service PID `2426265`
+served the withdrawn bytes at `http://100.94.63.83:8080/` and was retired only after replacement
+temporary verification passed. Those bytes remain historical defect evidence, not UAT or
+publication authority.
+
+Replacement mechanical authority is exact product source
+`b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
+`7062806695e1e134c339cfa47903145d321f6350`. The clean gate passes with log SHA-256
+`eb05d3c1e460f5cb7be410dc44d0af0c4b4eaf4fd775423b676c77a84a433f90`, unchanged 271-row golden
+SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and separate M84
+ledger SHA-256 `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+Its exact no-rebuild snapshot `/tmp/geosolve-m84-f003-uat.mO67NI` is frozen at directory/file modes
+`0555`/`0444` with seven regular non-symlink files and ordered-manifest aggregate
+`38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`. Source, copied and frozen
+manifests match. Temporary and retained eight-path HTTP ledgers match at SHA-256
+`438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`; existing browser checks
+pass 4/4 and F003 passes 1/1 on both. Retained `geosolve-m84-uat.service`, PID `3736900`, serves
+those exact bytes at `http://100.94.63.83:8080/`. No human row or M84 Pages publication is claimed;
+accepted M83 remains public authority.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

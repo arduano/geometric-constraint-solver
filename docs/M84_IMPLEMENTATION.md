@@ -2,9 +2,9 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **implementation reopened for M84-F003; the former clean-qualified immutable Tailscale
-candidate is withdrawn**. No M84 Pages publication is claimed. Accepted M83 remains public
-authority.
+Status: **M84-F003 is repaired, clean-qualified and immutably nominated for replacement UAT; the
+former candidate remains withdrawn historical evidence**. M84-U1 through M84-U11 remain pending.
+No M84 Pages publication is claimed. Accepted M83 remains public authority.
 
 ## Baseline and authority
 
@@ -49,8 +49,9 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   aggregate, organization, declared-lens and override value spans.
 - [x] Keep unsupported/syntax-invalid text as a non-authoritative draft; retain valid failed code
   intent above the last complete accepted scene.
-- [x] Bootstrap a supported accepted GUI rectangle into truthful managed declarations; reject
-  unsupported recipes instead of inventing lineage.
+- [x] Bootstrap a complete supported accepted GUI dependency closure into truthful, dependency-
+  ordered managed declarations; reject unsupported recipes instead of inventing lineage. Omit only
+  the exact canonical fresh-workspace document foundation and never hide other bootstrap geometry.
 
 ### I2 — custom artifacts and typed SDK
 
@@ -137,21 +138,26 @@ is valid bounded transport IR, but it is not a variable-driven reference coupled
 inferred result type. The bundled Braced Frame began as managed code and therefore did not cover
 ordinary GUI conversion.
 
-Required repair: retain the original DTO as labelled Intent IR, add direct managed
+Repair: retain the original DTO as labelled Intent IR, add direct managed
 `$.geometry.line`, dependency-order supported GUI bootstrap declarations, and emit endpoint
 expressions such as `frame.corners.lowerLeft`. Direct expansion must alias the exact owning native
 point rather than copy its coordinates. Ordinary Code preview/promotion must create one genuine
-code project/session. Focused Rust, TypeScript, workbench/persistence and browser tests precede a
-new complete qualification and nomination.
+persisted code project/session. Raw strings, transport DTOs, foreign-project and forged reserved-
+project references, wrong kinds and misspelled members fail closed. Only the exact canonical fresh-
+workspace document foundation is ignored; other bootstrap geometry makes conversion reject
+atomically. Same-cell branch normalization is limited to current code-expansion-owned Segments so
+ordinary GUI Segments retain explicit branch authority. Focused Rust, TypeScript, workbench/
+persistence and browser tests plus the complete replacement qualification and nomination pass.
 
 ## Focused evidence observed before final nomination
 
-- `cargo test --locked -p geosolve-sketch-code --all-features` — 44 unit and 21 integration tests
+- `cargo test --locked -p geosolve-sketch-code --all-features` — 44 unit and 29 integration tests
   pass, including parser/rewrite, artifact, descriptor, bootstrap, reconciliation, native
-  composition, override, optional-boundary and TypeScript-interoperability owners.
-- `cargo test --locked -p geosolve-demo-web --lib workbench` — 230 workbench tests pass, with six
-  non-workbench tests filtered; the 26-test code-project subset and focused braced-frame reference
-  dimension pass.
+  composition, direct-line lexical lowering, override, optional-boundary and TypeScript-
+  interoperability owners.
+- `cargo test --locked -p geosolve-demo-web --lib` — 243/243 pass, including ordinary Intent IR,
+  read-only lexical preview, real promotion/persistence, fresh-foundation handling, dependent
+  movement and ordinary-Segment branch-authority owners.
 - `cargo clippy --locked -p geosolve-sketch-code --all-targets --all-features -- -D warnings` and
   the corresponding `geosolve-demo-web` focused command pass.
 - `(cd packages/geosolve-sketch-code && npm ci --ignore-scripts && npm test)` passes its build,
@@ -216,20 +222,71 @@ projects. Config/spec hashes are `f0308eb1d706ead212d370963f9b6b6c87fe8488923a02
 are `54858c5a1f75cc2e286d07360ed8342c7f8a09290a8f3e7ee1c4d295afe91d9e` and
 `37f289b62adc02362e8c34a1ea23377c2a3fc5446d43ac262a5b075c1652f4c0`.
 
-`geosolve-m84-uat.service`, PID `2426265`, serves only that immutable directory at
-`http://100.94.63.83:8080/` and remains retained through UAT. The temporary `:18084` listener was
-retired. This nomination claims no human UAT, approval, Pages publication or milestone closure.
+Historical `geosolve-m84-uat.service` PID `2426265` served only that immutable directory at
+`http://100.94.63.83:8080/`; it was retired after the F003 replacement passed temporary
+verification. The old temporary listener is also retired. This withdrawn nomination claims no
+human UAT, approval, Pages publication or milestone closure.
 
 Human UAT subsequently opened M84-F003. This snapshot is preserved as historical defect evidence
 and claims no current nomination, approval, Pages publication or milestone closure.
+
+## M84-F003 replacement qualification and frozen nomination
+
+Exact committed product source `b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
+`7062806695e1e134c339cfa47903145d321f6350`, had a clean worktree and passed:
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY -u NO_COLOR \
+  nix-shell shell.nix --run ./scripts/release-gate.sh
+```
+
+The gate ran on 2026-08-26 from 00:24:02 through 00:46:20.940662 AEST, approximately 22m19s,
+and exited 0. Its 6,192-line, 414,397-byte log `/tmp/geosolve-m84-f003b-release-gate.log` has
+SHA-256 `eb05d3c1e460f5cb7be410dc44d0af0c4b4eaf4fd775423b676c77a84a433f90`.
+Workspace warnings-denied Clippy, locked all-feature tests, Rustdoc, the unchanged 271-row golden,
+actual WASM, both TypeScript suites, package closure, performance/benchmark gates, licensing and
+Trunk release assembly pass. Golden SHA-256 remains
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the separate M84
+code-project ledger remains
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+Without rebuilding, the exact gate output was copied to `/tmp/geosolve-m84-f003-uat.mO67NI`.
+Source, copied and frozen manifests are identical. The directory is mode `0555`; exactly seven
+regular non-symlink files are mode `0444`. Complete evidence is retained at
+`/tmp/geosolve-m84-f003-freeze-evidence.Ue4SCM`. The ordered-manifest aggregate is
+`38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`:
+
+```text
+bc99bec852a174e58de5027da25cffd31a5e21580fff4f4cba80e700a3d5f252  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+8c06f0303535f09aa7bec53703136f5e29625c0aa193abff945bc867ab13af99  geosolve-demo-web-c14103084aedc965.js
+178016828122190de25998de41a9a1991028a0180da0ff665a843fc170c9b85f  geosolve-demo-web-c14103084aedc965_bg.wasm
+d8faa1ccc37a0758aaf8ba94d45cfd12661ba42bc4f80b35d754ae59897311fe  index.html
+5b30ea9a86e4be495437705c2b2a9cb30800068ff5a27bcd61a408e13d7e1700  styles-4a93ed51c1144512.css
+```
+
+Temporary `:18084` and retained `:8080` verification cover `/` plus all seven files: HTTP 200,
+zero redirects, exact MIME type/length/hash, no `Location` or `Content-Encoding`, and root equality
+with `index.html`. Both result ledgers have SHA-256
+`438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`. Existing focused browser
+checks pass 4/4 and the dedicated F003 GUI draw → Intent IR → lexical preview → promotion → managed
+rectangle edit → dependent-line movement → reload flow passes 1/1 on both endpoints.
+
+Temporary listener PID `3728373` is retired. The worktree listener PID `2872083` is retired. Old
+withdrawn retained PID `2426265` was retired only after the replacement passed temporary byte and
+browser verification. `geosolve-m84-uat.service`, PID `3736900`, now serves only the immutable
+replacement snapshot at `http://100.94.63.83:8080/`. This nomination claims no human UAT row,
+approval, Pages publication or milestone closure.
 
 ## Known bounds and truthful limitations
 
 - Managed-v1 is intentionally a closed projectional subset. Arbitrary custom code is caller build
   input and has no browser runtime or general AST round-trip promise.
-- Only supported accepted GUI recipes bootstrap to managed code; the bundled Braced Frame starts as
-  a genuine managed code project rather than interactively invoking that bootstrap path. Its
-  reverse GUI edits and ordinary generated-geometry dependents are nevertheless directly tested.
+- Only the supported accepted GUI rectangle and line dependency closure bootstraps to managed code;
+  unsupported declarations reject the complete promotion. The bundled Braced Frame remains a
+  genuine managed code project. Both promotion and its later dependency-preserving edits are
+  directly tested.
 - Integration test sources which inspect workspace TypeScript/manifests are intentionally not part
   of the published Rust archive. Runtime library code and all eight required assets are
   self-contained and extraction-built.
@@ -240,8 +297,7 @@ and claims no current nomination, approval, Pages publication or milestone closu
 
 ## Remaining release sequence
 
-1. Repair and fully qualify M84-F003, freeze replacement bytes and resume M84-U1 through M84-U10
-   against only that replacement.
+1. Complete M84-U1 through M84-U11 against only the replacement snapshot.
 2. Record explicit supervising-user approval or open another numbered finding and withdraw the
    replacement candidate.
 3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
