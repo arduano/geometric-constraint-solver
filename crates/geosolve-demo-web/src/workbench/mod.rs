@@ -3758,9 +3758,12 @@ pub(crate) mod wasm {
         notice: String,
     ) -> Result<(), JsValue> {
         let mut samples = super::samples::SampleCatalogState::default();
-        if let Some(project) = &code_project {
+        if let Some(key) = code_project
+            .as_ref()
+            .and_then(super::code_projects::CodeProjectWorkbench::demo_key)
+        {
             samples
-                .select_code_key(project.demo_key())
+                .select_code_key(key)
                 .map_err(|error| JsValue::from_str(&error))?;
         }
         let mut workbench = ProjectionalWorkbench {
@@ -4098,6 +4101,37 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    /// Promotes the complete ordinary workspace only after the optional code
+    /// layer has parsed, cold-materialized, checkpointed, restored and
+    /// independently validated one genuine project/session candidate. No live
+    /// field changes before every fallible construction step has succeeded.
+    fn promote_projectional_code_project(wb: &mut ProjectionalWorkbench) -> Result<(), String> {
+        if wb.code_project.is_some() {
+            return Err("this workspace is already a code project".into());
+        }
+        let (code_project, editor) =
+            super::code_projects::CodeProjectWorkbench::promote_from_editor(wb.editor())?;
+        let authority = super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
+
+        wb.authority = authority;
+        wb.code_project = Some(code_project);
+        wb.authoring.deactivate();
+        wb.feature_authoring.deactivate();
+        let _ = wb.offset_authoring.cancel();
+        wb.feature_candidate = None;
+        wb.feature_pending.clear();
+        wb.samples = super::samples::SampleCatalogState::default();
+        wb.option_overlay.close();
+        wb.reproduction_overlay_open = false;
+        wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+        wb.construction_preview = None;
+        wb.pointer_moves.borrow_mut().invalidate();
+        wb.captured_pointer = None;
+        wb.outline_drag = None;
+        wb.notice = "Ordinary sketch promoted to one validated managed code project".into();
+        Ok(())
+    }
+
     fn copy_projectional_reproduction_payload(
         document: &Document,
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
@@ -4257,8 +4291,12 @@ pub(crate) mod wasm {
         wb.feature_candidate = None;
         wb.feature_pending.clear();
         wb.samples = super::samples::SampleCatalogState::default();
-        if let Some(code_project) = &wb.code_project {
-            wb.samples.select_code_key(code_project.demo_key())?;
+        if let Some(key) = wb
+            .code_project
+            .as_ref()
+            .and_then(super::code_projects::CodeProjectWorkbench::demo_key)
+        {
+            wb.samples.select_code_key(key)?;
         }
         wb.camera.reset();
         wb.pan_gesture = None;
@@ -4802,6 +4840,11 @@ pub(crate) mod wasm {
         if let Some(code_project) = &wb.code_project {
             set_hidden(&code_tab, false)?;
             code_panel.set_inner_html(&code_project.panel_markup());
+        } else if let Ok(preview) =
+            super::code_projects::OrdinaryCodePreview::from_editor(wb.editor())
+        {
+            set_hidden(&code_tab, false)?;
+            code_panel.set_inner_html(&preview.panel_markup());
         } else {
             code_panel.set_inner_html(super::code_projects::inactive_panel_markup());
             if code_tab.get_attribute("aria-selected").as_deref() == Some("true") {
@@ -7175,8 +7218,22 @@ pub(crate) mod wasm {
             }
             if let Some(code_action) = target.get_attribute("data-code-action") {
                 let mut wb = click_workbench.borrow_mut();
+                if code_action == "promote-ordinary"
+                    && let Ok(viewport) = required(&click_document, "wb-viewport")
+                {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before code promotion",
+                    );
+                }
                 let focus_code_source = code_action == "open-managed-lens";
                 let result: Result<String, String> = match code_action.as_str() {
+                    "promote-ordinary" => promote_projectional_code_project(&mut wb).map(|()| {
+                        "Ordinary sketch promoted to one validated managed code project".into()
+                    }),
                     "apply" => wb
                         .code_project
                         .as_mut()

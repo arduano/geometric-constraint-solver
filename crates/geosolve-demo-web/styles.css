@@ -348,7 +348,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   font-size: 0.68rem;
   line-height: 1.45;
 }
-.wb-design-source:empty::before { content: "Structured source will appear for the current design."; }
+.wb-design-source:empty::before { content: "Intent IR will appear for the current design."; }
 .wb-design-history:empty::before { content: "Committed design transactions will appear here."; }
 .wb-design-code { padding: 0; background: #191d1e; }
 .wb-code-project {

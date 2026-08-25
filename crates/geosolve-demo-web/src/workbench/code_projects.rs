@@ -19,13 +19,14 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProject, CodeProjectDemo, CodeProjectDemoId, CodeSessionReceipt, ExpandedCodeProject,
-    ExpandedSemanticTarget, FeatureKind, GeneratedMemberAddress, KeyedReconcileState,
-    ManagedDiagnostic, ManagedEdit, ManagedValue, MaterializedCodeProject, PatchModuleArtifact,
-    SemanticSymbol, SketchCodeSession, UnitLiteral, apply_managed_edit, bundled_code_project_demos,
-    expand_code_project, materialize_code_project_cold, materialize_code_project_incremental,
-    parse_managed_source, plan_managed_edit, rehydrate_materialized_code_project,
-    required_generated_members,
+    CodeProject, CodeProjectDemo, CodeProjectDemoId, CodeSessionReceipt,
+    EditorBootstrapDeclaration, ExpandedCodeProject, ExpandedSemanticTarget, FeatureKind,
+    GeneratedMemberAddress, KeyedReconcileState, ManagedDiagnostic, ManagedEdit, ManagedValue,
+    MaterializedCodeProject, PatchModuleArtifact, ProjectKey, SemanticSymbol, SketchCodeSession,
+    UnitLiteral, apply_managed_edit, bundled_code_project_demos, expand_code_project,
+    initialize_code_project_from_editor, materialize_code_project_cold,
+    materialize_code_project_incremental, parse_managed_source, plan_managed_edit,
+    rehydrate_materialized_code_project, required_generated_members,
 };
 use geosolve_sketch_intent::{
     GeometryRecipeKind, IntentLiteral, IntentNodeKind, IntentPortRole, IntentPortSelector,
@@ -98,7 +99,7 @@ impl SelectedCodeFile {
 /// projectional editor. The project and code session are authoritative; the
 /// selected file and invalid text draft are presentation state only.
 pub(crate) struct CodeProjectWorkbench {
-    demo: CodeProjectDemo,
+    origin: CodeProjectOrigin,
     project: CodeProject,
     session: SketchCodeSession,
     selected_file: SelectedCodeFile,
@@ -110,15 +111,86 @@ pub(crate) struct CodeProjectWorkbench {
     materialized: Option<Box<MaterializedCodeProject>>,
 }
 
+/// Presentation provenance for one genuine code project. Bundled projects
+/// retain their curated sample identity; GUI-promoted projects deliberately
+/// have no fake sample key.
+#[derive(Clone, Debug)]
+enum CodeProjectOrigin {
+    Bundled(CodeProjectDemo),
+    Promoted,
+}
+
+impl CodeProjectOrigin {
+    fn title(&self) -> &'static str {
+        match self {
+            Self::Bundled(demo) => demo.title,
+            Self::Promoted => "Promoted sketch",
+        }
+    }
+
+    fn demo_key(&self) -> Option<&'static str> {
+        match self {
+            Self::Bundled(demo) => Some(demo.id.key()),
+            Self::Promoted => None,
+        }
+    }
+
+    fn to_wire(&self) -> CodeProjectOriginWire {
+        match self {
+            Self::Bundled(demo) => CodeProjectOriginWire::Bundled {
+                demo: demo.id.key().into(),
+            },
+            Self::Promoted => CodeProjectOriginWire::Promoted,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum CodeProjectOriginWire {
+    Bundled { demo: String },
+    Promoted,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct CodeProjectWorkbenchWire {
     version: String,
-    demo: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    origin: Option<CodeProjectOriginWire>,
+    /// Historical nominated-M84 wire accepted only on input. New persistence
+    /// always writes the explicit bounded `origin` variant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    demo: Option<String>,
     project: String,
     session: String,
     selected_file: String,
     managed_draft: String,
+}
+
+fn restore_code_project_origin(
+    origin: Option<CodeProjectOriginWire>,
+    legacy_demo: Option<&str>,
+) -> Result<CodeProjectOrigin, String> {
+    let bundled = |key: &str| {
+        bundled_code_project_demos()
+            .into_iter()
+            .find(|demo| demo.id.key() == key)
+            .map(CodeProjectOrigin::Bundled)
+            .ok_or_else(|| format!("unknown code project `{key}`"))
+    };
+    match (origin, legacy_demo) {
+        (Some(CodeProjectOriginWire::Bundled { demo }), None) => bundled(&demo),
+        (Some(CodeProjectOriginWire::Promoted), None) => Ok(CodeProjectOrigin::Promoted),
+        (None, Some(demo)) => bundled(demo),
+        (None, None) => Err("code-project persistence has no origin".into()),
+        (Some(CodeProjectOriginWire::Bundled { .. }), Some(_)) => {
+            Err("bundled code-project origin is duplicated".into())
+        }
+        (Some(CodeProjectOriginWire::Promoted), Some(_)) => {
+            Err("promoted code-project origin cannot name a bundled demo".into())
+        }
+    }
 }
 
 impl CodeProjectWorkbench {
@@ -128,6 +200,24 @@ impl CodeProjectWorkbench {
             .find(|demo| demo.id.key() == key)
             .ok_or_else(|| format!("unknown code project `{key}`"))?;
         let project = demo.project();
+        Self::open_project(CodeProjectOrigin::Bundled(demo), project)
+    }
+
+    /// Builds a genuine optional code project from every declaration in one
+    /// accepted ordinary workspace. This is intentionally all-or-nothing: a
+    /// successful promotion cannot silently discard unsupported ordinary
+    /// declarations or retain a second hidden GUI authority.
+    pub(crate) fn promote_from_editor(
+        editor: &ProjectionalEditorSession,
+    ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
+        let project = projected_code_project(editor)?;
+        Self::open_project(CodeProjectOrigin::Promoted, project)
+    }
+
+    fn open_project(
+        origin: CodeProjectOrigin,
+        project: CodeProject,
+    ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
         project.validate().map_err(|error| error.to_string())?;
         let desired = required_generated_members(&project).map_err(|error| error.to_string())?;
         let plan = KeyedReconcileState::empty()
@@ -152,7 +242,7 @@ impl CodeProjectWorkbench {
         let managed_draft = project.managed.source.clone();
         Ok((
             Self {
-                demo,
+                origin,
                 project,
                 session,
                 selected_file: SelectedCodeFile::Managed,
@@ -168,7 +258,8 @@ impl CodeProjectWorkbench {
     pub(crate) fn to_persistence_json(&self) -> Result<String, String> {
         let wire = CodeProjectWorkbenchWire {
             version: CODE_WORKBENCH_WIRE_VERSION.into(),
-            demo: self.demo.id.key().into(),
+            origin: Some(self.origin.to_wire()),
+            demo: None,
             project: self
                 .project
                 .to_canonical_json()
@@ -204,10 +295,7 @@ impl CodeProjectWorkbench {
         if wire.version != CODE_WORKBENCH_WIRE_VERSION {
             return Err("unsupported code-workbench version".into());
         }
-        let demo = bundled_code_project_demos()
-            .into_iter()
-            .find(|demo| demo.id.key() == wire.demo)
-            .ok_or_else(|| format!("unknown code project `{}`", wire.demo))?;
+        let origin = restore_code_project_origin(wire.origin, wire.demo.as_deref())?;
         let project = CodeProject::from_json(&wire.project).map_err(|error| error.to_string())?;
         let session = SketchCodeSession::from_json_validating_checkpoints(
             &wire.session,
@@ -278,7 +366,7 @@ impl CodeProjectWorkbench {
         )
         .map_err(|error| error.to_string())?;
         let mut value = Self {
-            demo,
+            origin,
             project,
             session,
             selected_file: SelectedCodeFile::Managed,
@@ -698,8 +786,8 @@ impl CodeProjectWorkbench {
         }))
     }
 
-    pub(crate) fn demo_key(&self) -> &'static str {
-        self.demo.id.key()
+    pub(crate) fn demo_key(&self) -> Option<&'static str> {
+        self.origin.demo_key()
     }
 
     pub(crate) fn select_file(&mut self, path: &str) -> Result<(), String> {
@@ -1109,7 +1197,7 @@ impl CodeProjectWorkbench {
                 "<strong>{}</strong><small>managed-v1 · revision {}{}</small>",
                 "</div><span class=\"wb-code-runtime-badge\">Rust runtime · data only</span></header>"
             ),
-            escape_html(self.demo.title),
+            escape_html(self.origin.title()),
             revision,
             dirty,
         );
@@ -1370,6 +1458,118 @@ impl CodeProjectWorkbench {
         }
         markup.push_str("</section>");
     }
+}
+
+/// Read-only managed-v1 projection of one complete ordinary GUI workspace.
+/// The project is deliberately rebuilt and revalidated when Promote is
+/// clicked; these source bytes never become authority by being rendered.
+pub(crate) struct OrdinaryCodePreview {
+    source: String,
+    declaration_count: usize,
+}
+
+impl OrdinaryCodePreview {
+    pub(crate) fn from_editor(editor: &ProjectionalEditorSession) -> Result<Self, String> {
+        let project = projected_code_project(editor)?;
+        Ok(Self {
+            source: project.managed.source,
+            declaration_count: project.managed.program.declarations.len(),
+        })
+    }
+
+    pub(crate) fn panel_markup(&self) -> String {
+        format!(
+            concat!(
+                "<div class=\"wb-code-project wb-code-preview\">",
+                "<header class=\"wb-code-project-header\"><div>",
+                "<span class=\"wb-code-eyebrow\">Managed code preview</span>",
+                "<strong>Complete ordinary sketch</strong><small>{} declaration{}</small>",
+                "</div><span class=\"wb-code-runtime-badge\">Read-only · not authority</span></header>",
+                "<section class=\"wb-code-editor\" data-code-file-kind=\"managed-preview\">",
+                "<div class=\"wb-code-editor-toolbar\"><div><strong>sketch.ts</strong>",
+                "<span>Lexical, typed feature references</span></div>",
+                "<button type=\"button\" data-code-action=\"promote-ordinary\">Promote to code project</button></div>",
+                "<pre tabindex=\"0\" aria-label=\"Read-only managed sketch TypeScript preview\"><code>{}</code></pre>",
+                "<p class=\"wb-code-editor-note\">Promotion reparses, cold-materializes, and independently validates the complete candidate before replacing the ordinary workspace. Unsupported declarations are never omitted.</p>",
+                "</section></div>"
+            ),
+            self.declaration_count,
+            if self.declaration_count == 1 { "" } else { "s" },
+            escape_html(&self.source),
+        )
+    }
+}
+
+/// Produces one artifact-free project from every ordinary declaration in its
+/// current presentation order. The optional layer owns the naming policy;
+/// canonical node/port IDs never appear in managed source.
+fn projected_code_project(editor: &ProjectionalEditorSession) -> Result<CodeProject, String> {
+    let intent = editor.coordinator().intent();
+    let projection = editor.workbench_projection();
+    let ordered = projection
+        .outline
+        .iter()
+        .flat_map(|cell| &cell.declarations)
+        .collect::<Vec<_>>();
+    if ordered.is_empty() {
+        return Err("the ordinary sketch has no declarations to promote".into());
+    }
+    if ordered.len() != intent.graph().nodes().len() {
+        return Err(
+            "the complete ordinary declaration graph is not available for managed promotion".into(),
+        );
+    }
+
+    let mut base_counts = BTreeMap::<String, usize>::new();
+    let mut declarations = Vec::with_capacity(ordered.len());
+    for projected in ordered {
+        let node = intent
+            .graph()
+            .node(projected.node)
+            .ok_or_else(|| "an ordinary declaration disappeared during code preview".to_owned())?;
+        let base = match node.kind {
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::TwoPointAlignedRectangle,
+            } => "frame",
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            } if node.inputs.len() >= 2
+                && node.inputs.values().all(|input| {
+                    intent.graph().node(input.node).is_some_and(|owner| {
+                        matches!(
+                            owner.kind,
+                            IntentNodeKind::Geometry {
+                                recipe: GeometryRecipeKind::TwoPointAlignedRectangle
+                            }
+                        )
+                    })
+                }) =>
+            {
+                "diagonal"
+            }
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            } => "line",
+            _ => "declaration",
+        };
+        let ordinal = base_counts.entry(base.to_owned()).or_default();
+        *ordinal = ordinal.saturating_add(1);
+        let symbol = if *ordinal == 1 {
+            base.to_owned()
+        } else {
+            format!("{base}{ordinal}")
+        };
+        declarations.push(EditorBootstrapDeclaration::new(
+            node.id,
+            SemanticSymbol(symbol),
+        ));
+    }
+    initialize_code_project_from_editor(
+        editor,
+        ProjectKey("gui-promoted-sketch".into()),
+        &declarations,
+    )
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) fn inactive_panel_markup() -> &'static str {
@@ -2267,19 +2467,45 @@ fn recomputable_code_line_branches(
         .coordinator()
         .accepted_materialization()
         .ok_or_else(|| "code project has no accepted native authority".to_owned())?;
+    let expansion_owned_segments = expansion
+        .patch
+        .operations()
+        .iter()
+        .filter_map(|operation| match operation {
+            geosolve_sketch_intent::IntentPatchOperation::CreateNode { draft, .. }
+                if matches!(
+                    draft.kind,
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment
+                    }
+                ) =>
+            {
+                Some(draft.symbol.clone())
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
     let mut curves = BTreeSet::new();
     for node in intent.graph().nodes().values() {
         let IntentNodeKind::Geometry { recipe } = node.kind else {
             continue;
         };
-        if !matches!(
-            recipe,
-            GeometryRecipeKind::Polyline
-                | GeometryRecipeKind::TwoPointAlignedRectangle
-                | GeometryRecipeKind::ThreePointCornerRectangle
-                | GeometryRecipeKind::CenterRectangle
-                | GeometryRecipeKind::ThreePointCenterRectangle
-        ) {
+        // M83 Segment branches remain explicit. Only the exact current code
+        // expansion proves that a Segment came from a managed/artifact
+        // declaration whose branch is source-derived. An ordinary GUI Segment
+        // living beside a code project must still compare bit-for-bit.
+        let source_derived_segment = recipe == GeometryRecipeKind::Segment
+            && expansion_owned_segments.contains(&node.symbol);
+        if !source_derived_segment
+            && !matches!(
+                recipe,
+                GeometryRecipeKind::Polyline
+                    | GeometryRecipeKind::TwoPointAlignedRectangle
+                    | GeometryRecipeKind::ThreePointCornerRectangle
+                    | GeometryRecipeKind::CenterRectangle
+                    | GeometryRecipeKind::ThreePointCenterRectangle
+            )
+        {
             continue;
         }
         if let Some(ownership) = accepted.ownership.node(node.id) {
@@ -2382,6 +2608,105 @@ fn escape_attribute(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn ordinary_rectangle_diagonal() -> ProjectionalEditorSession {
+        let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84_f003)).unwrap();
+        let mut editor = ProjectionalEditorSession::restore(
+            intent,
+            DocumentId(PersistentId::from_u128(0x84_f003)),
+            1.0,
+        )
+        .unwrap();
+        let selector = |role, index| IntentPortSelector::Node { role, index };
+        let length = |value| IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Length,
+        };
+        let frame_alias = geosolve_sketch_intent::IntentKey::new("gui-frame").unwrap();
+        let frame = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::TwoPointAlignedRectangle,
+            },
+            geosolve_sketch_intent::IntentKey::new("gui.frame").unwrap(),
+        )
+        .with_instance_leaf(
+            selector(IntentPortRole::Corner, 0),
+            LeafField::X,
+            length(-4.0),
+        )
+        .with_instance_leaf(
+            selector(IntentPortRole::Corner, 0),
+            LeafField::Y,
+            length(-3.0),
+        )
+        .with_instance_leaf(
+            selector(IntentPortRole::Corner, 2),
+            LeafField::X,
+            length(8.0),
+        )
+        .with_instance_leaf(
+            selector(IntentPortRole::Corner, 2),
+            LeafField::Y,
+            length(5.0),
+        );
+        let frame = editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: frame_alias.clone(),
+                    draft: Box::new(frame),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        let frame_node = frame.aliases.node(&frame_alias).unwrap();
+        let lower_left = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(frame_node)
+            .unwrap()
+            .port_by_selector(selector(IntentPortRole::Corner, 0))
+            .unwrap()
+            .as_ref(frame_node);
+        let upper_right = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(frame_node)
+            .unwrap()
+            .port_by_selector(selector(IntentPortRole::Corner, 2))
+            .unwrap()
+            .as_ref(frame_node);
+        let diagonal_alias = geosolve_sketch_intent::IntentKey::new("gui-diagonal").unwrap();
+        let diagonal = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            geosolve_sketch_intent::IntentKey::new("gui.diagonal").unwrap(),
+        )
+        .with_input(
+            geosolve_sketch_intent::InputSlot::new(geosolve_sketch_intent::InputRole::Point, 0),
+            geosolve_sketch_intent::PatchPortRef::Stable { port: lower_left },
+        )
+        .with_input(
+            geosolve_sketch_intent::InputSlot::new(geosolve_sketch_intent::InputRole::Point, 1),
+            geosolve_sketch_intent::PatchPortRef::Stable { port: upper_right },
+        );
+        editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: diagonal_alias,
+                    draft: Box::new(diagonal),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        editor
+    }
 
     fn open_with_editor(key: &str) -> (CodeProjectWorkbench, Box<ProjectionalEditorSession>) {
         CodeProjectWorkbench::open_key(key).expect("code project")
@@ -4209,6 +4534,309 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_rectangle_diagonal_preview_uses_lexical_feature_references() {
+        let editor = ordinary_rectangle_diagonal();
+        let preview = OrdinaryCodePreview::from_editor(&editor).unwrap();
+        assert!(
+            preview
+                .source
+                .contains("const frame = $.geometry.rectangle")
+        );
+        assert!(preview.source.contains("const diagonal = $.geometry.line"));
+        assert!(preview.source.contains("start: frame.corners.lowerLeft"));
+        assert!(preview.source.contains("end: frame.corners.upperRight"));
+        assert!(!preview.source.contains("{\"declaration\":"));
+
+        let markup = preview.panel_markup();
+        assert!(markup.contains("Managed code preview"));
+        assert!(markup.contains("data-code-action=\"promote-ordinary\""));
+        assert!(markup.contains("Read-only · not authority"));
+        assert!(!markup.contains("<textarea"));
+    }
+
+    #[test]
+    fn ordinary_promotion_creates_one_real_project_and_round_trips_without_demo_identity() {
+        let editor = ordinary_rectangle_diagonal();
+        let (workbench, promoted_editor) =
+            CodeProjectWorkbench::promote_from_editor(&editor).unwrap();
+        assert_eq!(workbench.demo_key(), None);
+        assert_eq!(
+            workbench.session.snapshot().code_project.as_ref(),
+            Some(&workbench.project)
+        );
+        assert_eq!(
+            workbench.session.snapshot().accepted_code_project.as_ref(),
+            Some(&workbench.project)
+        );
+        assert!(
+            promoted_editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .validation
+                .hard_residuals_validated
+        );
+
+        let json = workbench.to_persistence_json().unwrap();
+        let wire: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(wire["origin"]["kind"], "promoted");
+        assert!(wire.get("demo").is_none());
+        let restored = CodeProjectWorkbench::from_persistence_json(&json).unwrap();
+        assert_eq!(restored.demo_key(), None);
+        assert_eq!(restored.managed_source(), workbench.managed_source());
+        assert_eq!(restored.to_persistence_json().unwrap(), json);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one end-to-end promotion regression audits source rewrite, code history, semantic dependency and native movement together"
+    )]
+    fn promoted_rectangle_edit_rewrites_source_and_moves_lexically_dependent_line() {
+        let editor = ordinary_rectangle_diagonal();
+        let (mut workbench, mut promoted) =
+            CodeProjectWorkbench::promote_from_editor(&editor).unwrap();
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .clone()
+            .unwrap();
+        let frame = SemanticSymbol("frame".into());
+        let frame_alias = managed_rectangle_alias(&workbench.project, &expansion, &frame).unwrap();
+        let mut operations = managed_rectangle_leaves(&promoted, &workbench.project, &expansion)
+            .unwrap()
+            .into_iter()
+            .filter_map(|(leaf, owner)| match owner {
+                WritableCodeLeaf::ManagedRectangle { argument, .. } if argument == "upperRight" => {
+                    Some(
+                        geosolve_sketch_intent::IntentPatchOperation::SetInstanceLeaf {
+                            leaf,
+                            value: IntentLiteral::Quantity {
+                                value: match leaf.field {
+                                    LeafField::X => 10.0,
+                                    LeafField::Y => 6.0,
+                                    _ => unreachable!("rectangle placement owns Cartesian leaves"),
+                                },
+                                unit: IntentUnit::Length,
+                            },
+                        },
+                    )
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        operations.sort_by_key(|operation| match operation {
+            geosolve_sketch_intent::IntentPatchOperation::SetInstanceLeaf { leaf, .. } => {
+                leaf.field
+            }
+            _ => unreachable!(),
+        });
+        promoted
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                promoted.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                operations,
+            ))
+            .unwrap();
+        let checkpoint = encode_editor_checkpoint(&promoted).unwrap();
+        let publication = workbench
+            .publish_delegated_editor_checkpoint(checkpoint, "Drag promoted frame")
+            .unwrap()
+            .unwrap();
+        assert!(workbench.managed_source().contains("upperRight: [10, 6]"));
+        assert_eq!(
+            managed_rectangle_argument_position(&publication.editor, &frame_alias, "upperRight")
+                .unwrap()
+                .map(f64::to_bits),
+            [10.0, 6.0].map(f64::to_bits),
+        );
+
+        let accepted_expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let line_alias = accepted_expansion
+            .semantic_outputs
+            .values()
+            .find_map(|output| {
+                (output.reference.declaration == SemanticSymbol("diagonal".into())
+                    && output.reference.output.0.is_empty())
+                .then(|| match &output.target {
+                    ExpandedSemanticTarget::Declaration { alias, .. } => Some(alias.clone()),
+                    _ => None,
+                })
+                .flatten()
+            })
+            .unwrap();
+        let line = publication
+            .editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&line_alias)
+            .unwrap();
+        let end = line
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::End,
+                index: 0,
+            })
+            .unwrap();
+        let accepted = publication
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap();
+        let IntentNativeBinding::Point(end) = accepted.ownership.port(end.as_ref(line.id)).unwrap()
+        else {
+            panic!("managed line end must resolve to a native point")
+        };
+        assert_eq!(
+            accepted
+                .session
+                .design_document()
+                .point(end)
+                .unwrap()
+                .position
+                .map(f64::to_bits),
+            [10.0, 6.0].map(f64::to_bits),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the regression proves both expansion-owned inclusion and ordinary explicit-branch exclusion with one shared native authority"
+    )]
+    fn recomputable_code_line_branches_exclude_ordinary_gui_segments() {
+        let editor = ordinary_rectangle_diagonal();
+        let (workbench, mut promoted) = CodeProjectWorkbench::promote_from_editor(&editor).unwrap();
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .clone()
+            .unwrap();
+        let managed_line_alias = expansion
+            .semantic_outputs
+            .values()
+            .find_map(|output| {
+                (output.reference.declaration == SemanticSymbol("diagonal".into()))
+                    .then(|| match &output.target {
+                        ExpandedSemanticTarget::Declaration { alias, .. } => Some(alias.clone()),
+                        _ => None,
+                    })
+                    .flatten()
+            })
+            .expect("managed line declaration");
+        let managed_line_node = promoted
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&managed_line_alias)
+            .expect("managed line node")
+            .id;
+        let IntentNativeBinding::Curve(managed_line_curve) =
+            native_binding_for_node(&promoted, managed_line_node, |binding| {
+                matches!(binding, IntentNativeBinding::Curve(_))
+            })
+        else {
+            panic!("managed line must own one native curve")
+        };
+
+        let selector = |role| IntentPortSelector::Node { role, index: 0 };
+        let length = |value| IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Length,
+        };
+        let gui_alias = geosolve_sketch_intent::IntentKey::new("gui-parity-segment").unwrap();
+        let gui_segment = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            geosolve_sketch_intent::IntentKey::new("gui.parity-segment").unwrap(),
+        )
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::X, length(20.0))
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::Y, length(20.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(30.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(20.0))
+        .with_field(
+            geosolve_sketch_intent::IntentFieldKey(
+                geosolve_sketch_intent::IntentKey::new("branch_direction").unwrap(),
+            ),
+            IntentLiteral::Point([1.0, 0.0]),
+        );
+        let outcome = promoted
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                promoted.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: gui_alias.clone(),
+                    draft: Box::new(gui_segment),
+                    cell: None,
+                }],
+            ))
+            .expect("ordinary GUI Segment");
+        let gui_node = outcome.aliases.node(&gui_alias).expect("ordinary GUI node");
+        let IntentNativeBinding::Curve(gui_curve) =
+            native_binding_for_node(&promoted, gui_node, |binding| {
+                matches!(binding, IntentNativeBinding::Curve(_))
+            })
+        else {
+            panic!("ordinary GUI Segment must own one native curve")
+        };
+
+        let recomputable = recomputable_code_line_branches(&promoted, &expansion).unwrap();
+        assert!(
+            recomputable.contains(&managed_line_curve),
+            "the expansion-owned managed line remains source-derived"
+        );
+        assert!(
+            !recomputable.contains(&gui_curve),
+            "an ordinary GUI Segment must retain exact explicit branch authority"
+        );
+
+        let document = promoted
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .clone();
+        let current = match &document.curve(gui_curve).unwrap().definition {
+            geosolve_sketch::CurveDefinition::Line {
+                branch_direction, ..
+            } => *branch_direction,
+            _ => panic!("ordinary GUI Segment must materialize as a line"),
+        };
+        let (sine, cosine) = 1.0e-10_f64.sin_cos();
+        let replacement = [
+            cosine * current[0] - sine * current[1],
+            sine * current[0] + cosine * current[1],
+        ];
+        let mut same_cell_mismatch = document.clone();
+        same_cell_mismatch
+            .set_curve_branch(geosolve_sketch::CurveSpan::line(gui_curve), replacement)
+            .expect("same-cell explicit branch mismatch remains a valid document");
+
+        let mut intentionally_overbroad = recomputable.clone();
+        intentionally_overbroad.insert(gui_curve);
+        assert!(
+            document.exact_except_recomputable_line_branches(
+                &same_cell_mismatch,
+                &intentionally_overbroad,
+            ),
+            "the fixture must exercise the normalization leak"
+        );
+        assert!(
+            !document.exact_except_recomputable_line_branches(&same_cell_mismatch, &recomputable,),
+            "the exact expansion-owned set must reject an ordinary Segment mismatch"
+        );
+    }
+
+    #[test]
     fn static_workbench_has_one_hidden_optional_code_projection_and_bounded_editor_styles() {
         let html = include_str!("../../index.html");
         let css = include_str!("../../styles.css");
@@ -4216,6 +4844,8 @@ mod tests {
         assert_eq!(html.matches("id=\"wb-design-code\"").count(), 1);
         assert!(html.contains("data-wb-design-tab=\"code\""));
         assert!(html.contains("id=\"wb-design-tab-code\"") && html.contains("hidden>Code"));
+        assert!(html.contains(">Intent IR</button>"));
+        assert!(!html.contains(">Structured source</button>"));
         for selector in [
             ".wb-code-project",
             ".wb-code-file-tabs",
@@ -4235,6 +4865,8 @@ mod tests {
         for route in [
             "data-code-sample-id",
             "open_projectional_code_project",
+            "promote_projectional_code_project",
+            "\"promote-ordinary\" =>",
             "apply_managed_draft()",
             "reset_override(&path)",
             "to_persistence_json()",
@@ -4299,6 +4931,24 @@ mod tests {
             custom_before,
         );
         assert_eq!(restored.to_persistence_json().unwrap(), json);
+    }
+
+    #[test]
+    fn historical_bundled_demo_wire_migrates_to_explicit_origin() {
+        let workbench = open("braced-frame");
+        let json = workbench.to_persistence_json().unwrap();
+        let mut wire: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(wire["origin"]["kind"], "bundled");
+        assert_eq!(wire["origin"]["demo"], "braced-frame");
+        wire.as_object_mut().unwrap().remove("origin");
+        wire["demo"] = serde_json::Value::String("braced-frame".into());
+
+        let restored = CodeProjectWorkbench::from_persistence_json(&wire.to_string()).unwrap();
+        assert_eq!(restored.demo_key(), Some("braced-frame"));
+        let migrated: serde_json::Value =
+            serde_json::from_str(&restored.to_persistence_json().unwrap()).unwrap();
+        assert_eq!(migrated["origin"]["kind"], "bundled");
+        assert!(migrated.get("demo").is_none());
     }
 
     #[test]
