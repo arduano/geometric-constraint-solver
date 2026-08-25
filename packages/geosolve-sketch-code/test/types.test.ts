@@ -25,6 +25,8 @@ const alphaStart = point(alpha, "start");
 const alphaEnd = point(alpha, "end");
 const betaEnd = point(beta, "end");
 const segment = line(alpha, "segment", alphaStart, alphaEnd);
+const reservedProject = createProject("__geosolve_managed_v1__");
+const reservedPoint = point(reservedProject, "outside");
 
 const panel = rectangle(alpha, "panel");
 const panelType: RectangleFeature<typeof alpha> = panel;
@@ -88,6 +90,8 @@ const managedRectangleDiagonal = sketch(($) => {
   $.geometry.line("wrongKind", { start: frame.edges.bottom, end: frame.corners.upperRight });
   // @ts-expect-error Managed line endpoints reject references from another project.
   $.geometry.line("foreign", { start: alphaStart, end: frame.corners.upperRight });
+  // @ts-expect-error The reserved public project name cannot forge the managed-only brand.
+  $.geometry.line("forged", { start: reservedPoint, end: frame.corners.upperRight });
   // @ts-expect-error Managed line endpoints reject raw semantic ID strings.
   $.geometry.line("rawId", { start: "frame.corners.lowerLeft", end: frame.corners.upperRight });
   const rawDto = {

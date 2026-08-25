@@ -173,3 +173,10 @@ test("public semantic constructors never surface raw wire identities", () => {
   assert.equal("port" in reference, false);
   assert.equal("id" in reference, false);
 });
+
+test("the managed sketch project identity is reserved from public construction", () => {
+  assert.throws(
+    () => createProject("__geosolve_managed_v1__"),
+    /managed sketch project name is reserved/u,
+  );
+});

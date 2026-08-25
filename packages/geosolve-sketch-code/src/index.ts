@@ -16,6 +16,9 @@ declare const outputKindBrand: unique symbol;
 declare const featureOutputsBrand: unique symbol;
 declare const collectionOwnerBrand: unique symbol;
 declare const managedSketchBrand: unique symbol;
+declare const managedSketchProjectBrand: unique symbol;
+
+const MANAGED_SKETCH_PROJECT_NAME = "__geosolve_managed_v1__" as const;
 
 const referenceRuntime = Symbol("geosolve.sketch-code.reference");
 const collectionRuntime = Symbol("geosolve.sketch-code.collection");
@@ -307,6 +310,9 @@ function featureReference<Project, Kind extends FeatureKind, Outputs>(
 }
 
 export function createProject<const Name extends string>(name: Name): SketchProject<Name> {
+  if (name === MANAGED_SKETCH_PROJECT_NAME) {
+    throw new TypeError("managed sketch project name is reserved");
+  }
   if (!validKey(name)) throw new TypeError(`invalid project key ${JSON.stringify(name)}`);
   return Object.freeze({ name }) as SketchProject<Name>;
 }
@@ -609,7 +615,9 @@ export function definePatch<Schemas extends InputSchemas, Result>(
 
 /** Project brand used only while type-checking a managed-v1 sketch file. */
 export interface ManagedSketchProject
-  extends SketchProject<"__geosolve_managed_v1__"> {}
+  extends SketchProject<typeof MANAGED_SKETCH_PROJECT_NAME> {
+  readonly [managedSketchProjectBrand]: true;
+}
 
 export interface ManagedPolylineVertex<Key extends string = string> {
   readonly key: Key;
