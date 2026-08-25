@@ -5596,9 +5596,9 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 passes clean qualification and immutable Tailscale replacement nomination;
-focused human UAT remains pending**.
+Status: **implementation, M83-F001 through M83-F010 repair, post-F007 architecture hardening and
+supervising-user acceptance are complete; F010 passes clean qualification and immutable Tailscale
+replacement nomination; final GitHub Pages publication remains pending**.
 ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
@@ -5702,7 +5702,9 @@ chronological owner-rewrite candidate remains archived at
 - [x] Run one fresh clean release gate from committed F010 source, freeze its exact output without
   rebuilding, pass focused semantic-source/Inspector browser checks and exact temporary/retained
   served-byte verification before replacing the retained UAT service.
-- [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U10.
+- [x] Receive explicit supervising-user milestone-level acceptance against M83-U1 through M83-U10
+  on 2026-08-25. This scoped disposition does not claim a separately logged row-by-row hands-on
+  replay.
 - [ ] After approval only, publish and exact-verify M83 on GitHub Pages, retire the Tailscale
   listener and close the milestone.
 
@@ -5752,9 +5754,12 @@ served-byte ledgers
 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`. Temporary PID `224467`
 is retired; `geosolve-m83-uat.service`, PID `276377`, serves that immutable snapshot at
 `http://100.94.63.83:8080/`. Complete F010 evidence is in
-`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`. All M83-U1 through M83-U10 rows, F001-F010
-human rechecks, Pages publication and milestone closure remain pending; GitHub Pages continues to
-serve accepted M81.
+`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`. On 2026-08-25 the supervising user explicitly
+accepted M83 at milestone level and instructed the approved closeout plan to be implemented. That
+decision accepts M83-U1 through M83-U10 and F001-F010 for closure without claiming a separately
+logged row-by-row hands-on replay. Pages publication, exact hosted-byte verification, retained-
+service retirement and final milestone closeout remain pending; GitHub Pages continues to serve
+accepted M81 at this checkpoint.
 
 Gate: organization, names and source row order cannot change materialization; exact before/after
 organization moves cannot change geometry; every accepted

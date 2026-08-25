@@ -2,10 +2,11 @@
 
 # M83 implementation ledger — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 is clean-qualified and immutably nominated as the Tailscale replacement; human UAT
-remains pending**. This ledger records implementation and qualification against ADR 0040 and
-`docs/M83_GOALS.md`. Accepted M81 GitHub Pages bytes remain public authority.
+Status: **implementation, M83-F001 through M83-F010 repair, post-F007 architecture hardening and
+supervising-user acceptance are complete; F010 is clean-qualified and immutably nominated as the
+Tailscale replacement; final GitHub Pages publication remains pending**. This ledger records
+implementation and qualification against ADR 0040 and `docs/M83_GOALS.md`. Accepted M81 GitHub
+Pages bytes remain public authority until the M83 publication closeout completes.
 
 ## Baseline and disposition
 
@@ -259,9 +260,11 @@ served-byte evidence are recorded in the F008/F009 qualification section below.
 
 ## Findings
 
-All ten replacement findings are mechanically resolved; their human rechecks remain pending. The
-I7 work predates and is separate from the actual M83-F008/F009 findings: its regressions were found
-by independent review before renewed UAT rather than by a shipped or human-reported product defect.
+All ten replacement findings are mechanically resolved and accepted under the supervising user's
+2026-08-25 milestone-level close decision. That disposition does not claim a separately logged
+row-by-row hands-on replay. The I7 work predates and is separate from the actual M83-F008/F009
+findings: its regressions were found by independent review before renewed UAT rather than by a
+shipped or human-reported product defect.
 
 - **M83-F001 — deterministic accepted drag identity and exact-once terminal capture.** The
   withdrawn candidate could let a rejected newer sample or duplicate capture terminal obscure the
@@ -820,7 +823,10 @@ F010 snapshot. Independent final evidence
 cover `/` plus all seven files with HTTP 200, zero redirects, exact media type, length and body,
 and root equality with `index.html`.
 
-This completes only the F010 mechanical qualification and immutable replacement nomination.
-M83-U1 through M83-U10 and every F001-F010 human recheck remain pending; M83 is not closed and
-GitHub Pages deliberately remains on accepted M81. A documentation-only descendant does not
-replace the qualified product source/tree or rebuild or mutate the frozen artifact.
+This completes the F010 mechanical qualification and immutable replacement nomination. On
+2026-08-25 the supervising user explicitly approved the implementation plan that closes M83 from
+this evidence and instructed it to be implemented. The decision accepts M83-U1 through M83-U10
+and F001-F010 at milestone level without claiming a separately logged row-by-row hands-on replay.
+GitHub Pages deliberately remains on accepted M81 until the exact F010 publication, hosted-byte
+verification and retained-service retirement complete. A documentation-only approval descendant
+does not replace the qualified product source/tree or rebuild or mutate the frozen artifact.

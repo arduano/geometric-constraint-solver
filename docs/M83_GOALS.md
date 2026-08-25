@@ -2,9 +2,9 @@
 
 # M83 — Projectional sketch design intent
 
-Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 is clean-qualified and immutably nominated as the Tailscale replacement; focused
-human UAT remains pending**.
+Status: **implementation, M83-F001 through M83-F010 repair, post-F007 architecture hardening and
+supervising-user acceptance are complete; F010 is clean-qualified and immutably nominated as the
+Tailscale replacement; final GitHub Pages publication remains pending**.
 ADR 0040 is the active architecture. The rejected chronological candidate is preserved only on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; it is not a compatibility target.
 
@@ -147,8 +147,9 @@ validated flat accepted scene authoritative.
   workbench remains visually responsive on the representative sample corpus.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM
   builds, the unchanged milestone-neutral golden and complete clean release gate pass.
-- The exact no-rebuild candidate is frozen and byte-verified over Tailscale. GitHub Pages remains
-  on the accepted M81 product until explicit M83 human approval.
+- The exact no-rebuild candidate is frozen and byte-verified over Tailscale. Supervising-user
+  milestone-level acceptance passes; GitHub Pages remains on M81 only until the standard M83
+  publication closeout completes.
 
 The initial `232b83a` nomination, post-F005 source `a621cdd`, post-F007 source `fafea4e`, post-
 hardening source `1e70f3f` and F008/F009 source `b0de5af` remain historical evidence after
@@ -164,8 +165,12 @@ final eight-path HTTP ledgers both have SHA-256
 `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`. Historical PID
 `3376452` was retired only after replacement verification and its immutable snapshot remains
 preserved. The current frozen candidate is retained at `http://100.94.63.83:8080/`, PID `276377`.
-M83-U1 through M83-U10 and F001-F010 human rechecks remain pending evidence; accepted M81 GitHub
-Pages bytes remain public authority and M83 is not closed.
+On 2026-08-25 the supervising user explicitly accepted M83 at milestone level and instructed the
+approved closeout plan to be implemented. That decision accepts M83-U1 through M83-U10 and the
+F001-F010 replacement disposition without claiming a separately logged row-by-row hands-on
+replay. Accepted M81 GitHub Pages bytes remain public authority only until M83 publication, exact
+hosted-byte verification and retained-service retirement complete; those are the remaining
+closeout steps at this checkpoint.
 
 ## Non-goals
 
