@@ -3,8 +3,8 @@
 # M83 implementation ledger — Projectional sketch design intent
 
 Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
-human UAT**. This ledger records implementation and qualification against ADR 0040 and
+complete; F010 is clean-qualified and immutably nominated as the Tailscale replacement; human UAT
+remains pending**. This ledger records implementation and qualification against ADR 0040 and
 `docs/M83_GOALS.md`. Accepted M81 GitHub Pages bytes remain public authority.
 
 ## Baseline and disposition
@@ -30,6 +30,9 @@ human UAT**. This ledger records implementation and qualification against ADR 00
 - F008/F009 product source, now superseded by F010:
   `b0de5af55a8c9fe3550137cda91dae63c87666b1`; tree
   `ff0b29dee074bc67a136c23feb5ee56c99deeba1`.
+- Current F010 mechanically nominated product source:
+  `ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`; tree
+  `889f730e033ce5c728fddbac345263d8c26b8b93`.
 
 ## Implementation slices
 
@@ -652,7 +655,8 @@ temporary and loopback verification services are retired. F008/F009 later retire
 service only after their replacement passed; the snapshot remains historical evidence. GitHub
 Pages deliberately remains on accepted M81.
 
-The documentation-only descendant recording this qualification does not replace product source
+The documentation-only descendant that recorded this historical F008/F009 qualification does not
+replace product source
 `1e70f3f4dc6778881ce180b2922235a6cc103cf7`, tree
 `77251dbe393cd57b9d036e9611f5a8aaa192f5ee`, or rebuild or mutate the frozen artifact. The artifact
 therefore retains the exact `API_COMPATIBILITY.md` bytes produced by that qualified product source.
@@ -723,20 +727,46 @@ Only after those checks passed was historical PID `2404961` retired and
 `geosolve-m83-uat.service`, PID `3376452`, started on `http://100.94.63.83:8080/`. Independent final
 evidence `/tmp/geosolve-m83-f008-f009-final-verify.na1TWg0E/results.tsv` has the identical SHA-256.
 Both ledgers cover `/` plus all seven assets with HTTP 200, zero redirects, exact media type,
-length and body, and root equality with `index.html`. The retained service remains live for
-historical comparison until F010 replacement qualification passes. GitHub Pages deliberately
-remains on accepted M81, and M83-U1 through M83-U10, F001-F010 human rechecks, publication and
-milestone closure remain pending.
+length and body, and root equality with `index.html`. F010 retired retained PID `3376452` only
+after its replacement passed; the historical immutable snapshot remains preserved. GitHub Pages
+deliberately remains on accepted M81, and M83-U1 through M83-U10, F001-F010 human rechecks,
+publication and milestone closure remain pending.
 
 The documentation-only descendant recording this qualification does not replace product source
 `b0de5af55a8c9fe3550137cda91dae63c87666b1`, tree
 `ff0b29dee074bc67a136c23feb5ee56c99deeba1`, or rebuild or mutate the frozen artifact. The artifact
 therefore retains the exact `API_COMPATIBILITY.md` bytes produced by that qualified product source.
 
-## F010 semantic-projection implementation evidence
+## F010 semantic-projection qualification and immutable replacement nomination
 
-The product implementation is complete; clean release, no-rebuild freeze and served-byte
-replacement evidence are pending. Focused development evidence from the combined candidate:
+F010 product source `ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`, tree
+`889f730e033ce5c728fddbac345263d8c26b8b93`, had a clean worktree and passes this exact command:
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run ./scripts/release-gate.sh
+```
+
+The gate ran from 2026-08-25 13:33:46 to 13:52:11 AEST in 1,105 seconds with exit 0. Its
+385,323-byte, 5,683-line log has SHA-256
+`71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`; the original is
+`/tmp/geosolve-m83-f010-gate.X6Nd9WM4/release-gate.log` and the evidence-package copy is
+`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww/release-gate.log`. It passed formatting and diff
+hygiene, warnings-denied locked workspace Clippy/Rustdoc, locked all-feature workspace tests, the
+exact 271-row golden `--require-clean`, native/WASM parity, actual demo WASM, 40/40 TypeScript
+tests, benchmark compilation, licence/package checks, performance examples, the ignored
+256-moving-body sparse crossover and Trunk 0.21.14 release assembly.
+
+The independent M83 performance cuts all remain within their declared budgets:
+
+| Interaction | Preview median | Preview p95 / budget | Exact terminal / budget |
+| --- | ---: | ---: | ---: |
+| retained direct manipulation | 2.348 ms | 2.780 / 16.000 ms | 57.633 / 750.000 ms |
+| Fillet radius | 1.336 ms | 1.759 / 250.000 ms | 0.579 / 4,000.000 ms |
+| Profile Offset distance | 3.225 ms | 3.522 / 400.000 ms | 0.729 / 6,000.000 ms |
+| relation-heavy curve control | 11.163 ms | 14.099 / 150.000 ms | 47.647 / 3,000.000 ms |
+
+The focused owner evidence within that clean gate includes:
 
 ```text
 cargo test --locked -q -p geosolve-sketch-intent -p geosolve-constraint-editor \
@@ -762,3 +792,35 @@ mixed/sparse operation outputs. The editor projection fixture combines sparse bo
 Polyline vertices, sparse NURBS inputs, aggregate spans and a true two-corner Fillet. TypeScript
 adds runtime protocol rejection and compile-time recursive object/array shape tests. No equation,
 Jacobian, branch, materialization or golden-scene row changes.
+
+Without rebuilding, the gate-produced `dist` was copied to
+`/tmp/geosolve-m83-f010-uat.Qmrz2R36`, compared byte-for-byte before and after freezing, and made
+immutable for UAT: directory mode `0555`, seven regular non-symlink files at `0444`. Its ordered
+manifest aggregate is `e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`;
+source, pre-freeze and frozen seven-file manifests are byte-identical. Complete source, gate,
+freeze, browser, HTTP and service evidence is in
+`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`.
+
+All nine frozen-browser checks pass against the local artifact, the temporary Tailscale listener
+and the retained Tailscale listener. They cover the carried F001-F009 interaction set plus F010
+Segment/NURBS semantic parity and multi-corner Fillet arrays/closed enums. The local, temporary and
+final logs have SHA-256 respectively
+`e8e2a2fa286a3fbfa334fbcc1d9816257ebbb45c2b8790afea55b8c9005fb1f3`,
+`b18a21a4f9855593c86dff4fb97a035b13c688ce3a5da8ff2e5b39a801fbc7fa` and
+`99ac24a1dd441937be4d9003f8021d3c7114854fcf23bd00e5dcd5a24e45695b`.
+
+Temporary service `geosolve-m83-f010-temp-uat.service`, PID `224467`, first served the frozen
+snapshot on port `18090`; it was retired after its byte and 9/9 browser passes. Temporary evidence
+`/tmp/geosolve-m83-f010-temp-verify.fa7xynxe/results.tsv` has SHA-256
+`9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`.
+Only then was historical retained PID `3376452` retired and preserved, and
+`geosolve-m83-uat.service`, PID `276377`, started at `http://100.94.63.83:8080/` from the immutable
+F010 snapshot. Independent final evidence
+`/tmp/geosolve-m83-f010-final-verify.jKSWm8xi/results.tsv` has the identical SHA-256. Both ledgers
+cover `/` plus all seven files with HTTP 200, zero redirects, exact media type, length and body,
+and root equality with `index.html`.
+
+This completes only the F010 mechanical qualification and immutable replacement nomination.
+M83-U1 through M83-U10 and every F001-F010 human recheck remain pending; M83 is not closed and
+GitHub Pages deliberately remains on accepted M81. A documentation-only descendant does not
+replace the qualified product source/tree or rebuild or mutate the frozen artifact.

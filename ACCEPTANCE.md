@@ -3235,8 +3235,8 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 ### M83: projectional sketch design intent
 
 Status: implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
-focused human UAT.
+complete; F010 passes clean qualification and immutable Tailscale replacement nomination;
+focused human UAT remains pending.
 ADR 0040, `docs/M83_GOALS.md` and the M83 scenario section own the active acceptance contract; no
 human evidence or accepted product claim exists yet.
 
@@ -3351,11 +3351,24 @@ snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` has ordered-manifest aggrega
 F006/F007 2/2 and focused F008/F009 2/2 browser suites pass locally (7/7 total); both focused
 suites pass on temporary and retained Tailscale listeners (4/4 each). Both eight-path served-byte
 ledgers have SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`.
-Those historical bytes remain at `http://100.94.63.83:8080/`, service
-`geosolve-m83-uat.service`, PID `3376452`, only until the F010 replacement passes. Complete prior
-evidence is in `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. M83-U1 through M83-U10 and
-F001-F010 human rechecks, Pages publication and milestone closure remain pending. No automated
-result is human acceptance evidence, and GitHub Pages continues to serve accepted M81.
+Prior retained PID `3376452` is retired; its immutable F008/F009 snapshot and complete evidence at
+`/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es` remain preserved.
+
+Current mechanical UAT authority is clean source
+`ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`, tree
+`889f730e033ce5c728fddbac345263d8c26b8b93`. Its 1,105-second complete release gate passes; the
+385,323-byte, 5,683-line log `/tmp/geosolve-m83-f010-gate.X6Nd9WM4/release-gate.log` has SHA-256
+`71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`. The exact seven-file
+no-rebuild snapshot `/tmp/geosolve-m83-f010-uat.Qmrz2R36` is immutable at ordered-manifest
+aggregate `e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. All 9/9 frozen-browser
+checks pass locally, on the temporary listener and on the retained Tailscale endpoint. Temporary
+and final eight-path served-byte ledgers have identical SHA-256
+`9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`; the temporary service is
+retired, while `geosolve-m83-uat.service`, PID `276377`, serves the immutable candidate at
+`http://100.94.63.83:8080/`. Complete evidence is in
+`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`. M83-U1 through M83-U10 and F001-F010 human
+rechecks, Pages publication and milestone closure remain pending. No automated result is human
+acceptance evidence, and GitHub Pages continues to serve accepted M81.
 
 ## Regression and oracle policy
 

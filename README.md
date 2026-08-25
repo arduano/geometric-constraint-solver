@@ -149,17 +149,18 @@ workspace-v8 projectional Copy/Load repro transport; F009 keeps suppressed Fille
 and makes scene-composition failure a truthful frame-local canvas status. F010 gives Structured
 Source and Inspector one bounded semantic object/array path contract while retaining canonical
 storage coordinates as exact persistence and mutation authority. Prior M83 nominations through
-F008/F009 source `b0de5af` are historical. The committed F010 replacement must pass a fresh clean
-gate, no-rebuild freeze and exact Tailscale verification before focused human UAT; public GitHub
-Pages continues to serve accepted M81.
+F008/F009 source `b0de5af` are historical. F010 source `ee18dbd`, tree `889f730`, passes the fresh
+clean gate and exact no-rebuild Tailscale nomination at immutable aggregate
+`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. Focused human UAT remains
+pending; public GitHub Pages continues to serve accepted M81.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with the M83 F010 replacement awaiting clean qualification
-   and immutable nomination before focused UAT over the accepted M81 baseline.
+3. `PLAN.md` — authoritative roadmap, with the M83 F010 replacement clean-qualified and immutably
+   nominated while focused UAT remains pending over the accepted M81 baseline.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -217,8 +218,9 @@ cancellation, stable diagnostics and separate sketch-operation/production-topolo
 companions. The host continues to own expressions, B-rep projection, feature history
 and application undo. M40.7, M53 and M61-M81 have explicit acceptance dispositions. M83 now
 implements a projectional intent/session layer while deliberately retaining the native solver as
-accepted geometry authority; F010 supersedes the F008/F009 nomination, and its fresh clean freeze
-must pass before human UAT begins. Public Pages remains on accepted M81. New
+accepted geometry authority; F010 supersedes the F008/F009 nomination and passes its fresh clean
+freeze and exact Tailscale verification while human UAT remains pending. Public Pages remains on
+accepted M81. New
 milestones normally end in hands-on UAT after objective automation; M74 records an
 explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future

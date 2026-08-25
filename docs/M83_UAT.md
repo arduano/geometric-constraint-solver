@@ -3,9 +3,9 @@
 # M83 focused UAT — Projectional sketch design intent
 
 Status: **M83-F001 through M83-F010 and post-F007 architecture hardening implemented; F010 clean
-qualification and immutable Tailscale replacement nomination are pending before focused human
-UAT**. Automation owns exact identities, equations, residuals, persistence and deterministic
-reconstruction; human review owns clarity and interaction feel.
+qualification and immutable Tailscale replacement nomination are complete; focused human UAT
+remains pending**. Automation owns exact identities, equations, residuals, persistence and
+deterministic reconstruction; human review owns clarity and interaction feel.
 
 ## Candidate authority
 
@@ -95,8 +95,8 @@ Superseded F008/F009 mechanical UAT authority:
   is retired after its byte and browser passes.
 - Retained exact served-byte verification:
   `/tmp/geosolve-m83-f008-f009-final-verify.na1TWg0E/results.tsv`, with the same SHA-256.
-- Retained endpoint until the F010 replacement passes: `http://100.94.63.83:8080/`
-  (`geosolve-m83-uat.service`, PID `3376452`).
+- Historical retained service: `geosolve-m83-uat.service`, PID `3376452`; F010 retired it only
+  after replacement verification, and its immutable snapshot remains preserved.
 - Complete freeze, browser, service and byte evidence:
   `/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`.
 
@@ -105,10 +105,44 @@ exact media type/length/body and root equality with `index.html`. Temporary list
 only after passing; the retained service then passed independent byte and focused-browser
 verification.
 
+Current F010 mechanical UAT authority:
+
+- Product source: `ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`.
+- Product tree: `889f730e033ce5c728fddbac345263d8c26b8b93`.
+- Clean gate: exit 0 on 2026-08-25 at 13:52:11 AEST after 1,105 seconds; 385,323-byte,
+  5,683-line log, SHA-256
+  `71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m83-f010-uat.Qmrz2R36` (directory `0555`; seven
+  regular non-symlink files `0444`). Source, pre-freeze and frozen manifests are byte-identical.
+- Ordered file-manifest aggregate:
+  `e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`.
+- Frozen browser verification: all 9/9 checks pass locally, on the temporary Tailscale listener
+  and on the retained Tailscale listener. The set carries F001-F009 checks and adds F010
+  Segment/NURBS Inspector/source parity plus multi-corner Fillet arrays and closed enums.
+- Temporary exact served-byte verification:
+  `/tmp/geosolve-m83-f010-temp-verify.fa7xynxe/results.tsv`, SHA-256
+  `9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`; temporary PID `224467`
+  is retired after its byte and browser passes.
+- Retained exact served-byte verification:
+  `/tmp/geosolve-m83-f010-final-verify.jKSWm8xi/results.tsv`, with the same SHA-256.
+- Current retained endpoint: `http://100.94.63.83:8080/` (`geosolve-m83-uat.service`, PID
+  `276377`).
+- Complete freeze, browser, service and byte evidence:
+  `/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`.
+
+Both current byte-verification passes cover `/` plus all seven assets: HTTP 200, zero redirects,
+exact media type/length/body and root equality with `index.html`. The temporary listener was
+retired only after passing; historical retained PID `3376452` was then retired and preserved, and
+the current retained service passed independent byte and 9/9 browser verification.
+
+| Mechanical nomination | Status |
+| --- | --- |
+| M83-F010 clean qualification, no-rebuild freeze and immutable Tailscale replacement | complete |
+
 GitHub Pages deliberately remains on accepted M81 bytes. M83-U1 through M83-U10 are pending and no
 automated result below is presented as human evidence.
 
-The superseded F008/F009 candidate mechanically preserves the automation-only architecture contract:
+The current F010 candidate mechanically preserves the automation-only architecture contract:
 strict SHA-256 v2/legacy-v1 migration, independently validated accepted/current/history authority,
 descriptor/body chronology, exact ownership, prepared Fillet/Offset publication, compact explicit
 Snapshot reads, typed bounded receipts/responses, the 64 MiB workspace admission boundary and 4 MiB

@@ -3,8 +3,8 @@
 # M83 — Projectional sketch design intent
 
 Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
-focused human UAT**.
+complete; F010 is clean-qualified and immutably nominated as the Tailscale replacement; focused
+human UAT remains pending**.
 ADR 0040 is the active architecture. The rejected chronological candidate is preserved only on
 `archive/m83-chronological-lineage-2026-08-23` at `be62a1c`; it is not a compatibility target.
 
@@ -152,15 +152,20 @@ validated flat accepted scene authoritative.
 
 The initial `232b83a` nomination, post-F005 source `a621cdd`, post-F007 source `fafea4e`, post-
 hardening source `1e70f3f` and F008/F009 source `b0de5af` remain historical evidence after
-M83-F001 through M83-F010. The last clean-qualified no-rebuild snapshot
-`/tmp/geosolve-m83-f008-f009-uat.zLfB22EK`, aggregate
-`f2092e54b1b014618dcdded21e3bc0907a280fc15aa93b0c18913cf87d9b30d6`, passes 7/7 local browser
-checks and 4/4 on both temporary and retained Tailscale listeners. Both temporary/final eight-path
-byte ledgers have SHA-256 `b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`;
-those historical bytes remain live at `http://100.94.63.83:8080/`, PID `3376452`, only until the
-F010 replacement passes clean qualification, freeze and served-byte verification. M83-U1 through
-M83-U10 and F001-F010 human rechecks remain pending evidence; accepted M81 GitHub Pages bytes
-remain public authority.
+M83-F001 through M83-F010. Current mechanical UAT authority is clean source
+`ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`, tree
+`889f730e033ce5c728fddbac345263d8c26b8b93`. Its 5,683-line, 385,323-byte clean-gate log has
+SHA-256 `71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`.
+The exact no-rebuild seven-file snapshot `/tmp/geosolve-m83-f010-uat.Qmrz2R36` is frozen at
+directory mode `0555` and file mode `0444`, with ordered manifest aggregate
+`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. All nine browser checks
+pass locally, on its temporary Tailscale listener and on the retained listener; the temporary and
+final eight-path HTTP ledgers both have SHA-256
+`9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`. Historical PID
+`3376452` was retired only after replacement verification and its immutable snapshot remains
+preserved. The current frozen candidate is retained at `http://100.94.63.83:8080/`, PID `276377`.
+M83-U1 through M83-U10 and F001-F010 human rechecks remain pending evidence; accepted M81 GitHub
+Pages bytes remain public authority and M83 is not closed.
 
 ## Non-goals
 

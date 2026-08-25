@@ -52,8 +52,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   `GEOSOLVE_REPRO_V1` envelope; F009 excludes suppressed computed Fillets from native-parent
   hiding and distinguishes empty accepted authority from a frame-local scene-composition error;
   F010 gives every descriptor target one bounded semantic object/array path while retaining the
-  canonical slot/field/port/leaf as exact mutation authority. F010 clean replacement nomination
-  and explicit human UAT remain required; GitHub Pages continues to serve accepted M81.
+  canonical slot/field/port/leaf as exact mutation authority. F010 source `ee18dbd`, tree
+  `889f730`, passes clean replacement qualification and immutable Tailscale nomination; explicit
+  human UAT remains required, and GitHub Pages continues to serve accepted M81.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -896,9 +897,12 @@ state, other failures render `data-scene-state="unavailable"` and a frame-local 
 unavailable: ...` status, and the next successful frame clears it. F010 renders Inspector fields
 as the same nested semantic object/array tree, uses one-based labels only for human display while
 typed paths remain zero-based and exact, renders closed enums as selects, and authenticates edits
-with the Inspector projection's own identity. The historical `b0de5af` bytes remain on Tailscale
-only until F010 replacement qualification passes. M83 remains unaccepted until human UAT passes;
-public Pages still serves accepted M81.
+with the Inspector projection's own identity. Historical F008/F009 PID `3376452` is retired and its
+snapshot remains preserved. The immutable F010 snapshot
+`/tmp/geosolve-m83-f010-uat.Qmrz2R36`, aggregate
+`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`, is served by retained PID
+`276377` at `http://100.94.63.83:8080/` after exact local, temporary and retained verification.
+M83 remains unaccepted until human UAT passes; public Pages still serves accepted M81.
 
 Workspace encode/decode shares the reproduction codec's 64 MiB admitted-workspace ceiling. A
 narrow version probe and disposable-cache visitor avoid an arbitrary `serde_json::Value` tree;
@@ -1724,5 +1728,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   requires a newly approved architecture rather than reactivating ADR 0038.
 - M83: active and not yet accepted. ADR 0040's projectional graph, F001-F010 interaction repairs
   and post-F007 architecture hardening are implemented over the unchanged M81 solver/domain
-  baseline. Prior nominations through `b0de5af` are historical; F010 clean replacement nomination
-  and focused human UAT remain required, and GitHub Pages continues to serve accepted M81.
+  baseline. Prior nominations through `b0de5af` are historical; the F010 clean replacement is
+  immutably nominated and focused human UAT remains required. GitHub Pages continues to serve
+  accepted M81.

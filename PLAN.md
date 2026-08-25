@@ -5597,8 +5597,8 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 ### M83: projectional sketch design intent
 
 Status: **implementation, M83-F001 through M83-F010 repair and post-F007 architecture hardening
-complete; F010 clean qualification and immutable Tailscale replacement nomination pending before
-focused human UAT**.
+complete; F010 passes clean qualification and immutable Tailscale replacement nomination;
+focused human UAT remains pending**.
 ADR 0040 and `docs/M83_GOALS.md` own the replacement contract. The rejected
 chronological owner-rewrite candidate remains archived at
 `archive/m83-chronological-lineage-2026-08-23` (`be62a1c`) and is not restored.
@@ -5699,7 +5699,7 @@ chronological owner-rewrite candidate remains archived at
 - [x] Pass one fresh clean release gate from committed F008/F009 source, freeze its exact output
   without rebuilding, pass 7/7 local plus 4/4 temporary and 4/4 retained Tailscale browser checks,
   and byte-verify `/` plus all seven files before replacing the retained service.
-- [ ] Run one fresh clean release gate from committed F010 source, freeze its exact output without
+- [x] Run one fresh clean release gate from committed F010 source, freeze its exact output without
   rebuilding, pass focused semantic-source/Inspector browser checks and exact temporary/retained
   served-byte verification before replacing the retained UAT service.
 - [ ] Receive explicit supervising-human UAT against M83-U1 through M83-U10.
@@ -5730,10 +5730,29 @@ snapshot `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` is frozen at ordered-manifes
 focused F006/F007 2/2 and focused F008/F009 2/2 suites pass locally (7/7 total); the two focused
 suites pass on both temporary and retained Tailscale listeners (4/4 each). Temporary and final
 eight-path served-byte ledgers both have SHA-256
-`b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. Those now-historical bytes
-remain live at `http://100.94.63.83:8080/` under `geosolve-m83-uat.service`, PID `3376452`, until the
-F010 candidate passes its replacement gate. Complete prior evidence is in
-`/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es`. All M83-U1 through M83-U10 rows, F001-F010
+`b5bef9cc6274258c217f5edf44c7a6ed06b7299c524f5f0ed3ea4aa64d8866b4`. Prior retained PID
+`3376452` is retired; `/tmp/geosolve-m83-f008-f009-uat.zLfB22EK` and complete evidence
+`/tmp/geosolve-m83-f008-f009-freeze-evidence.GZ1Vp2es` remain preserved.
+
+F010 source `ee18dbda89b6973ac54baea3ac0e0dbbd126ca59`, tree
+`889f730e033ce5c728fddbac345263d8c26b8b93`, had a clean worktree and passed
+`env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
+from 2026-08-25 13:33:46 to 13:52:11 AEST in 1,105 seconds. Its 385,323-byte, 5,683-line log
+`/tmp/geosolve-m83-f010-gate.X6Nd9WM4/release-gate.log` has SHA-256
+`71495557ca5638000cfec265d9b97c0b0e71c72d3cbdfbbd09dbea8518484f9a`; all 271 golden rows pass
+at fixture SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`, and TypeScript passes
+40/40. The exact gate-produced seven-file distribution was frozen without rebuilding at
+`/tmp/geosolve-m83-f010-uat.Qmrz2R36` with directory mode `0555`, regular-file mode `0444` and
+ordered-manifest aggregate `e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`;
+source, pre-freeze and frozen manifests are byte-identical. All 9/9 browser checks pass locally,
+on temporary Tailscale port `18090` and on the retained endpoint. Temporary and final eight-path
+served-byte ledgers
+`/tmp/geosolve-m83-f010-temp-verify.fa7xynxe/results.tsv` and
+`/tmp/geosolve-m83-f010-final-verify.jKSWm8xi/results.tsv` both have SHA-256
+`9914a99483df9dee2059a1e0eabf173c8055af6a9173c2a7e5288e31ffeef10b`. Temporary PID `224467`
+is retired; `geosolve-m83-uat.service`, PID `276377`, serves that immutable snapshot at
+`http://100.94.63.83:8080/`. Complete F010 evidence is in
+`/tmp/geosolve-m83-f010-freeze-evidence.nIFsx9ww`. All M83-U1 through M83-U10 rows, F001-F010
 human rechecks, Pages publication and milestone closure remain pending; GitHub Pages continues to
 serve accepted M81.
 
