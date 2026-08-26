@@ -2,11 +2,10 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the post-F004 direct code-authoring amendment is implemented and
-under qualification**. The clean-qualified M84-F003 and F004 snapshots are withdrawn historical
-evidence because they predate current scope. No replacement is nominated. M84-U1 through M84-U13
-and explicit approval remain pending; accepted M83 remains GitHub Pages authority. ADR 0041 is the
-controlling design.
+Status: **active and unaccepted; the post-F004 direct code-authoring amendment is clean-qualified
+and immutably nominated for UAT**. The earlier M84-F003/F004 snapshots remain withdrawn historical
+evidence. M84-U1 through M84-U13 and explicit approval remain pending; accepted M83 remains GitHub
+Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -189,17 +188,21 @@ no-rebuild seven-file output `/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` is immutab
 directory/file modes `0555`/`0444`, ordered-manifest aggregate
 `f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc`, and byte/browser-verified
 on temporary and retained endpoints. Baseline 4/4, F003 1/1 and F004 2/2 browser suites pass on
-both. Retained service PID `3316682` serves only those bytes at
-`http://100.94.63.83:8080/`. The later direct-authoring amendment withdraws them from current
-nomination solely because they predate amended scope; they may remain reachable as historical
-evidence until a replacement is ready.
+both. Historical service PID `3316682` served only those bytes at
+`http://100.94.63.83:8080/`. The later direct-authoring amendment withdrew them from current
+nomination solely because they predate amended scope; PID `3316682` was retired only after the
+direct-authoring replacement passed temporary verification.
 
-Post-F004 direct-authoring amendment (2026-08-26): public `CodeProject::managed_only` and the fresh
-Code landing are implemented. The authored starter, four example cards, exact current/accepted
-freshness check, typed native corner aliasing, valid/retained-invalid Apply, whole-source
-replacement, persisted `authored` origin and exact Undo/Redo pass focused Rust tests. This adds no
-solver equation, browser execution, custom artifact or fifth bundled golden row. Full WASM/browser
-and clean replacement qualification remain pending; M84-U1 through M84-U13, explicit approval,
+Current direct-authoring nomination (2026-08-26): exact source
+`41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`, passes the complete clean release gate, unchanged
+271-row golden and separate four-demo ledger. Its exact no-rebuild output is frozen at
+`/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, with complete evidence at
+`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`. Temporary and retained exact HTTP checks and
+direct 3/3, baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against those frozen bytes.
+PID `4081080` serves them at `http://100.94.63.83:8080/`. This adds no solver equation, browser
+execution, custom artifact or fifth bundled golden row. M84-U1 through M84-U13, explicit approval,
 Pages publication, service retirement and closure remain open.
 
 ## Bounds and non-goals

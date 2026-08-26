@@ -3386,11 +3386,10 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. The post-F004 direct code-authoring amendment is implemented and
-under qualification. The clean-qualified F003 and F004 snapshots are withdrawn historical evidence
-because they predate current scope; no replacement is nominated. M84-U1 through M84-U13 and
-explicit approval remain pending. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the
-acceptance contract. Accepted M83 remains public product authority.
+Status: active and unaccepted. The post-F004 direct code-authoring amendment is clean-qualified and
+immutably nominated for UAT. The earlier F003/F004 snapshots remain withdrawn historical evidence.
+M84-U1 through M84-U13 and explicit approval remain pending. ADR 0041, `docs/M84_GOALS.md` and the
+M84 scenario section own the acceptance contract. Accepted M83 remains public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3492,9 +3491,10 @@ and cold-materialized through the ordinary accepted-scene authority.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
-  because it predates the direct-authoring amendment. Replacement qualification and M84-U1 through
-  M84-U13 plus explicit supervising-user approval remain mandatory before GitHub Pages publication,
-  exact hosted verification, service retirement and closure.
+  because it predates the direct-authoring amendment. The qualified direct-authoring replacement
+  below is the current UAT candidate. M84-U1 through M84-U13 plus explicit supervising-user
+  approval remain mandatory before GitHub Pages publication, exact hosted verification, service
+  retirement and closure.
 
 Withdrawn historical nomination authority is exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -3521,7 +3521,8 @@ manifests match. Temporary and retained eight-path HTTP ledgers match at SHA-256
 pass 4/4 and F003 passes 1/1 on both. Retained `geosolve-m84-uat.service`, PID `3736900`, served
 those exact bytes at `http://100.94.63.83:8080/`. Those F003 bytes are now withdrawn from current
 UAT by F004 and PID `3736900` is retired. At that historical checkpoint no F004 replacement
-nomination, human row or M84 Pages publication was claimed; the current F004 nomination follows.
+nomination, human row or M84 Pages publication was claimed; the later, now-historical F004
+nomination follows.
 
 Historical F004 replacement mechanical authority is exact product source
 `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
@@ -3540,19 +3541,33 @@ ledgers are byte-identical at SHA-256
 `54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns HTTP
 200 with zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/`
 equals `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both
-endpoints. Retained service PID `3316682` serves those immutable bytes at
+endpoints. Historical service PID `3316682` served those immutable bytes at
 `http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. The later
-direct-authoring amendment withdraws these bytes from current nomination solely because they
-predate amended scope; PID `3316682` may continue serving them as historical evidence until a
-qualified replacement is ready.
+direct-authoring amendment withdrew these bytes from current nomination solely because they
+predate amended scope; PID `3316682` was retired only after the qualified replacement passed
+temporary exact-byte and browser verification.
 
-Post-F004 direct-authoring acceptance (2026-08-26): focused public-constructor and workbench owners
+Post-F004 direct-authoring qualification (2026-08-26): focused public-constructor and workbench owners
 pass artifact-free admission, exact fresh landing/catalog, native corner-ID aliasing after valid
 Apply, retained-invalid canvas/persistence, complete source replacement, exact Undo/Redo and
 conflicting-origin rejection. The four-demo ledger remains unchanged and no finding ID, fifth
-bundled demo, solver equation or browser runtime is added. Actual WASM/browser, full collateral,
-clean gate, freeze and replacement nomination remain pending; M84-U1 through M84-U13 and explicit
-approval remain open, so Pages remains accepted M83 authority and no M84 publication is claimed.
+bundled demo, solver equation or browser runtime is added.
+
+Current mechanical nomination is exact product source
+`41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`. The complete clean gate passes with 6,146-line,
+415,754-byte log SHA-256 `34bf408f6a565dec5705745f916eb628397a549b4a7002d865269e8d167e179f`,
+unchanged golden SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`
+and M84 ledger SHA-256 `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+Its exact no-rebuild snapshot `/tmp/geosolve-m84-authored-uat.ZYQQyBQQ` is frozen at directory/file
+modes `0555`/`0444`, with seven regular non-symlink files and ordered-manifest aggregate
+`6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`. Temporary/final eight-path
+HTTP ledgers match at SHA-256
+`1450e4c6d8585ba17dee56feafaf96869c45f764f3400280a0dc37581f9b4eee`; direct-authored 3/3,
+baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against the exact bytes on each endpoint.
+PID `4081080` serves them at `http://100.94.63.83:8080/`; evidence is retained at
+`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`. M84-U1 through M84-U13 and explicit approval
+remain open, so Pages remains accepted M83 authority and no M84 publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

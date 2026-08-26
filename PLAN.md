@@ -5793,12 +5793,11 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the post-F004 direct code-authoring amendment is implemented and
-under qualification**. Ordinary GUI dependencies project as lexical managed TypeScript while low-
-level transport remains truthfully labelled Intent IR. The clean-qualified F003 and F004 snapshots
-are withdrawn historical evidence because they predate current scope. No replacement is nominated;
-M84-U1 through M84-U13 and explicit approval remain pending, and accepted M83 remains public Pages
-authority.
+Status: **active and unaccepted; the post-F004 direct code-authoring amendment is clean-qualified
+and immutably nominated for UAT**. Ordinary GUI dependencies project as lexical managed TypeScript
+while low-level transport remains truthfully labelled Intent IR. The earlier F003/F004 snapshots
+remain withdrawn historical evidence. M84-U1 through M84-U13 and explicit approval remain pending,
+and accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5871,7 +5870,7 @@ authority.
   workspace, expose one **Start from code** action plus the four existing genuine sample cards;
   create a distinct persisted `authored` project with artifact-free editable `sketch.ts`, lexical
   `frame.corners.*` dependencies and no manufactured GUI/promotion step.
-- [ ] Qualify the direct starter through full code/workbench/WASM/TypeScript collateral, an actual
+- [x] Qualify the direct starter through full code/workbench/WASM/TypeScript collateral, an actual
   browser Start → edit → Apply → retained-invalid → Undo/reload flow at both required sizes, the
   unchanged golden/ledger, complete clean gate and an immutable replacement Tailscale nomination.
 - [ ] Receive explicit M84-U1 through M84-U13 approval, then publish/exact-verify Pages, retire the
@@ -5895,7 +5894,7 @@ the exact seven-file output is frozen at `/tmp/geosolve-m84-uat.aHw5ePSW` with d
 Tailscale eight-path ledgers byte-match at SHA-256
 `dd8e6c1350f56cb6e7a483892a188187edc68ddcb63ee8ba9335401432ba8895`; focused browser checks
 pass 4/4 locally and 4/4 on Tailscale, including bounded-surface checks at both required desktop
-sizes. `geosolve-m84-uat.service`, PID `2426265`, retains those immutable bytes at
+sizes. `geosolve-m84-uat.service`, PID `2426265`, served those immutable bytes at
 `http://100.94.63.83:8080/`. Human UAT then opened `M84-F003`: the ordinary GUI rectangle plus
 shared-corner Segment path displayed the M83 `IntentSourceSnapshot` reference DTO as if it were
 authoring TypeScript, so its dependency appeared as `{ declaration, output, kind }` data rather
@@ -5944,8 +5943,8 @@ browser replay then exposed the exact mouse path's inferred Horizontal and Verti
 the same repair now projects them as `$.constraint.horizontal`/`vertical` over lexical native
 spans, preserves suppression and lowers them to existing Intent kinds. Focused Rust owner,
 bootstrap/direct-lowering/workbench, TypeScript and UI tests pass. The then-current retained
-candidate is recorded below. M84-U1 through M84-U12, explicit approval, Pages publication, service retirement
-and closure remain open; no M84 Pages authority is claimed.
+candidate is recorded below. At that checkpoint M84-U1 through M84-U12, explicit approval, Pages
+publication, service retirement and closure remain open; no M84 Pages authority is claimed.
 
 Historical M84-F004 replacement qualification/nomination record (2026-08-26): exact product source
 `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
@@ -5964,9 +5963,9 @@ ledgers are byte-identical at SHA-256
 `54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns 200,
 zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
 `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both endpoints.
-Retained service PID `3316682` serves those immutable bytes at `http://100.94.63.83:8080/`; the
-temporary replacement service and obsolete pre-axis F004 service are retired. Pages remains on
-accepted M83 pending explicit M84-U1 through M84-U12 approval.
+Historical service PID `3316682` served those immutable bytes at `http://100.94.63.83:8080/`; it,
+the temporary replacement service and obsolete pre-axis F004 service are retired. Pages remains on
+accepted M83 pending the then-current M84-U1 through M84-U12 approval.
 
 Post-F004 direct-authoring amendment (2026-08-26): a canonical fresh workspace now presents a
 dedicated Code landing rather than an empty-promotion diagnostic. Public
@@ -5976,10 +5975,32 @@ lexical typed corner references. The same landing exposes the centrally owned fo
 Valid Apply, whole-source replacement, exact native corner aliasing, retained-invalid persistence,
 Undo/Redo and conflicting-origin rejection pass focused Rust tests. Fresh detection requires exact
 current/accepted semantic parity, independently validated empty native authority and no computed
-features. This is added functionality, not M84-F005 and not a fifth bundled-ledger row. It withdraws
-the F004 bytes from current nomination solely because they predate the amended scope; PID `3316682`
-may continue serving those historical bytes until a fully qualified replacement is ready. Actual
-WASM/browser, clean release qualification, freeze and replacement nomination remain pending.
+features. This is added functionality, not M84-F005 and not a fifth bundled-ledger row. It withdrew
+the F004 bytes from current nomination solely because they predated the amended scope. The exact
+replacement qualification and nomination are recorded below.
+
+Direct-authoring replacement qualification/nomination record (2026-08-26): exact committed product
+source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`, passes the complete clean Nix release gate from
+14:55:50.676940562 through 15:12:22.475576111 AEST, exit 0 in 991.798635549 seconds. Its 6,146-line,
+415,754-byte log `/tmp/geosolve-m84-authored-release-gate.log` has SHA-256
+`34bf408f6a565dec5705745f916eb628397a549b4a7002d865269e8d167e179f`. The gate preserves the
+271-row golden at SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`
+and the separate four-demo M84 ledger at
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+Without rebuilding, the exact seven-file output is frozen at
+`/tmp/geosolve-m84-authored-uat.ZYQQyBQQ` with directory/files `0555`/`0444`, ordered-manifest
+aggregate `6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, and complete evidence
+at `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`. Temporary `:18086` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`1450e4c6d8585ba17dee56feafaf96869c45f764f3400280a0dc37581f9b4eee`: every path returns 200,
+zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
+`index.html`. Direct-authored 3/3, baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against
+the exact frozen bytes on both endpoints, including the `1440x900` and `1024x720` bounded landing.
+The temporary service and historical F004 PID `3316682` are retired. `geosolve-m84-uat.service`,
+PID `4081080`, serves the nominated bytes at `http://100.94.63.83:8080/`. These automated checks
+nominate the candidate but do not accept M84-U1 through M84-U13, authorize Pages, or close M84.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

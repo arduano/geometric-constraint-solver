@@ -2,10 +2,9 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **the post-F004 direct code-authoring amendment is implemented and under qualification;
-UAT U1-U13 is pending with no current candidate**. No row is accepted. The initial, F003 and F004
-snapshots are withdrawn historical evidence because they predate current scope. Pages remains on
-accepted M83.
+Status: **the post-F004 direct code-authoring amendment is clean-qualified and immutably nominated;
+UAT U1-U13 remains pending**. No row is accepted. The initial, F003 and F004 snapshots remain
+withdrawn historical evidence. Pages remains on accepted M83.
 
 ## Withdrawn candidate evidence
 
@@ -141,13 +140,12 @@ eight-path HTTP ledgers are byte-identical at SHA-256
 200 with zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/`
 equals `index.html`. Baseline 4/4, F003 1/1 and F004 2/2 browser suites pass on both endpoints.
 
-Retained `geosolve-m84-uat.service`, PID `3316682`, still serves only those immutable bytes at
-`http://100.94.63.83:8080/`. The temporary replacement and obsolete pre-axis F004 services are
-retired. The later direct-authoring amendment withdraws this snapshot from current UAT solely
-because it predates amended scope; it remains reachable only until a qualified replacement is
-ready and does not accept a row or authorize M84 Pages publication.
+Historical `geosolve-m84-uat.service` PID `3316682` served only those immutable bytes at
+`http://100.94.63.83:8080/`. It was retired only after the direct-authoring replacement passed
+temporary exact-byte and browser verification. The later amendment keeps this snapshot withdrawn
+because it predates amended scope; it does not accept a row or authorize M84 Pages publication.
 
-## Direct code-authoring amendment awaiting replacement nomination
+## Current direct code-authoring nomination
 
 A canonical fresh workspace now exposes one **Start from code** action and four genuine project
 cards. Starting creates **Untitled code sketch** as a distinct artifact-free `Authored` project;
@@ -158,9 +156,61 @@ rejection. The fresh landing additionally requires exact current/accepted semant
 independently validated empty native authority. No fifth bundled project, golden row, custom
 artifact, JavaScript execution or solver equation is introduced.
 
-Actual WASM/browser qualification at both required sizes, the complete clean gate, immutable
-freeze and replacement Tailscale nomination remain pending. Run no human scorecard against the
-currently served historical F004 bytes.
+Exact product source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`, passes the clean command
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY -u NO_COLOR \
+  nix-shell shell.nix --run './scripts/release-gate.sh' 2>&1 | \
+  tee /tmp/geosolve-m84-authored-release-gate.log
+```
+
+from 14:55:50.676940562 through 15:12:22.475576111 AEST on 2026-08-26, exit 0 in
+991.798635549 seconds. Its final Trunk `INFO ✅ success` marker was checked independently of the
+tee pipeline. The 6,146-line, 415,754-byte log
+`/tmp/geosolve-m84-authored-release-gate.log` has SHA-256
+`34bf408f6a565dec5705745f916eb628397a549b4a7002d865269e8d167e179f`. It includes formatting and
+diff hygiene, warnings-denied Clippy/Rustdoc, locked workspace tests/doctests, unchanged 271-row
+golden, separate four-demo M84 ledger, actual WASM, both TypeScript packages, package closure,
+performance/benchmarks, licensing and Trunk 0.21.14. The worktree was clean before and after the
+gate. The golden remains
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the M84 ledger remains
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+The exact gate output was copied without rebuilding to
+`/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`. Source, copied and frozen manifests match; the directory
+is `0555` and exactly seven regular non-symlink files are `0444`. Complete evidence is retained at
+`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`; its ordered-manifest aggregate is
+`6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`:
+
+```text
+bc99bec852a174e58de5027da25cffd31a5e21580fff4f4cba80e700a3d5f252  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+26f7601677f65392bcde98f30cbb94f01f50d9ed45895c856a30d459ff38e715  geosolve-demo-web-c98440de375793fc.js
+89e70d8dcd84b648a7b0c7a252db7f927fa3d6cd81937bc4744c011b1d738241  geosolve-demo-web-c98440de375793fc_bg.wasm
+0b2996e0da06a9a57ae42d977bff1a4798833c53db34fa97fdb424e589ae7f14  index.html
+81e24b427990f181b099e7b751dee6739d68024001e3cef592a8be3faed435db  styles-8eda25752cd33a23.css
+```
+
+Temporary `:18086` and retained `:8080` eight-path HTTP ledgers are byte-identical at SHA-256
+`1450e4c6d8585ba17dee56feafaf96869c45f764f3400280a0dc37581f9b4eee`. `/` plus all seven files
+return HTTP 200, zero redirects, exact MIME/length/hash, no `Location` or `Content-Encoding`, and
+`/` equals `index.html`. Against those same frozen bytes, direct-authored lifecycle passes 3/3,
+baseline passes 4/4, F003 passes 1/1 and F004 passes 2/2 on both endpoints. The direct suite covers
+both `1440x900` and `1024x720`, zero landing overflow, Start/edit/Apply, retained-invalid canvas,
+Undo, reload/repro and sample-card routing. Automated browser checks are mechanical nomination
+evidence, not supervising-user UAT.
+
+The temporary service and historical F004 PID `3316682` are retired. Current
+`geosolve-m84-uat.service`, PID `4081080`, serves only the nominated frozen directory at
+`http://100.94.63.83:8080/`.
+
+| Release state | Status |
+| --- | --- |
+| Clean qualification, immutable freeze and exact Tailscale replacement | complete |
+| Supervising-user M84-U1 through M84-U13 | pending |
+| GitHub Pages publication, service retirement and M84 closure | pending |
 
 Run the ordinary desktop workbench at approximately
 `1440x900` and `1024x720`. Use actual code-project samples rather than importing equivalent flat
@@ -191,8 +241,8 @@ withdraws the candidate and opens an owning-layer regression.
 
 ## Final disposition
 
-- Supervising-user UAT: M84-U1 through M84-U13 pending; no replacement is currently nominated and
-  every prior candidate remains withdrawn historical evidence.
+- Supervising-user UAT: M84-U1 through M84-U13 pending against the current direct-authoring
+  candidate; every prior candidate remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Replacement Tailscale nomination: pending. `http://100.94.63.83:8080/` still serves historical
-  F004 bytes and will be replaced only after the amended candidate is fully qualified.
+- Replacement Tailscale nomination: complete. PID `4081080` serves the exact immutable candidate
+  from `/tmp/geosolve-m84-authored-uat.ZYQQyBQQ` at `http://100.94.63.83:8080/`.

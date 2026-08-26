@@ -4686,8 +4686,8 @@ separate reviewed ledger owns managed-source parsing, data-artifact expansion, t
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
 `docs/M84_GOALS.md` are authoritative. The F001-F004 fixtures below are implemented and pass their
 focused owner suites. The former complete clean candidate and clean-qualified F003/F004
-local/Tailscale nominations are withdrawn historical evidence because they predate the post-F004
-direct-authoring amendment. No replacement is nominated. Human presentation UAT U1-U13 remains
+local/Tailscale nominations remain withdrawn historical evidence. The post-F004 direct-authoring
+replacement is clean-qualified and immutably nominated. Human presentation UAT U1-U13 remains
 pending; accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
@@ -4885,19 +4885,26 @@ ledgers are byte-identical at SHA-256
 `54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns 200,
 zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
 `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both endpoints.
-Retained service PID `3316682` serves those immutable bytes at
-`http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. The later
+Historical service PID `3316682` served those immutable bytes at
+`http://100.94.63.83:8080/`; it and the temporary/obsolete pre-axis F004 services are retired. The
+later
 direct-authoring amendment withdraws those bytes from current nomination solely because they
-predate amended scope; they may remain reachable as historical evidence until a qualified
-replacement exists.
+predate amended scope; the qualified replacement below now owns the retained endpoint.
 
-Post-F004 direct-authoring focused owner coverage passes public artifact-free construction,
+Post-F004 direct-authoring source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`, passes public artifact-free construction,
 fresh-surface catalog/fail-closed classification, exact native rectangle-corner aliasing after
 Apply, retained-invalid persistence, complete source replacement, exact Undo/Redo and conflicting-
-origin rejection. The four-demo M84 ledger and 271-row golden remain unchanged. Actual-WASM/
-browser collateral at both required sizes, full release qualification, immutable freeze and
-replacement nomination remain pending. M84 remains active and unaccepted with U1-U13 pending;
-Pages remains accepted M83 authority and no M84 public publication is claimed.
+origin rejection. The complete clean release gate passes with log SHA-256
+`34bf408f6a565dec5705745f916eb628397a549b4a7002d865269e8d167e179f`; the four-demo M84 ledger and
+271-row golden remain unchanged. The exact no-rebuild snapshot
+`/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`, aggregate
+`6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, passes byte-identical
+temporary/final eight-path HTTP verification and direct 3/3, baseline 4/4, F003 1/1 and F004 2/2
+browser suites on each endpoint. Current PID `4081080` serves those immutable bytes at
+`http://100.94.63.83:8080/`; complete evidence is under
+`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`. M84 remains active and unaccepted with
+U1-U13 pending; Pages remains accepted M83 authority and no M84 public publication is claimed.
 
 ## Frozen near-singular fixtures
 

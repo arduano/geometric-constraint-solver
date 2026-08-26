@@ -64,8 +64,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   GUI dependency projection; M84-F004 adds direct computed-Fillet and inferred-axis projection and
   keeps Code discoverable for unsupported all-or-nothing conversion. The later direct-authoring
   amendment adds an artifact-free `Authored` project entry on exactly fresh workspaces. The clean-
-  qualified F003/F004 snapshots are historical because they predate that scope; replacement
-  qualification and U1-U13 remain open, and Pages stays on accepted M83.
+  qualified F003/F004 snapshots are historical because they predate that scope. Direct-authoring
+  source `41e65a4`, tree `d31b805`, passes clean qualification and immutable Tailscale nomination;
+  U1-U13 remain open, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -873,6 +874,13 @@ authority. Starting installs a complete editable rectangle-plus-diagonal project
 is lexical `frame.corners.*`; valid Apply, retained-invalid intent, whole-source replacement,
 Undo/Redo, reload and repro remain one atomic code-session authority. The starter is not a fifth
 bundled project and does not change the separate four-demo ledger.
+
+The exact direct-authoring candidate source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`, passes clean release qualification and exact
+temporary/retained verification. Its immutable snapshot is
+`/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`, aggregate
+`6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, served for UAT at
+`http://100.94.63.83:8080/`. This nomination changes no authority boundary described above.
 
 ### `geosolve-sketch-features`
 
@@ -1832,7 +1840,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
   typed semantic references, keyed reconciliation, one code/editor history and four required
   demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
-  nominations are withdrawn historical evidence; F004's immutable bytes may remain retained on
-  Tailscale but predate the direct artifact-free authored starter. Replacement qualification and
-  human UAT U1-U13 remain pending; accepted M83 remains Pages authority and no M84 publication is
-  claimed.
+  nominations are withdrawn historical evidence. Direct artifact-free authored source `41e65a4`
+  is clean-qualified and immutably nominated on Tailscale. Human UAT U1-U13 remains pending;
+  accepted M83 remains Pages authority and no M84 publication is claimed.

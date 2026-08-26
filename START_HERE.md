@@ -348,18 +348,24 @@ geometry must match the exact current retained semantic identity, so retained-fa
 produce hybrid promotable source. Exact source `c2cf160`, tree `94a1786`, passes the complete clean
 gate and its immutable no-rebuild snapshot `/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` passes byte
 verification plus browser 4/4, F003 1/1 and F004 2/2 on temporary and retained Tailscale endpoints.
-Those F004 bytes remain served at `http://100.94.63.83:8080/` only as historical evidence: the
-post-F004 direct-authoring amendment withdraws them from current nomination because they predate
-the amended scope. On an exact independently validated fresh workspace, Code now exposes one
+Those F004 bytes remain historical evidence: the post-F004 direct-authoring amendment withdrew
+them from current nomination because they predated the amended scope. On an exact independently
+validated fresh workspace, Code now exposes one
 **Start from code** action and the same four genuine sample cards. The action installs a distinct
 persisted artifact-free `Authored` project through public
 `CodeProject::managed_only(ProjectKey, source)`; its complete editable rectangle-plus-diagonal
 source uses lexical `frame.corners.*` references and gains geometry authority only through the
 ordinary intent/materialization/native-validation path. Valid Apply, retained-invalid state,
 complete source replacement, Undo/Redo, reload and repro use the existing atomic code-session
-authority. This is not M84-F005 and does not add a fifth bundled-ledger demo. Replacement WASM/
-browser and clean-release qualification are pending; U1-U13 remain pending. Pages remains on
-accepted M83 and no M84 public publication is claimed.
+authority. This is not M84-F005 and does not add a fifth bundled-ledger demo. Exact source
+`41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`, passes complete clean qualification. Its exact
+no-rebuild snapshot `/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`, aggregate
+`6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, passes temporary and retained
+exact-byte checks plus direct 3/3, baseline 4/4, F003 1/1 and F004 2/2 browser suites. Historical
+F004 PID `3316682` and the temporary listener are retired; PID `4081080` serves the nominated bytes
+at `http://100.94.63.83:8080/`. U1-U13 remain pending. Pages remains on accepted M83 and no M84
+public publication is claimed.
 
 ## Read first
 
@@ -772,8 +778,9 @@ qualification, immutable Tailscale nomination and supervising-human UAT; approva
 M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
-The clean-qualified F003 and F004 candidates are withdrawn historical evidence because they
-predate the direct-authoring amendment; replacement qualification and human UAT remain open.
+The clean-qualified F003 and F004 candidates remain withdrawn historical evidence; direct-
+authoring replacement qualification and immutable Tailscale nomination pass, while human UAT
+remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -891,9 +898,9 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F004 finding/repair ledger and
-  withdrawn F003/F004 nomination evidence plus the direct-authoring amendment)
-- `docs/M84_UAT.md` (withdrawn candidate evidence and pending U1-U13 scorecard)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F004 finding/repair ledger,
+  withdrawn historical evidence and current direct-authoring nomination)
+- `docs/M84_UAT.md` (current immutable candidate evidence and pending U1-U13 scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

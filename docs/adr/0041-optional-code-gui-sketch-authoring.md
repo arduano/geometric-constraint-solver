@@ -2,10 +2,10 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. The post-F004 direct code-authoring amendment is implemented and under
-qualification. The initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are withdrawn
-historical evidence because they predate current scope; no replacement is nominated. M84 remains
-active and unaccepted with U1-U13 pending; GitHub Pages remains on accepted M83.
+Status: accepted for M84. The post-F004 direct code-authoring amendment is clean-qualified and
+immutably nominated. The initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots remain
+withdrawn historical evidence. M84 remains active and unaccepted with U1-U13 pending; GitHub Pages
+remains on accepted M83.
 
 ## Context
 
@@ -240,6 +240,11 @@ linking `geosolve-sketch-code`.
   deployment boundary.
 - User-owned custom files remain code-owned. GeoSolve can change only managed calls, literals,
   organization, declared lens inputs and explicit overrides.
+- Exact source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+  `d31b805549a29433e157074bc181517bdb50fb67`, passes clean qualification, no-rebuild freeze and
+  exact temporary/retained Tailscale verification. Its immutable snapshot
+  `/tmp/geosolve-m84-authored-uat.ZYQQyBQQ` is the current mechanical UAT nomination; human U1-U13
+  and public publication remain pending.
 
 ## Rejected alternatives
 

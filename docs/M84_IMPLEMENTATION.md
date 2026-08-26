@@ -2,10 +2,11 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **the post-F004 direct code-authoring amendment is implemented and under qualification**.
-The initial, F003 and F004 candidates are withdrawn historical evidence because they predate
-current scope. No replacement is nominated. M84-U1 through M84-U13 remain pending; no M84 Pages
-publication is claimed, and accepted M83 remains public authority.
+Status: **the post-F004 direct code-authoring amendment is clean-qualified and immutably nominated
+for UAT**. Exact nominated source is `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`. The initial, F003 and F004 candidates remain withdrawn
+historical evidence. M84-U1 through M84-U13 remain pending; no M84 Pages publication is claimed,
+and accepted M83 remains public authority.
 
 ## Baseline and authority
 
@@ -392,9 +393,55 @@ cargo test --locked -p geosolve-demo-web --lib \
 The owner tests independently check finite accepted geometry, Hard residual validation, exact
 native corner-ID aliasing after a rectangle move, artifact-free authority, valid and retained-
 invalid persistence, whole-source replacement and Undo/Redo. The separate four-demo M84 ledger is
-unchanged. Actual WASM/browser qualification, full collateral, clean release gate, immutable freeze
-and replacement nomination remain pending. The retained PID `3316682` may continue serving the now-
-historical F004 bytes until a qualified replacement is ready.
+unchanged.
+
+## Direct code-authoring qualification and immutable replacement nomination
+
+Exact committed source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
+`d31b805549a29433e157074bc181517bdb50fb67`, passed this clean command:
+
+```bash
+env -u GEOSOLVE_ALLOW_DIRTY -u NO_COLOR \
+  nix-shell shell.nix --run './scripts/release-gate.sh' 2>&1 | \
+  tee /tmp/geosolve-m84-authored-release-gate.log
+```
+
+It ran from 2026-08-26 14:55:50.676940562 through 15:12:22.475576111 AEST, exited 0 in
+991.798635549 seconds, and its log was independently checked to end with Trunk 0.21.14
+`INFO ✅ success` rather than trusting the tee pipeline alone. The 6,146-line,
+415,754-byte log `/tmp/geosolve-m84-authored-release-gate.log` has SHA-256
+`34bf408f6a565dec5705745f916eb628397a549b4a7002d865269e8d167e179f`. The gate passed formatting,
+diff hygiene, warnings-denied Clippy and Rustdoc, locked all-feature workspace tests/doctests,
+actual WASM, both TypeScript packages, Rust package extraction/closure, licensing, performance and
+benchmarks, and the final Trunk release build. The 271-row golden remains byte-identical at SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the separate four-demo M84
+ledger remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+Without rebuilding, the exact seven-file gate output was copied to
+`/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`. Source, copied and frozen manifests are identical. The
+directory is `0555`, every regular non-symlink file is `0444`, and the ordered-manifest aggregate
+is `6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`. Complete manifests,
+modes, clean-worktree records, gate metadata, HTTP ledgers, browser scripts/logs and screenshots are
+under `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`.
+
+The same frozen directory was first served on temporary Tailscale port `18086`. `/` plus all seven
+files returned HTTP 200, zero redirects, exact MIME/length/hash, no `Location` or
+`Content-Encoding`, and `/` equalled `index.html`. The temporary and final `:8080` ledgers are
+byte-identical with SHA-256
+`1450e4c6d8585ba17dee56feafaf96869c45f764f3400280a0dc37581f9b4eee`.
+
+Sequential Playwright suites against the exact frozen bytes pass on both endpoints: direct authored
+lifecycle 3/3, baseline M84 4/4, F003 1/1 and F004 2/2. The authored suite covers `1440x900` and
+`1024x720`, zero horizontal/vertical landing overflow, all four cards, Start/edit/Apply, finite
+accepted geometry, retained-invalid canvas, Undo, reload/repro and nested card routing. The landing
+CSS was corrected during provisional review from 106/342 px vertical overflow to zero at those
+resolutions, then the clean gate and exact frozen runs requalified the correction.
+
+Only after temporary byte and browser verification passed was historical F004 PID `3316682`
+retired. The temporary PID `4027499` is also retired. `geosolve-m84-uat.service`, PID `4081080`,
+serves the exact immutable candidate from `/tmp/geosolve-m84-authored-uat.ZYQQyBQQ` at
+`http://100.94.63.83:8080/`. GitHub Pages deliberately remains on accepted M83. This record nominates
+the candidate mechanically; it does not accept a UAT row, authorize Pages, or close M84.
 
 ## Known bounds and truthful limitations
 
@@ -415,7 +462,7 @@ historical F004 bytes until a qualified replacement is ready.
 ## Remaining release sequence
 
 1. Complete the amended actual-WASM/browser, collateral and clean release qualification; freeze and
-   nominate one replacement snapshot.
+   nominate one replacement snapshot. **Complete.**
 2. Complete M84-U1 through M84-U13 against only that replacement and record explicit supervising-
    user approval or open another numbered finding.
 3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
