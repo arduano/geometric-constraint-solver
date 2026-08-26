@@ -2,11 +2,10 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. M84-F003 is repaired, clean-qualified and immutably nominated at exact
-replacement source `b9e67bad7f4935b1e0591ea4f149fae478b32675`. The former `79078ec` candidate
-remains withdrawn historical evidence because ordinary GUI Structured Source exposed transport
-DTOs instead of lexical managed references. M84 remains active and unaccepted with U1-U11 pending;
-GitHub Pages remains on accepted M83.
+Status: accepted for M84. M84-F004 is reproduced and its repair is under focused qualification.
+The initial `79078ec` candidate and F003 replacement `b9e67bad` are withdrawn historical evidence;
+no F004 replacement Tailscale candidate is nominated yet. M84 remains active and unaccepted with
+U1-U12 pending; GitHub Pages remains on accepted M83.
 
 ## Context
 
@@ -101,6 +100,20 @@ all-or-nothing promotion may omit only the exact canonical fresh-workspace docum
 other bootstrap geometry remains unsupported rather than disappearing. Direct line expansion
 aliases the exact referenced native points, and same-cell line-branch normalization is limited to
 Segments owned by the current code expansion so ordinary GUI Segments remain explicit.
+
+The same all-or-nothing conversion supports connected Segments through lexical `.start`/`.end`
+members and an ordinary computed Fillet through a distinct direct `$.computed.filletSet`
+declaration. Every corner contains exactly two ordered lexical `CurveSpanRef` parents and explicit
+parameter, winding, contact neighborhood, normal side, retained endpoint and periodic anchor;
+radius, endpoint order, sweep and suppression are explicit as well. Direct lowering reconstructs
+the existing Intent `ComputedFeature::FilletSet` without invoking Fillet authoring heuristics or a
+new solver path. Its result is an opaque `FilletSetFeature`, not a claim that evaluated child arcs
+are native curve-span ports.
+
+Code remains discoverable even when another unsupported declaration makes complete conversion
+fail. In that state the workbench renders an escaped read-only conversion diagnostic, keeps Intent
+IR available as the audit fallback and withholds Promote. Supported complete scenes show the
+read-only managed preview and may be promoted atomically as before.
 
 Invalid-subset text remains a non-canonical editor draft and changes no project or scene. Valid
 source with a missing/tampered artifact, expansion error, dangling dependency or invalid geometry

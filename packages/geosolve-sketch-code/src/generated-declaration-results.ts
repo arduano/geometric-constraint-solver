@@ -15,6 +15,13 @@ export const DECLARATION_RESULT_CATALOG = {
       }
     }
   },
+  "computed.filletSet": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {}
+    }
+  },
   "geometry.circle": {
     "feature_kind": "feature",
     "outputs": {

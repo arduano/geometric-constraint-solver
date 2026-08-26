@@ -2,9 +2,10 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **M84-F003 is repaired, clean-qualified and immutably nominated for replacement UAT; the
-former candidate remains withdrawn historical evidence**. M84-U1 through M84-U11 remain pending.
-No M84 Pages publication is claimed. Accepted M83 remains public authority.
+Status: **M84-F004 is reproduced and its repair is under focused qualification**. Both the initial
+candidate and the clean-qualified F003 replacement are withdrawn historical evidence; no F004
+replacement Tailscale candidate is nominated yet. M84-U1 through M84-U12 remain pending. No M84
+Pages publication is claimed. Accepted M83 remains public authority.
 
 ## Baseline and authority
 
@@ -52,6 +53,8 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
 - [x] Bootstrap a complete supported accepted GUI dependency closure into truthful, dependency-
   ordered managed declarations; reject unsupported recipes instead of inventing lineage. Omit only
   the exact canonical fresh-workspace document foundation and never hide other bootstrap geometry.
+- [x] Represent connected Segment endpoints and direct computed Fillet parents with lexical
+  declaration members (`line.end`, `line.span`) rather than native IDs or transport DTOs.
 
 ### I2 — custom artifacts and typed SDK
 
@@ -63,6 +66,8 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
 - [x] Generate named rectangle results, mapped Fillet records and Polyline-derived corner
   collections from Rust declaration descriptors. Raw IDs, cross-project references, misspelled
   outputs and point/curve/corner mismatch fail TypeScript compilation.
+- [x] Describe direct `computed.filletSet` as an opaque `FilletSetFeature`: its explicit parent
+  spans are typed, but it does not falsely expose evaluated child arcs as ordinary native ports.
 - [x] Keep `patches/*.patch.ts` byte-identical through every GUI edit and never execute them in
   Rust, WASM, browser runtime or load.
 
@@ -77,6 +82,9 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   cascade or retarget it.
 - [x] Lower direct Polyline/rectangle declarations and composed Fillets through the ordinary M83
   graph, cold materializer, native solver, computed-feature evaluator and independent validation.
+- [x] Lower direct managed `computed.filletSet` declarations back to the existing Intent
+  `ComputedFeature::FilletSet` with exact persisted contact/branch state, without invoking native
+  Fillet authoring heuristics or changing any solver equation.
 
 ### I4 — one code/editor transaction
 
@@ -94,6 +102,8 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
 
 - [x] Add managed/custom tabs, Apply/Revert, diagnostics, artifact state, source ownership,
   generated-member groups, edit lenses, override badges and Reset-to-code controls.
+- [x] Keep Code discoverable even when ordinary all-or-nothing conversion rejects: show escaped
+  read-only diagnostic source alongside the Intent IR fallback and withhold Promote.
 - [x] Round-trip complete offline code-project authority/history through save/reload and Copy/Load
   repro under the 64 MiB project bound. Missing, tampered, corrupt and oversized inputs reject
   atomically.
@@ -149,7 +159,30 @@ atomically. Same-cell branch normalization is limited to current code-expansion-
 ordinary GUI Segments retain explicit branch authority. Focused Rust, TypeScript, workbench/
 persistence and browser tests plus the complete replacement qualification and nomination pass.
 
-## Focused evidence observed before final nomination
+### M84-F004 — an ordinary computed Fillet made Code undiscoverable
+
+Reproduction owner: ordinary GUI managed projection plus the workbench Code surface. Draw two
+connected Segments and place one Fillet between them. Projection was all-or-nothing, but GUI
+bootstrap could neither express the second Segment's endpoint as a lexical reference to the first
+nor lower `ComputedFeature::FilletSet`. The resulting conversion error caused presentation to omit
+the Code tab entirely, so the user saw neither code nor an explanation.
+
+Repair contract: add Segment-to-Segment lexical endpoint projection and a distinct direct
+`$.computed.filletSet` declaration. Each corner carries exactly two ordered lexical parent span
+references plus explicit parameter, winding, neighborhood, normal-side, retained-endpoint and
+periodic-anchor state; endpoint order, sweep, radius and suppression are also explicit. Direct
+lowering reconstructs the existing Intent computed feature and must not rerun Fillet authoring or
+change solver behavior. The declaration returns an opaque `FilletSetFeature`. Ordinary projection
+remains intentionally all-or-nothing. Code is now always discoverable: supported scenes offer a
+read-only managed preview and Promote, while unsupported scenes show an escaped read-only
+conversion diagnostic with Intent IR still available and no Promote action.
+
+Focused development coverage is being qualified at the Rust GUI-bootstrap/owner, direct-lowering,
+descriptor-parity, workbench and TypeScript type-contract layers, together with the Code-surface
+diagnostic path. No F004 clean release gate, frozen artifact, Tailscale nomination or human UAT is
+claimed in this ledger yet.
+
+## Historical F003 focused evidence observed before its withdrawn nomination
 
 - `cargo test --locked -p geosolve-sketch-code --all-features` — 44 unit and 29 integration tests
   pass, including parser/rewrite, artifact, descriptor, bootstrap, reconciliation, native
@@ -230,7 +263,7 @@ human UAT, approval, Pages publication or milestone closure.
 Human UAT subsequently opened M84-F003. This snapshot is preserved as historical defect evidence
 and claims no current nomination, approval, Pages publication or milestone closure.
 
-## M84-F003 replacement qualification and frozen nomination
+## Withdrawn M84-F003 replacement qualification and frozen nomination
 
 Exact committed product source `b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
 `7062806695e1e134c339cfa47903145d321f6350`, had a clean worktree and passed:
@@ -275,18 +308,19 @@ rectangle edit → dependent-line movement → reload flow passes 1/1 on both en
 
 Temporary listener PID `3728373` is retired. The worktree listener PID `2872083` is retired. Old
 withdrawn retained PID `2426265` was retired only after the replacement passed temporary byte and
-browser verification. `geosolve-m84-uat.service`, PID `3736900`, now serves only the immutable
-replacement snapshot at `http://100.94.63.83:8080/`. This nomination claims no human UAT row,
+browser verification. `geosolve-m84-uat.service`, PID `3736900`, served only the immutable F003
+replacement snapshot at `http://100.94.63.83:8080/`. M84-F004 withdraws that snapshot from current
+UAT even if the endpoint remains reachable. This historical nomination claims no human UAT row,
 approval, Pages publication or milestone closure.
 
 ## Known bounds and truthful limitations
 
 - Managed-v1 is intentionally a closed projectional subset. Arbitrary custom code is caller build
   input and has no browser runtime or general AST round-trip promise.
-- Only the supported accepted GUI rectangle and line dependency closure bootstraps to managed code;
-  unsupported declarations reject the complete promotion. The bundled Braced Frame remains a
-  genuine managed code project. Both promotion and its later dependency-preserving edits are
-  directly tested.
+- The supported accepted GUI closure now includes lexical rectangle/Segment dependencies,
+  Segment-to-Segment endpoints and direct computed FilletSets. Other unsupported declarations
+  still reject the complete all-or-nothing promotion and expose a read-only diagnostic rather than
+  disappearing. The bundled Braced Frame remains a genuine managed code project.
 - Integration test sources which inspect workspace TypeScript/manifests are intentionally not part
   of the published Rust archive. Runtime library code and all eight required assets are
   self-contained and extraction-built.
@@ -297,8 +331,10 @@ approval, Pages publication or milestone closure.
 
 ## Remaining release sequence
 
-1. Complete M84-U1 through M84-U11 against only the replacement snapshot.
-2. Record explicit supervising-user approval or open another numbered finding and withdraw the
+1. Finish F004 focused/proportional qualification, complete a clean committed-source gate and
+   nominate one replacement immutable Tailscale snapshot.
+2. Complete M84-U1 through M84-U12 against only that replacement snapshot.
+3. Record explicit supervising-user approval or open another numbered finding and withdraw the
    replacement candidate.
-3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+4. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

@@ -60,10 +60,11 @@ construction/NURBS UAT and certified all-family visual profiles.
 - **Active target:** M84 implements an optional code/GUI authoring layer under ADR 0041. Managed source
   and caller-compiled data-only artifacts expand deterministically into the ordinary M83 intent
   graph; the unchanged Rust materializer/solver remains sole equation and accepted-scene authority.
-  Base solver/sketch/intent/editor deployments do not depend on this layer. M84-F003 repairs the
-  lexical GUI dependency projection, real code-project promotion and exact native point aliasing.
-  Implementation, clean replacement qualification and immutable Tailscale nomination pass at exact
-  source `b9e67bad`; focused human UAT remains open, and Pages stays on accepted M83.
+  Base solver/sketch/intent/editor deployments do not depend on this layer. M84-F003 repairs lexical
+  GUI dependency projection; M84-F004 adds direct computed-Fillet projection and keeps Code
+  discoverable for unsupported all-or-nothing conversion. F004 is under focused qualification,
+  the F003 snapshot is withdrawn and no replacement is nominated. U1-U12 remain open, and Pages
+  stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -834,6 +835,15 @@ reject before publication. Promotion constructs a real persisted `CodeProject` a
 fresh-workspace document foundation; every other bootstrap object participates in the all-or-
 nothing conversion. Branch normalization is restricted to current code-expansion-owned Segments,
 so ordinary GUI Segments beside a code project retain exact explicit branch authority.
+
+M84-F004 extends that supported complete closure to connected Segments and existing computed
+Fillets. Connected endpoints reuse lexical `.start`/`.end` members. Direct
+`$.computed.filletSet` takes exactly two ordered lexical curve-span parents per corner and preserves
+all persisted contact/branch choices explicitly. It lowers to the existing Intent computed feature
+without invoking Fillet authoring heuristics or adding solver behavior, and returns opaque
+`FilletSetFeature` authority rather than synthetic native arc ports. All-or-nothing projection
+remains; a rejection keeps Code discoverable with an escaped read-only conversion diagnostic,
+Intent IR fallback and no Promote.
 
 ### `geosolve-sketch-features`
 
@@ -1792,9 +1802,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   approval descendant `2006c86` and run `32817232564`.
 - M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
   typed semantic references, keyed reconciliation, one code/editor history and four required
-  demonstrations are implemented. The former `79078ec` nomination is withdrawn historical F003
-  evidence. Exact replacement source `b9e67bad`, tree `7062806`, passes complete clean
-  qualification; no-rebuild snapshot `/tmp/geosolve-m84-f003-uat.mO67NI`, aggregate
-  `38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`, passes local and
-  retained-Tailscale byte/browser verification. Human UAT U1-U11 remains pending; accepted M83
-  remains Pages authority and no M84 publication is claimed.
+  demonstrations are implemented. The `79078ec` and clean-qualified `b9e67bad` nominations are
+  withdrawn historical evidence. M84-F004's computed-Fillet/always-discoverable-Code repair is
+  under focused qualification; no F004 replacement is nominated. Human UAT U1-U12 remains
+  pending; accepted M83 remains Pages authority and no M84 publication is claimed.

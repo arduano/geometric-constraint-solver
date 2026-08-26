@@ -330,7 +330,15 @@ creates a genuine persisted code project; lexical endpoints alias exact native p
 transport DTOs, foreign or forged reserved-project references, wrong kinds and misspelled members
 fail closed. Only the exact canonical fresh-workspace document foundation is omitted, and line-
 branch normalization is limited to current expansion-owned Segments. M84 remains active and
-unaccepted with U1-U11 pending. Pages remains on accepted M83; no M84 publication is claimed.
+unaccepted. Human UAT then opened `M84-F004`: two connected Segments plus a computed Fillet made
+all-or-nothing GUI bootstrap reject, and the workbench hid Code for that conversion error. The
+repair adds lexical Segment-to-Segment endpoints and direct `$.computed.filletSet` with two ordered
+lexical curve-span parents, complete explicit persisted contact/branch state and opaque
+`FilletSetFeature` output. It lowers to the existing Intent computed feature without authoring
+heuristics or solver changes. Code remains discoverable on unsupported scenes with an escaped
+read-only conversion diagnostic, Intent IR fallback and no Promote. Focused qualification is in
+progress; the F003 snapshot is withdrawn, no F004 replacement is nominated and U1-U12 remain
+pending. Pages remains on accepted M83; no M84 publication is claimed.
 
 ## Read first
 
@@ -742,9 +750,9 @@ qualification, immutable Tailscale nomination and supervising-human UAT; approva
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
 M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
-acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen;
-implementation, clean qualification and immutable Tailscale nomination pass while human UAT
-remains open.
+acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
+F004 is under focused qualification; the F003 Tailscale candidate is withdrawn and no replacement
+is nominated while human UAT remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -862,9 +870,9 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F003 repairs and exact replacement
-  nomination ledger)
-- `docs/M84_UAT.md` (replacement immutable candidate and pending U1-U11 scorecard)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F004 finding/repair ledger and
+  withdrawn F003 nomination evidence)
+- `docs/M84_UAT.md` (withdrawn candidate evidence and pending U1-U12 scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

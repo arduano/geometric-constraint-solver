@@ -2,9 +2,11 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F003 is repaired, clean-qualified and immutably nominated for
-replacement UAT**. M84-U1 through M84-U11 and explicit approval remain pending. Accepted M83
-remains GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; M84-F004 is reproduced and its repair is under focused
+qualification**. The clean-qualified M84-F003 snapshot is withdrawn from current UAT by F004 and
+is historical evidence only; a replacement Tailscale candidate has not yet been nominated.
+M84-U1 through M84-U12 and explicit approval remain pending. Accepted M83 remains GitHub Pages
+authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -42,6 +44,13 @@ layer optional.
   project. Omit only the exact canonical fresh-workspace document foundation; never discard other
   bootstrap objects. Limit recomputable line-branch normalization to current code-expansion-owned
   Segments so ordinary GUI Segments retain explicit branch authority.
+- Project a supported ordinary computed Fillet as direct `$.computed.filletSet` managed source.
+  Each corner's exactly two ordered parents must be lexical curve-span references, and every
+  persisted parameter, winding, neighborhood, normal-side, retained-endpoint, periodic-anchor,
+  endpoint-order, sweep and suppression choice must remain explicit. Lower directly to the
+  existing Intent `ComputedFeature::FilletSet`; do not rerun Fillet picking/authoring heuristics or
+  introduce a solver path. The result is an opaque `FilletSetFeature`, not a false promise that
+  computed child arcs are ordinary native curve-span outputs.
 
 ### M84-G3 — reusable custom patches
 
@@ -82,6 +91,10 @@ layer optional.
   flat-scene imports or bootstraps that merely resemble their output.
 - Add managed/custom file tabs, Apply/Revert, line-local diagnostics, artifact status, generated-
   member groups, ownership badges, edit-lens controls, override indicators and Reset to code.
+- Keep the Code surface discoverable for every ordinary sketch. Complete supported scenes show a
+  read-only lexical preview and Promote; an unsupported all-or-nothing projection instead shows an
+  escaped read-only conversion diagnostic, retains Intent IR as the audit fallback and offers no
+  Promote action.
 - Treat custom files as read-only in the demo. Do not build a general browser IDE.
 - Round-trip all files, artifacts, locks, expansion provenance, overrides, nested accepted intent
   and unified history in a bounded code-project envelope; repro restore is atomic and offline.
@@ -128,16 +141,18 @@ manifest aggregate `99beaf51ebb314aa26689427f970a75a516891efd20f68587c2a33c1b3a6
 byte/browser-verified locally and at `http://100.94.63.83:8080/`. Human UAT then opened M84-F003,
 so those bytes are historical defect evidence rather than a current candidate.
 
-Replacement nomination record (2026-08-26): exact product source
+Withdrawn F003 replacement record (2026-08-26): exact product source
 `b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
 `7062806695e1e134c339cfa47903145d321f6350`, passes the complete clean release gate. Its exact
 no-rebuild seven-file output `/tmp/geosolve-m84-f003-uat.mO67NI` is frozen at directory/file modes
 `0555`/`0444`, ordered-manifest aggregate
 `38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`, and byte/browser-verified
 on temporary and retained endpoints. Existing browser checks pass 4/4 and the F003 flow passes 1/1
-on both. Retained service PID `3736900` serves only those exact bytes at
-`http://100.94.63.83:8080/`. M84-U1 through M84-U11, explicit approval, GitHub Pages publication,
-service retirement and closure remain open; accepted M83 remains public authority.
+on both. Retained service PID `3736900` served those exact bytes at
+`http://100.94.63.83:8080/`; M84-F004 now withdraws them from current UAT even if the endpoint
+remains reachable. No F004 replacement snapshot, clean gate or immutable nomination is claimed
+yet. M84-U1 through M84-U12, explicit approval, GitHub Pages publication, service retirement and
+closure remain open; accepted M83 remains public authority.
 
 ## Bounds and non-goals
 

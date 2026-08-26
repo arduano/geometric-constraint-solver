@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use geosolve_sketch_intent::{AggregateKind, GeometryRecipeKind};
+use geosolve_sketch_intent::{AggregateKind, ComputedFeatureKind, GeometryRecipeKind};
 use serde::{Deserialize, Serialize};
 
 use crate::FeatureKind;
@@ -10,6 +10,7 @@ use crate::FeatureKind;
 /// Closed direct-managed lowering routes owned by the optional adapter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DirectDeclarationLowering {
+    FilletSet,
     Line,
     Polyline,
     Rectangle,
@@ -33,6 +34,7 @@ pub enum TemplateDeclarationLowering {
 pub enum NativeDeclarationContract {
     Geometry(GeometryRecipeKind),
     Aggregate(AggregateKind),
+    ComputedFeature(ComputedFeatureKind),
     CompositePolyline,
     HostAuthoredFillet,
 }
@@ -48,7 +50,7 @@ pub struct CodeDeclarationFamilyDescriptor {
 }
 
 /// Every declaration family executable by the optional code adapter.
-pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 7] = [
+pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 8] = [
     CodeDeclarationFamilyDescriptor {
         family: "aggregate.chain",
         direct: None,
@@ -66,6 +68,12 @@ pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 7] = [
         direct: None,
         template: Some(TemplateDeclarationLowering::Fillet),
         native: NativeDeclarationContract::HostAuthoredFillet,
+    },
+    CodeDeclarationFamilyDescriptor {
+        family: "computed.filletSet",
+        direct: Some(DirectDeclarationLowering::FilletSet),
+        template: None,
+        native: NativeDeclarationContract::ComputedFeature(ComputedFeatureKind::FilletSet),
     },
     CodeDeclarationFamilyDescriptor {
         family: "geometry.circle",
@@ -139,6 +147,7 @@ pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDes
             "computed.fillet".into(),
             descriptor(object([("arc", leaf(FeatureKind::CurveSpan))])),
         ),
+        ("computed.filletSet".into(), descriptor(object([]))),
         (
             "geometry.circle".into(),
             descriptor(object([

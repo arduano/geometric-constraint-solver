@@ -3386,8 +3386,9 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. M84-F003 is repaired, clean-qualified and immutably nominated for
-replacement UAT. M84-U1 through M84-U11 and explicit approval remain pending.
+Status: active and unaccepted. M84-F004 is reproduced and its repair is under focused
+qualification. The clean-qualified F003 snapshot is withdrawn from current UAT; no F004
+replacement is nominated yet. M84-U1 through M84-U12 and explicit approval remain pending.
 ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract. Accepted
 M83 remains public product authority.
 
@@ -3415,6 +3416,21 @@ strings, transport DTOs, foreign-project and forged reserved-project references,
 misspelled members reject before materialization. Only the exact canonical fresh-workspace document
 foundation may be omitted during all-or-nothing promotion, and branch normalization applies only to
 current code-expansion-owned Segments so an ordinary GUI Segment retains explicit branch authority.
+
+Reproduced finding M84-F004 additionally requires an ordinary two-connected-Segment plus computed-
+Fillet scene to expose managed Code. Connected endpoints and the Fillet's two ordered parent spans
+must be lexical declaration members. Direct `$.computed.filletSet` carries exact radius,
+parameter, winding, neighborhood, normal-side, retained-endpoint, periodic-anchor, endpoint-order,
+sweep and suppression state, returns opaque `FilletSetFeature` authority and lowers to the existing
+Intent computed feature without invoking Fillet authoring heuristics or changing the solver.
+Cold promotion/reload must authenticate accepted feature/corner/span ownership, preserve finite
+Current geometry and independently validate normalized Hard residual `<= 1e-9`.
+
+Ordinary conversion remains all-or-nothing. Unsupported declarations must not make Code
+undiscoverable: Code renders an escaped read-only conversion diagnostic, Intent IR remains
+available and Promote is absent. Focused Rust bootstrap/ownership/direct-lowering/workbench,
+descriptor-parity, TypeScript and UI coverage is being qualified. This focused development
+evidence does not claim an F004 clean gate, frozen artifact, Tailscale nomination or human row.
 
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace
@@ -3451,10 +3467,10 @@ current code-expansion-owned Segments so an ordinary GUI Segment retains explici
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests, actual WASM, TypeScript,
   golden require-clean, Trunk and the complete clean release gate pass.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
-  verification but is withdrawn by M84-F003. The replacement passes complete qualification and
-  immutable nomination. M84-U1 through M84-U11 and explicit supervising-user approval remain
-  mandatory before GitHub Pages publication, exact hosted verification, service retirement and
-  closure.
+  verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
+  withdrawn by M84-F004. A new clean-qualified immutable replacement and M84-U1 through M84-U12
+  plus explicit supervising-user approval remain mandatory before GitHub Pages publication, exact
+  hosted verification, service retirement and closure.
 
 Withdrawn historical nomination authority is exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -3478,9 +3494,10 @@ Its exact no-rebuild snapshot `/tmp/geosolve-m84-f003-uat.mO67NI` is frozen at d
 `38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`. Source, copied and frozen
 manifests match. Temporary and retained eight-path HTTP ledgers match at SHA-256
 `438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`; existing browser checks
-pass 4/4 and F003 passes 1/1 on both. Retained `geosolve-m84-uat.service`, PID `3736900`, serves
-those exact bytes at `http://100.94.63.83:8080/`. No human row or M84 Pages publication is claimed;
-accepted M83 remains public authority.
+pass 4/4 and F003 passes 1/1 on both. Retained `geosolve-m84-uat.service`, PID `3736900`, served
+those exact bytes at `http://100.94.63.83:8080/`. Those F003 bytes are now withdrawn from current
+UAT by F004 even if the endpoint remains reachable. No F004 replacement nomination, human row or
+M84 Pages publication is claimed; accepted M83 remains public authority.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

@@ -599,6 +599,15 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-code-project-empty strong { color: #cbd4d1; font-size: 0.72rem; }
 .wb-code-project-empty p { margin: 0; color: #74807d; font-size: 0.62rem; line-height: 1.5; }
+.wb-code-preview-unavailable .wb-code-diagnostic {
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #684c43;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+  color: #d6a89a;
+  background: #2d2422;
+  font-family: ui-monospace, monospace;
+}
 .wb-code-sample-mark {
   display: inline-grid;
   width: 1.3rem;

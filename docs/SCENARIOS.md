@@ -4684,11 +4684,11 @@ complete the F010 disposition without claiming a separate row-by-row replay.
 M84 adds no residual equation and does not reinterpret the 271-row milestone-neutral golden. Its
 separate reviewed ledger owns managed-source parsing, data-artifact expansion, typed references,
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
-`docs/M84_GOALS.md` are authoritative. Every fixture below is implemented and passes its focused
-owner suite. The former complete clean candidate qualification and immutable local/Tailscale
-nomination are withdrawn historical evidence. M84-F003 is repaired and the replacement passes
-complete clean qualification plus immutable local/Tailscale nomination; human presentation UAT
-U1-U11 remains pending against only those replacement bytes.
+`docs/M84_GOALS.md` are authoritative. The F001-F003 fixtures below are implemented and pass their
+focused owner suites. The former complete clean candidate and clean-qualified F003 replacement
+local/Tailscale nominations are withdrawn historical evidence. M84-F004 is reproduced and its
+repair is under focused qualification; no replacement is nominated yet. Human presentation UAT
+U1-U12 remains pending.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4779,6 +4779,31 @@ also required before a Segment branch may be normalized; an ordinary GUI Segment
 explicit branch authority. Focused owner coverage rejects raw strings, DTO-shaped objects,
 foreign-project and forged reserved-project references, wrong kinds and misspelled members.
 
+### M84-F004 — ordinary computed Fillets keep Code discoverable
+
+In an ordinary sketch, draw two connected Segments and one computed Fillet between them. Complete
+GUI bootstrap formerly returned an unsupported-recipe error for `ComputedFeature::FilletSet`; the
+workbench treated every conversion error by omitting Code, making unsupported projection look like
+absence of the code layer.
+
+The supported complete projection must emit the second Segment endpoint as a lexical declaration
+member and one direct `$.computed.filletSet` declaration. Each Fillet corner has exactly two
+ordered lexical `CurveSpanRef` parents and explicit parameter, winding, neighborhood, normal side,
+retained endpoint and periodic anchor; radius, endpoint order, sweep and suppression are also
+explicit. No raw native ID or `{ declaration, output, kind }` transport DTO may appear. Direct
+lowering reconstructs the existing Intent `ComputedFeature::FilletSet` without rerunning Fillet
+authoring heuristics or adding a solver path, and its output remains opaque `FilletSetFeature`
+authority rather than fabricated child-arc ports.
+
+Promotion and cold reload must authenticate the accepted feature, corner and parent spans, retain
+finite Current computed geometry and independently validate normalized Hard residual `<= 1e-9`.
+Projection remains all-or-nothing for any other unsupported declaration, but Code must stay
+visible with an escaped read-only conversion diagnostic, Intent IR fallback and no Promote action.
+This focused ordinary-bootstrap family does not alter the four-demo M84 code-project golden
+ledger. Rust bootstrap/ownership, direct-lowering, descriptor-parity, workbench/persistence,
+TypeScript and UI tests are being qualified; no F004 clean gate, frozen artifact or UAT evidence is
+claimed yet.
+
 ### M84 release gate
 
 The separate code-project ledger, native/WASM/RPC/TypeScript parity, type failures, finite geometry,
@@ -4805,9 +4830,10 @@ has seven regular non-symlink files and aggregate
 `38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`; source, copied and frozen
 manifests match. Temporary and retained eight-path HTTP ledgers match at
 `438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`, existing browser 4/4 and
-F003 1/1 pass on both, and retained service PID `3736900` serves the snapshot at
-`http://100.94.63.83:8080/`. M84 remains active and unaccepted with U1-U11 pending; Pages remains
-M83.
+F003 1/1 pass on both, and retained service PID `3736900` served the snapshot at
+`http://100.94.63.83:8080/`. M84-F004 withdraws those F003 bytes from current UAT even if the
+endpoint remains reachable. M84 remains active and unaccepted with U1-U12 pending; no F004
+replacement nomination is claimed and Pages remains M83.
 
 ## Frozen near-singular fixtures
 

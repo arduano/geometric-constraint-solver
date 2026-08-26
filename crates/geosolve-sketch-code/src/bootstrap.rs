@@ -9,10 +9,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
-use geosolve_constraint_editor::{IntentNativeBinding, ProjectionalEditorSession};
+use geosolve_constraint_editor::{
+    ComputedFeatureDefinition, IntentNativeBinding, NativeCurveSpanSource, NewComputedFilletCorner,
+    ProjectionalEditorSession,
+};
+use geosolve_sketch::{
+    ContactNeighborhood, DocumentArcSweep, DocumentCurveNormalSide, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentTrimParameter,
+};
 use geosolve_sketch_intent::{
-    GeometryRecipeKind, InputRole, InputSlot, IntentNode, IntentNodeKind, IntentPortRole,
-    IntentPortSelector, NodeId,
+    ComputedFeatureKind, GeometryRecipeKind, InputRole, InputSlot, IntentNode, IntentNodeKind,
+    IntentPortKind, IntentPortRole, IntentPortSelector, NodeId,
 };
 use thiserror::Error;
 
@@ -62,6 +69,12 @@ pub enum EditorBootstrapError {
         symbol: String,
         output: &'static str,
     },
+    #[error("GUI declaration `{symbol}` has no exact accepted computed feature")]
+    MissingComputedFeature { symbol: String },
+    #[error("GUI declaration `{symbol}` has invalid accepted computed-feature state")]
+    InvalidComputedFeatureState { symbol: String },
+    #[error("GUI declaration `{symbol}` does not own its accepted Fillet span `{input}`")]
+    FilletSpanOwnershipMismatch { symbol: String, input: String },
     #[error("GUI declaration `{symbol}` contains non-finite accepted geometry")]
     NonFiniteGeometry { symbol: String },
     #[error("generated managed bootstrap is invalid: {0}")]
@@ -195,6 +208,9 @@ fn write_managed_declaration(
             )
             .expect("writing managed source to a String cannot fail");
         }
+        IntentNodeKind::ComputedFeature {
+            feature: ComputedFeatureKind::FilletSet,
+        } => write_managed_fillet_set(body, editor, declaration, node, selected)?,
         ref kind => {
             return Err(EditorBootstrapError::UnsupportedRecipe {
                 symbol: declaration.symbol.0.clone(),
@@ -203,6 +219,318 @@ fn write_managed_declaration(
         }
     }
     Ok(())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the bounded Fillet serializer keeps exact accepted branch state visibly contiguous"
+)]
+fn write_managed_fillet_set(
+    body: &mut String,
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    selected: &BTreeMap<NodeId, &EditorBootstrapDeclaration>,
+) -> Result<(), EditorBootstrapError> {
+    let accepted = editor
+        .coordinator()
+        .accepted_materialization()
+        .ok_or(EditorBootstrapError::MissingAcceptedAuthority)?;
+    let feature_port = node
+        .port_by_selector(IntentPortSelector::Node {
+            role: IntentPortRole::Feature,
+            index: 0,
+        })
+        .ok_or_else(|| EditorBootstrapError::MissingComputedFeature {
+            symbol: declaration.symbol.0.clone(),
+        })?;
+    let Some(IntentNativeBinding::ComputedFeature(feature_id)) =
+        accepted.ownership.port(feature_port.as_ref(node.id))
+    else {
+        return Err(EditorBootstrapError::MissingComputedFeature {
+            symbol: declaration.symbol.0.clone(),
+        });
+    };
+    let feature = accepted.features.feature(feature_id).ok_or_else(|| {
+        EditorBootstrapError::MissingComputedFeature {
+            symbol: declaration.symbol.0.clone(),
+        }
+    })?;
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    if !fillet.radius.is_finite()
+        || fillet.radius <= 0.0
+        || feature.suppressed != node.suppressed
+        || fillet.corners.is_empty()
+        || fillet.corners.len() != node.child_order.len()
+    {
+        return Err(EditorBootstrapError::InvalidComputedFeatureState {
+            symbol: declaration.symbol.0.clone(),
+        });
+    }
+
+    writeln!(
+        body,
+        "  const {symbol} = $.computed.filletSet(\"{symbol}\", {{",
+        symbol = declaration.symbol.0,
+    )
+    .expect("writing managed source to a String cannot fail");
+    writeln!(body, "    radius: {},", managed_number(fillet.radius))
+        .expect("writing managed source to a String cannot fail");
+    body.push_str("    corners: [\n");
+    for (ordinal, corner) in fillet.corners.iter().enumerate() {
+        let ordinal_u16 = u16::try_from(ordinal).map_err(|_| {
+            EditorBootstrapError::InvalidComputedFeatureState {
+                symbol: declaration.symbol.0.clone(),
+            }
+        })?;
+        let corner_port = node
+            .port_by_selector(IntentPortSelector::InitialChild {
+                ordinal: ordinal_u16,
+                role: IntentPortRole::FeatureCorner,
+                index: 0,
+            })
+            .ok_or_else(|| EditorBootstrapError::InvalidComputedFeatureState {
+                symbol: declaration.symbol.0.clone(),
+            })?;
+        if accepted.ownership.port(corner_port.as_ref(node.id))
+            != Some(IntentNativeBinding::ComputedFeatureCorner(corner.id))
+        {
+            return Err(EditorBootstrapError::InvalidComputedFeatureState {
+                symbol: declaration.symbol.0.clone(),
+            });
+        }
+        let corner = corner.without_id();
+        if !fillet_corner_is_finite(corner) {
+            return Err(EditorBootstrapError::InvalidComputedFeatureState {
+                symbol: declaration.symbol.0.clone(),
+            });
+        }
+        let first_index = u16::try_from(ordinal.saturating_mul(2)).map_err(|_| {
+            EditorBootstrapError::InvalidComputedFeatureState {
+                symbol: declaration.symbol.0.clone(),
+            }
+        })?;
+        let second_index = first_index.checked_add(1).ok_or_else(|| {
+            EditorBootstrapError::InvalidComputedFeatureState {
+                symbol: declaration.symbol.0.clone(),
+            }
+        })?;
+        body.push_str("      {\n");
+        body.push_str("        parents: [\n");
+        write_managed_fillet_parent(
+            body,
+            editor,
+            declaration,
+            node,
+            selected,
+            first_index,
+            corner,
+        )?;
+        write_managed_fillet_parent(
+            body,
+            editor,
+            declaration,
+            node,
+            selected,
+            second_index,
+            corner,
+        )?;
+        body.push_str("        ],\n");
+        writeln!(
+            body,
+            "        endpointOrder: \"{}\",\n        sweep: \"{}\",\n      }},",
+            match corner.endpoint_order {
+                DocumentFilletEndpointOrder::FirstThenSecond => "firstThenSecond",
+                DocumentFilletEndpointOrder::SecondThenFirst => "secondThenFirst",
+            },
+            match corner.sweep {
+                DocumentArcSweep::CounterClockwise => "counterClockwise",
+                DocumentArcSweep::Clockwise => "clockwise",
+            },
+        )
+        .expect("writing managed source to a String cannot fail");
+    }
+    writeln!(
+        body,
+        "    ],\n    suppressed: {},\n  }});",
+        feature.suppressed,
+    )
+    .expect("writing managed source to a String cannot fail");
+    Ok(())
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the explicit parent coordinate keeps accepted owner, input slot, and branch together"
+)]
+fn write_managed_fillet_parent(
+    body: &mut String,
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    selected: &BTreeMap<NodeId, &EditorBootstrapDeclaration>,
+    input_index: u16,
+    corner: NewComputedFilletCorner,
+) -> Result<(), EditorBootstrapError> {
+    let parent = if input_index.is_multiple_of(2) {
+        corner.first
+    } else {
+        corner.second
+    };
+    let span = fillet_span_expression(
+        editor,
+        declaration,
+        node,
+        selected,
+        input_index,
+        parent.source,
+    )?;
+    let neighborhood = match parent.neighborhood {
+        ContactNeighborhood::Interior => "{ kind: \"interior\" }".to_owned(),
+        ContactNeighborhood::Start => "{ kind: \"start\" }".to_owned(),
+        ContactNeighborhood::End => "{ kind: \"end\" }".to_owned(),
+        ContactNeighborhood::Local { lower, upper } => format!(
+            "{{ kind: \"local\", lower: {}, upper: {} }}",
+            managed_number(lower),
+            managed_number(upper),
+        ),
+    };
+    let periodic_anchor = parent.periodic_anchor.map_or_else(
+        || "null".to_owned(),
+        |DocumentTrimParameter { parameter, winding }| {
+            format!(
+                "{{ parameter: {}, winding: {winding} }}",
+                managed_number(parameter),
+            )
+        },
+    );
+    writeln!(
+        body,
+        concat!(
+            "          {{\n",
+            "            span: {span},\n",
+            "            parameter: {parameter},\n",
+            "            winding: {winding},\n",
+            "            neighborhood: {neighborhood},\n",
+            "            normalSide: \"{normal_side}\",\n",
+            "            retainedEndpoint: \"{retained_endpoint}\",\n",
+            "            periodicAnchor: {periodic_anchor},\n",
+            "          }},"
+        ),
+        span = span,
+        parameter = managed_number(parent.picked_parameter),
+        winding = parent.winding,
+        neighborhood = neighborhood,
+        normal_side = match parent.normal_side {
+            DocumentCurveNormalSide::Left => "left",
+            DocumentCurveNormalSide::Right => "right",
+        },
+        retained_endpoint = match parent.retained_endpoint {
+            DocumentFilletTrimEndpoint::Start => "start",
+            DocumentFilletTrimEndpoint::End => "end",
+        },
+        periodic_anchor = periodic_anchor,
+    )
+    .expect("writing managed source to a String cannot fail");
+    Ok(())
+}
+
+fn fillet_span_expression(
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    selected: &BTreeMap<NodeId, &EditorBootstrapDeclaration>,
+    input_index: u16,
+    native_source: NativeCurveSpanSource,
+) -> Result<String, EditorBootstrapError> {
+    let input_name = format!(
+        "corners[{}].parents[{}].span",
+        input_index / 2,
+        input_index % 2,
+    );
+    let source = node
+        .inputs
+        .get(&InputSlot::new(InputRole::Span, input_index))
+        .copied()
+        .ok_or_else(|| EditorBootstrapError::FilletSpanOwnershipMismatch {
+            symbol: declaration.symbol.0.clone(),
+            input: input_name.clone(),
+        })?;
+    let source_declaration =
+        selected
+            .get(&source.node)
+            .ok_or(EditorBootstrapError::MissingDependency {
+                symbol: declaration.symbol.0.clone(),
+                dependency: source.node,
+            })?;
+    let source_node = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node(source.node)
+        .ok_or(EditorBootstrapError::MissingNode(source.node))?;
+    let source_port = source_node.port(source.port).ok_or_else(|| {
+        EditorBootstrapError::FilletSpanOwnershipMismatch {
+            symbol: declaration.symbol.0.clone(),
+            input: input_name.clone(),
+        }
+    })?;
+    if source.kind != IntentPortKind::CurveSpan
+        || source_port.kind != IntentPortKind::CurveSpan
+        || editor
+            .coordinator()
+            .accepted_materialization()
+            .and_then(|accepted| accepted.ownership.port(source))
+            != Some(IntentNativeBinding::CurveSpan(native_source.span))
+    {
+        return Err(EditorBootstrapError::FilletSpanOwnershipMismatch {
+            symbol: declaration.symbol.0.clone(),
+            input: input_name,
+        });
+    }
+    let IntentPortSelector::Node {
+        role: IntentPortRole::Span,
+        index,
+    } = source_port.selector
+    else {
+        return Err(EditorBootstrapError::FilletSpanOwnershipMismatch {
+            symbol: declaration.symbol.0.clone(),
+            input: input_name,
+        });
+    };
+    match source_node.kind {
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        } if index == 0 => Ok(format!("{}.span", source_declaration.symbol.0)),
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::TwoPointAlignedRectangle,
+        } if index < 4 => Ok(format!(
+            "{}.edges.{}",
+            source_declaration.symbol.0,
+            ["bottom", "right", "top", "left"][usize::from(index)],
+        )),
+        _ => Err(EditorBootstrapError::UnsupportedReference {
+            symbol: declaration.symbol.0.clone(),
+            input: "Fillet parent span",
+        }),
+    }
+}
+
+fn fillet_corner_is_finite(corner: NewComputedFilletCorner) -> bool {
+    [corner.first, corner.second].into_iter().all(|parent| {
+        parent.picked_parameter.is_finite()
+            && match parent.neighborhood {
+                ContactNeighborhood::Local { lower, upper } => {
+                    lower.is_finite() && upper.is_finite()
+                }
+                ContactNeighborhood::Interior
+                | ContactNeighborhood::Start
+                | ContactNeighborhood::End => true,
+            }
+            && parent
+                .periodic_anchor
+                .is_none_or(|anchor| anchor.parameter.is_finite())
+    })
 }
 
 fn dependency_order<'a>(
@@ -342,17 +670,6 @@ fn segment_endpoint_expression(
             .graph()
             .node(source.node)
             .ok_or(EditorBootstrapError::MissingNode(source.node))?;
-        if !matches!(
-            source_node.kind,
-            IntentNodeKind::Geometry {
-                recipe: GeometryRecipeKind::TwoPointAlignedRectangle
-            }
-        ) {
-            return Err(EditorBootstrapError::UnsupportedReference {
-                symbol: declaration.symbol.0.clone(),
-                input,
-            });
-        }
         let port =
             source_node
                 .port(source.port)
@@ -360,33 +677,57 @@ fn segment_endpoint_expression(
                     symbol: declaration.symbol.0.clone(),
                     input,
                 })?;
-        let IntentPortSelector::Node {
-            role: IntentPortRole::Corner,
-            index,
-        } = port.selector
-        else {
-            return Err(EditorBootstrapError::UnsupportedReference {
+        return match (&source_node.kind, port.selector) {
+            (
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::TwoPointAlignedRectangle,
+                },
+                IntentPortSelector::Node {
+                    role: IntentPortRole::Corner,
+                    index,
+                },
+            ) => {
+                let position = accepted_point(
+                    editor,
+                    source_declaration,
+                    IntentPortSelector::Node {
+                        role: IntentPortRole::Corner,
+                        index,
+                    },
+                    "referenced rectangle corner",
+                )?;
+                let bounds = accepted_rectangle_bounds(editor, source_declaration)?;
+                let member = rectangle_corner_member(bounds, position).ok_or(
+                    EditorBootstrapError::UnsupportedReference {
+                        symbol: declaration.symbol.0.clone(),
+                        input,
+                    },
+                )?;
+                Ok(format!("{}.corners.{member}", source_declaration.symbol.0))
+            }
+            (
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Segment,
+                },
+                IntentPortSelector::Node {
+                    role: IntentPortRole::Start,
+                    index: 0,
+                },
+            ) => Ok(format!("{}.start", source_declaration.symbol.0)),
+            (
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Segment,
+                },
+                IntentPortSelector::Node {
+                    role: IntentPortRole::End,
+                    index: 0,
+                },
+            ) => Ok(format!("{}.end", source_declaration.symbol.0)),
+            _ => Err(EditorBootstrapError::UnsupportedReference {
                 symbol: declaration.symbol.0.clone(),
                 input,
-            });
+            }),
         };
-        let position = accepted_point(
-            editor,
-            source_declaration,
-            IntentPortSelector::Node {
-                role: IntentPortRole::Corner,
-                index,
-            },
-            "referenced rectangle corner",
-        )?;
-        let bounds = accepted_rectangle_bounds(editor, source_declaration)?;
-        let member = rectangle_corner_member(bounds, position).ok_or(
-            EditorBootstrapError::UnsupportedReference {
-                symbol: declaration.symbol.0.clone(),
-                input,
-            },
-        )?;
-        return Ok(format!("{}.corners.{member}", source_declaration.symbol.0));
     }
 
     let position = accepted_point(

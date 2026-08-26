@@ -1469,6 +1469,43 @@ pub(crate) struct OrdinaryCodePreview {
     declaration_count: usize,
 }
 
+/// Durable-panel presentation for the optional projection of an ordinary GUI
+/// workspace. Conversion failure is a visible state, not absence of the Code
+/// surface: hiding it would make an unsupported declaration indistinguishable
+/// from the optional authoring layer not existing at all.
+pub(crate) enum OrdinaryCodeSurface {
+    Preview(OrdinaryCodePreview),
+    Unavailable { reason: String },
+}
+
+impl OrdinaryCodeSurface {
+    pub(crate) fn from_editor(editor: &ProjectionalEditorSession) -> Self {
+        match OrdinaryCodePreview::from_editor(editor) {
+            Ok(preview) => Self::Preview(preview),
+            Err(reason) => Self::Unavailable { reason },
+        }
+    }
+
+    pub(crate) fn panel_markup(&self) -> String {
+        match self {
+            Self::Preview(preview) => preview.panel_markup(),
+            Self::Unavailable { reason } => format!(
+                concat!(
+                    "<div class=\"wb-code-project-empty wb-code-preview-unavailable\" ",
+                    "data-code-preview-state=\"unavailable\" role=\"status\">",
+                    "<span class=\"wb-code-eyebrow\">Managed code preview</span>",
+                    "<strong>Code preview unavailable</strong>",
+                    "<p>The complete ordinary sketch cannot yet be represented by the managed TypeScript projection.</p>",
+                    "<p class=\"wb-code-diagnostic\">{}</p>",
+                    "<p>Intent IR remains available, and no declaration has been omitted or made authoritative as partial code.</p>",
+                    "</div>"
+                ),
+                escape_html(reason),
+            ),
+        }
+    }
+}
+
 impl OrdinaryCodePreview {
     pub(crate) fn from_editor(editor: &ProjectionalEditorSession) -> Result<Self, String> {
         let project = projected_code_project(editor)?;
@@ -1574,6 +1611,9 @@ fn projected_code_project(editor: &ProjectionalEditorSession) -> Result<CodeProj
             IntentNodeKind::Geometry {
                 recipe: GeometryRecipeKind::Segment,
             } => "line",
+            IntentNodeKind::ComputedFeature {
+                feature: geosolve_sketch_intent::ComputedFeatureKind::FilletSet,
+            } => "fillet",
             _ => "declaration",
         };
         let ordinal = base_counts.entry(base.to_owned()).or_default();
@@ -1600,14 +1640,6 @@ fn projected_code_project(editor: &ProjectionalEditorSession) -> Result<CodeProj
         &declarations,
     )
     .map_err(|error| error.to_string())
-}
-
-pub(crate) fn inactive_panel_markup() -> &'static str {
-    concat!(
-        "<div class=\"wb-code-project-empty\"><span class=\"wb-code-eyebrow\">Optional authoring layer</span>",
-        "<strong>No code project open</strong>",
-        "<p>Choose a sample under <em>Code &amp; reusable patches</em> to inspect managed source, a pinned custom module, and stable generated ownership. Ordinary sketches remain plain projectional workspaces.</p></div>"
-    )
 }
 
 pub(crate) fn sample_group_markup(selected: Option<CodeProjectDemoId>) -> String {
@@ -2648,6 +2680,111 @@ mod tests {
         )
         .unwrap();
         add_ordinary_rectangle_diagonal(&mut editor);
+        editor
+    }
+
+    fn ordinary_line_fillet() -> ProjectionalEditorSession {
+        use geosolve_constraint_editor::{
+            FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
+            FeatureAuthoringTool,
+        };
+        use geosolve_sketch_intent::{InputRole, InputSlot, PatchPortRef};
+
+        let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84_f004)).unwrap();
+        let mut editor = ProjectionalEditorSession::restore(
+            intent,
+            DocumentId(PersistentId::from_u128(0x84_f004)),
+            1.0,
+        )
+        .unwrap();
+        let selector = |role| IntentPortSelector::Node { role, index: 0 };
+        let length = |value| IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Length,
+        };
+        let first_alias = geosolve_sketch_intent::IntentKey::new("gui-first-line").unwrap();
+        let first = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            geosolve_sketch_intent::IntentKey::new("gui.firstLine").unwrap(),
+        )
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::X, length(0.0))
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::Y, length(0.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(4.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(0.0));
+        let first = editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: first_alias.clone(),
+                    draft: Box::new(first),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        let first_node = first.aliases.node(&first_alias).unwrap();
+        let shared = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(first_node)
+            .unwrap()
+            .port_by_selector(selector(IntentPortRole::End))
+            .unwrap()
+            .as_ref(first_node);
+
+        let second_alias = geosolve_sketch_intent::IntentKey::new("gui-second-line").unwrap();
+        let second = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            geosolve_sketch_intent::IntentKey::new("gui.secondLine").unwrap(),
+        )
+        .with_input(
+            InputSlot::new(InputRole::Point, 0),
+            PatchPortRef::Stable { port: shared },
+        )
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(4.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(4.0));
+        editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: second_alias,
+                    draft: Box::new(second),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        let accepted = editor.coordinator().accepted_materialization().unwrap();
+        let IntentNativeBinding::Point(shared_point) = accepted.ownership.port(shared).unwrap()
+        else {
+            panic!("shared line endpoint must own one native point")
+        };
+        let mut authoring = FeatureAuthoringState::default();
+        let symbol = geosolve_sketch_intent::IntentKey::new("gui.fillet").unwrap();
+        let outcome = editor
+            .activate_feature_authoring(
+                &mut authoring,
+                FeatureAuthoringTool::Fillet,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(1.0),
+                    ..FeatureAuthoringOptions::default()
+                },
+                &[(SelectionItem::Point(shared_point), None)],
+                symbol.clone(),
+            )
+            .unwrap();
+        assert!(matches!(
+            outcome,
+            FeatureAuthoringOutcome::PreviewRequested { .. }
+        ));
+        editor
+            .apply_computed_fillet_preview(&mut authoring, symbol)
+            .unwrap();
         editor
     }
 
@@ -4560,11 +4697,17 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_inactive_surface_does_not_claim_a_code_project() {
-        let markup = inactive_panel_markup();
-        assert!(markup.contains("No code project open"));
-        assert!(markup.contains("Ordinary sketches remain plain"));
-        assert!(!markup.contains("wb-code-managed-source"));
+    fn unsupported_ordinary_projection_remains_visible_and_escaped() {
+        let surface = OrdinaryCodeSurface::Unavailable {
+            reason: "unsupported <future> & \"shape\"".into(),
+        };
+        let markup = surface.panel_markup();
+        assert!(markup.contains("data-code-preview-state=\"unavailable\""));
+        assert!(markup.contains("Code preview unavailable"));
+        assert!(markup.contains("unsupported &lt;future&gt; &amp; &quot;shape&quot;"));
+        assert!(markup.contains("Intent IR remains available"));
+        assert!(!markup.contains("data-code-action=\"promote-ordinary\""));
+        assert!(!markup.contains("unsupported <future>"));
     }
 
     #[test]
@@ -4586,6 +4729,49 @@ mod tests {
         assert!(markup.contains("data-code-action=\"promote-ordinary\""));
         assert!(markup.contains("Read-only · not authority"));
         assert!(!markup.contains("<textarea"));
+    }
+
+    #[test]
+    fn m84_f004_two_lines_and_fillet_project_and_promote_as_managed_code() {
+        let editor = ordinary_line_fillet();
+        let preview = OrdinaryCodePreview::from_editor(&editor).unwrap();
+        assert_eq!(preview.declaration_count, 3);
+        assert!(preview.source.contains("const line = $.geometry.line"));
+        assert!(preview.source.contains("const line2 = $.geometry.line"));
+        assert!(preview.source.contains("start: line.end"));
+        assert!(
+            preview
+                .source
+                .contains("const fillet = $.computed.filletSet")
+        );
+        assert!(preview.source.contains("span: line.span"));
+        assert!(preview.source.contains("span: line2.span"));
+        assert!(preview.source.contains("parents: ["));
+        assert!(!preview.source.contains("{\"declaration\":"));
+        assert!(
+            preview
+                .panel_markup()
+                .contains("data-code-action=\"promote-ordinary\"")
+        );
+
+        let (workbench, promoted) = CodeProjectWorkbench::promote_from_editor(&editor).unwrap();
+        assert_eq!(workbench.demo_key(), None);
+        assert_eq!(workbench.managed_source(), preview.source);
+        let accepted = promoted.coordinator().accepted_materialization().unwrap();
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert_eq!(accepted.validation.feature_count, 1);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+        );
+        let persistence = workbench.to_persistence_json().unwrap();
+        let restored = CodeProjectWorkbench::from_persistence_json(&persistence).unwrap();
+        assert_eq!(restored.demo_key(), None);
+        assert_eq!(restored.managed_source(), preview.source);
+        assert_eq!(restored.to_persistence_json().unwrap(), persistence);
     }
 
     #[test]
@@ -4687,6 +4873,14 @@ mod tests {
             panic!("a legacy point bootstrap must not disappear from managed promotion")
         };
         assert!(error.contains("depends on unselected declaration node"));
+        let OrdinaryCodeSurface::Unavailable { reason } = OrdinaryCodeSurface::from_editor(editor)
+        else {
+            panic!("an unsupported complete projection must remain a visible diagnostic")
+        };
+        assert_eq!(reason, error);
+        let markup = OrdinaryCodeSurface::Unavailable { reason }.panel_markup();
+        assert!(markup.contains("Code preview unavailable"));
+        assert!(!markup.contains("data-code-action=\"promote-ordinary\""));
     }
 
     #[test]
@@ -4972,13 +5166,13 @@ mod tests {
     }
 
     #[test]
-    fn static_workbench_has_one_hidden_optional_code_projection_and_bounded_editor_styles() {
+    fn static_workbench_has_one_discoverable_optional_code_projection_and_bounded_editor_styles() {
         let html = include_str!("../../index.html");
         let css = include_str!("../../styles.css");
         assert_eq!(html.matches("id=\"wb-design-tab-code\"").count(), 1);
         assert_eq!(html.matches("id=\"wb-design-code\"").count(), 1);
         assert!(html.contains("data-wb-design-tab=\"code\""));
-        assert!(html.contains("id=\"wb-design-tab-code\"") && html.contains("hidden>Code"));
+        assert!(html.contains("data-wb-design-tab=\"code\" tabindex=\"-1\">Code</button>"));
         assert!(html.contains(">Intent IR</button>"));
         assert!(!html.contains(">Structured source</button>"));
         for selector in [

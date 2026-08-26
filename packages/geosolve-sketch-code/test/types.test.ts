@@ -107,3 +107,50 @@ const managedRectangleDiagonal = sketch(($) => {
   return $.outputs({ frame, diagonal, mixedEndpointLine, literalLine });
 });
 managedRectangleDiagonal;
+
+const managedFilletSet = sketch(($) => {
+  const first = $.geometry.line("first", { start: [0, 0], end: [30, 0] });
+  const second = $.geometry.line("second", { start: [30, 0], end: [30, 20] });
+  const parent = {
+    span: first.span,
+    parameter: 0.9,
+    winding: 0,
+    neighborhood: { kind: "local" as const, lower: 0.75, upper: 1 },
+    normalSide: "left" as const,
+    retainedEndpoint: "start" as const,
+    periodicAnchor: null,
+  };
+  const round = $.computed.filletSet("round", {
+    radius: 4,
+    corners: [{
+      parents: [parent, {
+        ...parent,
+        span: second.span,
+        parameter: 0.1,
+        normalSide: "right",
+        retainedEndpoint: "end",
+      }],
+      endpointOrder: "firstThenSecond",
+      sweep: "counterClockwise",
+    }],
+    suppressed: false,
+  });
+
+  // @ts-expect-error Direct Fillet parents reject raw semantic path strings.
+  $.computed.filletSet("raw", { radius: 4, corners: [{ parents: [{ ...parent, span: "first.span" }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Direct Fillet parents require curve spans, not point outputs.
+  $.computed.filletSet("point", { radius: 4, corners: [{ parents: [{ ...parent, span: first.start }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Direct Fillet parents reject references from another project.
+  $.computed.filletSet("foreign", { radius: 4, corners: [{ parents: [{ ...parent, span: segment.span }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Direct Fillet parents reject transport DTOs.
+  $.computed.filletSet("dto", { radius: 4, corners: [{ parents: [{ ...parent, span: { declaration: "first", output: ["span"] } }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Direct Fillet parent branch state is required in full.
+  $.computed.filletSet("incomplete", { radius: 4, corners: [{ parents: [{ span: first.span }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Direct Fillet branch enums are closed.
+  $.computed.filletSet("enum", { radius: 4, corners: [{ parents: [parent, parent], endpointOrder: "nearest", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Direct Fillet radius rejects angular units.
+  $.computed.filletSet("angle", { radius: { unit: "deg", value: 4 }, corners: [{ parents: [parent, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+
+  return $.outputs({ first, second, round });
+});
+managedFilletSet;

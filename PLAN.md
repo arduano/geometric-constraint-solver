@@ -5793,9 +5793,10 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F003 is repaired, clean-qualified and immutably nominated for
-replacement UAT**. Ordinary GUI dependencies now project as lexical managed TypeScript while the
-low-level transport remains truthfully labelled Intent IR. M84-U1 through M84-U11 and explicit
+Status: **active and unaccepted; M84-F004 is reproduced and its repair is under focused
+qualification**. Ordinary GUI dependencies project as lexical managed TypeScript while low-level
+transport remains truthfully labelled Intent IR. The clean-qualified F003 snapshot is withdrawn
+from current UAT by F004; no replacement is nominated yet. M84-U1 through M84-U12 and explicit
 approval remain pending; accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
@@ -5844,7 +5845,17 @@ approval remain pending; accepted M83 remains public Pages authority.
 - [x] Qualify M84-F003 with focused Rust ownership/materialization, TypeScript compile-pass/fail,
   workbench/persistence and browser regressions; then pass the unchanged golden, WASM, formatting,
   Clippy, locked workspace and clean release gates and nominate replacement bytes.
-- [ ] Receive explicit M84-U1 through M84-U11 approval, then publish/exact-verify Pages, retire the
+- [x] Resolve M84-F004 at the projection boundary: add lexical connected-Segment endpoints and a
+  direct `$.computed.filletSet` declaration with two ordered lexical curve-span parents, complete
+  explicit persisted branch/contact state, opaque `FilletSetFeature` output and direct lowering to
+  the existing Intent computed feature without authoring heuristics or solver changes. Preserve
+  all-or-nothing projection, but keep Code visible on rejection with an escaped read-only
+  conversion diagnostic, Intent IR fallback and no Promote.
+- [ ] Qualify M84-F004 with focused bootstrap/ownership, direct-lowering, descriptor-parity,
+  TypeScript type-contract, workbench/persistence and Code-surface tests; then pass proportional
+  WASM/golden/format/Clippy/workspace gates, complete the clean release gate and nominate a new
+  immutable Tailscale candidate.
+- [ ] Receive explicit M84-U1 through M84-U12 approval, then publish/exact-verify Pages, retire the
   service and close M84.
 
 Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
@@ -5894,8 +5905,21 @@ golden and separate M84 ledger. Its exact no-rebuild seven-file snapshot
 `38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`, is immutable and exact-
 verified on temporary and retained endpoints. Existing browser checks pass 4/4 and the F003 flow
 passes 1/1 on each endpoint. `geosolve-m84-uat.service`, PID `3736900`, serves the replacement at
-`http://100.94.63.83:8080/`. M84-U1 through M84-U11, explicit approval, Pages publication, service
-retirement and closure remain open; no M84 Pages authority is claimed.
+`http://100.94.63.83:8080/`. M84-F004 now withdraws those bytes from current UAT even if that
+endpoint remains reachable.
+
+M84-F004 development record (2026-08-26): drawing two connected Segments and one computed Fillet
+made complete GUI bootstrap return an unsupported-Fillet error; presentation then hid Code for the
+conversion error. The repair adds Segment-to-Segment lexical endpoints and direct
+`$.computed.filletSet` source whose two ordered parent spans and all persisted contact/branch
+choices are explicit. It returns opaque `FilletSetFeature` authority and lowers to the existing
+Intent `ComputedFeature::FilletSet`, without rerunning Fillet authoring heuristics or changing the
+solver. Unsupported scenes continue to reject all-or-nothing conversion, but Code stays
+discoverable with an escaped diagnostic, Intent IR fallback and no Promote. Focused Rust owner,
+bootstrap/direct-lowering/workbench, TypeScript and UI tests are being qualified. No F004 clean
+gate, frozen artifact or Tailscale nomination is claimed yet. M84-U1 through M84-U12, explicit
+approval, Pages publication, service retirement and closure remain open; no M84 Pages authority is
+claimed.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

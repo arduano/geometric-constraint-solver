@@ -146,6 +146,18 @@ export type FilletOutputs<Project> = DescriptorResult<
 
 export type FilletFeature<Project> = FeatureRef<Project, "feature", FilletOutputs<Project>>;
 
+export type FilletSetOutputs<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["computed.filletSet"]["outputs"]
+>;
+
+/** One branch-explicit native computed FilletSet declaration. */
+export type FilletSetFeature<Project> = FeatureRef<
+  Project,
+  "feature",
+  FilletSetOutputs<Project>
+>;
+
 export type RoundedRectangleOutputs<Project> = DescriptorResult<
   Project,
   (typeof DECLARATION_RESULT_CATALOG)["geometry.rounded_rectangle"]["outputs"]
@@ -663,6 +675,47 @@ export interface ManagedConstraintBuilder<Project> {
   ): OutputRef<Project, "constraint">;
 }
 
+export type ManagedFilletNeighborhood =
+  | { readonly kind: "interior" | "start" | "end" }
+  | {
+    readonly kind: "local";
+    readonly lower: number;
+    readonly upper: number;
+  };
+
+export interface ManagedFilletParent<Project> {
+  readonly span: CurveSpanRef<Project>;
+  readonly parameter: number;
+  readonly winding: number;
+  readonly neighborhood: ManagedFilletNeighborhood;
+  readonly normalSide: "left" | "right";
+  readonly retainedEndpoint: "start" | "end";
+  readonly periodicAnchor: null | {
+    readonly parameter: number;
+    readonly winding: number;
+  };
+}
+
+export interface ManagedFilletCorner<Project> {
+  readonly parents: readonly [
+    ManagedFilletParent<Project>,
+    ManagedFilletParent<Project>,
+  ];
+  readonly endpointOrder: "firstThenSecond" | "secondThenFirst";
+  readonly sweep: "counterClockwise" | "clockwise";
+}
+
+export interface ManagedComputedBuilder<Project> {
+  filletSet(
+    symbol: string,
+    values: {
+      readonly radius: number | UnitLiteral<"mm" | "cm" | "m" | "inch">;
+      readonly corners: readonly ManagedFilletCorner<NoInfer<Project>>[];
+      readonly suppressed: boolean;
+    },
+  ): FilletSetFeature<Project>;
+}
+
 type ManagedInvocationValue<Value> =
   Value extends OutputRef<any, "scalar"> ? Value | UnitLiteral
     : Value extends KeyedFeatureCollection<infer Key, infer Element>
@@ -680,6 +733,7 @@ type ManagedPatchResult<Result, Project> = Reproject<Result, Project>;
 export interface ManagedSketchBuilder<Project> {
   readonly geometry: ManagedGeometryBuilder<Project>;
   readonly constraint: ManagedConstraintBuilder<Project>;
+  readonly computed: ManagedComputedBuilder<Project>;
   use<Schemas extends InputSchemas, Result>(
     symbol: string,
     patch: PatchDefinition<Schemas, Result>,

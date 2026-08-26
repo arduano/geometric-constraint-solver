@@ -4840,17 +4840,10 @@ pub(crate) mod wasm {
         if let Some(code_project) = &wb.code_project {
             set_hidden(&code_tab, false)?;
             code_panel.set_inner_html(&code_project.panel_markup());
-        } else if let Ok(preview) =
-            super::code_projects::OrdinaryCodePreview::from_editor(wb.editor())
-        {
-            set_hidden(&code_tab, false)?;
-            code_panel.set_inner_html(&preview.panel_markup());
         } else {
-            code_panel.set_inner_html(super::code_projects::inactive_panel_markup());
-            if code_tab.get_attribute("aria-selected").as_deref() == Some("true") {
-                select_design_projection_tab(document, super::DesignProjectionTab::Outline, false)?;
-            }
-            set_hidden(&code_tab, true)?;
+            let surface = super::code_projects::OrdinaryCodeSurface::from_editor(wb.editor());
+            set_hidden(&code_tab, false)?;
+            code_panel.set_inner_html(&surface.panel_markup());
         }
         let history = wb.editor().coordinator().intent().history_projection();
         let history_availability = wb.code_project.as_ref().map_or(

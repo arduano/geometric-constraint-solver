@@ -6,10 +6,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch_intent::{
-    AggregateKind, ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey,
-    IntentKey, IntentKeyError, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRole, IntentPortSelector,
-    IntentSessionIdentity, IntentUnit, LeafField, PatchPortRef, intent_content_digest,
+    AggregateKind, ComputedFeatureKind, ConstraintKind, GeometryRecipeKind, InputRole, InputSlot,
+    IntentFieldKey, IntentKey, IntentKeyError, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRole,
+    IntentPortSelector, IntentSessionIdentity, IntentUnit, LeafField, PatchPortRef,
+    intent_content_digest,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -650,6 +651,7 @@ pub fn expand_code_project(
     for plan in plans {
         lower_invocation(&mut builder, &plan, reconciliation)?;
     }
+    lower_computed(project, &mut builder)?;
     lower_constraints(project, &mut builder)?;
 
     let mut semantic_outputs = BTreeMap::new();
@@ -725,7 +727,6 @@ fn prepare(
             lower_direct_geometry(&mut builder, declaration, reconciliation)?;
         }
     }
-
     let mut plans = Vec::new();
     for declaration in &project.managed.program.declarations {
         let Some(patch) = &declaration.patch else {
@@ -804,10 +805,369 @@ fn lower_direct_geometry(
             lower_direct_polyline(builder, declaration, reconciliation)
         }
         Some(DirectDeclarationLowering::Rectangle) => lower_direct_rectangle(builder, declaration),
+        Some(DirectDeclarationLowering::FilletSet) => Err(CodeExpansionError::Unsupported(
+            format!("managed computed family `{family}` used through geometry"),
+        )),
         None => Err(CodeExpansionError::Unsupported(format!(
             "managed geometry family `{family}`"
         ))),
     }
+}
+
+fn lower_direct_computed(
+    builder: &mut ExpansionBuilder,
+    declaration: &AuthoringDeclaration,
+) -> Result<(), CodeExpansionError> {
+    let family = declaration.builder_path.join(".");
+    match code_declaration_family(&family).and_then(|descriptor| descriptor.direct) {
+        Some(DirectDeclarationLowering::FilletSet) => lower_direct_fillet_set(builder, declaration),
+        Some(
+            DirectDeclarationLowering::Line
+            | DirectDeclarationLowering::Polyline
+            | DirectDeclarationLowering::Rectangle,
+        ) => Err(CodeExpansionError::Unsupported(format!(
+            "managed geometry family `{family}` used through computed"
+        ))),
+        None => Err(CodeExpansionError::Unsupported(format!(
+            "managed computed family `{family}`"
+        ))),
+    }
+}
+
+fn lower_computed(
+    project: &CodeProject,
+    builder: &mut ExpansionBuilder,
+) -> Result<(), CodeExpansionError> {
+    for declaration in &project.managed.program.declarations {
+        if declaration.patch.is_none()
+            && declaration.builder_path.first().map(String::as_str) == Some("computed")
+        {
+            lower_direct_computed(builder, declaration)?;
+        }
+    }
+    Ok(())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "branch-explicit FilletSet lowering keeps every persisted contact field visibly adjacent"
+)]
+fn lower_direct_fillet_set(
+    builder: &mut ExpansionBuilder,
+    declaration: &AuthoringDeclaration,
+) -> Result<(), CodeExpansionError> {
+    let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
+    exact_object_keys(
+        arguments,
+        &["corners", "radius", "suppressed"],
+        &declaration.symbol.0,
+    )?;
+    let radius = length_value(
+        required(arguments, "radius", &declaration.symbol.0)?,
+        "FilletSet radius",
+    )?;
+    if !radius.is_finite() || radius <= 0.0 {
+        return invalid_declaration(
+            declaration,
+            "FilletSet radius must be finite and positive".into(),
+        );
+    }
+    let corners = array(
+        required(arguments, "corners", &declaration.symbol.0)?,
+        "FilletSet corners",
+    )?;
+    let kind = IntentNodeKind::ComputedFeature {
+        feature: ComputedFeatureKind::FilletSet,
+    };
+    let maximum_corners = usize::from(kind.schema(0).maximum_children);
+    if corners.len() > maximum_corners {
+        return Err(CodeExpansionError::ResourceLimit {
+            resource: "direct FilletSet corners",
+            actual: corners.len(),
+            limit: maximum_corners,
+        });
+    }
+    let child_count =
+        u16::try_from(corners.len()).map_err(|_| CodeExpansionError::ResourceLimit {
+            resource: "direct FilletSet corners",
+            actual: corners.len(),
+            limit: usize::from(u16::MAX),
+        })?;
+    if child_count == 0 {
+        return invalid_declaration(
+            declaration,
+            "FilletSet must contain at least one corner".into(),
+        );
+    }
+
+    let alias = semantic_alias("computed", &builder.project, &declaration.symbol, &[])?;
+    let mut draft = IntentNodeDraft::new(kind, alias.clone())
+        .with_dynamic_children(child_count)
+        .with_field(field_key("radius")?, length(radius));
+    draft.suppressed = boolean(
+        required(arguments, "suppressed", &declaration.symbol.0)?,
+        "FilletSet suppressed",
+    )?;
+
+    for (ordinal, value) in corners.iter().enumerate() {
+        let corner = object(value, "FilletSet corner")?;
+        exact_object_keys(
+            corner,
+            &["endpointOrder", "parents", "sweep"],
+            "FilletSet corner",
+        )?;
+        let parents = array(
+            required(corner, "parents", "FilletSet corner")?,
+            "FilletSet parents",
+        )?;
+        let [first, second] = parents else {
+            return invalid_declaration(
+                declaration,
+                "FilletSet corner parents must contain exactly two entries".into(),
+            );
+        };
+        for (parent_offset, (name, value)) in ["first", "second"]
+            .into_iter()
+            .zip([first, second])
+            .enumerate()
+        {
+            let parent = object(value, "FilletSet parent")?;
+            exact_object_keys(
+                parent,
+                &[
+                    "neighborhood",
+                    "normalSide",
+                    "parameter",
+                    "periodicAnchor",
+                    "retainedEndpoint",
+                    "span",
+                    "winding",
+                ],
+                "FilletSet parent",
+            )?;
+            let reference = format!(
+                "{}.corners[{ordinal}].parents[{parent_offset}].span",
+                declaration.symbol.0
+            );
+            let span = builder
+                .resolve_managed(
+                    required(parent, "span", "FilletSet parent")?,
+                    &SemanticOutputPath::default(),
+                    &reference,
+                )?
+                .as_port(IntentPortKind::CurveSpan, &reference)?;
+            let input_index = ordinal
+                .checked_mul(2)
+                .and_then(|index| index.checked_add(parent_offset))
+                .and_then(|index| u16::try_from(index).ok())
+                .ok_or_else(|| CodeExpansionError::ResourceLimit {
+                    resource: "direct FilletSet span inputs",
+                    actual: corners.len().saturating_mul(2),
+                    limit: usize::from(u16::MAX),
+                })?;
+            draft = draft.with_input(
+                InputSlot::new(InputRole::Span, input_index),
+                span.patch_ref(),
+            );
+            draft = with_direct_fillet_parent_fields(draft, ordinal, name, parent)?;
+        }
+        let prefix = format!("corner_{ordinal:04}");
+        let endpoint_order = match string(
+            required(corner, "endpointOrder", "FilletSet corner")?,
+            "FilletSet endpointOrder",
+        )? {
+            "firstThenSecond" => "first_then_second",
+            "secondThenFirst" => "second_then_first",
+            _ => {
+                return invalid_declaration(
+                    declaration,
+                    "FilletSet endpointOrder must be firstThenSecond or secondThenFirst".into(),
+                );
+            }
+        };
+        let sweep = match string(
+            required(corner, "sweep", "FilletSet corner")?,
+            "FilletSet sweep",
+        )? {
+            "counterClockwise" => "counter_clockwise",
+            "clockwise" => "clockwise",
+            _ => {
+                return invalid_declaration(
+                    declaration,
+                    "FilletSet sweep must be counterClockwise or clockwise".into(),
+                );
+            }
+        };
+        draft = draft
+            .with_field(
+                field_key(&format!("{prefix}_endpoint_order"))?,
+                enum_value(endpoint_order)?,
+            )
+            .with_field(field_key(&format!("{prefix}_sweep"))?, enum_value(sweep)?);
+    }
+
+    builder.push_node(alias.clone(), draft)?;
+    builder.insert_declaration(
+        declaration.symbol.clone(),
+        SemanticDeclaration {
+            root: SemanticValue::Declaration {
+                alias,
+                kind: FeatureKind::Feature,
+            },
+            paths: BTreeMap::new(),
+        },
+    )
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one parent-state lowering keeps its exact persisted branch fields auditable together"
+)]
+fn with_direct_fillet_parent_fields(
+    mut draft: IntentNodeDraft,
+    ordinal: usize,
+    name: &str,
+    parent: &BTreeMap<String, ManagedValue>,
+) -> Result<IntentNodeDraft, CodeExpansionError> {
+    let prefix = format!("corner_{ordinal:04}_{name}");
+    let parameter = finite_number(
+        required(parent, "parameter", "FilletSet parent")?,
+        "FilletSet parameter",
+    )?;
+    let winding = integer_value(
+        required(parent, "winding", "FilletSet parent")?,
+        "FilletSet winding",
+    )?;
+    let normal_side @ ("left" | "right") = string(
+        required(parent, "normalSide", "FilletSet parent")?,
+        "FilletSet normalSide",
+    )?
+    else {
+        return Err(CodeExpansionError::Unsupported(
+            "FilletSet normalSide must be left or right".into(),
+        ));
+    };
+    let retained_endpoint @ ("start" | "end") = string(
+        required(parent, "retainedEndpoint", "FilletSet parent")?,
+        "FilletSet retainedEndpoint",
+    )?
+    else {
+        return Err(CodeExpansionError::Unsupported(
+            "FilletSet retainedEndpoint must be start or end".into(),
+        ));
+    };
+    draft = draft
+        .with_field(
+            field_key(&format!("{prefix}_parameter"))?,
+            dimensionless(parameter),
+        )
+        .with_field(
+            field_key(&format!("{prefix}_winding"))?,
+            IntentLiteral::Integer(i64::from(winding)),
+        )
+        .with_field(
+            field_key(&format!("{prefix}_normal_side"))?,
+            enum_value(normal_side)?,
+        )
+        .with_field(
+            field_key(&format!("{prefix}_trim_endpoint"))?,
+            enum_value(retained_endpoint)?,
+        );
+
+    let neighborhood = object(
+        required(parent, "neighborhood", "FilletSet parent")?,
+        "FilletSet neighborhood",
+    )?;
+    let kind = string(
+        required(neighborhood, "kind", "FilletSet neighborhood")?,
+        "FilletSet neighborhood kind",
+    )?;
+    match kind {
+        value @ ("interior" | "start" | "end") => {
+            exact_object_keys(neighborhood, &["kind"], "FilletSet neighborhood")?;
+            draft = draft.with_field(
+                field_key(&format!("{prefix}_neighborhood"))?,
+                enum_value(value)?,
+            );
+        }
+        "local" => {
+            exact_object_keys(
+                neighborhood,
+                &["kind", "lower", "upper"],
+                "FilletSet neighborhood",
+            )?;
+            let lower = finite_number(
+                required(neighborhood, "lower", "FilletSet neighborhood")?,
+                "FilletSet local lower",
+            )?;
+            let upper = finite_number(
+                required(neighborhood, "upper", "FilletSet neighborhood")?,
+                "FilletSet local upper",
+            )?;
+            if lower >= upper {
+                return Err(CodeExpansionError::Unsupported(
+                    "FilletSet local neighborhood bounds must be strictly increasing".into(),
+                ));
+            }
+            draft = draft
+                .with_field(
+                    field_key(&format!("{prefix}_neighborhood"))?,
+                    enum_value("local")?,
+                )
+                .with_field(
+                    field_key(&format!("{prefix}_local_lower"))?,
+                    dimensionless(lower),
+                )
+                .with_field(
+                    field_key(&format!("{prefix}_local_upper"))?,
+                    dimensionless(upper),
+                );
+        }
+        _ => {
+            return Err(CodeExpansionError::Unsupported(
+                "FilletSet neighborhood kind is invalid".into(),
+            ));
+        }
+    }
+
+    match required(parent, "periodicAnchor", "FilletSet parent")? {
+        ManagedValue::Null => {
+            draft = draft.with_field(
+                field_key(&format!("{prefix}_periodic_anchor"))?,
+                IntentLiteral::Boolean(false),
+            );
+        }
+        value => {
+            let anchor = object(value, "FilletSet periodicAnchor")?;
+            exact_object_keys(
+                anchor,
+                &["parameter", "winding"],
+                "FilletSet periodicAnchor",
+            )?;
+            let parameter = finite_number(
+                required(anchor, "parameter", "FilletSet periodicAnchor")?,
+                "FilletSet anchor parameter",
+            )?;
+            let winding = integer_value(
+                required(anchor, "winding", "FilletSet periodicAnchor")?,
+                "FilletSet anchor winding",
+            )?;
+            draft = draft
+                .with_field(
+                    field_key(&format!("{prefix}_periodic_anchor"))?,
+                    IntentLiteral::Boolean(true),
+                )
+                .with_field(
+                    field_key(&format!("{prefix}_anchor_parameter"))?,
+                    dimensionless(parameter),
+                )
+                .with_field(
+                    field_key(&format!("{prefix}_anchor_winding"))?,
+                    IntentLiteral::Integer(i64::from(winding)),
+                );
+        }
+    }
+    Ok(draft)
 }
 
 fn lower_direct_line(
@@ -2500,6 +2860,17 @@ const fn length(value: f64) -> IntentLiteral {
     }
 }
 
+const fn dimensionless(value: f64) -> IntentLiteral {
+    IntentLiteral::Quantity {
+        value,
+        unit: IntentUnit::Dimensionless,
+    }
+}
+
+fn enum_value(value: &str) -> Result<IntentLiteral, CodeExpansionError> {
+    Ok(IntentLiteral::Enum(IntentKey::new(value)?))
+}
+
 fn unit_direction(start: [f64; 2], end: [f64; 2]) -> Option<[f64; 2]> {
     let direction = [end[0] - start[0], end[1] - start[1]];
     let magnitude = direction[0].hypot(direction[1]);
@@ -2569,6 +2940,60 @@ fn scalar_value(value: &ManagedValue, label: &str) -> Result<f64, CodeExpansionE
         _ => Err(CodeExpansionError::Unsupported(format!(
             "`{label}` must be a finite number"
         ))),
+    }
+}
+
+fn finite_number(value: &ManagedValue, label: &str) -> Result<f64, CodeExpansionError> {
+    match value {
+        ManagedValue::Number(value) if value.is_finite() => Ok(*value),
+        _ => Err(CodeExpansionError::Unsupported(format!(
+            "`{label}` must be a finite dimensionless number"
+        ))),
+    }
+}
+
+fn length_value(value: &ManagedValue, label: &str) -> Result<f64, CodeExpansionError> {
+    match value {
+        ManagedValue::Number(value) if value.is_finite() => Ok(*value),
+        ManagedValue::Unit(UnitLiteral { unit, value })
+            if matches!(unit.as_str(), "mm" | "cm" | "m" | "inch") && value.is_finite() =>
+        {
+            Ok(*value)
+        }
+        _ => Err(CodeExpansionError::Unsupported(format!(
+            "`{label}` must be a finite length, not an angular or dimensionless value"
+        ))),
+    }
+}
+
+fn integer_value(value: &ManagedValue, label: &str) -> Result<i32, CodeExpansionError> {
+    let value = finite_number(value, label)?;
+    if value.fract() != 0.0 || value < f64::from(i32::MIN) || value > f64::from(i32::MAX) {
+        return Err(CodeExpansionError::Unsupported(format!(
+            "`{label}` must be an integer within i32 range"
+        )));
+    }
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "integrality and the exact i32 range are checked immediately above"
+    )]
+    Ok(value as i32)
+}
+
+fn exact_object_keys(
+    value: &BTreeMap<String, ManagedValue>,
+    expected: &[&str],
+    label: &str,
+) -> Result<(), CodeExpansionError> {
+    let actual = value.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    let expected = expected.iter().copied().collect::<BTreeSet<_>>();
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(CodeExpansionError::Unsupported(format!(
+            "`{label}` fields must be exactly {}",
+            expected.into_iter().collect::<Vec<_>>().join(", ")
+        )))
     }
 }
 
