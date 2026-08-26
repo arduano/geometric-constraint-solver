@@ -2,10 +2,10 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **M84-F004 is mechanically qualified and its immutable replacement is nominated; focused
-UAT U1-U12 is pending**. No row is accepted. The F003 snapshot is withdrawn historical evidence.
-Pages remains on accepted M83. Both earlier candidates are preserved only as historical defect
-evidence.
+Status: **the post-F004 direct code-authoring amendment is implemented and under qualification;
+UAT U1-U13 is pending with no current candidate**. No row is accepted. The initial, F003 and F004
+snapshots are withdrawn historical evidence because they predate current scope. Pages remains on
+accepted M83.
 
 ## Withdrawn candidate evidence
 
@@ -120,7 +120,7 @@ Retained-failed intent is also authenticated against the prior accepted semantic
 serialization; a mismatch keeps Code visible as unavailable and removes Promote rather than
 constructing hybrid source.
 
-## Current F004 candidate evidence
+## Withdrawn historical F004 candidate evidence
 
 Qualified product source: `c2cf160d3a7d5065e582f2ba982881380d2b871c`; tree:
 `94a178699f9b2e8bd2a6497c9b0334d43cad2b20`. The complete clean gate ran on 2026-08-26 from
@@ -141,10 +141,26 @@ eight-path HTTP ledgers are byte-identical at SHA-256
 200 with zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/`
 equals `index.html`. Baseline 4/4, F003 1/1 and F004 2/2 browser suites pass on both endpoints.
 
-Retained `geosolve-m84-uat.service`, PID `3316682`, serves only those immutable bytes at
+Retained `geosolve-m84-uat.service`, PID `3316682`, still serves only those immutable bytes at
 `http://100.94.63.83:8080/`. The temporary replacement and obsolete pre-axis F004 services are
-retired. This nominates the candidate for the scorecard below; it does not accept a human row or
-authorize M84 Pages publication.
+retired. The later direct-authoring amendment withdraws this snapshot from current UAT solely
+because it predates amended scope; it remains reachable only until a qualified replacement is
+ready and does not accept a row or authorize M84 Pages publication.
+
+## Direct code-authoring amendment awaiting replacement nomination
+
+A canonical fresh workspace now exposes one **Start from code** action and four genuine project
+cards. Starting creates **Untitled code sketch** as a distinct artifact-free `Authored` project;
+its complete editable source declares a rectangle and diagonal through lexical
+`frame.corners.*` references. Focused Rust owner tests pass valid Apply, whole-source replacement,
+exact native endpoint aliasing, retained-invalid canvas/persistence, Undo/Redo and hostile origin
+rejection. The fresh landing additionally requires exact current/accepted semantic parity and
+independently validated empty native authority. No fifth bundled project, golden row, custom
+artifact, JavaScript execution or solver equation is introduced.
+
+Actual WASM/browser qualification at both required sizes, the complete clean gate, immutable
+freeze and replacement Tailscale nomination remain pending. Run no human scorecard against the
+currently served historical F004 bytes.
 
 Run the ordinary desktop workbench at approximately
 `1440x900` and `1024x720`. Use actual code-project samples rather than importing equivalent flat
@@ -167,6 +183,7 @@ bounds and byte parity.
 | M84-U10 | Start a plain M83 workspace/build without code support, then a code-enabled one. Inspect the browser file/artifact UI at both sizes. | Plain solver/editor behavior and persistence remain available without code-module linkage; code UI is polished and bounded, custom files are clearly read-only, and it does not pretend to be a general IDE. | pending |
 | M84-U11 | In an ordinary sketch, draw an aligned rectangle and a line between two rectangle corners; inspect Intent IR and Code, then promote the preview and edit the rectangle. | Intent IR is labelled as transport data; Code uses lexical `frame.corners.*` values with no serialized dependency DTO; promotion creates one real managed project and the dependent line follows later edits. | pending |
 | M84-U12 | In an ordinary sketch, draw a Horizontal line, continue it with a Vertical line and Fillet their corner. Inspect Code, promote and reload; edit radius once as a model-unit number and once with `mm(...)`. Then separately try a computed Fillet arc as a direct parent and add another unsupported declaration. | The `line2` declaration contains lexical `start: line.end`; the preview contains `$.constraint.horizontal` over `line.span`, `$.constraint.vertical` over `line2.span`, and `$.computed.filletSet` with those lexical parent spans, no raw ID/DTO and complete explicit branch/contact fields. Both existing axis constraints survive promotion. Line spans are native-branded; a computed host arc cannot be a parent. Positive finite model-unit and branded-mm radii work; forged/other-unit/nonpositive/nonfinite values reject. Promote/reload retains finite Current Fillet geometry with independently validated Hard residual `<= 1e-9`. Unsupported scenes keep Code visible with an escaped truthful diagnostic and Intent IR fallback, while Promote is absent. | pending |
+| M84-U13 | Click **New**, open **Code**, inspect the starter and four example cards, then choose **Start from code**. Edit the starter rectangle, Apply, enter a collapsed invalid rectangle, Undo/Redo, reload/repro, return to New, and open a sample card. Check both desktop sizes. | The fresh surface has one direct starter action and four genuine projects without overflow. Start creates **Untitled code sketch** with editable artifact-free `sketch.ts`, lexical `frame.corners.*` dependencies and no Promote/fabricated GUI history. Valid edits update finite accepted geometry; invalid edits retain the prior canvas and diagnostic; Undo/Redo/reload/repro preserve authored authority; New restores the starter and cards open genuine projects. | pending |
 
 Any JavaScript runtime solve, browser `eval`, raw code-facing ID, cross-project retarget, ordinal
 identity churn, silent cascade, duplicate history, blank accepted scene or pointer-frame expansion
@@ -174,8 +191,8 @@ withdraws the candidate and opens an owning-layer regression.
 
 ## Final disposition
 
-- Supervising-user UAT: M84-U1 through M84-U12 pending against the nominated F004 replacement;
-  both earlier candidates remain withdrawn historical evidence.
+- Supervising-user UAT: M84-U1 through M84-U13 pending; no replacement is currently nominated and
+  every prior candidate remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Replacement Tailscale nomination: complete at `http://100.94.63.83:8080/`; retirement is
-  prohibited until accepted Pages bytes are independently verified.
+- Replacement Tailscale nomination: pending. `http://100.94.63.83:8080/` still serves historical
+  F004 bytes and will be replaced only after the amended candidate is fully qualified.

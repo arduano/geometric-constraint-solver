@@ -4685,9 +4685,9 @@ M84 adds no residual equation and does not reinterpret the 271-row milestone-neu
 separate reviewed ledger owns managed-source parsing, data-artifact expansion, typed references,
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
 `docs/M84_GOALS.md` are authoritative. The F001-F004 fixtures below are implemented and pass their
-focused owner suites. The former complete clean candidate and clean-qualified F003 replacement
-local/Tailscale nominations are withdrawn historical evidence. M84-F004 is mechanically qualified
-and its exact immutable replacement is nominated for UAT. Human presentation UAT U1-U12 remains
+focused owner suites. The former complete clean candidate and clean-qualified F003/F004
+local/Tailscale nominations are withdrawn historical evidence because they predate the post-F004
+direct-authoring amendment. No replacement is nominated. Human presentation UAT U1-U13 remains
 pending; accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
@@ -4745,6 +4745,25 @@ The mounting helper remains byte-identical after GUI edits. Save/reload/repro re
 artifact, lock, expansion provenance, override, nested accepted intent and unified history
 offline. Missing/tampered artifacts, retained-invalid geometry, corrupt payloads and the 64 MiB
 project boundary reject atomically while preserving the previous accepted scene.
+
+### M84-G6 extension — direct code-authored starter
+
+On an exact canonical fresh workspace, open Code and require exactly one **Start from code**
+action plus all four genuine project cards. Fresh classification requires only the canonical
+document foundation, exact current/accepted semantic-identity parity and independently validated
+empty native/computed authority. Starting must install a distinct artifact-free `Authored` project
+through public `CodeProject::managed_only(ProjectKey, source)`, not promote or fabricate an
+ordinary GUI scene. Invalid project brands, malformed managed source and custom patch imports
+without pinned artifacts reject before installation; parsing alone grants no solver authority.
+
+The complete editable starter declares a rectangle and a dependent diagonal using lexical
+`frame.corners.lowerLeft`/`upperRight` references. Valid Apply and complete source replacement
+must cold-materialize finite geometry through ordinary native validation and alias the diagonal to
+the rectangle's exact native point IDs. A valid managed edit, retained-invalid collapsed
+rectangle, exact Undo/Redo, save/reload and repro must preserve authored origin, source and prior
+accepted canvas atomically. Sample identity and managed-source focus change only after successful
+installation. This extension adds neither an M84-F005 finding nor a fifth bundled project/ledger
+row; the existing four-demo golden remains unchanged.
 
 ### M84-F001 — generated-point terminal checkpoint parity
 
@@ -4850,7 +4869,7 @@ F003 1/1 pass on both, and retained service PID `3736900` served the snapshot at
 is retired. At that historical checkpoint M84 remained active with U1-U12 pending and no F004
 replacement nomination was claimed.
 
-Current F004 replacement source `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
+Historical F004 replacement source `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
 `94a178699f9b2e8bd2a6497c9b0334d43cad2b20`, passes the clean Nix release gate from
 12:37:30.923 through 12:55:14.714 AEST on 2026-08-26, exit 0 in 1,064 seconds. Its 6,118-line,
 412,411-byte log `/tmp/geosolve-m84-f004b-release-gate.log` has SHA-256
@@ -4867,9 +4886,18 @@ ledgers are byte-identical at SHA-256
 zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
 `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both endpoints.
 Retained service PID `3316682` serves those immutable bytes at
-`http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. M84 remains
-active and unaccepted with U1-U12 pending. Pages remains accepted M83 authority and no M84 public
-publication is claimed.
+`http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. The later
+direct-authoring amendment withdraws those bytes from current nomination solely because they
+predate amended scope; they may remain reachable as historical evidence until a qualified
+replacement exists.
+
+Post-F004 direct-authoring focused owner coverage passes public artifact-free construction,
+fresh-surface catalog/fail-closed classification, exact native rectangle-corner aliasing after
+Apply, retained-invalid persistence, complete source replacement, exact Undo/Redo and conflicting-
+origin rejection. The four-demo M84 ledger and 271-row golden remain unchanged. Actual-WASM/
+browser collateral at both required sizes, full release qualification, immutable freeze and
+replacement nomination remain pending. M84 remains active and unaccepted with U1-U13 pending;
+Pages remains accepted M83 authority and no M84 public publication is claimed.
 
 ## Frozen near-singular fixtures
 

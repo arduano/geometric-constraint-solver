@@ -30,14 +30,31 @@ use geosolve_sketch_code::{
     rehydrate_materialized_code_project, required_generated_members,
 };
 use geosolve_sketch_intent::{
-    BootstrapNativeKind, GeometryRecipeKind, IntentLiteral, IntentNodeKind, IntentPortRole,
-    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField, LeafRef, NodeId,
+    BootstrapNativeKind, GeometryRecipeKind, IntentLiteral, IntentNode, IntentNodeKind,
+    IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
+    LeafRef, NodeId,
 };
 use serde::{Deserialize, Serialize};
 
 const MANAGED_FILE: &str = "sketch.ts";
 const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v1";
 const CODE_PROJECT_MODEL_SCALE: f64 = 1.0;
+const AUTHORED_STARTER_SOURCE: &str = r#""use geosolve managed-v1";
+import { sketch } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const frame = $.geometry.rectangle("frame", {
+    lowerLeft: [0, 0],
+    upperRight: [60, 35],
+  });
+  const diagonal = $.geometry.line("diagonal", {
+    start: frame.corners.lowerLeft,
+    end: frame.corners.upperRight,
+  });
+  $.organize("Code-authored frame", [frame, diagonal]);
+  return $.outputs({ frame, diagonal });
+});
+"#;
 static NEXT_CODE_MATERIALIZATION: AtomicU64 = AtomicU64::new(1);
 
 /// One independently accepted replacement for the live projectional canvas.
@@ -118,6 +135,7 @@ pub(crate) struct CodeProjectWorkbench {
 #[derive(Clone, Debug)]
 enum CodeProjectOrigin {
     Bundled(CodeProjectDemo),
+    Authored,
     Promoted,
 }
 
@@ -125,6 +143,7 @@ impl CodeProjectOrigin {
     fn title(&self) -> &'static str {
         match self {
             Self::Bundled(demo) => demo.title,
+            Self::Authored => "Untitled code sketch",
             Self::Promoted => "Promoted sketch",
         }
     }
@@ -132,7 +151,7 @@ impl CodeProjectOrigin {
     fn demo_key(&self) -> Option<&'static str> {
         match self {
             Self::Bundled(demo) => Some(demo.id.key()),
-            Self::Promoted => None,
+            Self::Authored | Self::Promoted => None,
         }
     }
 
@@ -141,6 +160,7 @@ impl CodeProjectOrigin {
             Self::Bundled(demo) => CodeProjectOriginWire::Bundled {
                 demo: demo.id.key().into(),
             },
+            Self::Authored => CodeProjectOriginWire::Authored,
             Self::Promoted => CodeProjectOriginWire::Promoted,
         }
     }
@@ -150,6 +170,7 @@ impl CodeProjectOrigin {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum CodeProjectOriginWire {
     Bundled { demo: String },
+    Authored,
     Promoted,
 }
 
@@ -182,11 +203,15 @@ fn restore_code_project_origin(
     };
     match (origin, legacy_demo) {
         (Some(CodeProjectOriginWire::Bundled { demo }), None) => bundled(&demo),
+        (Some(CodeProjectOriginWire::Authored), None) => Ok(CodeProjectOrigin::Authored),
         (Some(CodeProjectOriginWire::Promoted), None) => Ok(CodeProjectOrigin::Promoted),
         (None, Some(demo)) => bundled(demo),
         (None, None) => Err("code-project persistence has no origin".into()),
         (Some(CodeProjectOriginWire::Bundled { .. }), Some(_)) => {
             Err("bundled code-project origin is duplicated".into())
+        }
+        (Some(CodeProjectOriginWire::Authored), Some(_)) => {
+            Err("authored code-project origin cannot name a bundled demo".into())
         }
         (Some(CodeProjectOriginWire::Promoted), Some(_)) => {
             Err("promoted code-project origin cannot name a bundled demo".into())
@@ -195,6 +220,19 @@ fn restore_code_project_origin(
 }
 
 impl CodeProjectWorkbench {
+    /// Starts one standalone code-authored sketch without first manufacturing
+    /// an ordinary GUI scene. The starter is intentionally artifact-free and
+    /// uses lexical typed feature references, then enters the same cold-
+    /// validated project/session path as every bundled or promoted project.
+    pub(crate) fn new_authored() -> Result<(Self, Box<ProjectionalEditorSession>), String> {
+        let project = CodeProject::managed_only(
+            ProjectKey("code-authored-sketch".into()),
+            AUTHORED_STARTER_SOURCE,
+        )
+        .map_err(|error| error.to_string())?;
+        Self::open_project(CodeProjectOrigin::Authored, project)
+    }
+
     pub(crate) fn open_key(key: &str) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
         let demo = bundled_code_project_demos()
             .into_iter()
@@ -1295,18 +1333,34 @@ impl CodeProjectWorkbench {
             .filter_map(|value| serde_json::from_value::<PatchModuleArtifact>(value.clone()).ok())
             .map(|artifact| artifact.edit_lenses.len())
             .sum::<usize>();
+        let (heading, detail, state) = if artifact_count == 0 {
+            (
+                "Managed source ready",
+                "No custom modules · direct declarations only".to_owned(),
+                "Artifact-free",
+            )
+        } else {
+            (
+                "Artifacts ready",
+                format!(
+                    "{} pinned module{} · {} edit lens{}",
+                    artifact_count,
+                    if artifact_count == 1 { "" } else { "s" },
+                    lens_count,
+                    if lens_count == 1 { "" } else { "es" },
+                ),
+                "Offline · ABI v1",
+            )
+        };
         let _ = write!(
             markup,
             concat!(
                 "<section class=\"wb-code-artifact-status\"><div>",
                 "<span class=\"wb-code-status-dot\" aria-hidden=\"true\"></span>",
-                "<div><strong>Artifacts ready</strong><small>{} pinned module{} · {} edit lens{}</small></div>",
-                "</div><span>Offline · ABI v1</span></section>"
+                "<div><strong>{}</strong><small>{}</small></div>",
+                "</div><span>{}</span></section>"
             ),
-            artifact_count,
-            if artifact_count == 1 { "" } else { "s" },
-            lens_count,
-            if lens_count == 1 { "" } else { "es" },
+            heading, detail, state,
         );
     }
 
@@ -1474,12 +1528,16 @@ pub(crate) struct OrdinaryCodePreview {
 /// surface: hiding it would make an unsupported declaration indistinguishable
 /// from the optional authoring layer not existing at all.
 pub(crate) enum OrdinaryCodeSurface {
+    Starter,
     Preview(OrdinaryCodePreview),
     Unavailable { reason: String },
 }
 
 impl OrdinaryCodeSurface {
     pub(crate) fn from_editor(editor: &ProjectionalEditorSession) -> Self {
+        if ordinary_code_starter_available(editor) {
+            return Self::Starter;
+        }
         match OrdinaryCodePreview::from_editor(editor) {
             Ok(preview) => Self::Preview(preview),
             Err(reason) => Self::Unavailable { reason },
@@ -1488,6 +1546,7 @@ impl OrdinaryCodeSurface {
 
     pub(crate) fn panel_markup(&self) -> String {
         match self {
+            Self::Starter => code_starter_markup(),
             Self::Preview(preview) => preview.panel_markup(),
             Self::Unavailable { reason } => format!(
                 concat!(
@@ -1504,6 +1563,88 @@ impl OrdinaryCodeSurface {
             ),
         }
     }
+}
+
+fn code_starter_markup() -> String {
+    let mut markup = String::from(concat!(
+        "<div class=\"wb-code-project-empty wb-code-starter\" ",
+        "data-code-preview-state=\"starter\">",
+        "<span class=\"wb-code-eyebrow\">Code-authored sketch</span>",
+        "<strong>Start with editable sketch.ts</strong>",
+        "<p>Create an artifact-free managed project directly from code. The starter demonstrates typed lexical feature references, and you can replace the complete source.</p>",
+        "<button type=\"button\" class=\"wb-code-starter-action\" data-code-action=\"start-authored\">Start from code</button>",
+        "<section class=\"wb-code-starter-samples\"><header><strong>Complete code examples</strong><span>Open, edit, Apply, drag and reload</span></header>",
+        "<div class=\"wb-code-starter-grid\">",
+    ));
+    for demo in bundled_code_project_demos() {
+        let card_title = demo
+            .title
+            .split_once(" · ")
+            .map_or(demo.title, |(title, _)| title);
+        let _ = write!(
+            markup,
+            concat!(
+                "<button type=\"button\" class=\"wb-code-starter-card\" ",
+                "data-code-sample-id=\"{}\" aria-label=\"{}\" title=\"{}\">",
+                "<span class=\"wb-code-sample-mark\" ",
+                "aria-hidden=\"true\">TS</span><strong>{}</strong><small>{}</small></button>"
+            ),
+            demo.id.key(),
+            escape_html(demo.title),
+            escape_html(demo.title),
+            escape_html(card_title),
+            escape_html(demo.summary()),
+        );
+    }
+    markup.push_str("</div></section></div>");
+    markup
+}
+
+fn ordinary_code_starter_available(editor: &ProjectionalEditorSession) -> bool {
+    let coordinator = editor.coordinator();
+    let intent = coordinator.intent();
+    let semantic = intent.semantic_identity();
+    let Some(authority) = intent.accepted() else {
+        return false;
+    };
+    let Some(accepted) = coordinator.accepted_materialization() else {
+        return false;
+    };
+    let nodes = intent.graph().nodes();
+    let canonical_graph = nodes.len() == 1
+        && nodes
+            .values()
+            .next()
+            .is_some_and(is_canonical_document_foundation);
+    let validation = &accepted.validation;
+    canonical_graph
+        && authority.target == semantic
+        && validation.semantic == semantic
+        && validation.hard_residuals_validated
+        && validation.all_active_features_current
+        && validation.point_count == 0
+        && validation.curve_count == 0
+        && validation.constraint_count == 0
+        && validation.feature_count == 0
+        && validation.computed_edge_count == 0
+        && validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+}
+
+fn is_canonical_document_foundation(node: &IntentNode) -> bool {
+    matches!(
+        node.kind,
+        IntentNodeKind::Bootstrap { ref object }
+            if object.kind == BootstrapNativeKind::Document
+                && object.codec.as_str() == BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1
+    ) && node.bootstrap_origin.is_none()
+        && !node.suppressed
+        && node.inputs.is_empty()
+        && node.fields.is_empty()
+        && node.operation_outputs.is_empty()
+        && node.child_order.is_empty()
+        && node.children.is_empty()
 }
 
 impl OrdinaryCodePreview {
@@ -1566,19 +1707,7 @@ fn projected_code_project(editor: &ProjectionalEditorSession) -> Result<CodeProj
             .graph()
             .node(projected.node)
             .ok_or_else(|| "an ordinary declaration disappeared during code preview".to_owned())?;
-        let is_document_foundation = matches!(
-            node.kind,
-            IntentNodeKind::Bootstrap { ref object }
-                if object.kind == BootstrapNativeKind::Document
-                    && object.codec.as_str() == BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1
-        ) && node.bootstrap_origin.is_none()
-            && !node.suppressed
-            && node.inputs.is_empty()
-            && node.fields.is_empty()
-            && node.operation_outputs.is_empty()
-            && node.child_order.is_empty()
-            && node.children.is_empty();
-        if is_document_foundation {
+        if is_canonical_document_foundation(node) {
             // A fresh M83 workspace owns one logical native-document header
             // beneath every later recipe. It is materializer seed metadata,
             // not authored geometry, and the promoted CodeProject creates its
@@ -3192,6 +3321,297 @@ mod tests {
             );
         }
         assert!(!markup.contains("data-sample-id="));
+    }
+
+    #[test]
+    fn fresh_code_surface_offers_one_authored_entry_and_every_genuine_sample() {
+        std::thread::Builder::new()
+            .name("m84-code-authored-landing".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| {
+                let authority = super::super::fresh_projectional_authority().unwrap();
+                let editor = authority.projectional_ref().unwrap();
+                assert!(matches!(
+                    OrdinaryCodeSurface::from_editor(editor),
+                    OrdinaryCodeSurface::Starter
+                ));
+                let markup = OrdinaryCodeSurface::Starter.panel_markup();
+                assert_eq!(
+                    markup
+                        .matches("data-code-action=\"start-authored\"")
+                        .count(),
+                    1
+                );
+                assert!(markup.contains("Start from code"));
+                assert!(markup.contains("replace the complete source"));
+                for demo in bundled_code_project_demos() {
+                    assert!(!demo.summary().trim().is_empty());
+                    assert_eq!(
+                        markup
+                            .matches(&format!("data-code-sample-id=\"{}\"", demo.id.key()))
+                            .count(),
+                        1,
+                    );
+                    assert!(markup.contains(demo.summary()));
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn authored_starter_applies_persists_and_retains_invalid_code_atomically() {
+        std::thread::Builder::new()
+            .name("m84-code-authored-project".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| {
+                let (mut workbench, editor) = CodeProjectWorkbench::new_authored().unwrap();
+                assert_eq!(workbench.demo_key(), None);
+                assert!(workbench.project.custom_files.is_empty());
+                assert!(workbench.project.artifacts.is_empty());
+                assert!(
+                    workbench
+                        .managed_source()
+                        .contains("const frame = $.geometry.rectangle")
+                );
+                assert!(
+                    workbench
+                        .managed_source()
+                        .contains("start: frame.corners.lowerLeft")
+                );
+                assert!(
+                    workbench
+                        .managed_source()
+                        .contains("end: frame.corners.upperRight")
+                );
+                assert!(!workbench.managed_source().contains("{\"declaration\":"));
+
+                let accepted = editor.coordinator().accepted_materialization().unwrap();
+                assert!(accepted.validation.hard_residuals_validated);
+                assert!(accepted.validation.all_active_features_current);
+                assert!(
+                    accepted
+                        .validation
+                        .maximum_normalized_hard_residual
+                        .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+                );
+                assert_eq!(accepted.session.design_document().points().len(), 4);
+                assert!(
+                    accepted
+                        .session
+                        .design_document()
+                        .points()
+                        .iter()
+                        .all(|point| point.position.into_iter().all(f64::is_finite))
+                );
+
+                let original_source = workbench.managed_source().to_owned();
+                let original_checkpoint = workbench.accepted_editor_checkpoint().clone();
+                workbench.set_managed_draft(original_source.replacen(
+                    "upperRight: [60, 35]",
+                    "upperRight: [72, 42]",
+                    1,
+                ));
+                let CodeApplyOutcome::Accepted(publication) =
+                    workbench.apply_managed_draft().unwrap()
+                else {
+                    panic!("valid authored source must publish")
+                };
+                assert!(workbench.managed_source().contains("upperRight: [72, 42]"));
+                let moved = publication
+                    .editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap();
+                assert!(moved.validation.hard_residuals_validated);
+                assert!(moved.validation.all_active_features_current);
+                assert!(
+                    moved
+                        .validation
+                        .maximum_normalized_hard_residual
+                        .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+                );
+                let moved_document = moved.session.design_document();
+                assert_eq!(moved_document.points().len(), 4);
+                assert_eq!(moved_document.curves().len(), 5);
+                let lower_left = moved_document
+                    .points()
+                    .iter()
+                    .find(|point| {
+                        point
+                            .position
+                            .into_iter()
+                            .zip([0.0, 0.0])
+                            .all(|(actual, expected)| (actual - expected).abs() <= 1.0e-12)
+                    })
+                    .unwrap()
+                    .id;
+                let upper_right = moved_document
+                    .points()
+                    .iter()
+                    .find(|point| {
+                        point
+                            .position
+                            .into_iter()
+                            .zip([72.0, 42.0])
+                            .all(|(actual, expected)| (actual - expected).abs() <= 1.0e-12)
+                    })
+                    .unwrap()
+                    .id;
+                let diagonal_count = moved_document
+                    .curves()
+                    .iter()
+                    .filter(|curve| {
+                        matches!(
+                            curve.definition,
+                            geosolve_sketch::CurveDefinition::Line { start, end, .. }
+                                if start == lower_left && end == upper_right
+                        )
+                    })
+                    .count();
+                assert_eq!(
+                    diagonal_count, 1,
+                    "the lexical diagonal must alias the moved rectangle's exact native corner IDs"
+                );
+
+                let persisted = workbench.to_persistence_json().unwrap();
+                let wire: serde_json::Value = serde_json::from_str(&persisted).unwrap();
+                assert_eq!(wire["origin"]["kind"], "authored");
+                let restored = CodeProjectWorkbench::from_persistence_json(&persisted).unwrap();
+                assert_eq!(restored.origin.title(), "Untitled code sketch");
+                assert_eq!(restored.demo_key(), None);
+                assert_eq!(restored.managed_source(), workbench.managed_source());
+                assert_eq!(restored.to_persistence_json().unwrap(), persisted);
+                let restored_editor = restored.restore_accepted_editor().unwrap();
+                let restored_accepted = restored_editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap();
+                assert_eq!(
+                    restored_accepted.session.design_document(),
+                    moved_document,
+                    "reload must retain exact lexical endpoint ownership and moved geometry"
+                );
+
+                let accepted_checkpoint = workbench.accepted_editor_checkpoint().clone();
+                workbench.set_managed_draft(workbench.managed_source().replacen(
+                    "upperRight: [72, 42]",
+                    "upperRight: [0, 0]",
+                    1,
+                ));
+                let CodeApplyOutcome::RetainedFailure { diagnostic, .. } =
+                    workbench.apply_managed_draft().unwrap()
+                else {
+                    panic!("collapsed authored geometry must retain the prior accepted scene")
+                };
+                assert!(!diagnostic.is_empty());
+                assert_eq!(workbench.accepted_editor_checkpoint(), &accepted_checkpoint);
+                let retained_json = workbench.to_persistence_json().unwrap();
+                let retained = CodeProjectWorkbench::from_persistence_json(&retained_json).unwrap();
+                assert_eq!(retained.origin.title(), "Untitled code sketch");
+                assert_eq!(retained.demo_key(), None);
+                assert!(retained.managed_source().contains("upperRight: [0, 0]"));
+                assert_eq!(
+                    retained.accepted_editor_checkpoint(),
+                    &accepted_checkpoint,
+                    "retained-invalid reload must keep the last accepted native scene"
+                );
+                assert_eq!(retained.to_persistence_json().unwrap(), retained_json);
+
+                let undone = workbench.step_history(true).unwrap().unwrap();
+                assert!(workbench.managed_source().contains("upperRight: [72, 42]"));
+                assert_eq!(
+                    encode_editor_checkpoint(&undone.editor).unwrap(),
+                    accepted_checkpoint
+                );
+                let undone = workbench.step_history(true).unwrap().unwrap();
+                assert_eq!(workbench.managed_source(), original_source);
+                assert_eq!(
+                    encode_editor_checkpoint(&undone.editor).unwrap(),
+                    original_checkpoint
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn authored_project_accepts_a_complete_source_replacement_with_exact_history() {
+        const REPLACEMENT: &str = r#""use geosolve managed-v1";
+import { sketch } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const baseline = $.geometry.line("baseline", {
+    start: [-15, 8],
+    end: [45, 8],
+  });
+  return $.outputs({ baseline });
+});
+"#;
+
+        std::thread::Builder::new()
+            .name("m84-code-authored-whole-source".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| {
+                let (mut workbench, _) = CodeProjectWorkbench::new_authored().unwrap();
+                let starter = workbench.managed_source().to_owned();
+                let starter_checkpoint = workbench.accepted_editor_checkpoint().clone();
+                workbench.set_managed_draft(REPLACEMENT.to_owned());
+                let CodeApplyOutcome::Accepted(publication) =
+                    workbench.apply_managed_draft().unwrap()
+                else {
+                    panic!("complete valid replacement must publish atomically")
+                };
+                assert_eq!(workbench.managed_source(), REPLACEMENT);
+                let accepted = publication
+                    .editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap();
+                assert!(accepted.validation.hard_residuals_validated);
+                assert_eq!(accepted.validation.point_count, 2);
+                assert_eq!(accepted.validation.curve_count, 1);
+                for (point, expected) in accepted
+                    .session
+                    .design_document()
+                    .points()
+                    .iter()
+                    .zip([[-15.0, 8.0], [45.0, 8.0]])
+                {
+                    assert!(
+                        point
+                            .position
+                            .into_iter()
+                            .zip(expected)
+                            .all(|(actual, expected)| (actual - expected).abs() <= 1.0e-12)
+                    );
+                }
+
+                let undone = workbench.step_history(true).unwrap().unwrap();
+                assert_eq!(workbench.managed_source(), starter);
+                assert_eq!(
+                    encode_editor_checkpoint(&undone.editor).unwrap(),
+                    starter_checkpoint
+                );
+                let redone = workbench.step_history(false).unwrap().unwrap();
+                assert_eq!(workbench.managed_source(), REPLACEMENT);
+                assert_eq!(
+                    redone
+                        .editor
+                        .coordinator()
+                        .accepted_materialization()
+                        .unwrap()
+                        .validation
+                        .curve_count,
+                    1
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 
     #[test]
@@ -4814,6 +5234,7 @@ mod tests {
             outcome.disposition,
             geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed,
         );
+        assert!(!ordinary_code_starter_available(&editor));
 
         let OrdinaryCodeSurface::Unavailable { reason } = OrdinaryCodeSurface::from_editor(&editor)
         else {
@@ -4830,6 +5251,7 @@ mod tests {
     #[test]
     fn ordinary_rectangle_diagonal_preview_uses_lexical_feature_references() {
         let editor = ordinary_rectangle_diagonal();
+        assert!(!ordinary_code_starter_available(&editor));
         let preview = OrdinaryCodePreview::from_editor(&editor).unwrap();
         assert!(
             preview
@@ -4993,6 +5415,7 @@ mod tests {
         let authority =
             super::super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator).unwrap();
         let editor = authority.projectional_ref().unwrap();
+        assert!(!ordinary_code_starter_available(editor));
         let bootstrap_kinds = editor
             .coordinator()
             .intent()
@@ -5333,12 +5756,16 @@ mod tests {
         for route in [
             "data-code-sample-id",
             "open_projectional_code_project",
+            "start_projectional_code_project",
+            "install_projectional_code_project",
+            "\"start-authored\" =>",
             "promote_projectional_code_project",
             "\"promote-ordinary\" =>",
             "apply_managed_draft()",
             "reset_override(&path)",
             "to_persistence_json()",
             "from_persistence_json(&decoded)",
+            "focus_code_source && result.is_ok()",
         ] {
             assert!(source.contains(route), "missing durable route `{route}`");
         }
@@ -5417,6 +5844,19 @@ mod tests {
             serde_json::from_str(&restored.to_persistence_json().unwrap()).unwrap();
         assert_eq!(migrated["origin"]["kind"], "bundled");
         assert!(migrated.get("demo").is_none());
+    }
+
+    #[test]
+    fn authored_origin_rejects_a_conflicting_legacy_demo_identity() {
+        let (workbench, _) = CodeProjectWorkbench::new_authored().unwrap();
+        let mut wire: serde_json::Value =
+            serde_json::from_str(&workbench.to_persistence_json().unwrap()).unwrap();
+        assert_eq!(wire["origin"]["kind"], "authored");
+        wire["demo"] = serde_json::Value::String("braced-frame".into());
+        let Err(error) = CodeProjectWorkbench::from_persistence_json(&wire.to_string()) else {
+            panic!("conflicting authored and bundled origins must reject")
+        };
+        assert!(error.contains("authored code-project origin cannot name a bundled demo"));
     }
 
     #[test]

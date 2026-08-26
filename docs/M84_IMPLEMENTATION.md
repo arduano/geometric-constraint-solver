@@ -2,10 +2,10 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **M84-F004 is mechanically qualified and its immutable replacement is nominated for
-UAT**. Both the initial candidate and the clean-qualified F003 replacement are withdrawn historical
-evidence. M84-U1 through M84-U12 remain pending. No M84 Pages publication is claimed. Accepted M83
-remains public authority.
+Status: **the post-F004 direct code-authoring amendment is implemented and under qualification**.
+The initial, F003 and F004 candidates are withdrawn historical evidence because they predate
+current scope. No replacement is nominated. M84-U1 through M84-U13 remain pending; no M84 Pages
+publication is claimed, and accepted M83 remains public authority.
 
 ## Baseline and authority
 
@@ -22,6 +22,9 @@ remains public authority.
   managed-v1 parsing, authenticated edits, artifact admission, declaration-family execution,
   typed semantic expansion, keyed reconciliation, overrides, composite history, bootstrap and the
   four bundled projects.
+- `CodeProject::managed_only(ProjectKey, source)` is its smallest code-only host seam. It accepts
+  only artifact-free managed source and the SDK import, validates the complete envelope, and
+  publishes no native geometry by parsing alone.
 - `packages/geosolve-sketch-code/` is the optional TypeScript authoring/build package. It owns
   project-branded `FeatureRef`/`OutputRef`, descriptor-generated result types, `definePatch`,
   `p.each`, `p.mapRecord`, caller-side artifact compilation and positive/negative type fixtures.
@@ -120,6 +123,13 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   atomically.
 - [x] Ship four genuine sessions: adaptive rounded Polyline; typed panel/keyed Fillets; GUI↔code
   braced frame; reusable mounting plate.
+- [x] On only the canonical, current-and-accepted empty workspace, show a dedicated Code landing
+  with one **Start from code** action and four centrally sourced project cards. Starting installs
+  an artifact-free `Authored` project through the shared cold-validated project path, focuses the
+  editable source, and never manufactures a GUI scene or promotion entry.
+- [x] Persist `CodeProjectOrigin::Authored` separately from bundled/promoted origins; reject a
+  conflicting legacy demo identity. Preserve valid and retained-invalid source, accepted native
+  checkpoint, whole-source replacement and exact outer Undo/Redo across reload.
 - [x] Prove an ordinary GUI reference CurveLength dimension on
   `brace.diagonals.rising` retains its native identity, follows a managed frame rewrite, updates
   its measured value, remains GUI-editable and shares exact outer Undo/Redo.
@@ -210,9 +220,10 @@ fixture exercised within the complete release-candidate qualification below.
 Focused Rust GUI-bootstrap/owner, direct-lowering, descriptor-parity, workbench, TypeScript type-
 contract and Code-surface diagnostic coverage passes. Exact source `c2cf160`, tree `94a1786`, also
 passes the complete clean release gate. Its immutable no-rebuild snapshot
-`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` is nominated on retained Tailscale after exact served-byte
+`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` was nominated on retained Tailscale after exact served-byte
 verification and baseline 4/4, F003 1/1 and F004 2/2 browser suites passed on both temporary and
-retained endpoints. This is mechanical qualification, not human UAT acceptance.
+retained endpoints. The later direct-authoring amendment withdraws those bytes from current
+nomination; this remains historical mechanical evidence, not human UAT acceptance.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -345,6 +356,46 @@ replacement snapshot at `http://100.94.63.83:8080/`. M84-F004 withdraws that sna
 UAT even if the endpoint remains reachable. This historical nomination claims no human UAT row,
 approval, Pages publication or milestone closure.
 
+## Post-F004 direct code-authoring amendment
+
+This is an intentional M84 scope extension, not M84-F005. A fresh workspace's Code surface now
+offers one direct authored entry and the four existing genuine examples. The starter is a complete
+artifact-free rectangle-plus-diagonal `sketch.ts`; its line endpoints are lexical
+`frame.corners.lowerLeft`/`upperRight` values. `Authored` persists as its own origin and the shared
+installer mutates live authority/sample identity only after every fallible candidate conversion
+succeeds. Source focus likewise occurs only after successful creation.
+
+Fresh classification is fail-closed: the graph must contain exactly the canonical document
+foundation, current and accepted semantic identities must match, and the accepted native evidence
+must independently validate zero points, curves, constraints, computed features and residual
+failure. Nonempty, unsupported and retained-failed scenes continue through Preview/Unavailable.
+
+Focused commands run from the amended worktree and pass:
+
+```bash
+cargo test --locked -p geosolve-sketch-code --lib managed_only_project -- --nocapture
+# 2 passed
+cargo test --locked -p geosolve-demo-web --lib \
+  fresh_code_surface_offers_one_authored_entry_and_every_genuine_sample -- --nocapture
+# 1 passed
+cargo test --locked -p geosolve-demo-web --lib \
+  authored_starter_applies_persists_and_retains_invalid_code_atomically -- --nocapture
+# 1 passed
+cargo test --locked -p geosolve-demo-web --lib \
+  authored_project_accepts_a_complete_source_replacement_with_exact_history -- --nocapture
+# 1 passed
+cargo test --locked -p geosolve-demo-web --lib \
+  authored_origin_rejects_a_conflicting_legacy_demo_identity -- --nocapture
+# 1 passed
+```
+
+The owner tests independently check finite accepted geometry, Hard residual validation, exact
+native corner-ID aliasing after a rectangle move, artifact-free authority, valid and retained-
+invalid persistence, whole-source replacement and Undo/Redo. The separate four-demo M84 ledger is
+unchanged. Actual WASM/browser qualification, full collateral, clean release gate, immutable freeze
+and replacement nomination remain pending. The retained PID `3316682` may continue serving the now-
+historical F004 bytes until a qualified replacement is ready.
+
 ## Known bounds and truthful limitations
 
 - Managed-v1 is intentionally a closed projectional subset. Arbitrary custom code is caller build
@@ -363,8 +414,9 @@ approval, Pages publication or milestone closure.
 
 ## Remaining release sequence
 
-1. Complete M84-U1 through M84-U12 against only the nominated F004 replacement snapshot.
-2. Record explicit supervising-user approval or open another numbered finding and withdraw the
-   replacement candidate.
+1. Complete the amended actual-WASM/browser, collateral and clean release qualification; freeze and
+   nominate one replacement snapshot.
+2. Complete M84-U1 through M84-U13 against only that replacement and record explicit supervising-
+   user approval or open another numbered finding.
 3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

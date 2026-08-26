@@ -4077,8 +4077,29 @@ pub(crate) mod wasm {
         key: &str,
     ) -> Result<(), String> {
         let (code_project, editor) = super::code_projects::CodeProjectWorkbench::open_key(key)?;
+        let mut samples = super::samples::SampleCatalogState::default();
+        samples.select_code_key(key)?;
+        let title = samples.selected_title().unwrap_or("Code project");
+        install_projectional_code_project(wb, code_project, editor)?;
+        wb.samples = samples;
+        wb.notice = format!("{title} opened as an offline code project");
+        Ok(())
+    }
+
+    fn start_projectional_code_project(wb: &mut ProjectionalWorkbench) -> Result<(), String> {
+        let (code_project, editor) = super::code_projects::CodeProjectWorkbench::new_authored()?;
+        install_projectional_code_project(wb, code_project, editor)?;
+        wb.samples = super::samples::SampleCatalogState::default();
+        wb.notice = "Untitled code sketch created from editable managed TypeScript".into();
+        Ok(())
+    }
+
+    fn install_projectional_code_project(
+        wb: &mut ProjectionalWorkbench,
+        code_project: super::code_projects::CodeProjectWorkbench,
+        editor: Box<ProjectionalEditorSession>,
+    ) -> Result<(), String> {
         let authority = super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
-        wb.samples.select_code_key(key)?;
         wb.authority = authority;
         wb.code_project = Some(code_project);
         wb.authoring.deactivate();
@@ -4094,10 +4115,6 @@ pub(crate) mod wasm {
         wb.captured_pointer = None;
         wb.outline_drag = None;
         wb.camera.reset();
-        wb.notice = format!(
-            "{} opened as an offline code project",
-            wb.samples.selected_title().unwrap_or("Code project")
-        );
         Ok(())
     }
 
@@ -7211,7 +7228,7 @@ pub(crate) mod wasm {
             }
             if let Some(code_action) = target.get_attribute("data-code-action") {
                 let mut wb = click_workbench.borrow_mut();
-                if code_action == "promote-ordinary"
+                if matches!(code_action.as_str(), "promote-ordinary" | "start-authored")
                     && let Ok(viewport) = required(&click_document, "wb-viewport")
                 {
                     let _ = cancel_projectional_interaction(
@@ -7219,11 +7236,15 @@ pub(crate) mod wasm {
                         &mut wb,
                         None,
                         true,
-                        "Active interaction canceled before code promotion",
+                        "Active interaction canceled before opening code authority",
                     );
                 }
-                let focus_code_source = code_action == "open-managed-lens";
+                let focus_code_source =
+                    matches!(code_action.as_str(), "open-managed-lens" | "start-authored");
                 let result: Result<String, String> = match code_action.as_str() {
+                    "start-authored" => start_projectional_code_project(&mut wb).map(|()| {
+                        "Untitled code sketch created from editable managed TypeScript".into()
+                    }),
                     "promote-ordinary" => promote_projectional_code_project(&mut wb).map(|()| {
                         "Ordinary sketch promoted to one validated managed code project".into()
                     }),
@@ -7286,6 +7307,7 @@ pub(crate) mod wasm {
                         }),
                     _ => Err(format!("unknown code-project action `{code_action}`")),
                 };
+                let focus_code_source = focus_code_source && result.is_ok();
                 wb.notice = result.unwrap_or_else(|error| error);
                 save_projectional(&mut wb);
                 drop(wb);

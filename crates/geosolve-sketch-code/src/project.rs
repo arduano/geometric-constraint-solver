@@ -7,7 +7,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::{
-    ArtifactValidationError, CODE_PROJECT_LIMIT, CodeProject, PatchModuleArtifact,
+    ArtifactValidationError, CODE_PROJECT_LIMIT, CodeProject, PatchModuleArtifact, ProjectKey,
     parse_managed_source,
 };
 
@@ -48,6 +48,44 @@ pub enum CodeProjectError {
 }
 
 impl CodeProject {
+    /// Creates one artifact-free project whose complete authored authority is
+    /// the bounded managed TypeScript source.
+    ///
+    /// This is the smallest code-only entry point: no ordinary GUI scene,
+    /// custom patch file or precompiled artifact is required. The resulting
+    /// project still expands through the ordinary intent/materialization path
+    /// and therefore acquires no solver authority merely by parsing.
+    ///
+    /// # Errors
+    ///
+    /// Returns a managed-source or project-validation error before the
+    /// candidate may be materialized.
+    pub fn managed_only(project: ProjectKey, source: &str) -> Result<Self, CodeProjectError> {
+        let managed = parse_managed_source(source)?;
+        if managed
+            .imports
+            .iter()
+            .any(|import| import.module != "@geosolve/sketch-code")
+        {
+            return Err(CodeProjectError::InvalidProject(
+                "managed-only source cannot import a custom patch without its pinned artifact"
+                    .into(),
+            ));
+        }
+        let project = Self {
+            project,
+            managed,
+            custom_files: BTreeMap::new(),
+            artifacts: BTreeMap::new(),
+            lock: serde_json::json!({
+                "format": "geosolve-lock-v1",
+                "modules": {},
+            }),
+        };
+        project.validate()?;
+        Ok(project)
+    }
+
     /// Validates every managed/custom file, precompiled artifact and exact lock
     /// pin without evaluating custom TypeScript.
     ///
@@ -218,6 +256,61 @@ mod tests {
     use crate::bundled_code_project_demos;
 
     use super::*;
+
+    const CODE_ONLY_SOURCE: &str = r#""use geosolve managed-v1";
+import { sketch } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const frame = $.geometry.rectangle("frame", {
+    lowerLeft: [0, 0],
+    upperRight: [60, 35],
+  });
+  const diagonal = $.geometry.line("diagonal", {
+    start: frame.corners.lowerLeft,
+    end: frame.corners.upperRight,
+  });
+  return $.outputs({ frame, diagonal });
+});
+"#;
+
+    #[test]
+    fn managed_only_project_is_valid_artifact_free_code_authority() {
+        let project =
+            CodeProject::managed_only(ProjectKey("code-only-test".into()), CODE_ONLY_SOURCE)
+                .unwrap();
+        assert!(project.custom_files.is_empty());
+        assert!(project.artifacts.is_empty());
+        assert_eq!(project.managed.program.declarations.len(), 2);
+        assert_eq!(project.managed.source, CODE_ONLY_SOURCE);
+        assert_eq!(project.lock["format"], "geosolve-lock-v1");
+        assert_eq!(project.lock["modules"], serde_json::json!({}));
+        assert!(project.validate().is_ok());
+    }
+
+    #[test]
+    fn managed_only_project_rejects_invalid_source_and_project_brand() {
+        assert!(matches!(
+            CodeProject::managed_only(ProjectKey("code-only-test".into()), "not managed code"),
+            Err(CodeProjectError::Managed(_))
+        ));
+        assert!(matches!(
+            CodeProject::managed_only(ProjectKey(String::new()), CODE_ONLY_SOURCE),
+            Err(CodeProjectError::InvalidProject(_))
+        ));
+        let custom_import = CODE_ONLY_SOURCE.replacen(
+            "import { sketch } from \"@geosolve/sketch-code\";",
+            concat!(
+                "import { sketch } from \"@geosolve/sketch-code\";\n",
+                "import { custom } from \"./patches/custom.patch.ts\";"
+            ),
+            1,
+        );
+        assert!(matches!(
+            CodeProject::managed_only(ProjectKey("code-only-test".into()), &custom_import),
+            Err(CodeProjectError::InvalidProject(message))
+                if message.contains("cannot import a custom patch")
+        ));
+    }
 
     #[test]
     fn four_projects_round_trip_with_custom_source_byte_identity() {

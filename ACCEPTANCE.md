@@ -3386,11 +3386,11 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. M84-F004 is mechanically qualified and its exact immutable
-replacement is nominated for UAT. The clean-qualified F003 snapshot is withdrawn historical
-evidence. M84-U1 through M84-U12 and explicit approval remain pending. ADR 0041,
-`docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract. Accepted M83 remains
-public product authority.
+Status: active and unaccepted. The post-F004 direct code-authoring amendment is implemented and
+under qualification. The clean-qualified F003 and F004 snapshots are withdrawn historical evidence
+because they predate current scope; no replacement is nominated. M84-U1 through M84-U13 and
+explicit approval remain pending. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the
+acceptance contract. Accepted M83 remains public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3399,7 +3399,7 @@ release qualification and immutable Tailscale nomination also pass; M84-U1 throu
 open, and none of this evidence changes accepted M83 public authority. That candidate is now
 historical defect evidence because it did not satisfy ordinary GUI-to-code lexical projection.
 
-Focused findings incorporated into the nominated source are closed: M84-F001 publishes the fully
+Focused findings incorporated into the historical F004 source are closed: M84-F001 publishes the fully
 parity-checked warm terminal checkpoint so a valid generated-point release cannot inherit stale
 reconstructed Segment branch metadata; M84-F002 applies managed aggregate reverse edits through
 their authenticated semantic value spans while preserving stale-source compare-and-swap and all
@@ -3438,7 +3438,7 @@ Ordinary conversion remains all-or-nothing. Unsupported declarations must not ma
 undiscoverable: Code renders an escaped read-only conversion diagnostic, Intent IR remains
 available and Promote is absent. Focused Rust bootstrap/ownership/direct-lowering/workbench,
 descriptor-parity, TypeScript and UI coverage plus the clean replacement qualification pass; the
-exact nomination evidence is recorded below without claiming a human row. After retained-failed
+exact historical evidence is recorded below without claiming a human row. After retained-failed
 intent, bootstrap must also require that accepted validation belongs to the exact current semantic
 identity; Code stays visible as unavailable and offers no Promote action. The checked-in managed-v1
 two-line/two-axis-constraint/one-Fillet fixture is one source compiled by TypeScript, parsed by Rust
@@ -3447,6 +3447,9 @@ and cold-materialized through the ordinary accepted-scene authority.
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace
   operation remains directly buildable and tested.
+- Public `CodeProject::managed_only(ProjectKey, source)` constructs one validated artifact-free
+  project directly from complete managed source. It rejects invalid source/project brands and
+  custom patch imports without their pinned artifacts; parsing never publishes solver authority.
 - Code-enabled authority is managed `sketch.ts` plus pinned data-only artifacts → bounded
   `AuthoringProgram`/keyed expansion → ordinary `IntentGraph` → unchanged Rust materializer/native
   solver → independent validation. No JavaScript equation or runtime solve exists.
@@ -3473,6 +3476,14 @@ and cold-materialized through the ordinary accepted-scene authority.
   tampered or oversized inputs reject before replacement.
 - All four genuine demonstrations pass: adaptive rounded Polyline; typed panel/keyed Fillets;
   GUI→code→GUI braced frame; reusable AI-authored mounting plate with byte-invariant custom helper.
+- A canonical fresh workspace's Code surface exposes exactly one direct **Start from code** action
+  and those four genuine project cards. Freshness requires exact current/accepted semantic parity
+  plus independently validated empty native/computed authority. Starting creates a distinct
+  artifact-free `Authored` project, not a promoted ordinary scene.
+- The complete editable starter uses lexical `frame.corners.*` references. Valid Apply and complete
+  source replacement publish only through ordinary intent/materialization/native validation;
+  invalid geometry retains prior accepted canvas/source diagnostics. Undo/Redo, persistence,
+  reload and repro preserve the authored origin atomically, with no browser TypeScript execution.
 - The milestone-neutral 271-row golden remains byte-identical. A separate reviewed code-project
   ledger plus native/WASM/RPC/TypeScript parity, type-failure, reconciliation, tombstone, history,
   failure, bound, persistence and performance owners pass.
@@ -3480,9 +3491,10 @@ and cold-materialized through the ordinary accepted-scene authority.
   golden require-clean, Trunk and the complete clean release gate pass.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
-  withdrawn by M84-F004. The exact clean-qualified F004 replacement below is nominated; M84-U1
-  through M84-U12 plus explicit supervising-user approval remain mandatory before GitHub Pages
-  publication, exact hosted verification, service retirement and closure.
+  withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
+  because it predates the direct-authoring amendment. Replacement qualification and M84-U1 through
+  M84-U13 plus explicit supervising-user approval remain mandatory before GitHub Pages publication,
+  exact hosted verification, service retirement and closure.
 
 Withdrawn historical nomination authority is exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -3511,7 +3523,7 @@ those exact bytes at `http://100.94.63.83:8080/`. Those F003 bytes are now withd
 UAT by F004 and PID `3736900` is retired. At that historical checkpoint no F004 replacement
 nomination, human row or M84 Pages publication was claimed; the current F004 nomination follows.
 
-Current F004 replacement mechanical authority is exact product source
+Historical F004 replacement mechanical authority is exact product source
 `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
 `94a178699f9b2e8bd2a6497c9b0334d43cad2b20`. The clean Nix release gate ran from
 12:37:30.923 through 12:55:14.714 AEST on 2026-08-26, exited 0 in 1,064 seconds, and produced the
@@ -3529,9 +3541,18 @@ ledgers are byte-identical at SHA-256
 200 with zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/`
 equals `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both
 endpoints. Retained service PID `3316682` serves those immutable bytes at
-`http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. M84-U1
-through M84-U12 and explicit approval remain pending, so Pages remains accepted M83 authority and
-no M84 public publication is claimed.
+`http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. The later
+direct-authoring amendment withdraws these bytes from current nomination solely because they
+predate amended scope; PID `3316682` may continue serving them as historical evidence until a
+qualified replacement is ready.
+
+Post-F004 direct-authoring acceptance (2026-08-26): focused public-constructor and workbench owners
+pass artifact-free admission, exact fresh landing/catalog, native corner-ID aliasing after valid
+Apply, retained-invalid canvas/persistence, complete source replacement, exact Undo/Redo and
+conflicting-origin rejection. The four-demo ledger remains unchanged and no finding ID, fifth
+bundled demo, solver equation or browser runtime is added. Actual WASM/browser, full collateral,
+clean gate, freeze and replacement nomination remain pending; M84-U1 through M84-U13 and explicit
+approval remain open, so Pages remains accepted M83 authority and no M84 publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

@@ -30,6 +30,26 @@ impl CodeProjectDemoId {
             Self::MountingPlate => "mounting-plate",
         }
     }
+
+    /// Concise user-facing explanation of the architectural behavior this
+    /// demonstration exercises.
+    #[must_use]
+    pub const fn summary(self) -> &'static str {
+        match self {
+            Self::RoundedPolyline => {
+                "A keyed Polyline feeds one reusable patch that follows every current corner."
+            }
+            Self::TypedPanel => {
+                "Named rectangle outputs feed a type-safe mapped record of selected Fillets."
+            }
+            Self::BracedFrame => {
+                "Direct geometry feeds a reusable cross-brace and an ordinary native relation."
+            }
+            Self::MountingPlate => {
+                "One pinned helper expands a rounded profile and stable keyed mounting holes."
+            }
+        }
+    }
 }
 
 /// Complete offline fixture for one M84 structural-authoring demonstration.
@@ -45,6 +65,12 @@ pub struct CodeProjectDemo {
 }
 
 impl CodeProjectDemo {
+    /// Concise user-facing explanation shared by every catalog surface.
+    #[must_use]
+    pub const fn summary(&self) -> &'static str {
+        self.id.summary()
+    }
+
     /// Builds the bounded offline code project. Custom patch source is copied
     /// byte-for-byte; only its precompiled artifact is interpreted by Rust.
     ///

@@ -2,10 +2,11 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F004 is mechanically qualified and its immutable replacement
-is nominated for UAT**. The clean-qualified M84-F003 snapshot is withdrawn historical evidence.
-M84-U1 through M84-U12 and explicit approval remain pending. Accepted M83 remains GitHub Pages
-authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; the post-F004 direct code-authoring amendment is implemented and
+under qualification**. The clean-qualified M84-F003 and F004 snapshots are withdrawn historical
+evidence because they predate current scope. No replacement is nominated. M84-U1 through M84-U13
+and explicit approval remain pending; accepted M83 remains GitHub Pages authority. ADR 0041 is the
+controlling design.
 
 ## Goal
 
@@ -23,6 +24,9 @@ layer optional.
   plain editor/workspace-v8 deployments remain unchanged.
 - Use only public M83 intent/editor APIs plus narrowly neutral keyed-reconciliation and delegated-
   checkpoint seams where required.
+- Expose the smallest direct host entry point as optional
+  `CodeProject::managed_only(ProjectKey, source)`: it admits complete artifact-free managed source
+  but publishes no geometry until ordinary expansion/materialization/native validation succeeds.
 
 ### M84-G2 — deterministic managed source
 
@@ -111,8 +115,20 @@ layer optional.
   and unified history in a bounded code-project envelope; repro restore is atomic and offline.
 - Preserve ordinary M83 selection, Inspector, canvas constraints/dimensions and accepted-scene
   authority for generated outputs.
+- On only an exact canonical fresh workspace whose current and accepted semantic identities match
+  an independently validated empty native scene, show one **Start from code** action and all four
+  centrally owned genuine sample cards. Nonempty or retained-failed scenes keep their existing
+  Preview/Unavailable behavior.
+- Starting from code creates a distinct persisted `Authored` origin, an artifact-free editable
+  `sketch.ts` and no fabricated ordinary scene or Promote history. Valid Apply, whole-source
+  replacement, retained-invalid source/diagnostic, Undo/Redo, reload and repro remain one atomic
+  code/editor authority.
 
 ## Required demonstrations
+
+The four bundled demonstrations below remain the reviewed artifact-project catalog. A separate,
+non-bundled entry path starts an **Untitled code sketch** directly from an editable rectangle plus
+diagonal whose endpoints are lexical `frame.corners.*` references.
 
 1. **Rounded polyline · dynamic corners** — six keyed vertices/radius `0.4` yield five spans/four
    Fillets; inserting `crest` yields seven/six/five. Reorder/remove/Undo preserve unaffected
@@ -166,7 +182,7 @@ on both. Retained service PID `3736900` served those exact bytes at
 `http://100.94.63.83:8080/`; M84-F004 now withdraws them from current UAT even if the endpoint
 remains reachable.
 
-Current F004 replacement record (2026-08-26): exact product source
+Historical F004 replacement record (2026-08-26): exact product source
 `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
 `94a178699f9b2e8bd2a6497c9b0334d43cad2b20`, passes the complete clean release gate. Its exact
 no-rebuild seven-file output `/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` is immutable at
@@ -174,8 +190,17 @@ directory/file modes `0555`/`0444`, ordered-manifest aggregate
 `f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc`, and byte/browser-verified
 on temporary and retained endpoints. Baseline 4/4, F003 1/1 and F004 2/2 browser suites pass on
 both. Retained service PID `3316682` serves only those bytes at
-`http://100.94.63.83:8080/`. M84-U1 through M84-U12, explicit approval, GitHub Pages publication,
-service retirement and closure remain open; accepted M83 remains public authority.
+`http://100.94.63.83:8080/`. The later direct-authoring amendment withdraws them from current
+nomination solely because they predate amended scope; they may remain reachable as historical
+evidence until a replacement is ready.
+
+Post-F004 direct-authoring amendment (2026-08-26): public `CodeProject::managed_only` and the fresh
+Code landing are implemented. The authored starter, four example cards, exact current/accepted
+freshness check, typed native corner aliasing, valid/retained-invalid Apply, whole-source
+replacement, persisted `authored` origin and exact Undo/Redo pass focused Rust tests. This adds no
+solver equation, browser execution, custom artifact or fifth bundled golden row. Full WASM/browser
+and clean replacement qualification remain pending; M84-U1 through M84-U13, explicit approval,
+Pages publication, service retirement and closure remain open.
 
 ## Bounds and non-goals
 

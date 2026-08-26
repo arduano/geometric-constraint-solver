@@ -5793,11 +5793,12 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F004 is mechanically qualified and its immutable replacement
-is nominated for UAT**. Ordinary GUI dependencies project as lexical managed TypeScript while low-
-level transport remains truthfully labelled Intent IR. The clean-qualified F003 snapshot is
-withdrawn historical evidence. M84-U1 through M84-U12 and explicit approval remain pending;
-accepted M83 remains public Pages authority.
+Status: **active and unaccepted; the post-F004 direct code-authoring amendment is implemented and
+under qualification**. Ordinary GUI dependencies project as lexical managed TypeScript while low-
+level transport remains truthfully labelled Intent IR. The clean-qualified F003 and F004 snapshots
+are withdrawn historical evidence because they predate current scope. No replacement is nominated;
+M84-U1 through M84-U13 and explicit approval remain pending, and accepted M83 remains public Pages
+authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5865,7 +5866,15 @@ accepted M83 remains public Pages authority.
   workbench/persistence and Code-surface tests; then pass proportional WASM/golden/format/Clippy/
   workspace gates, complete the clean release gate and nominate a new immutable Tailscale
   candidate.
-- [ ] Receive explicit M84-U1 through M84-U12 approval, then publish/exact-verify Pages, retire the
+- [x] Add direct code-only creation through public
+  `CodeProject::managed_only(ProjectKey, source)`. On an independently validated canonical fresh
+  workspace, expose one **Start from code** action plus the four existing genuine sample cards;
+  create a distinct persisted `authored` project with artifact-free editable `sketch.ts`, lexical
+  `frame.corners.*` dependencies and no manufactured GUI/promotion step.
+- [ ] Qualify the direct starter through full code/workbench/WASM/TypeScript collateral, an actual
+  browser Start → edit → Apply → retained-invalid → Undo/reload flow at both required sizes, the
+  unchanged golden/ledger, complete clean gate and an immutable replacement Tailscale nomination.
+- [ ] Receive explicit M84-U1 through M84-U13 approval, then publish/exact-verify Pages, retire the
   service and close M84.
 
 Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
@@ -5934,11 +5943,11 @@ stays discoverable with an escaped diagnostic, Intent IR fallback and no Promote
 browser replay then exposed the exact mouse path's inferred Horizontal and Vertical declarations;
 the same repair now projects them as `$.constraint.horizontal`/`vertical` over lexical native
 spans, preserves suppression and lowers them to existing Intent kinds. Focused Rust owner,
-bootstrap/direct-lowering/workbench, TypeScript and UI tests pass. The current retained candidate
-is recorded below. M84-U1 through M84-U12, explicit approval, Pages publication, service retirement
+bootstrap/direct-lowering/workbench, TypeScript and UI tests pass. The then-current retained
+candidate is recorded below. M84-U1 through M84-U12, explicit approval, Pages publication, service retirement
 and closure remain open; no M84 Pages authority is claimed.
 
-M84-F004 replacement qualification/nomination record (2026-08-26): exact product source
+Historical M84-F004 replacement qualification/nomination record (2026-08-26): exact product source
 `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
 `94a178699f9b2e8bd2a6497c9b0334d43cad2b20`, passes the clean Nix release gate from
 12:37:30.923 through 12:55:14.714 AEST, exit 0, in 1,064 seconds. Its 6,118-line, 412,411-byte log
@@ -5958,6 +5967,19 @@ zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/
 Retained service PID `3316682` serves those immutable bytes at `http://100.94.63.83:8080/`; the
 temporary replacement service and obsolete pre-axis F004 service are retired. Pages remains on
 accepted M83 pending explicit M84-U1 through M84-U12 approval.
+
+Post-F004 direct-authoring amendment (2026-08-26): a canonical fresh workspace now presents a
+dedicated Code landing rather than an empty-promotion diagnostic. Public
+`CodeProject::managed_only` admits complete artifact-free managed source; **Start from code** opens
+one independently cold-materialized `Authored` project whose starter rectangle and diagonal use
+lexical typed corner references. The same landing exposes the centrally owned four project demos.
+Valid Apply, whole-source replacement, exact native corner aliasing, retained-invalid persistence,
+Undo/Redo and conflicting-origin rejection pass focused Rust tests. Fresh detection requires exact
+current/accepted semantic parity, independently validated empty native authority and no computed
+features. This is added functionality, not M84-F005 and not a fifth bundled-ledger row. It withdraws
+the F004 bytes from current nomination solely because they predate the amended scope; PID `3316682`
+may continue serving those historical bytes until a fully qualified replacement is ready. Actual
+WASM/browser, clean release qualification, freeze and replacement nomination remain pending.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

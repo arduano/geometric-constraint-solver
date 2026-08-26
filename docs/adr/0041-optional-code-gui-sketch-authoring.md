@@ -2,10 +2,10 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. M84-F004 is mechanically qualified and its exact immutable replacement
-`c2cf160` is nominated on retained Tailscale. The initial `79078ec` candidate and F003 replacement
-`b9e67bad` are withdrawn historical evidence. M84 remains active and unaccepted with U1-U12
-pending; GitHub Pages remains on accepted M83.
+Status: accepted for M84. The post-F004 direct code-authoring amendment is implemented and under
+qualification. The initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are withdrawn
+historical evidence because they predate current scope; no replacement is nominated. M84 remains
+active and unaccepted with U1-U13 pending; GitHub Pages remains on accepted M83.
 
 ## Context
 
@@ -88,6 +88,23 @@ explicit managed `overrides` entry; Reset to code removes that override. A targe
 or permitted override is visibly read-only. An explicit conversion API may initialize a code
 project from an M83 editor checkpoint using descriptor-backed managed declarations and honest
 bootstrap declarations; conversion is never implicit.
+
+Public `CodeProject::managed_only(ProjectKey, source)` is the smallest direct code-only host seam.
+It accepts a complete managed-v1 source with a valid project brand and no pinned artifacts, and
+rejects invalid source/brands or custom patch imports whose artifact authority is absent. This
+constructor establishes project authority only; parsing alone never establishes geometry or
+solver authority. The ordinary expansion, intent materialization, native solve and independent
+validation path remains mandatory before a session can publish accepted geometry.
+
+The demo workbench exposes this seam only for an exact canonical fresh workspace: current and
+accepted semantic identities must match, the accepted native/computed scene must independently
+validate as empty and only the canonical document foundation may exist. Code then shows one
+**Start from code** action and four genuine bundled-project cards. Starting creates a distinct
+persisted `CodeProjectOrigin::Authored` project with complete editable artifact-free source, not a
+promotion or fabricated GUI history. Its rectangle-plus-diagonal starter uses lexical
+`frame.corners.*` dependencies. Valid Apply, retained-invalid intent, whole-source replacement,
+Undo/Redo, persistence, reload and repro retain the existing atomic code-session authority. This
+entry is not a fifth bundled demonstration and does not alter the four-demo ledger.
 
 The M83 `IntentSourceSnapshot` remains a data-only audit/RPC/Inspector projection and is labelled
 **Intent IR** in code-enabled presentation. It is never presented as authoring TypeScript. The

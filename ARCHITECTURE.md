@@ -62,8 +62,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   graph; the unchanged Rust materializer/solver remains sole equation and accepted-scene authority.
   Base solver/sketch/intent/editor deployments do not depend on this layer. M84-F003 repairs lexical
   GUI dependency projection; M84-F004 adds direct computed-Fillet and inferred-axis projection and
-  keeps Code discoverable for unsupported all-or-nothing conversion. F004 is clean-qualified and
-  immutably nominated on retained Tailscale; U1-U12 remain open, and Pages stays on accepted M83.
+  keeps Code discoverable for unsupported all-or-nothing conversion. The later direct-authoring
+  amendment adds an artifact-free `Authored` project entry on exactly fresh workspaces. The clean-
+  qualified F003/F004 snapshots are historical because they predate that scope; replacement
+  qualification and U1-U13 remain open, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -855,6 +857,22 @@ relation or residual.
 GUI bootstrap additionally authenticates the accepted validation semantic against the exact
 current retained intent before serialization. A retained-failed graph can therefore render only a
 truthful unavailable Code state, never source that mixes old accepted geometry and new wiring.
+
+The optional public `CodeProject::managed_only(ProjectKey, source)` constructor is the direct
+artifact-free host seam. It admits only a valid project brand and complete managed-v1 SDK source,
+and rejects custom patch imports because those require pinned artifacts. Construction and parsing
+do not publish solver authority: installation still performs ordinary expansion, intent
+materialization and independent native validation before replacing the live project. Persisted
+`CodeProjectOrigin::Authored` distinguishes this route from bundled demonstrations and promoted
+ordinary scenes.
+
+On an exact canonical fresh workspace only, the demo workbench presents one **Start from code**
+action beside four genuine sample cards. Freshness requires the canonical document foundation,
+matching current/accepted semantic identities and independently validated empty native/computed
+authority. Starting installs a complete editable rectangle-plus-diagonal project whose dependency
+is lexical `frame.corners.*`; valid Apply, retained-invalid intent, whole-source replacement,
+Undo/Redo, reload and repro remain one atomic code-session authority. The starter is not a fifth
+bundled project and does not change the separate four-demo ledger.
 
 ### `geosolve-sketch-features`
 
@@ -1813,8 +1831,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   approval descendant `2006c86` and run `32817232564`.
 - M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
   typed semantic references, keyed reconciliation, one code/editor history and four required
-  demonstrations are implemented. The `79078ec` and clean-qualified `b9e67bad` nominations are
-  withdrawn historical evidence. M84-F004's computed-Fillet/inferred-axis/always-discoverable-Code
-  repair at `c2cf160` is clean-qualified and its immutable replacement is retained on Tailscale.
-  Human UAT U1-U12 remains pending; accepted M83 remains Pages authority and no M84 publication is
+  demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
+  nominations are withdrawn historical evidence; F004's immutable bytes may remain retained on
+  Tailscale but predate the direct artifact-free authored starter. Replacement qualification and
+  human UAT U1-U13 remain pending; accepted M83 remains Pages authority and no M84 publication is
   claimed.
