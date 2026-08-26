@@ -97,64 +97,101 @@ pub fn rewrite_managed_source(
     document: &ManagedDocument,
     rewrite: &ManagedRewrite,
 ) -> Result<ManagedDocument, ManagedParseError> {
-    if rewrite.expected_source_digest != document.source_digest {
+    rewrite_managed_source_batch(document, std::slice::from_ref(rewrite))
+}
+
+/// Replaces a non-overlapping set of parser-authenticated owned spans and
+/// reparses the bounded candidate exactly once. Every coordinate is checked
+/// against the same source digest and expected bytes before any replacement
+/// is applied, so callers cannot accidentally authenticate later edits
+/// against source already shifted by an earlier edit.
+///
+/// # Errors
+///
+/// Returns the same precise stale-coordinate, UTF-8, resource, or candidate
+/// parse diagnostics as [`rewrite_managed_source`]. Empty, duplicate, or
+/// overlapping batches reject before changing source authority.
+pub(crate) fn rewrite_managed_source_batch(
+    document: &ManagedDocument,
+    rewrites: &[ManagedRewrite],
+) -> Result<ManagedDocument, ManagedParseError> {
+    let Some(first) = rewrites.first() else {
         return Err(diagnostic_error(
             &document.source,
             ManagedDiagnosticCode::RewriteStale,
-            "managed rewrite was prepared against stale source",
-            rewrite.span,
+            "managed rewrite batch is empty",
+            ManagedSpan::new(0, 0),
         ));
+    };
+    let mut ordered = rewrites.iter().collect::<Vec<_>>();
+    ordered.sort_unstable_by_key(|rewrite| (rewrite.span.start, rewrite.span.end));
+    let mut previous = None::<ManagedSpan>;
+    let mut candidate_len = document.source.len();
+    for rewrite in &ordered {
+        if rewrite.expected_source_digest != document.source_digest {
+            return Err(diagnostic_error(
+                &document.source,
+                ManagedDiagnosticCode::RewriteStale,
+                "managed rewrite was prepared against stale source",
+                rewrite.span,
+            ));
+        }
+        if rewrite.span.start > rewrite.span.end
+            || rewrite.span.end > document.source.len()
+            || !document.source.is_char_boundary(rewrite.span.start)
+            || !document.source.is_char_boundary(rewrite.span.end)
+        {
+            return Err(diagnostic_error(
+                &document.source,
+                ManagedDiagnosticCode::InvalidUtf8Boundary,
+                "managed rewrite span is not a valid UTF-8 source range",
+                rewrite.span,
+            ));
+        }
+        if previous.is_some_and(|span| span.end > rewrite.span.start) {
+            return Err(diagnostic_error(
+                &document.source,
+                ManagedDiagnosticCode::RewriteStale,
+                "managed rewrite batch contains overlapping owned spans",
+                rewrite.span,
+            ));
+        }
+        previous = Some(rewrite.span);
+        if !document.owned_spans.iter().any(|owned| {
+            owned.span == rewrite.span && owned.source_digest == document.source_digest
+        }) {
+            return Err(diagnostic_error(
+                &document.source,
+                ManagedDiagnosticCode::RewriteStale,
+                "managed rewrite does not target an authenticated owned span",
+                rewrite.span,
+            ));
+        }
+        let current = &document.source[rewrite.span.start..rewrite.span.end];
+        if current != rewrite.expected_text {
+            return Err(diagnostic_error(
+                &document.source,
+                ManagedDiagnosticCode::RewriteStale,
+                "managed rewrite expected bytes do not match canonical source",
+                rewrite.span,
+            ));
+        }
+        candidate_len = candidate_len
+            .saturating_sub(rewrite.span.len())
+            .saturating_add(rewrite.replacement.len());
     }
-    if rewrite.span.start > rewrite.span.end
-        || rewrite.span.end > document.source.len()
-        || !document.source.is_char_boundary(rewrite.span.start)
-        || !document.source.is_char_boundary(rewrite.span.end)
-    {
-        return Err(diagnostic_error(
-            &document.source,
-            ManagedDiagnosticCode::InvalidUtf8Boundary,
-            "managed rewrite span is not a valid UTF-8 source range",
-            rewrite.span,
-        ));
-    }
-    if !document
-        .owned_spans
-        .iter()
-        .any(|owned| owned.span == rewrite.span && owned.source_digest == document.source_digest)
-    {
-        return Err(diagnostic_error(
-            &document.source,
-            ManagedDiagnosticCode::RewriteStale,
-            "managed rewrite does not target an authenticated owned span",
-            rewrite.span,
-        ));
-    }
-    let current = &document.source[rewrite.span.start..rewrite.span.end];
-    if current != rewrite.expected_text {
-        return Err(diagnostic_error(
-            &document.source,
-            ManagedDiagnosticCode::RewriteStale,
-            "managed rewrite expected bytes do not match canonical source",
-            rewrite.span,
-        ));
-    }
-    let candidate_len = document
-        .source
-        .len()
-        .saturating_sub(rewrite.span.len())
-        .saturating_add(rewrite.replacement.len());
     if candidate_len > MANAGED_SOURCE_LIMIT {
         return Err(diagnostic_error(
             &document.source,
             ManagedDiagnosticCode::SourceTooLarge,
             format!("rewritten managed source would be {candidate_len} bytes"),
-            rewrite.span,
+            first.span,
         ));
     }
-    let mut candidate = String::with_capacity(candidate_len);
-    candidate.push_str(&document.source[..rewrite.span.start]);
-    candidate.push_str(&rewrite.replacement);
-    candidate.push_str(&document.source[rewrite.span.end..]);
+    let mut candidate = document.source.clone();
+    for rewrite in ordered.into_iter().rev() {
+        candidate.replace_range(rewrite.span.start..rewrite.span.end, &rewrite.replacement);
+    }
     parse_managed_source(&candidate)
 }
 
@@ -1311,6 +1348,50 @@ export default sketch(($) => {
                 .diagnostic
                 .code,
             ManagedDiagnosticCode::InvalidUtf8Boundary
+        );
+    }
+
+    #[test]
+    fn authenticated_batch_rewrite_is_order_independent_and_rejects_overlap() {
+        let document = parse_managed_source(SOURCE).unwrap();
+        let closed = document
+            .value_owned_spans
+            .iter()
+            .find(|owned| {
+                owned.declaration == SemanticSymbol("path".into())
+                    && owned.path.0 == [ManagedPathSegment::Field("closed".into())]
+            })
+            .unwrap();
+        let radius = document
+            .value_owned_spans
+            .iter()
+            .find(|owned| {
+                owned.declaration == SemanticSymbol("rounded".into())
+                    && owned.path.0 == [ManagedPathSegment::Field("radius".into())]
+            })
+            .unwrap();
+        let rewrites = [
+            ManagedRewrite::new(&document, radius.span, "mm(2.5)"),
+            ManagedRewrite::new(&document, closed.span, "true"),
+        ];
+        let rewritten = rewrite_managed_source_batch(&document, &rewrites).unwrap();
+        assert!(rewritten.source.contains("closed: true"));
+        assert!(rewritten.source.contains("radius: mm(2.5)"));
+
+        let duplicate = [rewrites[0].clone(), rewrites[0].clone()];
+        assert_eq!(
+            rewrite_managed_source_batch(&document, &duplicate)
+                .unwrap_err()
+                .diagnostic
+                .code,
+            ManagedDiagnosticCode::RewriteStale
+        );
+        assert_eq!(
+            rewrite_managed_source_batch(&document, &[])
+                .unwrap_err()
+                .diagnostic
+                .code,
+            ManagedDiagnosticCode::RewriteStale
         );
     }
 
