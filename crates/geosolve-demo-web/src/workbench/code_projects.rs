@@ -81,7 +81,9 @@ pub(crate) struct PreparedCodePointDrag {
 #[derive(Clone, Debug, PartialEq)]
 struct PendingSemanticPointDrag {
     pointer_id: u64,
+    session: CodeSessionIdentity,
     point: ExpandedWritablePoint,
+    transient_detachment: bool,
 }
 
 /// A syntactically valid Apply either replaces native authority atomically or
@@ -113,6 +115,62 @@ enum CodeOwnedEditorChange {
     SemanticPoints {
         placements: Vec<(ExpandedWritablePoint, [f64; 2])>,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SemanticTerminalParity {
+    /// Pointer-down authenticated one exact semantic lens. The terminal native
+    /// solve is only a preview; the independently rematerialized overlay is
+    /// the accepted authority, so coupled solver roundoff is not copied into
+    /// code state.
+    AuthenticatedPointRoute,
+    /// A checkpoint was classified after the fact and therefore must remain
+    /// completely identical to its independently staged native authority.
+    ClassifiedCheckpoint,
+}
+
+fn select_semantic_point_drag_lens(
+    expansion: &ExpandedCodeProject,
+    candidates: &[ExpandedWritablePoint],
+    preferred_declaration: Option<&SemanticSymbol>,
+) -> Result<Option<ExpandedWritablePoint>, String> {
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+    let preferred = preferred_declaration.map_or_else(Vec::new, |preferred_declaration| {
+        candidates
+            .iter()
+            .filter(|candidate| {
+                expansion.declaration_for_alias(&candidate.handle.alias)
+                    == Some(preferred_declaration)
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    });
+    match preferred.as_slice() {
+        [point] => Ok(Some(point.clone())),
+        [] => {
+            let producers = candidates
+                .iter()
+                .filter(|candidate| !candidate.source.is_reference())
+                .cloned()
+                .collect::<Vec<_>>();
+            match producers.as_slice() {
+                [point] => Ok(Some(point.clone())),
+                [] if candidates.len() == 1 => Ok(Some(candidates[0].clone())),
+                [] => {
+                    Err("this shared code-owned point has no unique producer semantic lens".into())
+                }
+                _ => {
+                    Err("this shared code-owned point has multiple producer semantic lenses".into())
+                }
+            }
+        }
+        _ => Err(
+            "the selected declaration has multiple semantic point lenses at this shared point"
+                .into(),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -483,18 +541,57 @@ impl CodeProjectWorkbench {
         editor_checkpoint: serde_json::Value,
         label: &str,
     ) -> Result<Option<AcceptedCodePublication>, String> {
-        if let Some(pending) = self.pending_semantic_point_drag.take() {
-            let candidate_editor = restore_editor_checkpoint(&editor_checkpoint)?;
-            let position = expanded_port_position(&candidate_editor, &pending.point.handle)
-                .ok_or_else(|| {
-                    "terminal referenced consumer has no Cartesian instance seed".to_owned()
-                })?;
-            return self.publish_semantic_point_overlay(
-                &[(pending.point, position)],
-                &candidate_editor,
-                label,
+        if self.pending_semantic_point_drag.is_some() {
+            return Err(
+                "an authenticated semantic point gesture is pending; only its terminal pointer may publish it"
+                    .into(),
             );
         }
+        self.publish_delegated_editor_checkpoint_unchecked(editor_checkpoint, label)
+    }
+
+    /// Publishes one pointer-up checkpoint through the exact semantic route
+    /// authenticated at pointer-down. A generic save, another pointer, or a
+    /// route prepared against an older code-session identity cannot consume
+    /// the token or turn a transient preview into durable authority.
+    pub(crate) fn publish_pointer_terminal_checkpoint(
+        &mut self,
+        pointer_id: u64,
+        editor_checkpoint: &serde_json::Value,
+        label: &str,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
+        let pending = self.pending_semantic_point_drag.as_ref().ok_or_else(|| {
+            "semantic point terminal has no pending authenticated route".to_owned()
+        })?;
+        if pending.pointer_id != pointer_id {
+            return Err("terminal pointer does not own the pending semantic point gesture".into());
+        }
+        if &pending.session != self.session.identity() {
+            self.pending_semantic_point_drag = None;
+            return Err(
+                "semantic point gesture was invalidated by a newer code-session revision".into(),
+            );
+        }
+        let pending = self
+            .pending_semantic_point_drag
+            .take()
+            .expect("the authenticated pending semantic drag was present");
+        let candidate_editor = restore_editor_checkpoint(editor_checkpoint)?;
+        let position = expanded_port_position(&candidate_editor, &pending.point.handle)
+            .ok_or_else(|| "terminal semantic point has no Cartesian instance seed".to_owned())?;
+        self.publish_semantic_point_overlay(
+            &[(pending.point, position)],
+            &candidate_editor,
+            label,
+            SemanticTerminalParity::AuthenticatedPointRoute,
+        )
+    }
+
+    fn publish_delegated_editor_checkpoint_unchecked(
+        &mut self,
+        editor_checkpoint: serde_json::Value,
+        label: &str,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
         if &editor_checkpoint == self.session.pointer_frame_checkpoint() {
             return Ok(None);
         }
@@ -517,9 +614,13 @@ impl CodeProjectWorkbench {
                 );
             }
             return match change {
-                CodeOwnedEditorChange::SemanticPoints { placements } => {
-                    self.publish_semantic_point_overlay(&placements, &candidate_editor, label)
-                }
+                CodeOwnedEditorChange::SemanticPoints { placements } => self
+                    .publish_semantic_point_overlay(
+                        &placements,
+                        &candidate_editor,
+                        label,
+                        SemanticTerminalParity::ClassifiedCheckpoint,
+                    ),
             };
         }
         let expansion = self
@@ -550,6 +651,7 @@ impl CodeProjectWorkbench {
         placements: &[(ExpandedWritablePoint, [f64; 2])],
         candidate_editor: &ProjectionalEditorSession,
         label: &str,
+        terminal_parity: SemanticTerminalParity,
     ) -> Result<Option<AcceptedCodePublication>, String> {
         if self.is_dirty() {
             return Err(
@@ -602,11 +704,13 @@ impl CodeProjectWorkbench {
                 return Err("semantic point draft failed exact terminal/native seed parity".into());
             }
         }
-        validate_terminal_native_parity(
-            candidate_editor,
-            &materialized.editor,
-            &materialized.expansion,
-        )?;
+        if terminal_parity == SemanticTerminalParity::ClassifiedCheckpoint {
+            validate_terminal_native_parity(
+                candidate_editor,
+                &materialized.editor,
+                &materialized.expansion,
+            )?;
+        }
         let expansion = materialized.expansion.clone();
         let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
         let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
@@ -693,14 +797,17 @@ impl CodeProjectWorkbench {
             })
     }
 
-    /// Prepares a unique referenced consumer for native point continuation.
+    /// Authenticates one exact semantic point lens for native continuation.
     ///
     /// A shared producer/consumer native point cannot express a local consumer
     /// drag until the reference is detached. The caller supplies the managed
     /// declaration selected before the point press; producer selection keeps
-    /// ordinary shared-follow behavior, while a selected referenced consumer
-    /// detaches locally. Ambiguous semantic lenses reject without changing
-    /// session, source, accepted scene, or history.
+    /// ordinary shared-follow behavior, no selection deterministically chooses
+    /// the unique producer, and a selected referenced consumer detaches
+    /// locally. The chosen point lens is retained through every native preview
+    /// frame so solver-derived movement of coupled points cannot masquerade as
+    /// additional terminal seed writes. Ambiguous semantic lenses reject
+    /// without changing session, source, accepted scene, or history.
     pub(crate) fn prepare_semantic_point_drag(
         &mut self,
         editor: &ProjectionalEditorSession,
@@ -708,7 +815,9 @@ impl CodeProjectWorkbench {
         native_point: geosolve_sketch::DesignPointId,
         preferred_declaration: Option<&SemanticSymbol>,
     ) -> Result<Option<PreparedCodePointDrag>, String> {
-        self.pending_semantic_point_drag = None;
+        if self.pending_semantic_point_drag.is_some() {
+            return Err("another authenticated semantic point gesture is still pending".into());
+        }
         self.point_drag_permission(editor, native_point)?;
         let expansion = self
             .session
@@ -724,34 +833,20 @@ impl CodeProjectWorkbench {
             })
             .cloned()
             .collect::<Vec<_>>();
-        if candidates.len() <= 1 {
+        let Some(point) =
+            select_semantic_point_drag_lens(expansion, &candidates, preferred_declaration)?
+        else {
+            return Ok(None);
+        };
+        if candidates.len() == 1 || !point.source.is_reference() {
+            self.pending_semantic_point_drag = Some(PendingSemanticPointDrag {
+                pointer_id,
+                session: self.session.identity().clone(),
+                point,
+                transient_detachment: false,
+            });
             return Ok(None);
         }
-        let Some(preferred_declaration) = preferred_declaration else {
-            return Ok(None);
-        };
-        let preferred = candidates
-            .iter()
-            .filter(|candidate| {
-                expansion.declaration_for_alias(&candidate.handle.alias)
-                    == Some(preferred_declaration)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        let point = match preferred.as_slice() {
-            [point] if point.source.is_reference() => point.clone(),
-            [point] => {
-                let _ = point;
-                return Ok(None);
-            }
-            [] => return Ok(None),
-            _ => {
-                return Err(
-                    "the selected declaration has multiple semantic point lenses at this shared point"
-                        .into(),
-                );
-            }
-        };
         // Before detachment a referenced consumer intentionally owns no
         // Cartesian instance leaves of its own: it aliases the producer's
         // accepted native point. Seed the transient detachment from that exact
@@ -781,7 +876,12 @@ impl CodeProjectWorkbench {
             .ok_or_else(|| "detached consumer has no accepted native point".to_owned())?;
         let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
         let detached_editor = restore_editor_checkpoint(&checkpoint)?;
-        self.pending_semantic_point_drag = Some(PendingSemanticPointDrag { pointer_id, point });
+        self.pending_semantic_point_drag = Some(PendingSemanticPointDrag {
+            pointer_id,
+            session: self.session.identity().clone(),
+            point,
+            transient_detachment: true,
+        });
         Ok(Some(PreparedCodePointDrag {
             editor: detached_editor,
             point: detached_point,
@@ -793,6 +893,11 @@ impl CodeProjectWorkbench {
         self.pending_semantic_point_drag
             .as_ref()
             .is_some_and(|pending| pending.pointer_id == pointer_id)
+    }
+
+    #[must_use]
+    pub(crate) fn has_any_pending_semantic_point_drag(&self) -> bool {
+        self.pending_semantic_point_drag.is_some()
     }
 
     /// Cancels a pre-frame semantic detachment and restores the exact accepted
@@ -807,8 +912,15 @@ impl CodeProjectWorkbench {
         if pointer_id.is_some_and(|pointer_id| pointer_id != pending.pointer_id) {
             return Ok(None);
         }
-        self.pending_semantic_point_drag = None;
-        self.restore_accepted_editor().map(Some)
+        let pending = self
+            .pending_semantic_point_drag
+            .take()
+            .expect("the authenticated pending semantic drag was present");
+        if pending.transient_detachment {
+            self.restore_accepted_editor().map(Some)
+        } else {
+            Ok(None)
+        }
     }
 
     /// Returns a truthful read-only diagnostic for unsupported direct
@@ -880,6 +992,7 @@ impl CodeProjectWorkbench {
     }
 
     pub(crate) fn set_managed_draft(&mut self, draft: String) {
+        self.pending_semantic_point_drag = None;
         self.managed_draft = draft;
         // A prior diagnostic authenticates different draft bytes and must not
         // continue to claim line ownership while the user edits.
@@ -1017,6 +1130,7 @@ impl CodeProjectWorkbench {
                     .into(),
             );
         }
+        self.pending_semantic_point_drag = None;
         let overlay = self
             .session
             .stage_generated_child_suppression(address, true)
@@ -1105,6 +1219,7 @@ impl CodeProjectWorkbench {
         reason = "one workbench transaction keeps parse, structural pruning, cold validation, failure retention, and publication atomic"
     )]
     pub(crate) fn apply_managed_draft(&mut self) -> Result<CodeApplyOutcome, String> {
+        self.pending_semantic_point_drag = None;
         let managed = match parse_managed_source(&self.managed_draft) {
             Ok(managed) => managed,
             Err(error) => {
@@ -1300,6 +1415,7 @@ impl CodeProjectWorkbench {
     }
 
     pub(crate) fn revert_managed_draft(&mut self) -> bool {
+        self.pending_semantic_point_drag = None;
         let changed = self.managed_draft != self.session.snapshot().managed.source
             || self.draft_diagnostic.is_some();
         self.managed_draft = self.session.snapshot().managed.source.clone();
@@ -1313,6 +1429,7 @@ impl CodeProjectWorkbench {
         address: &GeneratedMemberAddress,
         value: ManagedValue,
     ) -> Result<AcceptedCodePublication, String> {
+        self.pending_semantic_point_drag = None;
         let mut generated = self.session.snapshot().generated.clone();
         generated
             .set_override(address, value.clone())
@@ -1376,6 +1493,7 @@ impl CodeProjectWorkbench {
         {
             return Ok(None);
         }
+        self.pending_semantic_point_drag = None;
         let mut generated = self.session.snapshot().generated.clone();
         generated
             .reset_to_code(&address)
@@ -1459,6 +1577,7 @@ impl CodeProjectWorkbench {
         if overlay.reset_many(edit.writable_addresses()) == 0 {
             return Ok(None);
         }
+        self.pending_semantic_point_drag = None;
         self.ensure_materialized_cache()?;
         let materialized = materialize_code_project_incremental_with_overlay(
             self.materialized
@@ -1520,6 +1639,7 @@ impl CodeProjectWorkbench {
         if !overlay.reset_generated_child_suppression(&address) {
             return Ok(None);
         }
+        self.pending_semantic_point_drag = None;
         self.ensure_materialized_cache()?;
         let materialized = materialize_code_project_incremental_with_overlay(
             self.materialized
@@ -1566,6 +1686,7 @@ impl CodeProjectWorkbench {
         if (undo && !self.session.can_undo()) || (!undo && !self.session.can_redo()) {
             return Ok(None);
         }
+        self.pending_semantic_point_drag = None;
         // Restore and independently validate the nested authority before
         // replacing the live code session, so corrupt opaque checkpoint bytes
         // cannot leave history half-stepped.
@@ -4698,6 +4819,17 @@ export default sketch(($) => {
                 .declarations,
             vec![node],
         );
+        let IntentNativeBinding::Point(gui_point) = point_before else {
+            panic!("ordinary GUI marker must own one point")
+        };
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(&published.editor, 8407, gui_point, None)
+                .unwrap()
+                .is_none(),
+            "an ordinary GUI point must remain on the delegated editor route",
+        );
+        assert!(!workbench.has_pending_semantic_point_drag(8407));
 
         workbench.set_managed_draft(
             workbench
@@ -5401,6 +5533,7 @@ export default sketch(($) => {
                 &[(point, [26.0, 13.0])],
                 &candidate.editor,
                 "Drag generated shoulder",
+                SemanticTerminalParity::ClassifiedCheckpoint,
             )
             .unwrap()
             .unwrap();
@@ -7304,8 +7437,9 @@ export default sketch(($) => {
         let terminal = editor.pointer_up(&scene, pointer(8405, target)).unwrap();
         assert!(terminal.transaction.is_some());
         let publication = workbench
-            .publish_delegated_editor_checkpoint(
-                encode_editor_checkpoint(&editor).unwrap(),
+            .publish_pointer_terminal_checkpoint(
+                8405,
+                &encode_editor_checkpoint(&editor).unwrap(),
                 "Detach selected diagonal endpoint",
             )
             .unwrap()
@@ -7402,12 +7536,11 @@ export default sketch(($) => {
         );
     }
 
-    #[test]
     #[allow(
         clippy::too_many_lines,
         reason = "one real pointer regression proves producer ownership, rectangle seed coupling, and attached-consumer continuation together"
     )]
-    fn selected_producer_pointer_drag_keeps_the_referenced_consumer_attached() {
+    fn assert_producer_pointer_drag_keeps_the_referenced_consumer_attached(select_producer: bool) {
         use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
 
         let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
@@ -7492,12 +7625,18 @@ export default sketch(($) => {
         let source_before = workbench.managed_source().to_owned();
         let revision_before = workbench.session.identity().revision;
 
-        assert!(editor.set_selected_declaration(Some(frame_node)));
-        let preferred = workbench
-            .selected_managed_declaration(&editor)
-            .unwrap()
-            .unwrap();
-        assert_eq!(preferred, SemanticSymbol("frame".into()));
+        let preferred = if select_producer {
+            assert!(editor.set_selected_declaration(Some(frame_node)));
+            let preferred = workbench
+                .selected_managed_declaration(&editor)
+                .unwrap()
+                .unwrap();
+            assert_eq!(preferred, SemanticSymbol("frame".into()));
+            Some(preferred)
+        } else {
+            assert!(editor.editor().selection().is_empty());
+            None
+        };
         let viewport = Viewport::new([900.0, 700.0], [30.0, 17.5], 10.0).unwrap();
         let pointer = |id, model| PointerInput {
             pointer_id: id,
@@ -7510,12 +7649,52 @@ export default sketch(($) => {
         assert_eq!(route.point, shared_point);
         assert!(
             workbench
-                .prepare_semantic_point_drag(&editor, 8406, route.point, Some(&preferred))
+                .prepare_semantic_point_drag(&editor, 8406, route.point, preferred.as_ref())
                 .unwrap()
                 .is_none(),
-            "selecting the producer must keep ordinary shared-point authority",
+            "producer selection or no selection must keep ordinary shared-point authority",
         );
-        let target = [-5.0, -4.0];
+        assert!(workbench.has_pending_semantic_point_drag(8406));
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let overlay_before = workbench.session.snapshot().interaction_overlay.clone();
+        let persistence_before = workbench.to_persistence_json().unwrap();
+        let identity_before = workbench.session.identity().clone();
+        let Err(generic_error) = workbench.publish_delegated_editor_checkpoint(
+            checkpoint_before.clone(),
+            "Generic save during semantic drag",
+        ) else {
+            panic!("a generic save must not consume semantic pointer authority")
+        };
+        assert!(generic_error.contains("only its terminal pointer"));
+        assert!(workbench.has_pending_semantic_point_drag(8406));
+        let Err(pointer_error) = workbench.publish_pointer_terminal_checkpoint(
+            9999,
+            &checkpoint_before,
+            "Foreign terminal during semantic drag",
+        ) else {
+            panic!("another pointer must not consume semantic pointer authority")
+        };
+        assert!(pointer_error.contains("does not own"));
+        assert!(workbench.has_pending_semantic_point_drag(8406));
+        let Err(reentrant_error) =
+            workbench.prepare_semantic_point_drag(&editor, 9998, shared_point, preferred.as_ref())
+        else {
+            panic!("a reentrant preparation must not evict the first semantic route")
+        };
+        assert!(reentrant_error.contains("still pending"));
+        assert!(workbench.has_pending_semantic_point_drag(8406));
+        assert_eq!(workbench.session.identity(), &identity_before);
+        assert_eq!(
+            workbench.session.snapshot().interaction_overlay,
+            overlay_before,
+        );
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert_eq!(workbench.to_persistence_json().unwrap(), persistence_before);
+        let target = [1.0, 0.5];
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        editor
+            .pointer_move(&scene, pointer(8406, [0.45, 0.225]))
+            .unwrap();
         let scene = editor.scene(viewport, 0.5).unwrap();
         editor.pointer_move(&scene, pointer(8406, target)).unwrap();
         let scene = editor.scene(viewport, 0.5).unwrap();
@@ -7526,9 +7705,19 @@ export default sketch(($) => {
                 .transaction
                 .is_some()
         );
+        let terminal_position = editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .point(shared_point)
+            .unwrap()
+            .position;
         let publication = workbench
-            .publish_delegated_editor_checkpoint(
-                encode_editor_checkpoint(&editor).unwrap(),
+            .publish_pointer_terminal_checkpoint(
+                8406,
+                &encode_editor_checkpoint(&editor).unwrap(),
                 "Move selected frame corner",
             )
             .unwrap()
@@ -7559,7 +7748,7 @@ export default sketch(($) => {
                 .unwrap()
                 .position
                 .map(f64::to_bits),
-            target.map(f64::to_bits),
+            terminal_position.map(f64::to_bits),
         );
         assert_eq!(
             workbench
@@ -7581,6 +7770,16 @@ export default sketch(($) => {
                 .all(|draft| draft.provenance
                     == geosolve_sketch_code::CodeDraftProvenance::CanvasDrag),
         );
+    }
+
+    #[test]
+    fn no_selection_pointer_drag_keeps_the_referenced_consumer_attached() {
+        assert_producer_pointer_drag_keeps_the_referenced_consumer_attached(false);
+    }
+
+    #[test]
+    fn selected_producer_pointer_drag_keeps_the_referenced_consumer_attached() {
+        assert_producer_pointer_drag_keeps_the_referenced_consumer_attached(true);
     }
 
     #[test]
@@ -7694,8 +7893,9 @@ export default sketch(($) => {
                         .is_some()
                 );
                 let first = workbench
-                    .publish_delegated_editor_checkpoint(
-                        encode_editor_checkpoint(&editor).unwrap(),
+                    .publish_pointer_terminal_checkpoint(
+                        8410,
+                        &encode_editor_checkpoint(&editor).unwrap(),
                         "Detach generated rising brace endpoint",
                     )
                     .unwrap()
@@ -7782,8 +7982,9 @@ export default sketch(($) => {
                         .is_some()
                 );
                 let second = workbench
-                    .publish_delegated_editor_checkpoint(
-                        encode_editor_checkpoint(&editor).unwrap(),
+                    .publish_pointer_terminal_checkpoint(
+                        8411,
+                        &encode_editor_checkpoint(&editor).unwrap(),
                         "Move detached generated endpoint again",
                     )
                     .unwrap()
@@ -7863,6 +8064,26 @@ export default sketch(($) => {
                 .flatten()
             })
             .unwrap();
+        let frame_alias = expansion
+            .semantic_outputs
+            .values()
+            .find_map(|output| {
+                (output.reference.declaration == SemanticSymbol("frame".into())
+                    && output.reference.output.0.is_empty())
+                .then(|| match &output.target {
+                    ExpandedSemanticTarget::Declaration { alias, .. } => Some(alias.clone()),
+                    _ => None,
+                })
+                .flatten()
+            })
+            .unwrap();
+        let frame_node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&frame_alias)
+            .unwrap()
+            .id;
         let diagonal_node = editor
             .coordinator()
             .intent()
@@ -7936,6 +8157,36 @@ export default sketch(($) => {
             overlay_before,
         );
 
+        assert!(editor.set_selected_declaration(Some(frame_node)));
+        let producer = workbench
+            .selected_managed_declaration(&editor)
+            .unwrap()
+            .unwrap();
+        assert_eq!(producer, SemanticSymbol("frame".into()));
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(&editor, 8412, shared_point, Some(&producer))
+                .unwrap()
+                .is_none(),
+            "the producer route needs no transient detachment",
+        );
+        assert!(workbench.has_pending_semantic_point_drag(8412));
+        assert!(
+            workbench
+                .cancel_semantic_point_drag(Some(8412))
+                .unwrap()
+                .is_none(),
+            "canceling an attached producer gesture needs no editor replacement",
+        );
+        assert!(!workbench.has_pending_semantic_point_drag(8412));
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.session.identity().revision, revision_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert_eq!(
+            workbench.session.snapshot().interaction_overlay,
+            overlay_before,
+        );
+
         workbench.set_managed_draft(format!("{}\n", workbench.managed_source()));
         let Err(error) =
             workbench.prepare_semantic_point_drag(&editor, 8409, shared_point, Some(&preferred))
@@ -7946,5 +8197,299 @@ export default sketch(($) => {
         assert!(!workbench.has_pending_semantic_point_drag(8409));
         assert_eq!(workbench.session.identity().revision, revision_before);
         assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact no-motion pointer lifecycle and every history-neutral authority invariant stay adjacent"
+    )]
+    fn no_motion_producer_pointer_release_retires_route_without_history() {
+        use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
+
+        let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let mut workbench = Box::new(workbench);
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let producer = expansion
+            .writable_points
+            .iter()
+            .find(|point| {
+                !point.source.is_reference()
+                    && expansion.declaration_for_alias(&point.handle.alias)
+                        == Some(&SemanticSymbol("frame".into()))
+            })
+            .unwrap()
+            .clone();
+        let native_point = expanded_port_point(&editor, &producer.handle).unwrap();
+        let position = editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .point(native_point)
+            .unwrap()
+            .position;
+        let viewport = Viewport::new([900.0, 700.0], [30.0, 17.5], 10.0).unwrap();
+        let input = PointerInput {
+            pointer_id: 8_415,
+            position: viewport.model_to_screen(position),
+            modifiers: Modifiers::default(),
+        };
+        let identity_before = workbench.session.identity().clone();
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let overlay_before = workbench.session.snapshot().interaction_overlay.clone();
+        let source_before = workbench.managed_source().to_owned();
+        let persistence_before = workbench.to_persistence_json().unwrap();
+        let undo_before = workbench.can_undo();
+        let redo_before = workbench.can_redo();
+
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        editor.pointer_down(&scene, input).unwrap();
+        let route = editor.editor().prepared_point_drag_route().unwrap();
+        assert_eq!(route.pointer_id, input.pointer_id);
+        assert_eq!(route.point, native_point);
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(
+                    &editor,
+                    input.pointer_id,
+                    route.point,
+                    Some(&SemanticSymbol("frame".into())),
+                )
+                .unwrap()
+                .is_none(),
+            "a producer route needs no transient detachment",
+        );
+        assert!(workbench.has_pending_semantic_point_drag(input.pointer_id));
+
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        let outcome = editor.pointer_up(&scene, input).unwrap();
+        assert!(outcome.transaction.is_none());
+        assert!(outcome.effects.is_empty());
+        assert!(editor.editor().active_pointer_gesture().is_none());
+        assert!(
+            workbench
+                .cancel_semantic_point_drag(Some(input.pointer_id))
+                .unwrap()
+                .is_none(),
+            "an attached producer route needs no editor replacement on no-motion release",
+        );
+        assert!(!workbench.has_pending_semantic_point_drag(input.pointer_id));
+        assert_eq!(workbench.session.identity(), &identity_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert_eq!(
+            workbench.session.snapshot().interaction_overlay,
+            overlay_before,
+        );
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.can_undo(), undo_before);
+        assert_eq!(workbench.can_redo(), redo_before);
+        assert_eq!(workbench.to_persistence_json().unwrap(), persistence_before);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the test constructs one internally coherent newer delegated authority to hit the exact stale-session terminal branch"
+    )]
+    fn terminal_rejects_stored_session_identity_mismatch_and_preserves_newer_authority() {
+        let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let mut workbench = Box::new(workbench);
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let producer = expansion
+            .writable_points
+            .iter()
+            .find(|point| {
+                !point.source.is_reference()
+                    && expansion.declaration_for_alias(&point.handle.alias)
+                        == Some(&SemanticSymbol("frame".into()))
+            })
+            .unwrap()
+            .clone();
+        let native_point = expanded_port_point(&editor, &producer.handle).unwrap();
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(
+                    &editor,
+                    8_416,
+                    native_point,
+                    Some(&SemanticSymbol("frame".into())),
+                )
+                .unwrap()
+                .is_none(),
+        );
+        assert!(workbench.has_pending_semantic_point_drag(8_416));
+        let stale_checkpoint = workbench.accepted_editor_checkpoint().clone();
+        let stale_identity = workbench.session.identity().clone();
+
+        let patch = geosolve_sketch_intent::IntentPatch::new(
+            editor.coordinator().intent().identity(),
+            geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+            vec![geosolve_sketch_intent::IntentPatchOperation::CreateCell {
+                alias: geosolve_sketch_intent::IntentKey::new("identity-mismatch-cell").unwrap(),
+                name: geosolve_sketch_intent::IntentKey::new("Newer GUI authority").unwrap(),
+                before: None,
+            }],
+        );
+        editor.apply_patch(patch).unwrap();
+        let newer_checkpoint = encode_editor_checkpoint(&editor).unwrap();
+        assert_ne!(newer_checkpoint, stale_checkpoint);
+        let newer_cache = rehydrate_editor_checkpoint(
+            &newer_checkpoint,
+            workbench
+                .session
+                .snapshot()
+                .accepted_expansion
+                .clone()
+                .unwrap(),
+        )
+        .unwrap();
+        let prepared = workbench
+            .session
+            .prepare_delegated_editor_publication(
+                workbench.session.identity(),
+                newer_checkpoint.clone(),
+                "Install newer delegated authority under pending token",
+            )
+            .unwrap();
+        let receipt = workbench.session.apply_prepared(prepared).unwrap();
+        workbench.materialized = Some(newer_cache);
+        workbench.last_receipt = Some(receipt);
+        assert_ne!(workbench.session.identity(), &stale_identity);
+        assert!(workbench.has_pending_semantic_point_drag(8_416));
+        assert_warm_cache_matches_session(&workbench);
+
+        let newer_identity = workbench.session.identity().clone();
+        let newer_overlay = workbench.session.snapshot().interaction_overlay.clone();
+        let newer_source = workbench.managed_source().to_owned();
+        let newer_persistence = workbench.to_persistence_json().unwrap();
+        let Err(error) = workbench.publish_pointer_terminal_checkpoint(
+            8_416,
+            &stale_checkpoint,
+            "Reject terminal authenticated by stale code session",
+        ) else {
+            panic!("a terminal prepared under the older session must reject")
+        };
+        assert!(error.contains("invalidated by a newer code-session revision"));
+        assert!(!workbench.has_pending_semantic_point_drag(8_416));
+        assert_eq!(workbench.session.identity(), &newer_identity);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &newer_checkpoint);
+        assert_eq!(
+            workbench.session.snapshot().interaction_overlay,
+            newer_overlay,
+        );
+        assert_eq!(workbench.managed_source(), newer_source);
+        assert_eq!(workbench.to_persistence_json().unwrap(), newer_persistence);
+        assert_warm_cache_matches_session(&workbench);
+        let Err(second_error) = workbench.publish_pointer_terminal_checkpoint(
+            8_416,
+            &newer_checkpoint,
+            "Cannot reuse consumed stale route",
+        ) else {
+            panic!("the stale terminal token must be consumed after identity rejection")
+        };
+        assert!(second_error.contains("no pending authenticated route"));
+    }
+
+    #[test]
+    fn apply_and_undo_invalidate_an_old_semantic_terminal_without_reverting_newer_authority() {
+        let (workbench, editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let mut workbench = Box::new(workbench);
+        let producer_lens = |workbench: &CodeProjectWorkbench,
+                             editor: &ProjectionalEditorSession| {
+            let expansion = workbench
+                .session
+                .snapshot()
+                .accepted_expansion
+                .as_ref()
+                .unwrap();
+            let lens = expansion
+                .writable_points
+                .iter()
+                .find(|point| {
+                    !point.source.is_reference()
+                        && expansion.declaration_for_alias(&point.handle.alias)
+                            == Some(&SemanticSymbol("frame".into()))
+                })
+                .unwrap()
+                .clone();
+            let native = expanded_port_point(editor, &lens.handle).unwrap();
+            (lens, native)
+        };
+
+        let (_, first_point) = producer_lens(&workbench, &editor);
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(
+                    &editor,
+                    8_413,
+                    first_point,
+                    Some(&SemanticSymbol("frame".into())),
+                )
+                .unwrap()
+                .is_none(),
+        );
+        let stale_checkpoint = encode_editor_checkpoint(&editor).unwrap();
+        workbench.set_managed_draft(workbench.managed_source().replacen(
+            "upperRight: [60, 35]",
+            "upperRight: [61, 35]",
+            1,
+        ));
+        let CodeApplyOutcome::Accepted(applied) = workbench.apply_managed_draft().unwrap() else {
+            panic!("valid managed-source edit must apply")
+        };
+        let applied_identity = workbench.session.identity().clone();
+        let applied_checkpoint = workbench.accepted_editor_checkpoint().clone();
+        let Err(error) = workbench.publish_pointer_terminal_checkpoint(
+            8_413,
+            &stale_checkpoint,
+            "Stale terminal after Apply",
+        ) else {
+            panic!("Apply must invalidate the older semantic terminal")
+        };
+        assert!(error.contains("no pending authenticated route"));
+        assert_eq!(workbench.session.identity(), &applied_identity);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &applied_checkpoint);
+
+        let (_, second_point) = producer_lens(&workbench, &applied.editor);
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(
+                    &applied.editor,
+                    8_414,
+                    second_point,
+                    Some(&SemanticSymbol("frame".into())),
+                )
+                .unwrap()
+                .is_none(),
+        );
+        let undone = workbench.step_history(true).unwrap().unwrap();
+        let undone_identity = workbench.session.identity().clone();
+        let undone_checkpoint = workbench.accepted_editor_checkpoint().clone();
+        let Err(error) = workbench.publish_pointer_terminal_checkpoint(
+            8_414,
+            &encode_editor_checkpoint(&applied.editor).unwrap(),
+            "Stale terminal after Undo",
+        ) else {
+            panic!("Undo must invalidate the older semantic terminal")
+        };
+        assert!(error.contains("no pending authenticated route"));
+        assert_eq!(workbench.session.identity(), &undone_identity);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &undone_checkpoint);
+        assert_eq!(
+            encode_editor_checkpoint(&undone.editor).unwrap(),
+            undone_checkpoint,
+        );
     }
 }

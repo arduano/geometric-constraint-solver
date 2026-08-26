@@ -66,10 +66,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   amendment adds an artifact-free `Authored` project entry on exactly fresh workspaces. M84-F005
   adds a bounded collaborative semantic overlay and provenance-owned drag/deletion route; M84-F006
   adversarially hardens its persistence, owner pruning, generated detachment/rebinding and exact
-  duplicate/conflict authority. The
-  clean-qualified F003/F004 and direct-authoring `41e65a4` snapshots are historical because they
-  predate that scope; refreshed U1-U14 and a replacement nomination remain pending, and Pages stays
-  on accepted M83.
+  duplicate/conflict authority; M84-F007 makes one pointer-down semantic lens the sole terminal
+  seed authority. The clean-qualified F003/F004, direct-authoring `41e65a4` and combined F005/F006
+  `ff2e142` candidates are historical because they predate the current scope or were withdrawn by a
+  finding. Refreshed U1-U14 and a clean replacement nomination remain pending, and Pages stays on
+  accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -920,6 +921,28 @@ Generated Segment and circle-centre detachment carries explicit provenance throu
 dependent rebinding, transient cancellation, repeated drag and exact Undo/Redo. Same-tier point
 conflicts compare persisted IEEE bits, including signed zero. These are persistence/resource and
 transaction-authority rules, not solver equations or priority semantics.
+
+M84-F007 separates native preview motion from semantic terminal intent. Pointer-down authenticates
+one exact semantic point lens through accepted expansion provenance and retains it across frames.
+No selection resolves the unique producer, selected producer keeps consumers attached and selected
+consumer retains local detachment. Release stages only that lens and independently rematerializes
+its overlay; other solver-coupled points may move in the preview but cannot become
+additional same-tier writes because of incidental roundoff. Ordinary GUI-owned points remain on
+the delegated M83 route. Its pending route stores the exact `CodeSessionIdentity`, pointer and
+lens, consumable only by that pointer's dedicated authenticated terminal publisher. Generic saves,
+foreign/reentrant preparation and foreign terminals reject without consuming/replacing the route;
+every non-pointer durable workbench mutation first cancels capture and invalidates it; and an
+unexpected generic-save rejection preserves the live native authority rather than restoring under
+an unconsumed token. No-motion release/cancel is history-neutral, and Apply/Undo cannot let a stale
+terminal revert newer accepted authority. Genuine unequal semantic writes still reject bit-exactly
+under F006.
+
+The combined F005/F006 source `ff2e142` and its frozen candidate are withdrawn by this reproduction.
+The earlier provisional release-WASM/browser matrix passed 14/14. The post-audit demo-web library
+passes 270/270 with real no-motion, exact stored-session mismatch, durable-mutation ordering and
+generic-save preservation coverage; sketch-code suites and focused Clippy/WASM checks pass. The
+browser matrix must be refreshed before nomination, and no clean-qualified replacement, artifact
+path/hash or retained service is architecture authority yet.
 
 ### `geosolve-sketch-features`
 
@@ -1880,7 +1903,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   typed semantic references, keyed reconciliation, one code/editor history and four required
   demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
   nominations and direct artifact-free authored source `41e65a4` are withdrawn historical
-  evidence. M84-F005's collaborative overlay/semantic drag/deletion authority and M84-F006 audit
-  hardening are implemented and focused-qualified; clean replacement nomination and refreshed
-  human UAT U1-U14 remain pending. Accepted M83 remains Pages authority and no M84 publication is
-  claimed.
+  evidence. M84-F005's collaborative overlay/semantic drag/deletion authority, M84-F006 audit
+  hardening and M84-F007 terminal-lens classification are implemented and focused-qualified.
+  Combined source `ff2e142` is withdrawn; clean replacement nomination and refreshed human UAT
+  U1-U14 remain pending. Accepted M83 remains Pages authority and no M84 publication is claimed.

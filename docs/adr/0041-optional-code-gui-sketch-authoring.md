@@ -2,11 +2,12 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. M84-F005's collaborative semantic-interaction amendment and M84-F006's
-adversarial authority hardening are implemented and focused-qualified; clean replacement
-nomination and refreshed UAT remain pending. The direct-authoring `41e65a4` snapshot, plus the
-initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots, are withdrawn historical evidence.
-No F005/F006 replacement is nominated or accepted; GitHub Pages remains on accepted M83.
+Status: accepted for M84. M84-F005's collaborative semantic-interaction amendment, M84-F006's
+adversarial authority hardening and M84-F007's exact terminal-lens classification are implemented
+and focused-qualified; clean replacement nomination and refreshed UAT remain pending. The direct-
+authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`, initial `79078ec`, F003
+`b9e67bad` and F004 `c2cf160` snapshots are withdrawn historical evidence. No F007 replacement is
+clean-qualified, nominated or accepted; GitHub Pages remains on accepted M83.
 
 ## Context
 
@@ -279,6 +280,23 @@ compare persisted IEEE bits, so bit-identical values collapse while `+0.0` and `
 either order. These checks harden persistence and transaction authority; they add no geometry
 equation, constraint, priority, tolerance or branch rule.
 
+M84-F007 makes pointer-down, rather than terminal checkpoint inference, the semantic edit authority.
+One exact point lens is authenticated from accepted expansion provenance and retained across all
+native preview frames. No selection chooses a unique producer, explicit producer selection retains
+shared attachment and explicit consumer selection retains local detachment. Release stages only
+that lens and independently rematerializes its overlay. Solver-coupled motion remains preview
+evidence and cannot become extra semantic writes merely because several points moved by roundoff.
+The pending route stores the exact `CodeSessionIdentity`, pointer and lens. Only the dedicated
+authenticated terminal publisher for that pointer may consume it: generic saves reject without
+consumption, while foreign/reentrant preparation and foreign terminals reject while preserving the
+original route. Every non-pointer durable workbench route cancels captured canvas authority before
+deriving or changing durable state, independent of viewport lookup; platform capture release is
+best-effort. A defensive generic-save rejection preserves a still-live native editor/token instead
+of restoring underneath it. No-motion release/cancel is history-neutral; Apply/Undo invalidates a
+stale terminal without reverting newer accepted authority.
+Ordinary GUI-owned points retain the delegated editor path. This resolves terminal authority without
+weakening F006's bit-exact conflict rule or adding solver behavior.
+
 ## Consequences
 
 - Reusable TypeScript can express higher-order structural design while the GUI safely rewrites a
@@ -291,8 +309,9 @@ equation, constraint, priority, tolerance or branch rule.
   organization, declared lens inputs and explicit overrides.
 - Exact source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
   `d31b805549a29433e157074bc181517bdb50fb67`, and its immutable snapshot are historical
-  direct-authoring evidence only. M84-F005/F006 withdraw that nomination; the clean replacement
-  gate, refreshed UAT and any replacement freeze remain pending, as does public publication.
+  direct-authoring evidence only. Combined F005/F006 source `ff2e142` and its frozen candidate are
+  also withdrawn by F007. The clean replacement gate, refreshed UAT and any replacement freeze
+  remain pending, as does public publication; no replacement artifact hash or path is claimed.
 
 ## Rejected alternatives
 

@@ -4687,9 +4687,11 @@ keyed reconciliation, unified history and code-project persistence. ADR 0041 and
 `docs/M84_GOALS.md` are authoritative. The F001-F004 fixtures below are historical implemented
 coverage. The former complete clean candidate and clean-qualified F003/F004 local/Tailscale
 nominations remain withdrawn historical evidence. M84-F005 also withdraws the direct-authoring
-`41e65a4` nomination. Collaborative overlay and semantic interaction authority plus the F006
-adversarial hardening are implemented and focused-qualified; a fresh clean qualification,
-nomination and UAT U1-U14 remain required. Accepted M83 remains Pages authority.
+`41e65a4` nomination. Collaborative overlay and semantic interaction authority plus F006 audit
+hardening are implemented and focused-qualified. F007 then withdraws combined source `ff2e142` and
+its frozen candidate after reproducing false terminal conflicts on multi-frame producer drags. A
+fresh clean qualification, nomination and UAT U1-U14 remain required. Accepted M83 remains Pages
+authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4834,6 +4836,46 @@ changes no residual equation, solver priority, constraint, tolerance or branch s
 owners live beside F005's semantic-overlay, native-composition, persistence and workbench suites;
 clean release qualification and a replacement freeze remain pending.
 
+### M84-F007 — pointer-down lens owns semantic terminal publication
+
+In an authored project, drag a rectangle corner through at least two accepted preview frames, first
+with no semantic declaration selected and then with the producing rectangle selected. The F005/F006
+source `ff2e142` solved and displayed valid coupled geometry, but terminal after-the-fact
+classification collected every solver-moved code-owned point as a semantic placement. Incidental
+coupled-corner roundoff therefore produced multiple unequal same-tier writes to one address and the
+bit-exact conflict rule rejected the legitimate release.
+
+At pointer-down, resolve exactly one semantic point lens from accepted expansion provenance. With
+no selection, choose the unique producer; a selected producer keeps the referenced consumer
+attached; a uniquely selected referenced consumer still detaches only itself. Ambiguous producers
+or selected lenses reject without changing transient or durable authority. Ordinary GUI-owned
+points resolve no code lens and remain on the delegated editor route.
+
+Retain the authenticated lens through every native preview frame. On release, stage only its point
+seed, independently expand/cold-materialize that overlay and publish the resulting authority once.
+The terminal native checkpoint is preview evidence, not a source of additional semantic writes;
+solver-derived coupled point motion and roundoff cannot masquerade as user-authored seeds. Exact
+Undo/Redo, attachment/detachment semantics and independent native validation remain mandatory.
+
+The pending route stores exact `CodeSessionIdentity`, pointer and authenticated lens. Only that
+pointer's dedicated terminal publisher may consume it; generic saves reject without consumption,
+and foreign/reentrant preparation or foreign terminals reject while preserving the original route.
+Any non-pointer durable code action invalidates the route. Before any Outline, Inspector, source,
+code, history or Apply mutation, retire internal capture and restore transient detachment before
+deriving the candidate, even when the DOM viewport is unavailable. An unexpected generic save must
+preserve the live editor, token, capture, notice, history and persisted bytes rather than restoring
+accepted authority beneath the token. No-motion release/cancel is history-neutral; exact stored-
+session mismatch and Apply/Undo invalidate a stale terminal without reverting newer accepted
+authority.
+
+The earlier corrected provisional release-WASM/browser coverage passed 14/14. Post-audit demo-web
+passes 270/270, including real no-motion, exact stored-session mismatch, mutation-order and
+generic-save preservation regressions; the sketch-code suites and focused warnings-denied
+Clippy/WASM checks pass. The browser matrix must be refreshed after the audit hardening. The frozen
+`ff2e142` candidate is withdrawn. Clean committed-source qualification, a replacement freeze,
+retained Tailscale `:8080` publication and UAT remain pending; no final artifact hash or path is
+claimed.
+
 ### M84-F001 — generated-point terminal checkpoint parity
 
 Drag one generated rounded-Polyline point through the ordinary retained preview and release a
@@ -4956,9 +4998,9 @@ zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/
 `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both endpoints.
 Historical service PID `3316682` served those immutable bytes at
 `http://100.94.63.83:8080/`; it and the temporary/obsolete pre-axis F004 services are retired. The
-later
-direct-authoring amendment withdraws those bytes from current nomination solely because they
-predate amended scope; the qualified replacement below now owns the retained endpoint.
+later direct-authoring amendment withdraws those bytes from current nomination solely because they
+predate amended scope; the qualified replacement below owned the retained endpoint at that
+historical checkpoint.
 
 Historical post-F004 direct-authoring source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, passes public artifact-free construction,
@@ -4971,10 +5013,11 @@ origin rejection. The complete clean release gate passes with log SHA-256
 `6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, passes byte-identical
 temporary/final eight-path HTTP verification and direct 3/3, baseline 4/4, F003 1/1 and F004 2/2
 browser suites on each endpoint. The PID `4081080` service record and complete evidence under
-`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this nomination because
-it predates collaborative draft overlay and semantic drag/deletion authority. M84 remains active
-and unaccepted with refreshed U1-U14 pending; no F005/F006 replacement is nominated, Pages remains
-accepted M83 authority and no M84 public publication is claimed.
+`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this
+nomination because it predates collaborative draft overlay and semantic drag/deletion authority.
+F007 also withdraws the later frozen `ff2e142` candidate. M84 remains active and unaccepted with
+refreshed U1-U14 pending; no F007 replacement is clean-qualified or nominated, Pages remains accepted
+M83 authority and no M84 public publication is claimed.
 
 ## Frozen near-singular fixtures
 

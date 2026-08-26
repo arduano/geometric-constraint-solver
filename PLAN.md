@@ -5793,12 +5793,13 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F005 collaborative semantic interaction and the M84-F006
-adversarial authority audit are implemented and focused-qualified, while clean replacement
-nomination and refreshed UAT remain pending**. Ordinary GUI dependencies project as lexical
-managed TypeScript while low-level transport remains truthfully labelled Intent IR. The direct-
-authoring `41e65a4` snapshot and all earlier nominations are withdrawn historical evidence. No
-F005/F006 replacement is nominated, and accepted M83 remains public Pages authority.
+Status: **active and unaccepted; M84-F005 collaborative semantic interaction, M84-F006 adversarial
+authority hardening and M84-F007 exact terminal-lens classification are implemented and focused-
+qualified, while clean replacement nomination and refreshed UAT remain pending**. Ordinary GUI
+dependencies project as lexical managed TypeScript while low-level transport remains truthfully
+labelled Intent IR. The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`
+and all earlier nominations are withdrawn historical evidence. No F007 replacement is clean-
+qualified or nominated, and accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5895,6 +5896,13 @@ F005/F006 replacement is nominated, and accepted M83 remains public Pages author
   detachment exactly; preserve repeated generated drag through exact Undo/Redo; and compare
   same-tier seed conflicts by persisted IEEE bits, including signed zero. These are authority and
   resource repairs only, with no solver equation, priority, constraint or tolerance change.
+- [x] Resolve M84-F007: reproduce multi-frame no-selection and selected-producer rectangle drags
+  whose terminal after-the-fact classification copied solver-coupled corner motion into several
+  same-tier semantic writes and falsely rejected the legitimate release as a conflict. Authenticate
+  one exact semantic point lens at pointer-down. No selection chooses the unique producer; explicit
+  producer selection stays attached; a selected consumer still detaches. Materialize terminal
+  overlay authority independently from only that authenticated lens, never from incidental coupled
+  solver roundoff. Keep ordinary GUI-owned points on the delegated editor route.
 - [x] Qualify M84-F005/F006 at their focused owning layers with overlay/seed-precedence/conflict,
   semantic drag/deletion,
   consumer detach/rebind/repeat/Undo, retained/pruned-failure overlay, persistence/history and
@@ -5904,11 +5912,19 @@ F005/F006 replacement is nominated, and accepted M83 remains public Pages author
   incompatible `geosolve-sketch-code-session-v2` and `geosolve-code-workbench-v2`; plain M83
   workspace-v8 remains unchanged. The former `41e65a4` direct-authoring candidate is withdrawn and
   may not be reused for UAT or Pages.
-- [ ] Commit the reconciled implementation/documentation, pass the clean full release gate, refresh
-  browser/UAT collateral, freeze the exact no-rebuild output and exact-verify one replacement on
-  temporary and retained Tailscale listeners.
-- [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages, retire the
-  service and close M84.
+- [x] Qualify the provisional F007 correction through the sketch-code suites and the earlier
+  release-WASM browser matrix 14/14. Complete the terminal-authority audit with demo-web 270/270,
+  including real no-motion release, exact stored-session mismatch, pre-mutation cancellation for
+  every durable sidebar route and behavioral generic/foreign-save preservation; focused warnings-
+  denied Clippy/WASM checks pass. Cancellation also retires internal authority when the viewport
+  element is absent, with platform capture release remaining best-effort. These proportional
+  results do not nominate the dirty correction or revive `ff2e142`; the browser matrix must be
+  refreshed after the final audit hardening.
+- [ ] Commit the reconciled F007 implementation/documentation, pass the clean full release gate,
+  refresh browser/UAT collateral, freeze the exact no-rebuild output and exact-verify one
+  replacement on temporary and retained Tailscale listeners.
+- [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages,
+  retire the service and close M84.
 
 Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
 artifact contract, typed SDK, keyed reconciler, composite session, four workbench projects and
@@ -5927,6 +5943,26 @@ bits including signed zero. `geosolve-sketch-code`, native composition 11/11, se
 demo-web 264/264, unchanged golden 271/271, TypeScript package and package-closure checks pass at
 the focused dirty-tree checkpoint. The clean committed-source release gate and frozen replacement
 nomination remain pending and must not be inferred from those proportional results.
+
+M84-F007 implementation record (2026-08-26): source `ff2e142` correctly owned semantic overlay
+conflicts, but multi-frame rectangle previews exposed a classification seam. Terminal publication
+derived writes from every solver-moved code point, so minute coupled-corner roundoff could create
+multiple unequal same-tier writes for one semantic address. Pointer-down now authenticates one
+semantic lens and terminal publication rematerializes from that lens alone. No selection resolves
+the unique producer, selected producer remains attached, selected consumer still detaches and
+ordinary GUI points remain delegated. The pending route stores the exact `CodeSessionIdentity`,
+pointer and lens and is consumable only by its dedicated authenticated terminal publisher; generic
+saves, foreign/reentrant preparation and foreign terminals reject while preserving it. Non-pointer
+durable code actions invalidate it. Every Outline/Inspector/source/code/history/Apply mutation now
+cancels capture before deriving and changing durable authority, even if the viewport element is
+unavailable; platform pointer-capture release is then best-effort. The behavioral save-adapter
+regression proves generic and foreign failures preserve the serialized code session/history, live
+editor authority and notice. No-motion release/cancel is history-neutral and exact stored-session
+mismatch plus Apply/Undo stale terminals cannot revert newer authority. The earlier provisional
+release-WASM browser matrix passed 14/14; post-audit demo-web passes 270/270, with sketch-code
+suites and focused Clippy/WASM checks also passing. The browser matrix must be refreshed after these
+final changes. The frozen `ff2e142` candidate is withdrawn; no qualified replacement source,
+artifact hash, snapshot path or retained service is claimed.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -6046,8 +6082,9 @@ the exact frozen bytes on both endpoints, including the `1440x900` and `1024x720
 The temporary service and historical F004 PID `3316682` are retired. The `4081080` service record
 is now historical evidence: M84-F005 withdraws this direct-authoring nomination because it
 predates collaborative overlay and semantic interaction authority. These automated checks do not
-accept refreshed M84-U1 through M84-U14, authorize Pages, or close M84; a new F005 candidate is
-still required.
+accept refreshed M84-U1 through M84-U14, authorize Pages, or close M84. At that checkpoint a new
+F005 candidate was still required; F007 now requires a new clean replacement under the pending
+sequence recorded above.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

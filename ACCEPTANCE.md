@@ -3386,10 +3386,11 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. M84-F005's collaborative draft overlay/semantic interaction and
-M84-F006's adversarial authority hardening are implemented and focused-qualified. Clean replacement
-qualification, immutable nomination, refreshed M84-U1 through M84-U14 and explicit approval remain
-pending. The direct-authoring `41e65a4` snapshot and all earlier nominations remain withdrawn
+Status: active and unaccepted. M84-F005's collaborative draft overlay/semantic interaction,
+M84-F006's adversarial authority hardening and M84-F007's exact terminal-lens classification are
+implemented and focused-qualified. Clean replacement qualification, immutable nomination,
+refreshed M84-U1 through M84-U14 and explicit approval remain pending. The direct-authoring
+`41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn
 historical evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance
 contract. Accepted M83 remains public product authority.
 
@@ -3500,6 +3501,22 @@ and cold-materialized through the ordinary accepted-scene authority.
   cancels transient detachment exactly, and proves repeated generated drag with exact Undo/Redo.
   Same-tier seed conflict is bit-exact, including `+0.0/-0.0`. No equation, constraint, solver
   priority, tolerance or branch policy changes.
+- M84-F007 authenticates exactly one semantic point lens at pointer-down and retains it across
+  preview frames. No selection chooses the unique producer; selected producer remains attached;
+  selected consumer still detaches locally. Terminal publication independently rematerializes only
+  that lens and cannot copy solver-coupled point motion or roundoff into extra same-tier writes.
+  The pending route stores exact `CodeSessionIdentity`, pointer and lens and only that pointer's
+  dedicated authenticated terminal publisher can consume it. Generic saves reject without
+  consumption; foreign/reentrant preparation and foreign terminals reject while preserving the
+  original route; non-pointer durable code actions invalidate it. Every Outline, Inspector, source,
+  code, history and Apply route cancels capture before it derives or mutates durable authority,
+  even if the viewport element is unavailable; an unexpected generic-save rejection preserves the
+  live editor/token rather than restoring underneath it. Behavioral adapter coverage preserves the
+  complete serialized code session/history, live editor authority and notice. No-motion
+  release/cancel is history-neutral, and exact stored-session mismatch plus Apply/Undo stale
+  terminals cannot revert newer authority. Ordinary GUI-owned points remain delegated.
+  Multi-frame no-selection and producer-selection rectangle releases must publish once without
+  weakening bit-exact genuine-conflict rejection.
 - Managed source is at most 4 MiB, each artifact 16 MiB and the complete project 64 MiB. Save,
   reload and repro restore complete offline authority/history atomically; malformed, missing,
   tampered or oversized inputs reject before replacement.
@@ -3520,8 +3537,12 @@ and cold-materialized through the ordinary accepted-scene authority.
   actual WASM, TypeScript, golden require-clean, Trunk and the complete clean release gate.
 - Focused post-F006 qualification passes `geosolve-sketch-code`, native composition 11/11,
   semantic overlay 8/8, demo-web 264/264 with its existing test stack, the unchanged 271/271
-  golden, TypeScript package checks and package closure. This does not substitute for the pending
-  clean committed-source release gate or nominate bytes.
+  golden, TypeScript package checks and package closure. The earlier provisional F007
+  release-WASM/browser matrix passed 14/14. Post-audit F007 evidence passes demo-web 270/270,
+  sketch-code suites, focused terminal-lifecycle/mutation-order/generic-save regressions and
+  warnings-denied Clippy/WASM. The browser matrix must be refreshed after the final audit changes.
+  This does not substitute for the pending clean committed-source release gate, replacement freeze
+  or refreshed UAT, or nominate bytes.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3601,9 +3622,11 @@ HTTP ledgers match at SHA-256
 baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against the exact bytes on each endpoint.
 The PID `4081080` service record and evidence at
 `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this
-nomination because it predates the collaborative overlay/semantic-authority scope. Refreshed M84-U1 through M84-U14,
-clean replacement qualification and a new immutable nomination remain open, so Pages remains
-accepted M83 authority and no M84 publication is claimed.
+nomination because it predates the collaborative overlay/semantic-authority scope. Combined
+F005/F006 source `ff2e142` and its frozen candidate are themselves withdrawn by F007. Refreshed
+M84-U1 through M84-U14, clean F007 replacement qualification and a new immutable nomination remain
+open, so Pages remains accepted M83 authority and no M84 publication is claimed. No replacement
+artifact hash or path is asserted.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

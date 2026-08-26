@@ -2,11 +2,11 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F005 and the M84-F006 adversarial authority audit are
-implemented and focused-qualified, while clean replacement nomination and refreshed UAT remain
-pending**. The direct-authoring snapshot `41e65a4` and all earlier M84 nominations are withdrawn
-historical evidence. No F005/F006 replacement snapshot is nominated, no UAT row is accepted, and
-accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; M84-F005, M84-F006 and M84-F007 are implemented and focused-
+qualified, while clean replacement nomination and refreshed UAT remain pending**. The direct-
+authoring snapshot `41e65a4`, combined F005/F006 source `ff2e142` and all earlier M84 nominations
+are withdrawn historical evidence. No F007 replacement snapshot is nominated, no UAT row is
+accepted, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -168,6 +168,31 @@ layer optional.
 - Treat these as persistence/resource/transaction hardening only. Do not add an equation,
   constraint, solver priority, tolerance or branch rule.
 
+### M84-F007 — one authenticated terminal point lens
+
+- Authenticate exactly one semantic point lens at pointer-down and retain that route across every
+  native preview frame. Do not classify a terminal checkpoint by copying every solver-moved
+  code-owned point into semantic seed writes.
+- With no semantic selection, choose the unique producer lens. Explicit producer selection keeps
+  referenced consumers attached. Explicit consumer selection still detaches only that consumer.
+  Ambiguous producer/selected lenses reject before preview authority changes.
+- Independently rematerialize terminal overlay authority from only the authenticated point lens;
+  solver-derived coupled motion is preview evidence, not another semantic write. This prevents
+  harmless rectangle-corner roundoff from becoming a false same-tier conflict.
+- Store the pending route as that exact `CodeSessionIdentity`, pointer and point lens. Only the
+  dedicated authenticated terminal publisher for that pointer may consume it; generic/delegated
+  saves reject without consumption, and foreign/reentrant preparation or a foreign terminal
+  rejects while preserving the original route.
+- Every non-pointer durable code action cancels or invalidates the route. No-motion release and
+  cancellation are history-neutral. Apply and Undo invalidate a stale terminal without reverting
+  the newer accepted session, checkpoint or overlay authority.
+- Every durable Outline, Inspector, source, code, history, Apply and equivalent sidebar route must
+  cancel pointer capture before deriving or mutating authority. If an unexpected generic save still
+  reaches a pending route, it must preserve the live native editor, token, capture, notice, history
+  and persistence rather than restoring accepted authority beneath that token.
+- Keep ordinary GUI-owned points on the delegated M83 editor path. Add no equation, constraint,
+  solver priority, tolerance or branch rule.
+
 ## Required demonstrations
 
 The four bundled demonstrations below remain the reviewed artifact-project catalog. A separate,
@@ -206,6 +231,9 @@ diagonal whose endpoints are lexical `frame.corners.*` references.
   golden require-clean, Trunk and the complete clean release gate.
 - Freeze one no-rebuild M84 candidate, verify it locally and through retained Tailscale UAT, and
   publish to Pages only after explicit supervising-user approval and exact hosted-byte proof.
+- Post-audit F007 lifecycle regressions pass with demo-web 270/270; the earlier browser matrix passed
+  14/14 but must be refreshed after the audit hardening. The clean gate, freeze and refreshed UAT
+  remain pending.
 
 Withdrawn nomination record (2026-08-25): exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -247,9 +275,11 @@ Withdrawn direct-authoring nomination (2026-08-26): exact source
 `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`. Temporary and retained exact HTTP checks and
 direct 3/3, baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against those frozen bytes.
 The former PID `4081080` record is historical evidence only. This adds no solver equation, browser
-execution, custom artifact or fifth bundled golden row. Refreshed M84-U1 through M84-U14, clean
-F005/F006 replacement qualification, a replacement nomination, explicit approval, Pages
-publication, service retirement and closure remain open.
+execution, custom artifact or fifth bundled golden row. The later combined F005/F006 source
+`ff2e142` and its frozen candidate are withdrawn by M84-F007. Refreshed M84-U1 through M84-U14,
+clean F007 replacement qualification, a replacement nomination, explicit approval, Pages
+publication, service retirement and closure remain open. No replacement artifact hash or path is
+claimed here.
 
 ## Bounds and non-goals
 

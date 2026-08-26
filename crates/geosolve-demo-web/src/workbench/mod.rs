@@ -49,6 +49,7 @@ const CANVAS_PAN_POINTER_EVENTS: [&str; 3] = ["pointerdown", "pointermove", "poi
 enum WorkbenchPresentationEvent {
     PointerMoveFrame,
     PointerRelease,
+    AuthenticatedPointerRelease(u64),
     PointerReleaseWithoutTransaction,
     InteractionCancellation,
 }
@@ -61,10 +62,12 @@ impl WorkbenchPresentationEvent {
                 render_scope: WorkbenchRenderScope::Transient,
                 saves_workspace: false,
             },
-            Self::PointerRelease => WorkbenchPresentationPolicy {
-                render_scope: WorkbenchRenderScope::Durable,
-                saves_workspace: true,
-            },
+            Self::PointerRelease | Self::AuthenticatedPointerRelease(_) => {
+                WorkbenchPresentationPolicy {
+                    render_scope: WorkbenchRenderScope::Durable,
+                    saves_workspace: true,
+                }
+            }
             Self::PointerReleaseWithoutTransaction | Self::InteractionCancellation => {
                 WorkbenchPresentationPolicy {
                     render_scope: WorkbenchRenderScope::Durable,
@@ -1845,6 +1848,115 @@ fn projectional_terminal_owns_capture(
         Some(pointer) => captured_pointer == Some(pointer),
         None => true,
     }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProjectionalCodeSavePublication {
+    ContinuePersistence,
+    Abort,
+}
+
+/// Encodes the exact live delegated editor only after the save route has been
+/// authenticated. Generic or foreign saves while a semantic gesture is
+/// pending must return before even staging these transient native bytes.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_code_checkpoint_for_save(
+    authority: &WorkbenchDocumentAuthority,
+) -> Result<serde_json::Value, String> {
+    let snapshot = match authority {
+        WorkbenchDocumentAuthority::Projectional {
+            editor,
+            computed_evaluation_high_water,
+            revisions,
+        } => persistence::WorkspaceSnapshot::from_delegated_projectional_editor(
+            editor,
+            *computed_evaluation_high_water,
+            *revisions,
+        )?,
+        WorkbenchDocumentAuthority::Flat(_) => {
+            return Err("code projects require projectional editor authority".into());
+        }
+    };
+    snapshot.encode().map(serde_json::Value::String)
+}
+
+/// Publishes one staged native checkpoint into optional code authority before
+/// browser persistence. A rejected generic or foreign terminal must leave the
+/// complete live preview untouched while its authenticated pointer token is
+/// still pending. An owning terminal consumes that token before any later
+/// failure, so ordinary accepted-authority recovery remains safe afterward.
+#[cfg(any(target_arch = "wasm32", test))]
+fn publish_projectional_code_checkpoint_for_save(
+    code_project: &mut code_projects::CodeProjectWorkbench,
+    authority: &mut WorkbenchDocumentAuthority,
+    notice: &mut String,
+    terminal_pointer: Option<u64>,
+) -> ProjectionalCodeSavePublication {
+    if code_project.has_any_pending_semantic_point_drag()
+        && !terminal_pointer
+            .is_some_and(|pointer_id| code_project.has_pending_semantic_point_drag(pointer_id))
+    {
+        // This guard deliberately precedes checkpoint encoding. A generic or
+        // foreign save is neither a cancellation nor a terminal and therefore
+        // may not touch preview/editor, token, notice, history or persistence.
+        return ProjectionalCodeSavePublication::Abort;
+    }
+    let checkpoint = match projectional_code_checkpoint_for_save(authority) {
+        Ok(checkpoint) => checkpoint,
+        Err(error) => {
+            *notice =
+                format!("Code-project workspace could not stage its native checkpoint: {error}");
+            return ProjectionalCodeSavePublication::Abort;
+        }
+    };
+    let publication = match terminal_pointer {
+        Some(pointer_id) => code_project.publish_pointer_terminal_checkpoint(
+            pointer_id,
+            &checkpoint,
+            "Direct GUI sketch edit",
+        ),
+        None => {
+            code_project.publish_delegated_editor_checkpoint(checkpoint, "Direct GUI sketch edit")
+        }
+    };
+    match publication {
+        Ok(Some(publication)) => {
+            match WorkbenchDocumentAuthority::from_projectional_editor(*publication.editor) {
+                Ok(accepted) => *authority = accepted,
+                Err(error) => {
+                    *notice = format!(
+                        "Accepted code-owned edit could not install its validated native authority: {error}"
+                    );
+                    return ProjectionalCodeSavePublication::Abort;
+                }
+            }
+        }
+        Ok(None) => {}
+        Err(error) => {
+            if code_project.has_any_pending_semantic_point_drag() {
+                // This is a defensive adapter boundary. Every known
+                // non-pointer mutation cancels before dispatch, but an
+                // unexpected generic/foreign save must leave the live
+                // gesture, token, notice and persistence untouched.
+                return ProjectionalCodeSavePublication::Abort;
+            }
+            let restored = code_project
+                .restore_accepted_editor()
+                .and_then(|editor| WorkbenchDocumentAuthority::from_projectional_editor(*editor));
+            *notice = match restored {
+                Ok(accepted) => {
+                    *authority = accepted;
+                    format!("Code-owned edit was not applied: {error}")
+                }
+                Err(restore_error) => format!(
+                    "Code-owned edit was rejected ({error}); accepted authority could not be restored: {restore_error}"
+                ),
+            };
+            return ProjectionalCodeSavePublication::Abort;
+        }
+    }
+    ProjectionalCodeSavePublication::ContinuePersistence
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -3832,18 +3944,10 @@ pub(crate) mod wasm {
         };
         let before = wb.editor().coordinator().intent().identity();
         if may_change_identity {
-            let Ok(viewport) = required(document, "wb-viewport") else {
-                return super::live_intent_rpc::failure_response(
-                    "workbench_surface_unavailable",
-                    "the projectional workbench viewport is unavailable",
-                );
-            };
-            let _ = cancel_projectional_interaction(
-                &viewport,
+            cancel_projectional_before_durable_mutation(
+                document,
                 &mut wb,
-                None,
-                true,
-                "Canvas interaction canceled before code edit",
+                "applying a live code edit",
             );
         }
         let response =
@@ -4050,26 +4154,6 @@ pub(crate) mod wasm {
             wb.samples.selected_title().unwrap_or("Sample")
         );
         Ok(())
-    }
-
-    fn projectional_code_checkpoint(
-        wb: &ProjectionalWorkbench,
-    ) -> Result<serde_json::Value, String> {
-        let snapshot = match &wb.authority {
-            super::WorkbenchDocumentAuthority::Projectional {
-                editor,
-                computed_evaluation_high_water,
-                revisions,
-            } => super::persistence::WorkspaceSnapshot::from_delegated_projectional_editor(
-                editor,
-                *computed_evaluation_high_water,
-                *revisions,
-            )?,
-            super::WorkbenchDocumentAuthority::Flat(_) => {
-                return Err("code projects require projectional editor authority".into());
-            }
-        };
-        snapshot.encode().map(serde_json::Value::String)
     }
 
     fn open_projectional_code_project(
@@ -5093,56 +5177,32 @@ pub(crate) mod wasm {
     }
 
     fn save_projectional(wb: &mut ProjectionalWorkbench) {
+        save_projectional_with_terminal_pointer(wb, None);
+    }
+
+    fn save_projectional_with_terminal_pointer(
+        wb: &mut ProjectionalWorkbench,
+        terminal_pointer: Option<u64>,
+    ) {
         if wb.code_project.is_some() {
-            let checkpoint = match projectional_code_checkpoint(wb) {
-                Ok(checkpoint) => checkpoint,
-                Err(error) => {
-                    wb.notice = format!(
-                        "Code-project workspace could not stage its native checkpoint: {error}"
-                    );
-                    return;
-                }
+            let publication = {
+                let ProjectionalWorkbench {
+                    authority,
+                    code_project,
+                    notice,
+                    ..
+                } = wb;
+                super::publish_projectional_code_checkpoint_for_save(
+                    code_project
+                        .as_mut()
+                        .expect("code-project presence was checked"),
+                    authority,
+                    notice,
+                    terminal_pointer,
+                )
             };
-            let publication = wb
-                .code_project
-                .as_mut()
-                .expect("code-project presence was checked")
-                .publish_delegated_editor_checkpoint(checkpoint, "Direct GUI sketch edit");
-            match publication {
-                Ok(Some(publication)) => {
-                    match super::WorkbenchDocumentAuthority::from_projectional_editor(
-                        *publication.editor,
-                    ) {
-                        Ok(authority) => wb.authority = authority,
-                        Err(error) => {
-                            wb.notice = format!(
-                                "Accepted code-owned edit could not install its validated native authority: {error}"
-                            );
-                            return;
-                        }
-                    }
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    let restored = wb
-                        .code_project
-                        .as_ref()
-                        .expect("code-project presence was checked")
-                        .restore_accepted_editor()
-                        .and_then(|editor| {
-                            super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)
-                        });
-                    wb.notice = match restored {
-                        Ok(authority) => {
-                            wb.authority = authority;
-                            format!("Code-owned edit was not applied: {error}")
-                        }
-                        Err(restore_error) => format!(
-                            "Code-owned edit was rejected ({error}); accepted authority could not be restored: {restore_error}"
-                        ),
-                    };
-                    return;
-                }
+            if publication == super::ProjectionalCodeSavePublication::Abort {
+                return;
             }
         }
         let json = if let Some(code_project) = &wb.code_project {
@@ -5177,7 +5237,13 @@ pub(crate) mod wasm {
     ) -> Result<(), JsValue> {
         let policy = event.policy();
         if policy.saves_workspace {
-            save_projectional(&mut workbench.borrow_mut());
+            let terminal_pointer = match event {
+                super::WorkbenchPresentationEvent::AuthenticatedPointerRelease(pointer_id) => {
+                    Some(pointer_id)
+                }
+                _ => None,
+            };
+            save_projectional_with_terminal_pointer(&mut workbench.borrow_mut(), terminal_pointer);
         }
         match policy.render_scope {
             super::WorkbenchRenderScope::Transient => render_projectional_canvas(
@@ -5918,8 +5984,8 @@ pub(crate) mod wasm {
         Ok(true)
     }
 
-    fn cancel_projectional_interaction(
-        viewport: &Element,
+    fn cancel_projectional_interaction_with_optional_viewport(
+        viewport: Option<&Element>,
         wb: &mut ProjectionalWorkbench,
         pointer_id: Option<i32>,
         release_platform_capture: bool,
@@ -5955,7 +6021,14 @@ pub(crate) mod wasm {
         };
         let effect_count = effects.len();
         let _ = dispatch_projectional_effects(wb, effects);
-        release_projectional_pointer_capture(viewport, wb, pointer_id, release_platform_capture);
+        let released_pointer =
+            super::route_projectional_terminal_capture(&mut wb.captured_pointer, pointer_id);
+        if release_platform_capture
+            && let (Some(viewport), Some(pointer_id)) = (viewport, released_pointer)
+            && viewport.has_pointer_capture(pointer_id)
+        {
+            let _ = viewport.release_pointer_capture(pointer_id);
+        }
         let restored_semantic_drag = restore_pending_semantic_point_drag(
             wb,
             pointer_id.and_then(|pointer_id| u64::try_from(pointer_id).ok()),
@@ -5966,6 +6039,41 @@ pub(crate) mod wasm {
             wb.notice = notice.into();
         }
         changed
+    }
+
+    fn cancel_projectional_interaction(
+        viewport: &Element,
+        wb: &mut ProjectionalWorkbench,
+        pointer_id: Option<i32>,
+        release_platform_capture: bool,
+        notice: &str,
+    ) -> bool {
+        cancel_projectional_interaction_with_optional_viewport(
+            Some(viewport),
+            wb,
+            pointer_id,
+            release_platform_capture,
+            notice,
+        )
+    }
+
+    /// Retires any authenticated canvas route before a browser control mutates
+    /// durable projectional authority. In particular, a semantic point drag
+    /// may have installed a transiently detached editor, so the cancellation
+    /// must restore that accepted authority before the mutation is planned.
+    fn cancel_projectional_before_durable_mutation(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+        operation: &str,
+    ) {
+        let viewport = document.get_element_by_id("wb-viewport");
+        let _ = cancel_projectional_interaction_with_optional_viewport(
+            viewport.as_ref(),
+            wb,
+            None,
+            true,
+            &format!("Active interaction canceled before {operation}"),
+        );
     }
 
     fn cancel_projectional_before_camera_change(
@@ -6928,7 +7036,15 @@ pub(crate) mod wasm {
                     );
                     if outcome.transaction.is_some() {
                         wb.notice = "Projectional direct movement accepted".into();
-                        super::WorkbenchPresentationEvent::PointerRelease
+                        if wb.code_project.as_ref().is_some_and(|code_project| {
+                            code_project.has_pending_semantic_point_drag(input.pointer_id)
+                        }) {
+                            super::WorkbenchPresentationEvent::AuthenticatedPointerRelease(
+                                input.pointer_id,
+                            )
+                        } else {
+                            super::WorkbenchPresentationEvent::PointerRelease
+                        }
                     } else if annotation_drag {
                         wb.notice = "Annotation placement updated".into();
                         // Annotation layout is explicit presentation state,
@@ -7334,15 +7450,11 @@ pub(crate) mod wasm {
             }
             if let Some(key) = target.get_attribute("data-code-sample-id") {
                 let mut wb = click_workbench.borrow_mut();
-                if let Ok(viewport) = required(&click_document, "wb-viewport") {
-                    let _ = cancel_projectional_interaction(
-                        &viewport,
-                        &mut wb,
-                        None,
-                        true,
-                        "Active interaction canceled before opening a code project",
-                    );
-                }
+                cancel_projectional_before_durable_mutation(
+                    &click_document,
+                    &mut wb,
+                    "opening a code project",
+                );
                 if let Err(error) = open_projectional_code_project(&mut wb, &key) {
                     wb.notice = error;
                 } else {
@@ -7362,15 +7474,11 @@ pub(crate) mod wasm {
             }
             if let Some(key) = target.get_attribute("data-sample-id") {
                 let mut wb = click_workbench.borrow_mut();
-                if let Ok(viewport) = required(&click_document, "wb-viewport") {
-                    let _ = cancel_projectional_interaction(
-                        &viewport,
-                        &mut wb,
-                        None,
-                        true,
-                        "Active interaction canceled before opening a sample",
-                    );
-                }
+                cancel_projectional_before_durable_mutation(
+                    &click_document,
+                    &mut wb,
+                    "opening a sample",
+                );
                 if let Err(error) = open_projectional_sample(&mut wb, &key) {
                     wb.notice = error;
                 } else {
@@ -7382,6 +7490,11 @@ pub(crate) mod wasm {
             }
             if let Some(path) = target.get_attribute("data-code-file") {
                 let mut wb = click_workbench.borrow_mut();
+                cancel_projectional_before_durable_mutation(
+                    &click_document,
+                    &mut wb,
+                    "changing code files",
+                );
                 if let Some(code_project) = wb.code_project.as_mut()
                     && let Err(error) = code_project.select_file(&path)
                 {
@@ -7394,17 +7507,11 @@ pub(crate) mod wasm {
             }
             if let Some(code_action) = target.get_attribute("data-code-action") {
                 let mut wb = click_workbench.borrow_mut();
-                if matches!(code_action.as_str(), "promote-ordinary" | "start-authored")
-                    && let Ok(viewport) = required(&click_document, "wb-viewport")
-                {
-                    let _ = cancel_projectional_interaction(
-                        &viewport,
-                        &mut wb,
-                        None,
-                        true,
-                        "Active interaction canceled before opening code authority",
-                    );
-                }
+                cancel_projectional_before_durable_mutation(
+                    &click_document,
+                    &mut wb,
+                    "changing code authority",
+                );
                 let focus_code_source =
                     matches!(code_action.as_str(), "open-managed-lens" | "start-authored");
                 let result: Result<String, String> = match code_action.as_str() {
@@ -7531,6 +7638,11 @@ pub(crate) mod wasm {
                     _ => return,
                 };
                 let mut wb = click_workbench.borrow_mut();
+                cancel_projectional_before_durable_mutation(
+                    &click_document,
+                    &mut wb,
+                    "reordering the Outline",
+                );
                 let projection = wb.editor().workbench_projection();
                 let result =
                     match super::projectional_outline_move_patch(&projection, node, movement) {
@@ -7565,6 +7677,11 @@ pub(crate) mod wasm {
                     _ => return,
                 };
                 let mut wb = click_workbench.borrow_mut();
+                cancel_projectional_before_durable_mutation(
+                    &click_document,
+                    &mut wb,
+                    "reordering Outline cells",
+                );
                 let projection = wb.editor().workbench_projection();
                 let result = super::projectional_cell_move_patch(&projection, cell, movement)
                     .map_err(str::to_owned)
@@ -7829,9 +7946,15 @@ pub(crate) mod wasm {
                     } else {
                         super::AuthoringItemInput::TreeClick
                     };
-                    if super::owns_authoring_pick(input)
-                        && let Some(document) = projectional_authoring_document(&wb)
-                    {
+                    if super::owns_authoring_pick(input) {
+                        cancel_projectional_before_durable_mutation(
+                            &click_document,
+                            &mut wb,
+                            "applying a relation or dimension",
+                        );
+                        let Some(document) = projectional_authoring_document(&wb) else {
+                            return;
+                        };
                         let outcome = wb
                             .authoring
                             .pick(&document, AuthoringOperand::selected(item));
@@ -7895,20 +8018,14 @@ pub(crate) mod wasm {
             match action.as_deref() {
                 Some("new") => match reset_projectional_workbench(&click_document, &mut wb) {
                     Ok(()) => durable = true,
-                    Err(error) => {
-                        wb.notice = format!("A new sketch could not be created: {error}")
-                    }
+                    Err(error) => wb.notice = format!("A new sketch could not be created: {error}"),
                 },
                 Some("undo") | Some("redo") => {
-                    if let Ok(viewport) = required(&click_document, "wb-viewport") {
-                        let _ = cancel_projectional_interaction(
-                            &viewport,
-                            &mut wb,
-                            None,
-                            true,
-                            "Active interaction canceled before history navigation",
-                        );
-                    }
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "history navigation",
+                    );
                     durable = projectional_history_action(
                         &mut wb,
                         if action.as_deref() == Some("undo") {
@@ -7924,6 +8041,11 @@ pub(crate) mod wasm {
                     wb.notice = "Sketch and declaration selection cleared".into();
                 }
                 Some("annotation-reset-selected") => {
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "resetting annotation placement",
+                    );
                     let changed = wb
                         .editor_mut()
                         .editor_mut()
@@ -7936,10 +8058,12 @@ pub(crate) mod wasm {
                     durable = changed;
                 }
                 Some("annotation-reset-all") => {
-                    let changed = wb
-                        .editor_mut()
-                        .editor_mut()
-                        .reset_all_annotation_layout();
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "resetting annotation placement",
+                    );
+                    let changed = wb.editor_mut().editor_mut().reset_all_annotation_layout();
                     wb.notice = if changed {
                         "All annotations returned to automatic placement".into()
                     } else {
@@ -7963,15 +8087,11 @@ pub(crate) mod wasm {
                     wb.notice = "Current projectional problem dismissed".into();
                 }
                 Some("delete") => {
-                    if let Ok(viewport) = required(&click_document, "wb-viewport") {
-                        let _ = cancel_projectional_interaction(
-                            &viewport,
-                            &mut wb,
-                            None,
-                            true,
-                            "Active interaction canceled before deletion",
-                        );
-                    }
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "deletion",
+                    );
                     match delete_projectional_selection(&mut wb) {
                         Ok(notice) => {
                             wb.notice = notice;
@@ -7980,14 +8100,28 @@ pub(crate) mod wasm {
                         Err(error) => wb.notice = error,
                     }
                 }
-                Some("feature-apply") => match apply_projectional_feature_authoring(&mut wb) {
-                    Ok(()) => durable = true,
-                    Err(error) => wb.notice = error,
-                },
-                Some("offset-apply") => match apply_projectional_offset_authoring(&mut wb) {
-                    Ok(committed) => durable = committed,
-                    Err(error) => wb.notice = error,
-                },
+                Some("feature-apply") => {
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "applying a Fillet",
+                    );
+                    match apply_projectional_feature_authoring(&mut wb) {
+                        Ok(()) => durable = true,
+                        Err(error) => wb.notice = error,
+                    }
+                }
+                Some("offset-apply") => {
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "applying an Offset",
+                    );
+                    match apply_projectional_offset_authoring(&mut wb) {
+                        Ok(committed) => durable = committed,
+                        Err(error) => wb.notice = error,
+                    }
+                }
                 Some("offset-flip") => {
                     let outcome = wb.offset_authoring.flip();
                     let rebuild = matches!(outcome, OffsetAuthoringOutcome::OperandChanged { .. });
@@ -8002,6 +8136,11 @@ pub(crate) mod wasm {
                     wb.notice = "Offset canceled; Select active".into();
                 }
                 Some("finish") => {
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "finishing geometry",
+                    );
                     wb.pointer_moves.borrow_mut().invalidate();
                     let effects = projectional_scene(&wb).map_or_else(Vec::new, |scene| {
                         wb.editor_mut()
@@ -8073,6 +8212,11 @@ pub(crate) mod wasm {
                     wb.notice = "Tool options closed; Select active".into();
                 }
                 Some("geometry-role") => {
+                    cancel_projectional_before_durable_mutation(
+                        &click_document,
+                        &mut wb,
+                        "changing geometry roles",
+                    );
                     match wb.editor_mut().toggle_selected_geometry_role() {
                         Ok(_) => {
                             wb.notice = "Selected curve roles updated".into();
@@ -8125,8 +8269,7 @@ pub(crate) mod wasm {
                         Err(error) => wb.notice = error,
                     }
                 }
-                Some("zoom-in") | Some("zoom-out") | Some("zoom-fit")
-                | Some("zoom-origin") => {
+                Some("zoom-in") | Some("zoom-out") | Some("zoom-fit") | Some("zoom-origin") => {
                     let Ok(viewport) = required(&click_document, "wb-viewport") else {
                         wb.notice = "Canvas viewport is unavailable".into();
                         return;
@@ -8193,6 +8336,11 @@ pub(crate) mod wasm {
                 return;
             };
             let mut wb = code_input_workbench.borrow_mut();
+            cancel_projectional_before_durable_mutation(
+                &code_input_document,
+                &mut wb,
+                "editing managed source",
+            );
             let Some(code_project) = wb.code_project.as_mut() else {
                 return;
             };
@@ -8328,6 +8476,11 @@ pub(crate) mod wasm {
             let Some(drag) = wb.outline_drag.take() else {
                 return;
             };
+            cancel_projectional_before_durable_mutation(
+                &drop_document,
+                &mut wb,
+                "reordering the Outline",
+            );
             let projection = wb.editor().workbench_projection();
             let (result, notice) = match drag {
                 super::ProjectionalOutlineDrag::Declaration {
@@ -8459,6 +8612,11 @@ pub(crate) mod wasm {
                     .map_err(|_| "edit-lens value must be a finite number".to_owned())
                     .and_then(|value| {
                         let mut wb = change_workbench.borrow_mut();
+                        cancel_projectional_before_durable_mutation(
+                            &change_document,
+                            &mut wb,
+                            "applying a code edit lens",
+                        );
                         let outcome = wb
                             .code_project
                             .as_mut()
@@ -8618,6 +8776,11 @@ pub(crate) mod wasm {
             };
             if edit != "name" {
                 let mut wb = change_workbench.borrow_mut();
+                cancel_projectional_before_durable_mutation(
+                    &change_document,
+                    &mut wb,
+                    "committing an Inspector edit",
+                );
                 let dispatch =
                     super::dispatch_projectional_inspector_control(wb.editor_mut(), &control);
                 let committed = dispatch.saves_workspace();
@@ -8692,6 +8855,11 @@ pub(crate) mod wasm {
             if unchanged {
                 return;
             }
+            cancel_projectional_before_durable_mutation(
+                &change_document,
+                &mut wb,
+                "renaming a declaration",
+            );
             let patch = IntentPatch::new(
                 wb.editor().coordinator().intent().identity(),
                 IntentPatchPolicy::RequireAccepted,
@@ -8754,15 +8922,11 @@ pub(crate) mod wasm {
             if unchanged {
                 return;
             }
-            if let Ok(viewport) = required(&source_document, "wb-viewport") {
-                cancel_projectional_interaction(
-                    &viewport,
-                    &mut wb,
-                    None,
-                    true,
-                    "Active interaction canceled before the source edit",
-                );
-            }
+            cancel_projectional_before_durable_mutation(
+                &source_document,
+                &mut wb,
+                "editing structured source",
+            );
             match wb
                 .editor_mut()
                 .edit_source_token(&projection, token, &replacement)
@@ -8937,6 +9101,11 @@ pub(crate) mod wasm {
             {
                 event.prevent_default();
                 let mut wb = keyboard_workbench.borrow_mut();
+                cancel_projectional_before_durable_mutation(
+                    &keyboard_document,
+                    &mut wb,
+                    "applying a Fillet",
+                );
                 match apply_projectional_feature_authoring(&mut wb) {
                     Ok(()) => save_projectional(&mut wb),
                     Err(error) => wb.notice = error,
@@ -8950,6 +9119,11 @@ pub(crate) mod wasm {
             {
                 event.prevent_default();
                 let mut wb = keyboard_workbench.borrow_mut();
+                cancel_projectional_before_durable_mutation(
+                    &keyboard_document,
+                    &mut wb,
+                    "applying an Offset",
+                );
                 match apply_projectional_offset_authoring(&mut wb) {
                     Ok(true) => save_projectional(&mut wb),
                     Ok(false) => {}
@@ -8964,6 +9138,11 @@ pub(crate) mod wasm {
             {
                 event.prevent_default();
                 let mut wb = keyboard_workbench.borrow_mut();
+                cancel_projectional_before_durable_mutation(
+                    &keyboard_document,
+                    &mut wb,
+                    "finishing geometry",
+                );
                 wb.pointer_moves.borrow_mut().invalidate();
                 let effects = projectional_scene(&wb).map_or_else(Vec::new, |scene| {
                     wb.editor_mut()
@@ -9026,15 +9205,11 @@ pub(crate) mod wasm {
                     wb.notice =
                         "Finish or cancel active authoring before deleting a declaration".into();
                 } else {
-                    if let Ok(viewport) = required(&keyboard_document, "wb-viewport") {
-                        let _ = cancel_projectional_interaction(
-                            &viewport,
-                            &mut wb,
-                            None,
-                            true,
-                            "Active interaction canceled before deletion",
-                        );
-                    }
+                    cancel_projectional_before_durable_mutation(
+                        &keyboard_document,
+                        &mut wb,
+                        "deletion",
+                    );
                     match delete_projectional_selection(&mut wb) {
                         Ok(notice) => {
                             wb.notice = notice;
@@ -9127,15 +9302,11 @@ pub(crate) mod wasm {
             };
             event.prevent_default();
             let mut wb = keyboard_workbench.borrow_mut();
-            if let Ok(viewport) = required(&keyboard_document, "wb-viewport") {
-                cancel_projectional_interaction(
-                    &viewport,
-                    &mut wb,
-                    None,
-                    true,
-                    "Active interaction canceled before history navigation",
-                );
-            }
+            cancel_projectional_before_durable_mutation(
+                &keyboard_document,
+                &mut wb,
+                "history navigation",
+            );
             let _ = projectional_history_action(&mut wb, action);
             save_projectional(&mut wb);
             drop(wb);
@@ -15848,6 +16019,202 @@ mod tests {
     }
 
     #[test]
+    fn projectional_non_pointer_mutations_retire_canvas_authority_before_dispatch() {
+        let source = include_str!("mod.rs");
+        let events = source
+            .split("fn install_projectional_events(")
+            .nth(1)
+            .and_then(|source| source.split("fn install_palette_icons").next())
+            .expect("projectional browser event implementation");
+        let assert_guarded = |route_start: &str, mutation: &str| {
+            let route = events
+                .split(route_start)
+                .nth(1)
+                .unwrap_or_else(|| panic!("missing projectional route `{route_start}`"));
+            let mutation_index = route
+                .find(mutation)
+                .unwrap_or_else(|| panic!("route `{route_start}` is missing `{mutation}`"));
+            assert!(
+                route[..mutation_index].contains("cancel_projectional_before_durable_mutation("),
+                "route `{route_start}` mutates through `{mutation}` before retiring canvas authority",
+            );
+        };
+
+        for (route, mutation) in [
+            (
+                "if let Some(movement) = target.get_attribute(\"data-intent-move\")",
+                ".apply_patch(patch)",
+            ),
+            (
+                "if let Some(movement) = target.get_attribute(\"data-intent-cell-move\")",
+                ".apply_patch(patch)",
+            ),
+            (
+                "let drop_handler = Closure::<dyn FnMut(Event)>::new",
+                ".apply_patch(patch)",
+            ),
+            (
+                "if target.has_attribute(\"data-editor-item\")",
+                "projectional_authoring_document(&wb)",
+            ),
+            (
+                "Some(\"annotation-reset-selected\") => {",
+                ".reset_selected_annotation_layout()",
+            ),
+            (
+                "Some(\"annotation-reset-all\") => {",
+                ".reset_all_annotation_layout()",
+            ),
+            (
+                "Some(\"feature-apply\") => {",
+                "apply_projectional_feature_authoring(&mut wb)",
+            ),
+            (
+                "Some(\"offset-apply\") => {",
+                "apply_projectional_offset_authoring(&mut wb)",
+            ),
+            (
+                "if target.has_attribute(\"data-editor-item\")",
+                ".pick(&document, AuthoringOperand::selected(item))",
+            ),
+            (
+                "Some(\"finish\") => {",
+                ".complete_draft(scene.design_identity)",
+            ),
+            (
+                "Some(\"geometry-role\") => {",
+                ".toggle_selected_geometry_role()",
+            ),
+            (
+                "if edit != \"name\" {",
+                "dispatch_projectional_inspector_control(wb.editor_mut(), &control)",
+            ),
+            ("let unchanged = wb", "wb.editor_mut().apply_patch(patch)"),
+            (
+                "if event.key() == \"Enter\"\n                && projectional_feature_authoring_active",
+                "apply_projectional_feature_authoring(&mut wb)",
+            ),
+            (
+                "if event.key() == \"Enter\"\n                && projectional_offset_authoring_active",
+                "apply_projectional_offset_authoring(&mut wb)",
+            ),
+        ] {
+            assert_guarded(route, mutation);
+        }
+    }
+
+    #[test]
+    fn generic_and_foreign_saves_preserve_pending_semantic_pointer_authority() {
+        run_projectional_test_with_large_stack("m84-save-wrapper-pending-route", || {
+            let fixture = collaborative_reference_fixture();
+            let diagonal = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let shared = native_point_for_role(&fixture.editor, diagonal, IntentPortRole::Start);
+            let start = native_point_position(&fixture.editor, shared);
+            let CollaborativeReferenceFixture {
+                mut code,
+                editor,
+                viewport,
+            } = fixture;
+            assert!(
+                code.prepare_semantic_point_drag(&editor, 8_420, shared, None)
+                    .expect("unique producer semantic route")
+                    .is_none(),
+                "the producer route keeps ordinary shared native authority",
+            );
+            assert!(code.has_pending_semantic_point_drag(8_420));
+
+            let mut authority =
+                super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                    .expect("projectional workbench authority");
+            let notice_before = "Live semantic point preview".to_owned();
+            let mut notice = notice_before.clone();
+
+            let assert_preserved = |code: &mut super::code_projects::CodeProjectWorkbench,
+                                    authority: &mut super::WorkbenchDocumentAuthority,
+                                    notice: &mut String,
+                                    terminal_pointer| {
+                let authority_before = authority
+                    .snapshot()
+                    .and_then(|snapshot| snapshot.encode())
+                    .expect("encoded live editor authority");
+                let code_before = code.to_persistence_json().unwrap();
+                assert_eq!(
+                    super::publish_projectional_code_checkpoint_for_save(
+                        code,
+                        authority,
+                        notice,
+                        terminal_pointer,
+                    ),
+                    super::ProjectionalCodeSavePublication::Abort,
+                );
+                assert!(code.has_pending_semantic_point_drag(8_420));
+                assert_eq!(code.to_persistence_json().unwrap(), code_before);
+                assert_eq!(notice, &notice_before);
+                assert_eq!(
+                    authority
+                        .snapshot()
+                        .and_then(|snapshot| snapshot.encode())
+                        .expect("unchanged live editor authority"),
+                    authority_before,
+                );
+            };
+
+            // An unchanged live editor still belongs to the captured pointer;
+            // a generic save cannot consume that no-motion route.
+            assert_preserved(&mut code, &mut authority, &mut notice, None);
+
+            // Exercise the same exact coordinator after a real accepted native
+            // preview move. The preview must neither snap back to code authority
+            // nor leak into persisted code bytes through a generic/foreign save.
+            let pointer = |model| PointerInput {
+                pointer_id: 8_420,
+                position: viewport.model_to_screen(model),
+                modifiers: Modifiers::default(),
+            };
+            let editor = authority
+                .projectional_mut()
+                .expect("projectional editor authority");
+            let scene = editor.scene(viewport, 0.5).expect("pointer-down scene");
+            editor
+                .pointer_down_exact_point(&scene, pointer(start), shared)
+                .expect("exact producer point gesture");
+            let target = [4.0, 3.0];
+            let scene = editor.scene(viewport, 0.5).expect("pointer-move scene");
+            editor
+                .pointer_move(&scene, pointer(target))
+                .expect("valid native preview");
+            let scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
+            assert!(
+                editor
+                    .pointer_up(&scene, pointer(target))
+                    .expect("valid native terminal")
+                    .transaction
+                    .is_some(),
+            );
+            assert_preserved(&mut code, &mut authority, &mut notice, None);
+            assert_preserved(&mut code, &mut authority, &mut notice, Some(9_999));
+
+            let save_wrapper = include_str!("mod.rs")
+                .split("fn save_projectional_with_terminal_pointer(")
+                .nth(1)
+                .and_then(|source| {
+                    source
+                        .split("fn present_projectional_pointer_event(")
+                        .next()
+                })
+                .expect("projectional persistence wrapper");
+            assert!(save_wrapper.contains(
+                "if publication == super::ProjectionalCodeSavePublication::Abort {\n                return;"
+            ));
+            assert!(
+                save_wrapper.find("return;").unwrap()
+                    < save_wrapper.find("window.local_storage()").unwrap(),
+                "a refused save must return before changing browser persistence",
+            );
+        });
+    }
+
+    #[test]
     fn projectional_reproduction_controls_are_enabled_and_route_complete_transport() {
         let source = include_str!("mod.rs");
         let availability = source
@@ -21079,7 +21446,7 @@ mod tests {
             WorkbenchRenderScope::Transient,
         );
 
-        counters.record(WorkbenchPresentationEvent::PointerRelease);
+        counters.record(WorkbenchPresentationEvent::AuthenticatedPointerRelease(83));
         assert_eq!(
             counters,
             WorkbenchPresentationCounters {
@@ -22988,8 +23355,9 @@ export default sketch(($) => {
         );
         let publication = fixture
             .code
-            .publish_delegated_editor_checkpoint(
-                delegated_editor_checkpoint(&fixture.editor),
+            .publish_pointer_terminal_checkpoint(
+                pointer_id,
+                &delegated_editor_checkpoint(&fixture.editor),
                 label,
             )
             .expect("outer semantic point publication")

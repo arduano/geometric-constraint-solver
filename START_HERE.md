@@ -375,16 +375,31 @@ cancellation/repeated drag/Undo/Redo, and makes same-tier seed conflict bit-exac
 zero. It changes no equation, priority, constraint, tolerance or branch rule. The unreleased
 optional formats intentionally identify as
 `geosolve-sketch-code-session-v2` and `geosolve-code-workbench-v2`; plain M83 workspace-v8 is
-unchanged. This does not add a fifth bundled-ledger demo. Exact source
+unchanged. M84-F007 then repairs a terminal classification seam exposed by multi-frame rectangle
+drags. Pointer-down now authenticates one exact semantic point lens: no selection chooses the
+unique producer, selected producer remains attached and selected consumer still detaches. Release
+independently rematerializes only that lens, so solver-coupled corner roundoff cannot become extra
+same-tier writes; ordinary GUI points remain delegated. The pending route stores exact
+`CodeSessionIdentity`, pointer and lens; only its dedicated terminal publisher may consume it.
+Generic saves, foreign/reentrant preparation, foreign terminals and stale terminals reject without
+replacing the route or newer authority. Every durable sidebar, code, Outline, Inspector, history,
+source and Apply route first cancels captured canvas authority; the generic-save adapter also
+preserves an unexpected live route without restoring underneath it. No-motion release/cancel is
+history-neutral. This does not add a fifth bundled-ledger demo. Exact source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, passes complete clean qualification. Its exact
 no-rebuild snapshot `/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`, aggregate
 `6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, passes its historical
 temporary and retained exact-byte checks plus direct 3/3, baseline 4/4, F003 1/1 and F004 2/2
 browser suites. M84-F005/F006 withdraw this nomination because it predates collaborative overlay,
-semantic drag/deletion authority and its audit hardening. F005/F006 implementation and focused
-qualification pass, while the clean committed-source gate, refreshed U1-U14 and a replacement
-freeze remain pending; Pages remains on accepted M83 and no M84 public publication is claimed.
+semantic drag/deletion authority and its audit hardening. Combined F005/F006 source `ff2e142` and
+its frozen candidate are also withdrawn by F007. The earlier provisional release-WASM/browser
+matrix passed 14/14. Post-audit demo-web passes 270/270, including actual no-motion release, exact
+stored-session mismatch, durable-mutation ordering and generic-save preservation regressions;
+sketch-code suites plus focused Clippy/WASM checks pass. The refreshed browser matrix, clean
+committed-source gate, replacement freeze and U1-U14 remain pending. No replacement artifact
+hash/path or retained service is claimed; Pages remains on accepted M83 and no M84 public
+publication is claimed.
 
 ## Read first
 
@@ -422,7 +437,7 @@ freeze remain pending; Pages remains on accepted M83 and no M84 public publicati
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005/F006 ledger, withdrawn historical nominations and pending replacement
+    implemented F005-F007 ledger, withdrawn historical nominations and pending replacement
     scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
@@ -799,8 +814,9 @@ M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and po
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
 The clean-qualified F003/F004 and direct-authoring candidates remain withdrawn historical evidence.
-F005 collaborative semantic authority and F006 audit hardening are implemented and focused-
-qualified; clean replacement nomination and human UAT remain open.
+F005 collaborative semantic authority, F006 audit hardening and F007 exact terminal-lens
+classification are implemented and focused-qualified. Combined source `ff2e142` is withdrawn;
+clean replacement nomination and human UAT remain open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -918,9 +934,9 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F006 ledger and withdrawn
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F007 ledger and withdrawn
   historical nominations)
-- `docs/M84_UAT.md` (implemented/focused-qualified F005/F006 and refreshed pending U1-U14
+- `docs/M84_UAT.md` (implemented/focused-qualified F005-F007 and refreshed pending U1-U14
   scorecard; no current replacement candidate)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
