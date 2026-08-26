@@ -113,8 +113,16 @@ accepts a positive finite model-unit number or branded `mm(...)`; a forged unit 
 unit spelling is outside managed-v1. Direct lowering reconstructs the existing Intent
 `ComputedFeature::FilletSet` without invoking Fillet authoring heuristics or a new solver path. Its
 result is an opaque `FilletSetFeature`, not a claim that evaluated child arcs are native curve-span
-ports. One checked-in managed-v1 line/line/Fillet source is shared by TypeScript compilation, Rust
-parsing and cold materialization so those boundaries cannot validate divergent fixtures.
+ports. One checked-in managed-v1 line/Horizontal/Vertical/line/Fillet source is shared by
+TypeScript compilation, Rust parsing and cold materialization so those boundaries cannot validate
+divergent fixtures.
+Existing inferred Horizontal and Vertical constraints in that ordinary closure are represented by
+managed `$.constraint.horizontal`/`$.constraint.vertical` calls over the same lexical native-span
+members. Suppression is explicit and direct lowering selects the existing Intent constraint kind;
+this is adapter coverage, not a new relation or equation.
+Projection also requires the accepted validation semantic to equal the exact current retained
+intent semantic identity. Retained-failed intent therefore renders a visible unavailable Code
+state without Promote instead of combining prior accepted geometry with current wiring.
 
 Code remains discoverable even when another unsupported declaration makes complete conversion
 fail. In that state the workbench renders an escaped read-only conversion diagnostic, keeps Intent

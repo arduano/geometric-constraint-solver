@@ -1614,6 +1614,12 @@ fn projected_code_project(editor: &ProjectionalEditorSession) -> Result<CodeProj
             IntentNodeKind::ComputedFeature {
                 feature: geosolve_sketch_intent::ComputedFeatureKind::FilletSet,
             } => "fillet",
+            IntentNodeKind::Constraint {
+                constraint: geosolve_sketch_intent::ConstraintKind::Horizontal,
+            } => "horizontal",
+            IntentNodeKind::Constraint {
+                constraint: geosolve_sketch_intent::ConstraintKind::Vertical,
+            } => "vertical",
             _ => "declaration",
         };
         let ordinal = base_counts.entry(base.to_owned()).or_default();
@@ -2683,6 +2689,10 @@ mod tests {
         editor
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact mouse-shaped F004 fixture keeps both inferred axis constraints and its computed Fillet together"
+    )]
     fn ordinary_line_fillet() -> ProjectionalEditorSession {
         use geosolve_constraint_editor::{
             FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
@@ -2725,6 +2735,38 @@ mod tests {
             ))
             .unwrap();
         let first_node = first.aliases.node(&first_alias).unwrap();
+        let first_span = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(first_node)
+            .unwrap()
+            .port_by_selector(selector(IntentPortRole::Span))
+            .unwrap()
+            .as_ref(first_node);
+        let horizontal_alias =
+            geosolve_sketch_intent::IntentKey::new("gui-first-horizontal").unwrap();
+        let horizontal = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Constraint {
+                constraint: geosolve_sketch_intent::ConstraintKind::Horizontal,
+            },
+            geosolve_sketch_intent::IntentKey::new("gui.firstHorizontal").unwrap(),
+        )
+        .with_input(
+            InputSlot::new(InputRole::Span, 0),
+            PatchPortRef::Stable { port: first_span },
+        );
+        editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: horizontal_alias,
+                    draft: Box::new(horizontal),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
         let shared = editor
             .coordinator()
             .intent()
@@ -2748,13 +2790,45 @@ mod tests {
         )
         .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(4.0))
         .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(4.0));
+        let second = editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: second_alias.clone(),
+                    draft: Box::new(second),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        let second_node = second.aliases.node(&second_alias).unwrap();
+        let second_span = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(second_node)
+            .unwrap()
+            .port_by_selector(selector(IntentPortRole::Span))
+            .unwrap()
+            .as_ref(second_node);
+        let vertical_alias = geosolve_sketch_intent::IntentKey::new("gui-second-vertical").unwrap();
+        let vertical = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Constraint {
+                constraint: geosolve_sketch_intent::ConstraintKind::Vertical,
+            },
+            geosolve_sketch_intent::IntentKey::new("gui.secondVertical").unwrap(),
+        )
+        .with_input(
+            InputSlot::new(InputRole::Span, 0),
+            PatchPortRef::Stable { port: second_span },
+        );
         editor
             .apply_patch(geosolve_sketch_intent::IntentPatch::new(
                 editor.coordinator().intent().identity(),
                 geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
                 vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
-                    alias: second_alias,
-                    draft: Box::new(second),
+                    alias: vertical_alias,
+                    draft: Box::new(vertical),
                     cell: None,
                 }],
             ))
@@ -4711,6 +4785,49 @@ mod tests {
     }
 
     #[test]
+    fn retained_failed_rebind_keeps_code_visible_without_promoting_hybrid_authority() {
+        let mut editor = ordinary_rectangle_diagonal();
+        let diagonal = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&geosolve_sketch_intent::IntentKey::new("gui.diagonal").unwrap())
+            .unwrap();
+        let diagonal_id = diagonal.id;
+        let end = diagonal.inputs
+            [&geosolve_sketch_intent::InputSlot::new(geosolve_sketch_intent::InputRole::Point, 1)];
+        let outcome = editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RetainFailedIntent,
+                vec![geosolve_sketch_intent::IntentPatchOperation::RebindInput {
+                    node: diagonal_id,
+                    slot: geosolve_sketch_intent::InputSlot::new(
+                        geosolve_sketch_intent::InputRole::Point,
+                        0,
+                    ),
+                    source: geosolve_sketch_intent::PatchPortRef::Stable { port: end },
+                }],
+            ))
+            .unwrap();
+        assert_eq!(
+            outcome.disposition,
+            geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed,
+        );
+
+        let OrdinaryCodeSurface::Unavailable { reason } = OrdinaryCodeSurface::from_editor(&editor)
+        else {
+            panic!("retained-failed intent must not expose promotable hybrid code")
+        };
+        assert!(reason.contains("does not belong to the current retained intent"));
+        let markup = OrdinaryCodeSurface::Unavailable { reason }.panel_markup();
+        assert!(markup.contains("data-code-preview-state=\"unavailable\""));
+        assert!(markup.contains("Code preview unavailable"));
+        assert!(markup.contains("Intent IR remains available"));
+        assert!(!markup.contains("data-code-action=\"promote-ordinary\""));
+    }
+
+    #[test]
     fn ordinary_rectangle_diagonal_preview_uses_lexical_feature_references() {
         let editor = ordinary_rectangle_diagonal();
         let preview = OrdinaryCodePreview::from_editor(&editor).unwrap();
@@ -4735,10 +4852,22 @@ mod tests {
     fn m84_f004_two_lines_and_fillet_project_and_promote_as_managed_code() {
         let editor = ordinary_line_fillet();
         let preview = OrdinaryCodePreview::from_editor(&editor).unwrap();
-        assert_eq!(preview.declaration_count, 3);
+        assert_eq!(preview.declaration_count, 5);
         assert!(preview.source.contains("const line = $.geometry.line"));
         assert!(preview.source.contains("const line2 = $.geometry.line"));
         assert!(preview.source.contains("start: line.end"));
+        assert!(
+            preview
+                .source
+                .contains("const horizontal = $.constraint.horizontal")
+        );
+        assert!(preview.source.contains("curve: line.span"));
+        assert!(
+            preview
+                .source
+                .contains("const vertical = $.constraint.vertical")
+        );
+        assert!(preview.source.contains("curve: line2.span"));
         assert!(
             preview
                 .source
@@ -4761,6 +4890,16 @@ mod tests {
         assert!(accepted.validation.hard_residuals_validated);
         assert!(accepted.validation.all_active_features_current);
         assert_eq!(accepted.validation.feature_count, 1);
+        let constraints = accepted.session.design_document().constraints();
+        assert_eq!(constraints.len(), 2);
+        assert!(constraints.iter().any(|constraint| matches!(
+            constraint.definition,
+            geosolve_sketch::DocumentConstraintDefinition::Horizontal { .. }
+        )));
+        assert!(constraints.iter().any(|constraint| matches!(
+            constraint.definition,
+            geosolve_sketch::DocumentConstraintDefinition::Vertical { .. }
+        )));
         assert!(
             accepted
                 .validation

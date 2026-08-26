@@ -18,8 +18,8 @@ use geosolve_sketch::{
     DocumentFilletTrimEndpoint, DocumentTrimParameter,
 };
 use geosolve_sketch_intent::{
-    ComputedFeatureKind, GeometryRecipeKind, InputRole, InputSlot, IntentNode, IntentNodeKind,
-    IntentPortKind, IntentPortRole, IntentPortSelector, NodeId,
+    ComputedFeatureKind, ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentNode,
+    IntentNodeKind, IntentPortKind, IntentPortRole, IntentPortSelector, NodeId,
 };
 use thiserror::Error;
 
@@ -48,6 +48,8 @@ pub enum EditorBootstrapError {
     MissingAcceptedAuthority,
     #[error("the accepted GUI checkpoint failed independent native validation")]
     InvalidAcceptedAuthority,
+    #[error("the accepted GUI checkpoint does not belong to the current retained intent")]
+    StaleAcceptedAuthority,
     #[error("bootstrap selection is empty")]
     EmptySelection,
     #[error("bootstrap selection repeats declaration node {0}")]
@@ -64,6 +66,8 @@ pub enum EditorBootstrapError {
     MissingDependency { symbol: String, dependency: NodeId },
     #[error("GUI declaration `{symbol}` has an unsupported `{input}` dependency")]
     UnsupportedReference { symbol: String, input: &'static str },
+    #[error("GUI declaration `{symbol}` has an unsupported native span dependency `{input}`")]
+    UnsupportedNativeSpanReference { symbol: String, input: String },
     #[error("GUI declaration `{symbol}` has no accepted native `{output}` point")]
     MissingNativePoint {
         symbol: String,
@@ -75,6 +79,8 @@ pub enum EditorBootstrapError {
     InvalidComputedFeatureState { symbol: String },
     #[error("GUI declaration `{symbol}` does not own its accepted Fillet span `{input}`")]
     FilletSpanOwnershipMismatch { symbol: String, input: String },
+    #[error("GUI declaration `{symbol}` does not own its accepted native span `{input}`")]
+    NativeSpanOwnershipMismatch { symbol: String, input: String },
     #[error("GUI declaration `{symbol}` contains non-finite accepted geometry")]
     NonFiniteGeometry { symbol: String },
     #[error("generated managed bootstrap is invalid: {0}")]
@@ -113,6 +119,9 @@ pub fn initialize_code_project_from_editor(
             .is_some_and(|value| !value.is_finite() || value > 1.0e-9)
     {
         return Err(EditorBootstrapError::InvalidAcceptedAuthority);
+    }
+    if accepted.validation.semantic != editor.coordinator().intent().semantic_identity() {
+        return Err(EditorBootstrapError::StaleAcceptedAuthority);
     }
     validate_selection(declarations)?;
 
@@ -211,6 +220,9 @@ fn write_managed_declaration(
         IntentNodeKind::ComputedFeature {
             feature: ComputedFeatureKind::FilletSet,
         } => write_managed_fillet_set(body, editor, declaration, node, selected)?,
+        IntentNodeKind::Constraint {
+            constraint: constraint @ (ConstraintKind::Horizontal | ConstraintKind::Vertical),
+        } => write_managed_axis_constraint(body, editor, declaration, node, selected, constraint)?,
         ref kind => {
             return Err(EditorBootstrapError::UnsupportedRecipe {
                 symbol: declaration.symbol.0.clone(),
@@ -218,6 +230,31 @@ fn write_managed_declaration(
             });
         }
     }
+    Ok(())
+}
+
+fn write_managed_axis_constraint(
+    body: &mut String,
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    selected: &BTreeMap<NodeId, &EditorBootstrapDeclaration>,
+    constraint: ConstraintKind,
+) -> Result<(), EditorBootstrapError> {
+    let family = match constraint {
+        ConstraintKind::Horizontal => "horizontal",
+        ConstraintKind::Vertical => "vertical",
+        _ => unreachable!("caller admits only axis constraints"),
+    };
+    let span =
+        native_span_expression(editor, declaration, node, selected, 0, "curve".into(), None)?;
+    write!(
+        body,
+        "  const {symbol} = $.constraint.{family}(\"{symbol}\", {{\n    curve: {span},\n    suppressed: {suppressed},\n  }});\n",
+        symbol = declaration.symbol.0,
+        suppressed = node.suppressed,
+    )
+    .expect("writing managed source to a String cannot fail");
     Ok(())
 }
 
@@ -448,14 +485,44 @@ fn fillet_span_expression(
         input_index / 2,
         input_index % 2,
     );
+    native_span_expression(
+        editor,
+        declaration,
+        node,
+        selected,
+        input_index,
+        input_name,
+        Some(native_source),
+    )
+}
+
+fn native_span_expression(
+    editor: &ProjectionalEditorSession,
+    declaration: &EditorBootstrapDeclaration,
+    node: &IntentNode,
+    selected: &BTreeMap<NodeId, &EditorBootstrapDeclaration>,
+    input_index: u16,
+    input_name: String,
+    expected_native_source: Option<NativeCurveSpanSource>,
+) -> Result<String, EditorBootstrapError> {
+    let ownership_error = |input: String| {
+        if expected_native_source.is_some() {
+            EditorBootstrapError::FilletSpanOwnershipMismatch {
+                symbol: declaration.symbol.0.clone(),
+                input,
+            }
+        } else {
+            EditorBootstrapError::NativeSpanOwnershipMismatch {
+                symbol: declaration.symbol.0.clone(),
+                input,
+            }
+        }
+    };
     let source = node
         .inputs
         .get(&InputSlot::new(InputRole::Span, input_index))
         .copied()
-        .ok_or_else(|| EditorBootstrapError::FilletSpanOwnershipMismatch {
-            symbol: declaration.symbol.0.clone(),
-            input: input_name.clone(),
-        })?;
+        .ok_or_else(|| ownership_error(input_name.clone()))?;
     let source_declaration =
         selected
             .get(&source.node)
@@ -469,34 +536,29 @@ fn fillet_span_expression(
         .graph()
         .node(source.node)
         .ok_or(EditorBootstrapError::MissingNode(source.node))?;
-    let source_port = source_node.port(source.port).ok_or_else(|| {
-        EditorBootstrapError::FilletSpanOwnershipMismatch {
-            symbol: declaration.symbol.0.clone(),
-            input: input_name.clone(),
-        }
-    })?;
+    let source_port = source_node
+        .port(source.port)
+        .ok_or_else(|| ownership_error(input_name.clone()))?;
+    let accepted_binding = editor
+        .coordinator()
+        .accepted_materialization()
+        .and_then(|accepted| accepted.ownership.port(source));
     if source.kind != IntentPortKind::CurveSpan
         || source_port.kind != IntentPortKind::CurveSpan
-        || editor
-            .coordinator()
-            .accepted_materialization()
-            .and_then(|accepted| accepted.ownership.port(source))
-            != Some(IntentNativeBinding::CurveSpan(native_source.span))
+        || !matches!(
+            accepted_binding,
+            Some(IntentNativeBinding::CurveSpan(span))
+                if expected_native_source.is_none_or(|expected| expected.span == span)
+        )
     {
-        return Err(EditorBootstrapError::FilletSpanOwnershipMismatch {
-            symbol: declaration.symbol.0.clone(),
-            input: input_name,
-        });
+        return Err(ownership_error(input_name));
     }
     let IntentPortSelector::Node {
         role: IntentPortRole::Span,
         index,
     } = source_port.selector
     else {
-        return Err(EditorBootstrapError::FilletSpanOwnershipMismatch {
-            symbol: declaration.symbol.0.clone(),
-            input: input_name,
-        });
+        return Err(ownership_error(input_name));
     };
     match source_node.kind {
         IntentNodeKind::Geometry {
@@ -509,9 +571,9 @@ fn fillet_span_expression(
             source_declaration.symbol.0,
             ["bottom", "right", "top", "left"][usize::from(index)],
         )),
-        _ => Err(EditorBootstrapError::UnsupportedReference {
+        _ => Err(EditorBootstrapError::UnsupportedNativeSpanReference {
             symbol: declaration.symbol.0.clone(),
-            input: "Fillet parent span",
+            input: input_name,
         }),
     }
 }

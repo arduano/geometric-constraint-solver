@@ -3429,14 +3429,20 @@ radius accepts only a positive finite model-unit number or branded `mm(...)`. It
 Fillet authoring heuristics or changing the solver. Cold promotion/reload must authenticate
 accepted feature/corner/native-span ownership, preserve finite Current geometry and independently
 validate normalized Hard residual `<= 1e-9`.
+The normal axis-aligned authoring path's existing inferred Horizontal and Vertical constraints must
+also remain in the complete projection as lexical managed constraint calls over the owning native
+spans, preserve suppression, and cold-materialize as the existing native constraint kinds. They
+must not be dropped to make promotion succeed, and M84 adds no new residual equation.
 
 Ordinary conversion remains all-or-nothing. Unsupported declarations must not make Code
 undiscoverable: Code renders an escaped read-only conversion diagnostic, Intent IR remains
 available and Promote is absent. Focused Rust bootstrap/ownership/direct-lowering/workbench,
 descriptor-parity, TypeScript and UI coverage is being qualified. This focused development
 evidence does not claim an F004 clean gate, frozen artifact, Tailscale nomination or human row.
-The checked-in managed-v1 two-line/one-Fillet fixture is one source compiled by TypeScript, parsed
-by Rust and cold-materialized through the ordinary accepted-scene authority.
+After retained-failed intent, bootstrap must also require that accepted validation belongs to the
+exact current semantic identity; Code stays visible as unavailable and offers no Promote action.
+The checked-in managed-v1 two-line/two-axis-constraint/one-Fillet fixture is one source compiled by
+TypeScript, parsed by Rust and cold-materialized through the ordinary accepted-scene authority.
 
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace

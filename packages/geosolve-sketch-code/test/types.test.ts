@@ -163,6 +163,15 @@ const managedFilletSet = sketch(($) => {
     }],
     suppressed: false,
   });
+  const horizontal = $.constraint.horizontal("horizontal", {
+    curve: first,
+  });
+  const vertical = $.constraint.vertical("vertical", {
+    curve: second.span,
+    suppressed: false,
+  });
+  const typedVertical: OutputRef<ManagedSketchProject, "constraint"> = vertical;
+  typedVertical;
 
   const parent = {
     span: first.span,
@@ -192,7 +201,13 @@ const managedFilletSet = sketch(($) => {
   $.computed.filletSet("angle", { radius: { unit: "deg", value: 4 }, corners: [{ parents: [parent, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
   // @ts-expect-error Managed units must come from the branded supported constructor.
   $.computed.filletSet("forgedUnit", { radius: { unit: "mm", value: 4 }, corners: [{ parents: [parent, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Managed Vertical requires a native curve span or its owning line.
+  $.constraint.vertical("pointVertical", { curve: second.start });
+  // @ts-expect-error Managed Vertical rejects raw semantic path strings.
+  $.constraint.vertical("rawVertical", { curve: "second.span" });
+  // @ts-expect-error Managed Vertical rejects native spans from another project.
+  $.constraint.vertical("foreignVertical", { curve: segment.span });
 
-  return $.outputs({ first, second, round });
+  return $.outputs({ first, second, round, horizontal, vertical });
 });
 managedFilletSet;

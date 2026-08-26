@@ -845,9 +845,17 @@ not native spans and reject both statically and during Rust lowering. Radius acc
 positive finite model-unit number or branded `mm(...)`. It lowers to the existing Intent computed
 feature without invoking Fillet authoring heuristics or adding solver behavior, and returns opaque
 `FilletSetFeature` authority rather than synthetic native arc ports. The same checked-in managed-v1
-line/line/Fillet source is compiled by TypeScript, parsed by Rust and cold-materialized. All-or-
+line/Horizontal/Vertical/line/Fillet source is compiled by TypeScript, parsed by Rust and cold-
+materialized. All-or-
 nothing projection remains; a rejection keeps Code discoverable with an escaped read-only
 conversion diagnostic, Intent IR fallback and no Promote.
+The exact ordinary mouse path also retains inferred Horizontal/Vertical span relations. They are
+projected as managed constraint calls against the same lexical native-span expressions, including
+suppression, and lower to the existing Intent constraint kinds; the optional layer owns no new
+relation or residual.
+GUI bootstrap additionally authenticates the accepted validation semantic against the exact
+current retained intent before serialization. A retained-failed graph can therefore render only a
+truthful unavailable Code state, never source that mixes old accepted geometry and new wiring.
 
 ### `geosolve-sketch-features`
 

@@ -55,6 +55,14 @@ layer optional.
   to the existing Intent `ComputedFeature::FilletSet`; do not rerun Fillet picking/authoring
   heuristics or introduce a solver path. The result is an opaque `FilletSetFeature`, not a false
   promise that computed child arcs are ordinary native curve-span outputs.
+- Preserve the ordinary drafting path's existing inferred Horizontal and Vertical relations.
+  Project each as `$.constraint.horizontal` or `$.constraint.vertical` against the owning lexical
+  native span, including suppression, and lower it back to the existing Intent constraint kind.
+  Never omit those relations merely to make a Fillet scene promotable, and add no new relation or
+  residual equation.
+- Authenticate accepted geometry against the exact current retained semantic identity before GUI
+  projection. Retained-failed intent must keep Code visibly unavailable with no Promote action;
+  never serialize a hybrid of prior accepted geometry and current unaccepted wiring.
 
 ### M84-G3 — reusable custom patches
 
@@ -130,8 +138,9 @@ layer optional.
   bounds and save/repro.
 - Prove cold/warm and native/WASM/RPC/TypeScript parity, finite geometry, explicit branches and
   normalized Hard residual `<= 1e-9` through existing validation.
-- Compile the checked-in managed-v1 two-line/one-Fillet fixture through TypeScript, parse that same
-  source in Rust and cold-materialize it through the unchanged accepted-scene path.
+- Compile the checked-in managed-v1 two-line/Horizontal/Vertical/one-Fillet fixture through
+  TypeScript, parse that same source in Rust and cold-materialize it through the unchanged
+  accepted-scene path.
 - Prove pointer frames do no parsing/expansion and existing drag/terminal performance ceilings
   remain green.
 - Pass format, warnings-denied Clippy/Rustdoc, locked all-feature tests, actual WASM, TypeScript,

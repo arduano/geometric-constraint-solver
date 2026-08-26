@@ -5853,9 +5853,15 @@ approval remain pending; accepted M83 remains public Pages authority.
   segments; reject computed host Fillet arcs at both the typed and Rust lowering boundaries.
   Accept only positive finite model-unit radius numbers or branded `mm(...)`. Preserve all-or-
   nothing projection, but keep Code visible on rejection with an escaped read-only conversion
-  diagnostic, Intent IR fallback and no Promote.
+  diagnostic, Intent IR fallback and no Promote. Preserve ordinary inferred Horizontal/Vertical
+  relations as managed constraint declarations over lexical native spans and lower them to the
+  existing Intent kinds without adding equations.
+  Authenticate the accepted materialization against the exact current retained semantic identity
+  before serializing any declaration, so retained-failed intent keeps a visible unavailable Code
+  diagnostic and can never expose a promotable accepted/current hybrid.
 - [ ] Qualify M84-F004 with focused bootstrap/ownership, direct-lowering, descriptor-parity,
-  TypeScript type-contract, managed-v1 line/Fillet compile-parse-cold-materialization,
+  TypeScript type-contract, managed-v1 line/axis-constraint/Fillet compile-parse-cold-
+  materialization,
   workbench/persistence and Code-surface tests; then pass proportional WASM/golden/format/Clippy/
   workspace gates, complete the clean release gate and nominate a new immutable Tailscale
   candidate.
@@ -5919,12 +5925,16 @@ conversion error. The repair adds Segment-to-Segment lexical endpoints and direc
 contact/branch choices are explicit. Central descriptors brand only direct line spans, rectangle
 edges and Polyline segments; computed host Fillet arcs reject as parents at the TypeScript and Rust
 boundaries. Radius accepts only a positive finite model-unit number or branded `mm(...)`. The
-checked-in managed-v1 two-line/one-Fillet source is shared by TypeScript compilation, Rust parsing
-and cold materialization. The declaration returns opaque `FilletSetFeature` authority and lowers
+checked-in managed-v1 two-line/two-axis-constraint/one-Fillet source is shared by TypeScript
+compilation, Rust parsing and cold materialization. The declaration returns opaque
+`FilletSetFeature` authority and lowers
 to the existing Intent `ComputedFeature::FilletSet`, without rerunning Fillet authoring heuristics
 or changing the solver. Unsupported scenes continue to reject all-or-nothing conversion, but Code
 stays discoverable with an escaped diagnostic, Intent IR fallback and no Promote. Focused Rust
-owner, bootstrap/direct-lowering/workbench, TypeScript and UI tests are being qualified. No F004
+browser replay then exposed the exact mouse path's inferred Horizontal and Vertical declarations;
+the same repair now projects them as `$.constraint.horizontal`/`vertical` over lexical native
+spans, preserves suppression and lowers them to existing Intent kinds. Focused Rust owner,
+bootstrap/direct-lowering/workbench, TypeScript and UI tests are being qualified. No F004
 clean gate, frozen artifact or Tailscale nomination is claimed yet. M84-U1 through M84-U12,
 explicit approval, Pages publication, service retirement and closure remain open; no M84 Pages
 authority is claimed.

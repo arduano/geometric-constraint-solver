@@ -4781,13 +4781,18 @@ foreign-project and forged reserved-project references, wrong kinds and misspell
 
 ### M84-F004 — ordinary computed Fillets keep Code discoverable
 
-In an ordinary sketch, draw two connected Segments and one computed Fillet between them. Complete
-GUI bootstrap formerly returned an unsupported-recipe error for `ComputedFeature::FilletSet`; the
-workbench treated every conversion error by omitting Code, making unsupported projection look like
-absence of the code layer.
+In an ordinary sketch, draw a Horizontal Segment, continue it with a Vertical Segment and place one
+computed Fillet between them. Ordinary drafting creates the two existing inferred axis constraints.
+Complete GUI bootstrap formerly returned an unsupported-recipe error first for
+`ComputedFeature::FilletSet` and, after that direct slice, for those Horizontal/Vertical
+declarations; the old workbench also treated every conversion error by omitting Code, making
+unsupported projection look like absence of the code layer.
 
 The supported complete projection must emit the second Segment endpoint as a lexical declaration
-member and one direct `$.computed.filletSet` declaration. Each Fillet corner has exactly two
+member, `$.constraint.horizontal`/`$.constraint.vertical` declarations whose `curve` values are
+the lexical owning spans, and one direct `$.computed.filletSet` declaration. Constraint
+suppression is exact and lowering uses the existing Intent Horizontal/Vertical kinds. Each Fillet
+corner has exactly two
 ordered lexical `NativeCurveSpanRef` parents and explicit parameter, winding, neighborhood, normal
 side, retained endpoint and periodic anchor; endpoint order, sweep and suppression are also
 explicit. The central declaration-result catalog brands only direct line spans, rectangle edges
@@ -4802,11 +4807,13 @@ ports.
 
 Promotion and cold reload must authenticate the accepted feature, corner and parent spans, retain
 finite Current computed geometry and independently validate normalized Hard residual `<= 1e-9`.
-The exact checked-in managed-v1 two-line/one-Fillet fixture is compiled by TypeScript, parsed by
-Rust and cold-materialized through that authority; separate hand-maintained fixtures may not mask
-schema drift.
+The exact checked-in managed-v1 two-line/two-axis-constraint/one-Fillet fixture is compiled by
+TypeScript, parsed by Rust and cold-materialized through that authority; separate hand-maintained
+fixtures may not mask schema drift.
 Projection remains all-or-nothing for any other unsupported declaration, but Code must stay
 visible with an escaped read-only conversion diagnostic, Intent IR fallback and no Promote action.
+The same rule applies when retained-failed intent no longer matches the prior accepted semantic
+identity: projection rejects that authority mismatch before serialization and cannot offer Promote.
 This focused ordinary-bootstrap family does not alter the four-demo M84 code-project golden
 ledger. Rust bootstrap/ownership, direct-lowering, descriptor-parity, workbench/persistence,
 TypeScript and UI tests are being qualified; no F004 clean gate, frozen artifact or UAT evidence is

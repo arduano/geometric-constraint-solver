@@ -7,7 +7,7 @@ use std::path::Path;
 use geosolve_constraint_editor::{
     ComputedFeatureDefinition, ComputedFeatureEvaluationState, IntentNativeBinding,
 };
-use geosolve_sketch::{DocumentId, PersistentId};
+use geosolve_sketch::{DocumentConstraintDefinition, DocumentId, PersistentId};
 use geosolve_sketch_code::{
     CodeExpansionError, CodeProject, CodeProjectDemoId, FeatureKind, KeyedReconcileState,
     ManagedValue, ProjectKey, SemanticOutputPath, bundled_code_project_demos, expand_code_project,
@@ -126,6 +126,23 @@ fn parser_valid_managed_fillet_fixture_is_the_typescript_compile_target() {
         .expect("managed fixture accepted authority");
     assert!(accepted.validation.hard_residuals_validated);
     assert!(accepted.validation.all_active_features_current);
+    let constraints = accepted.session.design_document().constraints();
+    assert_eq!(constraints.len(), 2);
+    assert!(constraints.iter().any(|constraint| matches!(
+        constraint.definition,
+        DocumentConstraintDefinition::Horizontal { .. }
+    )));
+    assert!(constraints.iter().any(|constraint| matches!(
+        constraint.definition,
+        DocumentConstraintDefinition::Vertical { .. }
+    )));
+    assert!(constraints.iter().all(|constraint| !constraint.suppressed));
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+    );
 }
 
 #[test]

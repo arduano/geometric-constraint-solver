@@ -336,10 +336,16 @@ repair adds lexical Segment-to-Segment endpoints and direct `$.computed.filletSe
 lexical `NativeCurveSpanRef` parents, complete explicit persisted contact/branch state and opaque
 `FilletSetFeature` output. Central descriptors brand only direct line spans, rectangle edges and
 Polyline segments; computed host Fillet arcs reject as parents in TypeScript and Rust. Radius is a
-positive finite model-unit number or branded `mm(...)`. One managed-v1 line/line/Fillet fixture is
-compiled by TypeScript, parsed by Rust and cold-materialized. The feature lowers to existing Intent
-without authoring heuristics or solver changes. Code remains discoverable on unsupported scenes
-with an escaped read-only conversion diagnostic, Intent IR fallback and no Promote. Focused
+positive finite model-unit number or branded `mm(...)`. One managed-v1
+line/Horizontal/Vertical/line/Fillet fixture is compiled by TypeScript, parsed by Rust and cold-
+materialized. The feature lowers to existing Intent
+without authoring heuristics or solver changes. Exact browser replay additionally showed the
+ordinary authoring path's inferred Horizontal and Vertical declarations were unsupported; they now
+project against lexical `line.span`/`line2.span`, preserve suppression and lower to the existing
+constraint kinds without new equations. Code remains discoverable on unsupported scenes
+with an escaped read-only conversion diagnostic, Intent IR fallback and no Promote. Accepted
+geometry must match the exact current retained semantic identity, so retained-failed intent cannot
+produce hybrid promotable source. Focused
 qualification is in progress; the F003 snapshot is withdrawn, no F004 replacement is nominated and
 U1-U12 remain pending. Pages remains on accepted M83; no M84 publication is claimed.
 

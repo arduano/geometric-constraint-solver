@@ -55,8 +55,11 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   the exact canonical fresh-workspace document foundation and never hide other bootstrap geometry.
 - [x] Represent connected Segment endpoints and direct computed Fillet parents with lexical
   declaration members (`line.end`, `line.span`) rather than native IDs or transport DTOs.
-- [x] Keep one checked-in managed-v1 line/line/Fillet source as both a TypeScript compile target
-  and the Rust parser/cold-materialization fixture.
+- [x] Represent ordinary Horizontal and Vertical span relations as lexical
+  `$.constraint.horizontal`/`$.constraint.vertical` declarations, preserve suppression and lower
+  them to the existing native constraint kinds.
+- [x] Keep one checked-in managed-v1 line/Horizontal/Vertical/line/Fillet source as both a
+  TypeScript compile target and the Rust parser/cold-materialization fixture.
 
 ### I2 — custom artifacts and typed SDK
 
@@ -173,7 +176,10 @@ Reproduction owner: ordinary GUI managed projection plus the workbench Code surf
 connected Segments and place one Fillet between them. Projection was all-or-nothing, but GUI
 bootstrap could neither express the second Segment's endpoint as a lexical reference to the first
 nor lower `ComputedFeature::FilletSet`. The resulting conversion error caused presentation to omit
-the Code tab entirely, so the user saw neither code nor an explanation.
+the Code tab entirely, so the user saw neither code nor an explanation. After that direct Fillet
+slice was implemented, browser replay of the exact mouse-authored path exposed the remaining
+closure gap: ordinary drafting had also created Horizontal and Vertical constraints, and bootstrap
+rejected those declarations before it could present the otherwise-supported Fillet source.
 
 Repair contract: add Segment-to-Segment lexical endpoint projection and a distinct direct
 `$.computed.filletSet` declaration. Each corner carries exactly two ordered lexical
@@ -188,11 +194,18 @@ authoring or change solver behavior. The declaration returns an opaque `FilletSe
 Ordinary projection remains intentionally all-or-nothing. Code is now always discoverable:
 supported scenes offer a read-only managed preview and Promote, while unsupported scenes show an
 escaped read-only conversion diagnostic with Intent IR still available and no Promote action.
+The complete ordinary path additionally emits existing inferred axis relations as
+`$.constraint.horizontal(... { curve: line.span })` and
+`$.constraint.vertical(... { curve: line2.span })`, preserves suppression, and lowers them to the
+existing Intent Horizontal/Vertical kinds. It does not add or reinterpret a constraint equation.
+Bootstrap authenticates `accepted.validation.semantic` against the exact current retained intent
+before reading declarations. A retained-failed rebind therefore presents Code as unavailable with
+no Promote action instead of combining prior accepted geometry with current unaccepted wiring.
 
 Focused fixture: `packages/geosolve-sketch-code/test/managed/line-fillet.managed.ts` is the same
-managed-v1 two-line/one-Fillet source compiled by the TypeScript suite, parsed by Rust and
-cold-materialized through the ordinary intent/editor authority. It is focused development evidence,
-not release-candidate qualification.
+managed-v1 two-line/two-axis-constraint/one-Fillet source compiled by the TypeScript suite, parsed
+by Rust and cold-materialized through the ordinary intent/editor authority. It is focused
+development evidence, not release-candidate qualification.
 
 Focused development coverage is being qualified at the Rust GUI-bootstrap/owner, direct-lowering,
 descriptor-parity, workbench and TypeScript type-contract layers, together with the Code-surface

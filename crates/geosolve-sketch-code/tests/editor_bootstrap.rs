@@ -9,15 +9,15 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    EditorBootstrapDeclaration, ExpandedSemanticTarget, KeyedReconcileState, ManagedValue,
-    ProjectKey, SemanticSymbol, initialize_code_project_from_editor, materialize_code_project_cold,
-    required_generated_members,
+    EditorBootstrapDeclaration, EditorBootstrapError, ExpandedSemanticTarget, KeyedReconcileState,
+    ManagedValue, ProjectKey, SemanticSymbol, initialize_code_project_from_editor,
+    materialize_code_project_cold, required_generated_members,
 };
 use geosolve_sketch_intent::{
-    ComputedFeatureKind, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey, IntentLiteral,
-    IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
-    IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
-    PatchPortRef,
+    ComputedFeatureKind, ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey,
+    IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation,
+    IntentPatchPolicy, IntentPlanDisposition, IntentPortRole, IntentPortSelector, IntentSession,
+    IntentSessionId, IntentUnit, LeafField, PatchPortRef,
 };
 
 fn length(value: f64) -> IntentLiteral {
@@ -178,6 +178,8 @@ fn gui_two_lines_with_fillet() -> (
     geosolve_sketch_intent::NodeId,
     geosolve_sketch_intent::NodeId,
     geosolve_sketch_intent::NodeId,
+    geosolve_sketch_intent::NodeId,
+    geosolve_sketch_intent::NodeId,
 ) {
     let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84_f004)).unwrap();
     let mut editor = ProjectionalEditorSession::restore(
@@ -205,6 +207,42 @@ fn gui_two_lines_with_fillet() -> (
         ))
         .unwrap();
     let first = first_outcome.aliases.node(&first_alias).unwrap();
+    let first_span = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node(first)
+        .unwrap()
+        .port_by_selector(IntentPortSelector::Node {
+            role: IntentPortRole::Span,
+            index: 0,
+        })
+        .unwrap()
+        .as_ref(first);
+    let horizontal_alias = geosolve_sketch_intent::IntentKey::new("gui-horizontal").unwrap();
+    let horizontal_outcome = editor
+        .apply_patch(IntentPatch::new(
+            editor.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: horizontal_alias.clone(),
+                draft: Box::new(
+                    IntentNodeDraft::new(
+                        IntentNodeKind::Constraint {
+                            constraint: ConstraintKind::Horizontal,
+                        },
+                        geosolve_sketch_intent::IntentKey::new("gui.horizontal").unwrap(),
+                    )
+                    .with_input(
+                        InputSlot::new(InputRole::Span, 0),
+                        PatchPortRef::Stable { port: first_span },
+                    ),
+                ),
+                cell: None,
+            }],
+        ))
+        .unwrap();
+    let horizontal = horizontal_outcome.aliases.node(&horizontal_alias).unwrap();
     let first_end = editor
         .coordinator()
         .intent()
@@ -259,6 +297,42 @@ fn gui_two_lines_with_fillet() -> (
         ))
         .unwrap();
     let second = second_outcome.aliases.node(&second_alias).unwrap();
+    let second_span = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node(second)
+        .unwrap()
+        .port_by_selector(IntentPortSelector::Node {
+            role: IntentPortRole::Span,
+            index: 0,
+        })
+        .unwrap()
+        .as_ref(second);
+    let vertical_alias = geosolve_sketch_intent::IntentKey::new("gui-vertical").unwrap();
+    let vertical_outcome = editor
+        .apply_patch(IntentPatch::new(
+            editor.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: vertical_alias.clone(),
+                draft: Box::new(
+                    IntentNodeDraft::new(
+                        IntentNodeKind::Constraint {
+                            constraint: ConstraintKind::Vertical,
+                        },
+                        geosolve_sketch_intent::IntentKey::new("gui.vertical").unwrap(),
+                    )
+                    .with_input(
+                        InputSlot::new(InputRole::Span, 0),
+                        PatchPortRef::Stable { port: second_span },
+                    ),
+                ),
+                cell: None,
+            }],
+        ))
+        .unwrap();
+    let vertical = vertical_outcome.aliases.node(&vertical_alias).unwrap();
 
     let accepted = editor.coordinator().accepted_materialization().unwrap();
     let IntentNativeBinding::Point(shared_point) = accepted.ownership.port(first_end).unwrap()
@@ -301,7 +375,7 @@ fn gui_two_lines_with_fillet() -> (
             .then_some(node.id)
         })
         .unwrap();
-    (editor, first, second, fillet)
+    (editor, first, horizontal, second, vertical, fillet)
 }
 
 #[test]
@@ -401,6 +475,60 @@ fn conversion_rejects_unsupported_gui_recipe_instead_of_inventing_history() {
     )
     .unwrap_err();
     assert!(error.to_string().contains("unsupported recipe"));
+}
+
+#[test]
+fn retained_failed_rebind_cannot_mix_current_intent_with_prior_accepted_geometry() {
+    let (mut editor, rectangle, diagonal) = gui_rectangle_with_diagonal();
+    let accepted_semantic = editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .validation
+        .semantic;
+    let end = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node(diagonal)
+        .unwrap()
+        .inputs[&InputSlot::new(InputRole::Point, 1)];
+    let outcome = editor
+        .apply_patch(IntentPatch::new(
+            editor.coordinator().intent().identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![IntentPatchOperation::RebindInput {
+                node: diagonal,
+                slot: InputSlot::new(InputRole::Point, 0),
+                source: PatchPortRef::Stable { port: end },
+            }],
+        ))
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::RetainedFailed);
+    assert_eq!(
+        editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .validation
+            .semantic,
+        accepted_semantic,
+    );
+    assert_ne!(
+        editor.coordinator().intent().semantic_identity(),
+        accepted_semantic,
+    );
+
+    let error = initialize_code_project_from_editor(
+        &editor,
+        ProjectKey("retained-failed-rebind".into()),
+        &[
+            EditorBootstrapDeclaration::new(rectangle, SemanticSymbol("frame".into())),
+            EditorBootstrapDeclaration::new(diagonal, SemanticSymbol("diagonal".into())),
+        ],
+    )
+    .unwrap_err();
+    assert_eq!(error, EditorBootstrapError::StaleAcceptedAuthority);
 }
 
 #[test]
@@ -530,7 +658,7 @@ fn gui_rectangle_diagonal_projects_lexical_references_and_shared_native_ownershi
     reason = "one end-to-end F004 owner keeps lexical parents, exact branch state, cold validation, and computed ownership contiguous"
 )]
 fn gui_two_line_fillet_projects_lexical_span_references_and_exact_branch_state() {
-    let (editor, first, second, fillet) = gui_two_lines_with_fillet();
+    let (editor, first, horizontal, second, vertical, fillet) = gui_two_lines_with_fillet();
     let original = editor
         .coordinator()
         .intent()
@@ -543,7 +671,9 @@ fn gui_two_line_fillet_projects_lexical_span_references_and_exact_branch_state()
         ProjectKey("bootstrap-lexical-fillet".into()),
         &[
             EditorBootstrapDeclaration::new(fillet, SemanticSymbol("fillet".into())),
+            EditorBootstrapDeclaration::new(vertical, SemanticSymbol("vertical".into())),
             EditorBootstrapDeclaration::new(second, SemanticSymbol("second".into())),
+            EditorBootstrapDeclaration::new(horizontal, SemanticSymbol("horizontal".into())),
             EditorBootstrapDeclaration::new(first, SemanticSymbol("first".into())),
         ],
     )
@@ -551,6 +681,10 @@ fn gui_two_line_fillet_projects_lexical_span_references_and_exact_branch_state()
     let source = &project.managed.source;
     assert!(source.find("const first =").unwrap() < source.find("const fillet =").unwrap());
     assert!(source.find("const second =").unwrap() < source.find("const fillet =").unwrap());
+    assert!(source.contains("const horizontal = $.constraint.horizontal"));
+    assert!(source.contains("const vertical = $.constraint.vertical"));
+    assert!(source.contains("curve: first.span"));
+    assert!(source.contains("curve: second.span"));
     assert!(source.contains("const fillet = $.computed.filletSet"));
     assert!(source.contains("span: first.span"));
     assert!(source.contains("span: second.span"));

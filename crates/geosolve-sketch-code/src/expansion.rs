@@ -808,6 +808,9 @@ fn lower_direct_geometry(
         Some(DirectDeclarationLowering::FilletSet) => Err(CodeExpansionError::Unsupported(
             format!("managed computed family `{family}` used through geometry"),
         )),
+        Some(DirectDeclarationLowering::Constraint(_)) => Err(CodeExpansionError::Unsupported(
+            format!("managed constraint family `{family}` used through geometry"),
+        )),
         None => Err(CodeExpansionError::Unsupported(format!(
             "managed geometry family `{family}`"
         ))),
@@ -824,7 +827,8 @@ fn lower_direct_computed(
         Some(
             DirectDeclarationLowering::Line
             | DirectDeclarationLowering::Polyline
-            | DirectDeclarationLowering::Rectangle,
+            | DirectDeclarationLowering::Rectangle
+            | DirectDeclarationLowering::Constraint(_),
         ) => Err(CodeExpansionError::Unsupported(format!(
             "managed geometry family `{family}` used through computed"
         ))),
@@ -2581,8 +2585,14 @@ fn lower_constraints(
         {
             continue;
         }
-        match declaration.builder_path.as_slice() {
-            [namespace, family] if namespace == "constraint" && family == "horizontal" => {
+        let family = declaration.builder_path.join(".");
+        match code_declaration_family(&family).and_then(|descriptor| descriptor.direct) {
+            Some(DirectDeclarationLowering::Constraint(constraint)) => {
+                let relation_name = match constraint {
+                    ConstraintKind::Horizontal => "horizontal",
+                    ConstraintKind::Vertical => "vertical",
+                    _ => unreachable!("closed catalog admits only managed axis constraints"),
+                };
                 let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
                 let curve = required(arguments, "curve", &declaration.symbol.0)?;
                 let value = builder.resolve_managed(
@@ -2590,16 +2600,38 @@ fn lower_constraints(
                     &SemanticOutputPath::default(),
                     &format!("{}.curve", declaration.symbol.0),
                 )?;
-                let span = value.as_port(IntentPortKind::CurveSpan, "horizontal curve")?;
+                let span = match value
+                    .as_port(IntentPortKind::CurveSpan, &format!("{relation_name} curve"))
+                {
+                    Ok(span) => span,
+                    Err(error) => {
+                        let ManagedValue::Reference {
+                            declaration: owner,
+                            path,
+                        } = curve
+                        else {
+                            return Err(error);
+                        };
+                        let SemanticValue::Declaration {
+                            kind: FeatureKind::Feature,
+                            ..
+                        } = value
+                        else {
+                            return Err(error);
+                        };
+                        builder
+                            .resolve(owner, &join_paths(path, &fields_path(&["span"])))?
+                            .as_port(
+                                IntentPortKind::CurveSpan,
+                                &format!("{relation_name} line span"),
+                            )?
+                    }
+                };
                 let alias =
                     semantic_alias("constraint", &builder.project, &declaration.symbol, &[])?;
-                let mut draft = IntentNodeDraft::new(
-                    IntentNodeKind::Constraint {
-                        constraint: ConstraintKind::Horizontal,
-                    },
-                    alias.clone(),
-                )
-                .with_input(InputSlot::new(InputRole::Span, 0), span.patch_ref());
+                let mut draft =
+                    IntentNodeDraft::new(IntentNodeKind::Constraint { constraint }, alias.clone())
+                        .with_input(InputSlot::new(InputRole::Span, 0), span.patch_ref());
                 draft.suppressed = arguments
                     .get("suppressed")
                     .map(|value| boolean(value, "suppressed"))
@@ -2618,10 +2650,10 @@ fn lower_constraints(
                     },
                 )?;
             }
-            path => {
+            _ => {
                 return Err(CodeExpansionError::Unsupported(format!(
                     "managed constraint family `{}`",
-                    path.join(".")
+                    declaration.builder_path.join(".")
                 )));
             }
         }

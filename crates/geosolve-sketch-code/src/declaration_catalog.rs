@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use geosolve_sketch_intent::{AggregateKind, ComputedFeatureKind, GeometryRecipeKind};
+use geosolve_sketch_intent::{
+    AggregateKind, ComputedFeatureKind, ConstraintKind, GeometryRecipeKind,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::FeatureKind;
@@ -10,6 +12,7 @@ use crate::FeatureKind;
 /// Closed direct-managed lowering routes owned by the optional adapter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DirectDeclarationLowering {
+    Constraint(ConstraintKind),
     FilletSet,
     Line,
     Polyline,
@@ -33,6 +36,7 @@ pub enum TemplateDeclarationLowering {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeDeclarationContract {
     Geometry(GeometryRecipeKind),
+    Constraint(ConstraintKind),
     Aggregate(AggregateKind),
     ComputedFeature(ComputedFeatureKind),
     CompositePolyline,
@@ -50,7 +54,7 @@ pub struct CodeDeclarationFamilyDescriptor {
 }
 
 /// Every declaration family executable by the optional code adapter.
-pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 8] = [
+pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 10] = [
     CodeDeclarationFamilyDescriptor {
         family: "aggregate.chain",
         direct: None,
@@ -74,6 +78,22 @@ pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 8] = [
         direct: Some(DirectDeclarationLowering::FilletSet),
         template: None,
         native: NativeDeclarationContract::ComputedFeature(ComputedFeatureKind::FilletSet),
+    },
+    CodeDeclarationFamilyDescriptor {
+        family: "constraint.horizontal",
+        direct: Some(DirectDeclarationLowering::Constraint(
+            ConstraintKind::Horizontal,
+        )),
+        template: None,
+        native: NativeDeclarationContract::Constraint(ConstraintKind::Horizontal),
+    },
+    CodeDeclarationFamilyDescriptor {
+        family: "constraint.vertical",
+        direct: Some(DirectDeclarationLowering::Constraint(
+            ConstraintKind::Vertical,
+        )),
+        template: None,
+        native: NativeDeclarationContract::Constraint(ConstraintKind::Vertical),
     },
     CodeDeclarationFamilyDescriptor {
         family: "geometry.circle",
@@ -152,6 +172,14 @@ pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDes
             descriptor(object([("arc", leaf(FeatureKind::CurveSpan))])),
         ),
         ("computed.filletSet".into(), descriptor(object([]))),
+        (
+            "constraint.horizontal".into(),
+            descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),
+        ),
+        (
+            "constraint.vertical".into(),
+            descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),
+        ),
         (
             "geometry.circle".into(),
             descriptor(object([
@@ -238,8 +266,15 @@ pub fn typescript_declaration_result_catalog() -> String {
 }
 
 fn descriptor(outputs: CodeResultShape) -> CodeDeclarationResultDescriptor {
+    descriptor_kind(FeatureKind::Feature, outputs)
+}
+
+fn descriptor_kind(
+    feature_kind: FeatureKind,
+    outputs: CodeResultShape,
+) -> CodeDeclarationResultDescriptor {
     CodeDeclarationResultDescriptor {
-        feature_kind: FeatureKind::Feature,
+        feature_kind,
         outputs,
     }
 }

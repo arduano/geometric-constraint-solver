@@ -22,6 +22,20 @@ export const DECLARATION_RESULT_CATALOG = {
       "fields": {}
     }
   },
+  "constraint.horizontal": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "constraint"
+    }
+  },
+  "constraint.vertical": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "constraint"
+    }
+  },
   "geometry.circle": {
     "feature_kind": "feature",
     "outputs": {

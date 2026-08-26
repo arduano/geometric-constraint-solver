@@ -8,9 +8,17 @@ export default sketch(($) => {
     start: [0, 0],
     end: [4, 0],
   });
+  const horizontal = $.constraint.horizontal("horizontal", {
+    curve: line.span,
+    suppressed: false,
+  });
   const line2 = $.geometry.line("line2", {
     start: line.end,
     end: [4, 4],
+  });
+  const vertical = $.constraint.vertical("vertical", {
+    curve: line2.span,
+    suppressed: false,
   });
   const fillet = $.computed.filletSet("fillet", {
     radius: 1,
@@ -37,5 +45,5 @@ export default sketch(($) => {
     }],
     suppressed: false,
   });
-  return $.outputs({ line, line2, fillet });
+  return $.outputs({ line, line2, fillet, horizontal, vertical });
 });

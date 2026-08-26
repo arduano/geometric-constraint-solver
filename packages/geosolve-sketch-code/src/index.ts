@@ -129,6 +129,16 @@ export type FeatureCornerRef<Project> = OutputRef<Project, "feature_corner">;
 export type ProfileRef<Project> = OutputRef<Project, "profile">;
 export type PointLikeRef<Project> = PointRef<Project> | FeatureCornerRef<Project>;
 
+export type HorizontalConstraintRef<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["constraint.horizontal"]["outputs"]
+>;
+
+export type VerticalConstraintRef<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["constraint.vertical"]["outputs"]
+>;
+
 export type RectangleOutputs<Project> = DescriptorResult<
   Project,
   (typeof DECLARATION_RESULT_CATALOG)["geometry.rectangle"]["outputs"]
@@ -701,7 +711,14 @@ export interface ManagedConstraintBuilder<Project> {
       readonly curve: NativeCurveSpanRef<Project> | LineFeature<Project>;
       readonly suppressed?: boolean;
     },
-  ): OutputRef<Project, "constraint">;
+  ): HorizontalConstraintRef<Project>;
+  vertical(
+    symbol: string,
+    values: {
+      readonly curve: NativeCurveSpanRef<Project> | LineFeature<Project>;
+      readonly suppressed?: boolean;
+    },
+  ): VerticalConstraintRef<Project>;
 }
 
 export type ManagedFilletNeighborhood =
