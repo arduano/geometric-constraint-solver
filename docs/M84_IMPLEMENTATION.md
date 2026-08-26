@@ -2,10 +2,10 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **M84-F004 is reproduced and its repair is under focused qualification**. Both the initial
-candidate and the clean-qualified F003 replacement are withdrawn historical evidence; no F004
-replacement Tailscale candidate is nominated yet. M84-U1 through M84-U12 remain pending. No M84
-Pages publication is claimed. Accepted M83 remains public authority.
+Status: **M84-F004 is mechanically qualified and its immutable replacement is nominated for
+UAT**. Both the initial candidate and the clean-qualified F003 replacement are withdrawn historical
+evidence. M84-U1 through M84-U12 remain pending. No M84 Pages publication is claimed. Accepted M83
+remains public authority.
 
 ## Baseline and authority
 
@@ -204,13 +204,15 @@ no Promote action instead of combining prior accepted geometry with current unac
 
 Focused fixture: `packages/geosolve-sketch-code/test/managed/line-fillet.managed.ts` is the same
 managed-v1 two-line/two-axis-constraint/one-Fillet source compiled by the TypeScript suite, parsed
-by Rust and cold-materialized through the ordinary intent/editor authority. It is focused
-development evidence, not release-candidate qualification.
+by Rust and cold-materialized through the ordinary intent/editor authority. It is the focused
+fixture exercised within the complete release-candidate qualification below.
 
-Focused development coverage is being qualified at the Rust GUI-bootstrap/owner, direct-lowering,
-descriptor-parity, workbench and TypeScript type-contract layers, together with the Code-surface
-diagnostic path. No F004 clean release gate, frozen artifact, Tailscale nomination or human UAT is
-claimed in this ledger yet.
+Focused Rust GUI-bootstrap/owner, direct-lowering, descriptor-parity, workbench, TypeScript type-
+contract and Code-surface diagnostic coverage passes. Exact source `c2cf160`, tree `94a1786`, also
+passes the complete clean release gate. Its immutable no-rebuild snapshot
+`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` is nominated on retained Tailscale after exact served-byte
+verification and baseline 4/4, F003 1/1 and F004 2/2 browser suites passed on both temporary and
+retained endpoints. This is mechanical qualification, not human UAT acceptance.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -361,10 +363,8 @@ approval, Pages publication or milestone closure.
 
 ## Remaining release sequence
 
-1. Finish F004 focused/proportional qualification, complete a clean committed-source gate and
-   nominate one replacement immutable Tailscale snapshot.
-2. Complete M84-U1 through M84-U12 against only that replacement snapshot.
-3. Record explicit supervising-user approval or open another numbered finding and withdraw the
+1. Complete M84-U1 through M84-U12 against only the nominated F004 replacement snapshot.
+2. Record explicit supervising-user approval or open another numbered finding and withdraw the
    replacement candidate.
-4. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

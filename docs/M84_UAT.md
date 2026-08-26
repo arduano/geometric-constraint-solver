@@ -2,10 +2,10 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **M84-F004 is reproduced and its replacement is being qualified; focused UAT U1-U12 is
-pending**. No row is accepted. The F003 snapshot is withdrawn from current UAT and no F004
-replacement snapshot is nominated yet. Pages remains on accepted M83. Both earlier candidates are
-preserved only as historical defect evidence.
+Status: **M84-F004 is mechanically qualified and its immutable replacement is nominated; focused
+UAT U1-U12 is pending**. No row is accepted. The F003 snapshot is withdrawn historical evidence.
+Pages remains on accepted M83. Both earlier candidates are preserved only as historical defect
+evidence.
 
 ## Withdrawn candidate evidence
 
@@ -112,16 +112,41 @@ by TypeScript compile, Rust parse and cold materialization. Unsupported complete
 fail closed,
 but Code remains discoverable and displays an escaped read-only diagnostic, Intent IR remains
 available and Promote is absent. Focused Rust owner/bootstrap/direct-lowering/workbench,
-TypeScript and UI tests are being qualified; no clean gate or replacement frozen bytes are claimed
-yet. Exact browser replay also found the ordinary axis-aligned mouse path's inferred Horizontal and
-Vertical declarations were outside bootstrap closure. They now project as lexical managed
-constraint calls over `line.span`/`line2.span`, preserve suppression and lower to the existing
-constraint kinds; neither relation is omitted and no new equation is introduced.
+TypeScript and UI tests pass. Exact browser replay also found the ordinary axis-aligned mouse path's
+inferred Horizontal and Vertical declarations were outside bootstrap closure. They now project as
+lexical managed constraint calls over `line.span`/`line2.span`, preserve suppression and lower to
+the existing constraint kinds; neither relation is omitted and no new equation is introduced.
 Retained-failed intent is also authenticated against the prior accepted semantic identity before
 serialization; a mismatch keeps Code visible as unavailable and removes Promote rather than
 constructing hybrid source.
 
-When an F004 replacement is nominated, run that ordinary desktop workbench at approximately
+## Current F004 candidate evidence
+
+Qualified product source: `c2cf160d3a7d5065e582f2ba982881380d2b871c`; tree:
+`94a178699f9b2e8bd2a6497c9b0334d43cad2b20`. The complete clean gate ran on 2026-08-26 from
+12:37:30.923 through 12:55:14.714 AEST, exited 0 in 1,064 seconds, and produced the 6,118-line,
+412,411-byte log `/tmp/geosolve-m84-f004b-release-gate.log` with SHA-256
+`f4c005912392c11cab6600706876c37dab855f0a59c0b7c06565c242b014d6fd`. It includes workspace
+tests/Clippy/Rustdoc, unchanged golden, actual WASM, TypeScript, package closure, benchmarks,
+licensing and Trunk. The 271-row golden remains
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the separate M84 ledger
+remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+The exact no-rebuild seven-file output is frozen at
+`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe`, with directory mode `0555`, regular files at `0444`,
+complete evidence at `/tmp/geosolve-m84-f004-hv-freeze-evidence.FiCfIvir`, and ordered-manifest
+aggregate `f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc`. Temporary and retained
+eight-path HTTP ledgers are byte-identical at SHA-256
+`54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns HTTP
+200 with zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/`
+equals `index.html`. Baseline 4/4, F003 1/1 and F004 2/2 browser suites pass on both endpoints.
+
+Retained `geosolve-m84-uat.service`, PID `3316682`, serves only those immutable bytes at
+`http://100.94.63.83:8080/`. The temporary replacement and obsolete pre-axis F004 services are
+retired. This nominates the candidate for the scorecard below; it does not accept a human row or
+authorize M84 Pages publication.
+
+Run the ordinary desktop workbench at approximately
 `1440x900` and `1024x720`. Use actual code-project samples rather than importing equivalent flat
 scenes. Direct tests, not visual judgment, own exact identities, generations, residuals, payload
 bounds and byte parity.
@@ -149,8 +174,8 @@ withdraws the candidate and opens an owning-layer regression.
 
 ## Final disposition
 
-- Supervising-user UAT: M84-U1 through M84-U12 pending against a not-yet-nominated F004 replacement;
+- Supervising-user UAT: M84-U1 through M84-U12 pending against the nominated F004 replacement;
   both earlier candidates remain withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Replacement Tailscale nomination: pending F004 qualification. Once nominated, retirement is
+- Replacement Tailscale nomination: complete at `http://100.94.63.83:8080/`; retirement is
   prohibited until accepted Pages bytes are independently verified.

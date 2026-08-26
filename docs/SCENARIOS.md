@@ -4684,11 +4684,11 @@ complete the F010 disposition without claiming a separate row-by-row replay.
 M84 adds no residual equation and does not reinterpret the 271-row milestone-neutral golden. Its
 separate reviewed ledger owns managed-source parsing, data-artifact expansion, typed references,
 keyed reconciliation, unified history and code-project persistence. ADR 0041 and
-`docs/M84_GOALS.md` are authoritative. The F001-F003 fixtures below are implemented and pass their
+`docs/M84_GOALS.md` are authoritative. The F001-F004 fixtures below are implemented and pass their
 focused owner suites. The former complete clean candidate and clean-qualified F003 replacement
-local/Tailscale nominations are withdrawn historical evidence. M84-F004 is reproduced and its
-repair is under focused qualification; no replacement is nominated yet. Human presentation UAT
-U1-U12 remains pending.
+local/Tailscale nominations are withdrawn historical evidence. M84-F004 is mechanically qualified
+and its exact immutable replacement is nominated for UAT. Human presentation UAT U1-U12 remains
+pending; accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4816,8 +4816,8 @@ The same rule applies when retained-failed intent no longer matches the prior ac
 identity: projection rejects that authority mismatch before serialization and cannot offer Promote.
 This focused ordinary-bootstrap family does not alter the four-demo M84 code-project golden
 ledger. Rust bootstrap/ownership, direct-lowering, descriptor-parity, workbench/persistence,
-TypeScript and UI tests are being qualified; no F004 clean gate, frozen artifact or UAT evidence is
-claimed yet.
+TypeScript and UI tests plus the clean replacement qualification pass. The exact frozen nomination
+is recorded below; no human UAT row is claimed yet.
 
 ### M84 release gate
 
@@ -4846,9 +4846,30 @@ has seven regular non-symlink files and aggregate
 manifests match. Temporary and retained eight-path HTTP ledgers match at
 `438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`, existing browser 4/4 and
 F003 1/1 pass on both, and retained service PID `3736900` served the snapshot at
-`http://100.94.63.83:8080/`. M84-F004 withdraws those F003 bytes from current UAT even if the
-endpoint remains reachable. M84 remains active and unaccepted with U1-U12 pending; no F004
-replacement nomination is claimed and Pages remains M83.
+`http://100.94.63.83:8080/`. M84-F004 withdrew those F003 bytes from current UAT and PID `3736900`
+is retired. At that historical checkpoint M84 remained active with U1-U12 pending and no F004
+replacement nomination was claimed.
+
+Current F004 replacement source `c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
+`94a178699f9b2e8bd2a6497c9b0334d43cad2b20`, passes the clean Nix release gate from
+12:37:30.923 through 12:55:14.714 AEST on 2026-08-26, exit 0 in 1,064 seconds. Its 6,118-line,
+412,411-byte log `/tmp/geosolve-m84-f004b-release-gate.log` has SHA-256
+`f4c005912392c11cab6600706876c37dab855f0a59c0b7c06565c242b014d6fd`. The unchanged 271-row
+golden remains `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the separate M84
+ledger remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+The exact no-rebuild seven-file output is frozen at
+`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` with directory/file modes `0555`/`0444`, ordered-manifest
+aggregate `f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc`, and complete evidence
+at `/tmp/geosolve-m84-f004-hv-freeze-evidence.FiCfIvir`. Temporary and retained eight-path HTTP
+ledgers are byte-identical at SHA-256
+`54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns 200,
+zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
+`index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both endpoints.
+Retained service PID `3316682` serves those immutable bytes at
+`http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. M84 remains
+active and unaccepted with U1-U12 pending. Pages remains accepted M83 authority and no M84 public
+publication is claimed.
 
 ## Frozen near-singular fixtures
 

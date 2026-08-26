@@ -2,10 +2,10 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. M84-F004 is reproduced and its repair is under focused qualification.
-The initial `79078ec` candidate and F003 replacement `b9e67bad` are withdrawn historical evidence;
-no F004 replacement Tailscale candidate is nominated yet. M84 remains active and unaccepted with
-U1-U12 pending; GitHub Pages remains on accepted M83.
+Status: accepted for M84. M84-F004 is mechanically qualified and its exact immutable replacement
+`c2cf160` is nominated on retained Tailscale. The initial `79078ec` candidate and F003 replacement
+`b9e67bad` are withdrawn historical evidence. M84 remains active and unaccepted with U1-U12
+pending; GitHub Pages remains on accepted M83.
 
 ## Context
 

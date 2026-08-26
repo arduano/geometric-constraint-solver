@@ -2,9 +2,8 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F004 is reproduced and its repair is under focused
-qualification**. The clean-qualified M84-F003 snapshot is withdrawn from current UAT by F004 and
-is historical evidence only; a replacement Tailscale candidate has not yet been nominated.
+Status: **active and unaccepted; M84-F004 is mechanically qualified and its immutable replacement
+is nominated for UAT**. The clean-qualified M84-F003 snapshot is withdrawn historical evidence.
 M84-U1 through M84-U12 and explicit approval remain pending. Accepted M83 remains GitHub Pages
 authority. ADR 0041 is the controlling design.
 
@@ -165,9 +164,18 @@ no-rebuild seven-file output `/tmp/geosolve-m84-f003-uat.mO67NI` is frozen at di
 on temporary and retained endpoints. Existing browser checks pass 4/4 and the F003 flow passes 1/1
 on both. Retained service PID `3736900` served those exact bytes at
 `http://100.94.63.83:8080/`; M84-F004 now withdraws them from current UAT even if the endpoint
-remains reachable. No F004 replacement snapshot, clean gate or immutable nomination is claimed
-yet. M84-U1 through M84-U12, explicit approval, GitHub Pages publication, service retirement and
-closure remain open; accepted M83 remains public authority.
+remains reachable.
+
+Current F004 replacement record (2026-08-26): exact product source
+`c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
+`94a178699f9b2e8bd2a6497c9b0334d43cad2b20`, passes the complete clean release gate. Its exact
+no-rebuild seven-file output `/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` is immutable at
+directory/file modes `0555`/`0444`, ordered-manifest aggregate
+`f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc`, and byte/browser-verified
+on temporary and retained endpoints. Baseline 4/4, F003 1/1 and F004 2/2 browser suites pass on
+both. Retained service PID `3316682` serves only those bytes at
+`http://100.94.63.83:8080/`. M84-U1 through M84-U12, explicit approval, GitHub Pages publication,
+service retirement and closure remain open; accepted M83 remains public authority.
 
 ## Bounds and non-goals
 

@@ -5793,11 +5793,11 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F004 is reproduced and its repair is under focused
-qualification**. Ordinary GUI dependencies project as lexical managed TypeScript while low-level
-transport remains truthfully labelled Intent IR. The clean-qualified F003 snapshot is withdrawn
-from current UAT by F004; no replacement is nominated yet. M84-U1 through M84-U12 and explicit
-approval remain pending; accepted M83 remains public Pages authority.
+Status: **active and unaccepted; M84-F004 is mechanically qualified and its immutable replacement
+is nominated for UAT**. Ordinary GUI dependencies project as lexical managed TypeScript while low-
+level transport remains truthfully labelled Intent IR. The clean-qualified F003 snapshot is
+withdrawn historical evidence. M84-U1 through M84-U12 and explicit approval remain pending;
+accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5859,7 +5859,7 @@ approval remain pending; accepted M83 remains public Pages authority.
   Authenticate the accepted materialization against the exact current retained semantic identity
   before serializing any declaration, so retained-failed intent keeps a visible unavailable Code
   diagnostic and can never expose a promotable accepted/current hybrid.
-- [ ] Qualify M84-F004 with focused bootstrap/ownership, direct-lowering, descriptor-parity,
+- [x] Qualify M84-F004 with focused bootstrap/ownership, direct-lowering, descriptor-parity,
   TypeScript type-contract, managed-v1 line/axis-constraint/Fillet compile-parse-cold-
   materialization,
   workbench/persistence and Code-surface tests; then pass proportional WASM/golden/format/Clippy/
@@ -5934,10 +5934,30 @@ stays discoverable with an escaped diagnostic, Intent IR fallback and no Promote
 browser replay then exposed the exact mouse path's inferred Horizontal and Vertical declarations;
 the same repair now projects them as `$.constraint.horizontal`/`vertical` over lexical native
 spans, preserves suppression and lowers them to existing Intent kinds. Focused Rust owner,
-bootstrap/direct-lowering/workbench, TypeScript and UI tests are being qualified. No F004
-clean gate, frozen artifact or Tailscale nomination is claimed yet. M84-U1 through M84-U12,
-explicit approval, Pages publication, service retirement and closure remain open; no M84 Pages
-authority is claimed.
+bootstrap/direct-lowering/workbench, TypeScript and UI tests pass. The current retained candidate
+is recorded below. M84-U1 through M84-U12, explicit approval, Pages publication, service retirement
+and closure remain open; no M84 Pages authority is claimed.
+
+M84-F004 replacement qualification/nomination record (2026-08-26): exact product source
+`c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
+`94a178699f9b2e8bd2a6497c9b0334d43cad2b20`, passes the clean Nix release gate from
+12:37:30.923 through 12:55:14.714 AEST, exit 0, in 1,064 seconds. Its 6,118-line, 412,411-byte log
+`/tmp/geosolve-m84-f004b-release-gate.log` has SHA-256
+`f4c005912392c11cab6600706876c37dab855f0a59c0b7c06565c242b014d6fd`. The unchanged 271-row
+golden remains `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the separate M84
+ledger remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+Without rebuilding, the exact seven-file output is frozen at
+`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` with directory/files `0555`/`0444`; its ordered-manifest
+aggregate is `f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc` and complete evidence
+is at `/tmp/geosolve-m84-f004-hv-freeze-evidence.FiCfIvir`. Temporary and retained eight-path HTTP
+ledgers are byte-identical at SHA-256
+`54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns 200,
+zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
+`index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both endpoints.
+Retained service PID `3316682` serves those immutable bytes at `http://100.94.63.83:8080/`; the
+temporary replacement service and obsolete pre-axis F004 service are retired. Pages remains on
+accepted M83 pending explicit M84-U1 through M84-U12 approval.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

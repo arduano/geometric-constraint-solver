@@ -3386,11 +3386,11 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. M84-F004 is reproduced and its repair is under focused
-qualification. The clean-qualified F003 snapshot is withdrawn from current UAT; no F004
-replacement is nominated yet. M84-U1 through M84-U12 and explicit approval remain pending.
-ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract. Accepted
-M83 remains public product authority.
+Status: active and unaccepted. M84-F004 is mechanically qualified and its exact immutable
+replacement is nominated for UAT. The clean-qualified F003 snapshot is withdrawn historical
+evidence. M84-U1 through M84-U12 and explicit approval remain pending. ADR 0041,
+`docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract. Accepted M83 remains
+public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3437,12 +3437,12 @@ must not be dropped to make promotion succeed, and M84 adds no new residual equa
 Ordinary conversion remains all-or-nothing. Unsupported declarations must not make Code
 undiscoverable: Code renders an escaped read-only conversion diagnostic, Intent IR remains
 available and Promote is absent. Focused Rust bootstrap/ownership/direct-lowering/workbench,
-descriptor-parity, TypeScript and UI coverage is being qualified. This focused development
-evidence does not claim an F004 clean gate, frozen artifact, Tailscale nomination or human row.
-After retained-failed intent, bootstrap must also require that accepted validation belongs to the
-exact current semantic identity; Code stays visible as unavailable and offers no Promote action.
-The checked-in managed-v1 two-line/two-axis-constraint/one-Fillet fixture is one source compiled by
-TypeScript, parsed by Rust and cold-materialized through the ordinary accepted-scene authority.
+descriptor-parity, TypeScript and UI coverage plus the clean replacement qualification pass; the
+exact nomination evidence is recorded below without claiming a human row. After retained-failed
+intent, bootstrap must also require that accepted validation belongs to the exact current semantic
+identity; Code stays visible as unavailable and offers no Promote action. The checked-in managed-v1
+two-line/two-axis-constraint/one-Fillet fixture is one source compiled by TypeScript, parsed by Rust
+and cold-materialized through the ordinary accepted-scene authority.
 
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace
@@ -3480,9 +3480,9 @@ TypeScript, parsed by Rust and cold-materialized through the ordinary accepted-s
   golden require-clean, Trunk and the complete clean release gate pass.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
-  withdrawn by M84-F004. A new clean-qualified immutable replacement and M84-U1 through M84-U12
-  plus explicit supervising-user approval remain mandatory before GitHub Pages publication, exact
-  hosted verification, service retirement and closure.
+  withdrawn by M84-F004. The exact clean-qualified F004 replacement below is nominated; M84-U1
+  through M84-U12 plus explicit supervising-user approval remain mandatory before GitHub Pages
+  publication, exact hosted verification, service retirement and closure.
 
 Withdrawn historical nomination authority is exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -3495,7 +3495,7 @@ served the withdrawn bytes at `http://100.94.63.83:8080/` and was retired only a
 temporary verification passed. Those bytes remain historical defect evidence, not UAT or
 publication authority.
 
-Replacement mechanical authority is exact product source
+Withdrawn F003 replacement mechanical authority is exact product source
 `b9e67bad7f4935b1e0591ea4f149fae478b32675`, tree
 `7062806695e1e134c339cfa47903145d321f6350`. The clean gate passes with log SHA-256
 `eb05d3c1e460f5cb7be410dc44d0af0c4b4eaf4fd775423b676c77a84a433f90`, unchanged 271-row golden
@@ -3508,8 +3508,30 @@ manifests match. Temporary and retained eight-path HTTP ledgers match at SHA-256
 `438d747641522dd567e5790c56663f9bcb596147d48b843e1fe3367830822d0c`; existing browser checks
 pass 4/4 and F003 passes 1/1 on both. Retained `geosolve-m84-uat.service`, PID `3736900`, served
 those exact bytes at `http://100.94.63.83:8080/`. Those F003 bytes are now withdrawn from current
-UAT by F004 even if the endpoint remains reachable. No F004 replacement nomination, human row or
-M84 Pages publication is claimed; accepted M83 remains public authority.
+UAT by F004 and PID `3736900` is retired. At that historical checkpoint no F004 replacement
+nomination, human row or M84 Pages publication was claimed; the current F004 nomination follows.
+
+Current F004 replacement mechanical authority is exact product source
+`c2cf160d3a7d5065e582f2ba982881380d2b871c`, tree
+`94a178699f9b2e8bd2a6497c9b0334d43cad2b20`. The clean Nix release gate ran from
+12:37:30.923 through 12:55:14.714 AEST on 2026-08-26, exited 0 in 1,064 seconds, and produced the
+6,118-line, 412,411-byte log `/tmp/geosolve-m84-f004b-release-gate.log` with SHA-256
+`f4c005912392c11cab6600706876c37dab855f0a59c0b7c06565c242b014d6fd`. The unchanged 271-row
+golden remains `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; the separate
+M84 ledger remains `73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+Without rebuilding, the exact seven-file output is frozen at
+`/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` with directory/file modes `0555`/`0444`, ordered-manifest
+aggregate `f34c46ee5876c4bdb458863cc90c6c6b25281cc8e44f89c8d00eba0f16ca5bbc`, and complete evidence
+at `/tmp/geosolve-m84-f004-hv-freeze-evidence.FiCfIvir`. Temporary and retained eight-path HTTP
+ledgers are byte-identical at SHA-256
+`54efcd30699a8632b868d753af88b1f17433c284201688834f7a0f35e2598153`: every path returns HTTP
+200 with zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/`
+equals `index.html`. Sequential browser suites pass baseline 4/4, F003 1/1 and F004 2/2 on both
+endpoints. Retained service PID `3316682` serves those immutable bytes at
+`http://100.94.63.83:8080/`; temporary and obsolete pre-axis F004 services are retired. M84-U1
+through M84-U12 and explicit approval remain pending, so Pages remains accepted M83 authority and
+no M84 public publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

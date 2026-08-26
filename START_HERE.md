@@ -345,9 +345,11 @@ project against lexical `line.span`/`line2.span`, preserve suppression and lower
 constraint kinds without new equations. Code remains discoverable on unsupported scenes
 with an escaped read-only conversion diagnostic, Intent IR fallback and no Promote. Accepted
 geometry must match the exact current retained semantic identity, so retained-failed intent cannot
-produce hybrid promotable source. Focused
-qualification is in progress; the F003 snapshot is withdrawn, no F004 replacement is nominated and
-U1-U12 remain pending. Pages remains on accepted M83; no M84 publication is claimed.
+produce hybrid promotable source. Exact source `c2cf160`, tree `94a1786`, passes the complete clean
+gate and its immutable no-rebuild snapshot `/tmp/geosolve-m84-f004-hv-uat.FF5RFBZe` passes byte
+verification plus browser 4/4, F003 1/1 and F004 2/2 on temporary and retained Tailscale endpoints.
+It is the current UAT candidate at `http://100.94.63.83:8080/`; U1-U12 remain pending. Pages remains
+on accepted M83 and no M84 public publication is claimed.
 
 ## Read first
 
@@ -760,8 +762,8 @@ qualification, immutable Tailscale nomination and supervising-human UAT; approva
 M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
-F004 is under focused qualification; the F003 Tailscale candidate is withdrawn and no replacement
-is nominated while human UAT remains open.
+F004 is clean-qualified and its immutable replacement is nominated on retained Tailscale while
+human UAT remains open; the F003 candidate is withdrawn historical evidence.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at

@@ -61,10 +61,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   and caller-compiled data-only artifacts expand deterministically into the ordinary M83 intent
   graph; the unchanged Rust materializer/solver remains sole equation and accepted-scene authority.
   Base solver/sketch/intent/editor deployments do not depend on this layer. M84-F003 repairs lexical
-  GUI dependency projection; M84-F004 adds direct computed-Fillet projection and keeps Code
-  discoverable for unsupported all-or-nothing conversion. F004 is under focused qualification,
-  the F003 snapshot is withdrawn and no replacement is nominated. U1-U12 remain open, and Pages
-  stays on accepted M83.
+  GUI dependency projection; M84-F004 adds direct computed-Fillet and inferred-axis projection and
+  keeps Code discoverable for unsupported all-or-nothing conversion. F004 is clean-qualified and
+  immutably nominated on retained Tailscale; U1-U12 remain open, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -1815,6 +1814,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
   typed semantic references, keyed reconciliation, one code/editor history and four required
   demonstrations are implemented. The `79078ec` and clean-qualified `b9e67bad` nominations are
-  withdrawn historical evidence. M84-F004's computed-Fillet/always-discoverable-Code repair is
-  under focused qualification; no F004 replacement is nominated. Human UAT U1-U12 remains
-  pending; accepted M83 remains Pages authority and no M84 publication is claimed.
+  withdrawn historical evidence. M84-F004's computed-Fillet/inferred-axis/always-discoverable-Code
+  repair at `c2cf160` is clean-qualified and its immutable replacement is retained on Tailscale.
+  Human UAT U1-U12 remains pending; accepted M83 remains Pages authority and no M84 publication is
+  claimed.
