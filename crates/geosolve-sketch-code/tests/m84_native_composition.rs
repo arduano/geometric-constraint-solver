@@ -5,18 +5,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use geosolve_constraint_editor::{ComputedCornerRef, IntentNativeBinding};
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeCompositionError, CodeHostRequest, CodeProject, CodeProjectDemoId, ExpandedCodeProject,
-    ExpandedSemanticTarget, GeneratedMemberAddress, KeyedReconcileState, MaterializedCodeProject,
+    CodeCompositionError, CodeHostRequest, CodeInteractionOverlay, CodePointSeedSource,
+    CodeProject, CodeProjectDemoId, ExpandedCodeProject, ExpandedSemanticTarget,
+    GeneratedMemberAddress, KeyedReconcileState, MaterializedCodeProject, SemanticSymbol,
     bundled_code_project_demos, materialize_code_project_cold,
-    materialize_code_project_incremental, parse_managed_source,
-    rehydrate_materialized_code_project, required_generated_members,
+    materialize_code_project_incremental, materialize_code_project_incremental_with_overlay,
+    parse_managed_source, rehydrate_materialized_code_project, required_generated_members,
     rounded_polyline_member_addresses,
 };
 use geosolve_sketch_intent::{
-    AggregateKind, InputRole, InputSlot, IntentKey, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRef,
-    IntentReservation, IntentSessionId, NodeId, PatchPortRef, PortId, ReservationId,
-    intent_content_digest,
+    AggregateKind, DimensionKind, InputRole, InputSlot, IntentFieldKey, IntentKey, IntentLiteral,
+    IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+    IntentPlanDisposition, IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservation,
+    IntentSessionId, NodeId, PatchPortRef, PortId, ReservationId, intent_content_digest,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -615,12 +616,558 @@ fn warm_structural_edit_preserves_ordinary_outside_dependent_on_retained_output(
     assert_valid_native_authority(&after, 4);
 }
 
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact three-level survivor regression keeps code replacement, native identity, and GUI dimension authority adjacent"
+)]
+fn detached_segment_rebind_preserves_retained_code_and_gui_descendant_chain() {
+    let project = collaborative_reference_project();
+    let generated = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let mut before = materialize_code_project_cold(
+        &project,
+        &generated,
+        IntentSessionId::from_raw(0x84_1500),
+        DocumentId(PersistentId::from_u128(0x84_1500)),
+        1.0,
+    )
+    .unwrap();
+
+    let declaration_alias = |name: &str| {
+        before
+            .expansion
+            .declaration_provenance
+            .iter()
+            .find_map(|(alias, declaration)| {
+                (declaration == &SemanticSymbol(name.into())).then_some(alias.clone())
+            })
+            .unwrap_or_else(|| panic!("missing managed declaration `{name}`"))
+    };
+    let diagonal_alias = declaration_alias("diagonal");
+    let follower_alias = declaration_alias("follower");
+    let diagonal_before = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&diagonal_alias)
+        .unwrap()
+        .clone();
+    let follower_before = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&follower_alias)
+        .unwrap()
+        .clone();
+    assert_eq!(
+        follower_before.inputs[&InputSlot::new(InputRole::Point, 0)].node,
+        diagonal_before.id,
+    );
+    let follower_span = follower_before
+        .port_by_selector(IntentPortSelector::Node {
+            role: IntentPortRole::Span,
+            index: 0,
+        })
+        .unwrap()
+        .as_ref(follower_before.id);
+    let outside_symbol = IntentKey::new("outside.follower.reference-length").unwrap();
+    let outside_draft = IntentNodeDraft::new(
+        IntentNodeKind::Dimension {
+            dimension: DimensionKind::CurveLength,
+        },
+        outside_symbol.clone(),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        PatchPortRef::Stable {
+            port: follower_span,
+        },
+    )
+    .with_field(
+        IntentFieldKey(IntentKey::new("mode").unwrap()),
+        IntentLiteral::Enum(IntentKey::new("reference").unwrap()),
+    );
+    let outcome = before
+        .editor
+        .apply_patch(IntentPatch::new(
+            before.editor.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: outside_symbol.clone(),
+                draft: Box::new(outside_draft),
+                cell: None,
+            }],
+        ))
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    let outside_before = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&outside_symbol)
+        .unwrap()
+        .clone();
+    assert_eq!(
+        outside_before.inputs[&InputSlot::new(InputRole::Span, 0)].node,
+        follower_before.id,
+    );
+
+    let diagonal_start = before
+        .expansion
+        .writable_points
+        .iter()
+        .find(|point| {
+            point.handle.alias == diagonal_alias
+                && point.handle.selector
+                    == (IntentPortSelector::Node {
+                        role: IntentPortRole::Start,
+                        index: 0,
+                    })
+                && matches!(point.source, CodePointSeedSource::Reference { .. })
+        })
+        .unwrap()
+        .clone();
+    let overlay = diagonal_start
+        .stage_drag(&CodeInteractionOverlay::empty(), [5.0, 6.0])
+        .unwrap();
+    let after =
+        materialize_code_project_incremental_with_overlay(&before, &project, &generated, &overlay)
+            .unwrap();
+    let graph = after.editor.coordinator().intent().graph();
+    let diagonal_after = graph.node_by_symbol(&diagonal_alias).unwrap();
+    let follower_after = graph.node_by_symbol(&follower_alias).unwrap();
+    let outside_after = graph.node_by_symbol(&outside_symbol).unwrap();
+
+    assert_ne!(diagonal_after.id, diagonal_before.id);
+    assert_eq!(follower_after.id, follower_before.id);
+    assert_eq!(
+        follower_after
+            .ports
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>(),
+        follower_before
+            .ports
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>(),
+    );
+    assert_eq!(follower_after.reservations, follower_before.reservations);
+    assert_eq!(
+        follower_after.inputs[&InputSlot::new(InputRole::Point, 0)].node,
+        diagonal_after.id,
+    );
+    assert_eq!(outside_after, &outside_before);
+    assert_eq!(
+        outside_after.inputs[&InputSlot::new(InputRole::Span, 0)],
+        follower_span,
+    );
+    assert_eq!(
+        after
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .dimensions()
+            .len(),
+        1,
+    );
+    assert_valid_native_authority(&after, 0);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one regression audits generated detachment, owner stability, rebind and native point locality"
+)]
+fn generated_referenced_segment_detaches_locally_and_rebinds_its_constraint() {
+    let project = bundled_code_project_demos()
+        .into_iter()
+        .find(|demo| demo.id == CodeProjectDemoId::BracedFrame)
+        .unwrap()
+        .project();
+    let generated = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let before = materialize_code_project_cold(
+        &project,
+        &generated,
+        IntentSessionId::from_raw(0x84_1510),
+        DocumentId(PersistentId::from_u128(0x84_1510)),
+        1.0,
+    )
+    .unwrap();
+    let rising_address = generated
+        .active()
+        .keys()
+        .find(|address| {
+            address.invocation == "brace"
+                && address.template == ["diagonals", "rising"]
+                && address.output == ["span"]
+        })
+        .unwrap()
+        .clone();
+    let rising_identity = generated.active()[&rising_address];
+    let ExpandedSemanticTarget::Port { port: rising_span } =
+        &before.expansion.generated_provenance[&rising_address].target
+    else {
+        panic!("generated rising brace must publish a span port")
+    };
+    let rising_alias = rising_span.alias.clone();
+    let rising_before = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&rising_alias)
+        .unwrap()
+        .clone();
+    let writable_start = before
+        .expansion
+        .writable_points
+        .iter()
+        .find(|point| {
+            point.handle.alias == rising_alias
+                && point.handle.selector
+                    == (IntentPortSelector::Node {
+                        role: IntentPortRole::Start,
+                        index: 0,
+                    })
+        })
+        .unwrap()
+        .clone();
+    assert_eq!(
+        writable_start.source,
+        CodePointSeedSource::GeneratedReference,
+    );
+    let start_before = rising_before
+        .port_by_selector(writable_start.handle.selector)
+        .unwrap()
+        .as_ref(rising_before.id);
+    let accepted_before = before
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    let IntentNativeBinding::Point(shared_point) =
+        accepted_before.ownership.port(start_before).unwrap()
+    else {
+        panic!("generated brace endpoint must alias one native point")
+    };
+    let producer_port = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .flat_map(|node| node.ports.values().map(move |port| port.as_ref(node.id)))
+        .find(|port| {
+            *port != start_before
+                && accepted_before.ownership.port(*port)
+                    == Some(IntentNativeBinding::Point(shared_point))
+        })
+        .expect("the generated reference must have an attached producer");
+    let producer_position = accepted_before
+        .session
+        .design_document()
+        .point(shared_point)
+        .unwrap()
+        .position;
+    let datum_alias = before
+        .expansion
+        .declaration_provenance
+        .iter()
+        .find_map(|(alias, declaration)| {
+            (declaration == &SemanticSymbol("datum".into())).then_some(alias.clone())
+        })
+        .unwrap();
+    let datum_before = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&datum_alias)
+        .unwrap()
+        .clone();
+    assert!(
+        datum_before
+            .inputs
+            .values()
+            .any(|input| input.node == rising_before.id)
+    );
+
+    let target = [5.0, 6.0];
+    let overlay = writable_start
+        .stage_drag(&CodeInteractionOverlay::empty(), target)
+        .unwrap();
+    let after =
+        materialize_code_project_incremental_with_overlay(&before, &project, &generated, &overlay)
+            .unwrap();
+    let graph = after.editor.coordinator().intent().graph();
+    let rising_after = graph.node_by_symbol(&rising_alias).unwrap();
+    let datum_after = graph.node_by_symbol(&datum_alias).unwrap();
+    assert_ne!(rising_after.id, rising_before.id);
+    assert_eq!(datum_after.id, datum_before.id);
+    assert!(
+        datum_after
+            .inputs
+            .values()
+            .any(|input| input.node == rising_after.id)
+    );
+    assert_eq!(
+        after.expansion.generated_provenance[&rising_address].identity, rising_identity,
+        "local detachment must not churn generated semantic ownership",
+    );
+    let start_after = rising_after
+        .port_by_selector(writable_start.handle.selector)
+        .unwrap()
+        .as_ref(rising_after.id);
+    let accepted_after = after
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    let IntentNativeBinding::Point(detached_point) =
+        accepted_after.ownership.port(start_after).unwrap()
+    else {
+        panic!("detached generated endpoint must remain a native point")
+    };
+    assert_ne!(detached_point, shared_point);
+    assert_eq!(
+        accepted_after.ownership.port(producer_port),
+        Some(IntentNativeBinding::Point(shared_point)),
+    );
+    assert_eq!(
+        accepted_after
+            .session
+            .design_document()
+            .point(shared_point)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        producer_position.map(f64::to_bits),
+    );
+    assert_eq!(
+        accepted_after
+            .session
+            .design_document()
+            .point(detached_point)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        target.map(f64::to_bits),
+    );
+    assert_valid_native_authority(&after, 0);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact generated-circle detachment regression authenticates producer and consumer native ownership"
+)]
+fn generated_referenced_circle_center_detaches_without_moving_its_producer() {
+    let project = bundled_code_project_demos()
+        .into_iter()
+        .find(|demo| demo.id == CodeProjectDemoId::MountingPlate)
+        .unwrap()
+        .project();
+    let generated = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let before = materialize_code_project_cold(
+        &project,
+        &generated,
+        IntentSessionId::from_raw(0x84_1520),
+        DocumentId(PersistentId::from_u128(0x84_1520)),
+        1.0,
+    )
+    .unwrap();
+    let center = before
+        .expansion
+        .writable_points
+        .iter()
+        .find(|point| {
+            point.source == CodePointSeedSource::GeneratedReference
+                && point.handle.selector
+                    == (IntentPortSelector::Node {
+                        role: IntentPortRole::Center,
+                        index: 0,
+                    })
+        })
+        .unwrap()
+        .clone();
+    let circle_before = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&center.handle.alias)
+        .unwrap()
+        .clone();
+    let center_before = circle_before
+        .port_by_selector(center.handle.selector)
+        .unwrap()
+        .as_ref(circle_before.id);
+    let accepted_before = before
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    let IntentNativeBinding::Point(shared_point) =
+        accepted_before.ownership.port(center_before).unwrap()
+    else {
+        panic!("generated circle center must alias one producer point")
+    };
+    let producer_port = before
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .flat_map(|node| node.ports.values().map(move |port| port.as_ref(node.id)))
+        .find(|port| {
+            *port != center_before
+                && accepted_before.ownership.port(*port)
+                    == Some(IntentNativeBinding::Point(shared_point))
+        })
+        .expect("the generated center reference must have one producer");
+    let producer_position = accepted_before
+        .session
+        .design_document()
+        .point(shared_point)
+        .unwrap()
+        .position;
+    let (circle_address, circle_identity) = before
+        .expansion
+        .generated_provenance
+        .iter()
+        .find_map(|(address, provenance)| match &provenance.target {
+            ExpandedSemanticTarget::Port { port } if port.alias == center.handle.alias => {
+                Some((address.clone(), provenance.identity))
+            }
+            _ => None,
+        })
+        .unwrap();
+
+    let target = [-20.0, 10.0];
+    let overlay = center
+        .stage_drag(&CodeInteractionOverlay::empty(), target)
+        .unwrap();
+    let after =
+        materialize_code_project_incremental_with_overlay(&before, &project, &generated, &overlay)
+            .unwrap();
+    let circle_after = after
+        .editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&center.handle.alias)
+        .unwrap();
+    assert_ne!(circle_after.id, circle_before.id);
+    assert_eq!(
+        after.expansion.generated_provenance[&circle_address].identity,
+        circle_identity,
+    );
+    let center_after = circle_after
+        .port_by_selector(center.handle.selector)
+        .unwrap()
+        .as_ref(circle_after.id);
+    let accepted_after = after
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    let IntentNativeBinding::Point(detached_point) =
+        accepted_after.ownership.port(center_after).unwrap()
+    else {
+        panic!("detached circle center must remain a native point")
+    };
+    assert_ne!(detached_point, shared_point);
+    assert_eq!(
+        accepted_after.ownership.port(producer_port),
+        Some(IntentNativeBinding::Point(shared_point)),
+    );
+    assert_eq!(
+        accepted_after
+            .session
+            .design_document()
+            .point(shared_point)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        producer_position.map(f64::to_bits),
+    );
+    assert_eq!(
+        accepted_after
+            .session
+            .design_document()
+            .point(detached_point)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        target.map(f64::to_bits),
+    );
+    assert_valid_native_authority(&after, 4);
+}
+
 fn rounded_project() -> CodeProject {
     bundled_code_project_demos()
         .into_iter()
         .find(|demo| demo.id == CodeProjectDemoId::RoundedPolyline)
         .unwrap()
         .project()
+}
+
+fn collaborative_reference_project() -> CodeProject {
+    let source = r#"// SPDX-License-Identifier: GPL-3.0-or-later
+
+"use geosolve managed-v1";
+import { sketch } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const frame = $.geometry.rectangle("frame", {
+    lowerLeft: [0, 0],
+    upperRight: [60, 35],
+  });
+  const diagonal = $.geometry.line("diagonal", {
+    start: frame.corners.lowerLeft,
+    end: frame.corners.upperRight,
+  });
+  const follower = $.geometry.line("follower", {
+    start: diagonal.start,
+    end: [15, -10],
+  });
+  return $.outputs({ frame, diagonal, follower });
+});
+"#;
+    CodeProject {
+        project: geosolve_sketch_code::ProjectKey("m84-composition-closure".into()),
+        managed: parse_managed_source(source).unwrap(),
+        custom_files: BTreeMap::new(),
+        artifacts: BTreeMap::new(),
+        lock: serde_json::json!({ "format": "geosolve-lock-v1", "modules": {} }),
+    }
 }
 
 fn without_shoulder(project: &CodeProject) -> CodeProject {
@@ -739,10 +1286,14 @@ fn fillet_radii(materialized: &MaterializedCodeProject) -> BTreeSet<u64> {
 
 fn refresh_expansion_digest(expansion: &mut ExpandedCodeProject) {
     let provenance_rows = expansion.generated_provenance.iter().collect::<Vec<_>>();
+    let declaration_rows = expansion.declaration_provenance.iter().collect::<Vec<_>>();
     let bytes = serde_json::to_vec(&(
         &expansion.patch,
         &expansion.semantic_outputs,
         &provenance_rows,
+        &declaration_rows,
+        &expansion.writable_points,
+        &expansion.generated_children,
         &expansion.host_requests,
     ))
     .unwrap();

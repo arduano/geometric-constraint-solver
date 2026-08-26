@@ -5261,36 +5261,71 @@ pub(crate) mod wasm {
     fn delete_projectional_selection(wb: &mut ProjectionalWorkbench) -> Result<String, String> {
         // Code-authored declarations must be removed from managed TypeScript
         // first; deleting only the projection would be reverted on the next
-        // expansion. Resolve the semantic declaration from the current
-        // selection before borrowing the code project mutably.
-        if let Some(symbol) = wb.code_project.as_ref().and_then(|project| {
-            let accepted = wb.editor().coordinator().accepted_materialization()?;
-            wb.editor().editor().selection().iter().find_map(|item| {
-                let binding = match item {
-                    SelectionItem::Point(point) => IntentNativeBinding::Point(*point),
-                    SelectionItem::Curve(span) => IntentNativeBinding::Curve(*span),
-                    SelectionItem::Constraint(id) => IntentNativeBinding::Constraint(*id),
-                    SelectionItem::Dimension(id) => IntentNativeBinding::Dimension(*id),
-                    SelectionItem::Feature(id) => IntentNativeBinding::ComputedFeature(*id),
-                    SelectionItem::FeatureCorner(corner) => {
-                        IntentNativeBinding::ComputedFeatureCorner(corner.corner)
-                    }
-                    SelectionItem::Datum(_) => return None,
-                };
-                let owner = accepted.ownership.exact_owner(binding)?;
-                let node = wb.editor().coordinator().intent().graph().node(owner)?;
-                node.symbol
-                    .as_str()
-                    .starts_with("code.")
-                    .then(|| node.symbol.clone())
-            })
-        }) {
-            return wb
-                .code_project
-                .as_mut()
-                .expect("code project inspected above")
-                .delete_managed_declaration(&symbol)
-                .map(|_| format!("Managed declaration `{}` deleted", symbol.0));
+        // expansion. The selected declaration is projected through expansion
+        // provenance and never recovered by decoding a hashed IntentKey.
+        let code_target = wb
+            .code_project
+            .as_ref()
+            .map(|project| project.selected_code_delete_target(wb.editor()))
+            .transpose()?
+            .flatten();
+        if let Some(target) = code_target {
+            match target {
+                target @ super::code_projects::CodeDeleteTarget::GeneratedChild { .. } => {
+                    let publication = wb
+                        .code_project
+                        .as_mut()
+                        .expect("code project inspected above")
+                        .suppress_generated_child(&target)?;
+                    let revision = publication.receipt.after.revision;
+                    wb.authority = super::WorkbenchDocumentAuthority::from_projectional_editor(
+                        *publication.editor,
+                    )?;
+                    reconcile_projectional_authoring(wb);
+                    return Ok(format!(
+                        "Generated child `{}` suppressed · revision {revision}",
+                        match &target {
+                            super::code_projects::CodeDeleteTarget::GeneratedChild {
+                                address,
+                                ..
+                            } => address.display_path(),
+                            _ => unreachable!(),
+                        },
+                    ));
+                }
+                super::code_projects::CodeDeleteTarget::ManagedDeclaration {
+                    ref declaration,
+                    ..
+                } => {
+                    let display = declaration.0.clone();
+                    let outcome = wb
+                        .code_project
+                        .as_mut()
+                        .expect("code project inspected above")
+                        .delete_managed_declaration(&target)?;
+                    return match outcome {
+                        super::code_projects::CodeApplyOutcome::Accepted(publication) => {
+                            let revision = publication.receipt.after.revision;
+                            wb.authority =
+                                super::WorkbenchDocumentAuthority::from_projectional_editor(
+                                    *publication.editor,
+                                )?;
+                            reconcile_projectional_authoring(wb);
+                            Ok(format!(
+                                "Managed declaration `{}` and its dependent closure deleted · revision {revision}",
+                                display,
+                            ))
+                        }
+                        super::code_projects::CodeApplyOutcome::RetainedFailure {
+                            receipt,
+                            diagnostic,
+                        } => Ok(format!(
+                            "Managed deletion retained at revision {}; accepted scene unchanged: {diagnostic}",
+                            receipt.after.revision,
+                        )),
+                    };
+                }
+            }
         }
         let result = wb
             .editor_mut()
@@ -5869,6 +5904,20 @@ pub(crate) mod wasm {
         Ok(true)
     }
 
+    fn restore_pending_semantic_point_drag(
+        wb: &mut ProjectionalWorkbench,
+        pointer_id: Option<u64>,
+    ) -> Result<bool, String> {
+        let Some(code_project) = wb.code_project.as_mut() else {
+            return Ok(false);
+        };
+        let Some(editor) = code_project.cancel_semantic_point_drag(pointer_id)? else {
+            return Ok(false);
+        };
+        wb.authority = super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
+        Ok(true)
+    }
+
     fn cancel_projectional_interaction(
         viewport: &Element,
         wb: &mut ProjectionalWorkbench,
@@ -5907,7 +5956,12 @@ pub(crate) mod wasm {
         let effect_count = effects.len();
         let _ = dispatch_projectional_effects(wb, effects);
         release_projectional_pointer_capture(viewport, wb, pointer_id, release_platform_capture);
-        let changed = retired_frame || had_capture || effect_count != 0;
+        let restored_semantic_drag = restore_pending_semantic_point_drag(
+            wb,
+            pointer_id.and_then(|pointer_id| u64::try_from(pointer_id).ok()),
+        )
+        .unwrap_or(false);
+        let changed = retired_frame || had_capture || effect_count != 0 || restored_semantic_drag;
         if changed {
             wb.notice = notice.into();
         }
@@ -6470,7 +6524,25 @@ pub(crate) mod wasm {
                 );
                 return;
             }
-            let effects = match wb.editor_mut().pointer_down(&scene, input) {
+            let preferred_code_declaration = match wb
+                .code_project
+                .as_ref()
+                .map(|code_project| code_project.selected_managed_declaration(wb.editor()))
+            {
+                Some(Ok(declaration)) => declaration,
+                Some(Err(error)) => {
+                    wb.notice = format!("Code-owned point gesture is unavailable: {error}");
+                    drop(wb);
+                    let _ = present_projectional_pointer_event(
+                        &down_document,
+                        &down_workbench,
+                        super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                    );
+                    return;
+                }
+                None => None,
+            };
+            let mut effects = match wb.editor_mut().pointer_down(&scene, input) {
                 Ok(effects) => effects,
                 Err(error) => {
                     wb.notice = format!("Projectional point gesture is unavailable: {error}");
@@ -6483,19 +6555,71 @@ pub(crate) mod wasm {
                     return;
                 }
             };
-            if let Some(route) = wb.editor().editor().prepared_point_drag_route()
-                && let Some(code_project) = wb.code_project.as_ref()
-                && let Err(error) = code_project.point_drag_permission(wb.editor(), route.point)
-            {
-                wb.editor_mut().cancel_interaction();
-                wb.notice = format!("Code-owned point gesture is unavailable: {error}");
-                drop(wb);
-                let _ = present_projectional_pointer_event(
-                    &down_document,
-                    &down_workbench,
-                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
-                );
-                return;
+            if let Some(route) = wb.editor().editor().prepared_point_drag_route() {
+                let preparation = {
+                    let ProjectionalWorkbench {
+                        authority,
+                        code_project,
+                        ..
+                    } = &mut *wb;
+                    code_project.as_mut().map_or(Ok(None), |code_project| {
+                        code_project.prepare_semantic_point_drag(
+                            authority
+                                .projectional_ref()
+                                .expect("projectional adapter owns projectional authority"),
+                            input.pointer_id,
+                            route.point,
+                            preferred_code_declaration.as_ref(),
+                        )
+                    })
+                };
+                match preparation {
+                    Ok(Some(prepared)) => {
+                        wb.editor_mut().cancel_interaction();
+                        let routed = super::WorkbenchDocumentAuthority::from_projectional_editor(
+                            *prepared.editor,
+                        )
+                        .and_then(|authority| {
+                            wb.authority = authority;
+                            let detached_scene = projectional_scene(&wb).ok_or_else(|| {
+                                "detached semantic point has no accepted scene".to_owned()
+                            })?;
+                            wb.editor_mut()
+                                .pointer_down_exact_point(&detached_scene, input, prepared.point)
+                                .map_err(|error| error.to_string())
+                        });
+                        match routed {
+                            Ok(routed_effects) => effects = routed_effects,
+                            Err(error) => {
+                                let _ = restore_pending_semantic_point_drag(
+                                    &mut wb,
+                                    Some(input.pointer_id),
+                                );
+                                wb.notice =
+                                    format!("Code-owned point gesture is unavailable: {error}");
+                                drop(wb);
+                                let _ = present_projectional_pointer_event(
+                                    &down_document,
+                                    &down_workbench,
+                                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                                );
+                                return;
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        wb.editor_mut().cancel_interaction();
+                        wb.notice = format!("Code-owned point gesture is unavailable: {error}");
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &down_document,
+                            &down_workbench,
+                            super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                        );
+                        return;
+                    }
+                }
             }
             let active = wb.editor().editor().active_pointer_gesture();
             if active.is_some_and(|active| {
@@ -6552,6 +6676,8 @@ pub(crate) mod wasm {
                         super::WorkbenchPresentationEvent::PointerMoveFrame
                     } else {
                         wb.editor_mut().cancel_interaction();
+                        let _ =
+                            restore_pending_semantic_point_drag(&mut wb, Some(input.pointer_id));
                         wb.notice =
                             "Projectional point gesture canceled because pointer capture failed"
                                 .into();
@@ -6809,6 +6935,13 @@ pub(crate) mod wasm {
                         // not graph/solver intent, but it is part of workspace
                         // v8 and therefore persists on its terminal release.
                         save_projectional(&mut wb);
+                        super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+                    } else if wb.code_project.as_ref().is_some_and(|code_project| {
+                        code_project.has_pending_semantic_point_drag(input.pointer_id)
+                    }) {
+                        let _ =
+                            restore_pending_semantic_point_drag(&mut wb, Some(input.pointer_id));
+                        wb.notice = "Code-owned point gesture was unchanged".into();
                         super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
                     } else {
                         wb.notice = "Canvas selection updated".into();
@@ -7337,6 +7470,44 @@ pub(crate) mod wasm {
                                     *publication.editor,
                                 )?;
                             Ok("Generated placement reset to code".into())
+                        }),
+                    "reset-semantic-draft" => target
+                        .get_attribute("data-code-draft")
+                        .ok_or_else(|| "semantic draft target is unavailable".to_owned())
+                        .and_then(|path| {
+                            wb.code_project
+                                .as_mut()
+                                .ok_or_else(|| "no code project is open".to_owned())?
+                                .reset_semantic_draft(&path)
+                        })
+                        .and_then(|publication| {
+                            let Some(publication) = publication else {
+                                return Ok("Placement already follows code".into());
+                            };
+                            wb.authority =
+                                super::WorkbenchDocumentAuthority::from_projectional_editor(
+                                    *publication.editor,
+                                )?;
+                            Ok("GUI placement reset to code".into())
+                        }),
+                    "reset-child-suppression" => target
+                        .get_attribute("data-code-child")
+                        .ok_or_else(|| "generated child target is unavailable".to_owned())
+                        .and_then(|path| {
+                            wb.code_project
+                                .as_mut()
+                                .ok_or_else(|| "no code project is open".to_owned())?
+                                .reset_generated_child_suppression(&path)
+                        })
+                        .and_then(|publication| {
+                            let Some(publication) = publication else {
+                                return Ok("Generated child already follows code".into());
+                            };
+                            wb.authority =
+                                super::WorkbenchDocumentAuthority::from_projectional_editor(
+                                    *publication.editor,
+                                )?;
+                            Ok("Generated child restored from code".into())
                         }),
                     _ => Err(format!("unknown code-project action `{code_action}`")),
                 };
@@ -22567,5 +22738,484 @@ mod tests {
             .expect("native source remains authorable at the computed contact");
         assert_eq!(hit.item, SelectionItem::Curve(source));
         assert!(matches!(hit.item, SelectionItem::Curve(_)));
+    }
+
+    const COLLABORATIVE_REFERENCE_SOURCE: &str = r#""use geosolve managed-v1";
+import { sketch } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const frame = $.geometry.rectangle("frame", {
+    lowerLeft: [0, 0],
+    upperRight: [60, 35],
+  });
+  const diagonal = $.geometry.line("diagonal", {
+    start: frame.corners.lowerLeft,
+    end: frame.corners.upperRight,
+  });
+  const sibling = $.geometry.line("sibling", {
+    start: frame.corners.lowerLeft,
+    end: [-20, 5],
+  });
+  const follower = $.geometry.line("follower", {
+    start: diagonal.start,
+    end: [15, -10],
+  });
+  $.organize("Collaborative references", [frame, diagonal, sibling, follower]);
+  return $.outputs({ frame, diagonal, sibling, follower });
+});
+"#;
+
+    struct CollaborativeReferenceFixture {
+        code: Box<super::code_projects::CodeProjectWorkbench>,
+        editor: Box<ProjectionalEditorSession>,
+        viewport: Viewport,
+    }
+
+    fn collaborative_reference_fixture() -> CollaborativeReferenceFixture {
+        let (code, _) = super::code_projects::CodeProjectWorkbench::new_authored()
+            .expect("authored code project");
+        let mut code = Box::new(code);
+        code.set_managed_draft(COLLABORATIVE_REFERENCE_SOURCE.into());
+        let publication = match code
+            .apply_managed_draft()
+            .expect("valid collaborative reference source")
+        {
+            super::code_projects::CodeApplyOutcome::Accepted(publication) => publication,
+            super::code_projects::CodeApplyOutcome::RetainedFailure { diagnostic, .. } => {
+                panic!("collaborative reference source must acquire native authority: {diagnostic}")
+            }
+        };
+        CollaborativeReferenceFixture {
+            code,
+            editor: publication.editor,
+            viewport: Viewport::new([900.0, 700.0], [30.0, 17.5], 10.0)
+                .expect("finite pointer viewport"),
+        }
+    }
+
+    fn segment_node_with_end(editor: &ProjectionalEditorSession, expected_end: [f64; 2]) -> NodeId {
+        let accepted = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted code materialization");
+        editor
+            .coordinator()
+            .intent()
+            .graph()
+            .nodes()
+            .values()
+            .find_map(|node| {
+                if !matches!(
+                    node.kind,
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    }
+                ) {
+                    return None;
+                }
+                let port = node.port_by_selector(IntentPortSelector::Node {
+                    role: IntentPortRole::End,
+                    index: 0,
+                })?;
+                let geosolve_constraint_editor::IntentNativeBinding::Point(point) =
+                    accepted.ownership.port(port.as_ref(node.id))?
+                else {
+                    return None;
+                };
+                let position = accepted.session.design_document().point(point)?.position;
+                (position.map(f64::to_bits) == expected_end.map(f64::to_bits)).then_some(node.id)
+            })
+            .expect("segment with expected literal end")
+    }
+
+    fn native_point_for_role(
+        editor: &ProjectionalEditorSession,
+        node: NodeId,
+        role: IntentPortRole,
+    ) -> DesignPointId {
+        let declaration = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(node)
+            .expect("current code declaration");
+        let port = declaration
+            .port_by_selector(IntentPortSelector::Node { role, index: 0 })
+            .expect("semantic point output")
+            .as_ref(node);
+        let geosolve_constraint_editor::IntentNativeBinding::Point(point) = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted code materialization")
+            .ownership
+            .port(port)
+            .expect("native point binding")
+        else {
+            panic!("semantic point output must bind one native point")
+        };
+        point
+    }
+
+    fn native_point_position(editor: &ProjectionalEditorSession, point: DesignPointId) -> [f64; 2] {
+        editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted code materialization")
+            .session
+            .design_document()
+            .point(point)
+            .expect("accepted native point")
+            .position
+    }
+
+    fn delegated_editor_checkpoint(editor: &ProjectionalEditorSession) -> serde_json::Value {
+        let ordinary = WorkspaceSnapshot::from_projectional_editor(editor)
+            .expect("ordinary projectional checkpoint evidence");
+        let delegated = WorkspaceSnapshot::from_delegated_projectional_editor(
+            editor,
+            ordinary.computed_evaluation_high_water(),
+            ordinary.revisions,
+        )
+        .expect("history-free delegated checkpoint");
+        delegated
+            .validate_delegated_intent_checkpoint()
+            .expect("valid delegated checkpoint");
+        serde_json::Value::String(delegated.encode().expect("encoded delegated checkpoint"))
+    }
+
+    fn assert_code_editor_valid(editor: &ProjectionalEditorSession) {
+        let accepted = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted code materialization");
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+        );
+        assert!(
+            accepted
+                .session
+                .design_document()
+                .points()
+                .iter()
+                .flat_map(|point| point.position)
+                .all(f64::is_finite)
+        );
+        for curve in accepted.session.design_document().curves() {
+            if let CurveDefinition::Line {
+                branch_direction, ..
+            } = &curve.definition
+            {
+                assert!(branch_direction.iter().copied().all(f64::is_finite));
+                assert!((branch_direction[0].hypot(branch_direction[1]) - 1.0).abs() <= 1.0e-12);
+            }
+        }
+    }
+
+    fn drag_selected_code_point(
+        fixture: &mut CollaborativeReferenceFixture,
+        declaration: NodeId,
+        point: DesignPointId,
+        target: [f64; 2],
+        pointer_id: u64,
+        label: &str,
+    ) {
+        assert!(fixture.editor.set_selected_declaration(Some(declaration)));
+        let selected = fixture
+            .code
+            .selected_managed_declaration(&fixture.editor)
+            .expect("authenticated selected declaration")
+            .expect("selected managed declaration");
+        let pointer = |model| PointerInput {
+            pointer_id,
+            position: fixture.viewport.model_to_screen(model),
+            modifiers: Modifiers::default(),
+        };
+        let start = native_point_position(&fixture.editor, point);
+        let scene = fixture
+            .editor
+            .scene(fixture.viewport, 0.5)
+            .expect("accepted pointer-down scene");
+        fixture
+            .editor
+            .pointer_down(&scene, pointer(start))
+            .expect("ordinary shared-point pointer route");
+        let route = fixture
+            .editor
+            .editor()
+            .prepared_point_drag_route()
+            .expect("prepared point drag route");
+        assert_eq!(route.point, point);
+        if let Some(prepared) = fixture
+            .code
+            .prepare_semantic_point_drag(&fixture.editor, pointer_id, route.point, Some(&selected))
+            .expect("semantic point preparation")
+        {
+            fixture.editor.cancel_interaction();
+            fixture.editor = prepared.editor;
+            let scene = fixture
+                .editor
+                .scene(fixture.viewport, 0.5)
+                .expect("detached pointer-down scene");
+            fixture
+                .editor
+                .pointer_down_exact_point(&scene, pointer(start), prepared.point)
+                .expect("exact detached consumer pointer route");
+        }
+        let scene = fixture
+            .editor
+            .scene(fixture.viewport, 0.5)
+            .expect("accepted pointer-move scene");
+        fixture
+            .editor
+            .pointer_move(&scene, pointer(target))
+            .expect("valid code-point pointer preview");
+        let scene = fixture
+            .editor
+            .scene(fixture.viewport, 0.5)
+            .expect("accepted pointer-up scene");
+        assert!(
+            fixture
+                .editor
+                .pointer_up(&scene, pointer(target))
+                .expect("valid code-point terminal sample")
+                .transaction
+                .is_some()
+        );
+        let publication = fixture
+            .code
+            .publish_delegated_editor_checkpoint(
+                delegated_editor_checkpoint(&fixture.editor),
+                label,
+            )
+            .expect("outer semantic point publication")
+            .expect("one outer history row");
+        fixture.editor = publication.editor;
+        assert_code_editor_valid(&fixture.editor);
+    }
+
+    #[test]
+    fn selected_consumer_among_multiple_references_rebinds_code_owned_dependents() {
+        run_projectional_test_with_large_stack(
+            "m84-multiple-reference-consumer-detachment",
+            || {
+                let mut fixture = collaborative_reference_fixture();
+                let diagonal_before = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+                let sibling_before = segment_node_with_end(&fixture.editor, [-20.0, 5.0]);
+                let follower_before = segment_node_with_end(&fixture.editor, [15.0, -10.0]);
+                let frame_point =
+                    native_point_for_role(&fixture.editor, diagonal_before, IntentPortRole::Start);
+                assert_eq!(
+                    native_point_for_role(&fixture.editor, sibling_before, IntentPortRole::Start,),
+                    frame_point,
+                    "the producer must initially have two distinct referenced consumers",
+                );
+                assert_eq!(
+                    native_point_for_role(&fixture.editor, follower_before, IntentPortRole::Start,),
+                    frame_point,
+                    "the downstream code consumer must initially follow the selected consumer",
+                );
+                let source_before = fixture.code.managed_source().to_owned();
+
+                drag_selected_code_point(
+                    &mut fixture,
+                    diagonal_before,
+                    frame_point,
+                    [5.0, 6.0],
+                    8_411,
+                    "Detach selected diagonal with code dependents",
+                );
+
+                let diagonal_after = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+                let sibling_after = segment_node_with_end(&fixture.editor, [-20.0, 5.0]);
+                let follower_after = segment_node_with_end(&fixture.editor, [15.0, -10.0]);
+                let diagonal_point =
+                    native_point_for_role(&fixture.editor, diagonal_after, IntentPortRole::Start);
+                assert_ne!(diagonal_after, diagonal_before);
+                assert_eq!(sibling_after, sibling_before);
+                assert_eq!(follower_after, follower_before);
+                assert_ne!(diagonal_point, frame_point);
+                assert_eq!(
+                    native_point_for_role(&fixture.editor, sibling_after, IntentPortRole::Start,),
+                    frame_point,
+                    "the other referenced consumer remains attached to the producer",
+                );
+                assert_eq!(
+                    native_point_for_role(&fixture.editor, follower_after, IntentPortRole::Start,),
+                    diagonal_point,
+                    "the code-owned downstream consumer rebinds to the replacement Segment",
+                );
+                let follower = fixture
+                    .editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node(follower_after)
+                    .expect("retained code-owned follower");
+                assert_eq!(
+                    follower.inputs[&geosolve_sketch_intent::InputSlot::new(
+                        geosolve_sketch_intent::InputRole::Point,
+                        0,
+                    )]
+                        .node,
+                    diagonal_after,
+                );
+                assert_eq!(
+                    native_point_position(&fixture.editor, frame_point).map(f64::to_bits),
+                    [0.0, 0.0].map(f64::to_bits),
+                );
+                assert_eq!(
+                    native_point_position(&fixture.editor, diagonal_point).map(f64::to_bits),
+                    [5.0, 6.0].map(f64::to_bits),
+                );
+                assert_eq!(fixture.code.managed_source(), source_before);
+            },
+        );
+    }
+
+    #[test]
+    fn already_detached_referenced_consumer_supports_repeated_pointer_drags() {
+        run_projectional_test_with_large_stack("m84-repeated-detached-consumer-drag", || {
+            let mut fixture = collaborative_reference_fixture();
+            let first_node = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let shared = native_point_for_role(&fixture.editor, first_node, IntentPortRole::Start);
+            drag_selected_code_point(
+                &mut fixture,
+                first_node,
+                shared,
+                [5.0, 6.0],
+                8_412,
+                "First selected diagonal drag",
+            );
+            let revision_after_first = fixture.code.accepted_editor_checkpoint().clone();
+            let second_node = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let detached =
+                native_point_for_role(&fixture.editor, second_node, IntentPortRole::Start);
+            drag_selected_code_point(
+                &mut fixture,
+                second_node,
+                detached,
+                [9.0, 8.0],
+                8_413,
+                "Second selected diagonal drag",
+            );
+
+            assert_ne!(
+                fixture.code.accepted_editor_checkpoint(),
+                &revision_after_first,
+            );
+            let final_node = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let final_point =
+                native_point_for_role(&fixture.editor, final_node, IntentPortRole::Start);
+            assert_eq!(
+                native_point_position(&fixture.editor, final_point).map(f64::to_bits),
+                [9.0, 8.0].map(f64::to_bits),
+            );
+            let follower = segment_node_with_end(&fixture.editor, [15.0, -10.0]);
+            assert_eq!(
+                native_point_for_role(&fixture.editor, follower, IntentPortRole::Start),
+                final_point,
+                "the downstream reference must follow both terminal placements",
+            );
+            let sibling = segment_node_with_end(&fixture.editor, [-20.0, 5.0]);
+            assert_eq!(
+                native_point_position(
+                    &fixture.editor,
+                    native_point_for_role(&fixture.editor, sibling, IntentPortRole::Start,),
+                )
+                .map(f64::to_bits),
+                [0.0, 0.0].map(f64::to_bits),
+            );
+        });
+    }
+
+    #[test]
+    fn structural_reference_detachment_round_trips_through_outer_undo_redo() {
+        run_projectional_test_with_large_stack("m84-detachment-undo-redo", || {
+            let mut fixture = collaborative_reference_fixture();
+            let original_checkpoint = fixture.code.accepted_editor_checkpoint().clone();
+            let diagonal_before = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let original_shared =
+                native_point_for_role(&fixture.editor, diagonal_before, IntentPortRole::Start);
+            drag_selected_code_point(
+                &mut fixture,
+                diagonal_before,
+                original_shared,
+                [7.0, 4.0],
+                8_414,
+                "Detach diagonal before history replay",
+            );
+            let detached_checkpoint = fixture.code.accepted_editor_checkpoint().clone();
+            let diagonal_after = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let detached_point =
+                native_point_for_role(&fixture.editor, diagonal_after, IntentPortRole::Start);
+            assert_ne!(detached_point, original_shared);
+
+            let undone = fixture
+                .code
+                .step_history(true)
+                .expect("Undo structural detachment")
+                .expect("detachment owns one outer history row");
+            fixture.editor = undone.editor;
+            assert_eq!(
+                delegated_editor_checkpoint(&fixture.editor),
+                original_checkpoint,
+            );
+            assert_eq!(
+                fixture.code.accepted_editor_checkpoint(),
+                &original_checkpoint,
+            );
+            let undo_diagonal = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let undo_sibling = segment_node_with_end(&fixture.editor, [-20.0, 5.0]);
+            let undo_follower = segment_node_with_end(&fixture.editor, [15.0, -10.0]);
+            assert_eq!(undo_diagonal, diagonal_before);
+            assert_eq!(
+                native_point_for_role(&fixture.editor, undo_diagonal, IntentPortRole::Start,),
+                original_shared,
+            );
+            assert_eq!(
+                native_point_for_role(&fixture.editor, undo_sibling, IntentPortRole::Start,),
+                original_shared,
+            );
+            assert_eq!(
+                native_point_for_role(&fixture.editor, undo_follower, IntentPortRole::Start,),
+                original_shared,
+            );
+            assert_code_editor_valid(&fixture.editor);
+
+            let redone = fixture
+                .code
+                .step_history(false)
+                .expect("Redo structural detachment")
+                .expect("detachment remains redoable");
+            fixture.editor = redone.editor;
+            assert_eq!(
+                delegated_editor_checkpoint(&fixture.editor),
+                detached_checkpoint,
+            );
+            assert_eq!(
+                fixture.code.accepted_editor_checkpoint(),
+                &detached_checkpoint,
+            );
+            let redo_diagonal = segment_node_with_end(&fixture.editor, [60.0, 35.0]);
+            let redo_follower = segment_node_with_end(&fixture.editor, [15.0, -10.0]);
+            let redo_point =
+                native_point_for_role(&fixture.editor, redo_diagonal, IntentPortRole::Start);
+            assert_eq!(redo_diagonal, diagonal_after);
+            assert_eq!(redo_point, detached_point);
+            assert_eq!(
+                native_point_position(&fixture.editor, redo_point).map(f64::to_bits),
+                [7.0, 4.0].map(f64::to_bits),
+            );
+            assert_eq!(
+                native_point_for_role(&fixture.editor, redo_follower, IntentPortRole::Start,),
+                redo_point,
+            );
+            assert_code_editor_valid(&fixture.editor);
+        });
     }
 }

@@ -13,6 +13,7 @@ mod demos;
 mod expansion;
 mod managed_edit;
 mod model;
+mod overlay;
 mod parser;
 mod project;
 mod reconcile;
@@ -27,8 +28,9 @@ pub use bootstrap::{
 };
 pub use composition::{
     CodeCompositionError, MaterializedCodeProject, MaterializedFilletOutput,
-    materialize_code_project_cold, materialize_code_project_incremental,
-    rehydrate_materialized_code_project,
+    materialize_code_project_cold, materialize_code_project_cold_with_overlay,
+    materialize_code_project_incremental, materialize_code_project_incremental_for_structural_edit,
+    materialize_code_project_incremental_with_overlay, rehydrate_materialized_code_project,
 };
 pub use declaration_catalog::{
     CODE_DECLARATION_FAMILIES, CodeDeclarationFamilyDescriptor, CodeDeclarationResultDescriptor,
@@ -41,9 +43,12 @@ pub use demos::{
     rounded_polyline_member_addresses,
 };
 pub use expansion::{
-    CodeExpansionError, CodeHostRequest, ExpandedCodeProject, ExpandedFeatureCorner, ExpandedPort,
-    ExpandedSemanticOutput, ExpandedSemanticTarget, GeneratedIntentProvenance,
-    KeyedFilletHostRequest, expand_code_project, required_generated_members,
+    CodeExpansionError, CodeHostRequest, CodePointEdit, CodePointSeedSource, CodeRectangleCorner,
+    ExpandedCodeProject, ExpandedFeatureCorner, ExpandedGeneratedChild, ExpandedPort,
+    ExpandedSemanticOutput, ExpandedSemanticTarget, ExpandedWritablePoint,
+    GeneratedIntentProvenance, KeyedFilletHostRequest, expand_code_project,
+    expand_code_project_for_structural_edit, expand_code_project_with_overlay,
+    required_generated_members, stage_point_drags,
 };
 pub use managed_edit::{
     ManagedEdit, ManagedEditError, ManagedEditPlan, apply_managed_edit, plan_managed_edit,
@@ -54,6 +59,11 @@ pub use model::{
     ManagedOutput, ManagedOwnedSpan, ManagedOwnedSpanKind, ManagedPathSegment, ManagedSpan,
     ManagedValue, ManagedValueOwnedSpan, OutputRef, PatchInvocation, ProjectKey,
     SemanticOutputPath, SemanticSymbol, UnitLiteral,
+};
+pub use overlay::{
+    CodeDraft, CodeDraftProvenance, CodeDraftValue, CodeGeneratedChildAddress,
+    CodeInteractionOverlay, CodeOverlayError, CodeOwnerAddress, CodeOwnerIdentity,
+    CodeWritableAddress, CodeWritableField,
 };
 pub use parser::{
     MANAGED_COLLECTION_ITEM_LIMIT, MANAGED_SOURCE_LIMIT, MANAGED_VALUE_DEPTH_LIMIT,

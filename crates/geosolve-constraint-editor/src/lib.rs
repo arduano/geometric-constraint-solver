@@ -6066,6 +6066,29 @@ impl ConstraintEditor {
         self.pointer_down_with_draft_inference(scene, input, DraftInferenceInput::default())
     }
 
+    /// Starts a Select gesture for one exact point already authenticated by a
+    /// semantic host. The point must still be interactive and hit by this
+    /// pointer sample in the supplied accepted scene; this is a disambiguation
+    /// seam, not a way to target hidden or remote geometry.
+    pub(crate) fn pointer_down_exact_point(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        point: DesignPointId,
+    ) -> Option<Vec<EditorEffect>> {
+        if self.tool != EditorTool::Select
+            || self.active_pointer_gesture().is_some()
+            || !input.position.is_finite()
+        {
+            return None;
+        }
+        let point = scene.points.iter().find(|candidate| {
+            candidate.id == point && candidate.is_pickable(self.geometry_policy)
+        })?;
+        let hit = point_hit(point, input.position, self.pick_tolerance.point_pixels)?;
+        Some(self.pointer_down_resolved_hit(scene, input, Some(hit)))
+    }
+
     /// Resolves a pointer press with explicit host-normalized inference input.
     pub fn pointer_down_with_draft_inference(
         &mut self,

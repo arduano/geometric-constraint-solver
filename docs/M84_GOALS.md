@@ -2,10 +2,11 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the post-F004 direct code-authoring amendment is clean-qualified
-and immutably nominated for UAT**. The earlier M84-F003/F004 snapshots remain withdrawn historical
-evidence. M84-U1 through M84-U13 and explicit approval remain pending; accepted M83 remains GitHub
-Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; M84-F005 and the M84-F006 adversarial authority audit are
+implemented and focused-qualified, while clean replacement nomination and refreshed UAT remain
+pending**. The direct-authoring snapshot `41e65a4` and all earlier M84 nominations are withdrawn
+historical evidence. No F005/F006 replacement snapshot is nominated, no UAT row is accepted, and
+accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -94,10 +95,32 @@ layer optional.
   unaffected logical/native identities across insertion and reorder.
 - Allocate new keys above high-water, tombstone removed keys and use a new generation when a
   retired key is reused outside Undo. Never silently cascade or retarget outside dependents.
-- Own one `SketchCodeSession` history over project/artifacts/program/expansion/overrides and a
-  delegated nested editor checkpoint. One user action is one Undo entry.
+- Own one `SketchCodeSession` history over project/artifacts/program/expansion/semantic interaction
+  overlay and a delegated nested editor checkpoint. One user action is one Undo entry.
 - Parse/expand nothing on pointer frames. Terminal drag publication uses the newest authenticated
-  accepted native preview, stages the matching managed edit/override and commits exactly once.
+  accepted native preview, stages the matching overlay and commits exactly once.
+- Keep durable GUI placement in a bounded, generation-authenticated semantic overlay keyed by
+  project, semantic owner, output path and writable field. It is an equation-free instance-seed
+  layer, never a new constraint, residual or priority mechanism. M84 makes only Cartesian points
+  overlay-writable; scalar edits continue through authenticated managed-source lenses. Point-seed
+  precedence is typed overlay draft > legacy generated override > managed source seed; Reset
+  removes the complete semantic edit bundle and exposes the applicable lower tier again.
+- Resolve a canvas drag and deletion through accepted expansion provenance, never by decoding a
+  hashed `code.*` intent alias. With no selected semantic owner, or with the producer selected,
+  ordinary producer ownership keeps referenced consumers attached. A uniquely selected referenced
+  consumer detaches only that consumer; its projected Segment may acquire replacement intent/native
+  identity while its code owner stays stable and all retained code/GUI dependents rebind. Repeated
+  drags use the detached point lens, and Undo/Redo restores the complete attachment and overlay.
+  A rectangle corner updates its two canonical seeds atomically. Unknown, stale-generation,
+  wrong-type or non-finite drafts reject before publication. Equal duplicate writes in one
+  same-tier terminal bundle collapse; unequal writes to one address reject atomically. Multiple
+  matching lenses for the selected declaration reject without mutation.
+- Delete a managed declaration through its semantic source owner and exact dependent closure. Do
+  not delete only the projected intent node, silently cascade ordinary outside dependents, or allow
+  a dirty managed draft or retained code failure to choose deletion authority. Authenticate the
+  delete token against the exact code-session identity, accepted alias and semantic owner at
+  execution time. A generated-child Delete is reversible suppression, not source deletion;
+  GUI-owned selections remain on ordinary editor deletion.
 
 ### M84-G6 — project UX and persistence
 
@@ -112,6 +135,14 @@ layer optional.
 - Treat custom files as read-only in the demo. Do not build a general browser IDE.
 - Round-trip all files, artifacts, locks, expansion provenance, overrides, nested accepted intent
   and unified history in a bounded code-project envelope; repro restore is atomic and offline.
+- Persist current and accepted semantic overlays separately. A structural attempt that removes an
+  owner and later fails native publication retains the deterministic owner-pruned attempted
+  overlay while the exact accepted overlay/canvas remain authoritative; reload and Undo preserve
+  both sides.
+- Because the semantic overlay changes the still-unreleased optional persistence contract, use
+  explicit incompatible identifiers `geosolve-sketch-code-session-v2` and
+  `geosolve-code-workbench-v2`. Reject prototype-v1 payloads instead of silently changing their
+  identity digest. Plain M83 workspace-v8 persistence remains unchanged.
 - Preserve ordinary M83 selection, Inspector, canvas constraints/dimensions and accepted-scene
   authority for generated outputs.
 - On only an exact canonical fresh workspace whose current and accepted semantic identities match
@@ -122,6 +153,20 @@ layer optional.
   `sketch.ts` and no fabricated ordinary scene or Promote history. Valid Apply, whole-source
   replacement, retained-invalid source/diagnostic, Undo/Redo, reload and repro remain one atomic
   code/editor authority.
+
+### M84-F006 — adversarial authority hardening
+
+- Cap imported session identities before adopting allocator high-water and bound persisted managed
+  drafts to the existing 4 MiB source ceiling.
+- Use typed canonical Reset/Restore tokens and authenticate direct plus generated owner pruning
+  exactly across retained failure.
+- Preserve generated-reference provenance through local detachment, direct/generated Segment and
+  generated circle-centre replacement, dependent rebinding, cancellation, repeated drag and exact
+  Undo/Redo.
+- Compare same-tier point seeds by persisted IEEE bits: bit-identical duplicates collapse, while
+  distinct encodings such as `+0.0` and `-0.0` reject atomically in either order.
+- Treat these as persistence/resource/transaction hardening only. Do not add an equation,
+  constraint, solver priority, tolerance or branch rule.
 
 ## Required demonstrations
 
@@ -193,7 +238,7 @@ both. Historical service PID `3316682` served only those bytes at
 nomination solely because they predate amended scope; PID `3316682` was retired only after the
 direct-authoring replacement passed temporary verification.
 
-Current direct-authoring nomination (2026-08-26): exact source
+Withdrawn direct-authoring nomination (2026-08-26): exact source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, passes the complete clean release gate, unchanged
 271-row golden and separate four-demo ledger. Its exact no-rebuild output is frozen at
@@ -201,9 +246,10 @@ Current direct-authoring nomination (2026-08-26): exact source
 `6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, with complete evidence at
 `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`. Temporary and retained exact HTTP checks and
 direct 3/3, baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against those frozen bytes.
-PID `4081080` serves them at `http://100.94.63.83:8080/`. This adds no solver equation, browser
-execution, custom artifact or fifth bundled golden row. M84-U1 through M84-U13, explicit approval,
-Pages publication, service retirement and closure remain open.
+The former PID `4081080` record is historical evidence only. This adds no solver equation, browser
+execution, custom artifact or fifth bundled golden row. Refreshed M84-U1 through M84-U14, clean
+F005/F006 replacement qualification, a replacement nomination, explicit approval, Pages
+publication, service retirement and closure remain open.
 
 ## Bounds and non-goals
 

@@ -20,24 +20,30 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProject, CodeProjectDemo, CodeProjectDemoId, CodeSessionReceipt,
-    EditorBootstrapDeclaration, ExpandedCodeProject, ExpandedSemanticTarget, FeatureKind,
-    GeneratedMemberAddress, KeyedReconcileState, ManagedDiagnostic, ManagedEdit, ManagedValue,
+    CodeGeneratedChildAddress, CodeInteractionOverlay, CodeProject, CodeProjectDemo,
+    CodeProjectDemoId, CodeSessionIdentity, CodeSessionReceipt, CodeWritableAddress,
+    EditorBootstrapDeclaration, ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget,
+    ExpandedWritablePoint, KeyedReconcileState, ManagedDiagnostic, ManagedEdit, ManagedValue,
     MaterializedCodeProject, PatchModuleArtifact, ProjectKey, SemanticSymbol, SketchCodeSession,
-    UnitLiteral, apply_managed_edit, bundled_code_project_demos, expand_code_project,
-    initialize_code_project_from_editor, materialize_code_project_cold,
-    materialize_code_project_incremental, parse_managed_source, plan_managed_edit,
+    UnitLiteral, apply_managed_edit, bundled_code_project_demos,
+    expand_code_project_for_structural_edit, initialize_code_project_from_editor,
+    materialize_code_project_cold, materialize_code_project_incremental_for_structural_edit,
+    materialize_code_project_incremental_with_overlay, parse_managed_source, plan_managed_edit,
     rehydrate_materialized_code_project, required_generated_members,
 };
 use geosolve_sketch_intent::{
     BootstrapNativeKind, GeometryRecipeKind, IntentLiteral, IntentNode, IntentNodeKind,
-    IntentPortRole, IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
-    LeafRef, NodeId,
+    IntentPortKind, IntentSessionId, IntentUnit, LeafField, LeafRef, NodeId,
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+use geosolve_sketch_code::{FeatureKind, GeneratedMemberAddress};
+#[cfg(test)]
+use geosolve_sketch_intent::{IntentPortRole, IntentPortSelector, IntentSession};
+
 const MANAGED_FILE: &str = "sketch.ts";
-const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v1";
+const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v2";
 const CODE_PROJECT_MODEL_SCALE: f64 = 1.0;
 const AUTHORED_STARTER_SOURCE: &str = r#""use geosolve managed-v1";
 import { sketch } from "@geosolve/sketch-code";
@@ -65,6 +71,19 @@ pub(crate) struct AcceptedCodePublication {
     pub(crate) receipt: CodeSessionReceipt,
 }
 
+/// Transient semantic disambiguation prepared before the first pointer frame.
+/// It changes neither the code session nor outer history.
+pub(crate) struct PreparedCodePointDrag {
+    pub(crate) editor: Box<ProjectionalEditorSession>,
+    pub(crate) point: geosolve_sketch::DesignPointId,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct PendingSemanticPointDrag {
+    pointer_id: u64,
+    point: ExpandedWritablePoint,
+}
+
 /// A syntactically valid Apply either replaces native authority atomically or
 /// retains its code diagnostic over the previous accepted editor checkpoint.
 pub(crate) enum CodeApplyOutcome {
@@ -75,19 +94,28 @@ pub(crate) enum CodeApplyOutcome {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum CodeOwnedEditorChange {
-    GeneratedPoint {
-        address: GeneratedMemberAddress,
-        position: [f64; 2],
-    },
-    ManagedRectangle {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum CodeDeleteTarget {
+    ManagedDeclaration {
         declaration: SemanticSymbol,
         alias: geosolve_sketch_intent::IntentKey,
-        changed_arguments: BTreeSet<String>,
+        session: CodeSessionIdentity,
+    },
+    GeneratedChild {
+        address: CodeGeneratedChildAddress,
+        alias: geosolve_sketch_intent::IntentKey,
+        session: CodeSessionIdentity,
     },
 }
 
+#[derive(Clone, Debug, PartialEq)]
+enum CodeOwnedEditorChange {
+    SemanticPoints {
+        placements: Vec<(ExpandedWritablePoint, [f64; 2])>,
+    },
+}
+
+#[cfg(test)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum WritableCodeLeaf {
     GeneratedPoint(GeneratedMemberAddress),
@@ -127,6 +155,10 @@ pub(crate) struct CodeProjectWorkbench {
     // Reconstructible warm authority. Persistence stores the delegated editor
     // checkpoint plus authenticated expansion, never this runtime cache.
     materialized: Option<Box<MaterializedCodeProject>>,
+    // A referenced consumer may need to be detached before native pointer
+    // continuation starts. This is disposable gesture state and is never
+    // serialized or entered into history unless the terminal sample commits.
+    pending_semantic_point_drag: Option<PendingSemanticPointDrag>,
 }
 
 /// Presentation provenance for one genuine code project. Bundled projects
@@ -289,12 +321,14 @@ impl CodeProjectWorkbench {
                 draft_diagnostic: None,
                 last_receipt: None,
                 materialized: Some(materialized),
+                pending_semantic_point_drag: None,
             },
             delegated_editor,
         ))
     }
 
     pub(crate) fn to_persistence_json(&self) -> Result<String, String> {
+        validate_managed_draft_bound(&self.managed_draft)?;
         let wire = CodeProjectWorkbenchWire {
             version: CODE_WORKBENCH_WIRE_VERSION.into(),
             origin: Some(self.origin.to_wire()),
@@ -334,6 +368,7 @@ impl CodeProjectWorkbench {
         if wire.version != CODE_WORKBENCH_WIRE_VERSION {
             return Err("unsupported code-workbench version".into());
         }
+        validate_managed_draft_bound(&wire.managed_draft)?;
         let origin = restore_code_project_origin(wire.origin, wire.demo.as_deref())?;
         let project = CodeProject::from_json(&wire.project).map_err(|error| error.to_string())?;
         let session = SketchCodeSession::from_json_validating_checkpoints(
@@ -413,6 +448,7 @@ impl CodeProjectWorkbench {
             draft_diagnostic,
             last_receipt: None,
             materialized: Some(materialized),
+            pending_semantic_point_drag: None,
         };
         value.select_file(&wire.selected_file)?;
         Ok(value)
@@ -447,6 +483,18 @@ impl CodeProjectWorkbench {
         editor_checkpoint: serde_json::Value,
         label: &str,
     ) -> Result<Option<AcceptedCodePublication>, String> {
+        if let Some(pending) = self.pending_semantic_point_drag.take() {
+            let candidate_editor = restore_editor_checkpoint(&editor_checkpoint)?;
+            let position = expanded_port_position(&candidate_editor, &pending.point.handle)
+                .ok_or_else(|| {
+                    "terminal referenced consumer has no Cartesian instance seed".to_owned()
+                })?;
+            return self.publish_semantic_point_overlay(
+                &[(pending.point, position)],
+                &candidate_editor,
+                label,
+            );
+        }
         if &editor_checkpoint == self.session.pointer_frame_checkpoint() {
             return Ok(None);
         }
@@ -455,7 +503,6 @@ impl CodeProjectWorkbench {
         let code_change = classify_code_owned_editor_change(
             &accepted_editor,
             &candidate_editor,
-            &self.project,
             self.session
                 .snapshot()
                 .accepted_expansion
@@ -470,19 +517,9 @@ impl CodeProjectWorkbench {
                 );
             }
             return match change {
-                CodeOwnedEditorChange::GeneratedPoint { address, position } => self
-                    .publish_generated_point_override(&address, position, &candidate_editor, label),
-                CodeOwnedEditorChange::ManagedRectangle {
-                    declaration,
-                    alias,
-                    changed_arguments,
-                } => self.publish_managed_rectangle_placement(
-                    &declaration,
-                    &alias,
-                    &changed_arguments,
-                    &candidate_editor,
-                    label,
-                ),
+                CodeOwnedEditorChange::SemanticPoints { placements } => {
+                    self.publish_semantic_point_overlay(&placements, &candidate_editor, label)
+                }
             };
         }
         let expansion = self
@@ -508,10 +545,97 @@ impl CodeProjectWorkbench {
         }))
     }
 
-    /// Code-owned points remain editable through the accepted projectional
-    /// checkpoint. Where a generated or managed-source lens exists we still
-    /// reverse-edit the source; otherwise the edit is retained as a
-    /// projectional override so code and UX can be iterated together.
+    fn publish_semantic_point_overlay(
+        &mut self,
+        placements: &[(ExpandedWritablePoint, [f64; 2])],
+        candidate_editor: &ProjectionalEditorSession,
+        label: &str,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before dragging code-owned geometry"
+                    .into(),
+            );
+        }
+        if self.session.snapshot().failure.is_some() {
+            return Err(
+                "resolve or Undo the retained code failure before dragging code-owned geometry"
+                    .into(),
+            );
+        }
+        if placements.is_empty() {
+            return Err("semantic point publication has no placements".into());
+        }
+        if placements
+            .iter()
+            .flat_map(|(_, position)| *position)
+            .any(|value| !value.is_finite())
+        {
+            return Err("code-owned point placement is not finite".into());
+        }
+        let overlay = self
+            .session
+            .stage_point_drags(
+                placements
+                    .iter()
+                    .map(|(point, position)| (point, *position)),
+            )
+            .map_err(|error| error.to_string())?;
+        self.ensure_materialized_cache()?;
+        let materialized = materialize_code_project_incremental_with_overlay(
+            self.materialized
+                .as_deref()
+                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+            &self.project,
+            &self.session.snapshot().generated,
+            &overlay,
+        )
+        .map_err(|error| error.to_string())?;
+        for (point, position) in placements {
+            let staged_position = expanded_port_position(&materialized.editor, &point.handle)
+                .ok_or_else(|| "staged code point has no Cartesian instance seed".to_owned())?;
+            let terminal_position = expanded_port_position(candidate_editor, &point.handle)
+                .ok_or_else(|| "terminal code point has no Cartesian instance seed".to_owned())?;
+            if pair_bits(staged_position) != pair_bits(terminal_position)
+                || pair_bits(terminal_position) != pair_bits(*position)
+            {
+                return Err("semantic point draft failed exact terminal/native seed parity".into());
+            }
+        }
+        validate_terminal_native_parity(
+            candidate_editor,
+            &materialized.editor,
+            &materialized.expansion,
+        )?;
+        let expansion = materialized.expansion.clone();
+        let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
+        let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
+        let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
+        let prepared = self
+            .session
+            .prepare_project_overlay(
+                self.session.identity(),
+                overlay,
+                expansion,
+                checkpoint,
+                label,
+            )
+            .map_err(|error| error.to_string())?;
+        let receipt = self
+            .session
+            .apply_prepared(prepared)
+            .map_err(|error| error.to_string())?;
+        self.materialized = Some(candidate_cache);
+        self.last_receipt = Some(receipt.clone());
+        Ok(Some(AcceptedCodePublication {
+            editor: delegated_editor,
+            receipt,
+        }))
+    }
+
+    /// Authenticates a code-owned point against the accepted semantic draft
+    /// overlay before pointer motion begins. Unsupported code-owned points
+    /// fail closed instead of becoming opaque delegated checkpoints.
     pub(crate) fn point_drag_permission(
         &self,
         editor: &ProjectionalEditorSession,
@@ -539,24 +663,152 @@ impl CodeProjectWorkbench {
             .accepted_expansion
             .as_ref()
             .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
-        let supported = expansion
-            .generated_provenance
-            .iter()
-            .any(|(address, provenance)| {
-                supported_point_override_address(address)
-                    && expanded_target_point(editor, &provenance.target) == Some(point)
-            })
-            || managed_rectangle_points(editor, &self.project, expansion)?.contains_key(&point);
-        if supported && self.session.snapshot().failure.is_none() {
-            Ok(())
-        } else if supported {
-            Err(
-                "resolve or Undo the retained code failure before dragging code-owned geometry"
-                    .into(),
-            )
-        } else {
-            Ok(())
+        if expansion.declaration_for_alias(&node.symbol).is_none() {
+            return Err(
+                "code-owned point has no authenticated managed declaration provenance".into(),
+            );
         }
+        if !expansion
+            .writable_points
+            .iter()
+            .any(|candidate| expanded_port_point(editor, &candidate.handle) == Some(point))
+        {
+            return Err("this code-owned point has no semantic GUI draft lens".into());
+        }
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before dragging code-owned geometry"
+                    .into(),
+            );
+        }
+        self.session
+            .snapshot()
+            .failure
+            .as_ref()
+            .map_or(Ok(()), |_| {
+                Err(
+                    "resolve or Undo the retained code failure before dragging code-owned geometry"
+                        .into(),
+                )
+            })
+    }
+
+    /// Prepares a unique referenced consumer for native point continuation.
+    ///
+    /// A shared producer/consumer native point cannot express a local consumer
+    /// drag until the reference is detached. The caller supplies the managed
+    /// declaration selected before the point press; producer selection keeps
+    /// ordinary shared-follow behavior, while a selected referenced consumer
+    /// detaches locally. Ambiguous semantic lenses reject without changing
+    /// session, source, accepted scene, or history.
+    pub(crate) fn prepare_semantic_point_drag(
+        &mut self,
+        editor: &ProjectionalEditorSession,
+        pointer_id: u64,
+        native_point: geosolve_sketch::DesignPointId,
+        preferred_declaration: Option<&SemanticSymbol>,
+    ) -> Result<Option<PreparedCodePointDrag>, String> {
+        self.pending_semantic_point_drag = None;
+        self.point_drag_permission(editor, native_point)?;
+        let expansion = self
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+        let candidates = expansion
+            .writable_points
+            .iter()
+            .filter(|candidate| {
+                expanded_port_point(editor, &candidate.handle) == Some(native_point)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if candidates.len() <= 1 {
+            return Ok(None);
+        }
+        let Some(preferred_declaration) = preferred_declaration else {
+            return Ok(None);
+        };
+        let preferred = candidates
+            .iter()
+            .filter(|candidate| {
+                expansion.declaration_for_alias(&candidate.handle.alias)
+                    == Some(preferred_declaration)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let point = match preferred.as_slice() {
+            [point] if point.source.is_reference() => point.clone(),
+            [point] => {
+                let _ = point;
+                return Ok(None);
+            }
+            [] => return Ok(None),
+            _ => {
+                return Err(
+                    "the selected declaration has multiple semantic point lenses at this shared point"
+                        .into(),
+                );
+            }
+        };
+        // Before detachment a referenced consumer intentionally owns no
+        // Cartesian instance leaves of its own: it aliases the producer's
+        // accepted native point. Seed the transient detachment from that exact
+        // accepted native position, then authenticate the consumer-local
+        // leaves after expansion below.
+        let position = editor
+            .coordinator()
+            .accepted_materialization()
+            .and_then(|accepted| accepted.session.design_document().point(native_point))
+            .map(|point| point.position)
+            .ok_or_else(|| "referenced consumer has no accepted native point seed".to_owned())?;
+        let overlay = self
+            .session
+            .stage_point_drag(&point, position)
+            .map_err(|error| error.to_string())?;
+        self.ensure_materialized_cache()?;
+        let materialized = materialize_code_project_incremental_with_overlay(
+            self.materialized
+                .as_deref()
+                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+            &self.project,
+            &self.session.snapshot().generated,
+            &overlay,
+        )
+        .map_err(|error| error.to_string())?;
+        let detached_point = expanded_port_point(&materialized.editor, &point.handle)
+            .ok_or_else(|| "detached consumer has no accepted native point".to_owned())?;
+        let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
+        let detached_editor = restore_editor_checkpoint(&checkpoint)?;
+        self.pending_semantic_point_drag = Some(PendingSemanticPointDrag { pointer_id, point });
+        Ok(Some(PreparedCodePointDrag {
+            editor: detached_editor,
+            point: detached_point,
+        }))
+    }
+
+    #[must_use]
+    pub(crate) fn has_pending_semantic_point_drag(&self, pointer_id: u64) -> bool {
+        self.pending_semantic_point_drag
+            .as_ref()
+            .is_some_and(|pending| pending.pointer_id == pointer_id)
+    }
+
+    /// Cancels a pre-frame semantic detachment and restores the exact accepted
+    /// nested editor. The code session and history were never changed.
+    pub(crate) fn cancel_semantic_point_drag(
+        &mut self,
+        pointer_id: Option<u64>,
+    ) -> Result<Option<Box<ProjectionalEditorSession>>, String> {
+        let Some(pending) = self.pending_semantic_point_drag.as_ref() else {
+            return Ok(None);
+        };
+        if pointer_id.is_some_and(|pointer_id| pointer_id != pending.pointer_id) {
+            return Ok(None);
+        }
+        self.pending_semantic_point_drag = None;
+        self.restore_accepted_editor().map(Some)
     }
 
     /// Returns a truthful read-only diagnostic for unsupported direct
@@ -598,10 +850,10 @@ impl CodeProjectWorkbench {
                     .and_then(|node| editor.coordinator().intent().graph().node(node))
                     .is_some_and(|node| node.symbol.as_str().starts_with("code."))
             }) {
-                // Code-owned geometry may be adjusted in the projectional
-                // layer even when no reverse-edit lens is available. The
-                // accepted checkpoint remains the authoritative collaborative
-                // edit and can subsequently be promoted into source.
+                return Err(
+                    "this code-owned property has no semantic GUI draft lens; edit managed source or an exposed lens"
+                        .into(),
+                );
             }
         }
         Ok(())
@@ -609,219 +861,6 @@ impl CodeProjectWorkbench {
 
     pub(crate) fn restore_accepted_editor(&self) -> Result<Box<ProjectionalEditorSession>, String> {
         restore_editor_checkpoint(self.session.pointer_frame_checkpoint())
-    }
-
-    fn publish_generated_point_override(
-        &mut self,
-        address: &GeneratedMemberAddress,
-        position: [f64; 2],
-        candidate_editor: &ProjectionalEditorSession,
-        label: &str,
-    ) -> Result<Option<AcceptedCodePublication>, String> {
-        let value = ManagedValue::Array(vec![
-            ManagedValue::Number(position[0]),
-            ManagedValue::Number(position[1]),
-        ]);
-        let mut generated = self.session.snapshot().generated.clone();
-        generated
-            .set_override(address, value.clone())
-            .map_err(|error| error.to_string())?;
-
-        // The live projectional editor has already reconstructed its accepted
-        // terminal pointer sample. Independently replay the override over the
-        // warm accepted composition so ordinary GUI dependents participate in
-        // the same native validation without being reallocated or erased.
-        self.ensure_materialized_cache()?;
-        let parity = materialize_code_project_incremental(
-            self.materialized
-                .as_deref()
-                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
-            &self.project,
-            &generated,
-        )
-        .map_err(|error| error.to_string())?;
-        let parity_point = generated_point_position(&parity.editor, &parity.expansion, address)
-            .ok_or_else(|| {
-                "generated point override has no cold native parity target".to_owned()
-            })?;
-        let candidate_point = generated_point_position(
-            candidate_editor,
-            self.session
-                .snapshot()
-                .accepted_expansion
-                .as_ref()
-                .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?,
-            address,
-        )
-        .ok_or_else(|| "generated point override has no live native target".to_owned())?;
-        if pair_bits(parity_point) != pair_bits(candidate_point)
-            || pair_bits(candidate_point) != pair_bits(position)
-        {
-            return Err("generated point override failed exact cold/native parity".into());
-        }
-        validate_terminal_native_parity(candidate_editor, &parity.editor, &parity.expansion)?;
-        let expansion = parity.expansion.clone();
-        let checkpoint = encode_editor_checkpoint(&parity.editor)?;
-        let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
-        let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
-        let prepared = self
-            .session
-            .prepare_project_override(
-                self.session.identity(),
-                address,
-                value,
-                expansion,
-                checkpoint,
-                label,
-            )
-            .map_err(|error| error.to_string())?;
-        let receipt = self
-            .session
-            .apply_prepared(prepared)
-            .map_err(|error| error.to_string())?;
-        self.materialized = Some(candidate_cache);
-        self.last_receipt = Some(receipt.clone());
-        Ok(Some(AcceptedCodePublication {
-            editor: delegated_editor,
-            receipt,
-        }))
-    }
-
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one atomic reverse-edit protocol keeps source, warm materialization, parity, and publication reviewable together"
-    )]
-    fn publish_managed_rectangle_placement(
-        &mut self,
-        declaration: &SemanticSymbol,
-        alias: &geosolve_sketch_intent::IntentKey,
-        changed_arguments: &BTreeSet<String>,
-        candidate_editor: &ProjectionalEditorSession,
-        label: &str,
-    ) -> Result<Option<AcceptedCodePublication>, String> {
-        if self.is_dirty() {
-            return Err(
-                "Apply or Revert the managed-source draft before dragging code-owned geometry"
-                    .into(),
-            );
-        }
-        let mut managed = self.project.managed.clone();
-        for argument in changed_arguments {
-            let position = managed_rectangle_argument_position(candidate_editor, alias, argument)
-                .ok_or_else(|| {
-                format!(
-                    "managed rectangle `{}` has no exact `{argument}` Cartesian placement",
-                    declaration.0
-                )
-            })?;
-            if !position[0].is_finite() || !position[1].is_finite() {
-                return Err("managed rectangle placement is not finite".into());
-            }
-            let current = managed
-                .program
-                .declarations
-                .iter()
-                .find(|candidate| &candidate.symbol == declaration)
-                .and_then(|candidate| {
-                    managed_object_path(&candidate.arguments, std::slice::from_ref(argument))
-                })
-                .ok_or_else(|| {
-                    format!(
-                        "managed rectangle `{}` no longer owns `{argument}`",
-                        declaration.0
-                    )
-                })?;
-            let value = managed_point_value_like(current, position)?;
-            let plan = plan_managed_edit(
-                &managed,
-                ManagedEdit::SetInvocationArgument {
-                    declaration: declaration.clone(),
-                    path: vec![argument.clone()],
-                    value,
-                },
-            )
-            .map_err(|error| error.to_string())?;
-            managed = apply_managed_edit(&managed, &plan).map_err(|error| error.to_string())?;
-        }
-
-        let mut candidate_project = self.project.clone();
-        candidate_project.managed = managed;
-        candidate_project
-            .validate()
-            .map_err(|error| error.to_string())?;
-        if candidate_project.custom_files != self.project.custom_files
-            || candidate_project.artifacts != self.project.artifacts
-        {
-            return Err("managed placement attempted to change custom project authority".into());
-        }
-        let desired =
-            required_generated_members(&candidate_project).map_err(|error| error.to_string())?;
-        let plan = self
-            .session
-            .plan_structural_reconciliation(self.session.identity(), desired, &BTreeSet::new())
-            .map_err(|error| error.to_string())?;
-        self.ensure_materialized_cache()?;
-        let materialized = materialize_code_project_incremental(
-            self.materialized
-                .as_deref()
-                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
-            &candidate_project,
-            plan.staged(),
-        )
-        .map_err(|error| error.to_string())?;
-        let expansion = materialized.expansion.clone();
-        let staged_alias = managed_rectangle_alias(&candidate_project, &expansion, declaration)
-            .ok_or_else(|| {
-                format!(
-                    "managed rectangle `{}` disappeared during source expansion",
-                    declaration.0
-                )
-            })?;
-        for argument in changed_arguments {
-            let live = managed_rectangle_argument_position(candidate_editor, alias, argument)
-                .ok_or_else(|| "live managed rectangle placement disappeared".to_owned())?;
-            let staged =
-                managed_rectangle_argument_position(&materialized.editor, &staged_alias, argument)
-                    .ok_or_else(|| "staged managed rectangle placement disappeared".to_owned())?;
-            if pair_bits(live) != pair_bits(staged) {
-                return Err(format!(
-                    "managed rectangle `{}` `{argument}` drag failed exact source/native parity",
-                    declaration.0
-                ));
-            }
-        }
-        validate_terminal_native_parity(
-            candidate_editor,
-            &materialized.editor,
-            &materialized.expansion,
-        )?;
-        let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
-        let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
-        let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
-        let prepared = self
-            .session
-            .prepare_project_edit_from_plan(
-                self.session.identity(),
-                candidate_project.clone(),
-                plan,
-                expansion,
-                checkpoint,
-                label,
-            )
-            .map_err(|error| error.to_string())?;
-        let receipt = self
-            .session
-            .apply_prepared(prepared)
-            .map_err(|error| error.to_string())?;
-        self.project = candidate_project;
-        self.managed_draft = self.session.snapshot().managed.source.clone();
-        self.draft_diagnostic = None;
-        self.materialized = Some(candidate_cache);
-        self.last_receipt = Some(receipt.clone());
-        Ok(Some(AcceptedCodePublication {
-            editor: delegated_editor,
-            receipt,
-        }))
     }
 
     pub(crate) fn demo_key(&self) -> Option<&'static str> {
@@ -847,11 +886,207 @@ impl CodeProjectWorkbench {
         self.draft_diagnostic = None;
     }
 
+    /// Resolves the currently selected intent declaration back to the exact
+    /// managed semantic owner published by code expansion.
+    ///
+    /// The implementation deliberately does not decode the hashed `code.*`
+    /// developer symbol. An ordinary GUI-owned declaration is represented by
+    /// `None`; every expansion-owned declaration must be present in the
+    /// authenticated provenance map.
+    pub(crate) fn selected_managed_declaration(
+        &self,
+        editor: &ProjectionalEditorSession,
+    ) -> Result<Option<SemanticSymbol>, String> {
+        let Some(node_id) = editor.selected_declaration() else {
+            return Ok(None);
+        };
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(node_id)
+            .ok_or_else(|| "selected declaration is absent from current intent".to_owned())?;
+        let expansion = self
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+        match expansion.declaration_for_alias(&node.symbol) {
+            Some(declaration) => Ok(Some(declaration.clone())),
+            None if node.symbol.as_str().starts_with("code.") => Err(
+                "selected code-owned declaration has no authenticated managed-source provenance"
+                    .into(),
+            ),
+            None => Ok(None),
+        }
+    }
+
+    /// Resolves Delete through accepted code expansion. A generated host
+    /// child is a reversible suppression target; only its managed invocation
+    /// declaration is a source-rewrite target.
+    pub(crate) fn selected_code_delete_target(
+        &self,
+        editor: &ProjectionalEditorSession,
+    ) -> Result<Option<CodeDeleteTarget>, String> {
+        let Some(node_id) = editor.selected_declaration() else {
+            return Ok(None);
+        };
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(node_id)
+            .ok_or_else(|| "selected declaration is absent from current intent".to_owned())?;
+        let expansion = self
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+        if let Some(child) = expansion.generated_child_for_alias(&node.symbol) {
+            return Ok(Some(CodeDeleteTarget::GeneratedChild {
+                address: child.address.clone(),
+                alias: node.symbol.clone(),
+                session: self.session.identity().clone(),
+            }));
+        }
+        match expansion.declaration_for_alias(&node.symbol) {
+            Some(declaration) => Ok(Some(CodeDeleteTarget::ManagedDeclaration {
+                declaration: declaration.clone(),
+                alias: node.symbol.clone(),
+                session: self.session.identity().clone(),
+            })),
+            None if node.symbol.as_str().starts_with("code.") => Err(
+                "selected code-owned declaration has no authenticated semantic provenance".into(),
+            ),
+            None => Ok(None),
+        }
+    }
+
+    fn authenticate_delete_target(&self, target: &CodeDeleteTarget) -> Result<(), String> {
+        let (expected, alias) = match target {
+            CodeDeleteTarget::ManagedDeclaration { session, alias, .. }
+            | CodeDeleteTarget::GeneratedChild { session, alias, .. } => (session, alias),
+        };
+        if expected != self.session.identity() {
+            return Err("stale semantic deletion target; select the geometry again".into());
+        }
+        let expansion = self
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+        match target {
+            CodeDeleteTarget::ManagedDeclaration { declaration, .. }
+                if expansion.declaration_for_alias(alias) == Some(declaration) => {}
+            CodeDeleteTarget::GeneratedChild { address, .. }
+                if expansion
+                    .generated_child_for_alias(alias)
+                    .is_some_and(|child| child.address == *address) => {}
+            _ => {
+                return Err(
+                    "semantic deletion target no longer matches accepted expansion provenance"
+                        .into(),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Publishes a generated child Delete as one semantic suppression overlay
+    /// transaction. Managed source and the owning invocation remain intact.
+    pub(crate) fn suppress_generated_child(
+        &mut self,
+        target: &CodeDeleteTarget,
+    ) -> Result<AcceptedCodePublication, String> {
+        self.authenticate_delete_target(target)?;
+        let CodeDeleteTarget::GeneratedChild { address, .. } = target else {
+            return Err("semantic deletion target is not a generated child".into());
+        };
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before suppressing generated geometry"
+                    .into(),
+            );
+        }
+        if self.session.snapshot().failure.is_some() {
+            return Err(
+                "resolve or Undo the retained code failure before suppressing generated geometry"
+                    .into(),
+            );
+        }
+        let overlay = self
+            .session
+            .stage_generated_child_suppression(address, true)
+            .map_err(|error| error.to_string())?;
+        self.ensure_materialized_cache()?;
+        let materialized = materialize_code_project_incremental_with_overlay(
+            self.materialized
+                .as_deref()
+                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+            &self.project,
+            &self.session.snapshot().generated,
+            &overlay,
+        )
+        .map_err(|error| error.to_string())?;
+        let child = materialized
+            .expansion
+            .generated_children
+            .iter()
+            .find(|child| child.address == *address)
+            .ok_or_else(|| "suppressed generated child lost semantic provenance".to_owned())?;
+        if !child.suppressed {
+            return Err("generated child suppression did not reach expanded authority".into());
+        }
+        let expansion = materialized.expansion.clone();
+        let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
+        let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
+        let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
+        let prepared = self
+            .session
+            .prepare_project_overlay(
+                self.session.identity(),
+                overlay,
+                expansion,
+                checkpoint,
+                "Suppress generated child",
+            )
+            .map_err(|error| error.to_string())?;
+        let receipt = self
+            .session
+            .apply_prepared(prepared)
+            .map_err(|error| error.to_string())?;
+        self.materialized = Some(candidate_cache);
+        self.last_receipt = Some(receipt.clone());
+        Ok(AcceptedCodePublication {
+            editor: delegated_editor,
+            receipt,
+        })
+    }
+
     /// Reverse-projects a canvas deletion into the managed TypeScript file.
     pub(crate) fn delete_managed_declaration(
         &mut self,
-        declaration: &SemanticSymbol,
+        target: &CodeDeleteTarget,
     ) -> Result<CodeApplyOutcome, String> {
+        self.authenticate_delete_target(target)?;
+        let CodeDeleteTarget::ManagedDeclaration { declaration, .. } = target else {
+            return Err("semantic deletion target is not a managed declaration".into());
+        };
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before deleting code-owned geometry"
+                    .into(),
+            );
+        }
+        if self.session.snapshot().failure.is_some() {
+            return Err(
+                "resolve or Undo the retained code failure before deleting code-owned geometry"
+                    .into(),
+            );
+        }
         let plan = plan_managed_edit(
             &self.project.managed,
             ManagedEdit::DeleteDeclaration {
@@ -861,10 +1096,14 @@ impl CodeProjectWorkbench {
         .map_err(|error| error.to_string())?;
         let managed =
             apply_managed_edit(&self.project.managed, &plan).map_err(|error| error.to_string())?;
-        self.managed_draft = managed.source.clone();
+        self.managed_draft = managed.source;
         self.apply_managed_draft()
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one workbench transaction keeps parse, structural pruning, cold validation, failure retention, and publication atomic"
+    )]
     pub(crate) fn apply_managed_draft(&mut self) -> Result<CodeApplyOutcome, String> {
         let managed = match parse_managed_source(&self.managed_draft) {
             Ok(managed) => managed,
@@ -884,6 +1123,7 @@ impl CodeProjectWorkbench {
                 return self.retain_candidate_failure(
                     candidate_project,
                     None,
+                    self.session.snapshot().interaction_overlay.clone(),
                     None,
                     "structural expansion",
                     error.to_string(),
@@ -900,6 +1140,7 @@ impl CodeProjectWorkbench {
                 return self.retain_candidate_failure(
                     candidate_project,
                     None,
+                    self.session.snapshot().interaction_overlay.clone(),
                     None,
                     "keyed reconciliation",
                     error.to_string(),
@@ -907,26 +1148,28 @@ impl CodeProjectWorkbench {
             }
         };
         self.ensure_materialized_cache()?;
-        match materialize_code_project_incremental(
+        match materialize_code_project_incremental_for_structural_edit(
             self.materialized
                 .as_deref()
                 .ok_or_else(|| "code project has no warm native authority".to_owned())?,
             &candidate_project,
             plan.staged(),
+            &self.session.snapshot().interaction_overlay,
         )
         .map_err(|error| error.to_string())
         {
-            Ok(materialized) => {
+            Ok((materialized, retained_overlay)) => {
                 let expansion = materialized.expansion.clone();
                 let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
                 let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
                 let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
                 let prepared = self
                     .session
-                    .prepare_project_edit_from_plan(
+                    .prepare_project_edit_from_plan_with_overlay(
                         self.session.identity(),
                         candidate_project.clone(),
                         plan,
+                        retained_overlay,
                         expansion,
                         checkpoint,
                         "Apply managed source",
@@ -947,11 +1190,18 @@ impl CodeProjectWorkbench {
                 }))
             }
             Err(diagnostic) => {
-                let retained_expansion =
-                    expansion_for_retained_failure(&candidate_project, plan.staged());
+                let (retained_expansion, retained_overlay) = expansion_for_retained_failure(
+                    &candidate_project,
+                    plan.staged(),
+                    &self.session.snapshot().interaction_overlay,
+                    self.materialized
+                        .as_deref()
+                        .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+                );
                 self.retain_candidate_failure(
                     candidate_project,
                     Some(plan),
+                    retained_overlay,
                     retained_expansion,
                     "native materialization",
                     diagnostic,
@@ -1016,6 +1266,7 @@ impl CodeProjectWorkbench {
         &mut self,
         candidate_project: CodeProject,
         plan: Option<geosolve_sketch_code::KeyedReconcilePlan>,
+        interaction_overlay: CodeInteractionOverlay,
         expansion: Option<geosolve_sketch_code::ExpandedCodeProject>,
         stage: &str,
         diagnostic: String,
@@ -1026,6 +1277,7 @@ impl CodeProjectWorkbench {
                 self.session.identity(),
                 candidate_project.clone(),
                 plan,
+                interaction_overlay,
                 expansion,
                 self.session.snapshot().accepted_editor_checkpoint.clone(),
                 stage,
@@ -1066,12 +1318,13 @@ impl CodeProjectWorkbench {
             .set_override(address, value.clone())
             .map_err(|error| error.to_string())?;
         self.ensure_materialized_cache()?;
-        let materialized = materialize_code_project_incremental(
+        let materialized = materialize_code_project_incremental_with_overlay(
             self.materialized
                 .as_deref()
                 .ok_or_else(|| "code project has no warm native authority".to_owned())?,
             &self.project,
             &generated,
+            &self.session.snapshot().interaction_overlay,
         )
         .map_err(|error| error.to_string())?;
         let expansion = materialized.expansion.clone();
@@ -1128,12 +1381,13 @@ impl CodeProjectWorkbench {
             .reset_to_code(&address)
             .map_err(|error| error.to_string())?;
         self.ensure_materialized_cache()?;
-        let materialized = materialize_code_project_incremental(
+        let materialized = materialize_code_project_incremental_with_overlay(
             self.materialized
                 .as_deref()
                 .ok_or_else(|| "code project has no warm native authority".to_owned())?,
             &self.project,
             &generated,
+            &self.session.snapshot().interaction_overlay,
         )
         .map_err(|error| error.to_string())?;
         let expansion = materialized.expansion.clone();
@@ -1151,6 +1405,148 @@ impl CodeProjectWorkbench {
             )
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "generated override disappeared before publication".to_owned())?;
+        let receipt = self
+            .session
+            .apply_prepared(prepared)
+            .map_err(|error| error.to_string())?;
+        self.materialized = Some(candidate_cache);
+        self.last_receipt = Some(receipt.clone());
+        Ok(Some(AcceptedCodePublication {
+            editor: delegated_editor,
+            receipt,
+        }))
+    }
+
+    pub(crate) fn reset_semantic_draft(
+        &mut self,
+        address_token: &str,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
+        let address: CodeWritableAddress = serde_json::from_str(address_token)
+            .map_err(|_| "semantic draft target is malformed or stale".to_owned())?;
+        if self
+            .session
+            .snapshot()
+            .interaction_overlay
+            .draft(&address)
+            .is_none()
+        {
+            return Err(format!(
+                "semantic draft `{}` is unavailable",
+                address.display_path()
+            ));
+        }
+        let edit = self
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .and_then(|expansion| {
+                expansion.writable_points.iter().find_map(|point| {
+                    point
+                        .edit
+                        .writable_addresses()
+                        .contains(&address)
+                        .then(|| point.edit.clone())
+                })
+            })
+            .ok_or_else(|| {
+                format!(
+                    "semantic draft `{}` has no accepted edit lens",
+                    address.display_path()
+                )
+            })?;
+        let mut overlay = self.session.snapshot().interaction_overlay.clone();
+        if overlay.reset_many(edit.writable_addresses()) == 0 {
+            return Ok(None);
+        }
+        self.ensure_materialized_cache()?;
+        let materialized = materialize_code_project_incremental_with_overlay(
+            self.materialized
+                .as_deref()
+                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+            &self.project,
+            &self.session.snapshot().generated,
+            &overlay,
+        )
+        .map_err(|error| error.to_string())?;
+        let expansion = materialized.expansion.clone();
+        let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
+        let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
+        let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
+        let prepared = self
+            .session
+            .prepare_project_reset_draft(
+                self.session.identity(),
+                &address,
+                expansion,
+                checkpoint,
+                "Reset semantic GUI draft",
+            )
+            .map_err(|error| error.to_string())?;
+        let Some(prepared) = prepared else {
+            return Ok(None);
+        };
+        let receipt = self
+            .session
+            .apply_prepared(prepared)
+            .map_err(|error| error.to_string())?;
+        self.materialized = Some(candidate_cache);
+        self.last_receipt = Some(receipt.clone());
+        Ok(Some(AcceptedCodePublication {
+            editor: delegated_editor,
+            receipt,
+        }))
+    }
+
+    pub(crate) fn reset_generated_child_suppression(
+        &mut self,
+        address_token: &str,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
+        let address: CodeGeneratedChildAddress = serde_json::from_str(address_token)
+            .map_err(|_| "generated-child suppression target is malformed or stale".to_owned())?;
+        if self
+            .session
+            .snapshot()
+            .interaction_overlay
+            .generated_child_suppression(&address)
+            != Some(true)
+        {
+            return Err(format!(
+                "generated child `{}` is not suppressed",
+                address.display_path()
+            ));
+        }
+        let mut overlay = self.session.snapshot().interaction_overlay.clone();
+        if !overlay.reset_generated_child_suppression(&address) {
+            return Ok(None);
+        }
+        self.ensure_materialized_cache()?;
+        let materialized = materialize_code_project_incremental_with_overlay(
+            self.materialized
+                .as_deref()
+                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+            &self.project,
+            &self.session.snapshot().generated,
+            &overlay,
+        )
+        .map_err(|error| error.to_string())?;
+        let expansion = materialized.expansion.clone();
+        let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
+        let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
+        let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
+        let prepared = self
+            .session
+            .prepare_project_reset_generated_child_suppression(
+                self.session.identity(),
+                &address,
+                expansion,
+                checkpoint,
+                "Reset generated child suppression",
+            )
+            .map_err(|error| error.to_string())?;
+        let Some(prepared) = prepared else {
+            return Ok(None);
+        };
         let receipt = self
             .session
             .apply_prepared(prepared)
@@ -1520,6 +1916,7 @@ impl CodeProjectWorkbench {
         if members.is_empty() {
             markup.push_str("<p class=\"wb-code-empty\">This project has no structurally generated members.</p>");
         }
+        self.write_interaction_overlay_members(markup);
         if let Some(receipt) = &self.last_receipt {
             let _ = write!(
                 markup,
@@ -1529,6 +1926,60 @@ impl CodeProjectWorkbench {
             );
         }
         markup.push_str("</section>");
+    }
+
+    fn write_interaction_overlay_members(&self, markup: &mut String) {
+        let overlay = &self.session.snapshot().interaction_overlay;
+        for (address, draft) in overlay.drafts() {
+            let path = address.display_path();
+            let token = serde_json::to_string(address)
+                .expect("validated semantic draft address is infallibly serializable");
+            let _ = write!(
+                markup,
+                concat!(
+                    "<div class=\"wb-code-member\" data-code-ownership=\"draft\">",
+                    "<div><strong>GUI placement</strong><small>{}</small></div>",
+                    "<span class=\"wb-code-ownership-badge\">{:?}</span>",
+                    "<button type=\"button\" data-code-action=\"reset-semantic-draft\" ",
+                    "data-code-draft=\"{}\">Reset to code</button></div>"
+                ),
+                escape_html(&path),
+                draft.provenance,
+                escape_attribute(&token),
+            );
+        }
+        for (address, suppressed) in overlay.suppressed_children() {
+            if !suppressed {
+                continue;
+            }
+            let path = address.display_path();
+            let token = serde_json::to_string(address)
+                .expect("validated generated-child address is infallibly serializable");
+            let _ = write!(
+                markup,
+                concat!(
+                    "<div class=\"wb-code-member\" data-code-ownership=\"suppressed\">",
+                    "<div><strong>Suppressed generated child</strong><small>{}</small></div>",
+                    "<span class=\"wb-code-ownership-badge\">Suppressed</span>",
+                    "<button type=\"button\" data-code-action=\"reset-child-suppression\" ",
+                    "data-code-child=\"{}\">Restore from code</button></div>"
+                ),
+                escape_html(&path),
+                escape_attribute(&token),
+            );
+        }
+    }
+}
+
+fn validate_managed_draft_bound(draft: &str) -> Result<(), String> {
+    if draft.len() > geosolve_sketch_code::MANAGED_SOURCE_LIMIT {
+        Err(format!(
+            "managed source draft is {} bytes; the limit is {}",
+            draft.len(),
+            geosolve_sketch_code::MANAGED_SOURCE_LIMIT,
+        ))
+    } else {
+        Ok(())
     }
 }
 
@@ -1884,10 +2335,22 @@ fn materialize_candidate(
 fn expansion_for_retained_failure(
     project: &CodeProject,
     generated: &KeyedReconcileState,
-) -> Option<geosolve_sketch_code::ExpandedCodeProject> {
-    let (intent, _) = next_materialization_ids().ok()?;
-    let session = IntentSession::with_id(intent).ok()?;
-    expand_code_project(project, generated, session.identity()).ok()
+    current_overlay: &CodeInteractionOverlay,
+    previous: &MaterializedCodeProject,
+) -> (
+    Option<geosolve_sketch_code::ExpandedCodeProject>,
+    CodeInteractionOverlay,
+) {
+    expand_code_project_for_structural_edit(
+        project,
+        generated,
+        current_overlay,
+        previous.editor.coordinator().intent().identity(),
+    )
+    .map_or_else(
+        |_| (None, current_overlay.clone()),
+        |(expansion, retained)| (Some(expansion), retained),
+    )
 }
 
 fn next_materialization_ids() -> Result<(IntentSessionId, DocumentId), String> {
@@ -1961,50 +2424,51 @@ fn rehydrate_editor_checkpoint(
 fn classify_code_owned_editor_change(
     accepted: &ProjectionalEditorSession,
     candidate: &ProjectionalEditorSession,
-    project: &CodeProject,
     expansion: &ExpandedCodeProject,
 ) -> Result<Option<CodeOwnedEditorChange>, String> {
     let accepted_intent = accepted.coordinator().intent();
     let candidate_intent = candidate.coordinator().intent();
-    let accepted_code_nodes = accepted_intent
-        .graph()
-        .nodes()
-        .values()
-        .filter(|node| node.symbol.as_str().starts_with("code."))
-        .map(|node| (node.symbol.clone(), node.id))
-        .collect::<BTreeMap<_, _>>();
+    let mut accepted_code_nodes = BTreeMap::new();
+    for alias in expansion.declaration_provenance.keys() {
+        let node = accepted_intent
+            .graph()
+            .node_by_symbol(alias)
+            .ok_or_else(|| format!("accepted code declaration `{alias}` disappeared"))?;
+        accepted_code_nodes.insert(alias.clone(), node.id);
+    }
+    if let Some(node) = accepted_intent.graph().nodes().values().find(|node| {
+        node.symbol.as_str().starts_with("code.")
+            && !expansion.declaration_provenance.contains_key(&node.symbol)
+    }) {
+        return Err(format!(
+            "code-owned declaration `{}` has no authenticated semantic provenance",
+            node.symbol,
+        ));
+    }
     let candidate_code_symbols = candidate_intent
         .graph()
         .nodes()
         .values()
-        .filter(|node| node.symbol.as_str().starts_with("code."))
+        .filter(|node| expansion.declaration_provenance.contains_key(&node.symbol))
         .map(|node| node.symbol.clone())
         .collect::<BTreeSet<_>>();
+    if let Some(node) = candidate_intent.graph().nodes().values().find(|node| {
+        node.symbol.as_str().starts_with("code.")
+            && !expansion.declaration_provenance.contains_key(&node.symbol)
+    }) {
+        return Err(format!(
+            "candidate code-owned declaration `{}` has no authenticated semantic provenance",
+            node.symbol,
+        ));
+    }
     if accepted_code_nodes.keys().cloned().collect::<BTreeSet<_>>() != candidate_code_symbols {
-        // A projectional deletion is a legitimate collaborative edit. The
-        // editor checkpoint is published as the new accepted UX state; source
-        // promotion can subsequently reconcile the managed program.
-        if candidate_code_symbols.is_subset(&accepted_code_nodes.keys().cloned().collect()) {
-            return Ok(None);
-        }
-        return Err("code-owned declarations can only be deleted from the canvas".into());
+        return Err(
+            "code-owned declarations cannot be created or deleted in an opaque editor checkpoint"
+                .into(),
+        );
     }
 
-    let mut allowed_leaves = generated_point_leaves(accepted, expansion)?
-        .into_iter()
-        .map(|(leaf, address)| (leaf, WritableCodeLeaf::GeneratedPoint(address)))
-        .collect::<BTreeMap<_, _>>();
-    for (leaf, owner) in managed_rectangle_leaves(accepted, project, expansion)? {
-        if allowed_leaves.insert(leaf, owner).is_some() {
-            return Err("code-owned writable leaves have ambiguous source ownership".into());
-        }
-    }
-    let mut changed_address = None::<GeneratedMemberAddress>;
-    let mut changed_rectangle = None::<(
-        SemanticSymbol,
-        geosolve_sketch_intent::IntentKey,
-        BTreeSet<String>,
-    )>;
+    let mut changed_leaves = BTreeSet::new();
     for (symbol, accepted_node_id) in &accepted_code_nodes {
         let accepted_node = accepted_intent
             .graph()
@@ -2057,86 +2521,48 @@ fn classify_code_owned_editor_change(
             {
                 continue;
             }
-            // Leaves without a dedicated reverse-edit lens are retained as a
-            // projectional checkpoint edit. They remain fully draggable in
-            // the UX while managed/generated leaves below continue to update
-            // their source deterministically.
-            let Some(owner) = allowed_leaves.get(&leaf) else {
-                continue;
-            };
-            match owner {
-                WritableCodeLeaf::GeneratedPoint(address) => {
-                    if changed_rectangle.is_some() {
-                        return Err(
-                            "one canvas action cannot mix managed and generated placements".into(),
-                        );
-                    }
-                    if changed_address
-                        .as_ref()
-                        .is_some_and(|changed| changed != address)
-                    {
-                        return Err(
-                            "one canvas action cannot override multiple generated members".into(),
-                        );
-                    }
-                    changed_address = Some(address.clone());
-                }
-                WritableCodeLeaf::ManagedRectangle {
-                    declaration,
-                    alias,
-                    argument,
-                } => {
-                    if changed_address.is_some() {
-                        return Err(
-                            "one canvas action cannot mix managed and generated placements".into(),
-                        );
-                    }
-                    match &mut changed_rectangle {
-                        Some((existing, owner, arguments)) => {
-                            if existing != declaration || owner != alias {
-                                return Err(
-                                    "one canvas action cannot rewrite multiple managed declarations"
-                                        .into(),
-                                );
-                            }
-                            arguments.insert(argument.clone());
-                        }
-                        None => {
-                            changed_rectangle = Some((
-                                declaration.clone(),
-                                alias.clone(),
-                                BTreeSet::from([argument.clone()]),
-                            ));
-                        }
-                    }
-                }
-            }
+            changed_leaves.insert(leaf);
         }
     }
     validate_code_organization(accepted, candidate, &accepted_code_nodes)?;
 
-    if let Some(address) = changed_address {
-        let position =
-            generated_point_instance(candidate, expansion, &address).ok_or_else(|| {
-                "generated point override has no exact writable Cartesian leaves".to_owned()
-            })?;
-        if !position[0].is_finite() || !position[1].is_finite() {
-            return Err("generated point override is not finite".into());
-        }
-        return Ok(Some(CodeOwnedEditorChange::GeneratedPoint {
-            address,
-            position,
-        }));
+    if changed_leaves.is_empty() {
+        return Ok(None);
     }
-    Ok(
-        changed_rectangle.map(|(declaration, alias, changed_arguments)| {
-            CodeOwnedEditorChange::ManagedRectangle {
-                declaration,
-                alias,
-                changed_arguments,
-            }
-        }),
-    )
+    let mut covered_leaves = BTreeSet::new();
+    let mut placements = Vec::new();
+    for point in &expansion.writable_points {
+        let leaves = expanded_port_leaves(accepted, &point.handle)?;
+        let matched = leaves
+            .intersection(&changed_leaves)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if matched.is_empty() {
+            continue;
+        }
+        covered_leaves.extend(matched);
+        let position = expanded_port_position(candidate, &point.handle).ok_or_else(|| {
+            format!(
+                "semantic code point `{}.{}` has no exact Cartesian instance seed",
+                point.handle.alias, point.handle.selector,
+            )
+        })?;
+        if !position.into_iter().all(f64::is_finite) {
+            return Err("semantic code point placement is not finite".into());
+        }
+        placements.push((point.clone(), position));
+    }
+    if covered_leaves != changed_leaves {
+        return Err(
+            "this code-owned placement has changed leaves without semantic GUI draft provenance"
+                .into(),
+        );
+    }
+    placements.sort_by(|(left, _), (right, _)| left.handle.cmp(&right.handle));
+    placements.dedup_by(|(left, left_position), (right, right_position)| {
+        left == right && pair_bits(*left_position) == pair_bits(*right_position)
+    });
+    Ok(Some(CodeOwnedEditorChange::SemanticPoints { placements }))
 }
 
 fn validate_code_organization(
@@ -2169,6 +2595,7 @@ fn validate_code_organization(
     }
 }
 
+#[cfg(test)]
 fn generated_point_leaves(
     editor: &ProjectionalEditorSession,
     expansion: &ExpandedCodeProject,
@@ -2212,6 +2639,7 @@ fn generated_point_leaves(
     Ok(leaves)
 }
 
+#[cfg(test)]
 fn managed_rectangle_alias(
     project: &CodeProject,
     expansion: &ExpandedCodeProject,
@@ -2241,6 +2669,7 @@ fn managed_rectangle_alias(
     })
 }
 
+#[cfg(test)]
 fn managed_rectangle_leaves(
     editor: &ProjectionalEditorSession,
     project: &CodeProject,
@@ -2305,58 +2734,7 @@ fn managed_rectangle_leaves(
     Ok(leaves)
 }
 
-fn managed_rectangle_points(
-    editor: &ProjectionalEditorSession,
-    project: &CodeProject,
-    expansion: &ExpandedCodeProject,
-) -> Result<BTreeMap<geosolve_sketch::DesignPointId, (SemanticSymbol, String)>, String> {
-    let accepted = editor
-        .coordinator()
-        .accepted_materialization()
-        .ok_or_else(|| "code project has no accepted native authority".to_owned())?;
-    let mut points = BTreeMap::new();
-    for owner in managed_rectangle_leaves(editor, project, expansion)?.into_values() {
-        let WritableCodeLeaf::ManagedRectangle {
-            declaration,
-            alias,
-            argument,
-        } = owner
-        else {
-            continue;
-        };
-        let index = match argument.as_str() {
-            "lowerLeft" => 0,
-            "upperRight" => 2,
-            _ => continue,
-        };
-        let node = editor
-            .coordinator()
-            .intent()
-            .graph()
-            .node_by_symbol(&alias)
-            .ok_or_else(|| format!("managed rectangle `{}` disappeared", declaration.0))?;
-        let port = node
-            .port_by_selector(IntentPortSelector::Node {
-                role: IntentPortRole::Corner,
-                index,
-            })
-            .ok_or_else(|| format!("managed rectangle `{}` lost `{argument}`", declaration.0))?;
-        let Some(IntentNativeBinding::Point(point)) = accepted.ownership.port(port.as_ref(node.id))
-        else {
-            return Err(format!(
-                "managed rectangle `{}` `{argument}` is not a native point",
-                declaration.0
-            ));
-        };
-        if let Some(previous) = points.insert(point, (declaration.clone(), argument.clone()))
-            && previous != (declaration, argument)
-        {
-            return Err("managed rectangle points are not uniquely owned".into());
-        }
-    }
-    Ok(points)
-}
-
+#[cfg(test)]
 fn managed_rectangle_argument_position(
     editor: &ProjectionalEditorSession,
     alias: &geosolve_sketch_intent::IntentKey,
@@ -2387,87 +2765,99 @@ fn managed_rectangle_argument_position(
     Some([coordinate(LeafField::X)?, coordinate(LeafField::Y)?])
 }
 
-fn managed_point_value_like(
-    current: &ManagedValue,
-    position: [f64; 2],
-) -> Result<ManagedValue, String> {
-    let ManagedValue::Array(current) = current else {
-        return Err("managed point placement is not an array".into());
-    };
-    if current.len() != 2 {
-        return Err("managed point placement does not have two coordinates".into());
+fn expanded_port_leaves(
+    editor: &ProjectionalEditorSession,
+    handle: &ExpandedPort,
+) -> Result<BTreeSet<LeafRef>, String> {
+    let node = editor
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&handle.alias)
+        .ok_or_else(|| format!("semantic point owner `{}` is absent", handle.alias))?;
+    let port = node.port_by_selector(handle.selector).ok_or_else(|| {
+        format!(
+            "semantic point owner `{}` has no `{}` output",
+            handle.alias, handle.selector,
+        )
+    })?;
+    if handle.kind != IntentPortKind::Point || port.kind != handle.kind {
+        return Err(format!(
+            "semantic output `{}.{}` is not a Cartesian point",
+            handle.alias, handle.selector,
+        ));
     }
-    let coordinate = |current: &ManagedValue, value| match current {
-        ManagedValue::Number(_) => Ok(ManagedValue::Number(value)),
-        ManagedValue::Unit(unit) => Ok(ManagedValue::Unit(UnitLiteral {
-            unit: unit.unit.clone(),
-            value,
-        })),
-        _ => Err("managed point coordinate is not a numeric literal".to_owned()),
-    };
-    Ok(ManagedValue::Array(vec![
-        coordinate(&current[0], position[0])?,
-        coordinate(&current[1], position[1])?,
-    ]))
-}
-
-fn generated_point_instance(
-    editor: &ProjectionalEditorSession,
-    expansion: &ExpandedCodeProject,
-    address: &GeneratedMemberAddress,
-) -> Option<[f64; 2]> {
-    let target = &expansion.generated_provenance.get(address)?.target;
-    let ExpandedSemanticTarget::Port { port } = target else {
-        return None;
-    };
-    let intent = editor.coordinator().intent();
-    let node = intent.graph().node_by_symbol(&port.alias)?;
-    let output = node.port_by_selector(port.selector)?;
-    let value = |field| {
-        let leaf = LeafRef {
+    Ok([LeafField::X, LeafField::Y]
+        .into_iter()
+        .map(|field| LeafRef {
             node: node.id,
-            port: output.id,
+            port: port.id,
             field,
-        };
-        match intent.instance().values().get(&leaf)? {
-            IntentLiteral::Quantity {
-                value,
-                unit: IntentUnit::Length,
-            } => Some(*value),
-            _ => None,
-        }
-    };
-    Some([value(LeafField::X)?, value(LeafField::Y)?])
+        })
+        .collect())
 }
 
-fn generated_point_position(
+fn expanded_port_instance(
     editor: &ProjectionalEditorSession,
-    expansion: &ExpandedCodeProject,
-    address: &GeneratedMemberAddress,
+    handle: &ExpandedPort,
 ) -> Option<[f64; 2]> {
-    let target = &expansion.generated_provenance.get(address)?.target;
-    let point = expanded_target_point(editor, target)?;
-    editor
+    let intent = editor.coordinator().intent();
+    let node = intent.graph().node_by_symbol(&handle.alias)?;
+    let port = node.port_by_selector(handle.selector)?;
+    if handle.kind != IntentPortKind::Point || port.kind != handle.kind {
+        return None;
+    }
+    let coordinate = |field| match intent.instance().values().get(&LeafRef {
+        node: node.id,
+        port: port.id,
+        field,
+    })? {
+        IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Length,
+        } if value.is_finite() => Some(*value),
+        _ => None,
+    };
+    Some([coordinate(LeafField::X)?, coordinate(LeafField::Y)?])
+}
+
+fn expanded_port_position(
+    editor: &ProjectionalEditorSession,
+    handle: &ExpandedPort,
+) -> Option<[f64; 2]> {
+    if let Some(position) = expanded_port_instance(editor, handle) {
+        return Some(position);
+    }
+    let point = expanded_port_point(editor, handle)?;
+    let position = editor
         .coordinator()
         .accepted_materialization()?
         .session
         .design_document()
-        .point(point)
-        .map(|value| value.position)
+        .point(point)?
+        .position;
+    position.into_iter().all(f64::is_finite).then_some(position)
 }
 
-fn expanded_target_point(
+fn expanded_port_point(
     editor: &ProjectionalEditorSession,
-    target: &ExpandedSemanticTarget,
+    handle: &ExpandedPort,
 ) -> Option<geosolve_sketch::DesignPointId> {
-    let ExpandedSemanticTarget::Port { port } = target else {
+    if handle.kind != IntentPortKind::Point {
         return None;
-    };
+    }
     let intent = editor.coordinator().intent();
-    let node = intent.graph().node_by_symbol(&port.alias)?;
-    let output = node.port_by_selector(port.selector)?;
-    let accepted = editor.coordinator().accepted_materialization()?;
-    match accepted.ownership.port(output.as_ref(node.id))? {
+    let node = intent.graph().node_by_symbol(&handle.alias)?;
+    let port = node.port_by_selector(handle.selector)?;
+    if port.kind != handle.kind {
+        return None;
+    }
+    match editor
+        .coordinator()
+        .accepted_materialization()?
+        .ownership
+        .port(port.as_ref(node.id))?
+    {
         IntentNativeBinding::Point(point) => Some(point),
         _ => None,
     }
@@ -2770,6 +3160,7 @@ fn recomputable_code_line_branches(
     Ok(curves)
 }
 
+#[cfg(test)]
 fn supported_point_override_address(address: &GeneratedMemberAddress) -> bool {
     address.template == ["polyline", "vertex"] && address.output == ["point"]
 }
@@ -3638,6 +4029,442 @@ export default sketch(($) => {
     }
 
     #[test]
+    fn selected_code_node_resolves_through_semantic_provenance_not_hashed_symbol_text() {
+        let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        for expected in ["frame", "diagonal"] {
+            let expected = SemanticSymbol(expected.into());
+            let (alias, _) = expansion
+                .declaration_provenance
+                .iter()
+                .find(|(_, declaration)| *declaration == &expected)
+                .expect("managed declaration must publish alias provenance");
+            assert!(
+                alias.as_str().starts_with("code."),
+                "the fixture must prove that opaque code aliases are not source symbols"
+            );
+            let node = editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(alias)
+                .unwrap()
+                .id;
+            editor.set_selected_declaration(Some(node));
+            assert_eq!(
+                workbench.selected_managed_declaration(&editor).unwrap(),
+                Some(expected),
+            );
+        }
+    }
+
+    #[test]
+    fn managed_canvas_deletion_publishes_validated_scene_and_exact_undo() {
+        let (mut workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let source_before = workbench.managed_source().to_owned();
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let revision_before = workbench.session.identity().revision;
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let alias = expansion
+            .declaration_provenance
+            .iter()
+            .find_map(|(alias, declaration)| (declaration.0 == "diagonal").then_some(alias))
+            .unwrap();
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(alias)
+            .unwrap()
+            .id;
+        assert!(editor.set_selected_declaration(Some(node)));
+        let target = workbench
+            .selected_code_delete_target(&editor)
+            .unwrap()
+            .unwrap();
+
+        let CodeApplyOutcome::Accepted(publication) =
+            workbench.delete_managed_declaration(&target).unwrap()
+        else {
+            panic!("deleting the independent managed line must publish")
+        };
+        assert_eq!(publication.receipt.before.revision, revision_before);
+        assert_eq!(publication.receipt.after.revision, revision_before + 1);
+        assert!(!workbench.managed_source().contains("const diagonal ="));
+        assert!(workbench.managed_source().contains("const frame ="));
+        assert!(!workbench.managed_source().contains("frame, diagonal"));
+        let accepted = publication
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap();
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+        );
+        assert_eq!(accepted.validation.curve_count, 4);
+        assert_eq!(
+            encode_editor_checkpoint(&publication.editor).unwrap(),
+            *workbench.accepted_editor_checkpoint(),
+        );
+
+        let undone = workbench.step_history(true).unwrap().unwrap();
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert_eq!(
+            encode_editor_checkpoint(&undone.editor).unwrap(),
+            checkpoint_before,
+        );
+    }
+
+    #[test]
+    fn managed_canvas_deletion_uses_exact_transitive_dependency_closure() {
+        let (mut workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let alias = expansion
+            .declaration_provenance
+            .iter()
+            .find_map(|(alias, declaration)| (declaration.0 == "frame").then_some(alias))
+            .unwrap();
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(alias)
+            .unwrap()
+            .id;
+        assert!(editor.set_selected_declaration(Some(node)));
+        let target = workbench
+            .selected_code_delete_target(&editor)
+            .unwrap()
+            .unwrap();
+        let outcome = workbench.delete_managed_declaration(&target).unwrap();
+        let CodeApplyOutcome::Accepted(publication) = outcome else {
+            let CodeApplyOutcome::RetainedFailure { diagnostic, .. } = outcome else {
+                unreachable!()
+            };
+            panic!(
+                "deleting the rectangle and dependent line must publish atomically: {diagnostic}"
+            )
+        };
+        assert!(!workbench.managed_source().contains("const frame ="));
+        assert!(!workbench.managed_source().contains("const diagonal ="));
+        assert!(workbench.managed_source().contains("return $.outputs({});"));
+        let accepted = publication
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap();
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert_eq!(accepted.validation.point_count, 0);
+        assert_eq!(accepted.validation.curve_count, 0);
+        assert_eq!(
+            encode_editor_checkpoint(&publication.editor).unwrap(),
+            *workbench.accepted_editor_checkpoint(),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one authority regression exercises stale, dirty, retained-failed, and GUI-owned semantic deletion targets"
+    )]
+    fn semantic_delete_target_rejects_stale_dirty_failed_and_gui_owned_authority() {
+        let (mut workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let diagonal_alias = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap()
+            .declaration_provenance
+            .iter()
+            .find_map(|(alias, declaration)| (declaration.0 == "diagonal").then(|| alias.clone()))
+            .unwrap();
+        let select_diagonal = |editor: &mut ProjectionalEditorSession| {
+            let node = editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&diagonal_alias)
+                .unwrap()
+                .id;
+            assert!(editor.set_selected_declaration(Some(node)));
+        };
+        select_diagonal(&mut editor);
+        let stale = workbench
+            .selected_code_delete_target(&editor)
+            .unwrap()
+            .unwrap();
+
+        workbench.set_managed_draft(workbench.managed_source().replacen(
+            "upperRight: [60, 35]",
+            "upperRight: [61, 35]",
+            1,
+        ));
+        let CodeApplyOutcome::Accepted(publication) = workbench.apply_managed_draft().unwrap()
+        else {
+            panic!("valid source edit must advance semantic deletion authority")
+        };
+        editor = publication.editor;
+        let source_after_edit = workbench.managed_source().to_owned();
+        let checkpoint_after_edit = workbench.accepted_editor_checkpoint().clone();
+        let revision_after_edit = workbench.session.identity().revision;
+        let Err(error) = workbench.delete_managed_declaration(&stale) else {
+            panic!("stale semantic deletion target unexpectedly published")
+        };
+        assert!(error.contains("stale semantic deletion target"));
+        assert_eq!(workbench.managed_source(), source_after_edit);
+        assert_eq!(
+            workbench.accepted_editor_checkpoint(),
+            &checkpoint_after_edit
+        );
+        assert_eq!(workbench.session.identity().revision, revision_after_edit);
+
+        select_diagonal(&mut editor);
+        let clean = workbench
+            .selected_code_delete_target(&editor)
+            .unwrap()
+            .unwrap();
+        workbench.set_managed_draft(format!("{}\n", workbench.managed_source()));
+        let Err(error) = workbench.delete_managed_declaration(&clean) else {
+            panic!("dirty semantic deletion target unexpectedly published")
+        };
+        assert!(error.contains("Apply or Revert"));
+        assert_eq!(workbench.managed_source(), source_after_edit);
+        assert_eq!(
+            workbench.accepted_editor_checkpoint(),
+            &checkpoint_after_edit
+        );
+        assert_eq!(workbench.session.identity().revision, revision_after_edit);
+        assert!(workbench.revert_managed_draft());
+
+        let gui_alias = geosolve_sketch_intent::IntentKey::new("gui-delete-audit").unwrap();
+        let gui_point = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            geosolve_sketch_intent::IntentKey::new("GUI delete audit").unwrap(),
+        )
+        .with_instance_leaf(
+            IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            },
+            LeafField::X,
+            IntentLiteral::Quantity {
+                value: 90.0,
+                unit: IntentUnit::Length,
+            },
+        )
+        .with_instance_leaf(
+            IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            },
+            LeafField::Y,
+            IntentLiteral::Quantity {
+                value: 45.0,
+                unit: IntentUnit::Length,
+            },
+        );
+        let outcome = editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: gui_alias.clone(),
+                    draft: Box::new(gui_point),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        let gui_node = outcome.aliases.node(&gui_alias).unwrap();
+        assert!(editor.set_selected_declaration(Some(gui_node)));
+        assert_eq!(
+            workbench.selected_code_delete_target(&editor).unwrap(),
+            None,
+            "ordinary GUI declarations must stay on the ordinary delete route",
+        );
+
+        select_diagonal(&mut editor);
+        let before_failure_target = workbench
+            .selected_code_delete_target(&editor)
+            .unwrap()
+            .unwrap();
+        workbench.set_managed_draft(workbench.managed_source().replacen(
+            "upperRight: [61, 35]",
+            "upperRight: [0, 0]",
+            1,
+        ));
+        assert!(matches!(
+            workbench.apply_managed_draft().unwrap(),
+            CodeApplyOutcome::RetainedFailure { .. }
+        ));
+        let retained_checkpoint = workbench.accepted_editor_checkpoint().clone();
+        let retained_source = workbench.managed_source().to_owned();
+        let retained_revision = workbench.session.identity().revision;
+        select_diagonal(&mut editor);
+        let retained_target = workbench
+            .selected_code_delete_target(&editor)
+            .unwrap()
+            .unwrap();
+        let Err(error) = workbench.delete_managed_declaration(&retained_target) else {
+            panic!("retained-failure semantic deletion target unexpectedly published")
+        };
+        assert!(error.contains("resolve or Undo"));
+        assert_eq!(workbench.managed_source(), retained_source);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &retained_checkpoint);
+        assert_eq!(workbench.session.identity().revision, retained_revision);
+        let Err(error) = workbench.delete_managed_declaration(&before_failure_target) else {
+            panic!("pre-failure semantic deletion target unexpectedly published")
+        };
+        assert!(error.contains("stale semantic deletion target"));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one end-to-end regression audits suppression, reset and both history directions"
+    )]
+    fn generated_child_delete_is_reversible_suppression_not_source_deletion() {
+        let (mut workbench, mut editor) = open_boxed("rounded-polyline");
+        let source_before = workbench.managed_source().to_owned();
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let child = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap()
+            .generated_children
+            .iter()
+            .find(|child| !child.suppressed)
+            .unwrap()
+            .clone();
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&child.alias)
+            .unwrap()
+            .id;
+        assert!(editor.set_selected_declaration(Some(node)));
+        let target = workbench
+            .selected_code_delete_target(&editor)
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            &target,
+            CodeDeleteTarget::GeneratedChild { address, alias, .. }
+                if address == &child.address && alias == &child.alias
+        ));
+
+        let publication = workbench
+            .suppress_generated_child(&target)
+            .expect("generated child suppression must publish");
+        assert_eq!(workbench.managed_source(), source_before);
+        assert!(
+            publication
+                .editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&child.alias)
+                .unwrap()
+                .suppressed,
+        );
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .generated_child_suppression(&child.address),
+            Some(true),
+        );
+        assert!(
+            workbench
+                .panel_markup()
+                .contains("data-code-action=\"reset-child-suppression\"")
+        );
+        let restored = workbench
+            .reset_generated_child_suppression(&serde_json::to_string(&child.address).unwrap())
+            .unwrap()
+            .expect("exact typed child address restores generated authority");
+        assert!(
+            !restored
+                .editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&child.alias)
+                .unwrap()
+                .suppressed
+        );
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .generated_child_suppression(&child.address),
+            None,
+        );
+
+        let undone = workbench.step_history(true).unwrap().unwrap();
+        assert_eq!(workbench.managed_source(), source_before);
+        assert!(
+            undone
+                .editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&child.alias)
+                .unwrap()
+                .suppressed,
+        );
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .generated_child_suppression(&child.address),
+            Some(true),
+        );
+        let undone = workbench.step_history(true).unwrap().unwrap();
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert!(
+            !undone
+                .editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&child.alias)
+                .unwrap()
+                .suppressed
+        );
+    }
+
+    #[test]
     fn managed_and_custom_files_have_truthful_distinct_ownership_surfaces() {
         let mut workbench = open("rounded-polyline");
         let managed = workbench.panel_markup();
@@ -3965,53 +4792,63 @@ export default sketch(($) => {
 
     #[test]
     fn persistence_rehydrate_then_crest_apply_preserves_all_unaffected_identities() {
-        let workbench = open("rounded-polyline");
-        let json = workbench.to_persistence_json().unwrap();
-        let mut restored = CodeProjectWorkbench::from_persistence_json(&json).unwrap();
-        let before_editor = restored.restore_accepted_editor().unwrap();
-        let generated_before = restored.session.snapshot().generated.active().clone();
-        let native_before = generated_native_bindings(
-            &before_editor,
-            restored
-                .session
-                .snapshot()
-                .accepted_expansion
-                .as_ref()
-                .unwrap(),
-        );
-        let fillets_before = generated_fillet_owners(&restored);
-        restored.set_managed_draft(restored.managed_source().replace(
-            "{ key: \"end\", position: [65, 10] },",
-            "{ key: \"crest\", position: [60, 14] },\n      { key: \"end\", position: [65, 10] },",
-        ));
-        let CodeApplyOutcome::Accepted(applied) = restored.apply_managed_draft().unwrap() else {
-            panic!("valid post-restore crest insertion unexpectedly retained a failure")
-        };
-        for (address, identity) in generated_before {
-            assert_eq!(
-                restored.session.snapshot().generated.active().get(&address),
-                Some(&identity),
-                "semantic identity changed after reload for {}",
-                address.display_path(),
-            );
-        }
-        let native_after = generated_native_bindings(
-            &applied.editor,
-            restored
-                .session
-                .snapshot()
-                .accepted_expansion
-                .as_ref()
-                .unwrap(),
-        );
-        for (address, binding) in native_before {
-            assert_eq!(native_after.get(&address), Some(&binding));
-        }
-        let fillets_after = generated_fillet_owners(&restored);
-        for (address, owners) in fillets_before {
-            assert_eq!(fillets_after.get(&address), Some(&owners));
-        }
-        assert_warm_cache_matches_session(&restored);
+        std::thread::Builder::new()
+            .name("m84-persistence-rehydrate-crest".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| {
+                let workbench = open("rounded-polyline");
+                let json = workbench.to_persistence_json().unwrap();
+                let mut restored = CodeProjectWorkbench::from_persistence_json(&json).unwrap();
+                let before_editor = restored.restore_accepted_editor().unwrap();
+                let generated_before = restored.session.snapshot().generated.active().clone();
+                let native_before = generated_native_bindings(
+                    &before_editor,
+                    restored
+                        .session
+                        .snapshot()
+                        .accepted_expansion
+                        .as_ref()
+                        .unwrap(),
+                );
+                let fillets_before = generated_fillet_owners(&restored);
+                restored.set_managed_draft(restored.managed_source().replace(
+                    "{ key: \"end\", position: [65, 10] },",
+                    "{ key: \"crest\", position: [60, 14] },\n      { key: \"end\", position: [65, 10] },",
+                ));
+                let CodeApplyOutcome::Accepted(applied) =
+                    restored.apply_managed_draft().unwrap()
+                else {
+                    panic!("valid post-restore crest insertion unexpectedly retained a failure")
+                };
+                for (address, identity) in generated_before {
+                    assert_eq!(
+                        restored.session.snapshot().generated.active().get(&address),
+                        Some(&identity),
+                        "semantic identity changed after reload for {}",
+                        address.display_path(),
+                    );
+                }
+                let native_after = generated_native_bindings(
+                    &applied.editor,
+                    restored
+                        .session
+                        .snapshot()
+                        .accepted_expansion
+                        .as_ref()
+                        .unwrap(),
+                );
+                for (address, binding) in native_before {
+                    assert_eq!(native_after.get(&address), Some(&binding));
+                }
+                let fillets_after = generated_fillet_owners(&restored);
+                for (address, owners) in fillets_before {
+                    assert_eq!(fillets_after.get(&address), Some(&owners));
+                }
+                assert_warm_cache_matches_session(&restored);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 
     #[test]
@@ -4183,7 +5020,11 @@ export default sketch(($) => {
     }
 
     #[test]
-    fn generated_polyline_point_edit_becomes_one_explicit_outer_override() {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the regression proves overlay precedence, native parity, persistence, and Undo for one generated point"
+    )]
+    fn generated_polyline_point_edit_becomes_one_semantic_overlay_draft() {
         let (mut workbench, mut editor) = open_boxed("rounded-polyline");
         let address = workbench
             .session
@@ -4248,18 +5089,28 @@ export default sketch(($) => {
             workbench.accepted_editor_checkpoint(),
             &encode_editor_checkpoint(&publication.editor).unwrap()
         );
-        assert_eq!(
+        assert!(
             workbench
                 .session
                 .snapshot()
                 .generated
                 .override_for(&address)
-                .map(|value| &value.value),
-            Some(&ManagedValue::Array(vec![
-                ManagedValue::Number(26.0),
-                ManagedValue::Number(13.0),
-            ])),
+                .is_none(),
+            "semantic GUI drafts must not mutate the legacy generated override tier",
         );
+        let drafts = workbench.session.snapshot().interaction_overlay.drafts();
+        let draft_address = drafts
+            .iter()
+            .find_map(|(draft_address, draft)| {
+                (matches!(
+                    &draft_address.owner.address,
+                    geosolve_sketch_code::CodeOwnerAddress::GeneratedMember {
+                        address: owner,
+                    } if owner == &address
+                ) && draft.value == geosolve_sketch_code::CodeDraftValue::Point([26.0, 13.0]))
+                .then_some(draft_address.clone())
+            })
+            .expect("generated point drag must own one semantic draft");
         assert_eq!(
             restore_editor_checkpoint(&checkpoint)
                 .unwrap()
@@ -4271,7 +5122,353 @@ export default sketch(($) => {
         assert!(
             workbench
                 .panel_markup()
-                .contains("data-code-ownership=\"override\"")
+                .contains("data-code-ownership=\"draft\"")
+        );
+        let reset = workbench
+            .reset_semantic_draft(&serde_json::to_string(&draft_address).unwrap())
+            .unwrap()
+            .expect("Reset to code publishes one outer transaction");
+        assert!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .is_empty()
+        );
+        assert_eq!(reset.receipt.after.revision, revision + 2);
+        let undone_reset = workbench.step_history(true).unwrap().unwrap();
+        assert_eq!(
+            encode_editor_checkpoint(&undone_reset.editor).unwrap(),
+            encode_editor_checkpoint(&publication.editor).unwrap(),
+        );
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .draft(&draft_address)
+                .map(|draft| draft.value),
+            Some(geosolve_sketch_code::CodeDraftValue::Point([26.0, 13.0])),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one adapter regression keeps semantic-draft retention, legacy override coexistence, owner pruning and exact Undo in the same accepted transaction path"
+    )]
+    fn semantic_draft_survives_source_and_override_edits_then_prunes_with_owner() {
+        let (mut workbench, mut editor) = open_boxed("rounded-polyline");
+        let shoulder = workbench
+            .session
+            .snapshot()
+            .generated
+            .active()
+            .keys()
+            .find(|address| {
+                address.template == ["polyline", "vertex"] && address.member_key == ["shoulder"]
+            })
+            .unwrap()
+            .clone();
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let leaves = generated_point_leaves(&editor, expansion).unwrap();
+        let mut operations = leaves
+            .iter()
+            .filter(|(_, owner)| *owner == &shoulder)
+            .map(
+                |(leaf, _)| geosolve_sketch_intent::IntentPatchOperation::SetInstanceLeaf {
+                    leaf: *leaf,
+                    value: IntentLiteral::Quantity {
+                        value: match leaf.field {
+                            LeafField::X => 26.0,
+                            LeafField::Y => 13.0,
+                            _ => unreachable!("generated point owns only Cartesian leaves"),
+                        },
+                        unit: IntentUnit::Length,
+                    },
+                },
+            )
+            .collect::<Vec<_>>();
+        operations.sort_by_key(|operation| match operation {
+            geosolve_sketch_intent::IntentPatchOperation::SetInstanceLeaf { leaf, .. } => {
+                leaf.field
+            }
+            _ => unreachable!(),
+        });
+        editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                operations,
+            ))
+            .unwrap();
+        let dragged = workbench
+            .publish_delegated_editor_checkpoint(
+                encode_editor_checkpoint(&editor).unwrap(),
+                "Drag generated shoulder",
+            )
+            .unwrap()
+            .unwrap();
+        let draft_address = workbench
+            .session
+            .snapshot()
+            .interaction_overlay
+            .drafts()
+            .iter()
+            .find_map(|(address, draft)| {
+                (matches!(
+                    &address.owner.address,
+                    geosolve_sketch_code::CodeOwnerAddress::GeneratedMember { address: owner }
+                        if owner == &shoulder
+                ) && draft.value == geosolve_sketch_code::CodeDraftValue::Point([26.0, 13.0]))
+                .then_some(address.clone())
+            })
+            .expect("terminal drag publishes one shoulder draft");
+        assert_eq!(
+            encode_editor_checkpoint(&dragged.editor).unwrap(),
+            *workbench.accepted_editor_checkpoint(),
+        );
+
+        workbench.set_managed_draft(
+            workbench
+                .managed_source()
+                .replace("radius: mm(0.4)", "radius: mm(0.55)"),
+        );
+        let CodeApplyOutcome::Accepted(source_edit) = workbench.apply_managed_draft().unwrap()
+        else {
+            panic!("an unrelated managed-source edit must retain the semantic draft")
+        };
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .draft(&draft_address)
+                .map(|draft| draft.value),
+            Some(geosolve_sketch_code::CodeDraftValue::Point([26.0, 13.0])),
+        );
+        let shoulder_point = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap()
+            .writable_points
+            .iter()
+            .find(|point| {
+                matches!(
+                    &point.edit,
+                    geosolve_sketch_code::CodePointEdit::Point { address }
+                        if address == &draft_address
+                )
+            })
+            .unwrap();
+        assert_eq!(
+            expanded_port_instance(&source_edit.editor, &shoulder_point.handle).map(pair_bits),
+            Some(pair_bits([26.0, 13.0])),
+        );
+
+        let rise = workbench
+            .session
+            .snapshot()
+            .generated
+            .active()
+            .keys()
+            .find(|address| {
+                address.template == ["polyline", "vertex"] && address.member_key == ["rise"]
+            })
+            .unwrap()
+            .clone();
+        workbench
+            .apply_override(
+                &rise,
+                ManagedValue::Array(vec![ManagedValue::Number(22.0), ManagedValue::Number(3.0)]),
+            )
+            .expect("legacy override must coexist with an unrelated semantic draft");
+        assert!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .draft(&draft_address)
+                .is_some(),
+        );
+        workbench
+            .reset_override(&rise.display_path())
+            .expect("legacy override reset must coexist with an unrelated semantic draft")
+            .expect("legacy override reset publishes once");
+        assert!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .draft(&draft_address)
+                .is_some(),
+        );
+
+        let checkpoint_before_removal = workbench.accepted_editor_checkpoint().clone();
+        workbench.set_managed_draft(workbench.managed_source().replacen(
+            "      { key: \"shoulder\", position: [24, 12] },\n",
+            "",
+            1,
+        ));
+        let CodeApplyOutcome::Accepted(removal) = workbench.apply_managed_draft().unwrap() else {
+            panic!("removing a semantic draft owner must prune it in the same publication")
+        };
+        assert!(!workbench.managed_source().contains("key: \"shoulder\""));
+        assert!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .draft(&draft_address)
+                .is_none(),
+        );
+        let accepted = removal
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap();
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
+        );
+
+        let undone = workbench.step_history(true).unwrap().unwrap();
+        assert_eq!(
+            encode_editor_checkpoint(&undone.editor).unwrap(),
+            checkpoint_before_removal,
+        );
+        assert!(workbench.managed_source().contains("key: \"shoulder\""));
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .draft(&draft_address)
+                .map(|draft| draft.value),
+            Some(geosolve_sketch_code::CodeDraftValue::Point([26.0, 13.0])),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the regression compares retained attempted and accepted overlay/editor authorities through persistence and Undo"
+    )]
+    fn retained_native_failure_keeps_pruned_candidate_overlay_above_exact_accepted_draft() {
+        let mut workbench = open("rounded-polyline");
+        let point = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap()
+            .writable_points
+            .iter()
+            .find(|point| {
+                matches!(&point.edit, geosolve_sketch_code::CodePointEdit::Point { address }
+                    if matches!(&address.owner.address,
+                        geosolve_sketch_code::CodeOwnerAddress::GeneratedMember { address }
+                            if address.template == ["polyline", "vertex"]
+                                && address.member_key == ["shoulder"]))
+            })
+            .unwrap()
+            .clone();
+        let overlay = workbench
+            .session
+            .stage_point_drag(&point, [26.0, 13.0])
+            .unwrap();
+        let candidate = materialize_code_project_incremental_with_overlay(
+            workbench.materialized.as_deref().unwrap(),
+            &workbench.project,
+            &workbench.session.snapshot().generated,
+            &overlay,
+        )
+        .unwrap();
+        let dragged = workbench
+            .publish_semantic_point_overlay(
+                &[(point, [26.0, 13.0])],
+                &candidate.editor,
+                "Drag generated shoulder",
+            )
+            .unwrap()
+            .unwrap();
+        let accepted_overlay = workbench
+            .session
+            .snapshot()
+            .accepted_interaction_overlay
+            .clone();
+        assert_eq!(accepted_overlay.drafts().len(), 1);
+        let accepted_checkpoint = encode_editor_checkpoint(&dragged.editor).unwrap();
+        let accepted_source = workbench.managed_source().to_owned();
+
+        workbench.set_managed_draft(
+            accepted_source
+                .replacen("      { key: \"shoulder\", position: [24, 12] },\n", "", 1)
+                .replace("radius: mm(0.4)", "radius: mm(400)"),
+        );
+        let CodeApplyOutcome::RetainedFailure { diagnostic, .. } =
+            workbench.apply_managed_draft().unwrap()
+        else {
+            panic!("impossible structural edit unexpectedly acquired native authority")
+        };
+        assert!(!diagnostic.is_empty());
+        assert!(workbench.session.snapshot().failure.is_some());
+        assert!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .is_empty(),
+            "the attempted structure must prune its removed shoulder owner",
+        );
+        assert_eq!(
+            workbench.session.snapshot().accepted_interaction_overlay,
+            accepted_overlay,
+            "retained failure must not advance accepted semantic draft authority",
+        );
+        assert_eq!(
+            workbench.accepted_editor_checkpoint(),
+            &accepted_checkpoint,
+            "retained failure must keep the exact accepted dragged canvas",
+        );
+        let persisted = workbench.to_persistence_json().unwrap();
+        let restored = CodeProjectWorkbench::from_persistence_json(&persisted).unwrap();
+        assert!(restored.session.snapshot().failure.is_some());
+        assert!(
+            restored
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .is_empty()
+        );
+        assert_eq!(
+            restored.session.snapshot().accepted_interaction_overlay,
+            accepted_overlay,
+        );
+
+        let undone = workbench.step_history(true).unwrap().unwrap();
+        assert_eq!(workbench.managed_source(), accepted_source);
+        assert_eq!(
+            workbench.session.snapshot().interaction_overlay,
+            accepted_overlay,
+        );
+        assert_eq!(
+            encode_editor_checkpoint(&undone.editor).unwrap(),
+            accepted_checkpoint,
         );
     }
 
@@ -4280,7 +5477,7 @@ export default sketch(($) => {
         clippy::too_many_lines,
         reason = "the braced-frame acceptance scenario proves the complete GUI-to-code-to-GUI transaction and exact Undo/Redo authority"
     )]
-    fn braced_frame_corner_drag_rewrites_managed_source_and_preserves_custom_code() {
+    fn braced_frame_corner_drag_stages_overlay_and_preserves_managed_source() {
         let (mut workbench, mut editor) = open_boxed("braced-frame");
         let expansion = workbench
             .session
@@ -4420,8 +5617,17 @@ export default sketch(($) => {
 
         assert_eq!(publication.receipt.before.revision, revision);
         assert_eq!(publication.receipt.after.revision, revision + 1);
-        assert!(workbench.managed_source().contains("upperRight: [64, 38]"));
-        assert_ne!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .len(),
+            2,
+            "one rectangle-corner drag updates both canonical seeds atomically",
+        );
         assert_eq!(workbench.project.custom_files, custom_before);
         assert_eq!(code_node_ids(&publication.editor), code_ids_before);
         assert_eq!(
@@ -4484,7 +5690,7 @@ export default sketch(($) => {
         );
         assert_warm_cache_matches_session(&workbench);
         let redone = workbench.step_history(false).unwrap().unwrap();
-        assert!(workbench.managed_source().contains("upperRight: [64, 38]"));
+        assert_eq!(workbench.managed_source(), source_before);
         assert_eq!(workbench.project.custom_files, custom_before);
         assert_eq!(code_node_ids(&redone.editor), code_ids_before);
         assert_eq!(
@@ -4512,7 +5718,7 @@ export default sketch(($) => {
         clippy::too_many_lines,
         reason = "the focused generated-reference regression keeps source/native identity, measured value, managed rewrite, exact history, and continued GUI editing together"
     )]
-    fn braced_frame_gui_reference_dimension_survives_managed_rewrite_and_history() {
+    fn braced_frame_gui_reference_dimension_survives_overlay_drag_and_history() {
         let (mut workbench, mut editor) = open_boxed("braced-frame");
         let expansion = workbench
             .session
@@ -4710,8 +5916,7 @@ export default sketch(($) => {
         let source_after = workbench.managed_source().to_owned();
         let checkpoint_after = workbench.accepted_editor_checkpoint().clone();
 
-        assert_ne!(source_after, source_before);
-        assert!(source_after.contains("upperRight: [64, 38]"));
+        assert_eq!(source_after, source_before);
         assert_eq!(workbench.project.custom_files, custom_before);
         assert_ne!(brace_after, brace_before);
         assert_ne!(value_after.to_bits(), value_before.to_bits());
@@ -5504,12 +6709,13 @@ export default sketch(($) => {
     #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "one end-to-end promotion regression audits source rewrite, code history, semantic dependency and native movement together"
+        reason = "one end-to-end promotion regression audits overlay history, semantic dependency and native movement together"
     )]
-    fn promoted_rectangle_edit_rewrites_source_and_moves_lexically_dependent_line() {
+    fn promoted_rectangle_overlay_edit_moves_lexically_dependent_line() {
         let editor = ordinary_rectangle_diagonal();
         let (mut workbench, mut promoted) =
             CodeProjectWorkbench::promote_from_editor(&editor).unwrap();
+        let source_before = workbench.managed_source().to_owned();
         let expansion = workbench
             .session
             .snapshot()
@@ -5558,7 +6764,16 @@ export default sketch(($) => {
             .publish_delegated_editor_checkpoint(checkpoint, "Drag promoted frame")
             .unwrap()
             .unwrap();
-        assert!(workbench.managed_source().contains("upperRight: [10, 6]"));
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .len(),
+            2,
+        );
         assert_eq!(
             managed_rectangle_argument_position(&publication.editor, &frame_alias, "upperRight")
                 .unwrap()
@@ -5784,8 +6999,13 @@ export default sketch(($) => {
             "\"start-authored\" =>",
             "promote_projectional_code_project",
             "\"promote-ordinary\" =>",
+            "selected_code_delete_target(wb.editor())",
+            "CodeDeleteTarget::GeneratedChild { .. }",
+            ".suppress_generated_child(&target)?",
             "apply_managed_draft()",
             "reset_override(&path)",
+            "reset_semantic_draft(&path)",
+            "reset_generated_child_suppression(&path)",
             "to_persistence_json()",
             "from_persistence_json(&decoded)",
             "focus_code_source && result.is_ok()",
@@ -5852,6 +7072,26 @@ export default sketch(($) => {
     }
 
     #[test]
+    fn managed_presentation_draft_obeys_the_managed_source_bound_on_save_and_load() {
+        let mut workbench = open("braced-frame");
+        workbench.set_managed_draft(" ".repeat(geosolve_sketch_code::MANAGED_SOURCE_LIMIT + 1));
+        let Err(error) = workbench.to_persistence_json() else {
+            panic!("an oversized managed draft must not enter persistence")
+        };
+        assert!(error.contains("managed source draft"));
+
+        let workbench = open("braced-frame");
+        let mut wire: serde_json::Value =
+            serde_json::from_str(&workbench.to_persistence_json().unwrap()).unwrap();
+        wire["managed_draft"] =
+            serde_json::Value::String(" ".repeat(geosolve_sketch_code::MANAGED_SOURCE_LIMIT + 1));
+        let Err(error) = CodeProjectWorkbench::from_persistence_json(&wire.to_string()) else {
+            panic!("an oversized persisted managed draft must reject atomically")
+        };
+        assert!(error.contains("managed source draft"));
+    }
+
+    #[test]
     fn historical_bundled_demo_wire_migrates_to_explicit_origin() {
         let workbench = open("braced-frame");
         let json = workbench.to_persistence_json().unwrap();
@@ -5892,5 +7132,819 @@ export default sketch(($) => {
             session.replace("m84-demo-braced-frame", "m84-demo-tampered-frame"),
         );
         assert!(CodeProjectWorkbench::from_persistence_json(&wire.to_string()).is_err());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one real pointer regression proves selected-consumer detachment, preview, terminal publication, and source/producer retention together"
+    )]
+    fn selected_referenced_endpoint_pointer_drag_detaches_only_the_consumer() {
+        use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
+
+        let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let mut workbench = Box::new(workbench);
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .clone()
+            .unwrap();
+        let alias_for = |declaration: &str| {
+            expansion
+                .semantic_outputs
+                .values()
+                .find_map(|output| {
+                    (output.reference.declaration == SemanticSymbol(declaration.into())
+                        && output.reference.output.0.is_empty())
+                    .then(|| match &output.target {
+                        ExpandedSemanticTarget::Declaration { alias, .. } => Some(alias.clone()),
+                        _ => None,
+                    })
+                    .flatten()
+                })
+                .unwrap()
+        };
+        let frame_alias = alias_for("frame");
+        let diagonal_alias = alias_for("diagonal");
+        let frame = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&frame_alias)
+            .unwrap();
+        let frame_node = frame.id;
+        let frame_corner = frame
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Corner,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(frame_node);
+        let diagonal = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&diagonal_alias)
+            .unwrap();
+        let diagonal_node = diagonal.id;
+        let diagonal_start = diagonal
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Start,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(diagonal_node);
+        let diagonal_span = diagonal
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Span,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(diagonal_node);
+        let accepted = editor.coordinator().accepted_materialization().unwrap();
+        let IntentNativeBinding::Point(shared_point) =
+            accepted.ownership.port(frame_corner).unwrap()
+        else {
+            panic!("frame corner must own one native point")
+        };
+        assert_eq!(
+            accepted.ownership.port(diagonal_start),
+            Some(IntentNativeBinding::Point(shared_point)),
+        );
+        let producer_before = accepted
+            .session
+            .design_document()
+            .point(shared_point)
+            .unwrap()
+            .position;
+
+        let dimension_alias =
+            geosolve_sketch_intent::IntentKey::new("gui-diagonal-reference-length").unwrap();
+        let dimension = geosolve_sketch_intent::IntentNodeDraft::new(
+            IntentNodeKind::Dimension {
+                dimension: geosolve_sketch_intent::DimensionKind::CurveLength,
+            },
+            geosolve_sketch_intent::IntentKey::new("Diagonal reference length").unwrap(),
+        )
+        .with_input(
+            geosolve_sketch_intent::InputSlot::new(geosolve_sketch_intent::InputRole::Span, 0),
+            geosolve_sketch_intent::PatchPortRef::Stable {
+                port: diagonal_span,
+            },
+        )
+        .with_field(
+            geosolve_sketch_intent::IntentFieldKey(
+                geosolve_sketch_intent::IntentKey::new("mode").unwrap(),
+            ),
+            IntentLiteral::Enum(geosolve_sketch_intent::IntentKey::new("reference").unwrap()),
+        );
+        let dimension = editor
+            .apply_patch(geosolve_sketch_intent::IntentPatch::new(
+                editor.coordinator().intent().identity(),
+                geosolve_sketch_intent::IntentPatchPolicy::RequireAccepted,
+                vec![geosolve_sketch_intent::IntentPatchOperation::CreateNode {
+                    alias: dimension_alias.clone(),
+                    draft: Box::new(dimension),
+                    cell: None,
+                }],
+            ))
+            .unwrap();
+        let dimension_node = dimension.aliases.node(&dimension_alias).unwrap();
+        let IntentNativeBinding::Dimension(dimension_id) =
+            native_binding_for_node(&editor, dimension_node, |binding| {
+                matches!(binding, IntentNativeBinding::Dimension(_))
+            })
+        else {
+            unreachable!("dimension predicate returned a non-dimension binding")
+        };
+        let published_dimension = workbench
+            .publish_delegated_editor_checkpoint(
+                encode_editor_checkpoint(&editor).unwrap(),
+                "Add GUI diagonal reference dimension",
+            )
+            .unwrap()
+            .unwrap();
+        editor = published_dimension.editor;
+        let source_before = workbench.managed_source().to_owned();
+        let revision_before = workbench.session.identity().revision;
+
+        assert!(editor.set_selected_declaration(Some(diagonal_node)));
+        let preferred = workbench
+            .selected_managed_declaration(&editor)
+            .unwrap()
+            .unwrap();
+        assert_eq!(preferred, SemanticSymbol("diagonal".into()));
+        let viewport = Viewport::new([900.0, 700.0], [30.0, 17.5], 10.0).unwrap();
+        let pointer = |id, model| PointerInput {
+            pointer_id: id,
+            position: viewport.model_to_screen(model),
+            modifiers: Modifiers::default(),
+        };
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        editor
+            .pointer_down(&scene, pointer(8405, producer_before))
+            .unwrap();
+        let route = editor.editor().prepared_point_drag_route().unwrap();
+        assert_eq!(route.point, shared_point);
+        let prepared = workbench
+            .prepare_semantic_point_drag(&editor, 8405, route.point, Some(&preferred))
+            .unwrap()
+            .expect("selected referenced consumer must prepare local detachment");
+        editor.cancel_interaction();
+        editor = prepared.editor;
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        editor
+            .pointer_down_exact_point(&scene, pointer(8405, producer_before), prepared.point)
+            .unwrap();
+        let target = [5.0, 6.0];
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        editor.pointer_move(&scene, pointer(8405, target)).unwrap();
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        let terminal = editor.pointer_up(&scene, pointer(8405, target)).unwrap();
+        assert!(terminal.transaction.is_some());
+        let publication = workbench
+            .publish_delegated_editor_checkpoint(
+                encode_editor_checkpoint(&editor).unwrap(),
+                "Detach selected diagonal endpoint",
+            )
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.session.identity().revision, revision_before + 1);
+        let accepted = publication
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap();
+        let IntentNativeBinding::Point(frame_point) =
+            accepted.ownership.port(frame_corner).unwrap()
+        else {
+            panic!("frame corner must remain a native point")
+        };
+        let detached_diagonal = publication
+            .editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&diagonal_alias)
+            .unwrap();
+        let detached_diagonal_start = detached_diagonal
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Start,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(detached_diagonal.id);
+        let detached_diagonal_span = detached_diagonal
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Span,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(detached_diagonal.id);
+        let IntentNativeBinding::Point(diagonal_point) =
+            accepted.ownership.port(detached_diagonal_start).unwrap()
+        else {
+            panic!("diagonal endpoint must remain a native point")
+        };
+        assert_ne!(frame_point, diagonal_point);
+        let surviving_dimension = publication
+            .editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(dimension_node)
+            .expect("ordinary GUI dimension must survive consumer detachment");
+        assert_eq!(
+            surviving_dimension.inputs[&geosolve_sketch_intent::InputSlot::new(
+                geosolve_sketch_intent::InputRole::Span,
+                0,
+            )],
+            detached_diagonal_span,
+        );
+        assert_eq!(
+            native_binding_for_node(&publication.editor, dimension_node, |binding| {
+                matches!(binding, IntentNativeBinding::Dimension(_))
+            }),
+            IntentNativeBinding::Dimension(dimension_id),
+        );
+        assert_eq!(
+            accepted
+                .session
+                .design_document()
+                .point(frame_point)
+                .unwrap()
+                .position
+                .map(f64::to_bits),
+            producer_before.map(f64::to_bits),
+        );
+        assert_eq!(
+            accepted
+                .session
+                .design_document()
+                .point(diagonal_point)
+                .unwrap()
+                .position
+                .map(f64::to_bits),
+            target.map(f64::to_bits),
+        );
+        assert!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .values()
+                .any(|draft| draft.provenance
+                    == geosolve_sketch_code::CodeDraftProvenance::DetachedReference),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one real pointer regression proves producer ownership, rectangle seed coupling, and attached-consumer continuation together"
+    )]
+    fn selected_producer_pointer_drag_keeps_the_referenced_consumer_attached() {
+        use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
+
+        let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let mut workbench = Box::new(workbench);
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .clone()
+            .unwrap();
+        let alias_for = |declaration: &str| {
+            expansion
+                .semantic_outputs
+                .values()
+                .find_map(|output| {
+                    (output.reference.declaration == SemanticSymbol(declaration.into())
+                        && output.reference.output.0.is_empty())
+                    .then(|| match &output.target {
+                        ExpandedSemanticTarget::Declaration { alias, .. } => Some(alias.clone()),
+                        _ => None,
+                    })
+                    .flatten()
+                })
+                .unwrap()
+        };
+        let frame_alias = alias_for("frame");
+        let diagonal_alias = alias_for("diagonal");
+        let frame_node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&frame_alias)
+            .unwrap()
+            .id;
+        let diagonal_node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&diagonal_alias)
+            .unwrap()
+            .id;
+        let frame_corner = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(frame_node)
+            .unwrap()
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Corner,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(frame_node);
+        let diagonal_start = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(diagonal_node)
+            .unwrap()
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Start,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(diagonal_node);
+        let accepted = editor.coordinator().accepted_materialization().unwrap();
+        let IntentNativeBinding::Point(shared_point) =
+            accepted.ownership.port(frame_corner).unwrap()
+        else {
+            panic!("frame corner must own one native point")
+        };
+        assert_eq!(
+            accepted.ownership.port(diagonal_start),
+            Some(IntentNativeBinding::Point(shared_point)),
+        );
+        let start = accepted
+            .session
+            .design_document()
+            .point(shared_point)
+            .unwrap()
+            .position;
+        let source_before = workbench.managed_source().to_owned();
+        let revision_before = workbench.session.identity().revision;
+
+        assert!(editor.set_selected_declaration(Some(frame_node)));
+        let preferred = workbench
+            .selected_managed_declaration(&editor)
+            .unwrap()
+            .unwrap();
+        assert_eq!(preferred, SemanticSymbol("frame".into()));
+        let viewport = Viewport::new([900.0, 700.0], [30.0, 17.5], 10.0).unwrap();
+        let pointer = |id, model| PointerInput {
+            pointer_id: id,
+            position: viewport.model_to_screen(model),
+            modifiers: Modifiers::default(),
+        };
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        editor.pointer_down(&scene, pointer(8406, start)).unwrap();
+        let route = editor.editor().prepared_point_drag_route().unwrap();
+        assert_eq!(route.point, shared_point);
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(&editor, 8406, route.point, Some(&preferred))
+                .unwrap()
+                .is_none(),
+            "selecting the producer must keep ordinary shared-point authority",
+        );
+        let target = [-5.0, -4.0];
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        editor.pointer_move(&scene, pointer(8406, target)).unwrap();
+        let scene = editor.scene(viewport, 0.5).unwrap();
+        assert!(
+            editor
+                .pointer_up(&scene, pointer(8406, target))
+                .unwrap()
+                .transaction
+                .is_some()
+        );
+        let publication = workbench
+            .publish_delegated_editor_checkpoint(
+                encode_editor_checkpoint(&editor).unwrap(),
+                "Move selected frame corner",
+            )
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.session.identity().revision, revision_before + 1);
+        let accepted = publication
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap();
+        let IntentNativeBinding::Point(frame_point) =
+            accepted.ownership.port(frame_corner).unwrap()
+        else {
+            panic!("frame corner must remain a native point")
+        };
+        assert_eq!(
+            accepted.ownership.port(diagonal_start),
+            Some(IntentNativeBinding::Point(frame_point)),
+            "the attached consumer must continue sharing the producer point",
+        );
+        assert_eq!(
+            accepted
+                .session
+                .design_document()
+                .point(frame_point)
+                .unwrap()
+                .position
+                .map(f64::to_bits),
+            target.map(f64::to_bits),
+        );
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .len(),
+            2,
+            "rectangle placement records its coupled canonical seed bundle",
+        );
+        assert!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .values()
+                .all(|draft| draft.provenance
+                    == geosolve_sketch_code::CodeDraftProvenance::CanvasDrag),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one real generated-consumer gesture regression keeps detachment, repeat drag, semantic identity, native validation, and exact Undo/Redo adjacent"
+    )]
+    fn generated_referenced_endpoint_drag_is_repeatable_and_exactly_undoable() {
+        std::thread::Builder::new()
+            .name("m84-generated-consumer-pointer-drag".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| {
+                use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
+
+                let (mut workbench, mut editor) = open_boxed("braced-frame");
+                let expansion = workbench
+                    .session
+                    .snapshot()
+                    .accepted_expansion
+                    .clone()
+                    .unwrap();
+                let rising_address = workbench
+                    .session
+                    .snapshot()
+                    .generated
+                    .active()
+                    .keys()
+                    .find(|address| {
+                        address.invocation == "brace"
+                            && address.template == ["diagonals", "rising"]
+                            && address.output == ["span"]
+                    })
+                    .unwrap()
+                    .clone();
+                let generated_identity =
+                    workbench.session.snapshot().generated.active()[&rising_address];
+                let ExpandedSemanticTarget::Port { port: rising_span } =
+                    &expansion.generated_provenance[&rising_address].target
+                else {
+                    panic!("generated rising brace must publish one span")
+                };
+                let rising_alias = rising_span.alias.clone();
+                let rising_before = editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node_by_symbol(&rising_alias)
+                    .unwrap();
+                let rising_before_id = rising_before.id;
+                let rising_start = rising_before
+                    .port_by_selector(IntentPortSelector::Node {
+                        role: IntentPortRole::Start,
+                        index: 0,
+                    })
+                    .unwrap()
+                    .as_ref(rising_before_id);
+                let accepted_before = editor.coordinator().accepted_materialization().unwrap();
+                let IntentNativeBinding::Point(shared_point) =
+                    accepted_before.ownership.port(rising_start).unwrap()
+                else {
+                    panic!("generated rising endpoint must alias a native point")
+                };
+                let start = accepted_before
+                    .session
+                    .design_document()
+                    .point(shared_point)
+                    .unwrap()
+                    .position;
+                let source_before = workbench.managed_source().to_owned();
+                let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+                let overlay_before = workbench.session.snapshot().interaction_overlay.clone();
+                let revision_before = workbench.session.identity().revision;
+
+                assert!(editor.set_selected_declaration(Some(rising_before_id)));
+                let preferred = workbench
+                    .selected_managed_declaration(&editor)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(preferred, SemanticSymbol("brace".into()));
+                let viewport = Viewport::new([900.0, 700.0], [30.0, 17.5], 10.0).unwrap();
+                let pointer = |id, model| PointerInput {
+                    pointer_id: id,
+                    position: viewport.model_to_screen(model),
+                    modifiers: Modifiers::default(),
+                };
+                let scene = editor.scene(viewport, 0.5).unwrap();
+                editor.pointer_down(&scene, pointer(8410, start)).unwrap();
+                let route = editor.editor().prepared_point_drag_route().unwrap();
+                assert_eq!(route.point, shared_point);
+                let prepared = workbench
+                    .prepare_semantic_point_drag(&editor, 8410, shared_point, Some(&preferred))
+                    .unwrap()
+                    .expect("selected generated consumer must detach locally");
+                editor.cancel_interaction();
+                editor = prepared.editor;
+                let scene = editor.scene(viewport, 0.5).unwrap();
+                editor
+                    .pointer_down_exact_point(&scene, pointer(8410, start), prepared.point)
+                    .unwrap();
+                let first_target = [5.0, 6.0];
+                let scene = editor.scene(viewport, 0.5).unwrap();
+                editor
+                    .pointer_move(&scene, pointer(8410, first_target))
+                    .unwrap();
+                let scene = editor.scene(viewport, 0.5).unwrap();
+                assert!(
+                    editor
+                        .pointer_up(&scene, pointer(8410, first_target))
+                        .unwrap()
+                        .transaction
+                        .is_some()
+                );
+                let first = workbench
+                    .publish_delegated_editor_checkpoint(
+                        encode_editor_checkpoint(&editor).unwrap(),
+                        "Detach generated rising brace endpoint",
+                    )
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(workbench.managed_source(), source_before);
+                assert_eq!(workbench.session.identity().revision, revision_before + 1);
+                assert_eq!(
+                    workbench.session.snapshot().generated.active()[&rising_address],
+                    generated_identity,
+                );
+                assert!(
+                    workbench
+                        .session
+                        .snapshot()
+                        .interaction_overlay
+                        .drafts()
+                        .values()
+                        .any(|draft| draft.provenance
+                            == geosolve_sketch_code::CodeDraftProvenance::DetachedReference)
+                );
+                let first_checkpoint = workbench.accepted_editor_checkpoint().clone();
+                let first_overlay = workbench.session.snapshot().interaction_overlay.clone();
+                editor = first.editor;
+                let rising_after = editor
+                    .coordinator()
+                    .intent()
+                    .graph()
+                    .node_by_symbol(&rising_alias)
+                    .unwrap();
+                assert_ne!(rising_after.id, rising_before_id);
+                let detached_start = rising_after
+                    .port_by_selector(IntentPortSelector::Node {
+                        role: IntentPortRole::Start,
+                        index: 0,
+                    })
+                    .unwrap()
+                    .as_ref(rising_after.id);
+                let accepted = editor.coordinator().accepted_materialization().unwrap();
+                let IntentNativeBinding::Point(detached_point) =
+                    accepted.ownership.port(detached_start).unwrap()
+                else {
+                    panic!("detached generated endpoint must remain a native point")
+                };
+                assert_ne!(detached_point, shared_point);
+                assert_eq!(
+                    accepted
+                        .session
+                        .design_document()
+                        .point(detached_point)
+                        .unwrap()
+                        .position
+                        .map(f64::to_bits),
+                    first_target.map(f64::to_bits),
+                );
+
+                assert!(editor.set_selected_declaration(Some(rising_after.id)));
+                let scene = editor.scene(viewport, 0.5).unwrap();
+                editor
+                    .pointer_down_exact_point(&scene, pointer(8411, first_target), detached_point)
+                    .unwrap();
+                assert!(
+                    workbench
+                        .prepare_semantic_point_drag(
+                            &editor,
+                            8411,
+                            detached_point,
+                            Some(&preferred),
+                        )
+                        .unwrap()
+                        .is_none(),
+                    "the detached endpoint must reuse its existing local lens",
+                );
+                let second_target = [7.0, 8.0];
+                let scene = editor.scene(viewport, 0.5).unwrap();
+                editor
+                    .pointer_move(&scene, pointer(8411, second_target))
+                    .unwrap();
+                let scene = editor.scene(viewport, 0.5).unwrap();
+                assert!(
+                    editor
+                        .pointer_up(&scene, pointer(8411, second_target))
+                        .unwrap()
+                        .transaction
+                        .is_some()
+                );
+                let second = workbench
+                    .publish_delegated_editor_checkpoint(
+                        encode_editor_checkpoint(&editor).unwrap(),
+                        "Move detached generated endpoint again",
+                    )
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(workbench.session.identity().revision, revision_before + 2);
+                let second_checkpoint = workbench.accepted_editor_checkpoint().clone();
+                let accepted = second
+                    .editor
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap();
+                assert!(accepted.validation.hard_residuals_validated);
+                assert!(accepted.validation.all_active_features_current);
+                assert!(
+                    accepted
+                        .validation
+                        .maximum_normalized_hard_residual
+                        .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+                );
+                assert_eq!(
+                    accepted
+                        .session
+                        .design_document()
+                        .point(detached_point)
+                        .unwrap()
+                        .position
+                        .map(f64::to_bits),
+                    second_target.map(f64::to_bits),
+                );
+
+                let _ = workbench.step_history(true).unwrap().unwrap();
+                assert_eq!(workbench.accepted_editor_checkpoint(), &first_checkpoint);
+                assert_eq!(
+                    workbench.session.snapshot().interaction_overlay,
+                    first_overlay,
+                );
+                let _ = workbench.step_history(true).unwrap().unwrap();
+                assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+                assert_eq!(
+                    workbench.session.snapshot().interaction_overlay,
+                    overlay_before,
+                );
+                let _ = workbench.step_history(false).unwrap().unwrap();
+                assert_eq!(workbench.accepted_editor_checkpoint(), &first_checkpoint);
+                let _ = workbench.step_history(false).unwrap().unwrap();
+                assert_eq!(workbench.accepted_editor_checkpoint(), &second_checkpoint);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the regression authenticates every transient detachment and cancellation authority before and after restoration"
+    )]
+    fn transient_reference_detachment_cancels_to_exact_accepted_authority() {
+        let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let mut workbench = Box::new(workbench);
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .clone()
+            .unwrap();
+        let diagonal_alias = expansion
+            .semantic_outputs
+            .values()
+            .find_map(|output| {
+                (output.reference.declaration == SemanticSymbol("diagonal".into())
+                    && output.reference.output.0.is_empty())
+                .then(|| match &output.target {
+                    ExpandedSemanticTarget::Declaration { alias, .. } => Some(alias.clone()),
+                    _ => None,
+                })
+                .flatten()
+            })
+            .unwrap();
+        let diagonal_node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&diagonal_alias)
+            .unwrap()
+            .id;
+        let start = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(diagonal_node)
+            .unwrap()
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Start,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(diagonal_node);
+        let IntentNativeBinding::Point(shared_point) = editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .ownership
+            .port(start)
+            .unwrap()
+        else {
+            panic!("referenced line start must own one shared point")
+        };
+        assert!(editor.set_selected_declaration(Some(diagonal_node)));
+        let preferred = workbench
+            .selected_managed_declaration(&editor)
+            .unwrap()
+            .unwrap();
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let source_before = workbench.managed_source().to_owned();
+        let revision_before = workbench.session.identity().revision;
+        let overlay_before = workbench.session.snapshot().interaction_overlay.clone();
+
+        let prepared = workbench
+            .prepare_semantic_point_drag(&editor, 8408, shared_point, Some(&preferred))
+            .unwrap()
+            .unwrap();
+        assert!(workbench.has_pending_semantic_point_drag(8408));
+        assert_ne!(
+            encode_editor_checkpoint(&prepared.editor).unwrap(),
+            checkpoint_before,
+            "the transient editor must contain the local detached route",
+        );
+        assert!(
+            workbench
+                .cancel_semantic_point_drag(Some(9999))
+                .unwrap()
+                .is_none(),
+            "another pointer cannot retire this semantic gesture",
+        );
+        assert!(workbench.has_pending_semantic_point_drag(8408));
+        let restored = workbench
+            .cancel_semantic_point_drag(Some(8408))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            encode_editor_checkpoint(&restored).unwrap(),
+            checkpoint_before,
+        );
+        assert!(!workbench.has_pending_semantic_point_drag(8408));
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.session.identity().revision, revision_before);
+        assert_eq!(
+            workbench.session.snapshot().interaction_overlay,
+            overlay_before,
+        );
+
+        workbench.set_managed_draft(format!("{}\n", workbench.managed_source()));
+        let Err(error) =
+            workbench.prepare_semantic_point_drag(&editor, 8409, shared_point, Some(&preferred))
+        else {
+            panic!("a dirty managed draft must refuse semantic preparation")
+        };
+        assert!(error.contains("Apply or Revert"));
+        assert!(!workbench.has_pending_semantic_point_drag(8409));
+        assert_eq!(workbench.session.identity().revision, revision_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
     }
 }

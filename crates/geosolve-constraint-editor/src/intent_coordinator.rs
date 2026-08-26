@@ -220,6 +220,41 @@ impl ProjectionalIntentCoordinator {
         })
     }
 
+    /// Restores one exact pristine semantic session with independently
+    /// materialized empty native acceptance and no manufactured history.
+    ///
+    /// This narrow initialization seam is intentionally separate from
+    /// ordinary no-op patches, which remain rejected by the intent planner.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed materialization, intent, or authority mismatch when
+    /// the session is not pristine or empty acceptance cannot be independently
+    /// reconstructed and authenticated.
+    pub fn restore_pristine_empty(
+        mut intent: IntentSession,
+        materializer: ColdIntentMaterializer,
+    ) -> Result<Self, ProjectionalCoordinatorError> {
+        let accepted = materializer.materialize_pristine_empty(&intent)?;
+        intent.install_pristine_empty_acceptance(accepted.evidence.clone())?;
+        let authority = intent
+            .accepted()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?;
+        if authority.target != accepted.validation.semantic
+            || authority.evidence != accepted.evidence
+            || accepted.ownership.semantic != authority.target
+        {
+            return Err(ProjectionalCoordinatorError::BootstrapAuthorityMismatch);
+        }
+        Ok(Self {
+            intent,
+            materializer,
+            accepted: Some(Box::new(accepted)),
+            point_drag: None,
+            curve_control_drag: None,
+        })
+    }
+
     /// Installs a strictly authenticated history-free native bootstrap.
     ///
     /// This is the narrow migration seam for an already restored flat

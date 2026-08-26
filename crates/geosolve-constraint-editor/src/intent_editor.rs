@@ -215,6 +215,29 @@ impl ProjectionalEditorSession {
         )?))
     }
 
+    /// Restores an exact revision-zero empty intent with independently
+    /// validated empty native acceptance and no user-visible history entry.
+    /// Ordinary empty patches remain invalid; callers use this only when an
+    /// owning representation (such as a managed code project) is itself
+    /// authentically empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed document, native materialization, intent, or authority
+    /// mismatch when the session is not pristine or empty acceptance cannot
+    /// be independently authenticated.
+    pub fn restore_pristine_empty(
+        intent: IntentSession,
+        document: DocumentId,
+        model_scale: f64,
+    ) -> Result<Self, ProjectionalEditorError> {
+        let materializer = ColdIntentMaterializer::with_default_policy(document, model_scale)
+            .map_err(ProjectionalCoordinatorError::from)?;
+        Ok(Self::new(
+            ProjectionalIntentCoordinator::restore_pristine_empty(intent, materializer)?,
+        ))
+    }
+
     /// Activates one strictly decoded, history-free flat bootstrap over its
     /// already restored and independently accepted native scene.
     ///
@@ -2495,6 +2518,75 @@ impl ProjectionalEditorSession {
         } else {
             self.cancel_direct_manipulation();
         }
+        Ok(effects)
+    }
+
+    /// Starts a point drag for an exact native point selected by an
+    /// authenticated semantic projection host.
+    ///
+    /// This retains all ordinary accepted-scene, hit-tolerance and native
+    /// continuation checks while allowing the host to disambiguate coincident
+    /// producer and referenced-consumer points after a local detachment has
+    /// been prepared.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed stale-scene, ambiguous-route, retained-authority or
+    /// point-drag preparation failure without publishing a history entry.
+    pub fn pointer_down_exact_point(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        point: geosolve_sketch::DesignPointId,
+    ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
+        let effects = self
+            .editor
+            .pointer_down_exact_point(scene, input, point)
+            .ok_or(ProjectionalEditorError::PointDragRouteMismatch)?;
+        self.project_native_selection_to_declaration();
+        let route = self
+            .editor
+            .prepared_point_drag_route()
+            .ok_or(ProjectionalEditorError::PointDragRouteMismatch)?;
+        if route.pointer_id != input.pointer_id || route.point != point {
+            let _ = self.editor.cancel();
+            return Err(ProjectionalEditorError::PointDragRouteMismatch);
+        }
+        if self.editor.prepared_curve_control_drag_route().is_some()
+            || self.editor.prepared_feature_radius_drag_route().is_some()
+            || self
+                .editor
+                .prepared_accepted_offset_distance_drag_route()
+                .is_some()
+        {
+            let _ = self.editor.cancel();
+            return Err(ProjectionalEditorError::AmbiguousDirectManipulationRoute);
+        }
+        if !self
+            .coordinator
+            .intent()
+            .accepted()
+            .is_some_and(|accepted| {
+                accepted.target == self.coordinator.intent().semantic_identity()
+            })
+        {
+            let _ = self.editor.cancel();
+            return Err(ProjectionalEditorError::RetainedIntentDirectManipulationUnavailable);
+        }
+        self.cancel_direct_manipulation();
+        if let Err(error) = self
+            .coordinator
+            .begin_point_drag(route.pointer_id, route.point)
+        {
+            let _ = self.editor.cancel();
+            return Err(error.into());
+        }
+        self.point_drag = Some(ActivePointDrag {
+            pointer_id: route.pointer_id,
+            point: route.point,
+            latest_request_id: None,
+            latest_position: None,
+        });
         Ok(effects)
     }
 

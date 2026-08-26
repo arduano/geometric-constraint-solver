@@ -12,13 +12,19 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    CodeProject, ExpandedCodeProject, GeneratedMemberAddress, GeneratedMemberIdentity,
+    CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOverlayError, CodeProject,
+    ExpandedCodeProject, ExpandedWritablePoint, GeneratedMemberAddress, GeneratedMemberIdentity,
     KeyedReconcileError, KeyedReconcilePlan, KeyedReconcileState, ManagedDocument,
-    ManagedParseError, ManagedValue, ProjectKey, expand_code_project, parse_managed_source,
+    ManagedParseError, ManagedValue, ProjectKey, expand_code_project_with_overlay,
+    parse_managed_source, stage_point_drags,
 };
 
 const MAX_HISTORY: usize = 256;
-const SESSION_WIRE_VERSION: &str = "geosolve-sketch-code-session-v1";
+/// Persisted session identities are caller-controlled input. Keep the upper
+/// half of the allocator space as runtime headroom so one hostile restore
+/// cannot place the process-wide allocator next to exhaustion.
+const MAX_IMPORTED_SESSION: u64 = u64::MAX / 2;
+const SESSION_WIRE_VERSION: &str = "geosolve-sketch-code-session-v2";
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -65,6 +71,12 @@ pub struct CodeSessionSnapshot {
     /// current ledger while a structural candidate is retained as failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accepted_generated: Option<KeyedReconcileState>,
+    /// Current semantic GUI placement layered over code-authored seeds.
+    #[serde(default)]
+    pub interaction_overlay: CodeInteractionOverlay,
+    /// Overlay corresponding exactly to the accepted expansion/editor pair.
+    #[serde(default)]
+    pub accepted_interaction_overlay: CodeInteractionOverlay,
     pub accepted_source_digest: String,
     pub artifact_digests: BTreeMap<String, String>,
     pub generated: KeyedReconcileState,
@@ -169,6 +181,8 @@ impl SketchCodeSession {
             expansion: None,
             accepted_expansion: None,
             accepted_generated: None,
+            interaction_overlay: CodeInteractionOverlay::empty(),
+            accepted_interaction_overlay: CodeInteractionOverlay::empty(),
             artifact_digests,
             generated,
             accepted_editor_checkpoint: editor_checkpoint.clone(),
@@ -210,7 +224,12 @@ impl SketchCodeSession {
         project.validate().map_err(|error| {
             CodeSessionError::InvalidPersistence(format!("invalid code project: {error}"))
         })?;
-        validate_expansion(&project, &generated, &expansion)?;
+        validate_expansion(
+            &project,
+            &generated,
+            &CodeInteractionOverlay::empty(),
+            &expansion,
+        )?;
         let artifact_digests = artifact_digests(&project)?;
         let accepted_source_digest = project.managed.source_digest.clone();
         let snapshot = CodeSessionSnapshot {
@@ -221,6 +240,8 @@ impl SketchCodeSession {
             expansion: Some(expansion.clone()),
             accepted_expansion: Some(expansion),
             accepted_generated: Some(generated.clone()),
+            interaction_overlay: CodeInteractionOverlay::empty(),
+            accepted_interaction_overlay: CodeInteractionOverlay::empty(),
             accepted_source_digest,
             artifact_digests,
             generated,
@@ -366,6 +387,44 @@ impl SketchCodeSession {
         editor_checkpoint: serde_json::Value,
         label: impl Into<String>,
     ) -> Result<PreparedCodeEdit, CodeSessionError> {
+        let overlay_free = expand_code_project_with_overlay(
+            &project,
+            plan.staged(),
+            &CodeInteractionOverlay::empty(),
+            expansion.patch.expected,
+        )
+        .map_err(|error| {
+            CodeSessionError::InvalidPersistence(format!(
+                "structural overlay preflight cannot be reconstructed: {error}"
+            ))
+        })?;
+        let retained = overlay_free.retained_overlay(&self.snapshot.accepted_interaction_overlay);
+        self.prepare_project_edit_from_plan_with_overlay(
+            expected,
+            project,
+            plan,
+            retained,
+            expansion,
+            editor_checkpoint,
+            label,
+        )
+    }
+
+    /// Stages one structural project edit with its exact retained/pruned
+    /// semantic overlay. Removing a structural owner can therefore prune its
+    /// drafts in the same history entry, while persisted stale payloads remain
+    /// strict under ordinary snapshot validation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_project_edit_from_plan_with_overlay(
+        &self,
+        expected: &CodeSessionIdentity,
+        project: CodeProject,
+        plan: KeyedReconcilePlan,
+        overlay: CodeInteractionOverlay,
+        expansion: ExpandedCodeProject,
+        editor_checkpoint: serde_json::Value,
+        label: impl Into<String>,
+    ) -> Result<PreparedCodeEdit, CodeSessionError> {
         self.authenticate(expected)?;
         if plan.expected_identity() != self.snapshot.generated.identity() {
             return Err(KeyedReconcileError::StalePlan.into());
@@ -373,7 +432,27 @@ impl SketchCodeSession {
         project.validate().map_err(|error| {
             CodeSessionError::InvalidPersistence(format!("invalid code project: {error}"))
         })?;
-        validate_expansion(&project, plan.staged(), &expansion)?;
+        overlay.validate()?;
+        let overlay_free = expand_code_project_with_overlay(
+            &project,
+            plan.staged(),
+            &CodeInteractionOverlay::empty(),
+            expansion.patch.expected,
+        )
+        .map_err(|error| {
+            CodeSessionError::InvalidPersistence(format!(
+                "structural overlay preflight cannot be reconstructed: {error}"
+            ))
+        })?;
+        let expected_overlay =
+            overlay_free.retained_overlay(&self.snapshot.accepted_interaction_overlay);
+        if overlay != expected_overlay {
+            return Err(CodeSessionError::InvalidPersistence(
+                "structural publication overlay is not the deterministic retained projection"
+                    .into(),
+            ));
+        }
+        validate_expansion(&project, plan.staged(), &overlay, &expansion)?;
         let artifact_digests = artifact_digests(&project)?;
         let mut next = self.snapshot.clone();
         next.project = project.project.clone();
@@ -383,6 +462,8 @@ impl SketchCodeSession {
         next.expansion = Some(expansion.clone());
         next.accepted_expansion = Some(expansion);
         next.accepted_generated = Some(plan.staged().clone());
+        next.interaction_overlay = overlay.clone();
+        next.accepted_interaction_overlay = overlay;
         next.accepted_source_digest
             .clone_from(&next.managed.source_digest);
         next.artifact_digests = artifact_digests;
@@ -412,6 +493,7 @@ impl SketchCodeSession {
         expected: &CodeSessionIdentity,
         project: CodeProject,
         plan: Option<KeyedReconcilePlan>,
+        interaction_overlay: CodeInteractionOverlay,
         expansion: Option<ExpandedCodeProject>,
         editor_checkpoint: serde_json::Value,
         stage: impl Into<String>,
@@ -430,8 +512,28 @@ impl SketchCodeSession {
         } else {
             self.snapshot.generated.clone()
         };
+        interaction_overlay.validate()?;
         if let Some(expansion) = &expansion {
-            validate_expansion(&project, &generated, expansion)?;
+            let overlay_free = expand_code_project_with_overlay(
+                &project,
+                &generated,
+                &CodeInteractionOverlay::empty(),
+                expansion.patch.expected,
+            )
+            .map_err(|error| {
+                CodeSessionError::InvalidPersistence(format!(
+                    "retained-failure overlay preflight cannot be reconstructed: {error}"
+                ))
+            })?;
+            let expected_overlay =
+                overlay_free.retained_overlay(&self.snapshot.accepted_interaction_overlay);
+            if interaction_overlay != expected_overlay {
+                return Err(CodeSessionError::InvalidPersistence(
+                    "retained-failure overlay is not the deterministic owner-pruned projection"
+                        .into(),
+                ));
+            }
+            validate_expansion(&project, &generated, &interaction_overlay, expansion)?;
         }
         let artifact_digests = artifact_digests(&project)?;
         let mut next = self.snapshot.clone();
@@ -440,6 +542,7 @@ impl SketchCodeSession {
         next.code_project = Some(project);
         next.expansion = expansion;
         next.generated = generated;
+        next.interaction_overlay = interaction_overlay;
         next.artifact_digests = artifact_digests;
         next.editor_checkpoint = editor_checkpoint;
         next.failure = Some(CodeSessionFailure {
@@ -513,6 +616,170 @@ impl SketchCodeSession {
             editor_checkpoint,
             label,
         )
+    }
+
+    /// Computes the bounded semantic overlay produced by one visible point
+    /// drag without parsing, expanding or touching accepted authority.
+    pub fn stage_point_drag(
+        &self,
+        point: &ExpandedWritablePoint,
+        target: [f64; 2],
+    ) -> Result<CodeInteractionOverlay, CodeSessionError> {
+        let point = self.authenticate_writable_point(point)?;
+        Ok(point.stage_drag(&self.snapshot.interaction_overlay, target)?)
+    }
+
+    /// Computes one atomic terminal bundle over several semantic point edit
+    /// lenses. Equal duplicate seeds collapse and contradictory same-tier
+    /// seeds reject without changing session authority.
+    pub fn stage_point_drags<'a>(
+        &self,
+        drags: impl IntoIterator<Item = (&'a ExpandedWritablePoint, [f64; 2])>,
+    ) -> Result<CodeInteractionOverlay, CodeSessionError> {
+        let drags = drags
+            .into_iter()
+            .map(|(point, target)| Ok((self.authenticate_writable_point(point)?, target)))
+            .collect::<Result<Vec<_>, CodeSessionError>>()?;
+        Ok(stage_point_drags(
+            &self.snapshot.interaction_overlay,
+            drags,
+        )?)
+    }
+
+    /// Stages reversible suppression for one exact generated host child.
+    pub fn stage_generated_child_suppression(
+        &self,
+        address: &CodeGeneratedChildAddress,
+        suppressed: bool,
+    ) -> Result<CodeInteractionOverlay, CodeSessionError> {
+        if self.snapshot.failure.is_some() {
+            return Err(CodeSessionError::RetainedFailureActive);
+        }
+        let known = self
+            .snapshot
+            .accepted_expansion
+            .as_ref()
+            .and_then(|expansion| {
+                expansion
+                    .generated_children
+                    .iter()
+                    .find(|child| child.address == *address)
+            })
+            .ok_or_else(|| CodeSessionError::UnknownSemanticOwner(address.display_path()))?;
+        let mut overlay = self.snapshot.interaction_overlay.clone();
+        overlay.set_generated_child_suppressed(known.address.clone(), suppressed)?;
+        Ok(overlay)
+    }
+
+    fn authenticate_writable_point<'a>(
+        &'a self,
+        candidate: &ExpandedWritablePoint,
+    ) -> Result<&'a ExpandedWritablePoint, CodeSessionError> {
+        if self.snapshot.failure.is_some() {
+            return Err(CodeSessionError::RetainedFailureActive);
+        }
+        self.snapshot
+            .accepted_expansion
+            .as_ref()
+            .and_then(|expansion| {
+                expansion
+                    .writable_points
+                    .iter()
+                    .find(|known| *known == candidate)
+            })
+            .ok_or_else(|| {
+                CodeSessionError::UnknownSemanticOwner(format!(
+                    "{}:{:?}",
+                    candidate.handle.alias, candidate.handle.selector
+                ))
+            })
+    }
+
+    /// Stages one complete semantic overlay/native-editor publication.
+    /// Expansion and the delegated checkpoint must already describe this
+    /// exact overlay; publication enters the outer history once.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare_project_overlay(
+        &self,
+        expected: &CodeSessionIdentity,
+        overlay: CodeInteractionOverlay,
+        expansion: ExpandedCodeProject,
+        editor_checkpoint: serde_json::Value,
+        label: impl Into<String>,
+    ) -> Result<PreparedCodeEdit, CodeSessionError> {
+        self.authenticate(expected)?;
+        let project = self.clean_current_project()?;
+        overlay.validate()?;
+        validate_expansion(project, &self.snapshot.generated, &overlay, &expansion)?;
+        let mut next = self.snapshot.clone();
+        next.interaction_overlay = overlay.clone();
+        next.accepted_interaction_overlay = overlay;
+        next.expansion = Some(expansion.clone());
+        next.accepted_expansion = Some(expansion);
+        next.accepted_generated = Some(next.generated.clone());
+        next.accepted_code_project = Some(project.clone());
+        next.editor_checkpoint = editor_checkpoint.clone();
+        next.accepted_editor_checkpoint = editor_checkpoint;
+        next.failure = None;
+        validate_snapshot(&next)?;
+        Ok(PreparedCodeEdit {
+            expected: expected.clone(),
+            next,
+            plan: None,
+            label: label.into(),
+        })
+    }
+
+    /// Stages reset-to-code for one semantic draft. `None` means no draft was
+    /// active and therefore no history entry is due.
+    pub fn prepare_project_reset_draft(
+        &self,
+        expected: &CodeSessionIdentity,
+        address: &crate::CodeWritableAddress,
+        expansion: ExpandedCodeProject,
+        editor_checkpoint: serde_json::Value,
+        label: impl Into<String>,
+    ) -> Result<Option<PreparedCodeEdit>, CodeSessionError> {
+        self.authenticate(expected)?;
+        let edit = self
+            .snapshot
+            .accepted_expansion
+            .as_ref()
+            .and_then(|expansion| {
+                expansion.writable_points.iter().find_map(|point| {
+                    point
+                        .edit
+                        .writable_addresses()
+                        .contains(address)
+                        .then(|| point.edit.clone())
+                })
+            })
+            .ok_or_else(|| CodeSessionError::UnknownSemanticOwner(address.display_path()))?;
+        let mut overlay = self.snapshot.interaction_overlay.clone();
+        if overlay.reset_many(edit.writable_addresses()) == 0 {
+            return Ok(None);
+        }
+        self.prepare_project_overlay(expected, overlay, expansion, editor_checkpoint, label)
+            .map(Some)
+    }
+
+    /// Removes one generated-child suppression override. `None` means the
+    /// child already follows its generated definition.
+    pub fn prepare_project_reset_generated_child_suppression(
+        &self,
+        expected: &CodeSessionIdentity,
+        address: &CodeGeneratedChildAddress,
+        expansion: ExpandedCodeProject,
+        editor_checkpoint: serde_json::Value,
+        label: impl Into<String>,
+    ) -> Result<Option<PreparedCodeEdit>, CodeSessionError> {
+        self.authenticate(expected)?;
+        let mut overlay = self.snapshot.interaction_overlay.clone();
+        if !overlay.reset_generated_child_suppression(address) {
+            return Ok(None);
+        }
+        self.prepare_project_overlay(expected, overlay, expansion, editor_checkpoint, label)
+            .map(Some)
     }
 
     /// Stages Reset-to-code together with its exact replacement expansion and
@@ -836,11 +1103,7 @@ impl SketchCodeSession {
                 "unsupported code-session version".into(),
             ));
         }
-        if wire.identity.session == 0 || wire.identity.session >= u64::MAX - 1 {
-            return Err(CodeSessionError::InvalidPersistence(
-                "invalid code-session allocation".into(),
-            ));
-        }
+        validate_imported_session(wire.identity.session)?;
         if wire.structural_expansions > wire.identity.revision {
             return Err(CodeSessionError::InvalidPersistence(
                 "structural expansion count exceeds session revision".into(),
@@ -921,10 +1184,16 @@ impl SketchCodeSession {
         editor_checkpoint: serde_json::Value,
         label: impl Into<String>,
     ) -> Result<PreparedCodeEdit, CodeSessionError> {
-        validate_expansion(project, &generated, &expansion)?;
+        validate_expansion(
+            project,
+            &generated,
+            &self.snapshot.interaction_overlay,
+            &expansion,
+        )?;
         let mut next = self.snapshot.clone();
         next.generated = generated.clone();
         next.accepted_generated = Some(generated);
+        next.accepted_interaction_overlay = next.interaction_overlay.clone();
         next.expansion = Some(expansion.clone());
         next.accepted_expansion = Some(expansion);
         next.accepted_code_project = Some(project.clone());
@@ -1052,6 +1321,16 @@ fn allocate_session() -> Result<u64, CodeSessionError> {
         .map_err(|_| CodeSessionError::SessionIdentityExhausted)
 }
 
+fn validate_imported_session(session: u64) -> Result<(), CodeSessionError> {
+    if session == 0 || session > MAX_IMPORTED_SESSION {
+        Err(CodeSessionError::InvalidPersistence(
+            "invalid code-session allocation".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 fn validate_wire_size(
     identity: &CodeSessionIdentity,
     snapshot: &CodeSessionSnapshot,
@@ -1087,6 +1366,8 @@ pub enum CodeSessionError {
     Parse(#[from] ManagedParseError),
     #[error(transparent)]
     Reconcile(#[from] KeyedReconcileError),
+    #[error(transparent)]
+    Overlay(#[from] CodeOverlayError),
     #[error("stale code-session identity: expected {expected:?}, actual {actual:?}")]
     StaleSession {
         expected: CodeSessionIdentity,
@@ -1102,6 +1383,8 @@ pub enum CodeSessionError {
     CompleteProjectRequired,
     #[error("a retained code failure must be resolved or undone before this publication")]
     RetainedFailureActive,
+    #[error("semantic interaction owner `{0}` is stale, unknown or not accepted")]
+    UnknownSemanticOwner(String),
     #[error("code session is {actual} bytes; the limit is {limit}")]
     ResourceLimit { actual: usize, limit: usize },
     #[error("code-session identity allocator is exhausted")]
@@ -1111,6 +1394,7 @@ pub enum CodeSessionError {
 }
 
 #[allow(
+    clippy::single_match_else,
     clippy::too_many_lines,
     reason = "one audit pass validates all current and accepted snapshot cross-links"
 )]
@@ -1122,6 +1406,8 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
         ));
     }
     snapshot.generated.validate()?;
+    snapshot.interaction_overlay.validate()?;
+    snapshot.accepted_interaction_overlay.validate()?;
     if let Some(accepted) = &snapshot.accepted_generated {
         accepted.validate()?;
         if !snapshot
@@ -1162,7 +1448,12 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
                 ));
             }
             if let Some(expansion) = &snapshot.expansion {
-                validate_expansion(project, &snapshot.generated, expansion)?;
+                validate_expansion(
+                    project,
+                    &snapshot.generated,
+                    &snapshot.interaction_overlay,
+                    expansion,
+                )?;
             }
         }
         None => {
@@ -1173,6 +1464,13 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
             {
                 return Err(CodeSessionError::InvalidPersistence(
                     "partial complete-project authority".into(),
+                ));
+            }
+            if snapshot.interaction_overlay != CodeInteractionOverlay::empty()
+                || snapshot.accepted_interaction_overlay != CodeInteractionOverlay::empty()
+            {
+                return Err(CodeSessionError::InvalidPersistence(
+                    "legacy code session cannot retain semantic interaction drafts".into(),
                 ));
             }
         }
@@ -1193,7 +1491,12 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
                     "accepted code project belongs to another project".into(),
                 ));
             }
-            validate_expansion(project, generated, expansion)?;
+            validate_expansion(
+                project,
+                generated,
+                &snapshot.accepted_interaction_overlay,
+                expansion,
+            )?;
             if snapshot.accepted_source_digest != project.managed.source_digest {
                 return Err(CodeSessionError::InvalidPersistence(
                     "accepted source digest disagrees with accepted code project".into(),
@@ -1217,6 +1520,7 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
                     .accepted_generated
                     .as_ref()
                     .expect("complete authority was checked above")
+            || snapshot.interaction_overlay != snapshot.accepted_interaction_overlay
             || snapshot.editor_checkpoint != snapshot.accepted_editor_checkpoint)
     {
         return Err(CodeSessionError::InvalidPersistence(
@@ -1266,14 +1570,16 @@ fn artifact_digests(project: &CodeProject) -> Result<BTreeMap<String, String>, C
 fn validate_expansion(
     project: &CodeProject,
     generated: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
     expansion: &ExpandedCodeProject,
 ) -> Result<(), CodeSessionError> {
     let recomputed =
-        expand_code_project(project, generated, expansion.patch.expected).map_err(|error| {
-            CodeSessionError::InvalidPersistence(format!(
-                "code-project expansion cannot be reconstructed: {error}"
-            ))
-        })?;
+        expand_code_project_with_overlay(project, generated, overlay, expansion.patch.expected)
+            .map_err(|error| {
+                CodeSessionError::InvalidPersistence(format!(
+                    "code-project expansion cannot be reconstructed: {error}"
+                ))
+            })?;
     if &recomputed != expansion {
         return Err(CodeSessionError::InvalidPersistence(
             "code-project expansion/provenance is not canonical".into(),
@@ -1655,18 +1961,26 @@ export default sketch(($) => {
         .unwrap();
         let mut wire: SessionWire =
             serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
-        wire.identity.session = u64::MAX - 1;
-        wire.identity = identity(
-            wire.identity.session,
-            wire.identity.revision,
-            &wire.snapshot,
-            &wire.undo,
-            &wire.redo,
-            wire.structural_expansions,
-        )
-        .unwrap();
+        for hostile in [MAX_IMPORTED_SESSION + 1, u64::MAX - 2, u64::MAX - 1] {
+            wire.identity.session = hostile;
+            wire.identity = identity(
+                wire.identity.session,
+                wire.identity.revision,
+                &wire.snapshot,
+                &wire.undo,
+                &wire.redo,
+                wire.structural_expansions,
+            )
+            .unwrap();
+            assert!(matches!(
+                SketchCodeSession::from_json(&serde_json::to_string(&wire).unwrap()),
+                Err(CodeSessionError::InvalidPersistence(message))
+                    if message == "invalid code-session allocation"
+            ));
+        }
+        assert_eq!(validate_imported_session(MAX_IMPORTED_SESSION), Ok(()));
         assert!(matches!(
-            SketchCodeSession::from_json(&serde_json::to_string(&wire).unwrap()),
+            validate_imported_session(0),
             Err(CodeSessionError::InvalidPersistence(message))
                 if message == "invalid code-session allocation"
         ));
@@ -2017,6 +2331,7 @@ export default sketch(($) => {
                 session.identity(),
                 candidate.clone(),
                 Some(plan),
+                CodeInteractionOverlay::empty(),
                 Some(attempted),
                 serde_json::json!({"retained-intent": 2, "accepted-scene": 1}),
                 "native validation",

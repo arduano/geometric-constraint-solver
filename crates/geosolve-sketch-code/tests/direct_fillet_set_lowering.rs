@@ -526,9 +526,10 @@ fn direct_fillet_set_rejects_nonlexical_wrong_kind_and_malformed_state() {
             lock: serde_json::json!({ "format": "geosolve-lock-v1", "modules": {} }),
         };
         let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84f0_0403)).unwrap();
+        let reconciliation = reconciled(&candidate);
         assert!(
             matches!(
-                expand_code_project(&candidate, &KeyedReconcileState::empty(), intent.identity()),
+                expand_code_project(&candidate, &reconciliation, intent.identity()),
                 Err(CodeExpansionError::Unsupported(_)
                     | CodeExpansionError::InvalidDeclaration { .. }
                     | CodeExpansionError::KindMismatch { .. }
@@ -567,12 +568,9 @@ fn direct_fillet_set_rejects_nonlexical_wrong_kind_and_malformed_state() {
             .unwrap(),
     );
     let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84f0_0404)).unwrap();
+    let one_parent_reconciliation = reconciled(&one_parent);
     assert!(matches!(
-        expand_code_project(
-            &one_parent,
-            &KeyedReconcileState::empty(),
-            intent.identity()
-        ),
+        expand_code_project(&one_parent, &one_parent_reconciliation, intent.identity()),
         Err(CodeExpansionError::Unsupported(_) | CodeExpansionError::InvalidDeclaration { .. })
     ));
 

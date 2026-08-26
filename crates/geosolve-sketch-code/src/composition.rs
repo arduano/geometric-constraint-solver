@@ -13,17 +13,17 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::DocumentId;
 use geosolve_sketch_intent::{
-    DeletePolicy, IntentAliasMap, IntentKey, IntentKeyError, IntentNode, IntentNodeDraft,
-    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortKind,
-    IntentPortRef, IntentSession, IntentSessionId, IntentSessionIdentity, LeafRef, NodeId,
-    PatchPortRef, intent_content_digest,
+    DeletePolicy, InputRole, InputSlot, IntentAliasMap, IntentKey, IntentKeyError, IntentNode,
+    IntentNodeDraft, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition,
+    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector, IntentSession,
+    IntentSessionId, IntentSessionIdentity, LeafRef, NodeId, PatchPortRef, intent_content_digest,
 };
 use thiserror::Error;
 
 use crate::{
-    CodeExpansionError, CodeHostRequest, CodeProject, ExpandedCodeProject, ExpandedFeatureCorner,
-    GeneratedMemberAddress, GeneratedMemberIdentity, KeyedFilletHostRequest, KeyedReconcileState,
-    expand_code_project,
+    CodeExpansionError, CodeHostRequest, CodeInteractionOverlay, CodeProject, ExpandedCodeProject,
+    ExpandedFeatureCorner, GeneratedMemberAddress, GeneratedMemberIdentity, KeyedFilletHostRequest,
+    KeyedReconcileState, expand_code_project_for_structural_edit, expand_code_project_with_overlay,
 };
 
 /// One exact native computed output produced for a generated member.
@@ -147,20 +147,58 @@ pub fn materialize_code_project_cold(
     document: DocumentId,
     model_scale: f64,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
+    materialize_code_project_cold_with_overlay(
+        project,
+        reconciliation,
+        &CodeInteractionOverlay::empty(),
+        intent_session,
+        document,
+        model_scale,
+    )
+}
+
+/// Cold materializes one code project after applying a semantic GUI seed
+/// overlay. The overlay changes only intent instance leaves.
+///
+/// # Errors
+///
+/// Returns a typed expansion, reconciliation, editor, host-authoring, or
+/// independent native-validation error without publishing partial authority.
+pub fn materialize_code_project_cold_with_overlay(
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+    intent_session: IntentSessionId,
+    document: DocumentId,
+    model_scale: f64,
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
     let intent = IntentSession::with_id(intent_session).map_err(|error| {
         ProjectionalEditorError::Coordinator(
             geosolve_constraint_editor::ProjectionalCoordinatorError::Intent(error),
         )
     })?;
-    let mut editor = ProjectionalEditorSession::restore(intent, document, model_scale)?;
-    let expansion = expand_code_project(
-        project,
-        reconciliation,
-        editor.coordinator().intent().identity(),
-    )?;
-    let base_outcome = editor
-        .apply_patch(expansion.patch.clone())
-        .map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))?;
+    let expansion =
+        expand_code_project_with_overlay(project, reconciliation, overlay, intent.identity())?;
+    let mut editor = if expansion.patch.operations().is_empty() {
+        ProjectionalEditorSession::restore_pristine_empty(intent, document, model_scale)?
+    } else {
+        ProjectionalEditorSession::restore(intent, document, model_scale)?
+    };
+    // A managed project may legitimately become empty after deleting its
+    // final declaration. The generic intent API still rejects caller-issued
+    // no-op patches; composition alone recognizes its authenticated empty
+    // expansion as an already-accepted base over the restored empty document.
+    let base_outcome = if expansion.patch.operations().is_empty() {
+        ProjectionalPatchOutcome {
+            identity: editor.coordinator().intent().identity(),
+            disposition: IntentPlanDisposition::Accepted,
+            aliases: IntentAliasMap::default(),
+        }
+    } else {
+        editor
+            .apply_patch(expansion.patch.clone())
+            .map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))?
+    };
     if base_outcome.disposition != IntentPlanDisposition::Accepted {
         return Err(CodeCompositionError::BaseNotAccepted);
     }
@@ -234,10 +272,14 @@ fn authenticate_expansion_envelope(
     expansion: &ExpandedCodeProject,
 ) -> Result<(), CodeCompositionError> {
     let provenance_rows = expansion.generated_provenance.iter().collect::<Vec<_>>();
+    let declaration_rows = expansion.declaration_provenance.iter().collect::<Vec<_>>();
     let bytes = serde_json::to_vec(&(
         &expansion.patch,
         &expansion.semantic_outputs,
         &provenance_rows,
+        &declaration_rows,
+        &expansion.writable_points,
+        &expansion.generated_children,
         &expansion.host_requests,
     ))
     .map_err(|error| CodeCompositionError::Encoding(error.to_string()))?;
@@ -390,7 +432,7 @@ fn authenticate_rehydrated_fillet(
         .features
         .corner(owner.feature, owner.corner)
         .ok_or_else(mismatch)?;
-    if feature.suppressed
+    if feature.suppressed != request.suppressed
         || fillet.corners.len() != 1
         || fillet.radius.to_bits() != request.radius.value.to_bits()
         || BTreeSet::from([corner.first.source.span, corner.second.source.span])
@@ -426,20 +468,72 @@ pub fn materialize_code_project_incremental(
     project: &CodeProject,
     reconciliation: &KeyedReconcileState,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
+    materialize_code_project_incremental_with_overlay(
+        previous,
+        project,
+        reconciliation,
+        &CodeInteractionOverlay::empty(),
+    )
+}
+
+/// Incrementally materializes an explicit structural edit after projecting
+/// the prior interaction overlay onto still-present, provenance-compatible
+/// owners. The returned overlay must be published with the returned expansion
+/// in the same outer code-session transaction.
+///
+/// # Errors
+///
+/// Returns a typed expansion, projection, incremental-composition, host, or
+/// native-validation error without changing `previous`.
+pub fn materialize_code_project_incremental_for_structural_edit(
+    previous: &MaterializedCodeProject,
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    current_overlay: &CodeInteractionOverlay,
+) -> Result<(MaterializedCodeProject, CodeInteractionOverlay), CodeCompositionError> {
+    let (_, retained) = expand_code_project_for_structural_edit(
+        project,
+        reconciliation,
+        current_overlay,
+        previous.editor.coordinator().intent().identity(),
+    )?;
+    let materialized = materialize_code_project_incremental_with_overlay(
+        previous,
+        project,
+        reconciliation,
+        &retained,
+    )?;
+    Ok((materialized, retained))
+}
+
+/// Incremental counterpart of [`materialize_code_project_cold_with_overlay`].
+///
+/// # Errors
+///
+/// Returns a typed expansion, projection, incremental-composition, host, or
+/// native-validation error without changing `previous`.
+pub fn materialize_code_project_incremental_with_overlay(
+    previous: &MaterializedCodeProject,
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
     let accepted = previous
         .editor
         .coordinator()
         .accepted_materialization()
         .ok_or(CodeCompositionError::BaseNotAccepted)?;
     let document = accepted.session.design_document();
-    let desired = materialize_code_project_cold(
+    let desired = materialize_code_project_cold_with_overlay(
         project,
         reconciliation,
+        overlay,
         previous.editor.coordinator().intent().identity().session,
         document.id(),
         document.model_scale(),
     )?;
     let expansion = desired.expansion.clone();
+    let replacement_slots = detached_reference_replacement_slots(&previous.expansion, &expansion);
     let previous_symbols = materialized_project_symbols(previous)?;
     let previous_drafts = complete_project_drafts(previous)?;
     let cold_drafts = complete_project_drafts(&desired)?;
@@ -450,15 +544,22 @@ pub fn materialize_code_project_incremental(
         previous.editor.coordinator().intent(),
         &previous_symbols,
         &cold_drafts,
+        &replacement_slots,
         OutsideDependentPolicy::Reject,
     )?;
-    let warm_oracle = materialize_warm_host_oracle(previous, expansion.clone(), &previous_symbols)?;
+    let warm_oracle = materialize_warm_host_oracle(
+        previous,
+        expansion.clone(),
+        &previous_symbols,
+        &replacement_slots,
+    )?;
     let mut desired_drafts = complete_project_drafts(&warm_oracle)?;
     retain_unchanged_host_drafts(previous, &expansion, &previous_drafts, &mut desired_drafts)?;
     let (patch, retained_aliases) = incremental_project_patch(
         previous.editor.coordinator().intent(),
         &previous_symbols,
         &desired_drafts,
+        &replacement_slots,
         OutsideDependentPolicy::Reject,
     )?;
 
@@ -560,10 +661,15 @@ fn retain_unchanged_host_drafts(
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one incremental transaction keeps replacement, dependent rebinding, and exact delete authentication auditable together"
+)]
 fn incremental_project_patch(
     intent: &IntentSession,
     previous_symbols: &BTreeSet<IntentKey>,
     desired_drafts: &[(IntentKey, IntentNodeDraft)],
+    replacement_slots: &BTreeMap<IntentKey, BTreeSet<InputSlot>>,
     outside_policy: OutsideDependentPolicy,
 ) -> Result<(IntentPatch, BTreeMap<IntentKey, NodeId>), CodeCompositionError> {
     let desired_symbols = desired_drafts
@@ -577,6 +683,7 @@ fn incremental_project_patch(
         .collect::<BTreeSet<_>>();
     let mut retained = BTreeMap::<IntentKey, NodeId>::new();
     let mut replace = BTreeSet::new();
+    let mut detachable_replacements = BTreeMap::<NodeId, IntentKey>::new();
     for (alias, draft) in desired_drafts {
         let Some(existing) = graph.node_by_symbol(&draft.symbol) else {
             continue;
@@ -585,8 +692,11 @@ fn incremental_project_patch(
             && retained_inputs_compatible(existing, draft, &retained, graph)
         {
             retained.insert(alias.clone(), existing.id);
-        } else if replaceable_logical_aggregate(existing, draft) {
+        } else if replaceable_code_owned_schema(existing, draft, replacement_slots.get(alias)) {
             replace.insert(existing.id);
+            if replacement_slots.contains_key(alias) {
+                detachable_replacements.insert(existing.id, alias.clone());
+            }
         } else {
             return Err(CodeCompositionError::IncrementalSchemaChange {
                 symbol: draft.symbol.to_string(),
@@ -609,13 +719,54 @@ fn incremental_project_patch(
         }
     }
 
+    // A detached code endpoint replaces its Segment declaration because the
+    // neutral intent vocabulary has no unbind-input operation. Preserve any
+    // ordinary GUI declaration that consumes one of that Segment's outputs by
+    // explicitly rebinding the same typed selector to the replacement alias
+    // before the old declaration is deleted. This does not grant code
+    // authority over the GUI declaration; it is the same stable dependency
+    // continuation used for code-owned consumers.
+    for node in graph
+        .nodes()
+        .values()
+        .filter(|node| !previous_symbols.contains(&node.symbol) && !replace.contains(&node.id))
+    {
+        for (slot, source) in &node.inputs {
+            let Some(alias) = detachable_replacements.get(&source.node) else {
+                continue;
+            };
+            let source_node = graph.node(source.node).ok_or_else(|| {
+                CodeCompositionError::IncrementalSchemaChange {
+                    symbol: alias.to_string(),
+                }
+            })?;
+            let source_port = source_node.ports.get(&source.port).ok_or_else(|| {
+                CodeCompositionError::IncrementalSchemaChange {
+                    symbol: alias.to_string(),
+                }
+            })?;
+            if source_port.kind != source.kind {
+                return Err(CodeCompositionError::IncrementalSchemaChange {
+                    symbol: alias.to_string(),
+                });
+            }
+            operations.push(IntentPatchOperation::RebindInput {
+                node: node.id,
+                slot: *slot,
+                source: PatchPortRef::Alias {
+                    node: alias.clone(),
+                    selector: source_port.selector,
+                },
+            });
+        }
+    }
+
     let obsolete = obsolete.union(&replace).copied().collect::<BTreeSet<_>>();
     if let Some(root) = obsolete.first().copied() {
-        let pre_rebind_closure = graph
-            .dependent_closure(obsolete.iter().copied())
-            .map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))?;
+        let exact_nodes =
+            dependent_closure_after_planned_rebinds(graph, &obsolete, &operations, &retained)?;
         if outside_policy == OutsideDependentPolicy::Reject
-            && let Some(outside) = pre_rebind_closure.iter().find(|node| {
+            && let Some(outside) = exact_nodes.iter().find(|node| {
                 !obsolete.contains(node)
                     && graph
                         .node(**node)
@@ -627,19 +778,13 @@ fn incremental_project_patch(
                 .map_or_else(|| outside.to_string(), |node| node.symbol.to_string());
             return Err(CodeCompositionError::IncrementalOutsideDependent { symbol });
         }
-        let retained_nodes = retained.values().copied().collect::<BTreeSet<_>>();
-        let exact_nodes = pre_rebind_closure
-            .difference(&retained_nodes)
-            .copied()
-            .collect::<BTreeSet<_>>();
         operations.push(IntentPatchOperation::DeleteNode {
             node: root,
             policy: DeletePolicy::CascadeRoots {
                 exact_roots: obsolete.clone(),
-                // Every code-owned survivor is either retained/rebound above
-                // or recreated under a new symbol. The intent planner applies
-                // those mutations before authenticating this post-rebind
-                // closure, which must therefore be exactly the obsolete set.
+                // Retained dependents are rebound above. The intent planner
+                // applies those mutations before independently authenticating
+                // this exact reconstructed post-rebind closure.
                 exact_nodes,
             },
         });
@@ -654,14 +799,215 @@ fn incremental_project_patch(
     ))
 }
 
-fn replaceable_logical_aggregate(node: &IntentNode, draft: &IntentNodeDraft) -> bool {
-    matches!(
-        (&node.kind, &draft.kind),
+/// Computes the exact dependent closure over the existing graph after the
+/// input rebinds already planned in this unordered patch.
+///
+/// Intent applies retained mutations before authenticating deletion. Looking
+/// only at the old graph therefore overstates the cascade, while subtracting
+/// every descendant of a retained node can hide a second, unrebound path into
+/// that same descendant. Rebuilding the existing-node dependency edges after
+/// each planned rebind preserves both sides of the contract. Newly created
+/// nodes are admitted only when their dependency chain is disjoint from the
+/// roots being deleted; otherwise their not-yet-allocated IDs could not form
+/// an exact caller-stamped witness and the edit fails closed.
+fn dependent_closure_after_planned_rebinds(
+    graph: &geosolve_sketch_intent::IntentGraph,
+    roots: &BTreeSet<NodeId>,
+    operations: &[IntentPatchOperation],
+    retained: &BTreeMap<IntentKey, NodeId>,
+) -> Result<BTreeSet<NodeId>, CodeCompositionError> {
+    let mut inputs = graph
+        .nodes()
+        .iter()
+        .map(|(node_id, node)| {
+            (
+                *node_id,
+                node.inputs
+                    .iter()
+                    .map(|(slot, source)| (*slot, source.node))
+                    .collect::<BTreeMap<_, _>>(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let auxiliary_dependencies = graph
+        .nodes()
+        .iter()
+        .map(|(node_id, node)| {
+            let input_nodes = node
+                .inputs
+                .values()
+                .map(|source| source.node)
+                .collect::<BTreeSet<_>>();
+            (
+                *node_id,
+                node.dependencies()
+                    .difference(&input_nodes)
+                    .copied()
+                    .collect::<BTreeSet<_>>(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    for operation in operations {
+        let IntentPatchOperation::RebindInput { node, slot, source } = operation else {
+            continue;
+        };
+        let node_inputs =
+            inputs
+                .get_mut(node)
+                .ok_or_else(|| CodeCompositionError::IncrementalSchemaChange {
+                    symbol: node.to_string(),
+                })?;
+        let source = match source {
+            PatchPortRef::Stable { port } => Some(port.node),
+            PatchPortRef::Alias { node, .. } => retained.get(node).copied(),
+        };
+        if let Some(source) = source {
+            node_inputs.insert(*slot, source);
+        } else {
+            // An alias absent from `retained` names a declaration created by
+            // this patch, so it contributes no edge between existing nodes.
+            node_inputs.remove(slot);
+        }
+    }
+
+    let mut reverse = BTreeMap::<NodeId, BTreeSet<NodeId>>::new();
+    for node_id in graph.nodes().keys() {
+        for dependency in inputs[node_id]
+            .values()
+            .copied()
+            .chain(auxiliary_dependencies[node_id].iter().copied())
+        {
+            reverse.entry(dependency).or_default().insert(*node_id);
+        }
+    }
+
+    let mut closure = roots.clone();
+    let mut pending = roots.clone();
+    while let Some(node) = pending.pop_first() {
+        if let Some(dependents) = reverse.get(&node) {
+            for dependent in dependents {
+                if closure.insert(*dependent) {
+                    pending.insert(*dependent);
+                }
+            }
+        }
+    }
+
+    ensure_created_nodes_avoid_deleted_closure(operations, retained, &closure)?;
+    Ok(closure)
+}
+
+fn ensure_created_nodes_avoid_deleted_closure(
+    operations: &[IntentPatchOperation],
+    retained: &BTreeMap<IntentKey, NodeId>,
+    closure: &BTreeSet<NodeId>,
+) -> Result<(), CodeCompositionError> {
+    let mut tainted = BTreeSet::<IntentKey>::new();
+    loop {
+        let previous_len = tainted.len();
+        for operation in operations {
+            let IntentPatchOperation::CreateNode { alias, draft, .. } = operation else {
+                continue;
+            };
+            let depends_on_closure = draft.inputs.values().any(|source| match source {
+                PatchPortRef::Stable { port } => closure.contains(&port.node),
+                PatchPortRef::Alias { node, .. } => {
+                    retained
+                        .get(node)
+                        .is_some_and(|node| closure.contains(node))
+                        || tainted.contains(node)
+                }
+            });
+            if depends_on_closure {
+                tainted.insert(alias.clone());
+            }
+        }
+        if tainted.len() == previous_len {
+            break;
+        }
+    }
+    if let Some(alias) = tainted.first() {
+        return Err(CodeCompositionError::IncrementalSchemaChange {
+            symbol: alias.to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn replaceable_code_owned_schema(
+    node: &IntentNode,
+    draft: &IntentNodeDraft,
+    authorized_slots: Option<&BTreeSet<InputSlot>>,
+) -> bool {
+    match (&node.kind, &draft.kind) {
         (
             geosolve_sketch_intent::IntentNodeKind::Aggregate { aggregate: left },
             geosolve_sketch_intent::IntentNodeKind::Aggregate { aggregate: right },
+        ) => left == right,
+        (
+            geosolve_sketch_intent::IntentNodeKind::Geometry { recipe: left },
+            geosolve_sketch_intent::IntentNodeKind::Geometry { recipe: right },
         ) if left == right
-    )
+            && matches!(
+                left,
+                geosolve_sketch_intent::GeometryRecipeKind::Segment
+                    | geosolve_sketch_intent::GeometryRecipeKind::CenterRadiusCircle
+            ) =>
+        {
+            // A managed/generated point consumer may transition between a
+            // lexical input reference and a detached local seed. Intent
+            // patches do not have an "unbind input" mutation, so replace this
+            // one code-owned logical declaration atomically and rebind its
+            // retained dependents before deleting the prior node. This is a
+            // structural seed-authority transition, not a solver equation or
+            // a general native-schema migration seam.
+            let current = node.inputs.keys().copied().collect::<BTreeSet<_>>();
+            let desired = draft.inputs.keys().copied().collect::<BTreeSet<_>>();
+            let changed = current
+                .symmetric_difference(&desired)
+                .copied()
+                .collect::<BTreeSet<_>>();
+            !changed.is_empty()
+                && authorized_slots.is_some_and(|slots| changed.is_subset(slots))
+                && node.operation_outputs == draft.operation_outputs
+                && node.child_order.len() == usize::from(draft.dynamic_children)
+                && node.fields.keys().collect::<BTreeSet<_>>()
+                    == draft.fields.keys().collect::<BTreeSet<_>>()
+        }
+        _ => false,
+    }
+}
+
+fn detached_reference_replacement_slots(
+    previous: &ExpandedCodeProject,
+    desired: &ExpandedCodeProject,
+) -> BTreeMap<IntentKey, BTreeSet<InputSlot>> {
+    let mut authorized = BTreeMap::<IntentKey, BTreeSet<InputSlot>>::new();
+    for point in &desired.writable_points {
+        if !point.source.is_reference()
+            || !previous.writable_points.iter().any(|candidate| {
+                candidate.source.is_reference()
+                    && candidate.handle == point.handle
+                    && candidate.edit == point.edit
+            })
+        {
+            continue;
+        }
+        let IntentPortSelector::Node { role, index: 0 } = point.handle.selector else {
+            continue;
+        };
+        let index = match role {
+            IntentPortRole::Start | IntentPortRole::Center => 0,
+            IntentPortRole::End => 1,
+            _ => continue,
+        };
+        authorized
+            .entry(point.handle.alias.clone())
+            .or_default()
+            .insert(InputSlot::new(InputRole::Point, index));
+    }
+    authorized
 }
 
 fn retained_inputs_compatible(
@@ -756,6 +1102,7 @@ fn materialize_warm_host_oracle(
     previous: &MaterializedCodeProject,
     expansion: ExpandedCodeProject,
     previous_symbols: &BTreeSet<IntentKey>,
+    replacement_slots: &BTreeMap<IntentKey, BTreeSet<InputSlot>>,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
     let accepted = previous
         .editor
@@ -776,6 +1123,7 @@ fn materialize_warm_host_oracle(
         editor.coordinator().intent(),
         previous_symbols,
         &base_drafts,
+        replacement_slots,
         OutsideDependentPolicy::CascadeInOracle,
     )?;
     let mut base_outcome = if patch.operations().is_empty() {
@@ -825,6 +1173,7 @@ fn materialize_host_requests(
                 identity,
                 radius,
                 corners,
+                suppressed_children,
                 ..
             } => {
                 let mut outputs = Vec::with_capacity(corners.len());
@@ -837,6 +1186,7 @@ fn materialize_host_requests(
                         radius: radius.clone(),
                         corner: corner.clone(),
                         artifact_digest: String::new(),
+                        suppressed: suppressed_children.contains(key),
                     };
                     outputs.push(materialize_fillet_request(
                         editor,
@@ -1085,6 +1435,7 @@ fn expand_host_members(
                 identity,
                 radius,
                 corners,
+                suppressed_children,
                 ..
             } => corners
                 .iter()
@@ -1101,6 +1452,7 @@ fn expand_host_members(
                         radius: radius.clone(),
                         corner: corner.clone(),
                         artifact_digest: String::new(),
+                        suppressed: suppressed_children.contains(key),
                     },
                     suffix: Some(key.clone()),
                 })
@@ -1153,6 +1505,37 @@ fn materialize_fillet_request(
         })?;
     if outcome.disposition != IntentPlanDisposition::Accepted {
         return Err(CodeCompositionError::HostOwnershipMismatch { member: label });
+    }
+    if request.suppressed {
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&symbol)
+            .ok_or_else(|| CodeCompositionError::HostOwnershipMismatch {
+                member: request.output.display_path(),
+            })?
+            .id;
+        let suppression = IntentPatch::new(
+            editor.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetSuppressed {
+                node,
+                suppressed: true,
+            }],
+        );
+        let outcome =
+            editor
+                .apply_patch(suppression)
+                .map_err(|error| CodeCompositionError::HostEditor {
+                    member: request.output.display_path(),
+                    diagnostic: error.to_string(),
+                })?;
+        if outcome.disposition != IntentPlanDisposition::Accepted {
+            return Err(CodeCompositionError::HostOwnershipMismatch {
+                member: request.output.display_path(),
+            });
+        }
     }
     materialized_fillet_output(editor, &symbol, request)
 }

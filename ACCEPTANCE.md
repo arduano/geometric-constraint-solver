@@ -3386,10 +3386,12 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. The post-F004 direct code-authoring amendment is clean-qualified and
-immutably nominated for UAT. The earlier F003/F004 snapshots remain withdrawn historical evidence.
-M84-U1 through M84-U13 and explicit approval remain pending. ADR 0041, `docs/M84_GOALS.md` and the
-M84 scenario section own the acceptance contract. Accepted M83 remains public product authority.
+Status: active and unaccepted. M84-F005's collaborative draft overlay/semantic interaction and
+M84-F006's adversarial authority hardening are implemented and focused-qualified. Clean replacement
+qualification, immutable nomination, refreshed M84-U1 through M84-U14 and explicit approval remain
+pending. The direct-authoring `41e65a4` snapshot and all earlier nominations remain withdrawn
+historical evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance
+contract. Accepted M83 remains public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3464,12 +3466,40 @@ and cold-materialized through the ordinary accepted-scene authority.
 - Dynamic identity is invocation/template/member-key/output based. Reorder preserves identity;
   insertion uses allocator high-water; removal tombstones; retired-key reuse gets a new generation;
   outside dependents prevent silent deletion or retargeting.
-- One `SketchCodeSession` history covers source/artifacts/program/expansion/overrides and a delegated
-  nested editor checkpoint. One accepted action is one Undo entry. Retained-invalid code keeps the
-  previous accepted scene and exact diagnostics.
+- One `SketchCodeSession` history covers source/artifacts/program/expansion/current-and-accepted
+  semantic overlays and a delegated nested editor checkpoint. One accepted action is one Undo
+  entry. Retained-invalid code keeps the previous accepted scene and exact diagnostics.
 - Pointer frames do no parsing, expansion, persistence or durable-panel rebuilding. The existing
   retained native solve owns preview; terminal managed edits/overrides publish the newest accepted
   preview once after exact cold validation parity.
+- M84-F005 implements one bounded generation-authenticated semantic interaction overlay. It exposes
+  finite Cartesian point drafts only; scalar edits remain authenticated managed-source lens edits.
+  Point-seed precedence is typed overlay draft > legacy generated override > managed source seed;
+  Reset restores the applicable lower tier. This is never solver hard/soft priority or a new
+  equation. Unknown, stale, non-finite and wrong-type candidates reject before publication; equal
+  duplicate terminal writes collapse and unequal same-tier writes reject atomically.
+- Semantic drag and deletion resolve through accepted expansion provenance, not `code.*` alias
+  decoding. No semantic preference or a selected producer keeps consumers attached; a uniquely
+  selected referenced consumer detaches locally. Its projected Segment may be replaced while the
+  code-owner generation stays stable and retained code/GUI dependents rebind; repeated drag and
+  Undo/Redo preserve exact post-/pre-detachment authority. Rectangle updates are one atomic coupled
+  point-seed bundle, and ambiguous selected lenses reject without mutation.
+- A semantic-delete token authenticates the exact code session, accepted alias and managed or
+  generated semantic address at execution. Managed deletion rewrites only the exact source owner/
+  code-owned dependent closure; generated-child deletion is reversible suppression. Dirty source,
+  retained failure, stale token and GUI-owned selection cannot acquire semantic-delete authority.
+- A structural attempt that removes an overlay owner and then fails native publication keeps its
+  deterministically pruned current overlay while the exact accepted overlay/canvas remain
+  authoritative. Persistence and Undo restore both authorities. The still-unreleased optional
+  formats intentionally use incompatible `geosolve-sketch-code-session-v2` and
+  `geosolve-code-workbench-v2`; prototype-v1 payloads reject, while plain M83 workspace-v8 remains
+  unchanged.
+- M84-F006 caps imported session identities and persisted managed drafts, uses typed canonical
+  Reset/Restore tokens, prunes direct/generated retained-failure owners exactly, preserves
+  generated-reference provenance through Segment/circle-centre replacement and dependent rebind,
+  cancels transient detachment exactly, and proves repeated generated drag with exact Undo/Redo.
+  Same-tier seed conflict is bit-exact, including `+0.0/-0.0`. No equation, constraint, solver
+  priority, tolerance or branch policy changes.
 - Managed source is at most 4 MiB, each artifact 16 MiB and the complete project 64 MiB. Save,
   reload and repro restore complete offline authority/history atomically; malformed, missing,
   tampered or oversized inputs reject before replacement.
@@ -3486,15 +3516,19 @@ and cold-materialized through the ordinary accepted-scene authority.
 - The milestone-neutral 271-row golden remains byte-identical. A separate reviewed code-project
   ledger plus native/WASM/RPC/TypeScript parity, type-failure, reconciliation, tombstone, history,
   failure, bound, persistence and performance owners pass.
-- Formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests, actual WASM, TypeScript,
-  golden require-clean, Trunk and the complete clean release gate pass.
+- The replacement must pass formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests,
+  actual WASM, TypeScript, golden require-clean, Trunk and the complete clean release gate.
+- Focused post-F006 qualification passes `geosolve-sketch-code`, native composition 11/11,
+  semantic overlay 8/8, demo-web 264/264 with its existing test stack, the unchanged 271/271
+  golden, TypeScript package checks and package closure. This does not substitute for the pending
+  clean committed-source release gate or nominate bytes.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
-  because it predates the direct-authoring amendment. The qualified direct-authoring replacement
-  below is the current UAT candidate. M84-U1 through M84-U13 plus explicit supervising-user
-  approval remain mandatory before GitHub Pages publication, exact hosted verification, service
-  retirement and closure.
+  because it predates the direct-authoring amendment. The direct-authoring replacement below is
+  now also withdrawn because it predates F005. Refreshed M84-U1 through M84-U14 plus explicit
+  supervising-user approval remain mandatory before GitHub Pages publication, exact hosted
+  verification, service retirement and closure.
 
 Withdrawn historical nomination authority is exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -3553,7 +3587,7 @@ Apply, retained-invalid canvas/persistence, complete source replacement, exact U
 conflicting-origin rejection. The four-demo ledger remains unchanged and no finding ID, fifth
 bundled demo, solver equation or browser runtime is added.
 
-Current mechanical nomination is exact product source
+Withdrawn direct-authoring mechanical nomination is exact product source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`. The complete clean gate passes with 6,146-line,
 415,754-byte log SHA-256 `34bf408f6a565dec5705745f916eb628397a549b4a7002d865269e8d167e179f`,
@@ -3565,9 +3599,11 @@ modes `0555`/`0444`, with seven regular non-symlink files and ordered-manifest a
 HTTP ledgers match at SHA-256
 `1450e4c6d8585ba17dee56feafaf96869c45f764f3400280a0dc37581f9b4eee`; direct-authored 3/3,
 baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against the exact bytes on each endpoint.
-PID `4081080` serves them at `http://100.94.63.83:8080/`; evidence is retained at
-`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ`. M84-U1 through M84-U13 and explicit approval
-remain open, so Pages remains accepted M83 authority and no M84 publication is claimed.
+The PID `4081080` service record and evidence at
+`/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this
+nomination because it predates the collaborative overlay/semantic-authority scope. Refreshed M84-U1 through M84-U14,
+clean replacement qualification and a new immutable nomination remain open, so Pages remains
+accepted M83 authority and no M84 publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

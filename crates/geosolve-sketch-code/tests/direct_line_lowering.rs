@@ -9,11 +9,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use geosolve_constraint_editor::IntentNativeBinding;
 use geosolve_sketch::{DesignPointId, DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeExpansionError, CodeProject, ExpandedSemanticTarget, KeyedReconcileState,
-    ManagedDiagnosticCode, ProjectKey, expand_code_project, materialize_code_project_cold,
+    CodeExpansionError, CodeInteractionOverlay, CodePointEdit, CodeProject, CodeProjectDemoId,
+    ExpandedCodeProject, ExpandedSemanticTarget, KeyedReconcileState, ManagedDiagnosticCode,
+    ProjectKey, SemanticSymbol, bundled_code_project_demos, expand_code_project,
+    materialize_code_project_cold, materialize_code_project_cold_with_overlay,
     parse_managed_source, required_generated_members,
 };
-use geosolve_sketch_intent::{IntentSession, IntentSessionId};
+use geosolve_sketch_intent::{
+    GeometryRecipeKind, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeKind,
+    IntentPatchOperation, IntentSession, IntentSessionId,
+};
 
 fn project(key: &str, body: &str) -> CodeProject {
     let source = format!(
@@ -112,6 +117,62 @@ fn assert_current_and_hard_valid(materialized: &geosolve_sketch_code::Materializ
     );
 }
 
+fn segment_direction_for_declaration(
+    expansion: &ExpandedCodeProject,
+    declaration: &str,
+) -> [f64; 2] {
+    let field = IntentFieldKey(IntentKey::new("branch_direction").unwrap());
+    expansion
+        .patch
+        .operations()
+        .iter()
+        .find_map(|operation| {
+            let IntentPatchOperation::CreateNode { alias, draft, .. } = operation else {
+                return None;
+            };
+            if expansion.declaration_for_alias(alias) != Some(&SemanticSymbol(declaration.into()))
+                || !matches!(
+                    draft.kind,
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment
+                    }
+                )
+            {
+                return None;
+            }
+            let Some(IntentLiteral::Point(direction)) = draft.fields.get(&field) else {
+                panic!("segment `{declaration}` has no explicit branch direction")
+            };
+            Some(*direction)
+        })
+        .unwrap_or_else(|| panic!("segment declaration `{declaration}` was not expanded"))
+}
+
+fn assert_segment_branch_contract(expansion: &ExpandedCodeProject, expected_count: usize) {
+    let field = IntentFieldKey(IntentKey::new("branch_direction").unwrap());
+    let mut count = 0;
+    for operation in expansion.patch.operations() {
+        let IntentPatchOperation::CreateNode { draft, .. } = operation else {
+            continue;
+        };
+        if !matches!(
+            draft.kind,
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment
+            }
+        ) {
+            continue;
+        }
+        count += 1;
+        let Some(IntentLiteral::Point(direction)) = draft.fields.get(&field) else {
+            panic!("every lowered segment must retain explicit branch direction")
+        };
+        assert!(direction.iter().all(|component| component.is_finite()));
+        assert!((direction[0].hypot(direction[1]) - 1.0).abs() <= 1.0e-12);
+    }
+    assert_eq!(count, expected_count);
+}
+
 #[test]
 fn direct_line_reuses_two_lexically_referenced_rectangle_corners() {
     let project = project(
@@ -149,6 +210,7 @@ fn direct_line_reuses_two_lexically_referenced_rectangle_corners() {
 
     let materialized = materialize(&project, 0x84f0_0301);
     assert_current_and_hard_valid(&materialized);
+    assert_segment_branch_contract(&materialized.expansion, 1);
     assert_eq!(
         output_point(&materialized, "lineStart"),
         output_point(&materialized, "frameLowerLeft")
@@ -195,6 +257,7 @@ fn direct_line_supports_one_literal_and_one_lexical_point_reference() {
 
     let materialized = materialize(&project, 0x84f0_0302);
     assert_current_and_hard_valid(&materialized);
+    assert_segment_branch_contract(&materialized.expansion, 1);
     assert_eq!(
         output_point(&materialized, "lineEnd"),
         output_point(&materialized, "frameEnd")
@@ -251,6 +314,7 @@ fn direct_line_accepts_an_ordinary_point_output_reference() {
 
     let materialized = materialize(&project, 0x84f0_0304);
     assert_current_and_hard_valid(&materialized);
+    assert_segment_branch_contract(&materialized.expansion, 2);
     assert_eq!(
         output_point(&materialized, "baseEnd"),
         output_point(&materialized, "continuationStart")
@@ -268,6 +332,65 @@ fn direct_line_accepts_an_ordinary_point_output_reference() {
         3,
         "the second declaration must reuse the first declaration's point output"
     );
+}
+
+#[test]
+fn detached_reference_and_generated_lines_recompute_explicit_branch_direction() {
+    let project = project(
+        "direct-line-detached-reference",
+        r#"  const frame = $.geometry.rectangle("frame", {
+    lowerLeft: [0, 0],
+    upperRight: [60, 35],
+  });
+  const diagonal = $.geometry.line("diagonal", {
+    start: frame.corners.lowerLeft,
+    end: frame.corners.upperRight,
+  });
+  return $.outputs({ frame, diagonal });
+"#,
+    );
+    let generated = reconciled(&project);
+    let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84f0_0306)).unwrap();
+    let expanded = expand_code_project(&project, &generated, intent.identity()).unwrap();
+    let detached = expanded
+        .writable_points
+        .iter()
+        .find(|point| {
+            expanded.declaration_for_alias(&point.handle.alias)
+                == Some(&SemanticSymbol("diagonal".into()))
+                && matches!(&point.edit, CodePointEdit::Point { address }
+                    if address.output.0.last().is_some_and(|segment| {
+                        matches!(segment, geosolve_sketch_code::ManagedPathSegment::Field(field) if field == "start")
+                    }))
+        })
+        .unwrap();
+    let overlay = detached
+        .stage_drag(&CodeInteractionOverlay::empty(), [10.0, -5.0])
+        .unwrap();
+    let materialized = materialize_code_project_cold_with_overlay(
+        &project,
+        &generated,
+        &overlay,
+        IntentSessionId::from_raw(0x84f0_0307),
+        DocumentId(PersistentId::from_u128(0x84f0_0307)),
+        1.0,
+    )
+    .unwrap();
+    assert_current_and_hard_valid(&materialized);
+    assert_segment_branch_contract(&materialized.expansion, 1);
+    let direction = segment_direction_for_declaration(&materialized.expansion, "diagonal");
+    let expected_norm = 50.0_f64.hypot(40.0);
+    assert!((direction[0] - 50.0 / expected_norm).abs() <= 1.0e-12);
+    assert!((direction[1] - 40.0 / expected_norm).abs() <= 1.0e-12);
+
+    let generated_project = bundled_code_project_demos()
+        .into_iter()
+        .find(|demo| demo.id == CodeProjectDemoId::BracedFrame)
+        .unwrap()
+        .project();
+    let generated_materialized = materialize(&generated_project, 0x84f0_0308);
+    assert_current_and_hard_valid(&generated_materialized);
+    assert_segment_branch_contract(&generated_materialized.expansion, 2);
 }
 
 #[test]

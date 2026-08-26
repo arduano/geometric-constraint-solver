@@ -5793,11 +5793,12 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the post-F004 direct code-authoring amendment is clean-qualified
-and immutably nominated for UAT**. Ordinary GUI dependencies project as lexical managed TypeScript
-while low-level transport remains truthfully labelled Intent IR. The earlier F003/F004 snapshots
-remain withdrawn historical evidence. M84-U1 through M84-U13 and explicit approval remain pending,
-and accepted M83 remains public Pages authority.
+Status: **active and unaccepted; M84-F005 collaborative semantic interaction and the M84-F006
+adversarial authority audit are implemented and focused-qualified, while clean replacement
+nomination and refreshed UAT remain pending**. Ordinary GUI dependencies project as lexical
+managed TypeScript while low-level transport remains truthfully labelled Intent IR. The direct-
+authoring `41e65a4` snapshot and all earlier nominations are withdrawn historical evidence. No
+F005/F006 replacement is nominated, and accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5873,7 +5874,40 @@ and accepted M83 remains public Pages authority.
 - [x] Qualify the direct starter through full code/workbench/WASM/TypeScript collateral, an actual
   browser Start → edit → Apply → retained-invalid → Undo/reload flow at both required sizes, the
   unchanged golden/ledger, complete clean gate and an immutable replacement Tailscale nomination.
-- [ ] Receive explicit M84-U1 through M84-U13 approval, then publish/exact-verify Pages, retire the
+- [x] Resolve M84-F005: add a bounded persisted collaborative draft overlay over managed code seeds;
+  expose only finite Cartesian point drafts in that overlay and give point seeds explicit
+  precedence as `overlay draft > legacy generated override > managed source seed`, without adding
+  constraints, residuals or priority semantics; reject stale-generation, wrong-type and non-finite
+  drafts before publication, collapse equal duplicate terminal writes and reject unequal same-tier
+  writes. Route canvas drag and deletion through accepted
+  semantic expansion provenance rather than implementation alias text. No semantic preference or
+  a selected producer retains attached producer ownership; a uniquely selected referenced consumer
+  detaches only that consumer. Its projected Segment may be replaced while its code-owner
+  generation remains stable and retained code/GUI dependents rebind; repeat drag and Undo/Redo use
+  the resulting exact authority. Rectangle corner writes and Reset are complete atomic semantic
+  bundles. Authenticate deletion with exact session, accepted alias and managed/generated owner;
+  rewrite the managed declaration/dependent closure or reversibly suppress one generated child
+  only when source and code authority are clean.
+- [x] Complete M84-F006's adversarial audit hardening: bound imported session identities and
+  persisted managed drafts; use typed canonical Reset/Restore tokens; prune direct and generated
+  overlay owners exactly across retained failure; authenticate generated-reference detachment;
+  rebind replacement direct/generated Segments and generated circle centres; cancel transient
+  detachment exactly; preserve repeated generated drag through exact Undo/Redo; and compare
+  same-tier seed conflicts by persisted IEEE bits, including signed zero. These are authority and
+  resource repairs only, with no solver equation, priority, constraint or tolerance change.
+- [x] Qualify M84-F005/F006 at their focused owning layers with overlay/seed-precedence/conflict,
+  semantic drag/deletion,
+  consumer detach/rebind/repeat/Undo, retained/pruned-failure overlay, persistence/history and
+  workbench regressions, the 11-case native-composition and eight-case semantic-overlay suites,
+  complete demo-web library tests, unchanged 271-row golden, TypeScript packages and package
+  closure. The unreleased optional persistence identifiers intentionally become
+  incompatible `geosolve-sketch-code-session-v2` and `geosolve-code-workbench-v2`; plain M83
+  workspace-v8 remains unchanged. The former `41e65a4` direct-authoring candidate is withdrawn and
+  may not be reused for UAT or Pages.
+- [ ] Commit the reconciled implementation/documentation, pass the clean full release gate, refresh
+  browser/UAT collateral, freeze the exact no-rebuild output and exact-verify one replacement on
+  temporary and retained Tailscale listeners.
+- [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages, retire the
   service and close M84.
 
 Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
@@ -5882,6 +5916,17 @@ offline persistence are implemented. Focused code/package/workbench/WASM/TypeScr
 unchanged 271-row golden pass. `M84-F001` repairs generated-point terminal publication by installing
 the fully parity-checked warm checkpoint; `M84-F002` routes aggregate reverse edits through their
 authenticated semantic value spans.
+
+M84-F005/F006 implementation record (2026-08-26): the bounded point-only semantic overlay,
+generation-authenticated current/accepted persistence, producer/consumer attachment policy,
+direct/generated Segment and circle-centre detachment/rebind, rectangle coupling, managed deletion,
+generated-child suppression, Reset, retained-failure pruning and exact Undo/Redo are implemented.
+Three adversarial audits additionally cap imported session identity and managed-draft size, make
+Reset/Restore typed, authenticate generated provenance and compare conflict values by persisted IEEE
+bits including signed zero. `geosolve-sketch-code`, native composition 11/11, semantic overlay 8/8,
+demo-web 264/264, unchanged golden 271/271, TypeScript package and package-closure checks pass at
+the focused dirty-tree checkpoint. The clean committed-source release gate and frozen replacement
+nomination remain pending and must not be inferred from those proportional results.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -5998,9 +6043,11 @@ eight-path ledgers are byte-identical at SHA-256
 zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
 `index.html`. Direct-authored 3/3, baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against
 the exact frozen bytes on both endpoints, including the `1440x900` and `1024x720` bounded landing.
-The temporary service and historical F004 PID `3316682` are retired. `geosolve-m84-uat.service`,
-PID `4081080`, serves the nominated bytes at `http://100.94.63.83:8080/`. These automated checks
-nominate the candidate but do not accept M84-U1 through M84-U13, authorize Pages, or close M84.
+The temporary service and historical F004 PID `3316682` are retired. The `4081080` service record
+is now historical evidence: M84-F005 withdraws this direct-authoring nomination because it
+predates collaborative overlay and semantic interaction authority. These automated checks do not
+accept refreshed M84-U1 through M84-U14, authorize Pages, or close M84; a new F005 candidate is
+still required.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the

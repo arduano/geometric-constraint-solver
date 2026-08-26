@@ -16,11 +16,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    ArtifactValidationError, AuthoringDeclaration, CodeProject, CodeProjectError, CollectionRule,
-    DirectDeclarationLowering, FeatureKind, GeneratedMemberAddress, GeneratedMemberIdentity,
-    KeyedReconcileError, KeyedReconcileState, ManagedPathSegment, ManagedValue, OutputRef,
-    PatchModuleArtifact, PatchTemplateNode, ProjectKey, SemanticOutputPath, SemanticSymbol,
-    TemplateBinding, TemplateDeclarationLowering, UnitLiteral, ValidatedPatchModuleArtifact,
+    ArtifactValidationError, AuthoringDeclaration, CodeDraftProvenance, CodeDraftValue,
+    CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOverlayError, CodeOwnerAddress,
+    CodeProject, CodeProjectError, CodeWritableAddress, CollectionRule, DirectDeclarationLowering,
+    FeatureKind, GeneratedMemberAddress, GeneratedMemberIdentity, KeyedReconcileError,
+    KeyedReconcileState, ManagedPathSegment, ManagedValue, OutputRef, PatchModuleArtifact,
+    PatchTemplateNode, ProjectKey, SemanticOutputPath, SemanticSymbol, TemplateBinding,
+    TemplateDeclarationLowering, UnitLiteral, ValidatedPatchModuleArtifact,
     code_declaration_family,
 };
 
@@ -101,6 +103,76 @@ pub struct GeneratedIntentProvenance {
     pub target: ExpandedSemanticTarget,
 }
 
+/// The source form from which one writable point gets its base seed.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "source", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CodePointSeedSource {
+    Literal,
+    Reference {
+        declaration: SemanticSymbol,
+        path: SemanticOutputPath,
+    },
+    /// A generated template input which aliases another semantic point.
+    /// Unlike an independent generated seed, dragging this consumer detaches
+    /// only the generated owner from its producer.
+    GeneratedReference,
+    Generated,
+}
+
+impl CodePointSeedSource {
+    #[must_use]
+    pub const fn is_reference(&self) -> bool {
+        matches!(self, Self::Reference { .. } | Self::GeneratedReference)
+    }
+}
+
+/// Canonical rectangle corner roles used by the family-owned point codec.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeRectangleCorner {
+    LowerLeft,
+    LowerRight,
+    UpperRight,
+    UpperLeft,
+}
+
+/// How one visible point handle updates semantic draft seeds.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "edit", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CodePointEdit {
+    Point {
+        address: CodeWritableAddress,
+    },
+    RectangleCorner {
+        lower_left: CodeWritableAddress,
+        upper_right: CodeWritableAddress,
+        corner: CodeRectangleCorner,
+        effective_lower_left: [f64; 2],
+        effective_upper_right: [f64; 2],
+    },
+}
+
+/// Exact semantic writable provenance for one visible intent point port.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpandedWritablePoint {
+    pub handle: ExpandedPort,
+    pub source: CodePointSeedSource,
+    pub edit: CodePointEdit,
+}
+
+/// Exact generated host-child provenance used by semantic selection and
+/// reversible suppression. `alias` is the actual durable host declaration
+/// symbol; callers never derive or decode it.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpandedGeneratedChild {
+    pub alias: IntentKey,
+    pub declaration: SemanticSymbol,
+    pub address: CodeGeneratedChildAddress,
+    pub suppressed: bool,
+}
+
 /// One keyed corner passed to native Fillet authoring.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -112,6 +184,8 @@ pub struct KeyedFilletHostRequest {
     pub radius: UnitLiteral,
     pub corner: ExpandedFeatureCorner,
     pub artifact_digest: String,
+    #[serde(default)]
+    pub suppressed: bool,
 }
 
 /// Host-owned work which cannot honestly be expressed without existing
@@ -126,6 +200,8 @@ pub enum CodeHostRequest {
         identity: GeneratedMemberIdentity,
         radius: UnitLiteral,
         corners: BTreeMap<String, ExpandedFeatureCorner>,
+        #[serde(default)]
+        suppressed_children: BTreeSet<String>,
         artifact_digest: String,
     },
 }
@@ -138,8 +214,328 @@ pub struct ExpandedCodeProject {
     pub patch: IntentPatch,
     pub semantic_outputs: BTreeMap<String, ExpandedSemanticOutput>,
     pub generated_provenance: BTreeMap<GeneratedMemberAddress, GeneratedIntentProvenance>,
+    /// Every emitted code-owned alias mapped to its managed declaration.
+    /// Consumers must use this map rather than decode implementation aliases.
+    pub declaration_provenance: BTreeMap<IntentKey, SemanticSymbol>,
+    /// Stable point edit lenses keyed by visible semantic port.
+    pub writable_points: Vec<ExpandedWritablePoint>,
+    /// Generation-authenticated host children which may be suppressed without
+    /// deleting their owning managed invocation.
+    pub generated_children: Vec<ExpandedGeneratedChild>,
     pub host_requests: Vec<CodeHostRequest>,
     pub digest: String,
+}
+
+impl ExpandedCodeProject {
+    /// Resolves one emitted intent alias to its owning managed declaration.
+    #[must_use]
+    pub fn declaration_for_alias(&self, alias: &IntentKey) -> Option<&SemanticSymbol> {
+        self.declaration_provenance.get(alias)
+    }
+
+    /// Returns every semantic edit lens attached to one point port. More than
+    /// one row is deliberate when a producer and a dependent consumer share
+    /// the same native point before the consumer is detached.
+    pub fn writable_points_for_port(
+        &self,
+        alias: &IntentKey,
+        selector: IntentPortSelector,
+    ) -> impl Iterator<Item = &ExpandedWritablePoint> {
+        self.writable_points
+            .iter()
+            .filter(move |point| point.handle.alias == *alias && point.handle.selector == selector)
+    }
+
+    /// Resolves an exact generated host declaration to its semantic child.
+    #[must_use]
+    pub fn generated_child_for_alias(&self, alias: &IntentKey) -> Option<&ExpandedGeneratedChild> {
+        self.generated_children
+            .iter()
+            .find(|child| child.alias == *alias)
+    }
+
+    /// Prunes a prior overlay to the writable owners present in this exact
+    /// structural expansion. Explicit structural publications use this after
+    /// an overlay-free preflight; arbitrary stale persisted overlays continue
+    /// to fail closed in ordinary expansion.
+    #[must_use]
+    pub fn retained_overlay(&self, current: &CodeInteractionOverlay) -> CodeInteractionOverlay {
+        let writable = self
+            .writable_points
+            .iter()
+            .flat_map(|point| {
+                let provenance = point.draft_provenance();
+                writable_addresses(point)
+                    .into_iter()
+                    .cloned()
+                    .map(move |address| (address, provenance))
+            })
+            .collect::<BTreeSet<_>>();
+        let children = self
+            .generated_children
+            .iter()
+            .map(|child| child.address.clone())
+            .collect::<BTreeSet<_>>();
+        let mut retained = current.clone();
+        retained.retain(|address, draft| writable.contains(&(address.clone(), draft.provenance)));
+        retained.retain_generated_children(|address, _| children.contains(address));
+        retained
+    }
+}
+
+impl ExpandedWritablePoint {
+    /// Returns a staged overlay containing one complete terminal point edit.
+    /// A referenced consumer is detached locally; its producer is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns a finite-value, address, resource-limit, or same-tier conflict
+    /// error without mutating `current`.
+    pub fn stage_drag(
+        &self,
+        current: &CodeInteractionOverlay,
+        target: [f64; 2],
+    ) -> Result<CodeInteractionOverlay, CodeOverlayError> {
+        stage_point_drags(current, [(self, target)])
+    }
+
+    #[must_use]
+    pub fn draft_provenance(&self) -> CodeDraftProvenance {
+        match self.source {
+            CodePointSeedSource::Reference { .. } | CodePointSeedSource::GeneratedReference => {
+                CodeDraftProvenance::DetachedReference
+            }
+            CodePointSeedSource::Generated => CodeDraftProvenance::GeneratedOverride,
+            CodePointSeedSource::Literal => match &self.edit {
+                CodePointEdit::Point { address } => match address.owner.address {
+                    CodeOwnerAddress::DirectDeclaration { .. } => CodeDraftProvenance::CanvasDrag,
+                    CodeOwnerAddress::GeneratedMember { .. } => {
+                        CodeDraftProvenance::GeneratedOverride
+                    }
+                },
+                CodePointEdit::RectangleCorner { lower_left, .. } => {
+                    match lower_left.owner.address {
+                        CodeOwnerAddress::DirectDeclaration { .. } => {
+                            CodeDraftProvenance::CanvasDrag
+                        }
+                        CodeOwnerAddress::GeneratedMember { .. } => {
+                            CodeDraftProvenance::GeneratedOverride
+                        }
+                    }
+                }
+            },
+        }
+    }
+}
+
+/// Stages one complete terminal drag bundle atomically. This is the sole
+/// generalized same-tier conflict boundary for coupled semantic point edits.
+///
+/// # Errors
+///
+/// Returns a finite-value, address, resource-limit, or same-tier component
+/// conflict error without mutating `current`.
+pub fn stage_point_drags<'a>(
+    current: &CodeInteractionOverlay,
+    drags: impl IntoIterator<Item = (&'a ExpandedWritablePoint, [f64; 2])>,
+) -> Result<CodeInteractionOverlay, CodeOverlayError> {
+    let mut bases = BTreeMap::<CodeWritableAddress, ([f64; 2], CodeDraftProvenance)>::new();
+    let mut components =
+        BTreeMap::<(CodeWritableAddress, CartesianComponent), (f64, CodeDraftProvenance)>::new();
+    for (point, target) in drags {
+        let provenance = point.draft_provenance();
+        for (address, base) in point.edit.point_bases(target) {
+            if let Some((previous, previous_provenance)) = bases.get_mut(&address) {
+                if point_seed_bits(*previous) != point_seed_bits(base) {
+                    return Err(CodeOverlayError::ConflictingDraft(address.display_path()));
+                }
+                *previous_provenance = canonical_point_provenance(*previous_provenance, provenance);
+            } else {
+                bases.insert(address, (base, provenance));
+            }
+        }
+        for update in point.edit.component_updates(target) {
+            let key = (update.address.clone(), update.component);
+            if let Some((previous, previous_provenance)) = components.get_mut(&key) {
+                if previous.to_bits() != update.value.to_bits() {
+                    return Err(CodeOverlayError::ConflictingDraft(
+                        update.address.display_path(),
+                    ));
+                }
+                *previous_provenance = canonical_point_provenance(*previous_provenance, provenance);
+            } else {
+                components.insert(key, (update.value, provenance));
+            }
+        }
+    }
+    let mut updates = bases;
+    for ((address, component), (value, provenance)) in components {
+        let Some(entry) = updates.get_mut(&address) else {
+            return Err(CodeOverlayError::ConflictingDraft(address.display_path()));
+        };
+        match component {
+            CartesianComponent::X => entry.0[0] = value,
+            CartesianComponent::Y => entry.0[1] = value,
+        }
+        entry.1 = canonical_point_provenance(entry.1, provenance);
+    }
+    let mut staged = current.clone();
+    staged.set_point_drafts_atomically(
+        updates
+            .into_iter()
+            .map(|(address, (value, provenance))| (address, value, provenance)),
+    )?;
+    Ok(staged)
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum CartesianComponent {
+    X,
+    Y,
+}
+
+#[derive(Clone, Debug)]
+struct PointComponentUpdate {
+    address: CodeWritableAddress,
+    component: CartesianComponent,
+    value: f64,
+}
+
+fn canonical_point_provenance(
+    left: CodeDraftProvenance,
+    right: CodeDraftProvenance,
+) -> CodeDraftProvenance {
+    // Provenance is audit state rather than constraint priority. Identical
+    // component writes use one stable label independent of event ordering.
+    left.max(right)
+}
+
+impl CodePointEdit {
+    /// Expands one dragged visible position into canonical semantic point
+    /// drafts. Rectangle side/corner coupling is owned here, not in the web
+    /// adapter.
+    #[must_use]
+    pub fn point_updates(&self, target: [f64; 2]) -> Vec<(CodeWritableAddress, [f64; 2])> {
+        match self {
+            Self::Point { address } => vec![(address.clone(), target)],
+            Self::RectangleCorner {
+                lower_left,
+                upper_right,
+                corner,
+                effective_lower_left,
+                effective_upper_right,
+            } => {
+                let mut next_lower = *effective_lower_left;
+                let mut next_upper = *effective_upper_right;
+                match corner {
+                    CodeRectangleCorner::LowerLeft => next_lower = target,
+                    CodeRectangleCorner::LowerRight => {
+                        next_upper[0] = target[0];
+                        next_lower[1] = target[1];
+                    }
+                    CodeRectangleCorner::UpperRight => next_upper = target,
+                    CodeRectangleCorner::UpperLeft => {
+                        next_lower[0] = target[0];
+                        next_upper[1] = target[1];
+                    }
+                }
+                vec![
+                    (lower_left.clone(), next_lower),
+                    (upper_right.clone(), next_upper),
+                ]
+            }
+        }
+    }
+
+    fn component_updates(&self, target: [f64; 2]) -> Vec<PointComponentUpdate> {
+        let components = |address: &CodeWritableAddress, values: &[(CartesianComponent, f64)]| {
+            values
+                .iter()
+                .map(|(component, value)| PointComponentUpdate {
+                    address: address.clone(),
+                    component: *component,
+                    value: *value,
+                })
+                .collect::<Vec<_>>()
+        };
+        match self {
+            Self::Point { address } => components(
+                address,
+                &[
+                    (CartesianComponent::X, target[0]),
+                    (CartesianComponent::Y, target[1]),
+                ],
+            ),
+            Self::RectangleCorner {
+                lower_left,
+                upper_right,
+                corner,
+                ..
+            } => match corner {
+                CodeRectangleCorner::LowerLeft => components(
+                    lower_left,
+                    &[
+                        (CartesianComponent::X, target[0]),
+                        (CartesianComponent::Y, target[1]),
+                    ],
+                ),
+                CodeRectangleCorner::LowerRight => {
+                    components(upper_right, &[(CartesianComponent::X, target[0])])
+                        .into_iter()
+                        .chain(components(
+                            lower_left,
+                            &[(CartesianComponent::Y, target[1])],
+                        ))
+                        .collect()
+                }
+                CodeRectangleCorner::UpperRight => components(
+                    upper_right,
+                    &[
+                        (CartesianComponent::X, target[0]),
+                        (CartesianComponent::Y, target[1]),
+                    ],
+                ),
+                CodeRectangleCorner::UpperLeft => {
+                    components(lower_left, &[(CartesianComponent::X, target[0])])
+                        .into_iter()
+                        .chain(components(
+                            upper_right,
+                            &[(CartesianComponent::Y, target[1])],
+                        ))
+                        .collect()
+                }
+            },
+        }
+    }
+
+    fn point_bases(&self, target: [f64; 2]) -> Vec<(CodeWritableAddress, [f64; 2])> {
+        match self {
+            Self::Point { address } => vec![(address.clone(), target)],
+            Self::RectangleCorner {
+                lower_left,
+                upper_right,
+                effective_lower_left,
+                effective_upper_right,
+                ..
+            } => vec![
+                (lower_left.clone(), *effective_lower_left),
+                (upper_right.clone(), *effective_upper_right),
+            ],
+        }
+    }
+
+    /// Exact draft-address bundle owned by one visible edit lens.
+    #[must_use]
+    pub fn writable_addresses(&self) -> Vec<CodeWritableAddress> {
+        match self {
+            Self::Point { address } => vec![address.clone()],
+            Self::RectangleCorner {
+                lower_left,
+                upper_right,
+                ..
+            } => vec![lower_left.clone(), upper_right.clone()],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -148,6 +544,10 @@ struct ExpandedCodeProjectWire {
     patch: IntentPatch,
     semantic_outputs: BTreeMap<String, ExpandedSemanticOutput>,
     generated_provenance: Vec<(GeneratedMemberAddress, GeneratedIntentProvenance)>,
+    declaration_provenance: Vec<(IntentKey, SemanticSymbol)>,
+    writable_points: Vec<ExpandedWritablePoint>,
+    #[serde(default)]
+    generated_children: Vec<ExpandedGeneratedChild>,
     host_requests: Vec<CodeHostRequest>,
     digest: String,
 }
@@ -165,6 +565,13 @@ impl Serialize for ExpandedCodeProject {
                 .iter()
                 .map(|(address, provenance)| (address.clone(), provenance.clone()))
                 .collect(),
+            declaration_provenance: self
+                .declaration_provenance
+                .iter()
+                .map(|(alias, declaration)| (alias.clone(), declaration.clone()))
+                .collect(),
+            writable_points: self.writable_points.clone(),
+            generated_children: self.generated_children.clone(),
             host_requests: self.host_requests.clone(),
             digest: self.digest.clone(),
         }
@@ -186,10 +593,21 @@ impl<'de> Deserialize<'de> for ExpandedCodeProject {
                 "duplicate generated expansion provenance address",
             ));
         }
+        let declaration_len = wire.declaration_provenance.len();
+        let declaration_provenance: BTreeMap<IntentKey, SemanticSymbol> =
+            wire.declaration_provenance.into_iter().collect();
+        if declaration_provenance.len() != declaration_len {
+            return Err(serde::de::Error::custom(
+                "duplicate declaration expansion provenance alias",
+            ));
+        }
         Ok(Self {
             patch: wire.patch,
             semantic_outputs: wire.semantic_outputs,
             generated_provenance,
+            declaration_provenance,
+            writable_points: wire.writable_points,
+            generated_children: wire.generated_children,
             host_requests: wire.host_requests,
             digest: wire.digest,
         })
@@ -235,6 +653,16 @@ pub enum CodeExpansionError {
     UnsupportedOverride { address: String },
     #[error("generated override `{address}` is not a finite two-coordinate point")]
     InvalidPointOverride { address: String },
+    #[error(transparent)]
+    Overlay(#[from] CodeOverlayError),
+    #[error("UX draft `{address}` does not name an active writable seed")]
+    UnknownDraft { address: String },
+    #[error("UX draft `{address}` has a stale owner generation")]
+    StaleDraftGeneration { address: String },
+    #[error("UX draft `{address}` is not a point placement")]
+    DraftTypeMismatch { address: String },
+    #[error("conflicting UX drafts `{first}` and `{second}` target one instance seed")]
+    ConflictingDrafts { first: String, second: String },
     #[error("expansion resource `{resource}` is {actual}; the limit is {limit}")]
     ResourceLimit {
         resource: &'static str,
@@ -376,7 +804,11 @@ struct ExpansionBuilder {
     operations: Vec<IntentPatchOperation>,
     declarations: BTreeMap<SemanticSymbol, SemanticDeclaration>,
     provenance: BTreeMap<GeneratedMemberAddress, GeneratedIntentProvenance>,
+    declaration_provenance: BTreeMap<IntentKey, SemanticSymbol>,
+    writable_points: Vec<ExpandedWritablePoint>,
+    generated_children: Vec<ExpandedGeneratedChild>,
     host_requests: Vec<CodeHostRequest>,
+    point_seeds: BTreeMap<(IntentKey, IntentPortSelector), [f64; 2]>,
 }
 
 #[derive(Clone, Debug)]
@@ -392,12 +824,17 @@ impl ExpansionBuilder {
             operations: Vec::new(),
             declarations: BTreeMap::new(),
             provenance: BTreeMap::new(),
+            declaration_provenance: BTreeMap::new(),
+            writable_points: Vec::new(),
+            generated_children: Vec::new(),
             host_requests: Vec::new(),
+            point_seeds: BTreeMap::new(),
         }
     }
 
     fn push_node(
         &mut self,
+        declaration: &SemanticSymbol,
         alias: IntentKey,
         draft: IntentNodeDraft,
     ) -> Result<(), CodeExpansionError> {
@@ -408,12 +845,61 @@ impl ExpansionBuilder {
                 limit: MAX_EXPANDED_NODES,
             });
         }
+        if let Some(previous) = self
+            .declaration_provenance
+            .insert(alias.clone(), declaration.clone())
+        {
+            return Err(CodeExpansionError::InvalidDeclaration {
+                declaration: declaration.0.clone(),
+                message: format!(
+                    "expanded alias is already owned by declaration `{}`",
+                    previous.0
+                ),
+            });
+        }
         self.operations.push(IntentPatchOperation::CreateNode {
             alias,
             draft: Box::new(draft),
             cell: None,
         });
         Ok(())
+    }
+
+    fn add_writable_point(&mut self, point: ExpandedWritablePoint) {
+        self.writable_points.push(point);
+    }
+
+    #[allow(
+        clippy::float_cmp,
+        reason = "duplicate semantic point seeds must match their exact persisted IEEE values"
+    )]
+    fn add_point_seed(
+        &mut self,
+        port: &ExpandedPort,
+        position: [f64; 2],
+    ) -> Result<(), CodeExpansionError> {
+        let key = (port.alias.clone(), port.selector);
+        if let Some(previous) = self.point_seeds.insert(key, position)
+            && previous != position
+        {
+            return Err(CodeExpansionError::Unsupported(format!(
+                "point seed for `{}:{:?}` was emitted more than once",
+                port.alias, port.selector
+            )));
+        }
+        Ok(())
+    }
+
+    fn point_seed(&self, value: &SemanticValue) -> Option<[f64; 2]> {
+        let port = match value {
+            SemanticValue::PointLiteral(position) => return Some(*position),
+            SemanticValue::Port(port) => port,
+            SemanticValue::Corner(corner) => &corner.point,
+            _ => return None,
+        };
+        self.point_seeds
+            .get(&(port.alias.clone(), port.selector))
+            .copied()
     }
 
     fn insert_declaration(
@@ -545,7 +1031,7 @@ pub fn required_generated_members(
     project: &CodeProject,
 ) -> Result<Vec<GeneratedMemberAddress>, CodeExpansionError> {
     let mut addresses = direct_generated_members(project)?;
-    let (builder, plans) = prepare(project, None)?;
+    let (builder, plans) = prepare(project, None, &CodeInteractionOverlay::empty())?;
     for plan in plans {
         addresses.extend(plan.addresses.into_values());
     }
@@ -573,10 +1059,21 @@ fn direct_generated_members(
 ) -> Result<Vec<GeneratedMemberAddress>, CodeExpansionError> {
     let mut addresses = Vec::new();
     for declaration in &project.managed.program.declarations {
-        if declaration.patch.is_some()
-            || declaration.builder_path.as_slice() != ["geometry", "polyline"]
-        {
+        if declaration.patch.is_some() {
             continue;
+        }
+        match declaration.builder_path.as_slice() {
+            [geometry, family]
+                if geometry == "geometry" && matches!(family.as_str(), "line" | "rectangle") =>
+            {
+                addresses.push(direct_declaration_owner_address(
+                    &declaration.symbol,
+                    family,
+                ));
+                continue;
+            }
+            [geometry, family] if geometry == "geometry" && family == "polyline" => {}
+            _ => continue,
         }
         let definition = keyed_polyline_definition(declaration)?;
         addresses.extend(
@@ -596,6 +1093,18 @@ fn direct_generated_members(
         );
     }
     Ok(addresses)
+}
+
+fn direct_declaration_owner_address(
+    declaration: &SemanticSymbol,
+    family: &str,
+) -> GeneratedMemberAddress {
+    GeneratedMemberAddress::new(
+        declaration.0.clone(),
+        ["direct", family],
+        ["self"],
+        ["owner"],
+    )
 }
 
 fn direct_polyline_address(
@@ -624,9 +1133,31 @@ pub fn expand_code_project(
     reconciliation: &KeyedReconcileState,
     expected: IntentSessionIdentity,
 ) -> Result<ExpandedCodeProject, CodeExpansionError> {
+    expand_code_project_with_overlay(
+        project,
+        reconciliation,
+        &CodeInteractionOverlay::empty(),
+        expected,
+    )
+}
+
+/// Lowers a project with one generation-authenticated GUI seed overlay.
+/// Draft values remain instance seeds and never add constraints/equations.
+///
+/// # Errors
+///
+/// In addition to ordinary expansion failures, rejects non-finite, stale,
+/// unknown, type-mismatched or conflicting drafts before a patch is returned.
+pub fn expand_code_project_with_overlay(
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+    expected: IntentSessionIdentity,
+) -> Result<ExpandedCodeProject, CodeExpansionError> {
     reconciliation.validate()?;
+    overlay.validate()?;
     validate_supported_overrides(reconciliation)?;
-    let (mut builder, plans) = prepare(project, Some(reconciliation))?;
+    let (mut builder, plans) = prepare(project, Some(reconciliation), overlay)?;
     let required = direct_generated_members(project)?
         .into_iter()
         .chain(
@@ -649,7 +1180,7 @@ pub fn expand_code_project(
     }
 
     for plan in plans {
-        lower_invocation(&mut builder, &plan, reconciliation)?;
+        lower_invocation(&mut builder, &plan, reconciliation, overlay)?;
     }
     lower_computed(project, &mut builder)?;
     lower_constraints(project, &mut builder)?;
@@ -695,11 +1226,24 @@ pub fn expand_code_project(
     // `GeneratedMemberAddress` is a structured semantic key, not a JSON object
     // property. Canonicalize the already sorted map as rows so digesting never
     // relies on lossy/stringified map keys.
+    validate_overlay_coverage(overlay, &builder.writable_points)?;
+    validate_draft_conflicts(overlay, &builder.writable_points)?;
+    apply_host_interaction_overlay(
+        &builder.project,
+        &mut builder.declaration_provenance,
+        &mut builder.generated_children,
+        &mut builder.host_requests,
+        overlay,
+    )?;
     let provenance_rows = builder.provenance.iter().collect::<Vec<_>>();
+    let declaration_rows = builder.declaration_provenance.iter().collect::<Vec<_>>();
     let digest_bytes = serde_json::to_vec(&(
         &patch,
         &semantic_outputs,
         &provenance_rows,
+        &declaration_rows,
+        &builder.writable_points,
+        &builder.generated_children,
         &builder.host_requests,
     ))
     .map_err(|error| CodeExpansionError::Encoding(error.to_string()))?;
@@ -707,14 +1251,171 @@ pub fn expand_code_project(
         patch,
         semantic_outputs,
         generated_provenance: builder.provenance,
+        declaration_provenance: builder.declaration_provenance,
+        writable_points: builder.writable_points,
+        generated_children: builder.generated_children,
         host_requests: builder.host_requests,
         digest: intent_content_digest(&digest_bytes).to_string(),
     })
 }
 
+/// Expands an explicit structural edit while deterministically pruning the
+/// prior accepted interaction overlay to still-present, provenance-compatible
+/// writable owners. Ordinary expansion remains strict and never prunes stale
+/// persisted payloads implicitly.
+///
+/// # Errors
+///
+/// Returns the ordinary deterministic expansion or overlay-authentication
+/// error without changing the project, reconciliation state, or overlay.
+pub fn expand_code_project_for_structural_edit(
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    current: &CodeInteractionOverlay,
+    expected: IntentSessionIdentity,
+) -> Result<(ExpandedCodeProject, CodeInteractionOverlay), CodeExpansionError> {
+    let overlay_free = expand_code_project_with_overlay(
+        project,
+        reconciliation,
+        &CodeInteractionOverlay::empty(),
+        expected,
+    )?;
+    let retained = overlay_free.retained_overlay(current);
+    if retained == CodeInteractionOverlay::empty() {
+        Ok((overlay_free, retained))
+    } else {
+        let expansion =
+            expand_code_project_with_overlay(project, reconciliation, &retained, expected)?;
+        Ok((expansion, retained))
+    }
+}
+
+fn apply_host_interaction_overlay(
+    project: &ProjectKey,
+    provenance: &mut BTreeMap<IntentKey, SemanticSymbol>,
+    children: &mut Vec<ExpandedGeneratedChild>,
+    requests: &mut [CodeHostRequest],
+    overlay: &CodeInteractionOverlay,
+) -> Result<(), CodeExpansionError> {
+    for request in requests {
+        match request {
+            CodeHostRequest::FilletAtCorner(request) => {
+                let alias = host_intent_alias(&request.output, request.identity, None)?;
+                let address = CodeGeneratedChildAddress::new(
+                    project.clone(),
+                    request.output.clone(),
+                    request.identity,
+                    SemanticOutputPath::default(),
+                );
+                request.suppressed = overlay
+                    .generated_child_suppression(&address)
+                    .unwrap_or(false);
+                insert_host_provenance(provenance, &alias, &request.invocation)?;
+                children.push(ExpandedGeneratedChild {
+                    alias,
+                    declaration: request.invocation.clone(),
+                    address,
+                    suppressed: request.suppressed,
+                });
+            }
+            CodeHostRequest::RoundedRectangleProfile {
+                invocation,
+                output,
+                identity,
+                corners,
+                suppressed_children,
+                ..
+            } => {
+                for key in corners.keys() {
+                    let alias = host_intent_alias(output, *identity, Some(key))?;
+                    let address = CodeGeneratedChildAddress::new(
+                        project.clone(),
+                        output.clone(),
+                        *identity,
+                        member_path(&[], key, &[]),
+                    );
+                    let suppressed = overlay
+                        .generated_child_suppression(&address)
+                        .unwrap_or(false);
+                    if suppressed {
+                        suppressed_children.insert(key.clone());
+                    }
+                    insert_host_provenance(provenance, &alias, invocation)?;
+                    children.push(ExpandedGeneratedChild {
+                        alias,
+                        declaration: invocation.clone(),
+                        address,
+                        suppressed,
+                    });
+                }
+            }
+        }
+    }
+    children.sort_by(|left, right| left.alias.cmp(&right.alias));
+    validate_generated_child_overlay_coverage(overlay, children)?;
+    Ok(())
+}
+
+fn insert_host_provenance(
+    provenance: &mut BTreeMap<IntentKey, SemanticSymbol>,
+    alias: &IntentKey,
+    declaration: &SemanticSymbol,
+) -> Result<(), CodeExpansionError> {
+    if let Some(previous) = provenance.insert(alias.clone(), declaration.clone()) {
+        return Err(CodeExpansionError::InvalidDeclaration {
+            declaration: declaration.0.clone(),
+            message: format!(
+                "generated host alias is already owned by declaration `{}`",
+                previous.0
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn validate_generated_child_overlay_coverage(
+    overlay: &CodeInteractionOverlay,
+    children: &[ExpandedGeneratedChild],
+) -> Result<(), CodeExpansionError> {
+    let known = children
+        .iter()
+        .map(|child| &child.address)
+        .collect::<BTreeSet<_>>();
+    for address in overlay.suppressed_children().keys() {
+        if known.contains(address) {
+            continue;
+        }
+        let same_semantic_owner = children.iter().any(|child| {
+            child.address.project == address.project
+                && child.address.owner.address == address.owner.address
+                && child.address.child == address.child
+        });
+        if same_semantic_owner {
+            return Err(CodeExpansionError::StaleDraftGeneration {
+                address: address.display_path(),
+            });
+        }
+        return Err(CodeExpansionError::UnknownDraft {
+            address: address.display_path(),
+        });
+    }
+    Ok(())
+}
+
+pub(crate) fn host_intent_alias(
+    address: &GeneratedMemberAddress,
+    identity: GeneratedMemberIdentity,
+    suffix: Option<&str>,
+) -> Result<IntentKey, CodeExpansionError> {
+    let bytes = serde_json::to_vec(&(address, identity, suffix))
+        .map_err(|error| CodeExpansionError::Encoding(error.to_string()))?;
+    IntentKey::new(format!("code.host.{}", intent_content_digest(&bytes))).map_err(Into::into)
+}
+
 fn prepare(
     project: &CodeProject,
     reconciliation: Option<&KeyedReconcileState>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<(ExpansionBuilder, Vec<InvocationPlan>), CodeExpansionError> {
     project.validate()?;
     let artifacts = pinned_artifacts(project)?;
@@ -724,7 +1425,7 @@ fn prepare(
         if declaration.patch.is_none()
             && declaration.builder_path.first().map(String::as_str) == Some("geometry")
         {
-            lower_direct_geometry(&mut builder, declaration, reconciliation)?;
+            lower_direct_geometry(&mut builder, declaration, reconciliation, overlay)?;
         }
     }
     let mut plans = Vec::new();
@@ -797,14 +1498,19 @@ fn lower_direct_geometry(
     builder: &mut ExpansionBuilder,
     declaration: &AuthoringDeclaration,
     reconciliation: Option<&KeyedReconcileState>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<(), CodeExpansionError> {
     let family = declaration.builder_path.join(".");
     match code_declaration_family(&family).and_then(|descriptor| descriptor.direct) {
-        Some(DirectDeclarationLowering::Line) => lower_direct_line(builder, declaration),
-        Some(DirectDeclarationLowering::Polyline) => {
-            lower_direct_polyline(builder, declaration, reconciliation)
+        Some(DirectDeclarationLowering::Line) => {
+            lower_direct_line(builder, declaration, reconciliation, overlay)
         }
-        Some(DirectDeclarationLowering::Rectangle) => lower_direct_rectangle(builder, declaration),
+        Some(DirectDeclarationLowering::Polyline) => {
+            lower_direct_polyline(builder, declaration, reconciliation, overlay)
+        }
+        Some(DirectDeclarationLowering::Rectangle) => {
+            lower_direct_rectangle(builder, declaration, reconciliation, overlay)
+        }
         Some(DirectDeclarationLowering::FilletSet) => Err(CodeExpansionError::Unsupported(
             format!("managed computed family `{family}` used through geometry"),
         )),
@@ -1020,7 +1726,7 @@ fn lower_direct_fillet_set(
             .with_field(field_key(&format!("{prefix}_sweep"))?, enum_value(sweep)?);
     }
 
-    builder.push_node(alias.clone(), draft)?;
+    builder.push_node(&declaration.symbol, alias.clone(), draft)?;
     builder.insert_declaration(
         declaration.symbol.clone(),
         SemanticDeclaration {
@@ -1184,11 +1890,18 @@ fn with_direct_fillet_parent_fields(
     Ok(draft)
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one lowering keeps endpoint references, detached seeds, aliases, and writable provenance auditable together"
+)]
 fn lower_direct_line(
     builder: &mut ExpansionBuilder,
     declaration: &AuthoringDeclaration,
+    reconciliation: Option<&KeyedReconcileState>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<(), CodeExpansionError> {
     let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
+    let owner = direct_owner_identity(declaration, "line", reconciliation);
     let alias = semantic_alias("decl", &builder.project, &declaration.symbol, &[])?;
     let mut draft = IntentNodeDraft::new(
         IntentNodeKind::Geometry {
@@ -1196,7 +1909,8 @@ fn lower_direct_line(
         },
         alias.clone(),
     );
-    let mut literal_positions = [None, None];
+    let mut endpoint_positions = [None, None];
+    let mut writable = Vec::new();
     for (index, (name, role)) in [
         ("start", IntentPortRole::Start),
         ("end", IntentPortRole::End),
@@ -1206,15 +1920,36 @@ fn lower_direct_line(
     {
         let value = required(arguments, name, &declaration.symbol.0)?;
         let reference = format!("{}.{}", declaration.symbol.0, name);
-        let resolved =
-            builder.resolve_managed(value, &SemanticOutputPath::default(), &reference)?;
+        let address = owner.map(|identity| {
+            direct_point_address(
+                &builder.project,
+                &declaration.symbol,
+                identity,
+                fields_path(&[name]),
+            )
+        });
+        let source = match value {
+            ManagedValue::Reference { declaration, path } => CodePointSeedSource::Reference {
+                declaration: declaration.clone(),
+                path: path.clone(),
+            },
+            _ => CodePointSeedSource::Literal,
+        };
+        let drafted = address
+            .as_ref()
+            .and_then(|address| overlay_point(overlay, address));
+        let resolved = if let Some(position) = drafted {
+            SemanticValue::PointLiteral(position)
+        } else {
+            builder.resolve_managed(value, &SemanticOutputPath::default(), &reference)?
+        };
+        endpoint_positions[index] = builder.point_seed(&resolved);
         match resolved {
             SemanticValue::PointLiteral(position) => {
                 let selector = node_selector(role, 0);
                 draft = draft
                     .with_instance_leaf(selector, LeafField::X, length(position[0]))
                     .with_instance_leaf(selector, LeafField::Y, length(position[1]));
-                literal_positions[index] = Some(position);
             }
             value => {
                 let point = value.as_port(IntentPortKind::Point, &reference)?;
@@ -1227,19 +1962,50 @@ fn lower_direct_line(
                 );
             }
         }
+        if let Some(address) = address {
+            writable.push((
+                ExpandedPort {
+                    alias: alias.clone(),
+                    selector: node_selector(role, 0),
+                    kind: IntentPortKind::Point,
+                },
+                source,
+                address,
+            ));
+        }
     }
-    if let [Some(start), Some(end)] = literal_positions {
-        let direction =
-            unit_direction(start, end).ok_or_else(|| CodeExpansionError::InvalidDeclaration {
-                declaration: declaration.symbol.0.clone(),
-                message: "line endpoints must be finite and distinct".into(),
-            })?;
-        draft = draft.with_field(
-            field_key("branch_direction")?,
-            IntentLiteral::Point(direction),
-        );
+    let [Some(start), Some(end)] = endpoint_positions else {
+        return Err(CodeExpansionError::Unsupported(format!(
+            "line `{}` has no deterministic endpoint seed for explicit branch direction",
+            declaration.symbol.0
+        )));
+    };
+    let direction =
+        unit_direction(start, end).ok_or_else(|| CodeExpansionError::InvalidDeclaration {
+            declaration: declaration.symbol.0.clone(),
+            message: "line endpoints must be finite and distinct".into(),
+        })?;
+    draft = draft.with_field(
+        field_key("branch_direction")?,
+        IntentLiteral::Point(direction),
+    );
+    builder.push_node(&declaration.symbol, alias.clone(), draft)?;
+    for (role, position) in [IntentPortRole::Start, IntentPortRole::End]
+        .into_iter()
+        .zip([start, end])
+    {
+        builder.add_point_seed(
+            &port(&alias, node_selector(role, 0), IntentPortKind::Point),
+            position,
+        )?;
     }
-    builder.push_node(alias.clone(), draft)?;
+    for (handle, source, address) in writable {
+        builder.add_writable_point(ExpandedWritablePoint {
+            handle,
+            source,
+            edit: CodePointEdit::Point { address },
+        });
+    }
 
     builder.insert_declaration(
         declaration.symbol.clone(),
@@ -1286,6 +2052,7 @@ fn lower_direct_polyline(
     builder: &mut ExpansionBuilder,
     declaration: &AuthoringDeclaration,
     reconciliation: Option<&KeyedReconcileState>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<(), CodeExpansionError> {
     let definition = keyed_polyline_definition(declaration)?;
     let segment_count = if definition.closed {
@@ -1298,14 +2065,25 @@ fn lower_direct_polyline(
         .iter()
         .map(|(key, position)| {
             let address = direct_polyline_address(&declaration.symbol, "vertex", key, "point");
-            Ok((
-                key.clone(),
-                overridden_point(reconciliation, &address, *position)?,
-            ))
+            let identity = reconciliation.and_then(|state| state.active().get(&address).copied());
+            let writable = identity.map(|identity| {
+                CodeWritableAddress::generated_point(
+                    builder.project.clone(),
+                    address.clone(),
+                    identity,
+                    member_path(&["vertices"], key, &["position"]),
+                )
+            });
+            let legacy = overridden_point(reconciliation, &address, *position)?;
+            let effective = writable
+                .as_ref()
+                .and_then(|writable| overlay_point(overlay, writable))
+                .unwrap_or(legacy);
+            Ok((key.clone(), effective, writable))
         })
         .collect::<Result<Vec<_>, CodeExpansionError>>()?;
     let mut points = Vec::with_capacity(effective_vertices.len());
-    for (key, position) in &effective_vertices {
+    for (key, position, writable) in &effective_vertices {
         let address = direct_polyline_address(&declaration.symbol, "vertex", key, "point");
         let (alias, identity) = direct_generated_alias(&address, reconciliation)?;
         let selector = node_selector(IntentPortRole::Primary, 0);
@@ -1317,7 +2095,7 @@ fn lower_direct_polyline(
         )
         .with_instance_leaf(selector, LeafField::X, length(position[0]))
         .with_instance_leaf(selector, LeafField::Y, length(position[1]));
-        builder.push_node(alias.clone(), draft)?;
+        builder.push_node(&declaration.symbol, alias.clone(), draft)?;
         let point = SemanticValue::Port(port(&alias, selector, IntentPortKind::Point));
         if let Some(identity) = identity {
             builder.add_provenance(&address, identity, &declaration.symbol, None, &point)?;
@@ -1325,12 +2103,22 @@ fn lower_direct_polyline(
         let SemanticValue::Port(point) = point else {
             unreachable!("keyed Polyline point is a port")
         };
+        builder.add_point_seed(&point, *position)?;
+        if let Some(address) = writable {
+            builder.add_writable_point(ExpandedWritablePoint {
+                handle: point.clone(),
+                source: CodePointSeedSource::Literal,
+                edit: CodePointEdit::Point {
+                    address: address.clone(),
+                },
+            });
+        }
         points.push(point);
     }
 
     let mut spans = Vec::with_capacity(segment_count);
     for index in 0..segment_count {
-        let (key, start_position) = &effective_vertices[index];
+        let (key, start_position, _) = &effective_vertices[index];
         let end_index = (index + 1) % effective_vertices.len();
         let end_position = effective_vertices[end_index].1;
         let address = direct_polyline_address(&declaration.symbol, "segment", key, "span");
@@ -1359,7 +2147,7 @@ fn lower_direct_polyline(
             field_key("branch_direction")?,
             IntentLiteral::Point(direction),
         );
-        builder.push_node(alias.clone(), draft)?;
+        builder.push_node(&declaration.symbol, alias.clone(), draft)?;
         let span = SemanticValue::Port(port(
             &alias,
             node_selector(IntentPortRole::Span, 0),
@@ -1394,11 +2182,11 @@ fn lower_direct_polyline(
         let index = u16::try_from(index).expect("checked Polyline segment count");
         draft = draft.with_input(InputSlot::new(InputRole::Span, index), span.patch_ref());
     }
-    builder.push_node(alias.clone(), draft)?;
+    builder.push_node(&declaration.symbol, alias.clone(), draft)?;
 
     let mut paths = BTreeMap::new();
     let mut corners = BTreeMap::new();
-    for (ordinal, ((key, _), point)) in effective_vertices.iter().zip(&points).enumerate() {
+    for (ordinal, ((key, _, _), point)) in effective_vertices.iter().zip(&points).enumerate() {
         insert_path(
             &mut paths,
             member_path(&["vertices"], key, &["position"]),
@@ -1508,6 +2296,124 @@ fn point_override(value: &ManagedValue) -> Option<[f64; 2]> {
     (x.is_finite() && y.is_finite()).then_some([*x, *y])
 }
 
+fn direct_owner_identity(
+    declaration: &AuthoringDeclaration,
+    family: &str,
+    reconciliation: Option<&KeyedReconcileState>,
+) -> Option<GeneratedMemberIdentity> {
+    let reconciliation = reconciliation?;
+    let address = direct_declaration_owner_address(&declaration.symbol, family);
+    reconciliation.active().get(&address).copied()
+}
+
+fn direct_point_address(
+    project: &ProjectKey,
+    declaration: &SemanticSymbol,
+    identity: GeneratedMemberIdentity,
+    output: SemanticOutputPath,
+) -> CodeWritableAddress {
+    CodeWritableAddress::direct_point(project.clone(), declaration.clone(), identity, output)
+}
+
+fn overlay_point(
+    overlay: &CodeInteractionOverlay,
+    address: &CodeWritableAddress,
+) -> Option<[f64; 2]> {
+    let draft = overlay.draft(address)?;
+    match draft.value {
+        CodeDraftValue::Point(point) => Some(point),
+    }
+}
+
+fn writable_addresses(point: &ExpandedWritablePoint) -> Vec<&CodeWritableAddress> {
+    match &point.edit {
+        CodePointEdit::Point { address } => vec![address],
+        CodePointEdit::RectangleCorner {
+            lower_left,
+            upper_right,
+            ..
+        } => vec![lower_left, upper_right],
+    }
+}
+
+fn validate_overlay_coverage(
+    overlay: &CodeInteractionOverlay,
+    writable_points: &[ExpandedWritablePoint],
+) -> Result<(), CodeExpansionError> {
+    let mut known = BTreeMap::<CodeWritableAddress, BTreeSet<CodeDraftProvenance>>::new();
+    for point in writable_points {
+        let provenance = point.draft_provenance();
+        for address in writable_addresses(point) {
+            known.entry(address.clone()).or_default().insert(provenance);
+        }
+    }
+    if let Some((address, _)) = known.iter().find(|(_, provenances)| provenances.len() != 1) {
+        return Err(CodeExpansionError::Unsupported(format!(
+            "writable seed `{}` has ambiguous draft provenance",
+            address.display_path()
+        )));
+    }
+    for (address, draft) in overlay.drafts() {
+        if let Some(expected) = known.get(address) {
+            if !expected.contains(&draft.provenance) {
+                return Err(CodeExpansionError::Unsupported(format!(
+                    "draft `{}` has {:?} provenance, expected {:?}",
+                    address.display_path(),
+                    draft.provenance,
+                    expected.first().expect("known provenance is nonempty")
+                )));
+            }
+            continue;
+        }
+        let same_semantic_owner = known.keys().any(|known| {
+            known.project == address.project
+                && known.owner.address == address.owner.address
+                && known.output == address.output
+                && known.field == address.field
+        });
+        if same_semantic_owner {
+            return Err(CodeExpansionError::StaleDraftGeneration {
+                address: address.display_path(),
+            });
+        }
+        return Err(CodeExpansionError::UnknownDraft {
+            address: address.display_path(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_draft_conflicts(
+    overlay: &CodeInteractionOverlay,
+    writable_points: &[ExpandedWritablePoint],
+) -> Result<(), CodeExpansionError> {
+    let mut by_handle =
+        BTreeMap::<(IntentKey, IntentPortSelector), (&CodeWritableAddress, [f64; 2])>::new();
+    for point in writable_points {
+        let CodePointEdit::Point { address } = &point.edit else {
+            continue;
+        };
+        let Some(CodeDraftValue::Point(value)) = overlay.draft(address).map(|draft| draft.value)
+        else {
+            continue;
+        };
+        let key = (point.handle.alias.clone(), point.handle.selector);
+        if let Some((known_address, known_value)) = by_handle.insert(key, (address, value))
+            && point_seed_bits(known_value) != point_seed_bits(value)
+        {
+            return Err(CodeExpansionError::ConflictingDrafts {
+                first: known_address.display_path(),
+                second: address.display_path(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn point_seed_bits(point: [f64; 2]) -> [u64; 2] {
+    [point[0].to_bits(), point[1].to_bits()]
+}
+
 fn keyed_polyline_definition(
     declaration: &AuthoringDeclaration,
 ) -> Result<KeyedPolylineDefinition, CodeExpansionError> {
@@ -1550,22 +2456,76 @@ fn keyed_polyline_definition(
 fn lower_direct_rectangle(
     builder: &mut ExpansionBuilder,
     declaration: &AuthoringDeclaration,
+    reconciliation: Option<&KeyedReconcileState>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<(), CodeExpansionError> {
     let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
-    let lower_left = point(
+    let authored_lower_left = point(
         required(arguments, "lowerLeft", &declaration.symbol.0)?,
         "lowerLeft",
     )?;
-    let upper_right = point(
+    let authored_upper_right = point(
         required(arguments, "upperRight", &declaration.symbol.0)?,
         "upperRight",
     )?;
+    let owner = direct_owner_identity(declaration, "rectangle", reconciliation);
+    let (lower_address, upper_address) = owner.map_or((None, None), |identity| {
+        (
+            Some(direct_point_address(
+                &builder.project,
+                &declaration.symbol,
+                identity,
+                fields_path(&["lowerLeft"]),
+            )),
+            Some(direct_point_address(
+                &builder.project,
+                &declaration.symbol,
+                identity,
+                fields_path(&["upperRight"]),
+            )),
+        )
+    });
+    let lower_left = lower_address
+        .as_ref()
+        .and_then(|address| overlay_point(overlay, address))
+        .unwrap_or(authored_lower_left);
+    let upper_right = upper_address
+        .as_ref()
+        .and_then(|address| overlay_point(overlay, address))
+        .unwrap_or(authored_upper_right);
     let rectangle = build_rectangle(builder, &declaration.symbol, None, lower_left, upper_right)?;
+    if let (Some(lower_left_address), Some(upper_right_address)) = (lower_address, upper_address) {
+        for (name, corner) in [
+            ("lowerLeft", CodeRectangleCorner::LowerLeft),
+            ("lowerRight", CodeRectangleCorner::LowerRight),
+            ("upperRight", CodeRectangleCorner::UpperRight),
+            ("upperLeft", CodeRectangleCorner::UpperLeft),
+        ] {
+            let point = rectangle
+                .paths
+                .get(&fields_path(&["corners", name]))
+                .expect("built rectangle owns every corner")
+                .as_corner(name)?
+                .point;
+            builder.add_writable_point(ExpandedWritablePoint {
+                handle: point,
+                source: CodePointSeedSource::Literal,
+                edit: CodePointEdit::RectangleCorner {
+                    lower_left: lower_left_address.clone(),
+                    upper_right: upper_right_address.clone(),
+                    corner,
+                    effective_lower_left: lower_left,
+                    effective_upper_right: upper_right,
+                },
+            });
+        }
+    }
     builder.insert_declaration(declaration.symbol.clone(), rectangle)
 }
 
 #[allow(
     clippy::float_cmp,
+    clippy::too_many_lines,
     reason = "exactly equal authored coordinates are the explicit zero-width/height invalid geometry boundary"
 )]
 fn build_rectangle(
@@ -1597,7 +2557,22 @@ fn build_rectangle(
     .with_instance_leaf(first, LeafField::Y, length(lower_left[1]))
     .with_instance_leaf(third, LeafField::X, length(upper_right[0]))
     .with_instance_leaf(third, LeafField::Y, length(upper_right[1]));
-    builder.push_node(alias.clone(), draft)?;
+    builder.push_node(symbol, alias.clone(), draft)?;
+
+    for (selector, position) in [
+        (node_selector(IntentPortRole::Corner, 0), lower_left),
+        (
+            node_selector(IntentPortRole::Corner, 1),
+            [upper_right[0], lower_left[1]],
+        ),
+        (node_selector(IntentPortRole::Corner, 2), upper_right),
+        (
+            node_selector(IntentPortRole::Corner, 3),
+            [lower_left[0], upper_right[1]],
+        ),
+    ] {
+        builder.add_point_seed(&port(&alias, selector, IntentPortKind::Point), position)?;
+    }
 
     let profile_alias = semantic_alias("profile", &builder.project, symbol, &[])?;
     let mut profile = IntentNodeDraft::new(
@@ -1617,7 +2592,7 @@ fn build_rectangle(
             .patch_ref(),
         );
     }
-    builder.push_node(profile_alias.clone(), profile)?;
+    builder.push_node(symbol, profile_alias.clone(), profile)?;
 
     let corner_names = ["lowerLeft", "lowerRight", "upperRight", "upperLeft"];
     let edge_names = ["bottom", "right", "top", "left"];
@@ -1847,6 +2822,7 @@ fn lower_invocation(
     builder: &mut ExpansionBuilder,
     plan: &InvocationPlan,
     reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<(), CodeExpansionError> {
     for (key, value) in &plan.synthetic_outputs {
         let address = plan
@@ -1910,6 +2886,7 @@ fn lower_invocation(
                 plan,
                 template,
                 reconciliation,
+                overlay,
                 &mut template_outputs,
             )?;
         }
@@ -1922,6 +2899,7 @@ fn lower_template(
     plan: &InvocationPlan,
     template: &PatchTemplateNode,
     reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
     template_outputs: &mut TemplateOutputPlan,
 ) -> Result<(), CodeExpansionError> {
     let member_values = collection_members_for_template(plan, &template.path);
@@ -1958,8 +2936,15 @@ fn lower_template(
             member_value.as_ref(),
             template_outputs,
         )?;
-        let lowered =
-            lower_template_family(builder, plan, template, &member_key, &outputs, &bindings)?;
+        let lowered = lower_template_family(
+            builder,
+            plan,
+            template,
+            &member_key,
+            &outputs,
+            &bindings,
+            overlay,
+        )?;
         for (output, address, identity) in outputs {
             let value = lowered.get(&output).cloned().ok_or_else(|| {
                 CodeExpansionError::Unsupported(format!(
@@ -2088,24 +3073,36 @@ fn lower_template_family(
     member_key: &[String],
     outputs: &[(String, GeneratedMemberAddress, GeneratedMemberIdentity)],
     bindings: &BTreeMap<String, SemanticValue>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<BTreeMap<String, SemanticValue>, CodeExpansionError> {
     match code_declaration_family(&template.declaration_family)
         .and_then(|descriptor| descriptor.template)
     {
-        Some(TemplateDeclarationLowering::Line) => {
-            lower_generated_line(builder, template, outputs, bindings)
-        }
+        Some(TemplateDeclarationLowering::Line) => lower_generated_line(
+            builder,
+            &plan.declaration.symbol,
+            template,
+            outputs,
+            bindings,
+            overlay,
+        ),
         Some(TemplateDeclarationLowering::Circle) => {
-            lower_generated_circle(builder, plan, outputs, bindings)
+            lower_generated_circle(builder, plan, outputs, bindings, overlay)
         }
         Some(TemplateDeclarationLowering::Rectangle) => {
-            lower_generated_rectangle(builder, plan, outputs)
+            lower_generated_rectangle(builder, plan, outputs, overlay)
         }
         Some(TemplateDeclarationLowering::Fillet) => {
             lower_generated_fillet(builder, plan, member_key, outputs, bindings)
         }
         Some(TemplateDeclarationLowering::Profile | TemplateDeclarationLowering::Chain) => {
-            lower_generated_aggregate(builder, template, outputs, bindings)
+            lower_generated_aggregate(
+                builder,
+                &plan.declaration.symbol,
+                template,
+                outputs,
+                bindings,
+            )
         }
         None => Err(CodeExpansionError::Unsupported(format!(
             "artifact declaration family `{}`",
@@ -2114,11 +3111,17 @@ fn lower_template_family(
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one generated-line lowering keeps bindings, detached seeds, branch state, and writable provenance together"
+)]
 fn lower_generated_line(
     builder: &mut ExpansionBuilder,
+    declaration: &SemanticSymbol,
     template: &PatchTemplateNode,
     outputs: &[(String, GeneratedMemberAddress, GeneratedMemberIdentity)],
     bindings: &BTreeMap<String, SemanticValue>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<BTreeMap<String, SemanticValue>, CodeExpansionError> {
     let points = bindings
         .iter()
@@ -2147,15 +3150,81 @@ fn lower_generated_line(
         .first()
         .ok_or_else(|| CodeExpansionError::Unsupported("line template has no output".into()))?;
     let alias = generated_alias(address, *identity)?;
-    let draft = IntentNodeDraft::new(
+    let mut draft = IntentNodeDraft::new(
         IntentNodeKind::Geometry {
             recipe: GeometryRecipeKind::Segment,
         },
         alias.clone(),
-    )
-    .with_input(InputSlot::new(InputRole::Point, 0), start.patch_ref())
-    .with_input(InputSlot::new(InputRole::Point, 1), end.patch_ref());
-    builder.push_node(alias.clone(), draft)?;
+    );
+    let mut writable = Vec::new();
+    let mut endpoint_seeds = [None, None];
+    for (index, (name, point)) in [("start", start), ("end", end)].into_iter().enumerate() {
+        let writable_address = CodeWritableAddress::generated_point(
+            builder.project.clone(),
+            address.clone(),
+            *identity,
+            fields_path(&[name]),
+        );
+        let selector = node_selector(
+            if index == 0 {
+                IntentPortRole::Start
+            } else {
+                IntentPortRole::End
+            },
+            0,
+        );
+        if let Some(position) = overlay_point(overlay, &writable_address) {
+            endpoint_seeds[index] = Some(position);
+            draft = draft
+                .with_instance_leaf(selector, LeafField::X, length(position[0]))
+                .with_instance_leaf(selector, LeafField::Y, length(position[1]));
+        } else {
+            endpoint_seeds[index] = builder.point_seed(&SemanticValue::Port(point.clone()));
+            draft = draft.with_input(
+                InputSlot::new(
+                    InputRole::Point,
+                    u16::try_from(index).expect("two endpoints"),
+                ),
+                point.patch_ref(),
+            );
+        }
+        writable.push(ExpandedWritablePoint {
+            handle: port(&alias, selector, IntentPortKind::Point),
+            source: CodePointSeedSource::GeneratedReference,
+            edit: CodePointEdit::Point {
+                address: writable_address,
+            },
+        });
+    }
+    let [Some(start_seed), Some(end_seed)] = endpoint_seeds else {
+        return Err(CodeExpansionError::Unsupported(format!(
+            "generated line `{}` has no deterministic endpoint seed for explicit branch direction",
+            declaration.0
+        )));
+    };
+    let direction = unit_direction(start_seed, end_seed).ok_or_else(|| {
+        CodeExpansionError::InvalidDeclaration {
+            declaration: declaration.0.clone(),
+            message: "generated line endpoints must be finite and distinct".into(),
+        }
+    })?;
+    draft = draft.with_field(
+        field_key("branch_direction")?,
+        IntentLiteral::Point(direction),
+    );
+    builder.push_node(declaration, alias.clone(), draft)?;
+    for (role, position) in [IntentPortRole::Start, IntentPortRole::End]
+        .into_iter()
+        .zip([start_seed, end_seed])
+    {
+        builder.add_point_seed(
+            &port(&alias, node_selector(role, 0), IntentPortKind::Point),
+            position,
+        )?;
+    }
+    for point in writable {
+        builder.add_writable_point(point);
+    }
     Ok(outputs
         .iter()
         .map(|(name, _, _)| {
@@ -2180,11 +3249,16 @@ fn lower_generated_line(
         .collect())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one generated-circle lowering keeps typed outputs and writable provenance auditable together"
+)]
 fn lower_generated_circle(
     builder: &mut ExpansionBuilder,
     plan: &InvocationPlan,
     outputs: &[(String, GeneratedMemberAddress, GeneratedMemberIdentity)],
     bindings: &BTreeMap<String, SemanticValue>,
+    overlay: &CodeInteractionOverlay,
 ) -> Result<BTreeMap<String, SemanticValue>, CodeExpansionError> {
     let center = bindings
         .get("center")
@@ -2214,6 +3288,18 @@ fn lower_generated_circle(
         .first()
         .ok_or_else(|| CodeExpansionError::Unsupported("circle template has no output".into()))?;
     let alias = generated_alias(address, *identity)?;
+    let writable_address = CodeWritableAddress::generated_point(
+        builder.project.clone(),
+        address.clone(),
+        *identity,
+        fields_path(&["center"]),
+    );
+    let drafted_center = overlay_point(overlay, &writable_address);
+    let center_source = if matches!(center, SemanticValue::Port(_) | SemanticValue::Corner(_)) {
+        CodePointSeedSource::GeneratedReference
+    } else {
+        CodePointSeedSource::Generated
+    };
     let mut draft = IntentNodeDraft::new(
         IntentNodeKind::Geometry {
             recipe: GeometryRecipeKind::CenterRadiusCircle,
@@ -2225,7 +3311,15 @@ fn lower_generated_circle(
         LeafField::Value,
         length(radius.value),
     );
-    match center {
+    let effective_center =
+        drafted_center.map_or_else(|| center.clone(), SemanticValue::PointLiteral);
+    let center_seed = builder.point_seed(&effective_center).ok_or_else(|| {
+        CodeExpansionError::Unsupported(format!(
+            "generated circle `{}` has no deterministic center seed",
+            plan.declaration.symbol.0
+        ))
+    })?;
+    match &effective_center {
         SemanticValue::PointLiteral(position) => {
             let selector = node_selector(IntentPortRole::Center, 0);
             draft = draft
@@ -2237,7 +3331,26 @@ fn lower_generated_circle(
             draft = draft.with_input(InputSlot::new(InputRole::Point, 0), center.patch_ref());
         }
     }
-    builder.push_node(alias.clone(), draft)?;
+    builder.push_node(&plan.declaration.symbol, alias.clone(), draft)?;
+    builder.add_point_seed(
+        &port(
+            &alias,
+            node_selector(IntentPortRole::Center, 0),
+            IntentPortKind::Point,
+        ),
+        center_seed,
+    )?;
+    builder.add_writable_point(ExpandedWritablePoint {
+        handle: port(
+            &alias,
+            node_selector(IntentPortRole::Center, 0),
+            IntentPortKind::Point,
+        ),
+        source: center_source,
+        edit: CodePointEdit::Point {
+            address: writable_address,
+        },
+    });
     Ok(outputs
         .iter()
         .map(|(name, _, _)| {
@@ -2267,10 +3380,15 @@ fn lower_generated_circle(
         .collect())
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one generated-rectangle lowering keeps coupled seeds, outputs, and provenance auditable together"
+)]
 fn lower_generated_rectangle(
     builder: &mut ExpansionBuilder,
     plan: &InvocationPlan,
     outputs: &[(String, GeneratedMemberAddress, GeneratedMemberIdentity)],
+    overlay: &CodeInteractionOverlay,
 ) -> Result<BTreeMap<String, SemanticValue>, CodeExpansionError> {
     let width = invocation_number(plan, "width")?;
     let height = invocation_number(plan, "height")?;
@@ -2287,18 +3405,58 @@ fn lower_generated_rectangle(
         .ok_or_else(|| {
             CodeExpansionError::Unsupported("rectangle template has no output".into())
         })?;
+    let lower_address = CodeWritableAddress::generated_point(
+        builder.project.clone(),
+        address.clone(),
+        *identity,
+        fields_path(&["corners", "lowerLeft"]),
+    );
+    let upper_address = CodeWritableAddress::generated_point(
+        builder.project.clone(),
+        address.clone(),
+        *identity,
+        fields_path(&["corners", "upperRight"]),
+    );
+    let authored_lower = [-width / 2.0, -height / 2.0];
+    let authored_upper = [width / 2.0, height / 2.0];
+    let lower_left = overlay_point(overlay, &lower_address).unwrap_or(authored_lower);
+    let upper_right = overlay_point(overlay, &upper_address).unwrap_or(authored_upper);
     let rectangle = build_rectangle(
         builder,
         &plan.declaration.symbol,
         Some((address, *identity)),
-        [-width / 2.0, -height / 2.0],
-        [width / 2.0, height / 2.0],
+        lower_left,
+        upper_right,
     )?;
     let profile = rectangle
         .paths
         .get(&fields_path(&["profile"]))
         .cloned()
         .expect("built rectangle owns a profile");
+    for (name, corner) in [
+        ("lowerLeft", CodeRectangleCorner::LowerLeft),
+        ("lowerRight", CodeRectangleCorner::LowerRight),
+        ("upperRight", CodeRectangleCorner::UpperRight),
+        ("upperLeft", CodeRectangleCorner::UpperLeft),
+    ] {
+        let point = rectangle
+            .paths
+            .get(&fields_path(&["corners", name]))
+            .expect("built generated rectangle owns every corner")
+            .as_corner(name)?
+            .point;
+        builder.add_writable_point(ExpandedWritablePoint {
+            handle: point,
+            source: CodePointSeedSource::Generated,
+            edit: CodePointEdit::RectangleCorner {
+                lower_left: lower_address.clone(),
+                upper_right: upper_address.clone(),
+                corner,
+                effective_lower_left: lower_left,
+                effective_upper_right: upper_right,
+            },
+        });
+    }
     if let Ok(radius) = invocation_unit(plan, &["cornerRadius"]) {
         let corners = ["lowerLeft", "lowerRight", "upperRight", "upperLeft"]
             .into_iter()
@@ -2319,6 +3477,7 @@ fn lower_generated_rectangle(
                 identity: *identity,
                 radius,
                 corners,
+                suppressed_children: BTreeSet::new(),
                 artifact_digest: plan.pinned.digest.clone(),
             });
     }
@@ -2350,6 +3509,13 @@ fn lower_generated_rectangle(
             };
             let alias = generated_alias(address, *identity)?;
             let selector = node_selector(IntentPortRole::Primary, 0);
+            let writable_address = CodeWritableAddress::generated_point(
+                builder.project.clone(),
+                address.clone(),
+                *identity,
+                SemanticOutputPath::default(),
+            );
+            let position = overlay_point(overlay, &writable_address).unwrap_or(*position);
             let draft = IntentNodeDraft::new(
                 IntentNodeKind::Geometry {
                     recipe: GeometryRecipeKind::SketchPoint,
@@ -2358,7 +3524,15 @@ fn lower_generated_rectangle(
             )
             .with_instance_leaf(selector, LeafField::X, length(position[0]))
             .with_instance_leaf(selector, LeafField::Y, length(position[1]));
-            builder.push_node(alias.clone(), draft)?;
+            builder.push_node(&plan.declaration.symbol, alias.clone(), draft)?;
+            builder.add_point_seed(&port(&alias, selector, IntentPortKind::Point), position)?;
+            builder.add_writable_point(ExpandedWritablePoint {
+                handle: port(&alias, selector, IntentPortKind::Point),
+                source: CodePointSeedSource::Generated,
+                edit: CodePointEdit::Point {
+                    address: writable_address,
+                },
+            });
             Ok((
                 name.clone(),
                 SemanticValue::Port(port(&alias, selector, IntentPortKind::Point)),
@@ -2410,6 +3584,7 @@ fn lower_generated_fillet(
                 radius: radius.clone(),
                 corner: corner.clone(),
                 artifact_digest: plan.pinned.digest.clone(),
+                suppressed: false,
             }));
         result.insert(
             output.clone(),
@@ -2425,6 +3600,7 @@ fn lower_generated_fillet(
 
 fn lower_generated_aggregate(
     builder: &mut ExpansionBuilder,
+    declaration: &SemanticSymbol,
     template: &PatchTemplateNode,
     outputs: &[(String, GeneratedMemberAddress, GeneratedMemberIdentity)],
     bindings: &BTreeMap<String, SemanticValue>,
@@ -2457,7 +3633,7 @@ fn lower_generated_aggregate(
         })?;
         draft = draft.with_input(InputSlot::new(InputRole::Span, index), span.patch_ref());
     }
-    builder.push_node(alias.clone(), draft)?;
+    builder.push_node(declaration, alias.clone(), draft)?;
     let (role, kind) = match aggregate {
         AggregateKind::ClosedProfile => (IntentPortRole::Profile, IntentPortKind::Profile),
         AggregateKind::OpenChain => (IntentPortRole::Chain, IntentPortKind::Chain),
@@ -2637,7 +3813,7 @@ fn lower_constraints(
                     .map(|value| boolean(value, "suppressed"))
                     .transpose()?
                     .unwrap_or(false);
-                builder.push_node(alias.clone(), draft)?;
+                builder.push_node(&declaration.symbol, alias.clone(), draft)?;
                 builder.insert_declaration(
                     declaration.symbol.clone(),
                     SemanticDeclaration {

@@ -41,14 +41,14 @@ use geosolve_sketch::{
 };
 use geosolve_sketch_intent::{
     AggregateKind, BootstrapNativeKind, ConstraintKind, DimensionKind, ExternalIntentKind,
-    GeometryRecipeKind, InputRole, InputSlot, IntentAcceptedAuthority, IntentCandidate,
-    IntentEvaluation, IntentEvaluationFailure, IntentEvaluationFailureKind, IntentExternalInputs,
-    IntentGraph, IntentGraphError, IntentIdentityFlow, IntentInstanceState, IntentKey,
-    IntentLiteral, IntentNativeReservationKind, IntentNode, IntentNodeKind,
+    GeometryRecipeKind, InputRole, InputSlot, IntentAcceptedAuthority, IntentAllocatorHighWater,
+    IntentCandidate, IntentEvaluation, IntentEvaluationFailure, IntentEvaluationFailureKind,
+    IntentExternalInputs, IntentGraph, IntentGraphError, IntentIdentityFlow, IntentInstanceState,
+    IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNode, IntentNodeKind,
     IntentOperationOutputKind, IntentPort, IntentPortKind, IntentPortRef, IntentPortRole,
     IntentPortSelector, IntentReservationLedger, IntentReservationRecord, IntentReservationState,
-    IntentSemanticIdentity, IntentUnit, LeafField, LeafRef, MaterializationEvidence, NodeId,
-    OperationKind as IntentOperationKind, ParameterIntentKind, ReservationId,
+    IntentSemanticIdentity, IntentSession, IntentUnit, LeafField, LeafRef, MaterializationEvidence,
+    NodeId, OperationKind as IntentOperationKind, ParameterIntentKind, ReservationId,
 };
 use geosolve_sketch_ops::{
     LineEndpoint, SketchOperationKind, SketchOperationRequest, SketchOperationResult,
@@ -1092,6 +1092,28 @@ impl IntentMaterializationSource for IntentCandidate {
     }
 }
 
+impl IntentMaterializationSource for IntentSession {
+    fn graph(&self) -> &IntentGraph {
+        self.graph()
+    }
+
+    fn instance(&self) -> &IntentInstanceState {
+        self.instance()
+    }
+
+    fn reservations(&self) -> &IntentReservationLedger {
+        self.reservations()
+    }
+
+    fn external_inputs(&self) -> &IntentExternalInputs {
+        self.external_inputs()
+    }
+
+    fn semantic_identity(&self) -> IntentSemanticIdentity {
+        self.semantic_identity()
+    }
+}
+
 impl IntentMaterializationSource for IntentAcceptedAuthority {
     fn graph(&self) -> &IntentGraph {
         &self.graph
@@ -1222,6 +1244,38 @@ impl ColdIntentMaterializer {
         candidate: &IntentCandidate,
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         self.materialize_source(candidate)
+    }
+
+    /// Independently materializes one pristine empty semantic session so its
+    /// native evidence can be installed through
+    /// [`IntentSession::install_pristine_empty_acceptance`].
+    ///
+    /// This does not admit caller-issued no-op patches. It is only the
+    /// history-free initialization seam for an exact revision-zero session.
+    ///
+    /// # Errors
+    ///
+    /// Rejects any retained graph, instance, reservation, attempt, acceptance,
+    /// history, allocation, organization declaration, or external input.
+    pub fn materialize_pristine_empty(
+        &self,
+        session: &IntentSession,
+    ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
+        let pristine = session.identity().revision.raw() == 0
+            && session.graph().nodes().is_empty()
+            && session.instance().values().is_empty()
+            && session.reservations().entries().is_empty()
+            && session.organization().node_names().is_empty()
+            && session.external_inputs() == &IntentExternalInputs::default()
+            && session.latest_attempt().is_none()
+            && session.accepted().is_none()
+            && session.undo_len() == 0
+            && session.redo_len() == 0
+            && session.allocator_high_water() == IntentAllocatorHighWater::initial();
+        if !pristine {
+            return Err(IntentMaterializationError::AcceptedAuthorityIdentityMismatch);
+        }
+        self.materialize_source(session)
     }
 
     /// Cold-reconstructs one persisted accepted authority without fabricating
