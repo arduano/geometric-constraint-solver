@@ -508,8 +508,10 @@ impl CodeProjectWorkbench {
         }))
     }
 
-    /// Code-owned points without an explicit generated-placement lens stay
-    /// read-only in the demo. Ordinary GUI-authored points remain editable.
+    /// Code-owned points remain editable through the accepted projectional
+    /// checkpoint. Where a generated or managed-source lens exists we still
+    /// reverse-edit the source; otherwise the edit is retained as a
+    /// projectional override so code and UX can be iterated together.
     pub(crate) fn point_drag_permission(
         &self,
         editor: &ProjectionalEditorSession,
@@ -553,10 +555,7 @@ impl CodeProjectWorkbench {
                     .into(),
             )
         } else {
-            Err(
-                "this code-owned point is read-only on canvas; edit its managed source or an exposed lens"
-                    .into(),
-            )
+            Ok(())
         }
     }
 
@@ -599,10 +598,10 @@ impl CodeProjectWorkbench {
                     .and_then(|node| editor.coordinator().intent().graph().node(node))
                     .is_some_and(|node| node.symbol.as_str().starts_with("code."))
             }) {
-                return Err(
-                    "this code-owned property is read-only on canvas; edit managed source or an exposed lens"
-                        .into(),
-                );
+                // Code-owned geometry may be adjusted in the projectional
+                // layer even when no reverse-edit lens is available. The
+                // accepted checkpoint remains the authoritative collaborative
+                // edit and can subsequently be promoted into source.
             }
         }
         Ok(())
@@ -1964,10 +1963,13 @@ fn classify_code_owned_editor_change(
         .map(|node| node.symbol.clone())
         .collect::<BTreeSet<_>>();
     if accepted_code_nodes.keys().cloned().collect::<BTreeSet<_>>() != candidate_code_symbols {
-        return Err(
-            "code-owned declarations cannot be created or deleted from the canvas; edit managed source"
-                .into(),
-        );
+        // A projectional deletion is a legitimate collaborative edit. The
+        // editor checkpoint is published as the new accepted UX state; source
+        // promotion can subsequently reconcile the managed program.
+        if candidate_code_symbols.is_subset(&accepted_code_nodes.keys().cloned().collect()) {
+            return Ok(None);
+        }
+        return Err("code-owned declarations can only be deleted from the canvas".into());
     }
 
     let mut allowed_leaves = generated_point_leaves(accepted, expansion)?
@@ -2037,10 +2039,13 @@ fn classify_code_owned_editor_change(
             {
                 continue;
             }
-            let owner = allowed_leaves.get(&leaf).ok_or_else(|| {
-                "this code-owned placement is read-only on canvas; edit managed source or an exposed lens"
-                    .to_owned()
-            })?;
+            // Leaves without a dedicated reverse-edit lens are retained as a
+            // projectional checkpoint edit. They remain fully draggable in
+            // the UX while managed/generated leaves below continue to update
+            // their source deterministically.
+            let Some(owner) = allowed_leaves.get(&leaf) else {
+                continue;
+            };
             match owner {
                 WritableCodeLeaf::GeneratedPoint(address) => {
                     if changed_rectangle.is_some() {
