@@ -5914,9 +5914,9 @@ golden and separate M84 ledger. Its exact no-rebuild seven-file snapshot
 `/tmp/geosolve-m84-f003-uat.mO67NI`, aggregate
 `38d356e9f727a4b690c1166dee3a36b1e0a5e59a2ad8bad1ca7243d889c6a617`, is immutable and exact-
 verified on temporary and retained endpoints. Existing browser checks pass 4/4 and the F003 flow
-passes 1/1 on each endpoint. `geosolve-m84-uat.service`, PID `3736900`, serves the replacement at
-`http://100.94.63.83:8080/`. M84-F004 now withdraws those bytes from current UAT even if that
-endpoint remains reachable.
+passes 1/1 on each endpoint. `geosolve-m84-uat.service`, PID `3736900`, served the replacement at
+`http://100.94.63.83:8080/`. M84-F004 withdrew those bytes from current UAT and PID `3736900` is
+retired.
 
 M84-F004 development record (2026-08-26): drawing two connected Segments and one computed Fillet
 made complete GUI bootstrap return an unsupported-Fillet error; presentation then hid Code for the
