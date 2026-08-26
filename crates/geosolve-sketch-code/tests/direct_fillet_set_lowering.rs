@@ -366,7 +366,7 @@ fn direct_fillet_set_resolves_a_typed_span_from_an_earlier_custom_patch() {
         retainedEndpoint: "start",
         periodicAnchor: null,
       }, {
-        span: brace.diagonals.rising,
+        span: brace.diagonals.rising.span,
         parameter: 0.1,
         winding: 0,
         neighborhood: { kind: "interior" },

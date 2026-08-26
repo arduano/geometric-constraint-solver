@@ -2,12 +2,14 @@
 
 import {
   createProject,
+  definePatch,
   fillets,
   line,
   point,
   polyline,
   rectangle,
   sketch,
+  t,
 } from "../src/index.js";
 import type {
   CurveSpanRef,
@@ -70,6 +72,25 @@ panel.corners.lowerleft;
 type MappedRecord = FeatureRecord<typeof mapped>;
 const mappedRecord: MappedRecord = mapped;
 mappedRecord;
+
+const nativeSpanPatch = definePatch(
+  { frame: t.feature("rectangle") },
+  (p, { frame }) => ({
+    rising: p.line(frame.corners.lowerLeft, frame.corners.upperRight).span,
+  }),
+);
+
+const managedNativeSpanPatch = sketch(($) => {
+  const frame = $.geometry.rectangle("nativeSpanFrame", {
+    lowerLeft: [0, 0],
+    upperRight: [20, 10],
+  });
+  const generated = $.use("nativeSpan", nativeSpanPatch, { frame });
+  const native: NativeCurveSpanRef<ManagedSketchProject> = generated.rising;
+  native;
+  return $.outputs({ frame, generated });
+});
+managedNativeSpanPatch;
 
 const managedRectangleDiagonal = sketch(($) => {
   const frame = $.geometry.rectangle("frame", {

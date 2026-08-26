@@ -10,6 +10,31 @@ export default sketch(($) => {
     upperRight: [60, 35],
   });
   const brace = $.use("brace", crossBrace, { frame: frame });
+  const round = $.computed.filletSet("round", {
+    radius: 1,
+    corners: [{
+      parents: [{
+        span: frame.edges.bottom,
+        parameter: 0.1,
+        winding: 0,
+        neighborhood: { kind: "interior" },
+        normalSide: "left",
+        retainedEndpoint: "start",
+        periodicAnchor: null,
+      }, {
+        span: brace.diagonals.rising.span,
+        parameter: 0.1,
+        winding: 0,
+        neighborhood: { kind: "interior" },
+        normalSide: "right",
+        retainedEndpoint: "start",
+        periodicAnchor: null,
+      }],
+      endpointOrder: "firstThenSecond",
+      sweep: "counterClockwise",
+    }],
+    suppressed: true,
+  });
   // A diagonal of an axis-aligned frame cannot itself be horizontal. Keep the
   // downstream ordinary relation as an explicit, editable suppressed example
   // rather than publishing an invalid demonstration scene.
@@ -18,5 +43,5 @@ export default sketch(($) => {
     suppressed: true,
   });
   $.organize("Frame", [frame, brace, datum]);
-  return $.outputs({ frame, brace, rising: brace.diagonals.rising, datum });
+  return $.outputs({ frame, brace, rising: brace.diagonals.rising, round, datum });
 });

@@ -543,6 +543,7 @@ type Reproject<Value, Project> =
     : Value extends CircleFeature<any> ? CircleFeature<Project>
     : Value extends FilletFeature<any> ? FilletFeature<Project>
     : Value extends RoundedRectangleFeature<any> ? RoundedRectangleFeature<Project>
+    : Value extends NativeCurveSpanRef<any> ? NativeCurveSpanRef<Project>
     : Value extends KeyedFeatureCollection<infer Key, infer Element>
       ? KeyedFeatureCollection<Key, Reproject<Element, Project>>
     : Value extends OutputRef<any, infer Kind> ? OutputRef<Project, Kind>
