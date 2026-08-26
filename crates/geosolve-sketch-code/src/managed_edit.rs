@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 use crate::{
-    ManagedDocument, ManagedPathSegment, ManagedRewrite, ManagedValue, SemanticSymbol,
+    ManagedDocument, ManagedPathSegment, ManagedRewrite, ManagedSpan, ManagedValue, SemanticSymbol,
     rewrite_managed_source, rewrite_managed_value,
 };
 
@@ -32,6 +32,9 @@ pub enum ManagedEdit {
         name: String,
         declarations: Vec<SemanticSymbol>,
     },
+    /// Removes one declaration and all managed organization references to it.
+    /// Output references are removed from the returned source as well.
+    DeleteDeclaration { declaration: SemanticSymbol },
 }
 
 /// Exact-CAS source rewrite prepared from one canonical managed document.
@@ -92,6 +95,41 @@ pub fn plan_managed_edit(
         .map(|declaration| (declaration.symbol.clone(), declaration.variable.clone()))
         .collect::<BTreeMap<_, _>>();
     match edit {
+        ManagedEdit::DeleteDeclaration { declaration } => {
+            let target = document
+                .program
+                .declarations
+                .iter()
+                .find(|candidate| candidate.symbol == declaration)
+                .ok_or_else(|| ManagedEditError::UnknownDeclaration(declaration.0.clone()))?;
+            let mut source = document.source.clone();
+            let mut spans = vec![target.statement_span];
+            for organization in &document.program.organizations {
+                if organization.declarations.contains(&declaration) {
+                    spans.push(organization.span);
+                }
+            }
+            spans.sort_by_key(|span| span.start);
+            spans.dedup_by_key(|span| (span.start, span.end));
+            for span in spans.into_iter().rev() {
+                source.replace_range(span.start..span.end, "");
+            }
+            // The managed output envelope is intentionally simple and
+            // lossless; remove the deleted binding from output object lists.
+            let variable = target.variable.as_str();
+            source = source
+                .replace(&format!(", {variable} }}"), " }")
+                .replace(&format!("{{ {variable},"), "{");
+            Ok(ManagedEditPlan {
+                target: format!("delete.{}", declaration.0),
+                rewrite: ManagedRewrite::new(
+                    document,
+                    ManagedSpan::new(0, document.source.len()),
+                    source,
+                ),
+                value_target: None,
+            })
+        }
         ManagedEdit::SetDeclarationArguments {
             declaration,
             arguments,

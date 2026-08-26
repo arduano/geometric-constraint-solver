@@ -847,6 +847,24 @@ impl CodeProjectWorkbench {
         self.draft_diagnostic = None;
     }
 
+    /// Reverse-projects a canvas deletion into the managed TypeScript file.
+    pub(crate) fn delete_managed_declaration(
+        &mut self,
+        declaration: &SemanticSymbol,
+    ) -> Result<CodeApplyOutcome, String> {
+        let plan = plan_managed_edit(
+            &self.project.managed,
+            ManagedEdit::DeleteDeclaration {
+                declaration: declaration.clone(),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+        let managed =
+            apply_managed_edit(&self.project.managed, &plan).map_err(|error| error.to_string())?;
+        self.managed_draft = managed.source.clone();
+        self.apply_managed_draft()
+    }
+
     pub(crate) fn apply_managed_draft(&mut self) -> Result<CodeApplyOutcome, String> {
         let managed = match parse_managed_source(&self.managed_draft) {
             Ok(managed) => managed,
