@@ -55,6 +55,8 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   the exact canonical fresh-workspace document foundation and never hide other bootstrap geometry.
 - [x] Represent connected Segment endpoints and direct computed Fillet parents with lexical
   declaration members (`line.end`, `line.span`) rather than native IDs or transport DTOs.
+- [x] Keep one checked-in managed-v1 line/line/Fillet source as both a TypeScript compile target
+  and the Rust parser/cold-materialization fixture.
 
 ### I2 — custom artifacts and typed SDK
 
@@ -68,6 +70,9 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   outputs and point/curve/corner mismatch fail TypeScript compilation.
 - [x] Describe direct `computed.filletSet` as an opaque `FilletSetFeature`: its explicit parent
   spans are typed, but it does not falsely expose evaluated child arcs as ordinary native ports.
+- [x] Generate `NativeCurveSpanRef` from the central Rust declaration-result catalog only for
+  direct line spans, rectangle edges and Polyline segments. Computed Fillet arc outputs remain
+  ordinary non-native curve-span references and are not assignable to a direct Fillet parent.
 - [x] Keep `patches/*.patch.ts` byte-identical through every GUI edit and never execute them in
   Rust, WASM, browser runtime or load.
 
@@ -85,6 +90,9 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
 - [x] Lower direct managed `computed.filletSet` declarations back to the existing Intent
   `ComputedFeature::FilletSet` with exact persisted contact/branch state, without invoking native
   Fillet authoring heuristics or changing any solver equation.
+- [x] Authenticate every direct parent as an Intent-backed native span during Rust lowering and
+  reject computed host outputs even if a caller bypasses TypeScript branding. Accept radius only
+  as a positive finite model-unit number or branded millimetre literal `mm(...)`.
 
 ### I4 — one code/editor transaction
 
@@ -168,14 +176,23 @@ nor lower `ComputedFeature::FilletSet`. The resulting conversion error caused pr
 the Code tab entirely, so the user saw neither code nor an explanation.
 
 Repair contract: add Segment-to-Segment lexical endpoint projection and a distinct direct
-`$.computed.filletSet` declaration. Each corner carries exactly two ordered lexical parent span
-references plus explicit parameter, winding, neighborhood, normal-side, retained-endpoint and
-periodic-anchor state; endpoint order, sweep, radius and suppression are also explicit. Direct
-lowering reconstructs the existing Intent computed feature and must not rerun Fillet authoring or
-change solver behavior. The declaration returns an opaque `FilletSetFeature`. Ordinary projection
-remains intentionally all-or-nothing. Code is now always discoverable: supported scenes offer a
-read-only managed preview and Promote, while unsupported scenes show an escaped read-only
-conversion diagnostic with Intent IR still available and no Promote action.
+`$.computed.filletSet` declaration. Each corner carries exactly two ordered lexical
+`NativeCurveSpanRef` parents plus explicit parameter, winding, neighborhood, normal-side,
+retained-endpoint and periodic-anchor state; endpoint order, sweep and suppression are also
+explicit. The descriptor generator grants the native-span brand only to direct line spans,
+rectangle edges and Polyline segments. Computed host Fillet arcs remain unbranded; Rust lowering
+also rejects such host outputs as parents so branding cannot be bypassed. Radius accepts only a
+positive finite model-unit number or branded `mm(...)`, not forged unit records or another length
+unit. Direct lowering reconstructs the existing Intent computed feature and must not rerun Fillet
+authoring or change solver behavior. The declaration returns an opaque `FilletSetFeature`.
+Ordinary projection remains intentionally all-or-nothing. Code is now always discoverable:
+supported scenes offer a read-only managed preview and Promote, while unsupported scenes show an
+escaped read-only conversion diagnostic with Intent IR still available and no Promote action.
+
+Focused fixture: `packages/geosolve-sketch-code/test/managed/line-fillet.managed.ts` is the same
+managed-v1 two-line/one-Fillet source compiled by the TypeScript suite, parsed by Rust and
+cold-materialized through the ordinary intent/editor authority. It is focused development evidence,
+not release-candidate qualification.
 
 Focused development coverage is being qualified at the Rust GUI-bootstrap/owner, direct-lowering,
 descriptor-parity, workbench and TypeScript type-contract layers, together with the Code-surface

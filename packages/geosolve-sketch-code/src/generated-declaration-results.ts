@@ -48,8 +48,7 @@ export const DECLARATION_RESULT_CATALOG = {
           "kind": "point"
         },
         "span": {
-          "shape": "leaf",
-          "kind": "curve_span"
+          "shape": "native_span"
         },
         "start": {
           "shape": "leaf",
@@ -69,8 +68,7 @@ export const DECLARATION_RESULT_CATALOG = {
           "derived_from_owner": true
         },
         "segments": {
-          "shape": "keyed",
-          "kind": "curve_span",
+          "shape": "native_span_keyed",
           "derived_from_owner": false
         },
         "vertices": {
@@ -111,20 +109,16 @@ export const DECLARATION_RESULT_CATALOG = {
           "shape": "object",
           "fields": {
             "bottom": {
-              "shape": "leaf",
-              "kind": "curve_span"
+              "shape": "native_span"
             },
             "left": {
-              "shape": "leaf",
-              "kind": "curve_span"
+              "shape": "native_span"
             },
             "right": {
-              "shape": "leaf",
-              "kind": "curve_span"
+              "shape": "native_span"
             },
             "top": {
-              "shape": "leaf",
-              "kind": "curve_span"
+              "shape": "native_span"
             }
           }
         },

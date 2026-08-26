@@ -15,6 +15,7 @@ import type {
   KeyedFeatureCollection,
   LineFeature,
   ManagedSketchProject,
+  NativeCurveSpanRef,
   OutputRef,
   RectangleFeature,
 } from "../src/index.js";
@@ -32,6 +33,8 @@ const panel = rectangle(alpha, "panel");
 const panelType: RectangleFeature<typeof alpha> = panel;
 const bottom: CurveSpanRef<typeof alpha> = panelType.edges.bottom;
 bottom;
+const nativeBottom: NativeCurveSpanRef<typeof alpha> = panelType.edges.bottom;
+nativeBottom;
 
 const path = polyline(alpha, "path", ["lowerLeft", "upperRight", "tail"] as const);
 const selected = {
@@ -41,6 +44,9 @@ const selected = {
 const mapped = fillets(alpha, selected);
 mapped.lowerLeft.arc;
 mapped.upperRight.arc;
+// @ts-expect-error A computed host output is not an already materialized native span.
+const computedArcIsNotNative: NativeCurveSpanRef<typeof alpha> = mapped.lowerLeft.arc;
+computedArcIsNotNative;
 
 type ExactKeys = keyof typeof mapped;
 const exactKey: ExactKeys = "lowerLeft";
@@ -111,24 +117,25 @@ managedRectangleDiagonal;
 const managedFilletSet = sketch(($) => {
   const first = $.geometry.line("first", { start: [0, 0], end: [30, 0] });
   const second = $.geometry.line("second", { start: [30, 0], end: [30, 20] });
-  const parent = {
-    span: first.span,
-    parameter: 0.9,
-    winding: 0,
-    neighborhood: { kind: "local" as const, lower: 0.75, upper: 1 },
-    normalSide: "left" as const,
-    retainedEndpoint: "start" as const,
-    periodicAnchor: null,
-  };
   const round = $.computed.filletSet("round", {
     radius: 4,
     corners: [{
-      parents: [parent, {
-        ...parent,
+      parents: [{
+        span: first.span,
+        parameter: 0.9,
+        winding: 0,
+        neighborhood: { kind: "local", lower: 0.75, upper: 1 },
+        normalSide: "left",
+        retainedEndpoint: "start",
+        periodicAnchor: null,
+      }, {
         span: second.span,
         parameter: 0.1,
+        winding: 0,
+        neighborhood: { kind: "interior" },
         normalSide: "right",
         retainedEndpoint: "end",
+        periodicAnchor: null,
       }],
       endpointOrder: "firstThenSecond",
       sweep: "counterClockwise",
@@ -136,10 +143,22 @@ const managedFilletSet = sketch(($) => {
     suppressed: false,
   });
 
+  const parent = {
+    span: first.span,
+    parameter: 0.9,
+    winding: 0,
+    neighborhood: { kind: "interior" as const },
+    normalSide: "left" as const,
+    retainedEndpoint: "start" as const,
+    periodicAnchor: null,
+  };
+
   // @ts-expect-error Direct Fillet parents reject raw semantic path strings.
   $.computed.filletSet("raw", { radius: 4, corners: [{ parents: [{ ...parent, span: "first.span" }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
   // @ts-expect-error Direct Fillet parents require curve spans, not point outputs.
   $.computed.filletSet("point", { radius: 4, corners: [{ parents: [{ ...parent, span: first.start }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Direct Fillet parents require the lexical span output, not its owning line.
+  $.computed.filletSet("line", { radius: 4, corners: [{ parents: [{ ...parent, span: first }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
   // @ts-expect-error Direct Fillet parents reject references from another project.
   $.computed.filletSet("foreign", { radius: 4, corners: [{ parents: [{ ...parent, span: segment.span }, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
   // @ts-expect-error Direct Fillet parents reject transport DTOs.
@@ -150,6 +169,8 @@ const managedFilletSet = sketch(($) => {
   $.computed.filletSet("enum", { radius: 4, corners: [{ parents: [parent, parent], endpointOrder: "nearest", sweep: "counterClockwise" }], suppressed: false });
   // @ts-expect-error Direct Fillet radius rejects angular units.
   $.computed.filletSet("angle", { radius: { unit: "deg", value: 4 }, corners: [{ parents: [parent, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
+  // @ts-expect-error Managed units must come from the branded supported constructor.
+  $.computed.filletSet("forgedUnit", { radius: { unit: "mm", value: 4 }, corners: [{ parents: [parent, parent], endpointOrder: "firstThenSecond", sweep: "counterClockwise" }], suppressed: false });
 
   return $.outputs({ first, second, round });
 });

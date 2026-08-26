@@ -104,11 +104,15 @@ M84-F004 reproduction: in an ordinary sketch, draw two connected lines and place
 them. The complete managed projection rejected the unsupported computed Fillet, and presentation
 responded to that conversion error by omitting Code entirely. The F004 contract adds lexical
 Segment-to-Segment endpoint reuse and direct `$.computed.filletSet` with two ordered lexical
-curve-span parents plus complete persisted contact/branch state. Unsupported complete projections
-still fail closed, but Code remains discoverable and displays an escaped read-only diagnostic,
-Intent IR remains available and Promote is absent. Focused Rust owner/bootstrap/direct-lowering/
-workbench, TypeScript and UI tests are being qualified; no clean gate or replacement frozen bytes
-are claimed yet.
+`NativeCurveSpanRef` parents plus complete persisted contact/branch state. The central descriptors
+brand only line spans, rectangle edges and Polyline segments; a computed host Fillet arc rejects as
+a direct parent in TypeScript and Rust. Radius accepts a positive finite model-unit number or
+branded `mm(...)`. The checked-in managed-v1 line/line/Fillet fixture is shared by TypeScript
+compile, Rust parse and cold materialization. Unsupported complete projections still fail closed,
+but Code remains discoverable and displays an escaped read-only diagnostic, Intent IR remains
+available and Promote is absent. Focused Rust owner/bootstrap/direct-lowering/workbench,
+TypeScript and UI tests are being qualified; no clean gate or replacement frozen bytes are claimed
+yet.
 
 When an F004 replacement is nominated, run that ordinary desktop workbench at approximately
 `1440x900` and `1024x720`. Use actual code-project samples rather than importing equivalent flat
@@ -130,7 +134,7 @@ bounds and byte parity.
 | M84-U9 | Drag repeatedly in the largest code sample while watching source/History, including rapid reversals and a rejected final pointer sample. | Preview remains at the M83 interaction quality; pointer frames do not parse/expand or churn panels; release commits the newest accepted preview once and exact Undo restores it. | pending |
 | M84-U10 | Start a plain M83 workspace/build without code support, then a code-enabled one. Inspect the browser file/artifact UI at both sizes. | Plain solver/editor behavior and persistence remain available without code-module linkage; code UI is polished and bounded, custom files are clearly read-only, and it does not pretend to be a general IDE. | pending |
 | M84-U11 | In an ordinary sketch, draw an aligned rectangle and a line between two rectangle corners; inspect Intent IR and Code, then promote the preview and edit the rectangle. | Intent IR is labelled as transport data; Code uses lexical `frame.corners.*` values with no serialized dependency DTO; promotion creates one real managed project and the dependent line follows later edits. | pending |
-| M84-U12 | In an ordinary sketch, draw two connected lines and Fillet their corner. Inspect Code, promote and reload; then separately add an unsupported declaration and inspect Code again. | The `line2` declaration contains lexical `start: line.end`; the preview also contains `$.computed.filletSet`, `line.span`/`line2.span`, no raw ID/DTO and complete explicit branch/contact fields. Promote/reload retains finite Current Fillet geometry with independently validated Hard residual `<= 1e-9`. For the unsupported scene, Code stays visible with an escaped truthful diagnostic and Intent IR fallback, while Promote is absent. | pending |
+| M84-U12 | In an ordinary sketch, draw two connected lines and Fillet their corner. Inspect Code, promote and reload; edit radius once as a model-unit number and once with `mm(...)`. Then separately try a computed Fillet arc as a direct parent and add another unsupported declaration. | The `line2` declaration contains lexical `start: line.end`; the preview also contains `$.computed.filletSet`, `line.span`/`line2.span`, no raw ID/DTO and complete explicit branch/contact fields. Line spans are native-branded; a computed host arc cannot be a parent. Positive finite model-unit and branded-mm radii work; forged/other-unit/nonpositive/nonfinite values reject. Promote/reload retains finite Current Fillet geometry with independently validated Hard residual `<= 1e-9`. Unsupported scenes keep Code visible with an escaped truthful diagnostic and Intent IR fallback, while Promote is absent. | pending |
 
 Any JavaScript runtime solve, browser `eval`, raw code-facing ID, cross-project retarget, ordinal
 identity churn, silent cascade, duplicate history, blank accepted scene or pointer-frame expansion

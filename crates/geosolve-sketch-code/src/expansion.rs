@@ -949,13 +949,23 @@ fn lower_direct_fillet_set(
                 "{}.corners[{ordinal}].parents[{parent_offset}].span",
                 declaration.symbol.0
             );
-            let span = builder
-                .resolve_managed(
-                    required(parent, "span", "FilletSet parent")?,
-                    &SemanticOutputPath::default(),
-                    &reference,
-                )?
-                .as_port(IntentPortKind::CurveSpan, &reference)?;
+            let resolved = builder.resolve_managed(
+                required(parent, "span", "FilletSet parent")?,
+                &SemanticOutputPath::default(),
+                &reference,
+            )?;
+            if matches!(
+                &resolved,
+                SemanticValue::HostOutput {
+                    kind: FeatureKind::CurveSpan,
+                    ..
+                }
+            ) {
+                return Err(CodeExpansionError::Unsupported(format!(
+                    "`{reference}` must reference an Intent-backed native span, not a computed host output"
+                )));
+            }
+            let span = resolved.as_port(IntentPortKind::CurveSpan, &reference)?;
             let input_index = ordinal
                 .checked_mul(2)
                 .and_then(|index| index.checked_add(parent_offset))
@@ -2955,13 +2965,11 @@ fn finite_number(value: &ManagedValue, label: &str) -> Result<f64, CodeExpansion
 fn length_value(value: &ManagedValue, label: &str) -> Result<f64, CodeExpansionError> {
     match value {
         ManagedValue::Number(value) if value.is_finite() => Ok(*value),
-        ManagedValue::Unit(UnitLiteral { unit, value })
-            if matches!(unit.as_str(), "mm" | "cm" | "m" | "inch") && value.is_finite() =>
-        {
+        ManagedValue::Unit(UnitLiteral { unit, value }) if unit == "mm" && value.is_finite() => {
             Ok(*value)
         }
         _ => Err(CodeExpansionError::Unsupported(format!(
-            "`{label}` must be a finite length, not an angular or dimensionless value"
+            "`{label}` must be a finite model-unit number or millimetre literal"
         ))),
     }
 }

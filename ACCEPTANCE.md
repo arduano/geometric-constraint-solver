@@ -3419,18 +3419,24 @@ current code-expansion-owned Segments so an ordinary GUI Segment retains explici
 
 Reproduced finding M84-F004 additionally requires an ordinary two-connected-Segment plus computed-
 Fillet scene to expose managed Code. Connected endpoints and the Fillet's two ordered parent spans
-must be lexical declaration members. Direct `$.computed.filletSet` carries exact radius,
-parameter, winding, neighborhood, normal-side, retained-endpoint, periodic-anchor, endpoint-order,
-sweep and suppression state, returns opaque `FilletSetFeature` authority and lowers to the existing
-Intent computed feature without invoking Fillet authoring heuristics or changing the solver.
-Cold promotion/reload must authenticate accepted feature/corner/span ownership, preserve finite
-Current geometry and independently validate normalized Hard residual `<= 1e-9`.
+must be lexical declaration members typed as `NativeCurveSpanRef`. Central declaration-result
+descriptors grant that brand only to direct line spans, rectangle edges and Polyline segments.
+Computed host Fillet arcs must reject as direct parents at both the TypeScript boundary and Rust
+lowering boundary. Direct `$.computed.filletSet` carries exact parameter, winding, neighborhood,
+normal-side, retained-endpoint, periodic-anchor, endpoint-order, sweep and suppression state;
+radius accepts only a positive finite model-unit number or branded `mm(...)`. It returns opaque
+`FilletSetFeature` authority and lowers to the existing Intent computed feature without invoking
+Fillet authoring heuristics or changing the solver. Cold promotion/reload must authenticate
+accepted feature/corner/native-span ownership, preserve finite Current geometry and independently
+validate normalized Hard residual `<= 1e-9`.
 
 Ordinary conversion remains all-or-nothing. Unsupported declarations must not make Code
 undiscoverable: Code renders an escaped read-only conversion diagnostic, Intent IR remains
 available and Promote is absent. Focused Rust bootstrap/ownership/direct-lowering/workbench,
 descriptor-parity, TypeScript and UI coverage is being qualified. This focused development
 evidence does not claim an F004 clean gate, frozen artifact, Tailscale nomination or human row.
+The checked-in managed-v1 two-line/one-Fillet fixture is one source compiled by TypeScript, parsed
+by Rust and cold-materialized through the ordinary accepted-scene authority.
 
 - `geosolve-sketch-code` and `@geosolve/sketch-code` are optional adjacent layers. Core, sketch,
   linkage, intent and editor modules have no dependency back into them; plain M83 editor/workspace

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::Path;
 
 use geosolve_constraint_editor::{
     ComputedFeatureDefinition, ComputedFeatureEvaluationState, IntentNativeBinding,
@@ -89,6 +91,41 @@ fn reconciled(project: &CodeProject) -> KeyedReconcileState {
         )
         .expect("direct reconciliation")
         .into_staged()
+}
+
+#[test]
+fn parser_valid_managed_fillet_fixture_is_the_typescript_compile_target() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("code crate lives under the workspace crates directory");
+    let path = workspace.join("packages/geosolve-sketch-code/test/managed/line-fillet.managed.ts");
+    let source = fs::read_to_string(path).expect("checked-in managed Fillet TypeScript fixture");
+    let mut candidate = project(
+        "managed-ts-fillet",
+        source
+            .split_once("export default sketch(($) => {\n")
+            .expect("managed fixture wrapper")
+            .1
+            .strip_suffix("});\n")
+            .expect("managed fixture suffix"),
+    );
+    candidate.managed = parse_managed_source(&source).expect("managed fixture must parse in Rust");
+    let materialized = materialize_code_project_cold(
+        &candidate,
+        &reconciled(&candidate),
+        IntentSessionId::from_raw(0x84f0_0409),
+        DocumentId(PersistentId::from_u128(0x84f0_0409)),
+        1.0,
+    )
+    .expect("the same managed source compiled by TypeScript must materialize");
+    let accepted = materialized
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .expect("managed fixture accepted authority");
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(accepted.validation.all_active_features_current);
 }
 
 #[test]
@@ -377,6 +414,57 @@ fn direct_fillet_set_resolves_a_typed_span_from_an_earlier_custom_patch() {
 }
 
 #[test]
+fn direct_fillet_set_rejects_a_computed_host_arc_as_a_native_parent() {
+    let mut candidate = bundled_code_project_demos()
+        .into_iter()
+        .find(|demo| demo.id == CodeProjectDemoId::TypedPanel)
+        .expect("typed-panel demo")
+        .project();
+    let insertion = r#"  const nested = $.computed.filletSet("nested", {
+    radius: 1,
+    corners: [{
+      parents: [{
+        span: panel.edges.bottom,
+        parameter: 0.1,
+        winding: 0,
+        neighborhood: { kind: "interior" },
+        normalSide: "left",
+        retainedEndpoint: "start",
+        periodicAnchor: null,
+      }, {
+        span: corners.fillets.lowerLeft,
+        parameter: 0.1,
+        winding: 0,
+        neighborhood: { kind: "interior" },
+        normalSide: "right",
+        retainedEndpoint: "start",
+        periodicAnchor: null,
+      }],
+      endpointOrder: "firstThenSecond",
+      sweep: "counterClockwise",
+    }],
+    suppressed: true,
+  });
+"#;
+    let source = candidate.managed.source.replacen(
+        "  return $.outputs",
+        &format!("{insertion}  return $.outputs"),
+        1,
+    );
+    assert_ne!(source, candidate.managed.source);
+    candidate.managed = parse_managed_source(&source).expect("lexical computed-arc reference");
+
+    let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84f0_0408)).unwrap();
+    let error = expand_code_project(&candidate, &reconciled(&candidate), intent.identity())
+        .expect_err("a computed host arc cannot become a native Fillet parent");
+    assert!(
+        matches!(error, CodeExpansionError::Unsupported(_)),
+        "unexpected rejection: {error:?}"
+    );
+    assert!(error.to_string().contains("Intent-backed native span"));
+}
+
+#[test]
 fn direct_fillet_set_rejects_nonlexical_wrong_kind_and_malformed_state() {
     let base = valid_project().managed.source;
     let cases = [
@@ -409,6 +497,7 @@ fn direct_fillet_set_rejects_nonlexical_wrong_kind_and_malformed_state() {
             "periodicAnchor: { parameter: 0.5 }",
         ),
         ("angular radius", "radius: 1", "radius: deg(1)"),
+        ("unsupported length unit", "radius: 1", "radius: cm(1)"),
         ("nonpositive radius", "radius: 1,", "radius: 0,"),
     ];
     for (name, from, to) in cases {

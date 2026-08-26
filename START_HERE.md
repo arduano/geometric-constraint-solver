@@ -333,12 +333,15 @@ branch normalization is limited to current expansion-owned Segments. M84 remains
 unaccepted. Human UAT then opened `M84-F004`: two connected Segments plus a computed Fillet made
 all-or-nothing GUI bootstrap reject, and the workbench hid Code for that conversion error. The
 repair adds lexical Segment-to-Segment endpoints and direct `$.computed.filletSet` with two ordered
-lexical curve-span parents, complete explicit persisted contact/branch state and opaque
-`FilletSetFeature` output. It lowers to the existing Intent computed feature without authoring
-heuristics or solver changes. Code remains discoverable on unsupported scenes with an escaped
-read-only conversion diagnostic, Intent IR fallback and no Promote. Focused qualification is in
-progress; the F003 snapshot is withdrawn, no F004 replacement is nominated and U1-U12 remain
-pending. Pages remains on accepted M83; no M84 publication is claimed.
+lexical `NativeCurveSpanRef` parents, complete explicit persisted contact/branch state and opaque
+`FilletSetFeature` output. Central descriptors brand only direct line spans, rectangle edges and
+Polyline segments; computed host Fillet arcs reject as parents in TypeScript and Rust. Radius is a
+positive finite model-unit number or branded `mm(...)`. One managed-v1 line/line/Fillet fixture is
+compiled by TypeScript, parsed by Rust and cold-materialized. The feature lowers to existing Intent
+without authoring heuristics or solver changes. Code remains discoverable on unsupported scenes
+with an escaped read-only conversion diagnostic, Intent IR fallback and no Promote. Focused
+qualification is in progress; the F003 snapshot is withdrawn, no F004 replacement is nominated and
+U1-U12 remain pending. Pages remains on accepted M83; no M84 publication is claimed.
 
 ## Read first
 

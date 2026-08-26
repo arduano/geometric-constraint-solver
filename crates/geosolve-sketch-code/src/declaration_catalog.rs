@@ -117,11 +117,15 @@ pub enum CodeResultShape {
     Leaf {
         kind: FeatureKind,
     },
+    NativeSpan,
     Object {
         fields: BTreeMap<String, CodeResultShape>,
     },
     Keyed {
         kind: FeatureKind,
+        derived_from_owner: bool,
+    },
+    NativeSpanKeyed {
         derived_from_owner: bool,
     },
 }
@@ -159,7 +163,7 @@ pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDes
             "geometry.line".into(),
             descriptor(object([
                 ("end", leaf(FeatureKind::Point)),
-                ("span", leaf(FeatureKind::CurveSpan)),
+                ("span", native_span()),
                 ("start", leaf(FeatureKind::Point)),
             ])),
         ),
@@ -167,7 +171,7 @@ pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDes
             "geometry.polyline".into(),
             descriptor(object([
                 ("filletableCorners", keyed(FeatureKind::FeatureCorner, true)),
-                ("segments", keyed(FeatureKind::CurveSpan, false)),
+                ("segments", native_span_keyed(false)),
                 ("vertices", keyed(FeatureKind::Point, false)),
             ])),
         ),
@@ -186,10 +190,10 @@ pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDes
                 (
                     "edges",
                     object([
-                        ("bottom", leaf(FeatureKind::CurveSpan)),
-                        ("left", leaf(FeatureKind::CurveSpan)),
-                        ("right", leaf(FeatureKind::CurveSpan)),
-                        ("top", leaf(FeatureKind::CurveSpan)),
+                        ("bottom", native_span()),
+                        ("left", native_span()),
+                        ("right", native_span()),
+                        ("top", native_span()),
                     ]),
                 ),
                 ("profile", leaf(FeatureKind::Profile)),
@@ -244,11 +248,19 @@ fn leaf(kind: FeatureKind) -> CodeResultShape {
     CodeResultShape::Leaf { kind }
 }
 
+fn native_span() -> CodeResultShape {
+    CodeResultShape::NativeSpan
+}
+
 fn keyed(kind: FeatureKind, derived_from_owner: bool) -> CodeResultShape {
     CodeResultShape::Keyed {
         kind,
         derived_from_owner,
     }
+}
+
+fn native_span_keyed(derived_from_owner: bool) -> CodeResultShape {
+    CodeResultShape::NativeSpanKeyed { derived_from_owner }
 }
 
 fn object<const N: usize>(fields: [(&'static str, CodeResultShape); N]) -> CodeResultShape {

@@ -13,10 +13,12 @@ export { DECLARATION_RESULT_CATALOG } from "./generated-declaration-results.js";
 declare const projectTypeBrand: unique symbol;
 declare const projectReferenceBrand: unique symbol;
 declare const outputKindBrand: unique symbol;
+declare const nativeCurveSpanBrand: unique symbol;
 declare const featureOutputsBrand: unique symbol;
 declare const collectionOwnerBrand: unique symbol;
 declare const managedSketchBrand: unique symbol;
 declare const managedSketchProjectBrand: unique symbol;
+declare const unitLiteralBrand: unique symbol;
 
 const MANAGED_SKETCH_PROJECT_NAME = "__geosolve_managed_v1__" as const;
 
@@ -86,6 +88,15 @@ type DescriptorResult<
   Owner = never,
 > = Shape extends { readonly shape: "leaf"; readonly kind: infer Kind extends FeatureKind }
   ? OutputRef<Project, Kind>
+  : Shape extends { readonly shape: "native_span" }
+    ? NativeCurveSpanRef<Project>
+  : Shape extends {
+      readonly shape: "native_span_keyed";
+      readonly derived_from_owner: infer Derived;
+    }
+    ? Derived extends true
+      ? DerivedFeatureCollection<Owner, Key, NativeCurveSpanRef<Project>>
+      : KeyedFeatureCollection<Key, NativeCurveSpanRef<Project>>
   : Shape extends {
       readonly shape: "keyed";
       readonly kind: infer Kind extends FeatureKind;
@@ -109,6 +120,10 @@ type DescriptorKeyedValue<Project, Shape> = Shape extends {
 export type PointRef<Project> = OutputRef<Project, "point">;
 export type CurveRef<Project> = OutputRef<Project, "curve">;
 export type CurveSpanRef<Project> = OutputRef<Project, "curve_span">;
+/** A curve span already backed by an ordinary Intent/native span. */
+export type NativeCurveSpanRef<Project> = CurveSpanRef<Project> & {
+  readonly [nativeCurveSpanBrand]: true;
+};
 export type ScalarRef<Project> = OutputRef<Project, "scalar">;
 export type FeatureCornerRef<Project> = OutputRef<Project, "feature_corner">;
 export type ProfileRef<Project> = OutputRef<Project, "profile">;
@@ -286,6 +301,14 @@ function outputPath<Project, Kind extends FeatureKind>(
   });
 }
 
+function nativeCurveSpanOutput<Project>(
+  root: ReferenceRuntime,
+  path: readonly string[],
+): NativeCurveSpanRef<Project> {
+  return outputPath<Project, "curve_span">(root, path, "curve_span") as
+    NativeCurveSpanRef<Project>;
+}
+
 function namedTemplateOutput<Project, Kind extends FeatureKind>(
   root: ReferenceRuntime,
   semanticPath: readonly string[],
@@ -359,10 +382,10 @@ function rectangleFromRuntime<Project>(root: ReferenceRuntime): RectangleFeature
       ),
     }),
     edges: Object.freeze({
-      bottom: outputPath<Project, "curve_span">(runtime, ["edges", "bottom"], "curve_span"),
-      right: outputPath<Project, "curve_span">(runtime, ["edges", "right"], "curve_span"),
-      top: outputPath<Project, "curve_span">(runtime, ["edges", "top"], "curve_span"),
-      left: outputPath<Project, "curve_span">(runtime, ["edges", "left"], "curve_span"),
+      bottom: nativeCurveSpanOutput<Project>(runtime, ["edges", "bottom"]),
+      right: nativeCurveSpanOutput<Project>(runtime, ["edges", "right"]),
+      top: nativeCurveSpanOutput<Project>(runtime, ["edges", "top"]),
+      left: nativeCurveSpanOutput<Project>(runtime, ["edges", "left"]),
     }),
     profile: output<Project, "profile">(runtime, "profile", "profile"),
   }));
@@ -387,7 +410,7 @@ function lineFromRuntime<Project>(root: ReferenceRuntime): LineFeature<Project> 
   return featureReference(root, (runtime) => ({
     start: output<Project, "point">(runtime, "start", "point"),
     end: output<Project, "point">(runtime, "end", "point"),
-    span: output<Project, "curve_span">(runtime, "span", "curve_span"),
+    span: nativeCurveSpanOutput<Project>(runtime, ["span"]),
   }));
 }
 
@@ -450,7 +473,11 @@ export function polyline<
   const vertices = keyedCollection(keys, (key) =>
     makeReference<Project, "point">({ ...root, path: ["vertices", { member: key }], expectedKind: "point" }));
   const segments = keyedCollection(keys, (key) =>
-    makeReference<Project, "curve_span">({ ...root, path: ["segments", { member: key }], expectedKind: "curve_span" }));
+    makeReference<Project, "curve_span">({
+      ...root,
+      path: ["segments", { member: key }],
+      expectedKind: "curve_span",
+    }) as NativeCurveSpanRef<Project>);
   const corners = keyedCollection(keys, (key) =>
     makeReference<Project, "feature_corner">({
       ...root,
@@ -485,11 +512,12 @@ function keyedCollection<Key extends PropertyKey, Value>(
 export interface UnitLiteral<Unit extends string = string> {
   readonly unit: Unit;
   readonly value: number;
+  readonly [unitLiteralBrand]: Unit;
 }
 
 export function mm(value: number): UnitLiteral<"mm"> {
   requireFinite(value, "millimetre value");
-  return Object.freeze({ unit: "mm", value });
+  return Object.freeze({ unit: "mm", value }) as UnitLiteral<"mm">;
 }
 
 export interface ValueSchema<Value> {
@@ -669,7 +697,7 @@ export interface ManagedConstraintBuilder<Project> {
   horizontal(
     symbol: string,
     values: {
-      readonly curve: CurveSpanRef<Project> | LineFeature<Project>;
+      readonly curve: NativeCurveSpanRef<Project> | LineFeature<Project>;
       readonly suppressed?: boolean;
     },
   ): OutputRef<Project, "constraint">;
@@ -684,7 +712,7 @@ export type ManagedFilletNeighborhood =
   };
 
 export interface ManagedFilletParent<Project> {
-  readonly span: CurveSpanRef<Project>;
+  readonly span: NativeCurveSpanRef<Project>;
   readonly parameter: number;
   readonly winding: number;
   readonly neighborhood: ManagedFilletNeighborhood;
@@ -709,7 +737,7 @@ export interface ManagedComputedBuilder<Project> {
   filletSet(
     symbol: string,
     values: {
-      readonly radius: number | UnitLiteral<"mm" | "cm" | "m" | "inch">;
+      readonly radius: number | UnitLiteral<"mm">;
       readonly corners: readonly ManagedFilletCorner<NoInfer<Project>>[];
       readonly suppressed: boolean;
     },

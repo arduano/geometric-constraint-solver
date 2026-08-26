@@ -838,12 +838,16 @@ so ordinary GUI Segments beside a code project retain exact explicit branch auth
 
 M84-F004 extends that supported complete closure to connected Segments and existing computed
 Fillets. Connected endpoints reuse lexical `.start`/`.end` members. Direct
-`$.computed.filletSet` takes exactly two ordered lexical curve-span parents per corner and preserves
-all persisted contact/branch choices explicitly. It lowers to the existing Intent computed feature
-without invoking Fillet authoring heuristics or adding solver behavior, and returns opaque
-`FilletSetFeature` authority rather than synthetic native arc ports. All-or-nothing projection
-remains; a rejection keeps Code discoverable with an escaped read-only conversion diagnostic,
-Intent IR fallback and no Promote.
+`$.computed.filletSet` takes exactly two ordered lexical `NativeCurveSpanRef` parents per corner and
+preserves all persisted contact/branch choices explicitly. The central declaration-result catalog
+brands only direct line spans, rectangle edges and Polyline segments; computed host Fillet arcs are
+not native spans and reject both statically and during Rust lowering. Radius accepts only a
+positive finite model-unit number or branded `mm(...)`. It lowers to the existing Intent computed
+feature without invoking Fillet authoring heuristics or adding solver behavior, and returns opaque
+`FilletSetFeature` authority rather than synthetic native arc ports. The same checked-in managed-v1
+line/line/Fillet source is compiled by TypeScript, parsed by Rust and cold-materialized. All-or-
+nothing projection remains; a rejection keeps Code discoverable with an escaped read-only
+conversion diagnostic, Intent IR fallback and no Promote.
 
 ### `geosolve-sketch-features`
 

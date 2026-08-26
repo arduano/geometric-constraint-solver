@@ -103,12 +103,18 @@ Segments owned by the current code expansion so ordinary GUI Segments remain exp
 
 The same all-or-nothing conversion supports connected Segments through lexical `.start`/`.end`
 members and an ordinary computed Fillet through a distinct direct `$.computed.filletSet`
-declaration. Every corner contains exactly two ordered lexical `CurveSpanRef` parents and explicit
-parameter, winding, contact neighborhood, normal side, retained endpoint and periodic anchor;
-radius, endpoint order, sweep and suppression are explicit as well. Direct lowering reconstructs
-the existing Intent `ComputedFeature::FilletSet` without invoking Fillet authoring heuristics or a
-new solver path. Its result is an opaque `FilletSetFeature`, not a claim that evaluated child arcs
-are native curve-span ports.
+declaration. Every corner contains exactly two ordered lexical `NativeCurveSpanRef` parents and
+explicit parameter, winding, contact neighborhood, normal side, retained endpoint, periodic
+anchor, endpoint order, sweep and suppression. The central Rust declaration-result descriptor
+catalog, not handwritten TypeScript aliases, generates that brand only for direct line spans,
+rectangle edges and Polyline segments. A computed host Fillet arc is deliberately not native-
+branded and Rust lowering rejects any such host output even if static typing is bypassed. Radius
+accepts a positive finite model-unit number or branded `mm(...)`; a forged unit record or another
+unit spelling is outside managed-v1. Direct lowering reconstructs the existing Intent
+`ComputedFeature::FilletSet` without invoking Fillet authoring heuristics or a new solver path. Its
+result is an opaque `FilletSetFeature`, not a claim that evaluated child arcs are native curve-span
+ports. One checked-in managed-v1 line/line/Fillet source is shared by TypeScript compilation, Rust
+parsing and cold materialization so those boundaries cannot validate divergent fixtures.
 
 Code remains discoverable even when another unsupported declaration makes complete conversion
 fail. In that state the workbench renders an escaped read-only conversion diagnostic, keeps Intent

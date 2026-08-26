@@ -4788,15 +4788,23 @@ absence of the code layer.
 
 The supported complete projection must emit the second Segment endpoint as a lexical declaration
 member and one direct `$.computed.filletSet` declaration. Each Fillet corner has exactly two
-ordered lexical `CurveSpanRef` parents and explicit parameter, winding, neighborhood, normal side,
-retained endpoint and periodic anchor; radius, endpoint order, sweep and suppression are also
-explicit. No raw native ID or `{ declaration, output, kind }` transport DTO may appear. Direct
-lowering reconstructs the existing Intent `ComputedFeature::FilletSet` without rerunning Fillet
-authoring heuristics or adding a solver path, and its output remains opaque `FilletSetFeature`
-authority rather than fabricated child-arc ports.
+ordered lexical `NativeCurveSpanRef` parents and explicit parameter, winding, neighborhood, normal
+side, retained endpoint and periodic anchor; endpoint order, sweep and suppression are also
+explicit. The central declaration-result catalog brands only direct line spans, rectangle edges
+and Polyline segments. A computed host Fillet arc is not a native span: it must fail TypeScript
+assignment and must still reject during Rust lowering if the typed boundary is bypassed. Radius
+accepts only a positive finite model-unit number or branded `mm(...)`; forged unit records, other
+length-unit calls, angular, nonpositive and nonfinite values reject. No raw native ID or
+`{ declaration, output, kind }` transport DTO may appear. Direct lowering reconstructs the existing
+Intent `ComputedFeature::FilletSet` without rerunning Fillet authoring heuristics or adding a solver
+path, and its output remains opaque `FilletSetFeature` authority rather than fabricated child-arc
+ports.
 
 Promotion and cold reload must authenticate the accepted feature, corner and parent spans, retain
 finite Current computed geometry and independently validate normalized Hard residual `<= 1e-9`.
+The exact checked-in managed-v1 two-line/one-Fillet fixture is compiled by TypeScript, parsed by
+Rust and cold-materialized through that authority; separate hand-maintained fixtures may not mask
+schema drift.
 Projection remains all-or-nothing for any other unsupported declaration, but Code must stay
 visible with an escaped read-only conversion diagnostic, Intent IR fallback and no Promote action.
 This focused ordinary-bootstrap family does not alter the four-demo M84 code-project golden
