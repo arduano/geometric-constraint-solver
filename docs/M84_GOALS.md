@@ -2,11 +2,12 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F005, M84-F006 and M84-F007 are implemented and focused-
-qualified, while clean replacement nomination and refreshed UAT remain pending**. The direct-
-authoring snapshot `41e65a4`, combined F005/F006 source `ff2e142` and all earlier M84 nominations
-are withdrawn historical evidence. No F007 replacement snapshot is nominated, no UAT row is
-accepted, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; M84-F005, M84-F006 and M84-F007 are implemented, clean-qualified
+and immutably nominated, while refreshed UAT remains pending**. Exact product source `cc2f05e`,
+tree `6b8fc41`, is the current candidate. The direct-authoring snapshot `41e65a4`, combined
+F005/F006 source `ff2e142` and all earlier M84 nominations are withdrawn historical evidence. No
+UAT row is accepted, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling
+design.
 
 ## Goal
 
@@ -231,9 +232,10 @@ diagonal whose endpoints are lexical `frame.corners.*` references.
   golden require-clean, Trunk and the complete clean release gate.
 - Freeze one no-rebuild M84 candidate, verify it locally and through retained Tailscale UAT, and
   publish to Pages only after explicit supervising-user approval and exact hosted-byte proof.
-- Post-audit F007 lifecycle regressions pass with demo-web 270/270; the earlier browser matrix passed
-  14/14 but must be refreshed after the audit hardening. The clean gate, freeze and refreshed UAT
-  remain pending.
+- Post-audit F007 lifecycle regressions pass with demo-web 270/270. The exact committed source then
+  passes the complete clean gate, no-rebuild freeze, identical temporary/retained eight-path HTTP
+  ledgers and refreshed 14/14 browser matrix on both endpoints. Refreshed human UAT remains
+  pending.
 
 Withdrawn nomination record (2026-08-25): exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -276,10 +278,25 @@ Withdrawn direct-authoring nomination (2026-08-26): exact source
 direct 3/3, baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against those frozen bytes.
 The former PID `4081080` record is historical evidence only. This adds no solver equation, browser
 execution, custom artifact or fifth bundled golden row. The later combined F005/F006 source
-`ff2e142` and its frozen candidate are withdrawn by M84-F007. Refreshed M84-U1 through M84-U14,
-clean F007 replacement qualification, a replacement nomination, explicit approval, Pages
-publication, service retirement and closure remain open. No replacement artifact hash or path is
-claimed here.
+`ff2e142` and its frozen candidate are withdrawn by M84-F007.
+
+Current F007 nomination (2026-08-27): exact product source
+`cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the complete clean gate. The 6,194-line,
+419,126-byte log `/tmp/geosolve-m84-f007-release-gate.fn6ZHE.log` has SHA-256
+`40c73a8856df0905e85e2b877a82db0e0e81da583764ccc18d729e268f01763b`. The unchanged 271-row
+golden and four-demo M84 ledger retain SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+Without rebuilding, the exact seven-file output is frozen at
+`/tmp/geosolve-m84-f007-uat.KgW8fpLf`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`, with complete evidence at
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Temporary `:18087` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; all 14 browser cases pass
+on both endpoints. Historical PID `4081080` and temporary PID `34895` are retired. PID `62376`
+serves only that immutable snapshot at `http://100.94.63.83:8080/`. Refreshed M84-U1 through
+M84-U14, explicit approval, Pages publication, service retirement and closure remain open.
 
 ## Bounds and non-goals
 

@@ -385,21 +385,19 @@ Generic saves, foreign/reentrant preparation, foreign terminals and stale termin
 replacing the route or newer authority. Every durable sidebar, code, Outline, Inspector, history,
 source and Apply route first cancels captured canvas authority; the generic-save adapter also
 preserves an unexpected live route without restoring underneath it. No-motion release/cancel is
-history-neutral. This does not add a fifth bundled-ledger demo. Exact source
-`41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
-`d31b805549a29433e157074bc181517bdb50fb67`, passes complete clean qualification. Its exact
-no-rebuild snapshot `/tmp/geosolve-m84-authored-uat.ZYQQyBQQ`, aggregate
-`6f82bb261057916f737110cb6533da128d1afde72d1b2f5584f937acdd1a54b1`, passes its historical
-temporary and retained exact-byte checks plus direct 3/3, baseline 4/4, F003 1/1 and F004 2/2
-browser suites. M84-F005/F006 withdraw this nomination because it predates collaborative overlay,
-semantic drag/deletion authority and its audit hardening. Combined F005/F006 source `ff2e142` and
-its frozen candidate are also withdrawn by F007. The earlier provisional release-WASM/browser
-matrix passed 14/14. Post-audit demo-web passes 270/270, including actual no-motion release, exact
-stored-session mismatch, durable-mutation ordering and generic-save preservation regressions;
-sketch-code suites plus focused Clippy/WASM checks pass. The refreshed browser matrix, clean
-committed-source gate, replacement freeze and U1-U14 remain pending. No replacement artifact
-hash/path or retained service is claimed; Pages remains on accepted M83 and no M84 public
-publication is claimed.
+history-neutral. This does not add a fifth bundled-ledger demo. Exact direct-authoring source
+`41e65a4f8c92179412ba2e06f44692377cd5fe51`, combined F005/F006 source `ff2e142` and their frozen
+candidates are withdrawn historical evidence. Current exact product source
+`cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the complete clean release gate. Its exact
+no-rebuild snapshot `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
+`8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`, passes byte-identical
+temporary and retained eight-path verification plus refreshed baseline 4/4, direct-authored 3/3,
+F003 1/1, F004 2/2 and F005-F007 4/4 browser suites on both endpoints. Complete evidence is at
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Historical PID `4081080` and temporary PID
+`34895` are retired; PID `62376` serves only the immutable snapshot at
+`http://100.94.63.83:8080/`. U1-U14 remain pending. Pages remains on accepted M83 and no M84
+public publication is claimed.
 
 ## Read first
 
@@ -437,8 +435,8 @@ publication is claimed.
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005-F007 ledger, withdrawn historical nominations and pending replacement
-    scorecard.
+    implemented F005-F007 ledger, current immutable replacement nomination, withdrawn historical
+    nominations and pending human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -815,8 +813,8 @@ architecture hardening pass clean qualification, immutable Tailscale nomination,
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
 The clean-qualified F003/F004 and direct-authoring candidates remain withdrawn historical evidence.
 F005 collaborative semantic authority, F006 audit hardening and F007 exact terminal-lens
-classification are implemented and focused-qualified. Combined source `ff2e142` is withdrawn;
-clean replacement nomination and human UAT remain open.
+classification are implemented, clean-qualified and immutably nominated at exact source
+`cc2f05e`, tree `6b8fc41`. Combined source `ff2e142` is withdrawn; human UAT remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -934,10 +932,10 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F007 ledger and withdrawn
-  historical nominations)
-- `docs/M84_UAT.md` (implemented/focused-qualified F005-F007 and refreshed pending U1-U14
-  scorecard; no current replacement candidate)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F007 ledger, current immutable
+  nomination and withdrawn historical nominations)
+- `docs/M84_UAT.md` (implemented/clean-qualified F005-F007 and refreshed pending U1-U14
+  scorecard; current replacement candidate live on Tailscale)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

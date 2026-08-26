@@ -2,10 +2,11 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **M84-F005, M84-F006 and M84-F007 are implemented and focused-qualified but not accepted;
-refreshed UAT U1-U14 is pending**. No row is accepted and no replacement snapshot is nominated.
-The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and the initial/F003/
-F004 snapshots are withdrawn historical evidence. Pages remains on accepted M83.
+Status: **M84-F005, M84-F006 and M84-F007 are implemented, clean-qualified and immutably
+nominated but not accepted; refreshed UAT U1-U14 is pending**. No row is accepted. Exact product
+source `cc2f05e`, tree `6b8fc41`, is the current candidate. The direct-authoring `41e65a4`
+snapshot, combined F005/F006 source `ff2e142` and the initial/F003/F004 snapshots are withdrawn
+historical evidence. Pages remains on accepted M83.
 
 ## Withdrawn candidate evidence
 
@@ -219,13 +220,56 @@ mutation even if the viewport is unavailable, and a defensive generic save prese
 live route without restoring beneath it. No-motion release/cancel is history-neutral; exact stored-
 session mismatch and Apply/Undo cannot revert newer authority. The earlier release-WASM/browser
 matrix passed 14/14. Post-audit web library 270/270,
-sketch-code suites and focused Clippy/WASM checks pass; the browser matrix must be refreshed after
-these final changes. This is focused replacement evidence only; no clean-qualified candidate,
-final artifact hash/path, retained Tailscale service or UAT row is claimed.
+sketch-code suites and focused Clippy/WASM checks pass. This is historical focused evidence; the
+clean replacement nomination is recorded below and no UAT row is claimed by automation.
+
+## Current F007 replacement nomination
+
+Exact product source `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the complete clean gate from 00:52:15 through
+01:08:51 AEST on 2026-08-27. The 6,194-line, 419,126-byte log
+`/tmp/geosolve-m84-f007-release-gate.fn6ZHE.log` has SHA-256
+`40c73a8856df0905e85e2b877a82db0e0e81da583764ccc18d729e268f01763b` and ends with the Trunk
+0.21.14 success marker. It includes formatting/diff hygiene, warnings-denied workspace
+Clippy/Rustdoc, locked tests/doctests, unchanged 271-row golden, actual WASM, both TypeScript
+packages, package closure, benchmarks/performance, licensing and release Trunk. The unchanged
+golden and four-demo ledger hashes are
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+The exact gate output was frozen without rebuilding at
+`/tmp/geosolve-m84-f007-uat.KgW8fpLf`. Source, copied and frozen manifests match; the directory is
+`0555` and exactly seven regular non-symlink files are `0444`. Ordered-manifest aggregate is
+`8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`; complete evidence is at
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`:
+
+```text
+bc99bec852a174e58de5027da25cffd31a5e21580fff4f4cba80e700a3d5f252  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+1cdaa482960063be48a3175941caa61b2120dfa36c61bfd87190efef3629ab5d  geosolve-demo-web-82d5c542ca4d046b.js
+6ae0f1208912c7a9050c7cc5729381aad992242b213989bbea0787bc69fd37c4  geosolve-demo-web-82d5c542ca4d046b_bg.wasm
+92cbb926b4dfb36af12ae4d7e549006fd0f699e8b99662062db101e73b0f800f  index.html
+81e24b427990f181b099e7b751dee6739d68024001e3cef592a8be3faed435db  styles-8eda25752cd33a23.css
+```
+
+Temporary `:18087` and retained `:8080` eight-path ledgers are byte-identical at SHA-256
+`efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`: every path returns HTTP
+200, zero redirects, exact MIME/length/hash, no `Location`/`Content-Encoding`, and `/` equals
+`index.html`. Baseline 4/4, direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser
+suites pass on both endpoints. Browser coverage directly exercises both desktop sizes,
+no-selection producer drag, selected producer, selected-consumer detachment, repeated drag,
+Undo/Redo/reload/Reset, managed deletion and generated-child suppression. Generic/foreign/stale
+terminal and bit-conflict adversarial internals remain Rust/WASM-owned because no public browser
+gesture exists for them.
+
+Only after temporary byte/browser verification passed was withdrawn PID `4081080` retired.
+Temporary PID `34895` is retired. `geosolve-m84-uat.service`, PID `62376`, serves only the exact
+snapshot at `http://100.94.63.83:8080/`. This evidence nominates bytes; it does not accept U1-U14.
 
 | Release state | Status |
 | --- | --- |
-| M84-F007 clean qualification, immutable freeze and exact Tailscale replacement | pending |
+| M84-F007 clean qualification, immutable freeze and exact Tailscale replacement | complete |
 | Supervising-user refreshed M84-U1 through M84-U14 | pending |
 | GitHub Pages publication, service retirement and M84 closure | pending |
 
@@ -270,5 +314,6 @@ withdraws the candidate and opens an owning-layer regression.
 - Supervising-user UAT: refreshed M84-U1 through M84-U14 pending; every previous candidate,
   including direct-authoring `41e65a4`, remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Replacement Tailscale nomination: pending after clean F007 qualification and no-rebuild
-  freeze.
+- Replacement Tailscale nomination: exact `cc2f05e` candidate is live at
+  `http://100.94.63.83:8080/` under PID `62376`; immutable snapshot
+  `/tmp/geosolve-m84-f007-uat.KgW8fpLf` remains current until approval or another finding.

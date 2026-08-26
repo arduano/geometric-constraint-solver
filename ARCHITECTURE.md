@@ -69,8 +69,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   duplicate/conflict authority; M84-F007 makes one pointer-down semantic lens the sole terminal
   seed authority. The clean-qualified F003/F004, direct-authoring `41e65a4` and combined F005/F006
   `ff2e142` candidates are historical because they predate the current scope or were withdrawn by a
-  finding. Refreshed U1-U14 and a clean replacement nomination remain pending, and Pages stays on
-  accepted M83.
+  finding. Exact replacement source `cc2f05e`, tree `6b8fc41`, passes the clean gate, immutable
+  freeze and temporary/retained Tailscale qualification. Refreshed U1-U14 remain pending, and Pages
+  stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -938,11 +939,15 @@ terminal revert newer accepted authority. Genuine unequal semantic writes still 
 under F006.
 
 The combined F005/F006 source `ff2e142` and its frozen candidate are withdrawn by this reproduction.
-The earlier provisional release-WASM/browser matrix passed 14/14. The post-audit demo-web library
-passes 270/270 with real no-motion, exact stored-session mismatch, durable-mutation ordering and
-generic-save preservation coverage; sketch-code suites and focused Clippy/WASM checks pass. The
-browser matrix must be refreshed before nomination, and no clean-qualified replacement, artifact
-path/hash or retained service is architecture authority yet.
+The post-audit demo-web library passes 270/270 with real no-motion, exact stored-session mismatch,
+durable-mutation ordering and generic-save preservation coverage; sketch-code suites and focused
+Clippy/WASM checks pass. Exact replacement source
+`cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, then passes the complete clean gate. Its exact
+no-rebuild snapshot `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
+`8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`, passes identical temporary
+and retained HTTP ledgers and refreshed 14/14 browser cases on each endpoint. PID `62376` serves
+that immutable authority at `http://100.94.63.83:8080/`; U1-U14 remain pending.
 
 ### `geosolve-sketch-features`
 
@@ -1904,6 +1909,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
   nominations and direct artifact-free authored source `41e65a4` are withdrawn historical
   evidence. M84-F005's collaborative overlay/semantic drag/deletion authority, M84-F006 audit
-  hardening and M84-F007 terminal-lens classification are implemented and focused-qualified.
-  Combined source `ff2e142` is withdrawn; clean replacement nomination and refreshed human UAT
-  U1-U14 remain pending. Accepted M83 remains Pages authority and no M84 publication is claimed.
+  hardening and M84-F007 terminal-lens classification are implemented, clean-qualified and
+  immutably nominated at exact source `cc2f05e`, tree `6b8fc41`. Combined source `ff2e142` is
+  withdrawn; refreshed human UAT U1-U14 remains pending. Accepted M83 remains Pages authority and
+  no M84 publication is claimed.

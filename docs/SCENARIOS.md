@@ -4689,9 +4689,10 @@ coverage. The former complete clean candidate and clean-qualified F003/F004 loca
 nominations remain withdrawn historical evidence. M84-F005 also withdraws the direct-authoring
 `41e65a4` nomination. Collaborative overlay and semantic interaction authority plus F006 audit
 hardening are implemented and focused-qualified. F007 then withdraws combined source `ff2e142` and
-its frozen candidate after reproducing false terminal conflicts on multi-frame producer drags. A
-fresh clean qualification, nomination and UAT U1-U14 remain required. Accepted M83 remains Pages
-authority.
+its frozen candidate after reproducing false terminal conflicts on multi-frame producer drags.
+Exact replacement source `cc2f05e`, tree `6b8fc41`, passes clean qualification, immutable
+nomination and temporary/retained frozen-browser verification. UAT U1-U14 remains required.
+Accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4834,7 +4835,8 @@ Submit duplicate same-tier point seeds in both orders. Bit-identical IEEE values
 deterministic provenance; unequal values, including `+0.0` versus `-0.0`, reject atomically. F006
 changes no residual equation, solver priority, constraint, tolerance or branch state. Its focused
 owners live beside F005's semantic-overlay, native-composition, persistence and workbench suites;
-clean release qualification and a replacement freeze remain pending.
+the current clean release qualification and replacement freeze are recorded in the release gate
+section below.
 
 ### M84-F007 — pointer-down lens owns semantic terminal publication
 
@@ -4871,10 +4873,10 @@ authority.
 The earlier corrected provisional release-WASM/browser coverage passed 14/14. Post-audit demo-web
 passes 270/270, including real no-motion, exact stored-session mismatch, mutation-order and
 generic-save preservation regressions; the sketch-code suites and focused warnings-denied
-Clippy/WASM checks pass. The browser matrix must be refreshed after the audit hardening. The frozen
-`ff2e142` candidate is withdrawn. Clean committed-source qualification, a replacement freeze,
-retained Tailscale `:8080` publication and UAT remain pending; no final artifact hash or path is
-claimed.
+Clippy/WASM checks pass. The frozen `ff2e142` candidate is withdrawn. Exact replacement source
+`cc2f05e`, tree `6b8fc41`, then passes the complete clean gate, immutable freeze, retained
+Tailscale `:8080` publication and refreshed 14/14 browser matrix on both endpoints. UAT remains
+pending.
 
 ### M84-F001 — generated-point terminal checkpoint parity
 
@@ -5016,8 +5018,17 @@ browser suites on each endpoint. The PID `4081080` service record and complete e
 `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this
 nomination because it predates collaborative draft overlay and semantic drag/deletion authority.
 F007 also withdraws the later frozen `ff2e142` candidate. M84 remains active and unaccepted with
-refreshed U1-U14 pending; no F007 replacement is clean-qualified or nominated, Pages remains accepted
-M83 authority and no M84 public publication is claimed.
+refreshed U1-U14 pending. Current F007 product source
+`cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the clean gate; its no-rebuild snapshot
+`/tmp/geosolve-m84-f007-uat.KgW8fpLf` has aggregate
+`8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`. Temporary and retained
+eight-path ledgers match at
+`efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; baseline 4/4,
+direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
+PID `62376` serves the exact frozen bytes at `http://100.94.63.83:8080/`; complete evidence is at
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Pages remains accepted M83 authority and no M84
+public publication is claimed.
 
 ## Frozen near-singular fixtures
 

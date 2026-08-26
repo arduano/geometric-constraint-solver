@@ -3,11 +3,11 @@
 # ADR 0041: Optional code/GUI sketch authoring
 
 Status: accepted for M84. M84-F005's collaborative semantic-interaction amendment, M84-F006's
-adversarial authority hardening and M84-F007's exact terminal-lens classification are implemented
-and focused-qualified; clean replacement nomination and refreshed UAT remain pending. The direct-
-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`, initial `79078ec`, F003
-`b9e67bad` and F004 `c2cf160` snapshots are withdrawn historical evidence. No F007 replacement is
-clean-qualified, nominated or accepted; GitHub Pages remains on accepted M83.
+adversarial authority hardening and M84-F007's exact terminal-lens classification are implemented,
+clean-qualified and immutably nominated at exact source `cc2f05e`, tree `6b8fc41`; refreshed UAT
+remains pending. The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`,
+initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are withdrawn historical evidence.
+No M84 candidate is accepted; GitHub Pages remains on accepted M83.
 
 ## Context
 
@@ -310,8 +310,14 @@ weakening F006's bit-exact conflict rule or adding solver behavior.
 - Exact source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
   `d31b805549a29433e157074bc181517bdb50fb67`, and its immutable snapshot are historical
   direct-authoring evidence only. Combined F005/F006 source `ff2e142` and its frozen candidate are
-  also withdrawn by F007. The clean replacement gate, refreshed UAT and any replacement freeze
-  remain pending, as does public publication; no replacement artifact hash or path is claimed.
+  also withdrawn by F007. Exact replacement source
+  `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+  `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the clean gate and is frozen without rebuild
+  at `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
+  `8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`. Exact temporary and
+  retained Tailscale verification plus the 14-case browser matrix pass on both endpoints; PID
+  `62376` serves that snapshot at `http://100.94.63.83:8080/`. Refreshed UAT and public publication
+  remain pending.
 
 ## Rejected alternatives
 

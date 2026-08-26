@@ -3,13 +3,14 @@
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
 Status: **M84-F005 collaborative semantic interaction, M84-F006 adversarial authority hardening and
-M84-F007 exact terminal-lens classification are implemented and focused-qualified; the clean
-replacement gate, immutable nomination and refreshed UAT remain pending**. Direct-authoring source
+M84-F007 exact terminal-lens classification are implemented, clean-qualified and immutably
+nominated; refreshed UAT remains pending**. Exact product source `cc2f05e`, tree `6b8fc41`, is the
+current candidate. Direct-authoring source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, is withdrawn historical evidence with the initial,
 F003 and F004 candidates. Combined F005/F006 source `ff2e142` and its frozen candidate are also
-withdrawn by F007. No F007 replacement is clean-qualified or nominated, no UAT row is accepted, no
-M84 Pages publication is claimed, and accepted M83 remains public authority.
+withdrawn by F007. No UAT row is accepted, no M84 Pages publication is claimed, and accepted M83
+remains public authority.
 
 ## Baseline and authority
 
@@ -365,13 +366,13 @@ Undo cannot change the newer accepted authority.
 The earlier corrected provisional release-WASM/browser matrix passed 14/14. Post-audit demo-web
 passes 270/270, including real no-motion release, exact stored-session mismatch, mutation-order and
 generic-save preservation regressions; the sketch-code suites and focused warnings-denied
-Clippy/WASM checks pass. The browser matrix must be refreshed after the audit changes. This
-withdraws the frozen `ff2e142` candidate but does not establish a clean-qualified replacement,
-immutable artifact, Tailscale service or UAT acceptance.
+Clippy/WASM checks pass. Exact committed source `cc2f05e` then passes the clean release gate and
+the refreshed browser matrix on temporary and retained frozen endpoints. This withdraws the
+`ff2e142` candidate and establishes the current mechanical nomination, but not UAT acceptance.
 
 ## Focused F005-F007 qualification
 
-The final dirty implementation state passes the proportional pre-release matrix:
+The final pre-nomination implementation state passed the proportional pre-release matrix:
 
 - `cargo test --locked -p geosolve-sketch-code` passes, including
   `m84_native_composition` 11/11 and `m84_semantic_overlay` 8/8;
@@ -386,11 +387,49 @@ The final dirty implementation state passes the proportional pre-release matrix:
   expected 29 files;
 - focused warnings-denied Clippy, formatting and `git diff --check` pass during the audits; and
 - the pre-final-audit F007 release-WASM/browser matrix passed 14/14; its focused WASM check and the
-  post-audit WASM build check pass, while a refreshed 14-case browser run remains required.
+  post-audit WASM build check pass; the refreshed 14-case browser run subsequently passes on both
+  candidate endpoints.
 
-These focused results establish implemented behavior but do not nominate bytes. The exact clean
-committed-source release gate, no-rebuild freeze, temporary/retained served-byte verification and
-refreshed browser suites must still be repeated after documentation reconciliation.
+These focused results establish the owning-layer behavior. The exact clean committed-source
+nomination below supplies the release-level evidence.
+
+## Current F007 qualification and immutable nomination
+
+Exact product source `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passed
+`env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
+from 00:52:15 through 01:08:51 AEST on 2026-08-27, exit 0 in approximately 996 seconds. Its final
+Trunk 0.21.14 `INFO ✅ success` marker was checked. The 6,194-line, 419,126-byte log
+`/tmp/geosolve-m84-f007-release-gate.fn6ZHE.log` has SHA-256
+`40c73a8856df0905e85e2b877a82db0e0e81da583764ccc18d729e268f01763b`. The gate covers format and
+diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature workspace tests and
+doctests, the clean 271-row golden, actual WASM, both TypeScript packages, benchmark compilation,
+M14/M32/M83 and interaction performance, the independently validated 256-body sparse crossover,
+licensing, package contents/extraction and the final release Trunk build. The worktree was clean
+before and after. Golden and M84-ledger hashes remain
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+Without rebuilding, the exact seven-file gate output was copied to
+`/tmp/geosolve-m84-f007-uat.KgW8fpLf`. Source, copied and frozen manifests are identical; the
+directory is `0555`, exactly seven regular non-symlink files are `0444`, and the ordered-manifest
+aggregate is `8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`. Complete gate,
+manifest, mode, HTTP, browser, service and screenshot evidence is retained at
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`.
+
+The same immutable bytes were first served only on Tailscale port `18087` under PID `34895`.
+Temporary and final `:8080` eight-path ledgers are byte-identical at SHA-256
+`efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`: `/` and all seven files
+return HTTP 200, zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/`
+equals `index.html`. Sequential browser suites pass baseline 4/4, direct authored 3/3, F003 1/1,
+F004 2/2 and F005-F007 4/4 on both endpoints, including `1440x900` and `1024x720`. Only after the
+temporary byte/browser proof passed was withdrawn PID `4081080` retired. Temporary PID `34895` is
+also retired; `geosolve-m84-uat.service`, PID `62376`, now serves only the exact snapshot at
+`http://100.94.63.83:8080/`. Browser checks directly cover no-selection producer, selected
+producer, selected-consumer detachment, repeated drag, Undo/Redo, reload, Reset, managed deletion
+and generated-child suppression. Foreign/stale terminal and bit-conflict adversarial cases remain
+owned by the Rust/WASM regressions because no corresponding public browser gesture exists. This is
+mechanical nomination evidence; U1-U14 remain pending.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -608,9 +647,9 @@ retired. The temporary PID `4027499` is also retired. M84-F005 withdraws this ot
 direct-authoring record because it predates the collaborative overlay and semantic-authority
 contract. Combined F005/F006 source `ff2e142` and its later frozen candidate are themselves
 withdrawn by F007's terminal-lens reproduction. Those snapshot/service records are historical only,
-not current candidates. GitHub Pages deliberately remains on accepted M83; a new F007 clean
-qualification, freeze and UAT nomination are still required. No replacement artifact hash, path or
-service record is claimed.
+not current candidates. The current F007 qualification and immutable nomination are recorded
+above. GitHub Pages deliberately remains on accepted M83 pending refreshed UAT and explicit
+approval.
 
 ## Known bounds and truthful limitations
 
@@ -631,9 +670,10 @@ service record is claimed.
 
 ## Remaining release sequence
 
-1. Commit the implemented F007 correction and reconciled documentation, run the exact clean release
-   gate, freeze its no-rebuild output, exact-verify temporary and retained Tailscale service bytes,
-   and run the refreshed baseline/F003/F004/F005-F007 browser suites. **Pending.**
+1. Commit the implemented F007 correction, run the exact clean release gate, freeze its no-rebuild
+   output, exact-verify temporary and retained Tailscale service bytes, run the refreshed baseline/
+   authored/F003/F004/F005-F007 browser suites, and reconcile the nomination documentation.
+   **Complete at exact product source `cc2f05e`; this documentation is its nomination descendant.**
 2. Complete refreshed M84-U1 through M84-U14 against only that replacement and record explicit supervising-
    user approval or open another numbered finding.
 3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately

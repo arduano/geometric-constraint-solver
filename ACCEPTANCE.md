@@ -3388,8 +3388,8 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 Status: active and unaccepted. M84-F005's collaborative draft overlay/semantic interaction,
 M84-F006's adversarial authority hardening and M84-F007's exact terminal-lens classification are
-implemented and focused-qualified. Clean replacement qualification, immutable nomination,
-refreshed M84-U1 through M84-U14 and explicit approval remain pending. The direct-authoring
+implemented, clean-qualified and immutably nominated at exact source `cc2f05e`, tree `6b8fc41`.
+Refreshed M84-U1 through M84-U14 and explicit approval remain pending. The direct-authoring
 `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn
 historical evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance
 contract. Accepted M83 remains public product authority.
@@ -3540,9 +3540,10 @@ and cold-materialized through the ordinary accepted-scene authority.
   golden, TypeScript package checks and package closure. The earlier provisional F007
   release-WASM/browser matrix passed 14/14. Post-audit F007 evidence passes demo-web 270/270,
   sketch-code suites, focused terminal-lifecycle/mutation-order/generic-save regressions and
-  warnings-denied Clippy/WASM. The browser matrix must be refreshed after the final audit changes.
-  This does not substitute for the pending clean committed-source release gate, replacement freeze
-  or refreshed UAT, or nominate bytes.
+  warnings-denied Clippy/WASM. Exact committed source `cc2f05e` subsequently passes the complete
+  clean gate, immutable no-rebuild freeze, byte-identical temporary/retained HTTP verification and
+  the refreshed 14/14 browser matrix on both endpoints. This nominates bytes but does not
+  substitute for refreshed human UAT.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3623,10 +3624,23 @@ baseline 4/4, F003 1/1 and F004 2/2 browser suites pass against the exact bytes 
 The PID `4081080` service record and evidence at
 `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this
 nomination because it predates the collaborative overlay/semantic-authority scope. Combined
-F005/F006 source `ff2e142` and its frozen candidate are themselves withdrawn by F007. Refreshed
-M84-U1 through M84-U14, clean F007 replacement qualification and a new immutable nomination remain
-open, so Pages remains accepted M83 authority and no M84 publication is claimed. No replacement
-artifact hash or path is asserted.
+F005/F006 source `ff2e142` and its frozen candidate are themselves withdrawn by F007.
+
+Current F007 mechanical authority is exact product source
+`cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`. Its complete clean gate log has 6,194 lines,
+419,126 bytes and SHA-256
+`40c73a8856df0905e85e2b877a82db0e0e81da583764ccc18d729e268f01763b`. The exact no-rebuild
+snapshot `/tmp/geosolve-m84-f007-uat.KgW8fpLf` has seven regular non-symlink files at
+directory/file modes `0555`/`0444` and ordered-manifest aggregate
+`8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`. Complete evidence is under
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Temporary and retained eight-path HTTP ledgers
+are byte-identical at SHA-256
+`efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; baseline 4/4,
+direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
+Historical PID `4081080` and temporary PID `34895` are retired. PID `62376` serves only those
+frozen bytes at `http://100.94.63.83:8080/`. Refreshed M84-U1 through M84-U14 remain open, so Pages
+remains accepted M83 authority and no M84 public publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

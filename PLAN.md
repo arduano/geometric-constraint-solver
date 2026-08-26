@@ -5794,12 +5794,12 @@ all existing constraint mathematics remain solely in the native Rust solver.
 ### M84: optional code/GUI sketch authoring
 
 Status: **active and unaccepted; M84-F005 collaborative semantic interaction, M84-F006 adversarial
-authority hardening and M84-F007 exact terminal-lens classification are implemented and focused-
-qualified, while clean replacement nomination and refreshed UAT remain pending**. Ordinary GUI
+authority hardening and M84-F007 exact terminal-lens classification are implemented,
+clean-qualified and immutably nominated, while refreshed UAT remains pending**. Ordinary GUI
 dependencies project as lexical managed TypeScript while low-level transport remains truthfully
 labelled Intent IR. The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`
-and all earlier nominations are withdrawn historical evidence. No F007 replacement is clean-
-qualified or nominated, and accepted M83 remains public Pages authority.
+and all earlier nominations are withdrawn historical evidence. Exact product source `cc2f05e`,
+tree `6b8fc41`, is the current candidate; accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5920,7 +5920,7 @@ qualified or nominated, and accepted M83 remains public Pages authority.
   element is absent, with platform capture release remaining best-effort. These proportional
   results do not nominate the dirty correction or revive `ff2e142`; the browser matrix must be
   refreshed after the final audit hardening.
-- [ ] Commit the reconciled F007 implementation/documentation, pass the clean full release gate,
+- [x] Commit the reconciled F007 implementation/documentation, pass the clean full release gate,
   refresh browser/UAT collateral, freeze the exact no-rebuild output and exact-verify one
   replacement on temporary and retained Tailscale listeners.
 - [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages,
@@ -5960,9 +5960,31 @@ regression proves generic and foreign failures preserve the serialized code sess
 editor authority and notice. No-motion release/cancel is history-neutral and exact stored-session
 mismatch plus Apply/Undo stale terminals cannot revert newer authority. The earlier provisional
 release-WASM browser matrix passed 14/14; post-audit demo-web passes 270/270, with sketch-code
-suites and focused Clippy/WASM checks also passing. The browser matrix must be refreshed after these
-final changes. The frozen `ff2e142` candidate is withdrawn; no qualified replacement source,
-artifact hash, snapshot path or retained service is claimed.
+suites and focused Clippy/WASM checks also passing. The frozen `ff2e142` candidate is withdrawn.
+Exact current qualification and nomination are recorded below.
+
+M84-F007 replacement qualification/nomination record (2026-08-27): exact product source
+`cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
+`6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the complete clean gate from 00:52:15 through
+01:08:51 AEST, exit 0 in approximately 996 seconds. Its 6,194-line, 419,126-byte log
+`/tmp/geosolve-m84-f007-release-gate.fn6ZHE.log` has SHA-256
+`40c73a8856df0905e85e2b877a82db0e0e81da583764ccc18d729e268f01763b`. The unchanged 271-row
+golden and four-demo M84 ledger remain
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`73b25bd00344229e33971a71c8025e4c6e17ff970106f7e1afafd3b3179dcf7e`.
+
+Without rebuilding, the exact seven-file gate output is frozen at
+`/tmp/geosolve-m84-f007-uat.KgW8fpLf`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`, with complete evidence at
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Temporary `:18087` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`: every path returns 200,
+zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
+`index.html`. Baseline 4/4, direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser
+suites pass on both endpoints. Only after temporary qualification passed were withdrawn PID
+`4081080` and temporary PID `34895` retired. `geosolve-m84-uat.service`, PID `62376`, serves only
+the exact frozen snapshot at `http://100.94.63.83:8080/`. U1-U14, explicit approval, Pages
+publication, service retirement and milestone closure remain pending.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -6083,8 +6105,8 @@ The temporary service and historical F004 PID `3316682` are retired. The `408108
 is now historical evidence: M84-F005 withdraws this direct-authoring nomination because it
 predates collaborative overlay and semantic interaction authority. These automated checks do not
 accept refreshed M84-U1 through M84-U14, authorize Pages, or close M84. At that checkpoint a new
-F005 candidate was still required; F007 now requires a new clean replacement under the pending
-sequence recorded above.
+F005 candidate was still required; F007 later superseded it and the current clean replacement is
+recorded above.
 
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the
