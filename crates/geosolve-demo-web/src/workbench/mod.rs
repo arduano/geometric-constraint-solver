@@ -5259,6 +5259,39 @@ pub(crate) mod wasm {
     }
 
     fn delete_projectional_selection(wb: &mut ProjectionalWorkbench) -> Result<String, String> {
+        // Code-authored declarations must be removed from managed TypeScript
+        // first; deleting only the projection would be reverted on the next
+        // expansion. Resolve the semantic declaration from the current
+        // selection before borrowing the code project mutably.
+        if let Some(symbol) = wb.code_project.as_ref().and_then(|project| {
+            let accepted = wb.editor().coordinator().accepted_materialization()?;
+            wb.editor().editor().selection().iter().find_map(|item| {
+                let binding = match item {
+                    SelectionItem::Point(point) => IntentNativeBinding::Point(*point),
+                    SelectionItem::Curve(span) => IntentNativeBinding::Curve(*span),
+                    SelectionItem::Constraint(id) => IntentNativeBinding::Constraint(*id),
+                    SelectionItem::Dimension(id) => IntentNativeBinding::Dimension(*id),
+                    SelectionItem::Feature(id) => IntentNativeBinding::ComputedFeature(*id),
+                    SelectionItem::FeatureCorner(corner) => {
+                        IntentNativeBinding::ComputedFeatureCorner(corner.corner)
+                    }
+                    SelectionItem::Datum(_) => return None,
+                };
+                let owner = accepted.ownership.exact_owner(binding)?;
+                let node = wb.editor().coordinator().intent().graph().node(owner)?;
+                node.symbol
+                    .as_str()
+                    .starts_with("code.")
+                    .then(|| node.symbol.clone())
+            })
+        }) {
+            return wb
+                .code_project
+                .as_mut()
+                .expect("code project inspected above")
+                .delete_managed_declaration(&symbol)
+                .map(|_| format!("Managed declaration `{}` deleted", symbol.0));
+        }
         let result = wb
             .editor_mut()
             .delete_selected_declaration()
