@@ -401,6 +401,74 @@ fn pointer_frames_are_transient_and_release_commits_one_intent_transaction() {
 }
 
 #[test]
+fn retained_camera_scene_reauthenticates_after_preview_cancel_and_accepted_replacement() {
+    let (mut session, _, viewport) = fixture();
+    let origin = viewport.model_to_screen([1.0, 2.0]);
+    let target = viewport.model_to_screen([1.5, 2.25]);
+    let destination = Viewport::new([800.0, 600.0], [3.0, -2.0], 85.0).unwrap();
+
+    let mut accepted_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .reproject_scene(&mut accepted_scene, destination)
+        .expect("the current accepted cache is camera-reprojectable");
+
+    let origin_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_down(&origin_scene, pointer(70, origin))
+        .unwrap();
+    session
+        .pointer_move(&origin_scene, pointer(70, target))
+        .unwrap();
+    let mut preview_scene = session.scene(viewport, 0.5).unwrap();
+    session.cancel_interaction();
+    assert!(matches!(
+        session.reproject_scene(&mut preview_scene, destination),
+        Err(ProjectionalEditorError::SceneAuthorityMismatch)
+    ));
+
+    let origin_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_down(&origin_scene, pointer(71, origin))
+        .unwrap();
+    session
+        .pointer_move(&origin_scene, pointer(71, target))
+        .unwrap();
+    let terminal_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_up(&terminal_scene, pointer(71, target))
+        .unwrap();
+    assert!(matches!(
+        session.reproject_scene(&mut accepted_scene, destination),
+        Err(ProjectionalEditorError::SceneAuthorityMismatch)
+    ));
+
+    let mut committed_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .reproject_scene(&mut committed_scene, destination)
+        .expect("the newly committed scene is current");
+    session.undo().unwrap().unwrap();
+    assert!(matches!(
+        session.reproject_scene(&mut committed_scene, viewport),
+        Err(ProjectionalEditorError::SceneAuthorityMismatch)
+    ));
+
+    let mut undone_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .reproject_scene(&mut undone_scene, destination)
+        .expect("the Undo scene is current");
+    session.redo().unwrap().unwrap();
+    assert!(matches!(
+        session.reproject_scene(&mut undone_scene, viewport),
+        Err(ProjectionalEditorError::SceneAuthorityMismatch)
+    ));
+
+    let mut redone_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .reproject_scene(&mut redone_scene, destination)
+        .expect("the Redo scene is current");
+}
+
+#[test]
 fn rejected_terminal_sample_commits_the_last_visible_accepted_point_preview_once() {
     let (cancel, token) = cancellation_pair();
     let mut control = OperationControl::unlimited();

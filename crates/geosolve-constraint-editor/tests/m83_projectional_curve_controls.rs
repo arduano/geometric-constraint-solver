@@ -2,8 +2,8 @@
 
 use geosolve_constraint_editor::{
     ColdIntentMaterializer, EditorEffect, IntentNativeBinding, Modifiers, PointerInput,
-    ProjectionalCoordinatorError, ProjectionalEditorSession, ProjectionalIntentCoordinator,
-    ScreenPoint, SelectionItem, Viewport,
+    ProjectionalCoordinatorError, ProjectionalEditorError, ProjectionalEditorSession,
+    ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveId, CurveSpan, DocumentCurveControlId, DocumentCurveControlKind,
@@ -533,6 +533,11 @@ fn projectional_editor_resolves_curve_effects_and_cancel_is_history_free() {
         history_before,
     );
     let preview_scene = session.scene(viewport, 0.5).unwrap();
+    let destination = Viewport::new([800.0, 600.0], [2.0, -1.0], 85.0).unwrap();
+    let mut retained_preview = preview_scene.clone();
+    session
+        .reproject_scene(&mut retained_preview, destination)
+        .expect("the live curve-control preview is camera-reprojectable");
     let outcome = session
         .pointer_up(&preview_scene, pointer(20, target))
         .unwrap();
@@ -564,6 +569,10 @@ fn projectional_editor_resolves_curve_effects_and_cancel_is_history_free() {
             .len(),
         history_before + 1,
     );
+    assert!(matches!(
+        session.reproject_scene(&mut retained_preview, viewport),
+        Err(ProjectionalEditorError::SceneAuthorityMismatch)
+    ));
 
     let scene = session.scene(viewport, 0.5).unwrap();
     let radius = scene
@@ -582,10 +591,15 @@ fn projectional_editor_resolves_curve_effects_and_cancel_is_history_free() {
     session
         .pointer_move(&scene, pointer(21, cancel_target))
         .unwrap();
+    let mut canceled_preview = session.scene(viewport, 0.5).unwrap();
     assert_eq!(
         session.cancel_interaction(),
         vec![EditorEffect::ClearCurveControlPreview],
     );
+    assert!(matches!(
+        session.reproject_scene(&mut canceled_preview, destination),
+        Err(ProjectionalEditorError::SceneAuthorityMismatch)
+    ));
     assert_eq!(
         session
             .coordinator()

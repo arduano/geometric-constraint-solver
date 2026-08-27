@@ -1429,6 +1429,115 @@ pub(crate) fn apply_layout(
     );
 }
 
+/// Reprojects an already resolved annotation layout between camera viewports.
+///
+/// Camera changes do not alter accepted geometry or the user's annotation
+/// placement intent. Model-attached anchors therefore follow the exact affine
+/// viewport mapping, while CAD-sized clearances, glyph fan-out, right-angle
+/// marks, and label offsets remain fixed in pixels. This also keeps automatic
+/// placement stable during navigation instead of rerunning the deliberately
+/// expensive collision search and making labels jump between valid slots.
+pub(crate) fn reproject_retained_layout(
+    annotations: &mut [SceneAnnotation],
+    previous: Viewport,
+    next: Viewport,
+) {
+    let map_anchor = |point: ScreenPoint| next.model_to_screen(previous.screen_to_model(point));
+    let offset_from =
+        |point: ScreenPoint, anchor: ScreenPoint| [point.x - anchor.x, point.y - anchor.y];
+    let apply_offset = |anchor: ScreenPoint, offset: [f64; 2]| ScreenPoint {
+        x: anchor.x + offset[0],
+        y: anchor.y + offset[1],
+    };
+
+    for annotation in annotations {
+        match &mut annotation.geometry {
+            SceneAnnotationGeometry::RightAngle {
+                vertex,
+                first_arm,
+                corner,
+                second_arm,
+            } => {
+                let first_offset = offset_from(*first_arm, *vertex);
+                let corner_offset = offset_from(*corner, *vertex);
+                let second_offset = offset_from(*second_arm, *vertex);
+                *vertex = map_anchor(*vertex);
+                *first_arm = apply_offset(*vertex, first_offset);
+                *corner = apply_offset(*vertex, corner_offset);
+                *second_arm = apply_offset(*vertex, second_offset);
+            }
+            SceneAnnotationGeometry::Glyph { markers } => {
+                for marker in markers {
+                    if let Some(origin) = marker.leader_from {
+                        let marker_offset = offset_from(marker.anchor, origin);
+                        let origin = map_anchor(origin);
+                        marker.leader_from = Some(origin);
+                        marker.anchor = apply_offset(origin, marker_offset);
+                    } else {
+                        marker.anchor = map_anchor(marker.anchor);
+                    }
+                }
+            }
+            SceneAnnotationGeometry::LinearDimension {
+                measured_first,
+                measured_second,
+                first,
+                second,
+                label_anchor,
+            } => {
+                let first_offset = offset_from(*first, *measured_first);
+                let second_offset = offset_from(*second, *measured_second);
+                let label_offset = offset_from(*label_anchor, midpoint(*first, *second));
+                *measured_first = map_anchor(*measured_first);
+                *measured_second = map_anchor(*measured_second);
+                *first = apply_offset(*measured_first, first_offset);
+                *second = apply_offset(*measured_second, second_offset);
+                *label_anchor = apply_offset(midpoint(*first, *second), label_offset);
+            }
+            SceneAnnotationGeometry::RadialDimension {
+                center,
+                edge,
+                label_anchor,
+                ..
+            } => {
+                let label_offset = offset_from(*label_anchor, *edge);
+                *center = map_anchor(*center);
+                *edge = map_anchor(*edge);
+                *label_anchor = apply_offset(*edge, label_offset);
+            }
+            SceneAnnotationGeometry::AngularDimension {
+                vertex,
+                first_ray,
+                second_ray,
+                label_anchor,
+                ..
+            } => {
+                let first_offset = offset_from(*first_ray, *vertex);
+                let second_offset = offset_from(*second_ray, *vertex);
+                let label_offset = offset_from(*label_anchor, *vertex);
+                *vertex = map_anchor(*vertex);
+                *first_ray = apply_offset(*vertex, first_offset);
+                *second_ray = apply_offset(*vertex, second_offset);
+                *label_anchor = apply_offset(*vertex, label_offset);
+            }
+            SceneAnnotationGeometry::Label {
+                anchor,
+                leader_from,
+            } => {
+                if let Some(origin) = *leader_from {
+                    let label_offset = offset_from(*anchor, origin);
+                    let origin = map_anchor(origin);
+                    *leader_from = Some(origin);
+                    *anchor = apply_offset(origin, label_offset);
+                } else {
+                    *anchor = map_anchor(*anchor);
+                }
+            }
+        }
+        annotation.refresh_label_bounds();
+    }
+}
+
 pub(crate) fn build_constraint_entries(document: &SketchDocument) -> Vec<SceneConstraintEntry> {
     constraint_entries(document)
 }

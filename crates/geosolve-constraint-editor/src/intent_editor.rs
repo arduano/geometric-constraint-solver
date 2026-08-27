@@ -654,6 +654,56 @@ impl ProjectionalEditorSession {
         Ok(scene)
     }
 
+    /// Reprojects one cached scene only while it still represents this
+    /// session's exact current presentation authority.
+    ///
+    /// The browser may retain a scene between camera frames, but accepted
+    /// native input or computed-feature identity can change without changing
+    /// the old DTO's own internally valid seal. Reauthenticating both stamps
+    /// here prevents a canceled preview or replaced code project from being
+    /// revived by a later camera or pointer callback.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProjectionalEditorError::SceneAuthorityMismatch`] for a stale
+    /// cache, or the ordinary typed reprojection error for invalid geometry.
+    pub fn reproject_scene(
+        &self,
+        scene: &mut EditorScene,
+        viewport: Viewport,
+    ) -> Result<(), ProjectionalEditorError> {
+        if !self.scene_is_current(scene) {
+            return Err(ProjectionalEditorError::SceneAuthorityMismatch);
+        }
+        scene.reproject_viewport(viewport)?;
+        Ok(())
+    }
+
+    /// Whether a cached scene still belongs to the exact presentation
+    /// authority currently exposed by this projectional session.
+    #[must_use]
+    pub fn scene_is_current(&self, scene: &EditorScene) -> bool {
+        self.scene_is_current_inner(scene).unwrap_or(false)
+    }
+
+    fn scene_is_current_inner(&self, scene: &EditorScene) -> Result<bool, ProjectionalEditorError> {
+        let (materialization, session, _) = self.scene_materialization()?;
+        let accepted = session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let accepted_input = session
+            .accepted_prepared_input()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let feature_identity = materialization.features.identity();
+        Ok(scene.belongs_to_retained_session(session)
+            && !(scene.accepted_revision != accepted.identity().revision().get()
+                || scene.design_identity != session.design_identity()
+                || scene.feature_identity != Some(feature_identity)
+                || scene.computed_input.is_none_or(|input| {
+                    input.sketch != accepted_input || input.features != feature_identity
+                })))
+    }
+
     fn attach_computed_fillet_radius_rails(
         &self,
         scene: &mut EditorScene,

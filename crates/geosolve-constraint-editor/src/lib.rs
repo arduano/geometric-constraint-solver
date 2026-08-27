@@ -156,7 +156,7 @@ pub use offset_authoring::{
     OffsetAuthoringStage, OffsetAuthoringState, OffsetAuthoringTarget,
     OffsetAuthoringTargetAvailability, OffsetAuthoringWarning, OffsetAuthoringWarningKind,
 };
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::BTreeSet};
 
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
@@ -1039,6 +1039,37 @@ struct DraftInferenceSceneSeal {
     construction_snap_points: Vec<ScenePoint>,
 }
 
+/// Exact non-camera inputs consumed by retained viewport reprojection.
+///
+/// Camera reprojection is allowed to replace constructor-owned screen-space
+/// values, but it must not turn caller-edited public DTO fields back into
+/// authenticated scene authority. Keeping a collision-free private copy of
+/// every public source that reprojection reads lets the operation reject such
+/// mutation transactionally. The selected control owner is retained directly
+/// instead of being inferred from whichever public control happens to sort
+/// first.
+#[derive(Clone, Debug, PartialEq)]
+struct RetainedSceneReprojectionSeal {
+    accepted_revision: u64,
+    design_identity: SketchDesignIdentity,
+    viewport: Viewport,
+    chord_tolerance_pixels: f64,
+    points: Vec<ScenePoint>,
+    curves: Vec<SceneCurve>,
+    datums: Vec<SceneDatum>,
+    computed_curves: Vec<SceneComputedCurve>,
+    selected_curve_control_owner: Option<CurveSpan>,
+    curve_controls: Vec<SceneCurveControl>,
+    curve_control_guides: Vec<SceneCurveControlGuide>,
+    feature_identity: Option<geosolve_sketch_features::ComputedFeatureDocumentIdentity>,
+    computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    fillet_affordances: Vec<SceneFilletCornerAffordances>,
+    computed_fillet_continuation_statuses: Vec<ComputedFilletContinuationStatus>,
+    annotations: Vec<SceneAnnotation>,
+    constraint_entries: Vec<SceneConstraintEntry>,
+    construction_snap_points: Vec<ScenePoint>,
+}
+
 /// Exact candidate-scene values retained beside the pointer-down stamp for one
 /// already-live selected-curve control gesture.
 ///
@@ -1135,6 +1166,55 @@ impl DraftInferenceSceneSeal {
     }
 }
 
+impl RetainedSceneReprojectionSeal {
+    fn capture(scene: &EditorScene) -> Self {
+        Self {
+            accepted_revision: scene.accepted_revision,
+            design_identity: scene.design_identity,
+            viewport: scene.viewport,
+            chord_tolerance_pixels: scene.chord_tolerance_pixels,
+            points: scene.points.clone(),
+            curves: scene.curves.clone(),
+            datums: scene.datums.clone(),
+            computed_curves: scene.computed_curves.clone(),
+            selected_curve_control_owner: scene.selected_curve_control_owner,
+            curve_controls: scene.curve_controls.clone(),
+            curve_control_guides: scene.curve_control_guides.clone(),
+            feature_identity: scene.feature_identity,
+            computed_input: scene.computed_input,
+            fillet_affordances: scene.fillet_affordances.clone(),
+            computed_fillet_continuation_statuses: scene
+                .computed_fillet_continuation_statuses
+                .clone(),
+            annotations: scene.annotations.clone(),
+            constraint_entries: scene.constraint_entries.clone(),
+            construction_snap_points: scene.construction_snap_points.clone(),
+        }
+    }
+
+    fn matches(&self, scene: &EditorScene) -> bool {
+        self.accepted_revision == scene.accepted_revision
+            && self.design_identity == scene.design_identity
+            && self.viewport == scene.viewport
+            && self.chord_tolerance_pixels.to_bits() == scene.chord_tolerance_pixels.to_bits()
+            && self.points == scene.points
+            && self.curves == scene.curves
+            && self.datums == scene.datums
+            && self.computed_curves == scene.computed_curves
+            && self.selected_curve_control_owner == scene.selected_curve_control_owner
+            && self.curve_controls == scene.curve_controls
+            && self.curve_control_guides == scene.curve_control_guides
+            && self.feature_identity == scene.feature_identity
+            && self.computed_input == scene.computed_input
+            && self.fillet_affordances == scene.fillet_affordances
+            && self.computed_fillet_continuation_statuses
+                == scene.computed_fillet_continuation_statuses
+            && self.annotations == scene.annotations
+            && self.constraint_entries == scene.constraint_entries
+            && self.construction_snap_points == scene.construction_snap_points
+    }
+}
+
 /// Deterministic presentation-neutral scene derived from one accepted revision.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EditorScene {
@@ -1150,6 +1230,17 @@ pub struct EditorScene {
     /// inference. Public presentation-field mutation invalidates publication
     /// authority instead of silently changing authenticated semantics.
     draft_inference_seal: Option<DraftInferenceSceneSeal>,
+    /// Private collision-free copy of every non-camera public field consumed
+    /// by [`Self::reproject_viewport`].
+    retained_reprojection_seal: Option<RetainedSceneReprojectionSeal>,
+    /// Pixel chord tolerance used to build the retained native and computed
+    /// curve representatives. Camera-only reprojection reuses this exact
+    /// presentation contract without re-solving or re-evaluating features.
+    chord_tolerance_pixels: f64,
+    /// Exact selected native owner whose controls are present in this scene.
+    /// This is retained privately because public control ordering is not an
+    /// authority source.
+    selected_curve_control_owner: Option<CurveSpan>,
     pub viewport: Viewport,
     pub points: Vec<ScenePoint>,
     pub curves: Vec<SceneCurve>,
@@ -1209,18 +1300,21 @@ impl EditorScene {
         &mut self,
         accepted: &geosolve_sketch::SketchAcceptedDocumentState,
     ) -> bool {
-        if accepted.document().id() != self.accepted_document.id()
+        if !self.retained_reprojection_semantics_are_sealed()
+            || accepted.document().id() != self.accepted_document.id()
             || accepted.identity().revision().get() != self.accepted_revision
             || accepted.document() != &self.accepted_document
         {
             return false;
         }
         annotations::update_dimension_values(&mut self.annotations, accepted);
+        self.refresh_retained_reprojection_seal();
         true
     }
 
     /// Applies editor-owned presentation layout without changing accepted geometry authority.
     pub fn apply_annotation_layout(&mut self, layout: &AnnotationLayoutState) {
+        let retained_authority_was_sealed = self.retained_reprojection_semantics_are_sealed();
         // Recompose from geometry-derived automatic positions so repeated host
         // rebuilds are idempotent. Runtime reference values are then copied
         // back before manual placements and collision resolution are applied.
@@ -1253,6 +1347,173 @@ impl EditorScene {
             layout,
         );
         self.annotations = annotations;
+        if retained_authority_was_sealed {
+            self.refresh_retained_reprojection_seal();
+        } else {
+            self.retained_reprojection_seal = None;
+        }
+    }
+
+    /// Reprojects this authenticated accepted scene into a new viewport.
+    ///
+    /// This is the camera-only counterpart to constructing a scene from a
+    /// retained session. It reuses the already accepted document, computed-arc
+    /// model geometry, feature stamps, and annotation placement cache. It does
+    /// not solve the sketch, materialize intent, or evaluate computed features.
+    /// Native and computed curves are retessellated with the scene's original
+    /// pixel chord tolerance so zoomed paint and picking remain equivalent to a
+    /// cold scene build. Every fixed-pixel control, annotation, datum, and
+    /// Fillet affordance is then rebuilt for the new viewport.
+    ///
+    /// The update is transactional: malformed public scene geometry or an
+    /// invalid viewport leaves `self` unchanged. Successfully reprojected
+    /// scenes retain their prepared-input publication authority and refresh the
+    /// private drafting-inference seal against the new exact screen geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EditorError::InvalidViewport`] for an invalid viewport, or a
+    /// typed scene/evaluation error when retained model geometry can no longer
+    /// produce a complete exact projection.
+    pub fn reproject_viewport(&mut self, viewport: Viewport) -> Result<(), EditorError> {
+        if !viewport.is_valid() {
+            return Err(EditorError::InvalidViewport);
+        }
+        let mut projected = self.clone();
+        projected.reproject_viewport_inner(viewport)?;
+        *self = projected;
+        Ok(())
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one transactional reprojection keeps every camera-dependent scene field auditable"
+    )]
+    fn reproject_viewport_inner(&mut self, viewport: Viewport) -> Result<(), EditorError> {
+        if !self.chord_tolerance_pixels.is_finite() || self.chord_tolerance_pixels <= 0.0 {
+            return Err(EditorError::InvalidTolerance);
+        }
+        // Reprojection may move constructor-authenticated semantics but must
+        // never re-seal public DTO mutations supplied by a host. The existing
+        // seal is the only authority that can distinguish trusted retained
+        // geometry from a caller-edited screen/parameter field.
+        if !self.retained_reprojection_semantics_are_sealed() {
+            return Err(EditorError::StaleSceneProjection);
+        }
+        let previous_viewport = self.viewport;
+
+        let selected_control_owner = self.selected_curve_control_owner;
+        let previous_affordances = self.fillet_affordances.clone();
+
+        let point_roles = point_role_incidence(&self.accepted_document);
+        let points = self
+            .accepted_document
+            .points()
+            .iter()
+            .map(|point| ScenePoint {
+                id: point.id,
+                model_position: point.position,
+                screen_position: viewport.model_to_screen(point.position),
+                role_incidence: point_roles.get(&point.id).copied().unwrap_or(
+                    ScenePointRoleIncidence {
+                        profile: true,
+                        construction: false,
+                    },
+                ),
+            })
+            .collect::<Vec<_>>();
+        let snap_point_ids = self
+            .construction_snap_points
+            .iter()
+            .map(|point| point.id)
+            .collect::<BTreeSet<_>>();
+        let construction_snap_points = points
+            .iter()
+            .copied()
+            .filter(|point| snap_point_ids.contains(&point.id))
+            .collect();
+
+        let mut curves = Vec::with_capacity(self.curves.len());
+        for retained in &self.curves {
+            if retained.screen_parameters.len() != retained.screen_polyline.len() {
+                return Err(EditorError::StaleSceneProjection);
+            }
+            let (Some(start_parameter), Some(end_parameter)) = (
+                retained.screen_parameters.first().copied(),
+                retained.screen_parameters.last().copied(),
+            ) else {
+                return Err(EditorError::StaleSceneProjection);
+            };
+            let mut curve = scene_curve_for_interval(
+                &self.accepted_document,
+                viewport,
+                retained.span,
+                start_parameter,
+                end_parameter,
+                self.chord_tolerance_pixels,
+            )?;
+            curve.authoring_eligible = retained.authoring_eligible;
+            curve.affine = retained.affine;
+            curve.contact_domain = retained.contact_domain;
+            curve.role = retained.role;
+            curve.source_role = retained.source_role;
+            curve.origin = retained.origin;
+            curve.drag_handle_point = retained.drag_handle_point;
+            curves.push(curve);
+        }
+
+        let mut computed_curves = self.computed_curves.clone();
+        for curve in &mut computed_curves {
+            curve.screen_polyline =
+                tessellate_scene_computed_arc(curve, viewport, self.chord_tolerance_pixels)?;
+            curve.radius_rail = None;
+        }
+
+        self.viewport = viewport;
+        self.points = points;
+        self.construction_snap_points = construction_snap_points;
+        self.curves = curves;
+        self.datums = scene_datums(viewport);
+        self.computed_curves = computed_curves;
+
+        self.curve_controls.clear();
+        self.curve_control_guides.clear();
+        self.set_selected_curve_controls(selected_control_owner)?;
+
+        self.fillet_affordances.clear();
+        for retained in previous_affordances {
+            let curve_index = self
+                .computed_curves
+                .iter()
+                .position(|curve| curve.owner == retained.owner)
+                .ok_or(EditorError::StaleSceneProjection)?;
+            let (radius_rail, contacts) = Self::derive_computed_fillet_radius_affordances(
+                &self.computed_curves[curve_index],
+                viewport,
+                retained.owner,
+                retained.radius_rail.model_derivative,
+            )?;
+            self.computed_curves[curve_index].radius_rail = Some(radius_rail);
+            let actions = retained
+                .actions
+                .into_iter()
+                .map(|action| reproject_fillet_action(action, viewport))
+                .collect::<Result<Vec<_>, _>>()?;
+            self.fillet_affordances.push(SceneFilletCornerAffordances {
+                owner: retained.owner,
+                affected_owners: retained.affected_owners,
+                radius_rail,
+                contacts,
+                actions,
+                continuation_status: retained.continuation_status,
+            });
+        }
+        self.fillet_affordances
+            .sort_by_key(|affordances| affordances.owner);
+        annotations::reproject_retained_layout(&mut self.annotations, previous_viewport, viewport);
+        self.refresh_draft_inference_seal();
+        self.refresh_retained_reprojection_seal();
+        Ok(())
     }
 
     /// Sets the shared paint/pick visibility policy for contextual constraints.
@@ -1267,6 +1528,7 @@ impl EditorScene {
 
     fn set_selected_curve_controls(&mut self, owner: Option<CurveSpan>) -> Result<(), EditorError> {
         self.curve_control_interaction_origin = None;
+        self.selected_curve_control_owner = None;
         self.curve_controls.clear();
         self.curve_control_guides.clear();
         let Some(owner) = owner else {
@@ -1296,6 +1558,7 @@ impl EditorScene {
         )?;
         self.curve_controls = controls;
         self.curve_control_guides = guides;
+        self.selected_curve_control_owner = Some(owner);
         Ok(())
     }
 
@@ -1434,6 +1697,9 @@ impl EditorScene {
             design_identity,
             prepared_input: None,
             draft_inference_seal: None,
+            retained_reprojection_seal: None,
+            chord_tolerance_pixels,
+            selected_curve_control_owner: None,
             viewport,
             points,
             curves,
@@ -1457,6 +1723,7 @@ impl EditorScene {
             accepted_document: accepted_document.clone(),
         };
         scene.refresh_draft_inference_seal();
+        scene.refresh_retained_reprojection_seal();
         Ok(scene)
     }
 
@@ -1510,10 +1777,38 @@ impl EditorScene {
         self.draft_inference_seal = Some(DraftInferenceSceneSeal::capture(self));
     }
 
+    fn refresh_retained_reprojection_seal(&mut self) {
+        self.retained_reprojection_seal = Some(RetainedSceneReprojectionSeal::capture(self));
+    }
+
     fn draft_inference_semantics_are_sealed(&self) -> bool {
         self.draft_inference_seal
             .as_ref()
             .is_some_and(|seal| seal.matches(self))
+    }
+
+    fn retained_reprojection_semantics_are_sealed(&self) -> bool {
+        self.retained_reprojection_seal
+            .as_ref()
+            .is_some_and(|seal| seal.matches(self))
+    }
+
+    /// Whether this immutable scene cache still belongs to one retained native
+    /// presentation session, independent of its camera.
+    ///
+    /// This does not grant construction-publication authority: detached
+    /// preview/historical scenes remain detached. It only lets a presentation
+    /// adapter reject a stale cache before camera reprojection or picking.
+    #[must_use]
+    pub fn belongs_to_retained_session(&self, session: &RetainedSketchDocumentSession) -> bool {
+        let Some(accepted) = session.accepted_state() else {
+            return false;
+        };
+        self.retained_reprojection_semantics_are_sealed()
+            && self.accepted_revision == accepted.identity().revision().get()
+            && self.design_identity == session.design_identity()
+            && self.accepted_document == *accepted.document()
+            && self.matches_design_filter(session.design_document())
     }
 
     pub(crate) fn authenticated_prepared_input(&self) -> Option<PreparedSketchInput> {
@@ -1972,6 +2267,7 @@ impl EditorScene {
             viewport,
         );
         scene.refresh_draft_inference_seal();
+        scene.refresh_retained_reprojection_seal();
         Ok(scene)
     }
 
@@ -2096,6 +2392,9 @@ impl EditorScene {
         model_derivative: [f64; 2],
         affected_owners: Vec<geosolve_sketch_features::ComputedCornerRef>,
     ) -> Result<(), EditorError> {
+        if !self.retained_reprojection_semantics_are_sealed() {
+            return Err(EditorError::StaleSceneProjection);
+        }
         if affected_owners.binary_search(&owner).is_err()
             || affected_owners.windows(2).any(|pair| pair[0] >= pair[1])
         {
@@ -2133,6 +2432,7 @@ impl EditorScene {
             self.fillet_affordances
                 .sort_by_key(|affordances| affordances.owner);
         }
+        self.refresh_retained_reprojection_seal();
         Ok(())
     }
 
@@ -2235,6 +2535,9 @@ impl EditorScene {
         owner: geosolve_sketch_features::ComputedCornerRef,
         actions: Vec<SceneFilletAction>,
     ) -> Result<(), EditorError> {
+        if !self.retained_reprojection_semantics_are_sealed() {
+            return Err(EditorError::StaleSceneProjection);
+        }
         let affordances = self
             .fillet_affordances
             .iter_mut()
@@ -2249,6 +2552,7 @@ impl EditorScene {
             return Err(EditorError::InvalidComputedFeatureAffordance);
         }
         affordances.actions = actions;
+        self.refresh_retained_reprojection_seal();
         Ok(())
     }
 
@@ -2267,6 +2571,9 @@ impl EditorScene {
         owner: geosolve_sketch_features::ComputedCornerRef,
         status: Option<ComputedFilletContinuationStatus>,
     ) -> Result<(), EditorError> {
+        if !self.retained_reprojection_semantics_are_sealed() {
+            return Err(EditorError::StaleSceneProjection);
+        }
         let curve_index = self
             .computed_curves
             .iter()
@@ -2307,6 +2614,7 @@ impl EditorScene {
         {
             affordances.continuation_status = status;
         }
+        self.refresh_retained_reprojection_seal();
         Ok(())
     }
 
@@ -5604,13 +5912,18 @@ impl ConstraintEditor {
     /// Returns a typed accepted-domain control-enumeration failure without
     /// publishing a partial cage.
     pub fn populate_curve_controls(&self, scene: &mut EditorScene) -> Result<(), EditorError> {
+        if !scene.retained_reprojection_semantics_are_sealed() {
+            return Err(EditorError::StaleSceneProjection);
+        }
         let owner = (self.tool == EditorTool::Select && self.selection.len() == 1)
             .then(|| match self.selection[0] {
                 SelectionItem::Curve(span) => Some(span),
                 _ => None,
             })
             .flatten();
-        scene.set_selected_curve_controls(owner)
+        scene.set_selected_curve_controls(owner)?;
+        scene.refresh_retained_reprojection_seal();
+        Ok(())
     }
 
     /// Returns presentation-only manual annotation placement.
@@ -10792,12 +11105,80 @@ pub enum EditorError {
     StalePreparedSketchInput,
     #[error("computed-feature interaction affordance is missing, stale, or malformed")]
     InvalidComputedFeatureAffordance,
+    #[error("retained scene geometry cannot be reprojected into a new exact viewport")]
+    StaleSceneProjection,
     #[error(transparent)]
     Document(#[from] geosolve_sketch::DocumentError),
     #[error(transparent)]
     Curve(#[from] geosolve_sketch::DocumentCurveEvaluationError),
     #[error(transparent)]
     CurveControl(#[from] geosolve_sketch::DocumentCurveControlError),
+}
+
+fn tessellate_scene_computed_arc(
+    curve: &SceneComputedCurve,
+    viewport: Viewport,
+    chord_tolerance_pixels: f64,
+) -> Result<Vec<ScreenPoint>, EditorError> {
+    Ok(tessellate_circular_arc_geometry(
+        curve.center,
+        curve.radius,
+        curve.start_angle,
+        curve.end_angle,
+        curve.sweep,
+        viewport,
+        chord_tolerance_pixels,
+    )?
+    .screen_polyline)
+}
+
+fn reproject_fillet_action(
+    mut action: SceneFilletAction,
+    viewport: Viewport,
+) -> Result<SceneFilletAction, EditorError> {
+    if let Some(control) = action.control_geometry.as_mut() {
+        let model_direction_length = control.model_direction[0].hypot(control.model_direction[1]);
+        let pixel_length = control.screen_start.distance(control.screen_end);
+        if !model_direction_length.is_finite() || model_direction_length <= 0.0 {
+            return Err(EditorError::StaleSceneProjection);
+        }
+        if !pixel_length.is_finite() || pixel_length <= 0.0 {
+            return Err(EditorError::StaleSceneProjection);
+        }
+        let unit = [
+            control.model_direction[0] / model_direction_length,
+            control.model_direction[1] / model_direction_length,
+        ];
+        let model_length = pixel_length / viewport.pixels_per_model_unit;
+        let model_end = [
+            model_length.mul_add(unit[0], control.model_anchor[0]),
+            model_length.mul_add(unit[1], control.model_anchor[1]),
+        ];
+        control.screen_start = viewport.model_to_screen(control.model_anchor);
+        control.screen_end = viewport.model_to_screen(model_end);
+    }
+    if let Some(alternative) = action.dashed_alternative_arc.as_mut() {
+        if alternative.model_polyline.len() < 2
+            || alternative
+                .model_polyline
+                .iter()
+                .flatten()
+                .copied()
+                .any(|value| !value.is_finite())
+        {
+            return Err(EditorError::StaleSceneProjection);
+        }
+        alternative.screen_polyline = alternative
+            .model_polyline
+            .iter()
+            .copied()
+            .map(|point| viewport.model_to_screen(point))
+            .collect();
+    }
+    if !action.is_valid(action.owner, viewport) {
+        return Err(EditorError::StaleSceneProjection);
+    }
+    Ok(action)
 }
 
 fn build_native_scene_curves(
@@ -10950,23 +11331,49 @@ fn tessellate_computed_arc_geometry(
     viewport: Viewport,
     chord_tolerance_pixels: f64,
 ) -> Result<SceneFilletAlternativeGeometry, EditorError> {
-    if !arc.center.into_iter().all(f64::is_finite)
-        || !arc.radius.is_finite()
-        || arc.radius <= 0.0
-        || !arc.start_angle.is_finite()
-        || !arc.end_angle.is_finite()
+    tessellate_circular_arc_geometry(
+        arc.center,
+        arc.radius,
+        arc.start_angle,
+        arc.end_angle,
+        arc.sweep,
+        viewport,
+        chord_tolerance_pixels,
+    )
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::too_many_arguments
+)]
+fn tessellate_circular_arc_geometry(
+    center: [f64; 2],
+    radius: f64,
+    start_angle: f64,
+    end_angle: f64,
+    sweep: DocumentArcSweep,
+    viewport: Viewport,
+    chord_tolerance_pixels: f64,
+) -> Result<SceneFilletAlternativeGeometry, EditorError> {
+    if !center.into_iter().all(f64::is_finite)
+        || !radius.is_finite()
+        || radius <= 0.0
+        || !start_angle.is_finite()
+        || !end_angle.is_finite()
     {
         return Err(EditorError::StaleComputedFeatureSnapshot);
     }
     let tau = std::f64::consts::TAU;
-    let delta = match arc.sweep {
-        DocumentArcSweep::CounterClockwise => (arc.end_angle - arc.start_angle).rem_euclid(tau),
-        DocumentArcSweep::Clockwise => -(arc.start_angle - arc.end_angle).rem_euclid(tau),
+    let delta = match sweep {
+        DocumentArcSweep::CounterClockwise => (end_angle - start_angle).rem_euclid(tau),
+        DocumentArcSweep::Clockwise => -(start_angle - end_angle).rem_euclid(tau),
     };
     if !delta.is_finite() || delta.abs() <= f64::EPSILON {
         return Err(EditorError::StaleComputedFeatureSnapshot);
     }
-    let screen_radius = arc.radius * viewport.pixels_per_model_unit;
+    let screen_radius = radius * viewport.pixels_per_model_unit;
     let cosine = (1.0 - chord_tolerance_pixels / screen_radius).clamp(-1.0, 1.0);
     let max_step = (2.0 * cosine.acos()).clamp(1.0e-3, std::f64::consts::FRAC_PI_4);
     let segments = ((delta.abs() / max_step).ceil() as usize)
@@ -10974,10 +11381,10 @@ fn tessellate_computed_arc_geometry(
     let model_polyline = (0..=segments)
         .map(|index| {
             let fraction = index as f64 / segments as f64;
-            let angle = delta.mul_add(fraction, arc.start_angle);
+            let angle = delta.mul_add(fraction, start_angle);
             [
-                arc.radius.mul_add(angle.cos(), arc.center[0]),
-                arc.radius.mul_add(angle.sin(), arc.center[1]),
+                radius.mul_add(angle.cos(), center[0]),
+                radius.mul_add(angle.sin(), center[1]),
             ]
         })
         .collect::<Vec<_>>();
@@ -14564,7 +14971,13 @@ mod tests {
 
     #[test]
     fn scene_anchors_retain_exact_bounded_and_periodic_contact_topology() {
-        let (document, lines, _) = line_document();
+        let (mut document, lines, _) = line_document();
+        document
+            .add_constraint(
+                "annotation seal witness",
+                DocumentConstraintDefinition::Horizontal { line: lines[0] },
+            )
+            .expect("constraint");
         let scene = scene(&document);
         let start = scene.viewport.model_to_screen([-4.0, 1.0]);
         let anchors = inference_anchors(&scene, start);
@@ -17208,6 +17621,7 @@ mod tests {
         });
         scene.feature_identity = Some(input.features);
         scene.computed_input = Some(input);
+        scene.refresh_retained_reprojection_seal();
         scene
             .attach_computed_fillet_radius_rail(owner, derivative, vec![owner])
             .expect("radius rail");
@@ -18264,6 +18678,7 @@ mod tests {
         };
         let mut scene = fixture.scene.clone();
         scene.fillet_affordances.clear();
+        scene.refresh_retained_reprojection_seal();
         scene
             .set_computed_fillet_continuation_status(fixture.owner, Some(status.clone()))
             .expect("top-level fold status without rail");
@@ -21533,6 +21948,376 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact parity fixture compares every retained camera-dependent scene surface"
+    )]
+    fn retained_scene_reprojection_matches_cold_geometry_and_preserves_annotation_layout() {
+        let (mut document, lines, points) = line_document();
+        let controls = [points[0], points[1], points[2], points[3]];
+        document
+            .add_curve(
+                "curved reprojection witness",
+                CurveDefinition::CubicBezier { controls },
+            )
+            .expect("Bezier");
+        let distance = document
+            .add_scalar(
+                "reference distance",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("distance scalar");
+        document
+            .add_dimension(
+                "camera reprojection dimension",
+                DocumentDimensionDefinition::PointDistance {
+                    first: points[0],
+                    second: points[3],
+                    target: distance,
+                },
+                DocumentDimensionMode::Reference,
+            )
+            .expect("dimension");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let mut editor = super::ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(lines[0])]);
+        let layout = editor.annotation_layout_for_scene();
+        let build = |viewport| {
+            let mut scene = EditorScene::from_accepted_for_design(
+                accepted.identity().revision().get(),
+                session.design_identity(),
+                accepted.document(),
+                session.design_document(),
+                viewport,
+                0.25,
+            )
+            .expect("cold scene");
+            assert!(scene.update_annotation_values(accepted));
+            scene.apply_annotation_layout(&layout);
+            let mut scene = scene
+                .with_retained_session(&session)
+                .expect("authenticated scene");
+            editor
+                .populate_curve_controls(&mut scene)
+                .expect("curve controls");
+            scene
+        };
+        let initial = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("initial");
+        let pan = Viewport::new([1000.0, 700.0], [3.25, -1.75], 50.0).expect("pan");
+        let zoom = Viewport::new([1000.0, 700.0], [-2.5, 4.0], 137.0).expect("zoom");
+        let mut reprojected = build(initial);
+        let prepared = reprojected
+            .authenticated_prepared_input()
+            .expect("initial publication authority");
+
+        for viewport in [pan, zoom] {
+            let previous_annotations = reprojected.annotations.clone();
+            reprojected
+                .reproject_viewport(viewport)
+                .expect("camera-only reprojection");
+            let cold = build(viewport);
+            assert_eq!(reprojected.viewport, cold.viewport);
+            assert_eq!(reprojected.points, cold.points);
+            assert_eq!(reprojected.curves, cold.curves);
+            assert_eq!(reprojected.datums, cold.datums);
+            assert_eq!(reprojected.computed_curves, cold.computed_curves);
+            assert_eq!(reprojected.curve_controls, cold.curve_controls);
+            assert_eq!(reprojected.curve_control_guides, cold.curve_control_guides);
+            assert_eq!(reprojected.annotations.len(), cold.annotations.len());
+            for (retained, cold) in reprojected.annotations.iter().zip(&cold.annotations) {
+                assert_eq!(retained.item, cold.item);
+                assert_eq!(retained.source, cold.source);
+                assert_eq!(retained.kind, cold.kind);
+                assert_eq!(retained.operands, cold.operands);
+                assert_eq!(retained.visibility, cold.visibility);
+                assert_eq!(retained.suppressed, cold.suppressed);
+                assert_eq!(retained.visible_text, cold.visible_text);
+                assert_eq!(retained.accessible_label, cold.accessible_label);
+                assert_eq!(retained.reference, cold.reference);
+                assert!(annotation_geometry_is_finite(&retained.geometry));
+            }
+            for (previous, retained) in previous_annotations.iter().zip(&reprojected.annotations) {
+                match (previous.label_bounds, retained.label_bounds) {
+                    (Some(previous), Some(retained)) => {
+                        let previous_size = [
+                            previous.max.x - previous.min.x,
+                            previous.max.y - previous.min.y,
+                        ];
+                        let retained_size = [
+                            retained.max.x - retained.min.x,
+                            retained.max.y - retained.min.y,
+                        ];
+                        assert!((previous_size[0] - retained_size[0]).abs() <= 1.0e-10);
+                        assert!((previous_size[1] - retained_size[1]).abs() <= 1.0e-10);
+                    }
+                    (None, None) => {}
+                    _ => panic!("camera reprojection changed annotation label ownership"),
+                }
+            }
+            assert_eq!(reprojected.draft_inference_seal, cold.draft_inference_seal,);
+            assert_eq!(
+                reprojected.authenticated_prepared_input(),
+                Some(prepared),
+                "an exact camera reprojection must preserve retained-session publication authority",
+            );
+        }
+    }
+
+    fn annotation_geometry_is_finite(geometry: &SceneAnnotationGeometry) -> bool {
+        let points = match geometry {
+            SceneAnnotationGeometry::Glyph { markers } => {
+                return markers.iter().all(|marker| {
+                    marker.anchor.is_finite()
+                        && marker.leader_from.is_none_or(ScreenPoint::is_finite)
+                        && marker.rotation_radians.is_finite()
+                });
+            }
+            SceneAnnotationGeometry::RightAngle {
+                vertex,
+                first_arm,
+                corner,
+                second_arm,
+            } => vec![*vertex, *first_arm, *corner, *second_arm],
+            SceneAnnotationGeometry::LinearDimension {
+                measured_first,
+                measured_second,
+                first,
+                second,
+                label_anchor,
+            } => vec![
+                *measured_first,
+                *measured_second,
+                *first,
+                *second,
+                *label_anchor,
+            ],
+            SceneAnnotationGeometry::RadialDimension {
+                center,
+                edge,
+                label_anchor,
+                ..
+            } => vec![*center, *edge, *label_anchor],
+            SceneAnnotationGeometry::AngularDimension {
+                vertex,
+                first_ray,
+                second_ray,
+                radius,
+                label_anchor,
+                ..
+            } => {
+                if !radius.is_finite() || *radius <= 0.0 {
+                    return false;
+                }
+                vec![*vertex, *first_ray, *second_ray, *label_anchor]
+            }
+            SceneAnnotationGeometry::Label {
+                anchor,
+                leader_from,
+            } => {
+                return anchor.is_finite() && leader_from.is_none_or(ScreenPoint::is_finite);
+            }
+        };
+        points.into_iter().all(ScreenPoint::is_finite)
+    }
+
+    #[test]
+    fn retained_scene_reprojection_updates_computed_fillet_affordances_and_actions() {
+        let mut fixture = fillet_interaction_fixture(50.0, [1.0, 0.5]);
+        let _ = install_test_fillet_actions(&mut fixture);
+        let old_control_length = fixture.scene.fillet_affordances[0].actions[0]
+            .control_geometry
+            .expect("control")
+            .screen_start
+            .distance(
+                fixture.scene.fillet_affordances[0].actions[0]
+                    .control_geometry
+                    .expect("control")
+                    .screen_end,
+            );
+        let viewport =
+            Viewport::new([1000.0, 700.0], [2.5, -3.0], 125.0).expect("destination viewport");
+        fixture
+            .scene
+            .reproject_viewport(viewport)
+            .expect("computed reprojection");
+
+        let curve = &fixture.scene.computed_curves[0];
+        assert!(curve.screen_polyline.len() > usize::from(MIN_COMPUTED_ARC_SEGMENTS));
+        for screen in &curve.screen_polyline {
+            let model = viewport.screen_to_model(*screen);
+            assert!((model[0].hypot(model[1]) - curve.radius).abs() <= 1.0e-12);
+        }
+        let affordances = &fixture.scene.fillet_affordances[0];
+        assert_eq!(
+            affordances.radius_rail.screen_center,
+            viewport.model_to_screen(affordances.radius_rail.model_center),
+        );
+        assert_eq!(
+            affordances.radius_rail.screen_grip,
+            viewport.model_to_screen(affordances.radius_rail.model_grip),
+        );
+        assert!(
+            (affordances
+                .radius_rail
+                .screen_rail_start
+                .distance(affordances.radius_rail.screen_rail_end)
+                - 88.0)
+                .abs()
+                <= 1.0e-9
+        );
+        for contact in affordances.contacts {
+            assert_eq!(
+                contact.screen_position,
+                viewport.model_to_screen(contact.model_position),
+            );
+        }
+        let control = affordances.actions[0]
+            .control_geometry
+            .expect("reprojected control");
+        assert_eq!(
+            control.screen_start,
+            viewport.model_to_screen(control.model_anchor)
+        );
+        assert!(
+            (control.screen_start.distance(control.screen_end) - old_control_length).abs()
+                <= 1.0e-9
+        );
+        let alternative = affordances.actions[1]
+            .dashed_alternative_arc
+            .as_ref()
+            .expect("alternative geometry");
+        assert!(
+            alternative
+                .model_polyline
+                .iter()
+                .zip(&alternative.screen_polyline)
+                .all(|(model, screen)| viewport.model_to_screen(*model) == *screen)
+        );
+    }
+
+    #[test]
+    fn retained_scene_reprojection_is_transactional_for_malformed_public_geometry() {
+        let (document, _, _) = line_document();
+        let mut scene = scene(&document);
+        scene.curves[0].screen_parameters.pop();
+        let before = scene.clone();
+        let viewport = Viewport::new([1000.0, 700.0], [1.0, 2.0], 80.0).expect("viewport");
+        assert!(matches!(
+            scene.reproject_viewport(viewport),
+            Err(EditorError::StaleSceneProjection)
+        ));
+        assert_eq!(scene, before, "failed reprojection must publish no prefix");
+    }
+
+    #[test]
+    fn retained_scene_reprojection_rejects_every_mutable_derived_surface_without_resealing() {
+        let (mut document, lines, _) = line_document();
+        document
+            .add_constraint(
+                "horizontal annotation fixture",
+                DocumentConstraintDefinition::Horizontal { line: lines[0] },
+            )
+            .expect("horizontal constraint");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+        let destination = Viewport::new([1000.0, 700.0], [2.0, -1.0], 75.0).expect("destination");
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(lines[0])]);
+        let build = || {
+            let mut scene = EditorScene::from_accepted_for_design(
+                accepted.identity().revision().get(),
+                session.design_identity(),
+                accepted.document(),
+                session.design_document(),
+                viewport,
+                0.25,
+            )
+            .expect("scene");
+            assert!(scene.update_annotation_values(accepted));
+            let mut scene = scene
+                .with_retained_session(&session)
+                .expect("authenticated scene");
+            editor
+                .populate_curve_controls(&mut scene)
+                .expect("selected controls");
+            scene
+        };
+
+        let mut annotation_scene = build();
+        annotation_scene.annotations[0]
+            .accessible_label
+            .push_str(" caller mutation");
+        annotation_scene.apply_annotation_layout(&AnnotationLayoutState::default());
+        assert!(matches!(
+            annotation_scene.reproject_viewport(destination),
+            Err(EditorError::StaleSceneProjection)
+        ));
+
+        let mut control_scene = build();
+        control_scene.curve_controls[0]
+            .accessible_name
+            .push_str(" caller mutation");
+        assert!(matches!(
+            editor.populate_curve_controls(&mut control_scene),
+            Err(EditorError::StaleSceneProjection)
+        ));
+        assert!(matches!(
+            control_scene.reproject_viewport(destination),
+            Err(EditorError::StaleSceneProjection)
+        ));
+
+        let mut computed = fillet_interaction_fixture(50.0, [1.0, 0.5]);
+        computed.scene.computed_curves[0].radius += 0.25;
+        assert!(matches!(
+            computed.scene.attach_computed_fillet_radius_rail(
+                computed.owner,
+                [1.0, 0.5],
+                vec![computed.owner],
+            ),
+            Err(EditorError::StaleSceneProjection)
+        ));
+        assert!(matches!(
+            computed.scene.reproject_viewport(destination),
+            Err(EditorError::StaleSceneProjection)
+        ));
+
+        let mut action_scene = fillet_interaction_fixture(50.0, [1.0, 0.5]);
+        let _ = install_test_fillet_actions(&mut action_scene);
+        let valid_actions = action_scene.scene.fillet_affordances[0].actions.clone();
+        action_scene.scene.fillet_affordances[0].actions[0]
+            .label
+            .push_str(" caller mutation");
+        assert!(matches!(
+            action_scene
+                .scene
+                .set_fillet_corner_actions(action_scene.owner, valid_actions),
+            Err(EditorError::StaleSceneProjection)
+        ));
+        assert!(matches!(
+            action_scene.scene.reproject_viewport(destination),
+            Err(EditorError::StaleSceneProjection)
+        ));
     }
 
     #[test]

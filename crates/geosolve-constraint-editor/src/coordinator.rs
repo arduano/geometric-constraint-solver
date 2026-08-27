@@ -5796,6 +5796,7 @@ impl RetainedEditorCoordinator {
             .accepted_state_identity()
             .ok_or(crate::EditorError::StalePreparedSketchInput)?;
         if scene.authenticated_prepared_input().is_some()
+            || !scene.belongs_to_retained_session(candidate)
             || scene.accepted_revision != candidate_accepted.identity().revision().get()
             || scene.design_identity != candidate.design_identity()
             || scene.accepted_document != *candidate_accepted.document()
