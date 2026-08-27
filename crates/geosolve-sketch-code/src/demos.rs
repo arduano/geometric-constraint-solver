@@ -22,6 +22,7 @@ pub enum CodeProjectDemoId {
     SuspensionBridge,
     CompassRose,
     NeonManifold,
+    PcWaterManifold,
 }
 
 impl CodeProjectDemoId {
@@ -36,6 +37,7 @@ impl CodeProjectDemoId {
             Self::SuspensionBridge => "suspension-bridge",
             Self::CompassRose => "compass-rose",
             Self::NeonManifold => "neon-manifold",
+            Self::PcWaterManifold => "pc-water-manifold",
         }
     }
 
@@ -67,6 +69,9 @@ impl CodeProjectDemoId {
             }
             Self::NeonManifold => {
                 "Lexical native spans, ordinary axis relations and explicit multi-corner Fillet branches coexist in managed code."
+            }
+            Self::PcWaterManifold => {
+                "A fully constrained acrylic distro plate combines managed mechanical dimensions with adaptive AI-authored water-channel patches."
             }
         }
     }
@@ -194,6 +199,7 @@ pub fn bundled_code_project_demos() -> Vec<CodeProjectDemo> {
         suspension_bridge_demo(),
         compass_rose_demo(),
         neon_manifold_demo(),
+        pc_water_manifold_demo(),
     ]
 }
 
@@ -575,6 +581,44 @@ export default sketch(($) => {
     }
 }
 
+fn pc_water_manifold_demo() -> CodeProjectDemo {
+    const PATCH: &str = include_str!("../assets/patches/water-channel.patch.ts");
+    const SOURCE: &str = include_str!("../assets/demos/pc-water-manifold.sketch.ts");
+    let mut demo = CodeProjectDemo {
+        id: CodeProjectDemoId::PcWaterManifold,
+        title: "PC water manifold · fully constrained dogfood",
+        managed_source: SOURCE,
+        custom_files: BTreeMap::from([("patches/water-channel.patch.ts", PATCH)]),
+        artifacts: vec![water_channel_artifact(PATCH)],
+        output_kinds: BTreeMap::from([
+            ("plate", FeatureKind::Feature),
+            ("reservoir", FeatureKind::Feature),
+            ("upperCenterline", FeatureKind::Feature),
+            ("upperSeal", FeatureKind::Feature),
+            ("upperChannelBends", FeatureKind::Collection),
+            ("middleCenterline", FeatureKind::Feature),
+            ("middleSeal", FeatureKind::Feature),
+            ("middleChannelBends", FeatureKind::Collection),
+            ("lowerCenterline", FeatureKind::Feature),
+            ("lowerSeal", FeatureKind::Feature),
+            ("lowerChannelBends", FeatureKind::Collection),
+            ("screwNwOuter", FeatureKind::Feature),
+            ("screwNwInner", FeatureKind::Feature),
+            ("screwNeInner", FeatureKind::Feature),
+            ("screwNeOuter", FeatureKind::Feature),
+            ("screwSwOuter", FeatureKind::Feature),
+            ("screwSwInner", FeatureKind::Feature),
+            ("screwSeInner", FeatureKind::Feature),
+            ("screwSeOuter", FeatureKind::Feature),
+            ("plateAnchor", FeatureKind::Constraint),
+        ]),
+        generated_members: Vec::new(),
+    };
+    demo.generated_members = crate::required_generated_members(&demo.project())
+        .expect("bundled manifold generated-member inventory is valid");
+    demo
+}
+
 fn typed_panel_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
     const SOURCE: &str = r#""use geosolve managed-v1";
@@ -747,6 +791,13 @@ fn compass_core_artifact(source: &str) -> PatchModuleArtifact {
     )
 }
 
+fn water_channel_artifact(source: &str) -> PatchModuleArtifact {
+    compiled_typescript_artifact(
+        source,
+        include_str!("../assets/artifacts/water-channel.artifact.json"),
+    )
+}
+
 fn compiled_typescript_artifact(source: &str, canonical_json: &str) -> PatchModuleArtifact {
     let canonical_json = canonical_json.trim_end_matches(['\r', '\n']);
     let validated = PatchModuleArtifact::from_canonical_json(canonical_json)
@@ -769,7 +820,7 @@ mod tests {
     #[test]
     fn all_bundled_projects_are_offline_parseable_and_artifact_valid() {
         let demos = bundled_code_project_demos();
-        assert_eq!(demos.len(), 8);
+        assert_eq!(demos.len(), 9);
         for demo in demos {
             let project = demo.project();
             assert_eq!(project.managed.source, demo.managed_source);

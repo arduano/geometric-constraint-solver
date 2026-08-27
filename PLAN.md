@@ -5793,14 +5793,15 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F010 withdraws the otherwise clean-qualified F009 candidate,
-and its coupled semantic-terminal correction now passes complete clean qualification and immutable
-Tailscale nomination while refreshed human UAT remains pending**. Ordinary GUI
+Status: **active and unaccepted; the M84-F011 manifold dogfood amendment withdraws the F010
+nomination while its ninth sample, relational mechanical vocabulary and PNG export undergo
+replacement clean qualification and immutable Tailscale nomination**. Ordinary GUI
 dependencies project as lexical
 managed TypeScript while low-level transport remains truthfully labelled Intent IR. Exact product
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn
 historical rollback evidence. Exact F010 source `cf463838`, tree `992e587`, and immutable snapshot
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are current mechanical UAT authority on Tailscale. F007
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback authority until F011 replacement
+qualification completes. F007
 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and
 all earlier nominations are also withdrawn historical evidence; accepted M83 remains public Pages
 authority.
@@ -5967,7 +5968,29 @@ authority.
   Compass delayed-snap reproduction plus the full carried browser matrix against temporary frozen
   bytes, and only then replace the retained F009 Tailscale listener and reconcile nomination
   evidence.
-- [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages,
+- [x] Implement M84-F011 as the ninth genuine code project: a 240 × 120 mm acrylic PC water
+  manifold with a 60 × 84 mm reservoir bay, three restrained Polyline channels, three closed
+  O-ring groove loops and eight 5 mm screw circles. Locate every feature through dimensions,
+  references and construction datums from exactly one `FixedPoint`; admit no
+  `FixedCoordinate` row.
+- [x] Add the smallest optional-layer direct vocabulary required by that dogfood sketch:
+  managed circles, Coincident, FixedPoint, curve-length/diameter dimensions, exact keyed
+  Polyline member references and profile/construction line roles. Lower only to existing native
+  intent/document contracts and add no residual or solver equation.
+- [x] Compile and pin the AI-authored `waterChannel` patch whose keyed `p.each` rule adapts one
+  Fillet to every current channel corner. Keep the three O-ring centerlines as inexpensive closed
+  managed loops; require six Current generated Fillets and stable keyed owner inventory.
+- [x] Add presentation-only **Export PNG** using the authoritative composed SVG, browser canvas
+  rasterization and a fixed self-contained 2000 × 1400 download. Hide hit/provisional geometry,
+  keep export out of document/history authority and verify the PNG signature/dimensions in a real
+  browser.
+- [x] Expand the separate reviewed ledger from eight to nine rows and independently prove finite
+  accepted geometry, normalized Hard residual at most `1e-9`, numerical/equality/bidirectional
+  DOF zero, exactly one FixedPoint, zero FixedCoordinate, eight solved radius-2.5/diameter-5
+  circles, three open routes, three closed seals, 21 construction spans and six Current Fillets.
+- [ ] Commit and clean-qualify F011, freeze the exact no-rebuild output, verify the ninth sample and
+  PNG download on temporary frozen bytes, then replace the retained F010 Tailscale service.
+- [ ] Receive explicit refreshed M84-U1 through M84-U16 approval, then publish/exact-verify Pages,
   retire the service and close M84.
 
 Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
@@ -6232,7 +6255,7 @@ recorded above.
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the
 sole accepted geometry path; plain deployments do not link the code layer; one history spans
-source and nested editor state; pointer frames never parse or expand; all eight demonstrations,
+source and nested editor state; pointer frames never parse or expand; all nine demonstrations,
 type failures, bounds, golden preservation, clean qualification and explicit UAT pass before
 publication.
 

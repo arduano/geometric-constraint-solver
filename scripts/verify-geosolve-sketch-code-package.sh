@@ -31,13 +31,16 @@ for required in \
   assets/artifacts/fillet-record.artifact.json \
   assets/artifacts/mounting-plate.artifact.json \
   assets/artifacts/round-every-corner.artifact.json \
+  assets/artifacts/water-channel.artifact.json \
+  assets/demos/pc-water-manifold.sketch.ts \
   assets/patches/adaptive-lanterns.patch.ts \
   assets/patches/braced-frame.patch.ts \
   assets/patches/bridge-cables.patch.ts \
   assets/patches/compass-core.patch.ts \
   assets/patches/mounting-plate.patch.ts \
   assets/patches/rounded-polyline.patch.ts \
-  assets/patches/typed-panel.patch.ts
+  assets/patches/typed-panel.patch.ts \
+  assets/patches/water-channel.patch.ts
 do
   grep -Fqx "$required" <<<"$contents"
 done

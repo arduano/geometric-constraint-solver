@@ -3,14 +3,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_constraint_editor::{ComputedCornerRef, IntentNativeBinding};
-use geosolve_sketch::{DocumentId, PersistentId};
+use geosolve_sketch::{
+    CurveDefinition, DocumentConstraintDefinition, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentId, GeometryRole, PersistentId,
+};
 use geosolve_sketch_code::{
     CodeCompositionError, CodeHostRequest, CodeInteractionOverlay, CodePointSeedSource,
     CodeProject, CodeProjectDemo, CodeProjectDemoId, ExpandedCodeProject, ExpandedSemanticTarget,
-    FeatureKind, GeneratedMemberAddress, KeyedReconcileState, MaterializedCodeProject,
-    SemanticSymbol, bundled_code_project_demos, materialize_code_project_cold,
-    materialize_code_project_incremental, materialize_code_project_incremental_with_overlay,
-    parse_managed_source, rehydrate_materialized_code_project, required_generated_members,
+    FeatureKind, GeneratedMemberAddress, KeyedReconcileState, ManagedValue,
+    MaterializedCodeProject, SemanticSymbol, bundled_code_project_demos,
+    materialize_code_project_cold, materialize_code_project_incremental,
+    materialize_code_project_incremental_with_overlay, parse_managed_source,
+    rehydrate_materialized_code_project, required_generated_members,
     rounded_polyline_member_addresses,
 };
 use geosolve_sketch_intent::{
@@ -113,10 +117,15 @@ fn expected_demo_inventory(demo: CodeProjectDemoId) -> DemoInventory {
         CodeProjectDemoId::SuspensionBridge => (11, 10, 8, 6, 10, 5, 0, 0, 0),
         CodeProjectDemoId::CompassRose => (9, 12, 14, 5, 12, 4, 0, 0, 0),
         CodeProjectDemoId::NeonManifold => (9, 4, 9, 5, 4, 4, 0, 1, 6),
+        CodeProjectDemoId::PcWaterManifold => (138, 82, 20, 53, 58, 58, 6, 6, 15),
     }
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive catalog audit keeps each demo's native inventory and the manifold's mechanical invariants under the same accepted authority"
+)]
 fn all_bundled_code_projects_materialize_through_native_authority() {
     for (ordinal, demo) in bundled_code_project_demos().into_iter().enumerate() {
         let project = demo.project();
@@ -175,7 +184,6 @@ fn all_bundled_code_projects_materialize_through_native_authority() {
             .unwrap();
         assert_demo_output_kinds(&demo, &materialized.expansion);
 
-        let expected = expected_demo_inventory(demo.id);
         let actual = (
             project.managed.program.declarations.len(),
             generated_count,
@@ -187,8 +195,13 @@ fn all_bundled_code_projects_materialize_through_native_authority() {
             accepted.validation.feature_count,
             accepted.validation.computed_edge_count,
         );
+        let expected = expected_demo_inventory(demo.id);
         assert_eq!(actual, expected, "{} native inventory", demo.id.key());
-        let document = accepted.session.design_document();
+        let accepted_state = accepted
+            .session
+            .accepted_state_for_current_input()
+            .expect("accepted solved state for exact code input");
+        let document = accepted_state.document();
         assert!(
             document
                 .points()
@@ -205,6 +218,142 @@ fn all_bundled_code_projects_materialize_through_native_authority() {
             "{} accepted scalars must all be finite",
             demo.id.key()
         );
+        if demo.id == CodeProjectDemoId::PcWaterManifold {
+            let fixed_points = document
+                .constraints()
+                .iter()
+                .filter(|constraint| {
+                    matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::FixedPoint { .. }
+                    )
+                })
+                .count();
+            let fixed_coordinates = document
+                .constraints()
+                .iter()
+                .filter(|constraint| {
+                    matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::FixedCoordinate { .. }
+                    )
+                })
+                .count();
+            assert_eq!(fixed_points, 1, "one absolute plate anchor");
+            assert_eq!(
+                fixed_coordinates, 0,
+                "the manifold must be dimensioned from its one anchor, not frozen by coordinates"
+            );
+            assert_eq!(
+                document
+                    .constraints()
+                    .iter()
+                    .filter(|constraint| matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::Coincident { .. }
+                    ))
+                    .count(),
+                7,
+                "the reservoir, three routes, and three seal loops use explicit point incidence"
+            );
+
+            let circle_radii = document
+                .curves()
+                .iter()
+                .filter_map(|curve| match curve.definition {
+                    CurveDefinition::Circle { radius, .. } => {
+                        Some(document.scalar(radius).expect("circle radius scalar").value)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let polyline_closure = project
+                .managed
+                .program
+                .declarations
+                .iter()
+                .filter(|declaration| declaration.builder_path == ["geometry", "polyline"])
+                .map(|declaration| {
+                    let ManagedValue::Object(arguments) = &declaration.arguments else {
+                        panic!("Polyline arguments must be one managed object")
+                    };
+                    let Some(ManagedValue::Bool(closed)) = arguments.get("closed") else {
+                        panic!("Polyline must declare its closed branch")
+                    };
+                    (declaration.symbol.0.as_str(), *closed)
+                })
+                .collect::<BTreeMap<_, _>>();
+            let construction_spans = document
+                .curves()
+                .iter()
+                .filter(|curve| {
+                    document.geometry_role(curve.id) == Some(GeometryRole::Construction)
+                })
+                .count();
+            assert_eq!(circle_radii.len(), 8);
+            assert!(
+                circle_radii
+                    .iter()
+                    .all(|radius| radius.is_finite() && (*radius - 2.5).abs() <= 1.0e-12),
+                "all eight solved screw radii must be 2.5 mm"
+            );
+            assert_eq!(
+                polyline_closure,
+                BTreeMap::from([
+                    ("lowerCenterline", false),
+                    ("lowerSeal", true),
+                    ("middleCenterline", false),
+                    ("middleSeal", true),
+                    ("upperCenterline", false),
+                    ("upperSeal", true),
+                ])
+            );
+            assert_eq!(construction_spans, 21);
+
+            let diameters = document
+                .dimensions()
+                .iter()
+                .filter_map(|dimension| match dimension.definition {
+                    DocumentDimensionDefinition::Diameter { target, .. } => {
+                        assert_eq!(dimension.mode, DocumentDimensionMode::Driving);
+                        Some(
+                            document
+                                .scalar(target)
+                                .expect("diameter target scalar")
+                                .value,
+                        )
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(diameters.len(), 8);
+            assert!(
+                diameters
+                    .iter()
+                    .all(|diameter| diameter.is_finite() && (*diameter - 5.0).abs() <= 1.0e-12)
+            );
+
+            let diagnostics = accepted_state.diagnostics();
+            assert_eq!(
+                diagnostics
+                    .rank
+                    .expect("manifold rank diagnostics")
+                    .numerical_right_nullity,
+                Some(0)
+            );
+            let mobility = diagnostics.mobility.expect("manifold mobility diagnostics");
+            assert_eq!(mobility.equality_degrees_of_freedom, Some(0));
+            assert_eq!(mobility.bidirectional_bounded_degrees_of_freedom, Some(0));
+
+            assert_eq!(materialized.host_outputs.len(), 6);
+            assert!(
+                materialized
+                    .host_outputs
+                    .values()
+                    .all(|outputs| outputs.len() == 1),
+                "each adaptive channel corner owns one current native Fillet"
+            );
+        }
         if demo.id == CodeProjectDemoId::MountingPlate {
             assert_eq!(materialized.host_outputs.values().next().unwrap().len(), 4);
         }

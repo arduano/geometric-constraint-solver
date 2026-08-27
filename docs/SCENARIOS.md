@@ -4695,9 +4695,10 @@ catalog amendment and M84-F008/F009 corrections were clean-qualified and frozen 
 `c74651c`, tree `a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws
 that nomination after a Compass Rose center release durably selected another valid solution.
 Coupled semantic-terminal durability is implemented, clean-qualified and frozen without rebuild at
-source `cf463838`, tree `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`; this is the
-current immutable nomination. Refreshed UAT U1-U14 remains required. M84 is active and unaccepted,
-and accepted M83 remains Pages authority.
+source `cf463838`, tree `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. M84-F011
+withdraws that nomination while the ninth PC-water-manifold dogfood project and presentation-only
+PNG export undergo replacement qualification. Refreshed UAT U1-U16 remains required. M84 is active
+and unaccepted, and accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4962,7 +4963,43 @@ rebuild at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, modes `0555`/`0444`, aggregate
 the carried 14/14 browser matrix pass against exact temporary and retained bytes. The focused case
 performs six drags, samples each release at +50/+250/+500/+1000 ms, retains all four spoke
 attachments, finite accepted authority and exact reload. This mechanical nomination accepts no UAT
-row; U1-U14 remain pending.
+row; U1-U14 remained pending at that historical checkpoint.
+
+### M84-F011 — fully constrained PC water-manifold dogfood and PNG export
+
+Open **PC water manifold · fully constrained dogfood** through the ordinary code-project catalog.
+Cold materialization must accept a finite 240 × 120 mm plate containing a 60 × 84 mm reservoir bay,
+three open channel centreline Polylines, three closed O-ring groove loops and eight circular screw
+bores. Each bore has a solved radius of 2.5 mm and one driving Diameter target of 5 mm. The complete
+sketch is located relationally by 21 construction spans from exactly one `FixedPoint` and zero
+`FixedCoordinate` constraints. Independently require normalized Hard residual `<= 1e-9`, numerical
+right nullity zero, equality DOF zero, bidirectional bounded DOF zero and every active feature
+Current.
+
+The managed source owns all coordinates, native roles, incidences and driving dimensions. Three
+calls to the separately compiled `waterChannel` custom patch consume each route's keyed
+`filletableCorners`; its artifact `each` rule emits one existing native Fillet for every current
+corner. Require exactly six stable one-output Fillet hosts across those invocations. Inserting or
+removing a keyed route vertex must change corner cardinality structurally without requiring the
+managed caller to list corner IDs. The simple closed O-ring loops remain ordinary fully constrained
+Polylines so this dogfood fixture does not confuse adaptive routing with a new offset or sealing
+algorithm.
+
+Compile and pin the custom patch through the caller-owned TypeScript toolchain, then require exact
+byte parity for its package fixture and Rust-bundled source/artifact copies. The managed vocabulary
+used by the sample—Circle, Coincident, FixedPoint, curve-length/diameter dimensions, keyed
+Polyline `.byKey` roots and profile/construction line roles—must lower only to existing intent and
+native document semantics. This fixture adds no solver residual, Jacobian, branch heuristic or
+runtime JavaScript execution. The separate reviewed code-project ledger grows from eight to nine
+rows; historical eight-demo F008/F009 evidence remains intact.
+
+Click **Export PNG** in both an ordinary flat sketch and this code project. The browser must
+rasterize the already-composed authoritative SVG into a downloaded `geosolve-sketch.png` whose
+signature is PNG and whose IHDR is exactly 2000 × 1400. The image keeps accepted native, computed,
+datum, construction and annotation paint, but omits hit corridors, controls, provisional geometry
+and error overlays. Export must not mutate the accepted document, code session, history,
+persistence or selected project, and it must remain available in a build that does not use the
+optional code authoring layer.
 
 ### M84-F001 — generated-point terminal checkpoint parity
 
@@ -5154,8 +5191,9 @@ and `c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
 
 `geosolve-m84-uat.service`, PID `650971`, serves only this immutable snapshot from its snapshot
 working directory at `http://100.94.63.83:8080/`. Temporary F010 PIDs `238809`/`621532` are
-retired. This clean immutable replacement is nominated, not accepted. Pages remains accepted M83
-authority and no M84 public publication is claimed; refreshed U1-U14 remain pending.
+retired. M84-F011 withdraws this nomination while keeping it online as rollback authority until
+the replacement is byte/browser-verified. Pages remains accepted M83 authority and no M84 public
+publication is claimed; refreshed U1-U16 remain pending.
 
 ## Frozen near-singular fixtures
 

@@ -39,6 +39,12 @@ fn new_bundled_managed_programs_are_exact_type_checked_typescript_fixtures() {
                 "../../../packages/geosolve-sketch-code/test/managed/neon-manifold.managed.ts"
             ),
         ),
+        (
+            CodeProjectDemoId::PcWaterManifold,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/pc-water-manifold.managed.ts"
+            ),
+        ),
     ];
     let demos = bundled_code_project_demos();
     for (id, fixture) in fixtures {
@@ -55,7 +61,7 @@ fn new_bundled_managed_programs_are_exact_type_checked_typescript_fixtures() {
     }
 }
 
-fn fixtures() -> [Fixture; 7] {
+fn fixtures() -> [Fixture; 8] {
     [
         Fixture {
             module: "./patches/round-every-corner.patch.ts",
@@ -118,6 +124,15 @@ fn fixtures() -> [Fixture; 7] {
             ),
             canonical_json: include_str!(
                 "../../../packages/geosolve-sketch-code/test/fixtures/compass-core.artifact.json"
+            ),
+        },
+        Fixture {
+            module: "./patches/water-channel.patch.ts",
+            source: include_str!(
+                "../../../packages/geosolve-sketch-code/examples/water-channel.patch.ts"
+            ),
+            canonical_json: include_str!(
+                "../../../packages/geosolve-sketch-code/test/fixtures/water-channel.artifact.json"
             ),
         },
     ]

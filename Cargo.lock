@@ -672,6 +672,7 @@ dependencies = [
  "geosolve-sketch-code",
  "geosolve-sketch-features",
  "geosolve-sketch-intent",
+ "js-sys",
  "miniz_oxide",
  "serde",
  "serde_json",

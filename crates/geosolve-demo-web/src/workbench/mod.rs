@@ -21,6 +21,8 @@ mod persistence;
 #[cfg(target_arch = "wasm32")]
 mod platform;
 #[cfg(any(target_arch = "wasm32", test))]
+mod png_export;
+#[cfg(any(target_arch = "wasm32", test))]
 mod samples;
 #[cfg(any(target_arch = "wasm32", test))]
 mod scene;
@@ -8025,6 +8027,17 @@ pub(crate) mod wasm {
                 copy_projectional_reproduction_payload(&click_document, &click_workbench);
                 return;
             }
+            if action.as_deref() == Some("export-png") {
+                if let Err(error) = super::png_export::export_viewport_png(&click_document) {
+                    let message = error
+                        .as_string()
+                        .unwrap_or_else(|| "browser API rejected the export".to_owned());
+                    if let Some(status) = click_document.get_element_by_id("wb-status-message") {
+                        status.set_text_content(Some(&format!("PNG export failed: {message}")));
+                    }
+                }
+                return;
+            }
             let mut wb = click_workbench.borrow_mut();
             let mut durable = false;
             let mut focus_reproduction_text = false;
@@ -9904,6 +9917,19 @@ pub(crate) mod wasm {
             } else if let Some(action) = target.get_attribute("data-wb-action") {
                 if action == "reproduction-copy" {
                     copy_reproduction_payload(&callback_document, &callback_workbench);
+                    return;
+                }
+                if action == "export-png" {
+                    if let Err(error) = super::png_export::export_viewport_png(&callback_document) {
+                        let message = error
+                            .as_string()
+                            .unwrap_or_else(|| "browser API rejected the export".to_owned());
+                        if let Some(status) =
+                            callback_document.get_element_by_id("wb-status-message")
+                        {
+                            status.set_text_content(Some(&format!("PNG export failed: {message}")));
+                        }
+                    }
                     return;
                 }
                 let mut wb = callback_workbench.borrow_mut();

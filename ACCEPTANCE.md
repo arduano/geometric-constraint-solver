@@ -3386,12 +3386,12 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. M84-F010 withdraws the clean-qualified eight-demo/F008/F009
-candidate after a Compass Rose center release durably selected another valid solution. Its coupled
-semantic-terminal correction now passes clean committed-source qualification and immutable
-replacement nomination. Refreshed M84-U1 through M84-U14 and explicit approval remain pending.
-Exact F010 source `cf463838`, tree `992e587`, and snapshot
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are current mechanical UAT authority on Tailscale. Exact F009
+Status: active and unaccepted. The M84-F011 PC water-manifold dogfood amendment withdraws the
+otherwise clean-qualified F010 nomination while its ninth code project, relational mechanical
+vocabulary and presentation-only PNG export undergo replacement qualification. Refreshed M84-U1
+through M84-U16 and explicit approval remain pending. Exact F010 source `cf463838`, tree `992e587`,
+and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical rollback authority and stay
+served on Tailscale only until an exact F011 replacement is verified. Exact F009
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remain
 historical rollback evidence. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot,
 combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn historical
@@ -3539,7 +3539,7 @@ and cold-materialized through the ordinary accepted-scene authority.
 - Managed source is at most 4 MiB, each artifact 16 MiB and the complete project 64 MiB. Save,
   reload and repro restore complete offline authority/history atomically; malformed, missing,
   tampered or oversized inputs reject before replacement.
-- All eight genuine demonstrations pass: adaptive rounded Polyline; typed panel/keyed Fillets;
+- The original eight genuine demonstrations pass: adaptive rounded Polyline; typed panel/keyed Fillets;
   GUI→code→GUI braced frame; reusable AI-authored mounting plate; adaptive Lantern Garland;
   typed Suspension Bridge; generated Compass Rose; and artifact-free Neon Manifold.
 - A canonical fresh workspace's Code surface exposes exactly one direct **Start from code** action
@@ -3571,6 +3571,31 @@ and cold-materialized through the ordinary accepted-scene authority.
   regressions and an exhaustive all-eight audit check both the declared reference kind and expanded
   target kind of every semantic output. This changes no native geometry, solver equation,
   constraint, priority, tolerance or branch rule.
+- M84-F011 adds a ninth genuine project that dogfoods the hybrid boundary as a manufacturable-style
+  240 × 120 mm PC water-cooling distribution manifold. It contains a 60 × 84 mm reservoir bay,
+  three open water-channel centreline Polylines, three closed O-ring groove loops and eight screw
+  circles with driving 5 mm diameters. Twenty-one dimensioned construction spans locate those
+  features relationally from exactly one `FixedPoint`; the project contains no `FixedCoordinate`.
+  Native qualification independently requires finite accepted geometry, normalized Hard residual
+  `<= 1e-9`, numerical/equality/bidirectional DOF zero, all active features Current, eight solved
+  radii of 2.5 mm and the reviewed native inventory.
+- The reusable AI-authored `waterChannel` custom patch consumes a keyed corner collection and uses
+  artifact `p.each` to publish one native Fillet per current route corner. The three channel
+  invocations therefore own six adaptive Fillets without enumerating those corners in managed
+  source. Managed source still owns route coordinates, constraints and dimensions; the simple
+  closed O-ring centreline loops deliberately remain native Polylines. This is hybrid structural
+  authoring over existing Fillet and solver authority, not a new residual or curve algorithm.
+- F011's supporting managed vocabulary is the smallest direct projection of existing native
+  semantics: circles, Coincident, FixedPoint, curve-length/diameter dimensions, keyed Polyline
+  `.byKey` references and profile/construction line roles. TypeScript artifacts, managed fixture
+  source and Rust-bundled copies must remain byte-identical and lower only through the existing
+  intent/materializer/native-validation route. The reviewed M84 ledger contains nine rows.
+- **Export PNG** rasterizes the already-composed authoritative SVG in the browser to a
+  self-contained 2000 × 1400 PNG. Export-specific paint rules hide hit targets, provisional
+  geometry and error overlays while retaining accepted datum, construction, native, computed and
+  annotation presentation. The action must not inspect or reinterpret native equations, mutate the
+  document, create history, alter persistence or require the optional code module. A real-browser
+  check must validate the downloaded PNG signature and IHDR dimensions.
 - Historical replacement source `c74651c` passes formatting, warnings-denied Clippy/Rustdoc, locked
   all-feature tests, actual WASM, TypeScript, golden require-clean, Trunk and the complete clean
   release gate.
@@ -3592,7 +3617,7 @@ and cold-materialized through the ordinary accepted-scene authority.
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
   because it predates the direct-authoring amendment. The direct-authoring replacement below is
-  now also withdrawn because it predates F005. Refreshed M84-U1 through M84-U14 plus explicit
+  now also withdrawn because it predates F005. Refreshed M84-U1 through M84-U16 plus explicit
   supervising-user approval remain mandatory before GitHub Pages publication, exact hosted
   verification, service retirement and closure.
 
@@ -3735,7 +3760,8 @@ suite passes 1/1 on both endpoints across six drags, release/+50/+250/+500/+1000
 four attached spokes; the carried 14/14 browser matrix also passes on both. Retained
 `geosolve-m84-uat.service`, PID `650971`, serves those immutable bytes at
 `http://100.94.63.83:8080/`. Temporary and mutable listeners are retired; the F009 snapshot remains
-preserved as historical rollback evidence. Refreshed M84-U1 through M84-U14 remain open, so Pages
+preserved as historical rollback evidence. M84-F011 withdraws this F010 nomination while keeping
+it as rollback authority. Refreshed M84-U1 through M84-U16 remain open, so Pages
 remains accepted M83 authority and no M84 public publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,

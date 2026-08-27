@@ -69,7 +69,7 @@ construction/NURBS UAT and certified all-family visual profiles.
   duplicate/conflict authority; M84-F007 makes one pointer-down semantic lens the sole terminal
   gesture authority. M84-F010 retains that authentication boundary while making terminal
   durability include the complete authenticated solver-coupled semantic point closure. The
-  creative-catalog amendment expands the genuine catalog to eight projects,
+  creative-catalog amendment historically expanded the genuine catalog to eight projects,
   publishes typed keyed Polyline vertex/segment roots, adds M84-F008's camera/sample presentation
   correction and repairs M84-F009's multi-output shorthand routing. The clean-qualified F003/F004,
   direct-authoring `41e65a4` and combined F005/F006
@@ -80,9 +80,12 @@ construction/NURBS UAT and certified all-family visual profiles.
   `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remains historical rollback evidence. Exact F010 source
   `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
   `992e587609e61768a9af76af193df2fad8325829`, passes complete clean qualification and immutable
-  no-rebuild nomination at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. Retained PID `650971` serves
-  those bytes at `http://100.94.63.83:8080/`; F007 source `cc2f05e` is also historical. Refreshed
-  U1-U14 remain pending, and Pages stays on accepted M83.
+  no-rebuild nomination at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. M84-F011 withdraws that
+  nomination while adding a ninth fully constrained PC water-manifold dogfood project, the
+  relational managed vocabulary it needs and presentation-only PNG export. Retained PID `650971`
+  keeps the F010 rollback bytes at `http://100.94.63.83:8080/` until an exact F011 replacement is
+  verified; F007 source `cc2f05e` is also historical. Refreshed U1-U16 remain pending, and Pages
+  stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -1000,7 +1003,31 @@ eight-path ledgers. The focused Compass case passes 1/1 on each endpoint across 
 release/+50/+250/+500/+1000 ms, reload and four attached spokes; the carried 14/14 browser matrix
 also passes on each. Retained `geosolve-m84-uat.service`, PID `650971`, serves the immutable F010
 snapshot at `http://100.94.63.83:8080/`; temporary and mutable listeners are retired. This is the
-current mechanical UAT nomination, not human acceptance or public authority.
+historical rollback authority, not human acceptance or public authority.
+
+M84-F011 dogfoods the optional boundary with a ninth real sketch rather than a transport-only
+fixture. Managed source defines one 240 × 120 mm manifold plate, a 60 × 84 mm reservoir bay, three
+open water routes, three closed O-ring-groove centreline loops and eight 5 mm screw circles. Exactly
+one `FixedPoint` anchors absolute placement; 21 Construction line spans, Coincident relations and
+driving curve-length/diameter dimensions locate the remaining geometry. There is no
+`FixedCoordinate`. The existing native solve remains authoritative, and independent qualification
+requires finite accepted geometry, normalized Hard residual at most `1e-9`, all active features
+Current and numerical/equality/bidirectional DOF zero.
+
+The separately compiled AI-authored `waterChannel` patch accepts a keyed Corner collection and a
+bend radius. Its data-only `each` template emits one existing native Fillet per current corner, so
+the three managed invocations adapt across keyed route edits without listing corner IDs. The
+managed program owns coordinates, roles, relations and dimensions; the custom patch owns only the
+structural repetition. Supporting Circle, Coincident, FixedPoint, curve-length/diameter, keyed
+Polyline `.byKey` and profile/construction-role syntax lower directly to existing intent/document
+semantics and add no equation or runtime TypeScript dependency.
+
+PNG export remains outside every sketch/code authority boundary. The browser wraps the already
+composed SVG viewport in self-contained paint rules, hides hit/provisional/error-only presentation,
+rasterizes through Canvas at 2000 × 1400 and downloads `geosolve-sketch.png`. It neither reads the
+native document to reconstruct geometry nor mutates selection, persistence, history, accepted
+authority or the optional code session. The feature therefore remains available to plain flat
+workbench deployments as presentation functionality.
 
 ### `geosolve-sketch-features`
 
@@ -1958,7 +1985,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   immutably nominated, accepted by the supervising user and exact-verified on GitHub Pages through
   approval descendant `2006c86` and run `32817232564`.
 - M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
-  typed semantic references, keyed reconciliation, one code/editor history and eight required
+  typed semantic references, keyed reconciliation, one code/editor history and nine required
   demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
   nominations and direct artifact-free authored source `41e65a4` are withdrawn historical
   evidence. M84-F005's collaborative overlay/semantic drag/deletion authority, M84-F006 audit
@@ -1968,6 +1995,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws it and implements complete
   authenticated solver-coupled terminal durability. Exact source `cf463838`, tree `992e587`,
   passes clean qualification and immutable no-rebuild nomination at
-  `/tmp/geosolve-m84-f010-uat.7R5eXQoz`; retained PID `650971` serves those exact bytes on
-  Tailscale. Combined source `ff2e142` is withdrawn; refreshed human UAT U1-U14 remains pending.
-  Accepted M83 remains Pages authority and no M84 publication is claimed.
+  `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. M84-F011 withdraws that nomination for a ninth fully
+  constrained PC water-manifold dogfood project, hybrid adaptive water-channel patch and isolated
+  PNG export; replacement qualification is pending. Retained PID `650971` serves the exact F010
+  rollback bytes on Tailscale. Combined source `ff2e142` is withdrawn; refreshed human UAT U1-U16
+  remains pending. Accepted M83 remains Pages authority and no M84 publication is claimed.

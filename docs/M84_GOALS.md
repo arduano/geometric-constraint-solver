@@ -2,13 +2,17 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the clean-qualified immutable M84-F010 replacement is nominated
-for refreshed human UAT U1-U14**. Exact source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+Status: **active and unaccepted; the M84-F011 manifold dogfood amendment withdraws the otherwise
+clean-qualified F010 nomination while replacement qualification remains pending**. Exact F010
+source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, and no-rebuild snapshot
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are the current candidate authority. F009 source `c74651c`,
-tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect
-evidence; F007 source `cc2f05e`, direct-authoring snapshot `41e65a4`, combined F005/F006 source
-`ff2e142` and all earlier M84 nominations are likewise historical. No UAT row is accepted, and
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical rollback authority and continue to be
+served on retained Tailscale until the F011 candidate is clean-qualified and independently
+verified. F009 source `c74651c`, tree `a904584`, and snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect evidence; F007 source
+`cc2f05e`, direct-authoring snapshot `41e65a4`, combined F005/F006 source `ff2e142` and all earlier
+M84 nominations are likewise historical. Human UAT U1-U16, replacement freeze/Tailscale proof and
+explicit approval remain pending. No UAT row is accepted, M84 is not published or closed, and
 accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
@@ -154,7 +158,7 @@ layer optional.
 - Preserve ordinary M83 selection, Inspector, canvas constraints/dimensions and accepted-scene
   authority for generated outputs.
 - On only an exact canonical fresh workspace whose current and accepted semantic identities match
-  an independently validated empty native scene, show one **Start from code** action and all eight
+  an independently validated empty native scene, show one **Start from code** action and all nine
   centrally owned genuine sample cards. Nonempty or retained-failed scenes keep their existing
   Preview/Unavailable behavior.
 - Starting from code creates a distinct persisted `Authored` origin, an artifact-free editable
@@ -245,11 +249,40 @@ layer optional.
 - Treat this as optional-layer output routing only. Add or change no native geometry, solver
   equation, constraint, priority, tolerance or branch rule.
 
+### M84-F011 — PC water-manifold dogfood amendment
+
+- Add a ninth genuine code-first sample representing a 240 × 120 mm CNC acrylic PC water-cooling
+  distribution manifold. Reserve a 60 × 84 mm reservoir bay, route three open channel Polylines,
+  surround them with three closed O-ring groove loops and place eight screw circles with solved
+  radius 2.5 mm plus driving diameter 5 mm.
+- Fully constrain the sketch relationally from exactly one `FixedPoint` and no `FixedCoordinate`.
+  Use 21 construction datum spans to locate the reservoir, route starts, seals and screw rails;
+  independently require normalized Hard residual `<= 1e-9` and zero numerical, equality and
+  bidirectional degrees of freedom.
+- Exercise the intended managed/custom hybrid: managed declarations own mechanical dimensions and
+  references, while the caller-compiled AI-authored `waterChannel` patch consumes keyed Polyline
+  corners through `p.each` and adapts one existing native Fillet per current corner. The three
+  routes must produce six Current Fillets; the inexpensive closed O-ring loops remain direct
+  managed geometry.
+- Extend only the optional managed vocabulary needed for this mechanical slice: circles,
+  Coincident, FixedPoint/FixedCoordinate, curve-length and diameter dimensions, keyed Polyline
+  member references and profile/construction line roles. The sample deliberately uses no
+  FixedCoordinate. Lower all of them to existing Intent/native contracts; add no solver equation,
+  residual, priority, tolerance or branch rule.
+- Add a presentation-only **Export PNG** action over the authoritative composed SVG. Rasterize in
+  the browser to a fixed, self-contained 2000 × 1400 PNG, omit hit/provisional geometry and never
+  mutate the document, code session, history or accepted-scene authority.
+- Qualify the ninth project, real PNG download and PNG signature/dimensions as M84-U15 and U16.
+  Freeze and verify a clean committed F011 candidate on a temporary endpoint before replacing the
+  retained F010 Tailscale service. Pages publication, human acceptance and milestone closure remain
+  out of bounds until explicit approval.
+
 ## Required demonstrations
 
-The eight bundled demonstrations below are the reviewed code-project catalog. A separate,
-non-bundled entry path starts an **Untitled code sketch** directly from an editable rectangle plus
-diagonal whose endpoints are lexical `frame.corners.*` references.
+The eight bundled demonstrations below are the historical reviewed F009/F010 code-project catalog.
+F011 adds the ninth dogfood demonstration below them. A separate, non-bundled entry path starts an
+**Untitled code sketch** directly from an editable rectangle plus diagonal whose endpoints are
+lexical `frame.corners.*` references.
 
 1. **Rounded polyline · dynamic corners** — six keyed vertices/radius `4` yield five spans/four
    Fillets; inserting `crest` yields seven/six/five. Reorder/remove/Undo preserve unaffected
@@ -276,11 +309,16 @@ diagonal whose endpoints are lexical `frame.corners.*` references.
 8. **Neon manifold · explicit native bends** — artifact-free managed TypeScript combines four
    connected axis-constrained native lines with one branch-explicit two-corner direct FilletSet;
    native endpoint dragging recomputes the feature.
+9. **PC water manifold · constrained mechanical dogfood** — a managed 240 × 120 mm plate combines
+   a 60 × 84 mm reservoir, three open water channels, three closed O-ring loops, eight diameter-5
+   screw circles and 21 construction datums. Exactly one fixed point anchors its otherwise
+   relational dimensions, and the custom `waterChannel` patch generates six keyed adaptive native
+   Fillets across the current channel corners.
 
 ## Acceptance summary
 
-- Preserve the milestone-neutral 271-row authoring/scene golden byte-for-byte and add a separate
-  reviewed eight-row code-project ledger.
+- Preserve the milestone-neutral 271-row authoring/scene golden byte-for-byte and extend the
+  separate reviewed code-project ledger from the historical eight rows to nine.
 - Qualify lossless parsing/exact-span rewrites, artifact compilation/locks, TypeScript type failures,
   keyed reconciliation/tombstones/high-water/Undo, one-transaction expansion, retained failures,
   bounds and save/repro.
@@ -292,6 +330,12 @@ diagonal whose endpoints are lexical `frame.corners.*` references.
   `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18` while the milestone-neutral
   271-row golden remains
   `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+- Materialize the ninth manifold demonstration through the same accepted native authority. Require
+  finite geometry, all active features Current, normalized Hard residual `<= 1e-9`, zero numerical/
+  equality/bidirectional DOF, exactly one FixedPoint and no FixedCoordinate, eight radius-2.5
+  circles with diameter-5 dimensions, three open routes, three closed seals, 21 construction spans
+  and six adaptive Fillets. Record the reviewed replacement-ledger digest only after final
+  qualification.
 - Compile the checked-in managed-v1 two-line/Horizontal/Vertical/one-Fillet fixture through
   TypeScript, parse that same source in Rust and cold-materialize it through the unchanged
   accepted-scene path.
@@ -301,9 +345,11 @@ diagonal whose endpoints are lexical `frame.corners.*` references.
   golden require-clean, Trunk and the complete clean release gate.
 - Freeze one no-rebuild M84 candidate, verify it locally and through retained Tailscale UAT, and
   publish to Pages only after explicit supervising-user approval and exact hosted-byte proof.
-- Exact F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d` passes the complete clean gate,
-  no-rebuild freeze, identical temporary/retained eight-path HTTP ledgers, focused Compass 1/1 and
-  carried 14/14 browser matrix on both endpoints. Refreshed human UAT remains pending.
+- Exact F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d` historically passes the complete
+  clean gate, no-rebuild freeze, identical temporary/retained eight-path HTTP ledgers, focused
+  Compass 1/1 and carried 14/14 browser matrix on both endpoints. F011 withdraws that nomination;
+  F011 clean qualification, freeze, temporary verification, retained-service replacement and
+  refreshed human UAT U1-U16 remain pending.
 
 Withdrawn nomination record (2026-08-25): exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -385,7 +431,7 @@ on both endpoints. Temporary PID `3943194` and superseded F007 PID `62376` are r
 M84-F010 withdraws this nomination. Historical PID `3965271` and the temporary F010 development
 PID `238809` are retired; the immutable F009 snapshot is preserved.
 
-Current F010 replacement nomination (2026-08-27): exact product source
+Historical F010 replacement nomination (2026-08-27): exact product source
 `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, passed the clean release gate from
 15:58:23.055857854 through 16:17:18.303733569 AEST, exit 0. The 6,209-line, 420,425-byte log
@@ -408,8 +454,10 @@ and config have SHA-256 `4b97f570d5122a353b4ee104b26ea46427ca1c3b79aa5a8d35fee78
 and `c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
 `geosolve-m84-uat.service`, PID `650971`, serves only this immutable snapshot from its snapshot
 working directory at `http://100.94.63.83:8080/`. Historical F009 PID `3965271` and temporary
-F010 PIDs `238809`/`621532` are retired; the F009 snapshot remains preserved. Refreshed M84-U1
-through M84-U14, explicit approval, Pages publication, service retirement and closure remain open.
+F010 PIDs `238809`/`621532` are retired; the F009 snapshot remains preserved. M84-F011 withdraws
+F010 from current nomination, but that retained service must not be replaced until a clean F011
+freeze passes temporary exact-byte and browser verification. F011 qualification, M84-U1 through
+M84-U16, explicit approval, Pages publication, service retirement and closure remain open.
 
 ## Bounds and non-goals
 

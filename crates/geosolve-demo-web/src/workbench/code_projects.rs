@@ -4237,12 +4237,12 @@ mod tests {
     }
 
     #[test]
-    fn all_eight_samples_open_with_nonempty_independently_validated_native_canvases() {
+    fn all_nine_samples_open_with_nonempty_independently_validated_native_canvases() {
         let demos = bundled_code_project_demos();
         assert_eq!(
             demos.len(),
-            8,
-            "the curated M84 catalog is closed at eight demos"
+            9,
+            "the curated M84 catalog includes the manifold dogfood demo"
         );
         for demo in demos {
             let (workbench, editor) = open_with_editor(demo.id.key());
@@ -4275,14 +4275,14 @@ mod tests {
     }
 
     #[test]
-    fn menu_owns_one_distinct_code_group_and_eight_genuine_project_leaves() {
+    fn menu_owns_one_distinct_code_group_and_nine_genuine_project_leaves() {
         let markup = sample_group_markup(None);
         assert!(markup.contains("Code &amp; reusable patches"));
         let demos = bundled_code_project_demos();
         assert_eq!(
             demos.len(),
-            8,
-            "the curated M84 catalog is closed at eight demos"
+            9,
+            "the curated M84 catalog includes the manifold dogfood demo"
         );
         assert_eq!(markup.matches("data-code-sample-id=").count(), demos.len());
         for demo in demos {

@@ -10,6 +10,7 @@ import { compassCore } from "../examples/compass-core.patch.js";
 import { mountingPlate } from "../examples/mounting-plate.patch.js";
 import { roundEveryCorner } from "../examples/rounded-polyline.patch.js";
 import { fillets as mappedFillets } from "../examples/typed-panel.patch.js";
+import { waterChannel } from "../examples/water-channel.patch.js";
 import { compilePatchArtifact } from "../src/compiler.js";
 import {
   PATCH_ARTIFACT_FORMAT,
@@ -71,7 +72,7 @@ test("each records a canonical Rust-shaped, equation-free artifact", () => {
   assert.doesNotMatch(compiled.canonicalJson, /node_id|port_id|equation|residual|function/u);
 });
 
-test("mapRecord and all seven examples compile deterministically", () => {
+test("mapRecord and all eight examples compile deterministically", () => {
   const builds = [
     () => compilePatchArtifact({
       source: "adaptiveLanterns",
@@ -114,6 +115,12 @@ test("mapRecord and all seven examples compile deterministically", () => {
       moduleSpecifier: "./patches/mounting-plate.patch.ts",
       exportName: "mountingPlate",
       patch: mountingPlate,
+    }),
+    () => compilePatchArtifact({
+      source: "waterChannel",
+      moduleSpecifier: "./patches/water-channel.patch.ts",
+      exportName: "waterChannel",
+      patch: waterChannel,
     }),
   ];
   for (const build of builds) {

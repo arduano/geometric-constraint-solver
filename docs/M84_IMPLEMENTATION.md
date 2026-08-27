@@ -2,19 +2,22 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **the clean-qualified immutable M84-F010 replacement is nominated for refreshed human UAT
-U1-U14; M84 remains active and unaccepted**. Exact source
-`cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+Status: **the M84-F011 PC water-manifold dogfood amendment withdraws the clean-qualified F010
+nomination; M84 remains active and unaccepted while replacement qualification is pending**. Exact
+F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, and snapshot
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are current candidate authority. F009 source `c74651c`, tree
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical rollback authority and retained Tailscale
+bytes until F011 is clean-qualified and independently verified. F009 source `c74651c`, tree
 `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect
 evidence; F007 source `cc2f05e` and its immutable snapshot are likewise historical.
 Direct-authoring source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, is withdrawn historical evidence with the initial,
 F003 and F004 candidates. Combined F005/F006 source `ff2e142` and its frozen candidate are also
-withdrawn by F007. No UAT row is accepted, no M84 Pages publication is claimed, and accepted M83
-remains public authority.
+withdrawn by F007. F011 implementation is present but has no final source/tree/freeze authority yet;
+do not infer any such identity from this ledger. M84-U1 through U16, replacement Tailscale proof,
+explicit approval, Pages publication and closure remain pending. No UAT row is accepted, no M84
+Pages publication is claimed, and accepted M83 remains public authority.
 
 ## Baseline and authority
 
@@ -22,15 +25,17 @@ remains public authority.
   exact Pages run `32817232564`.
 - Controlling architecture: ADR 0041 and `docs/M84_GOALS.md`.
 - Numerical authority remains the existing Rust materializer/solver plus independent validation.
-- M84 adds structural authoring only: no primitive, relation, dimension, residual, priority,
-  branch rule or JavaScript solve path changed.
+- M84 adds structural authoring only. F011 exposes more existing native primitive/relation/
+  dimension families through the optional managed adapter, but changes no native equation,
+  residual, priority, tolerance, branch rule or JavaScript solve path.
 
 ## Files and public seams
 
 - `crates/geosolve-sketch-code/` is the optional pure-Rust code-project layer. It owns bounded
   managed-v1 parsing, authenticated edits, artifact admission, declaration-family execution,
   typed semantic expansion, keyed reconciliation, overrides, composite history, bootstrap and the
-  eight bundled projects.
+  nine bundled projects. The historical F009/F010 catalog contained eight projects; F011 adds the
+  PC Water Manifold.
 - `CodeProject::managed_only(ProjectKey, source)` is its smallest code-only host seam. It accepts
   only artifact-free managed source and the SDK import, validates the complete envelope, and
   publishes no native geometry by parsing alone.
@@ -44,8 +49,12 @@ remains public authority.
 - `geosolve-demo-web::workbench::code_projects` composes the optional module through public intent,
   coordinator, ownership and scene APIs. Persistence carries either the unchanged plain
   workspace-v8 authority or a bounded authenticated code-project envelope.
+- `geosolve-demo-web::workbench::png_export` clones the authoritative composed SVG, removes
+  hit/provisional content, applies self-contained presentation styling and rasterizes through a
+  browser canvas to a fixed 2000 × 1400 PNG download. It has no document, code-session, history or
+  accepted-scene write path.
 - `scripts/verify-geosolve-sketch-code-package.sh` packages the real normalized Rust crate, checks
-  all fourteen crate-owned runtime assets, extracts it and performs a locked offline build with local
+  every crate-owned runtime asset, extracts it and performs a locked offline build with local
   patches for GeoSolve crates that are not yet on crates.io. `scripts/release-gate.sh` runs this
   verifier and both TypeScript packages.
 
@@ -229,6 +238,42 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   when collection result provenance is absent. Exact alias/nesting/mapping regressions and the
   all-eight audit require declared reference and expanded target kinds to equal the reviewed
   catalog. No native geometry or solver behavior changed.
+
+### M84-F011 — PC water-manifold dogfood amendment
+
+- [x] Extend the optional managed declaration catalog, parser/lowering and generated TypeScript
+  surface with direct circles, Coincident, FixedPoint, FixedCoordinate, CurveLength and Diameter;
+  publish keyed Polyline members through `.byKey` and preserve explicit line roles
+  `"profile" | "construction"`. Every declaration lowers to an existing Intent/native family and
+  no solver equation or residual changes.
+- [x] Add the ninth genuine code project from
+  `assets/demos/pc-water-manifold.sketch.ts`, with the byte-matched managed fixture and the
+  caller-compiled `water-channel.patch.ts`/pinned data-only artifact in both Rust and TypeScript
+  package surfaces. The custom patch uses keyed `p.each` expansion so each current open-channel
+  corner owns one adaptive native Fillet. Register it as the ninth centrally sourced code landing
+  card without changing the separate **Start from code** path.
+- [x] Model a 240 × 120 mm acrylic plate, 60 × 84 mm reservoir bay, three open channel Polylines,
+  three closed O-ring loops, eight solved radius-2.5 screw circles with driving diameter 5 mm and
+  21 construction datum spans. Exactly one FixedPoint anchors the design and no FixedCoordinate is
+  present. The final sample inventory has 138 managed declarations, 82 generated members and 20
+  typed outputs; its native result contains 53 points, 58 curves, 58 constraints, six host
+  outputs/features and 15 computed edges.
+- [x] Keep only the six useful channel-corner Fillets adaptive and Current. The three simple closed
+  O-ring loops intentionally remain unfilleted direct geometry so ordinary replay stays practical;
+  this changes neither their constraint semantics nor the custom patch contract.
+- [x] Add command-bar **Export PNG** through the isolated presentation module. Export clones the
+  composed SVG, strips hit/provisional geometry, supplies self-contained dark styling and uses
+  SVG-to-canvas rasterization for a fixed 2000 × 1400 PNG without touching sketch or history
+  authority.
+- [x] Focused native authority assertions require finite accepted geometry, all active features
+  Current, independently validated normalized Hard residual `<= 1e-9`, zero numerical/equality/
+  bidirectional DOF, one FixedPoint, zero FixedCoordinate, exact route/seal/datum/circle inventories
+  and six one-output adaptive Fillets. The expanded nine-row ledger is reviewed separately from the
+  unchanged milestone-neutral golden.
+- [ ] Commit and run the complete clean release qualification; freeze the exact no-rebuild output;
+  verify the ninth project plus PNG signature and 2000 × 1400 IHDR in a real browser; then replace
+  the retained F010 service only after temporary exact-byte/browser proof. M84-U15/U16, all other
+  refreshed UAT, Pages publication and milestone closure remain pending.
 
 The semantic-overlay addition intentionally changes the still-unreleased optional persistence
 contract. Code sessions now identify as `geosolve-sketch-code-session-v2`; composed workbench
@@ -463,8 +508,9 @@ the mutable `:18090` development listener, the original release remains unchange
 +50/+250/+500/+1000 ms; six successive center drags retain their exact releases, all spoke starts
 remain attached and no browser error occurs. Exact committed source `cf463838` then passes the
 complete clean gate, immutable no-rebuild freeze, exact temporary/retained HTTP verification,
-focused Compass 1/1 and the carried 14/14 browser matrix on both endpoints. The current nomination
-is recorded below; these automated facts do not accept a human UAT row.
+focused Compass 1/1 and the carried 14/14 browser matrix on both endpoints. Its then-current,
+now-F011-withdrawn nomination is recorded below; these automated facts do not accept a human UAT
+row.
 
 ### M84-F009 — canonical map order selected an unrelated multi-output shorthand
 
@@ -592,7 +638,7 @@ Only after temporary byte/browser proof passed was superseded F007 PID `62376` r
 PID `3943194` is retired. M84-F010 withdraws this nomination. Historical retained PID `3965271`
 and temporary development PID `238809` are retired; the immutable F009 snapshot remains preserved.
 
-## Current F010 qualification and immutable replacement nomination
+## Historical F010 qualification and withdrawn replacement nomination
 
 Exact product source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, passed
@@ -624,7 +670,36 @@ Only after temporary exact-byte and browser proof passed did
 `http://100.94.63.83:8080/`; its working directory is the immutable F010 snapshot. Historical F009
 PID `3965271` and temporary F010 PIDs `238809`/`621532` are retired, while the F009 snapshot is
 preserved. This is the clean immutable F010 replacement nomination, not acceptance. Refreshed
-U1-U14, explicit supervising-user approval, Pages publication and milestone closure remain pending.
+U1-U14 were pending when this evidence was recorded. M84-F011 now withdraws the nomination; its
+frozen service remains rollback authority only until the F011 replacement passes temporary
+exact-byte/browser proof.
+
+## Current F011 implementation awaiting replacement qualification
+
+The ninth **PC Water Manifold** project is implemented as the milestone's first substantial
+AI-authored mechanical dogfood sketch. Its managed source describes a 240 × 120 mm plate, 60 × 84
+mm reservoir bay, three open water-channel Polylines, three closed O-ring loops, eight diameter-5
+mm screw circles and 21 construction datums. Exactly one FixedPoint anchors absolute position;
+there is no FixedCoordinate. The caller-owned custom `waterChannel` patch applies keyed `p.each`
+expansion to the six current channel corners, yielding six existing native Fillets while adapting
+to the Polyline corner collection.
+
+The native owner test requires a finite accepted solved state, every active feature Current,
+independently validated normalized Hard residual `<= 1e-9`, and numerical, equality and
+bidirectional DOF all zero. It also requires the exact route, seal, datum, circle, dimension and
+Fillet inventories. This qualification uses ordinary M83 Intent/materialization/native-solver
+authority; the new optional managed spellings for circles, Coincident, FixedPoint/FixedCoordinate,
+CurveLength/Diameter, keyed Polyline members and line roles add no equation or residual.
+
+The command bar also exposes presentation-only **Export PNG**. It derives from the composed
+authoritative SVG, hides hit/provisional content, rasterizes with self-contained styling and
+downloads fixed 2000 × 1400 output without mutating the document or history. A clean committed
+source identity, release-gate evidence, no-rebuild freeze, temporary and retained HTTP ledgers,
+actual PNG signature/IHDR proof and replacement service identity are deliberately not recorded
+until those steps finish. U15 owns the manifold dogfood check and U16 owns PNG export; both remain
+pending alongside U1-U14. F010 PID `650971` continues to serve its immutable rollback snapshot at
+`http://100.94.63.83:8080/` until the F011 temporary candidate is fully verified. No M84 Pages
+publication or milestone closure is authorized.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -842,8 +917,9 @@ retired. The temporary PID `4027499` is also retired. M84-F005 withdraws this ot
 direct-authoring record because it predates the collaborative overlay and semantic-authority
 contract. Combined F005/F006 source `ff2e142` and its later frozen candidate are themselves
 withdrawn by F007's terminal-lens reproduction. Those snapshot/service records are historical only,
-not current candidates. The withdrawn F009 and current F010 qualification records are above.
-GitHub Pages deliberately remains on accepted M83 pending refreshed UAT and explicit approval.
+not current candidates. The withdrawn F009 and historical F010 qualification records are above;
+F011 replacement qualification remains open. GitHub Pages deliberately remains on accepted M83
+pending refreshed UAT and explicit approval.
 
 ## Known bounds and truthful limitations
 
@@ -854,17 +930,21 @@ GitHub Pages deliberately remains on accepted M83 pending refreshed UAT and expl
   still reject the complete all-or-nothing promotion and expose a read-only diagnostic rather than
   disappearing. The bundled Braced Frame remains a genuine managed code project.
 - Integration test sources which inspect workspace TypeScript/manifests are intentionally not part
-  of the published Rust archive. Runtime library code and all fourteen required assets are
-  self-contained and extraction-built.
+  of the published Rust archive. Runtime library code and every required asset are self-contained
+  and extraction-built.
 - General ejection, arbitrary formulas/new constraints, arbitrary TypeScript execution, general
   topological naming, 3D/B-rep behavior and the deferred Offset redesign remain out of scope.
 - Human discoverability, presentation feel and repeated real-browser drag/deletion responsiveness
-  remain owned by `docs/M84_UAT.md`. Pages must remain M83 until refreshed U1-U14 are explicitly
-  approved.
+  remain owned by `docs/M84_UAT.md`. F011 adds explicit manifold and PNG checks U15/U16. Pages must
+  remain M83 until refreshed U1-U16 are explicitly approved.
 
 ## Remaining release sequence
 
-1. Complete refreshed M84-U1 through M84-U14 against only the frozen F010 replacement and record
+1. Commit and clean-qualify F011, freeze only the exact no-rebuild output, then verify its ninth
+   sample, PNG signature/2000 × 1400 IHDR and exact HTTP bytes on a temporary endpoint.
+2. Only after that proof passes, replace the retained F010 Tailscale service and record the exact
+   F011 source/tree/log/ledger/snapshot/browser identities.
+3. Complete refreshed M84-U1 through M84-U16 against only the frozen F011 replacement and record
    explicit supervising-user approval or open another numbered finding.
-2. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+4. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

@@ -27,9 +27,13 @@ serde_json.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
+js-sys = "=0.3.98"
 wasm-bindgen = "=0.2.121"
 wasm-bindgen-futures = "=0.4.71"
 web-sys = { version = "=0.3.98", features = [
+    "Blob",
+    "BlobPropertyBag",
+    "CanvasRenderingContext2d",
     "Clipboard",
     "Document",
     "DomRect",
@@ -37,7 +41,10 @@ web-sys = { version = "=0.3.98", features = [
     "Event",
     "EventTarget",
     "FocusEvent",
+    "HtmlAnchorElement",
+    "HtmlCanvasElement",
     "HtmlElement",
+    "HtmlImageElement",
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
@@ -46,6 +53,7 @@ web-sys = { version = "=0.3.98", features = [
     "Navigator",
     "PointerEvent",
     "Storage",
+    "Url",
     "WheelEvent",
     "Window",
 ] }

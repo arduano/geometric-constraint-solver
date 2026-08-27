@@ -12,6 +12,7 @@ import { compassCore } from "../dist/examples/compass-core.patch.js";
 import { mountingPlate } from "../dist/examples/mounting-plate.patch.js";
 import { roundEveryCorner } from "../dist/examples/rounded-polyline.patch.js";
 import { fillets } from "../dist/examples/typed-panel.patch.js";
+import { waterChannel } from "../dist/examples/water-channel.patch.js";
 import { compilePatchArtifact } from "../dist/src/compiler.js";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -66,6 +67,14 @@ const fixtures = [
     exportName: "mountingPlate",
     patch: mountingPlate,
   },
+  {
+    source: "examples/water-channel.patch.ts",
+    fixture: "test/fixtures/water-channel.artifact.json",
+    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/water-channel.artifact.json",
+    moduleSpecifier: "./patches/water-channel.patch.ts",
+    exportName: "waterChannel",
+    patch: waterChannel,
+  },
 ];
 
 for (const fixture of fixtures) {
@@ -83,8 +92,20 @@ for (const fixture of fixtures) {
       compiled.canonicalJson,
       `${fixture.fixture} is stale; run npm run generate:fixtures`,
     );
+    if (fixture.rustFixture !== undefined) {
+      assert.equal(
+        await readFile(resolve(packageRoot, fixture.rustFixture), "utf8"),
+        compiled.canonicalJson,
+        `${fixture.rustFixture} is stale; run npm run generate:fixtures`,
+      );
+    }
   } else {
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(destination, compiled.canonicalJson);
+    if (fixture.rustFixture !== undefined) {
+      const rustDestination = resolve(packageRoot, fixture.rustFixture);
+      await mkdir(dirname(rustDestination), { recursive: true });
+      await writeFile(rustDestination, compiled.canonicalJson);
+    }
   }
 }
