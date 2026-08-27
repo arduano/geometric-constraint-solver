@@ -693,11 +693,17 @@ CurveLength/Diameter, keyed Polyline members and line roles add no equation or r
 
 The command bar also exposes presentation-only **Export PNG**. It derives from the composed
 authoritative SVG, hides hit/provisional content, rasterizes with self-contained styling and
-downloads fixed 2000 × 1400 output without mutating the document or history. A clean committed
-source identity, release-gate evidence, no-rebuild freeze, temporary and retained HTTP ledgers,
-actual PNG signature/IHDR proof and replacement service identity are deliberately not recorded
-until those steps finish. U15 owns the manifold dogfood check and U16 owns PNG export; both remain
-pending alongside U1-U14. F010 PID `650971` continues to serve its immutable rollback snapshot at
+downloads fixed 2000 × 1400 output without mutating the document or history. A focused local
+Chromium run on the mutable F011 build passes 1/1: it opens the ninth project as accepted, observes
+at least 53 points and 58 curves with exactly six finite computed Fillets, confirms all visible
+geometry is fitted, inspects managed/custom hybrid source and downloads a PNG without a browser,
+console or request error. The 233,543-byte download has PNG signature, IHDR 2000 × 1400 and
+SHA-256 `2378a8c74216524c42fc8910d79e28a6dacc54fc437ac705518ab42122363dc2`.
+
+This is proportional mutable-build evidence, not a clean committed source identity, release-gate
+result, no-rebuild freeze, temporary/retained HTTP ledger or replacement service nomination. U15
+owns the manifold dogfood check and U16 owns PNG export; both remain pending alongside U1-U14.
+F010 PID `650971` continues to serve its immutable rollback snapshot at
 `http://100.94.63.83:8080/` until the F011 temporary candidate is fully verified. No M84 Pages
 publication or milestone closure is authorized.
 

@@ -333,7 +333,7 @@ facts historically nominated F010 but accept no UAT row. M84-F011 withdraws that
 | Eight-demo/M84-F008/F009 clean replacement qualification and immutable freeze | withdrawn by F010 |
 | M84-F010 proportional owner/WASM/mutable-browser qualification | complete |
 | M84-F010 clean qualification and immutable replacement freeze | complete; withdrawn by F011 |
-| M84-F011 manifold/PNG focused qualification | pending final reconciliation |
+| M84-F011 manifold/PNG focused qualification | complete on mutable local build; no UAT row accepted |
 | M84-F011 clean qualification and immutable replacement freeze | pending |
 | Supervising-user refreshed M84-U1 through M84-U16 | pending |
 | GitHub Pages publication, service retirement and M84 closure | pending |
