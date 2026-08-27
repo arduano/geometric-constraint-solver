@@ -1125,7 +1125,7 @@ impl CodeProjectWorkbench {
         let audited = self.session.apply_prepared_audited(prepared);
         work.merge(audited.work);
         let receipt = audited.outcome.map_err(|error| error.to_string())?;
-        self.materialized = Some(Box::new(materialized));
+        self.materialized = Some(materialized);
         self.last_receipt = Some(receipt.clone());
         Ok(Some(AcceptedCodePublication {
             editor: delegated_editor,
