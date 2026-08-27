@@ -1160,12 +1160,31 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-grid path { fill: none; vector-effect: non-scaling-stroke; }
 .wb-grid-minor { stroke: #1b2223; stroke-width: 0.75; }
 .wb-grid-major { stroke: #263031; stroke-width: 1; }
+.wb-point {
+  transform: scale(var(--wb-camera-inverse-scale, 1));
+  transform-box: view-box;
+}
+.wb-camera-fixed-size,
+.wb-curve-control-hit,
+.wb-curve-control-mark,
+.wb-curve-control-tooltip,
+.wb-fillet-radius-grip,
+.wb-annotations text,
+.wb-dimension-label-mask,
+.wb-annotation-label-hit,
+.wb-annotation-move-hit,
+.wb-dimension-arrow {
+  transform: scale(var(--wb-camera-inverse-scale, 1));
+  transform-box: fill-box;
+  transform-origin: center;
+}
 .wb-reference-geometry { isolation: isolate; }
 .wb-datum { outline: none; cursor: pointer; }
 .wb-datum-hit {
   fill: transparent;
   stroke: transparent;
   pointer-events: all;
+  vector-effect: non-scaling-stroke;
 }
 .wb-datum-axis .wb-datum-hit { stroke-width: 8; }
 .wb-datum-line {
@@ -1231,6 +1250,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-width: 14;
   pointer-events: stroke;
   cursor: ew-resize;
+  vector-effect: non-scaling-stroke;
 }
 .wb-computed-item.has-problem .wb-computed-fillet { stroke: #ff7666; }
 .wb-fillet-radius-rail,
@@ -1447,6 +1467,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   font: 600 10px/1.2 Inter, system-ui, sans-serif;
   letter-spacing: 0.01em;
 }
+.wb-curve-control-tooltip.context-hidden { display: none; }
 .wb-curve[data-interactive="false"],
 .wb-point[data-interactive="false"] {
   pointer-events: none;
@@ -1564,6 +1585,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   text-align: center;
 }
 .wb-annotation { cursor: pointer; outline: none; }
+.wb-annotation.context-hidden { display: none; }
 .wb-dimension text { text-anchor: middle; }
 .wb-dimension-label-mask {
   fill: #121617;
@@ -1597,6 +1619,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-width: 20;
   pointer-events: stroke;
   cursor: pointer;
+  vector-effect: non-scaling-stroke;
 }
 .wb-annotation-label-hit { cursor: pointer; }
 .wb-annotation-move-hit,

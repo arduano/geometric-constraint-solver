@@ -33,10 +33,48 @@ const MAX_PIXELS_PER_MODEL_UNIT: f64 = 2_000.0;
 const FIT_MARGIN_PIXELS: f64 = 64.0;
 const GRID_TARGET_MAJOR_PIXELS: f64 = 96.0;
 
+/// Presentation-only affine mapping from one exact camera paint to a newer
+/// desired camera. The accepted SVG scene is already expressed in screen
+/// coordinates, so this transform can be applied to its retained root group
+/// without rebuilding geometry, annotations, or computed features.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RetainedCameraTransform {
+    pub(crate) translate: [f64; 2],
+    pub(crate) scale: f64,
+}
+
+impl RetainedCameraTransform {
+    pub(crate) fn between(exact: CanvasCamera, desired: CanvasCamera) -> Option<Self> {
+        let scale = desired.pixels_per_model_unit / exact.pixels_per_model_unit;
+        let translate = [
+            SCREEN_SIZE[0] * 0.5
+                + (exact.model_center[0] - desired.model_center[0]) * desired.pixels_per_model_unit
+                - scale * SCREEN_SIZE[0] * 0.5,
+            SCREEN_SIZE[1] * 0.5
+                + (desired.model_center[1] - exact.model_center[1]) * desired.pixels_per_model_unit
+                - scale * SCREEN_SIZE[1] * 0.5,
+        ];
+        (scale.is_finite() && scale > 0.0 && translate.into_iter().all(f64::is_finite))
+            .then_some(Self { translate, scale })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn map_screen_point(self, point: ScreenPoint) -> Option<ScreenPoint> {
+        let mapped = ScreenPoint {
+            x: self.translate[0] + self.scale * point.x,
+            y: self.translate[1] + self.scale * point.y,
+        };
+        (mapped.x.is_finite() && mapped.y.is_finite()).then_some(mapped)
+    }
+}
+
 /// Transient, visual-only canvas presentation owned by the demo adapter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CanvasDisplayOptions {
     pub(crate) grid_visible: bool,
+    /// Keeps context-only annotations in the SVG as inert hidden nodes so a
+    /// retained hover frame can reveal them without rebuilding the scene.
+    pub(crate) retain_contextual_annotations: bool,
 }
 
 /// Transient Offset-specific canvas state that must not be flattened into ordinary selection.
@@ -50,7 +88,10 @@ pub(crate) struct OffsetCanvasPresentation {
 
 impl Default for CanvasDisplayOptions {
     fn default() -> Self {
-        Self { grid_visible: true }
+        Self {
+            grid_visible: true,
+            retain_contextual_annotations: false,
+        }
     }
 }
 
@@ -60,6 +101,44 @@ struct AdaptiveGridSpec {
     major_pixels: f64,
     minor_pixels: f64,
     screen_origin: ScreenPoint,
+}
+
+/// Exact lightweight grid paint for one desired camera. Camera RAFs may
+/// update these two retained paths without serializing the accepted scene.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RetainedGridPresentation {
+    pub(crate) model_major_step: f64,
+    pub(crate) major_pixels: f64,
+    pub(crate) minor_path: String,
+    pub(crate) major_path: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RetainedDatumAxisPresentation {
+    pub(crate) visible: bool,
+    pub(crate) start: ScreenPoint,
+    pub(crate) end: ScreenPoint,
+    pub(crate) label: ScreenPoint,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RetainedFixedSizeTransform {
+    pub(crate) inverse_scale: f64,
+}
+
+impl RetainedFixedSizeTransform {
+    pub(crate) fn for_camera(transform: RetainedCameraTransform) -> Option<Self> {
+        let inverse_scale = transform.scale.recip();
+        (inverse_scale.is_finite() && inverse_scale > 0.0).then_some(Self { inverse_scale })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn map_about(self, anchor: ScreenPoint, point: ScreenPoint) -> ScreenPoint {
+        ScreenPoint {
+            x: anchor.x + (point.x - anchor.x) * self.inverse_scale,
+            y: anchor.y + (point.y - anchor.y) * self.inverse_scale,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -440,10 +519,11 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
     }
     output.push_str("<g class=\"wb-geometry\">");
     if let Some(scene) = scene {
-        for curve in scene
+        for (scene_curve_index, curve) in scene
             .curves
             .iter()
-            .filter(|curve| curve.is_visible(geometry_policy))
+            .enumerate()
+            .filter(|(_, curve)| curve.is_visible(geometry_policy))
         {
             if curve.screen_polyline.len() < 2 {
                 continue;
@@ -464,11 +544,12 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
             let _ = write!(
                 output,
                 concat!(
-                    "<path class=\"wb-curve{}{}{}{}{}{}{}{}{}\" d=\"{}\" ",
+                    "<path id=\"wb-scene-curve-{}\" class=\"wb-curve{}{}{}{}{}{}{}{}{}\" d=\"{}\" ",
                     "data-persistent-id=\"{}\" {}",
                     "data-editor-segment=\"{}\" data-role=\"{}\" data-source-role=\"{}\" ",
                     "data-construction-origin=\"{}\" data-interactive=\"{}\" {}/>"
                 ),
+                scene_curve_index,
                 if selected { " selected" } else { "" },
                 if hovered { " geometry-hovered" } else { "" },
                 if pending { " authoring-pending" } else { "" },
@@ -551,10 +632,11 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
         );
         render_curve_control_guides(&mut output, scene, hover);
         output.push_str("</g><g class=\"wb-points\">");
-        for point in scene
+        for (scene_point_index, point) in scene
             .points
             .iter()
-            .filter(|point| point.is_visible(geometry_policy))
+            .enumerate()
+            .filter(|(_, point)| point.is_visible(geometry_policy))
         {
             let interactive = point.is_interactive(geometry_policy);
             let item = SelectionItem::Point(point.id);
@@ -568,9 +650,11 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
             let _ = write!(
                 output,
                 concat!(
-                    "<circle class=\"wb-point{}{}{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
+                    "<circle id=\"wb-scene-point-{}\" class=\"wb-point{}{}{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
+                    "style=\"transform-origin:{:.3}px {:.3}px\" ",
                     "data-persistent-id=\"{}\" {}data-interactive=\"{}\"/>"
                 ),
+                scene_point_index,
                 if selected { " selected" } else { "" },
                 if hovered { " geometry-hovered" } else { "" },
                 if pending { " authoring-pending" } else { "" },
@@ -585,6 +669,8 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
                     ""
                 },
                 if has_problem { " has-problem" } else { "" },
+                point.screen_position.x,
+                point.screen_position.y,
                 point.screen_position.x,
                 point.screen_position.y,
                 point.id,
@@ -625,6 +711,7 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
             hover,
             &problem_items,
             problem,
+            display.retain_contextual_annotations,
         );
     }
     output.push_str("</g>");
@@ -709,11 +796,9 @@ fn adaptive_grid_spec(viewport: Viewport) -> Option<AdaptiveGridSpec> {
 }
 
 fn render_adaptive_grid(output: &mut String, viewport: Viewport) {
-    let Some(spec) = adaptive_grid_spec(viewport) else {
+    let Some(grid) = retained_grid_presentation(viewport) else {
         return;
     };
-    let minor = grid_path(spec.screen_origin, spec.minor_pixels, viewport.screen_size);
-    let major = grid_path(spec.screen_origin, spec.major_pixels, viewport.screen_size);
     let _ = write!(
         output,
         concat!(
@@ -722,8 +807,59 @@ fn render_adaptive_grid(output: &mut String, viewport: Viewport) {
             "<path class=\"wb-grid-minor\" d=\"{}\"/>",
             "<path class=\"wb-grid-major\" d=\"{}\"/></g>"
         ),
-        spec.model_major_step, spec.major_pixels, minor, major,
+        grid.model_major_step, grid.major_pixels, grid.minor_path, grid.major_path,
     );
+}
+
+pub(crate) fn retained_grid_presentation(viewport: Viewport) -> Option<RetainedGridPresentation> {
+    let spec = adaptive_grid_spec(viewport)?;
+    Some(RetainedGridPresentation {
+        model_major_step: spec.model_major_step,
+        major_pixels: spec.major_pixels,
+        minor_path: grid_path(spec.screen_origin, spec.minor_pixels, viewport.screen_size),
+        major_path: grid_path(spec.screen_origin, spec.major_pixels, viewport.screen_size),
+    })
+}
+
+pub(crate) fn retained_datum_axis_presentation(
+    viewport: Viewport,
+    datum: SketchDatum,
+) -> Option<RetainedDatumAxisPresentation> {
+    let origin = viewport.model_to_screen([0.0, 0.0]);
+    let [width, height] = viewport.screen_size;
+    match datum {
+        SketchDatum::Origin => None,
+        SketchDatum::XAxis => Some(RetainedDatumAxisPresentation {
+            visible: (0.0..=height).contains(&origin.y),
+            start: ScreenPoint {
+                x: 0.0,
+                y: origin.y,
+            },
+            end: ScreenPoint {
+                x: width,
+                y: origin.y,
+            },
+            label: ScreenPoint {
+                x: width - 20.0,
+                y: (origin.y - 8.0).max(14.0),
+            },
+        }),
+        SketchDatum::YAxis => Some(RetainedDatumAxisPresentation {
+            visible: (0.0..=width).contains(&origin.x),
+            start: ScreenPoint {
+                x: origin.x,
+                y: height,
+            },
+            end: ScreenPoint {
+                x: origin.x,
+                y: 0.0,
+            },
+            label: ScreenPoint {
+                x: (origin.x + 9.0).min(width - 18.0),
+                y: 18.0,
+            },
+        }),
+    }
 }
 
 fn grid_path(origin: ScreenPoint, spacing: f64, screen_size: [f64; 2]) -> String {
@@ -752,7 +888,7 @@ fn render_datums(
     viewport: Viewport,
 ) {
     output.push_str("<g class=\"wb-reference-geometry\" data-reference-provenance=\"intrinsic\">");
-    for datum in &scene.datums {
+    for (datum_index, datum) in scene.datums.iter().enumerate() {
         let item = SelectionItem::Datum(datum.datum);
         let selected = selection.contains(&item);
         let hovered = geometry_is_hovered(hover, item);
@@ -769,7 +905,7 @@ fn render_datums(
             // but do not paint a duplicate canvas marker or focus target.
             SketchDatum::Origin => {}
             SketchDatum::XAxis | SketchDatum::YAxis => {
-                render_axis_datum(output, datum, &state_classes, viewport);
+                render_axis_datum(output, datum_index, datum, &state_classes, viewport);
             }
         }
     }
@@ -905,7 +1041,7 @@ fn render_curve_control_guides(output: &mut String, scene: &EditorScene, hover: 
     output.push_str(
         "<g class=\"wb-curve-control-guides\" aria-hidden=\"true\" pointer-events=\"none\">",
     );
-    for guide in &scene.curve_control_guides {
+    for (guide_index, guide) in scene.curve_control_guides.iter().enumerate() {
         let hovered = guide
             .control
             .is_some_and(|control| curve_control_is_hovered(hover, control));
@@ -918,9 +1054,10 @@ fn render_curve_control_guides(output: &mut String, scene: &EditorScene, hover: 
         let _ = write!(
             output,
             concat!(
-                "<path class=\"{}{}\" data-control-guide=\"{}\" data-curve-id=\"{}\" ",
+                "<path id=\"wb-scene-control-guide-{}\" class=\"{}{}\" data-control-guide=\"{}\" data-curve-id=\"{}\" ",
                 "d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>"
             ),
+            guide_index,
             class,
             if hovered { " hovered" } else { "" },
             kind,
@@ -939,7 +1076,7 @@ fn render_curve_controls(output: &mut String, scene: &EditorScene, hover: Editor
         return;
     }
     output.push_str("<g class=\"wb-curve-control-cage\">");
-    for control in &scene.curve_controls {
+    for (control_index, control) in scene.curve_controls.iter().enumerate() {
         // Stored design-point aliases keep the ordinary point presentation and
         // pointer owner. They remain in the headless catalog so guides can use
         // their exact anchors, but painting a second grip would falsely imply a
@@ -947,12 +1084,17 @@ fn render_curve_controls(output: &mut String, scene: &EditorScene, hover: Editor
         if !matches!(control.interaction, SceneCurveControlInteraction::Direct) {
             continue;
         }
-        render_curve_control(output, control, hover);
+        render_curve_control(output, control_index, control, hover);
     }
     output.push_str("</g>");
 }
 
-fn render_curve_control(output: &mut String, control: &SceneCurveControl, hover: EditorHoverState) {
+fn render_curve_control(
+    output: &mut String,
+    control_index: usize,
+    control: &SceneCurveControl,
+    hover: EditorHoverState,
+) {
     let hovered = curve_control_is_hovered(hover, control.id);
     let read_only = !control.is_editable();
     let role = curve_control_kind_key(control.id.kind);
@@ -967,10 +1109,11 @@ fn render_curve_control(output: &mut String, control: &SceneCurveControl, hover:
     let _ = write!(
         output,
         concat!(
-            "<g class=\"wb-curve-control{}{}\" role=\"img\" aria-label=\"{}\" ",
+            "<g id=\"wb-scene-control-{}\" class=\"wb-curve-control{}{}\" role=\"img\" aria-label=\"{}\" ",
             "aria-disabled=\"{}\" data-control-role=\"{}\" data-curve-id=\"{}\" ",
             "data-editor-segment=\"{}\" pointer-events=\"none\">"
         ),
+        control_index,
         if hovered { " hovered" } else { "" },
         if read_only { " read-only" } else { "" },
         escape(&label),
@@ -1025,15 +1168,14 @@ fn render_curve_control(output: &mut String, control: &SceneCurveControl, hover:
             );
         }
     }
-    if hovered {
-        let _ = write!(
-            output,
-            "<text class=\"wb-curve-control-tooltip\" x=\"{:.3}\" y=\"{:.3}\" aria-hidden=\"true\">{}</text>",
-            control.screen_position.x + 10.0,
-            control.screen_position.y - 10.0,
-            escape(&label),
-        );
-    }
+    let _ = write!(
+        output,
+        "<text class=\"wb-curve-control-tooltip{}\" x=\"{:.3}\" y=\"{:.3}\" aria-hidden=\"true\">{}</text>",
+        if hovered { "" } else { " context-hidden" },
+        control.screen_position.x + 10.0,
+        control.screen_position.y - 10.0,
+        escape(&label),
+    );
     output.push_str("</g>");
 }
 
@@ -1050,7 +1192,7 @@ const fn curve_control_guide_key(kind: SceneCurveControlGuideKind) -> &'static s
     }
 }
 
-const fn curve_control_kind_key(kind: DocumentCurveControlKind) -> &'static str {
+pub(crate) const fn curve_control_kind_key(kind: DocumentCurveControlKind) -> &'static str {
     match kind {
         DocumentCurveControlKind::Center => "center",
         DocumentCurveControlKind::StartPoint => "start-point",
@@ -1094,60 +1236,50 @@ const fn curve_control_read_only_reason(
 
 fn render_axis_datum(
     output: &mut String,
+    datum_index: usize,
     datum: &SceneDatum,
     state_classes: &str,
     viewport: Viewport,
 ) {
-    if !datum.is_visible_in_viewport(viewport) {
-        return;
-    }
     let is_x = datum.datum == SketchDatum::XAxis;
-    let coordinate = if is_x {
-        datum.screen_start.y
+    let presentation = retained_datum_axis_presentation(viewport, datum.datum)
+        .expect("axis datum has retained presentation");
+    let (key, label, axis_class) = if is_x {
+        ("x-axis", "X", "wb-datum-x-axis")
     } else {
-        datum.screen_start.x
-    };
-    let (key, label, axis_class, label_x, label_y) = if is_x {
-        (
-            "x-axis",
-            "X",
-            "wb-datum-x-axis",
-            viewport.screen_size[0] - 20.0,
-            (coordinate - 8.0).max(14.0),
-        )
-    } else {
-        (
-            "y-axis",
-            "Y",
-            "wb-datum-y-axis",
-            (coordinate + 9.0).min(viewport.screen_size[0] - 18.0),
-            18.0,
-        )
+        ("y-axis", "Y", "wb-datum-y-axis")
     };
     let _ = write!(
         output,
         concat!(
-            "<g class=\"wb-datum wb-datum-axis {}{}\" role=\"button\" tabindex=\"0\" ",
+            "<g id=\"wb-scene-datum-{}\" class=\"wb-datum wb-datum-axis {}{}\" role=\"button\" tabindex=\"{}\" ",
             "aria-label=\"{} axis · protected infinite intrinsic reference\" ",
-            "data-editor-item=\"datum\" data-datum=\"{}\" data-protected=\"true\">",
+            "data-editor-item=\"datum\" data-datum=\"{}\" data-protected=\"true\"{}>",
             "<path class=\"wb-datum-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
             "<path class=\"wb-datum-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
             "<text class=\"wb-datum-label\" x=\"{:.3}\" y=\"{:.3}\">{}</text></g>"
         ),
+        datum_index,
         axis_class,
         state_classes,
+        if presentation.visible { "0" } else { "-1" },
         label,
         key,
-        datum.screen_start.x,
-        datum.screen_start.y,
-        datum.screen_end.x,
-        datum.screen_end.y,
-        datum.screen_start.x,
-        datum.screen_start.y,
-        datum.screen_end.x,
-        datum.screen_end.y,
-        label_x,
-        label_y,
+        if presentation.visible {
+            ""
+        } else {
+            " aria-hidden=\"true\" style=\"display:none\""
+        },
+        presentation.start.x,
+        presentation.start.y,
+        presentation.end.x,
+        presentation.end.y,
+        presentation.start.x,
+        presentation.start.y,
+        presentation.end.x,
+        presentation.end.y,
+        presentation.label.x,
+        presentation.label.y,
         label,
     );
 }
@@ -1278,10 +1410,11 @@ fn render_computed_geometry(
         .filter(|affordances| fillet_owner_is_visible(affordances.owner, selection))
         .flat_map(|affordances| affordances.affected_owners.iter().copied())
         .collect::<BTreeSet<_>>();
-    for curve in scene
+    for (computed_curve_index, curve) in scene
         .computed_curves
         .iter()
-        .filter(|curve| curve.is_visible(geometry_policy))
+        .enumerate()
+        .filter(|(_, curve)| curve.is_visible(geometry_policy))
     {
         let item = SelectionItem::FeatureCorner(curve.owner);
         let selected = selection.contains(&item)
@@ -1293,13 +1426,14 @@ fn render_computed_geometry(
         let _ = write!(
             output,
             concat!(
-                "<g class=\"wb-computed-item{}{}{}{}\" {}",
+                "<g id=\"wb-scene-computed-curve-{}\" class=\"wb-computed-item{}{}{}{}\" {}",
                 "data-feature-id=\"{}\" data-feature-corner-id=\"{}\" ",
                 "data-computed-evaluation=\"{}\" data-computed-edge=\"{}\" data-role=\"{}\" ",
                 "data-interactive=\"{}\">",
                 "<path class=\"wb-curve wb-computed-fillet{}\" data-role=\"{}\" ",
                 "data-interactive=\"{}\" d=\"{}\"/>"
             ),
+            computed_curve_index,
             if selected { " selected" } else { "" },
             if hovered { " geometry-hovered" } else { "" },
             if affected {
@@ -1742,15 +1876,16 @@ fn render_annotations(
     hover: EditorHoverState,
     problem_items: &[SelectionItem],
     problem: Option<&EditorProblemMetadata>,
+    retain_contextual: bool,
 ) {
     let visibility_context = hover
         .context_owner
         .or_else(|| hover.target.map(EditorHoverTarget::item));
-    for annotation in &scene.annotations {
-        if !(annotation.is_visible(selection, visibility_context, problem_items)
+    for (annotation_index, annotation) in scene.annotations.iter().enumerate() {
+        let visible = annotation.is_visible(selection, visibility_context, problem_items)
             || scene.show_all_constraint_annotations
-                && matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
-        {
+                && matches!(annotation.kind, SceneAnnotationKind::Constraint(_));
+        if !visible && !retain_contextual {
             continue;
         }
         let selected = selection.contains(&annotation.item);
@@ -1773,9 +1908,10 @@ fn render_annotations(
             hovered_occurrence.is_some_and(|occurrence| occurrence.marker_index.is_none());
         let has_problem = problem_items.contains(&annotation.item);
         let class = format!(
-            "{}{}{}{}{}{}{}{}",
+            "{}{}{}{}{}{}{}{}{}",
             if selected { " selected" } else { "" },
             if is_hovered { " hovered" } else { "" },
+            if visible { "" } else { " context-hidden" },
             if has_problem { " has-problem" } else { "" },
             if annotation.suppressed {
                 " suppressed"
@@ -1857,6 +1993,11 @@ fn render_annotations(
                 String::new(),
                 "tabindex=\"-1\" role=\"img\" data-provisional=\"true\"".to_owned(),
             )
+        } else if !visible {
+            (
+                format!("data-editor-item=\"{editor_kind}\" data-persistent-id=\"{id}\" "),
+                "tabindex=\"-1\" role=\"button\" aria-hidden=\"true\"".to_owned(),
+            )
         } else {
             (
                 format!("data-editor-item=\"{editor_kind}\" data-persistent-id=\"{id}\" "),
@@ -1865,7 +2006,7 @@ fn render_annotations(
         };
         let _ = write!(
             output,
-            "<g class=\"wb-annotation wb-{editor_kind}{class}\" aria-label=\"{escaped_label}\" {identity}data-{editor_kind}-kind=\"{kind}\"{}{} data-annotation-kind=\"{kind}\" {accessibility}>",
+            "<g class=\"wb-annotation wb-{editor_kind}{class}\" id=\"wb-scene-annotation-{annotation_index}\" aria-label=\"{escaped_label}\" {identity}data-{editor_kind}-kind=\"{kind}\"{}{} data-annotation-kind=\"{kind}\" {accessibility}>",
             if mode.is_empty() {
                 String::new()
             } else {
@@ -1981,7 +2122,7 @@ fn annotation_geometry(
                 }
                 let _ = write!(
                     output,
-                    "<g class=\"wb-constraint-symbol{}\" transform=\"translate({:.3} {:.3}) rotate({:.3})\" data-annotation-marker=\"{index}\" data-marker-rotation-radians=\"{:.6}\"><circle class=\"wb-annotation-hit\" r=\"{:.3}\"/>{}</g>",
+                    "<g class=\"wb-constraint-symbol{}\" transform=\"translate({:.3} {:.3}) rotate({:.3})\" data-annotation-marker=\"{index}\" data-marker-rotation-radians=\"{:.6}\"><g class=\"wb-camera-fixed-size\" style=\"transform-origin:0px 0px\"><circle class=\"wb-annotation-hit\" r=\"{:.3}\"/>{}</g></g>",
                     if hovered_marker == Some(index) {
                         " hovered"
                     } else {
@@ -2006,10 +2147,13 @@ fn annotation_geometry(
                 output,
                 concat!(
                     "<g class=\"wb-constraint-symbol\">",
+                    "<g class=\"wb-camera-fixed-size\" style=\"transform-origin:{:.3}px {:.3}px\">",
                     "<path class=\"wb-right-angle\" d=\"M{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}\"/>",
                     "<path class=\"wb-annotation-path-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}\"/>",
-                    "</g>"
+                    "</g></g>"
                 ),
+                corner.x,
+                corner.y,
                 first_arm.x,
                 first_arm.y,
                 corner.x,
@@ -3128,10 +3272,10 @@ mod tests {
     };
 
     use super::{
-        CanvasCamera, CanvasDisplayOptions, OffsetCanvasPresentation, adaptive_grid_spec,
-        annotation_geometry, constraint_glyph, construction_geometry_markup, construction_markup,
-        dimension_kind, grid_path, render_curve_controls, svg_markup,
-        svg_markup_with_computed_context,
+        CanvasCamera, CanvasDisplayOptions, OffsetCanvasPresentation, RetainedCameraTransform,
+        RetainedFixedSizeTransform, adaptive_grid_spec, annotation_geometry, constraint_glyph,
+        construction_geometry_markup, construction_markup, dimension_kind, grid_path,
+        render_curve_controls, svg_markup, svg_markup_with_computed_context,
         svg_markup_with_computed_context_action_stamp_and_display,
         svg_markup_with_computed_context_action_stamp_display_and_provisional,
         svg_markup_with_computed_context_and_action_stamp, svg_markup_with_context, viewport,
@@ -3198,11 +3342,13 @@ mod tests {
             GeometryInteractionPolicy::default(),
             CanvasDisplayOptions {
                 grid_visible: false,
+                ..CanvasDisplayOptions::default()
             },
             viewport,
         );
         assert!(!markup.contains("data-datum=\"origin\""));
-        assert!(!markup.contains("data-datum=\"x-axis\""));
+        assert!(markup.contains("data-datum=\"x-axis\""));
+        assert!(markup.contains("data-datum=\"x-axis\" data-protected=\"true\" aria-hidden=\"true\" style=\"display:none\""));
         assert!(markup.contains("data-datum=\"y-axis\""));
     }
 
@@ -3338,6 +3484,55 @@ mod tests {
     }
 
     #[test]
+    fn retained_camera_transform_matches_exact_viewport_mapping() {
+        let exact = CanvasCamera {
+            model_center: [-4.0, 6.0],
+            pixels_per_model_unit: 37.5,
+        };
+        let desired = CanvasCamera {
+            model_center: [3.25, -2.5],
+            pixels_per_model_unit: 92.0,
+        };
+        let transform = RetainedCameraTransform::between(exact, desired)
+            .expect("finite cameras have a retained affine mapping");
+        for model in [[0.0, 0.0], [-12.5, 3.0], [24.0, -18.75]] {
+            let retained = transform
+                .map_screen_point(exact.viewport().model_to_screen(model))
+                .expect("finite transformed screen point");
+            let exact_screen = desired.viewport().model_to_screen(model);
+            assert!((retained.x - exact_screen.x).abs() <= 1.0e-10);
+            assert!((retained.y - exact_screen.y).abs() <= 1.0e-10);
+        }
+
+        assert!(
+            RetainedCameraTransform::between(
+                exact,
+                CanvasCamera {
+                    model_center: [f64::NAN, 0.0],
+                    pixels_per_model_unit: 50.0,
+                },
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn retained_fixed_size_transform_cancels_parent_zoom_about_its_anchor() {
+        let camera = RetainedCameraTransform {
+            translate: [120.0, -40.0],
+            scale: 2.5,
+        };
+        let fixed = RetainedFixedSizeTransform::for_camera(camera).expect("finite scale");
+        let anchor = ScreenPoint { x: 200.0, y: 90.0 };
+        let point = ScreenPoint { x: 205.0, y: 90.0 };
+        let local = fixed.map_about(anchor, point);
+        let mapped_anchor = camera.map_screen_point(anchor).expect("mapped anchor");
+        let mapped_point = camera.map_screen_point(local).expect("mapped point");
+        assert!((mapped_point.x - mapped_anchor.x - 5.0).abs() <= 1.0e-12);
+        assert!((mapped_point.y - mapped_anchor.y).abs() <= 1.0e-12);
+    }
+
+    #[test]
     fn adaptive_grid_uses_origin_aligned_one_two_five_steps_and_is_visual_only() {
         for scale in [2.0, 7.5, 50.0, 175.0, 2_000.0] {
             let viewport =
@@ -3402,6 +3597,7 @@ mod tests {
             GeometryInteractionPolicy::default(),
             CanvasDisplayOptions {
                 grid_visible: false,
+                ..CanvasDisplayOptions::default()
             },
             viewport,
         );
@@ -3551,6 +3747,7 @@ mod tests {
                 GeometryInteractionPolicy::default(),
                 CanvasDisplayOptions {
                     grid_visible: false,
+                    ..CanvasDisplayOptions::default()
                 },
                 viewport,
             )
@@ -3648,6 +3845,7 @@ mod tests {
             GeometryInteractionPolicy::default(),
             CanvasDisplayOptions {
                 grid_visible: false,
+                ..CanvasDisplayOptions::default()
             },
             viewport,
         );
@@ -4305,6 +4503,106 @@ mod tests {
         assert!(!hidden.contains("data-editor-item=\"constraint\""));
         assert!(!hidden.contains("data-editor-item=\"dimension\""));
         assert!(!hidden.contains("class=\"wb-annotation wb-"));
+    }
+
+    #[test]
+    fn retained_contextual_annotations_are_hidden_inert_nodes_until_context_reveals_them() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("retained contextual annotation", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted rectangle");
+        let viewport = viewport();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("scene");
+        let item = SelectionItem::Constraint(rectangle.constraints[0]);
+        let annotation_index = scene
+            .annotations
+            .iter()
+            .position(|annotation| annotation.item == item)
+            .expect("contextual constraint annotation");
+        let annotation_id = format!("id=\"wb-scene-annotation-{annotation_index}\"");
+        let render = |display| {
+            svg_markup_with_computed_context_action_stamp_and_display(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &[],
+                &[],
+                EditorHoverState::default(),
+                None,
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy::default(),
+                display,
+                viewport,
+            )
+        };
+
+        let ordinary = render(CanvasDisplayOptions::default());
+        assert!(
+            !ordinary.contains(&annotation_id),
+            "the ordinary cold renderer must continue omitting context-only annotations"
+        );
+
+        let retained = render(CanvasDisplayOptions {
+            retain_contextual_annotations: true,
+            ..CanvasDisplayOptions::default()
+        });
+        let start = retained
+            .find(&annotation_id)
+            .expect("retained annotation id");
+        let element_start = retained[..start].rfind('<').expect("annotation start");
+        let element_end = start + retained[start..].find('>').expect("annotation end") + 1;
+        let element = &retained[element_start..element_end];
+        assert!(element.contains("class=\"wb-annotation wb-constraint context-hidden"));
+        assert!(element.contains("tabindex=\"-1\""));
+        assert!(element.contains("aria-hidden=\"true\""));
+        assert!(element.contains("data-editor-item=\"constraint\""));
+
+        let revealed = svg_markup_with_computed_context_action_stamp_and_display(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[item],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions {
+                retain_contextual_annotations: true,
+                ..CanvasDisplayOptions::default()
+            },
+            viewport,
+        );
+        let start = revealed
+            .find(&annotation_id)
+            .expect("revealed annotation id");
+        let element_start = revealed[..start].rfind('<').expect("annotation start");
+        let element_end = start + revealed[start..].find('>').expect("annotation end") + 1;
+        let element = &revealed[element_start..element_end];
+        assert!(!element.contains("context-hidden"));
+        assert!(element.contains("tabindex=\"0\""));
+        assert!(!element.contains("aria-hidden"));
     }
 
     #[test]

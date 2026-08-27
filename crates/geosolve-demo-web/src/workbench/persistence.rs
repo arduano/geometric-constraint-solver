@@ -677,6 +677,34 @@ pub(crate) struct WorkspaceRevisions {
 }
 
 impl WorkspaceSnapshot {
+    /// Metadata required to retain a live projectional editor as browser
+    /// authority. This is intentionally cheaper than constructing a complete
+    /// persistence snapshot: callers that already own an independently
+    /// validated editor must not serialize every document/feature/Intent byte
+    /// merely to recover these two scalar ledgers.
+    pub(crate) fn projectional_authority_metadata(
+        projectional: &ProjectionalEditorSession,
+    ) -> Result<(ComputedEvaluationAllocatorHighWater, WorkspaceRevisions), String> {
+        let native = &projectional
+            .coordinator()
+            .accepted_materialization()
+            .ok_or_else(|| {
+                "projectional workspace has no independently accepted materialization".to_owned()
+            })?
+            .session;
+        let revisions = native.revision_high_water();
+        Ok((
+            default_evaluation_high_water(),
+            WorkspaceRevisions {
+                design: revisions.design().get(),
+                attempt: revisions.attempt().get(),
+                accepted: revisions
+                    .accepted()
+                    .map(geosolve_sketch::SketchAcceptedRevision::get),
+            },
+        ))
+    }
+
     pub(crate) fn from_coordinator(
         coordinator: &RetainedEditorCoordinator,
     ) -> Result<Self, String> {
@@ -698,34 +726,12 @@ impl WorkspaceSnapshot {
     pub(crate) fn from_projectional_editor(
         projectional: &ProjectionalEditorSession,
     ) -> Result<Self, String> {
-        Self::from_projectional_editor_with_evaluation_high_water(
-            projectional,
-            default_evaluation_high_water(),
-        )
-    }
-
-    pub(crate) fn from_projectional_editor_with_evaluation_high_water(
-        projectional: &ProjectionalEditorSession,
-        computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
-    ) -> Result<Self, String> {
-        let native = &projectional
-            .coordinator()
-            .accepted_materialization()
-            .ok_or_else(|| {
-                "projectional workspace has no independently accepted materialization".to_owned()
-            })?
-            .session;
-        let revisions = native.revision_high_water();
+        let (computed_evaluation_high_water, revisions) =
+            Self::projectional_authority_metadata(projectional)?;
         Self::from_projectional_editor_with_persistence_high_water(
             projectional,
             computed_evaluation_high_water,
-            WorkspaceRevisions {
-                design: revisions.design().get(),
-                attempt: revisions.attempt().get(),
-                accepted: revisions
-                    .accepted()
-                    .map(geosolve_sketch::SketchAcceptedRevision::get),
-            },
+            revisions,
         )
     }
 
@@ -2013,6 +2019,17 @@ mod tests {
         let restored = projectional_editor_from_snapshot(&decoded).unwrap();
         assert_eq!(restored.coordinator().intent().undo_len(), 0);
         assert!(restored.coordinator().accepted_materialization().is_some());
+    }
+
+    #[test]
+    fn projectional_authority_metadata_matches_full_snapshot_without_serializing_it() {
+        let (snapshot, _, _) = m83_projectional_fixture();
+        let editor = projectional_editor_from_snapshot(&snapshot).expect("projectional editor");
+        let (evaluation, revisions) =
+            WorkspaceSnapshot::projectional_authority_metadata(&editor).expect("metadata");
+
+        assert_eq!(evaluation, snapshot.computed_evaluation_high_water());
+        assert_eq!(revisions, snapshot.revisions);
     }
 
     #[derive(Deserialize, Serialize)]

@@ -17,6 +17,8 @@ pub(crate) mod live_intent_rpc;
 #[cfg(any(target_arch = "wasm32", test))]
 mod panels;
 #[cfg(any(target_arch = "wasm32", test))]
+mod performance;
+#[cfg(any(target_arch = "wasm32", test))]
 mod persistence;
 #[cfg(target_arch = "wasm32")]
 mod platform;
@@ -39,6 +41,9 @@ const CANVAS_POINTER_TERMINAL_EVENTS: [&str; 3] =
 
 #[cfg(any(target_arch = "wasm32", test))]
 const CANVAS_PAN_POINTER_EVENTS: [&str; 3] = ["pointerdown", "pointermove", "pointerup"];
+
+#[cfg(target_arch = "wasm32")]
+const CAMERA_WHEEL_IDLE_RECONCILIATION_MS: i32 = 120;
 
 /// Browser presentation work admitted after one exact pointer lifecycle event.
 ///
@@ -85,6 +90,118 @@ impl WorkbenchPresentationEvent {
 enum WorkbenchRenderScope {
     Transient,
     Durable,
+}
+
+/// Closed presentation-only camera commands shared by both browser adapters.
+///
+/// Keeping the command semantics outside either DOM callback makes route
+/// parity testable without a browser and prevents toolbar navigation from
+/// drifting back into workspace persistence or durable scene rendering.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CameraToolbarAction {
+    ZoomIn,
+    ZoomOut,
+    Fit,
+    Origin,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl CameraToolbarAction {
+    #[cfg(test)]
+    const ALL: [Self; 4] = [Self::ZoomIn, Self::ZoomOut, Self::Fit, Self::Origin];
+
+    fn from_workbench_action(action: &str) -> Option<Self> {
+        match action {
+            "zoom-in" => Some(Self::ZoomIn),
+            "zoom-out" => Some(Self::ZoomOut),
+            "zoom-fit" => Some(Self::Fit),
+            "zoom-origin" => Some(Self::Origin),
+            _ => None,
+        }
+    }
+
+    fn apply(
+        self,
+        camera: &mut scene::CanvasCamera,
+        scene: Option<&geosolve_constraint_editor::EditorScene>,
+    ) -> CameraToolbarOutcome {
+        let before = *camera;
+        let fitted_geometry = match self {
+            Self::ZoomIn => {
+                camera.zoom_about(
+                    geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
+                    1.25,
+                );
+                None
+            }
+            Self::ZoomOut => {
+                camera.zoom_about(
+                    geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
+                    0.8,
+                );
+                None
+            }
+            Self::Fit => Some(camera.fit_scene_or_reset(scene)),
+            Self::Origin => {
+                camera.center_origin();
+                None
+            }
+        };
+        CameraToolbarOutcome {
+            changed: *camera != before,
+            fitted_geometry,
+        }
+    }
+
+    fn notice(self, outcome: CameraToolbarOutcome) -> &'static str {
+        match (self, outcome.fitted_geometry) {
+            (Self::ZoomIn, _) => "Canvas zoomed in",
+            (Self::ZoomOut, _) => "Canvas zoomed out",
+            (Self::Fit, Some(true)) => "View fitted to sketch geometry",
+            (Self::Fit, Some(false)) => "Empty sketch reset to the Origin view",
+            (Self::Origin, _) => "View centred on Origin",
+            (Self::Fit, None) => unreachable!("Fit always records whether geometry was fitted"),
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CameraToolbarOutcome {
+    changed: bool,
+    fitted_geometry: Option<bool>,
+}
+
+/// Scheduling authority returned by a presentation-only toolbar command.
+/// Camera controls may schedule retained paint and exact idle reconciliation,
+/// but can never authorize persistence or a durable render.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct RetainedCameraAdmission {
+    frame_generation: Option<u64>,
+    idle_generation: Option<u64>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl RetainedCameraAdmission {
+    #[cfg(test)]
+    #[allow(
+        clippy::unused_self,
+        reason = "the assertion reads as policy on one admission"
+    )]
+    const fn saves_workspace(self) -> bool {
+        false
+    }
+
+    #[cfg(test)]
+    #[allow(
+        clippy::unused_self,
+        reason = "the assertion reads as policy on one admission"
+    )]
+    const fn durable_render_scope(self) -> Option<WorkbenchRenderScope> {
+        None
+    }
 }
 
 /// Non-semantic projection selected in the Design panel.
@@ -156,6 +273,187 @@ impl DesignProjectionTab {
 impl WorkbenchRenderScope {
     const fn rebuilds_durable_panels(self) -> bool {
         matches!(self, Self::Durable)
+    }
+}
+
+/// Coalesces presentation-only camera input independently from semantic
+/// pointer motion. `camera` on the workbench remains the desired camera; this
+/// owner records which camera the retained SVG was painted for and
+/// authenticates animation-frame and wheel-idle callbacks by generation.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Debug, Default)]
+struct RetainedCameraQueue {
+    exact_camera: scene::CanvasCamera,
+    pending_camera: Option<scene::CanvasCamera>,
+    next_frame_generation: u64,
+    scheduled_frame_generation: Option<u64>,
+    next_idle_generation: u64,
+    scheduled_idle_generation: Option<u64>,
+    exact_reconciliation_needed: bool,
+}
+
+/// One generation-authenticated camera paint that has not yet been recorded
+/// as presented. Browser adapters complete it only after every retained DOM
+/// mutation succeeds, so failed and stale callbacks remain truthful zeros in
+/// the actual-work ledger.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct AdmittedCameraFrame {
+    transform: scene::RetainedCameraTransform,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl AdmittedCameraFrame {
+    fn take(queue: &mut RetainedCameraQueue, generation: u64) -> Option<Self> {
+        queue
+            .take_frame(generation)
+            .map(|transform| Self { transform })
+    }
+
+    fn complete(self, ledger: &performance::PresentationWorkLedger) {
+        let _ = self.transform;
+        ledger.record(performance::PresentationWork::CameraPresentation);
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn complete_retained_hover_presentation(ledger: &performance::PresentationWorkLedger) {
+    ledger.record(performance::PresentationWork::HoverPresentation);
+}
+
+/// Records the semantic work already completed by one pointer lifecycle event
+/// immediately before its browser presentation. This is event evidence, not a
+/// prediction: retained plain hover bypasses this function, and only an
+/// authenticated mutating release records cold Intent/code publication.
+#[cfg(any(target_arch = "wasm32", test))]
+fn record_projectional_pointer_semantic_work(
+    ledger: &performance::PresentationWorkLedger,
+    event: WorkbenchPresentationEvent,
+    code_owned: bool,
+) {
+    match event {
+        WorkbenchPresentationEvent::PointerMoveFrame => {
+            ledger.record(performance::PresentationWork::SolverPreview);
+        }
+        WorkbenchPresentationEvent::PointerRelease
+        | WorkbenchPresentationEvent::AuthenticatedPointerRelease(_) => {
+            ledger.record(performance::PresentationWork::SolverPreview);
+            ledger.record(performance::PresentationWork::IntentMaterialization);
+            ledger.record(performance::PresentationWork::ComputedEvaluation);
+            if code_owned {
+                ledger.record(performance::PresentationWork::CodeExpansion);
+            }
+        }
+        WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+        | WorkbenchPresentationEvent::InteractionCancellation => {}
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn record_flat_pointer_semantic_work(
+    ledger: &performance::PresentationWorkLedger,
+    event: WorkbenchPresentationEvent,
+) {
+    match event {
+        WorkbenchPresentationEvent::PointerMoveFrame => {
+            ledger.record(performance::PresentationWork::SolverPreview);
+        }
+        WorkbenchPresentationEvent::PointerRelease
+        | WorkbenchPresentationEvent::AuthenticatedPointerRelease(_) => {
+            ledger.record(performance::PresentationWork::SolverPreview);
+            ledger.record(performance::PresentationWork::ComputedEvaluation);
+        }
+        WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+        | WorkbenchPresentationEvent::InteractionCancellation => {}
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl RetainedCameraQueue {
+    /// Retains the newest desired camera and schedules at most one RAF.
+    fn request_frame(&mut self, camera: scene::CanvasCamera) -> Option<u64> {
+        self.pending_camera = Some(camera);
+        self.exact_reconciliation_needed |= camera != self.exact_camera;
+        if self.scheduled_frame_generation.is_some() {
+            return None;
+        }
+        self.next_frame_generation = self.next_frame_generation.wrapping_add(1);
+        self.scheduled_frame_generation = Some(self.next_frame_generation);
+        Some(self.next_frame_generation)
+    }
+
+    /// Consumes only the currently authenticated RAF; stale callbacks are
+    /// inert and the latest camera wins over every raw event it coalesced.
+    fn take_frame(&mut self, generation: u64) -> Option<scene::RetainedCameraTransform> {
+        if self.scheduled_frame_generation != Some(generation) {
+            return None;
+        }
+        self.scheduled_frame_generation = None;
+        let camera = self.pending_camera.take()?;
+        scene::RetainedCameraTransform::between(self.exact_camera, camera)
+    }
+
+    #[cfg_attr(test, allow(dead_code))]
+    fn cancel_frame(&mut self, generation: u64) {
+        if self.scheduled_frame_generation == Some(generation) {
+            self.scheduled_frame_generation = None;
+        }
+    }
+
+    /// Restarts the short wheel-idle boundary. Older timers remain allocated
+    /// by the browser but cannot authorize an exact scene reconstruction.
+    fn request_idle_reconciliation(&mut self) -> u64 {
+        self.next_idle_generation = self.next_idle_generation.wrapping_add(1);
+        self.scheduled_idle_generation = Some(self.next_idle_generation);
+        self.next_idle_generation
+    }
+
+    /// Admits one toolbar camera mutation to the same retained queue used by
+    /// pan and wheel input. A no-op command updates its status synchronously in
+    /// the adapter and schedules no presentation work.
+    fn admit_toolbar_change(
+        &mut self,
+        camera: scene::CanvasCamera,
+        changed: bool,
+    ) -> RetainedCameraAdmission {
+        if !changed {
+            return RetainedCameraAdmission::default();
+        }
+        RetainedCameraAdmission {
+            frame_generation: self.request_frame(camera),
+            idle_generation: Some(self.request_idle_reconciliation()),
+        }
+    }
+
+    fn take_idle_reconciliation(&mut self, generation: u64) -> bool {
+        if self.scheduled_idle_generation != Some(generation) {
+            return false;
+        }
+        self.scheduled_idle_generation = None;
+        self.exact_reconciliation_needed
+    }
+
+    const fn needs_exact_reconciliation(&self) -> bool {
+        self.exact_reconciliation_needed
+    }
+
+    #[cfg_attr(
+        test,
+        allow(dead_code, reason = "browser-only semantic input reconciliation")
+    )]
+    fn require_exact_reconciliation(&mut self) {
+        self.exact_reconciliation_needed = true;
+    }
+
+    /// Publishes a new exact base and revokes every callback created for the
+    /// previous retained group. The browser closures may still run, but their
+    /// generations no longer match this owner.
+    fn exact_reconciled(&mut self, camera: scene::CanvasCamera) {
+        self.exact_camera = camera;
+        self.pending_camera = None;
+        self.scheduled_frame_generation = None;
+        self.scheduled_idle_generation = None;
+        self.exact_reconciliation_needed = false;
     }
 }
 
@@ -277,11 +575,12 @@ impl WorkbenchDocumentAuthority {
     fn from_projectional_editor(
         editor: geosolve_constraint_editor::ProjectionalEditorSession,
     ) -> Result<Self, String> {
-        let snapshot = persistence::WorkspaceSnapshot::from_projectional_editor(&editor)?;
+        let (computed_evaluation_high_water, revisions) =
+            persistence::WorkspaceSnapshot::projectional_authority_metadata(&editor)?;
         Ok(Self::projectional(
             editor,
-            snapshot.computed_evaluation_high_water(),
-            snapshot.revisions,
+            computed_evaluation_high_water,
+            revisions,
         ))
     }
 
@@ -372,6 +671,37 @@ impl WorkbenchDocumentAuthority {
                 true,
                 false,
             ),
+        }
+    }
+
+    #[cfg_attr(
+        test,
+        allow(dead_code, reason = "browser-only retained scene authentication")
+    )]
+    fn retained_scene_is_current(&self, scene: &geosolve_constraint_editor::EditorScene) -> bool {
+        match self {
+            Self::Flat(coordinator) => {
+                use geosolve_constraint_editor::ComputedSceneState;
+
+                let source = coordinator
+                    .visible_preview_session()
+                    .unwrap_or(coordinator.session());
+                if !scene.belongs_to_retained_session(source) {
+                    return false;
+                }
+                if source.accepted_state_for_current_input().is_none() {
+                    return scene.computed_input.is_none();
+                }
+                match coordinator.computed_scene_state() {
+                    ComputedSceneState::Current { expected, .. } => {
+                        scene.computed_input.as_ref() == Some(expected)
+                    }
+                    ComputedSceneState::Withheld | ComputedSceneState::Absent => {
+                        scene.computed_input.is_none()
+                    }
+                }
+            }
+            Self::Projectional { editor, .. } => editor.scene_is_current(scene),
         }
     }
 
@@ -3644,6 +3974,176 @@ fn compose_editor_scene(
     Some(scene)
 }
 
+/// Stable retained-SVG owners for one semantic canvas item.
+///
+/// A span or computed feature may have multiple painted occurrences, so the
+/// hover presenter must update every matching element rather than assuming
+/// persistent identity is unique in the SVG.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_item_element_ids(
+    scene: &geosolve_constraint_editor::EditorScene,
+    item: geosolve_constraint_editor::SelectionItem,
+) -> Vec<String> {
+    use geosolve_constraint_editor::SelectionItem;
+
+    match item {
+        SelectionItem::Point(point) => scene
+            .points
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| candidate.id == point)
+            .map(|(index, _)| format!("wb-scene-point-{index}"))
+            .collect(),
+        SelectionItem::Curve(span) => scene
+            .curves
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| candidate.span == span)
+            .map(|(index, _)| format!("wb-scene-curve-{index}"))
+            .collect(),
+        SelectionItem::Datum(datum) => {
+            if datum == geosolve_sketch::SketchDatum::Origin {
+                Vec::new()
+            } else {
+                scene
+                    .datums
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, candidate)| candidate.datum == datum)
+                    .map(|(index, _)| format!("wb-scene-datum-{index}"))
+                    .collect()
+            }
+        }
+        SelectionItem::FeatureCorner(corner) => scene
+            .computed_curves
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| candidate.owner == corner)
+            .map(|(index, _)| format!("wb-scene-computed-curve-{index}"))
+            .collect(),
+        SelectionItem::Feature(feature) => scene
+            .computed_curves
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| candidate.owner.feature == feature)
+            .map(|(index, _)| format!("wb-scene-computed-curve-{index}"))
+            .collect(),
+        SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => Vec::new(),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_annotation_element_id(
+    scene: &geosolve_constraint_editor::EditorScene,
+    item: geosolve_constraint_editor::SelectionItem,
+) -> Option<String> {
+    use geosolve_constraint_editor::SelectionItem;
+
+    if !matches!(
+        item,
+        SelectionItem::Constraint(_) | SelectionItem::Dimension(_)
+    ) {
+        return None;
+    }
+    scene
+        .annotations
+        .iter()
+        .position(|annotation| annotation.item == item)
+        .map(|index| format!("wb-scene-annotation-{index}"))
+}
+
+/// Exact retained DOM class target for a headless hover occurrence.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ProjectionalHoverDomTarget {
+    Geometry(String),
+    CurveControl(String),
+    CurveControlGuide(String),
+    AnnotationRoot(String),
+    AnnotationMarker { root: String, selector: String },
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_hover_dom_targets(
+    scene: &geosolve_constraint_editor::EditorScene,
+    target: geosolve_constraint_editor::EditorHoverTarget,
+) -> Vec<ProjectionalHoverDomTarget> {
+    use geosolve_constraint_editor::EditorHoverTarget;
+
+    match target {
+        EditorHoverTarget::Geometry(item) => projectional_item_element_ids(scene, item)
+            .into_iter()
+            .map(ProjectionalHoverDomTarget::Geometry)
+            .collect(),
+        EditorHoverTarget::CurveControl { control, owner } => {
+            let mut targets = Vec::new();
+            if let Some(index) = scene.curve_controls.iter().position(|candidate| {
+                candidate.id == control
+                    && candidate.owner == owner
+                    && matches!(
+                        candidate.interaction,
+                        geosolve_constraint_editor::SceneCurveControlInteraction::Direct
+                    )
+            }) {
+                targets.push(ProjectionalHoverDomTarget::CurveControl(format!(
+                    "wb-scene-control-{index}"
+                )));
+            }
+            targets.extend(
+                scene
+                    .curve_control_guides
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, guide)| guide.control == Some(control))
+                    .map(|(index, _)| {
+                        ProjectionalHoverDomTarget::CurveControlGuide(format!(
+                            "wb-scene-control-guide-{index}"
+                        ))
+                    }),
+            );
+            targets
+        }
+        EditorHoverTarget::Annotation(occurrence) => {
+            let Some(root) = projectional_annotation_element_id(scene, occurrence.item) else {
+                return Vec::new();
+            };
+            if let Some(index) = occurrence.marker_index {
+                vec![ProjectionalHoverDomTarget::AnnotationMarker {
+                    root,
+                    selector: format!(".wb-constraint-symbol[data-annotation-marker=\"{index}\"]"),
+                }]
+            } else {
+                vec![ProjectionalHoverDomTarget::AnnotationRoot(root)]
+            }
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_effects_are_retained_hover_only(
+    effects: &[geosolve_constraint_editor::EditorEffect],
+) -> bool {
+    use geosolve_constraint_editor::EditorEffect;
+
+    effects.iter().all(|effect| {
+        matches!(
+            effect,
+            EditorEffect::HoverChanged(_)
+                | EditorEffect::FilletBranchPreviewChanged { target: None }
+        )
+    })
+}
+
+/// The flat retained presenter admits exactly the same headless effect set as
+/// the projectional route. Keeping this explicit adapter seam makes parity a
+/// native-testable contract while both browser workbenches remain available.
+#[cfg(any(target_arch = "wasm32", test))]
+fn flat_effects_are_retained_hover_only(
+    effects: &[geosolve_constraint_editor::EditorEffect],
+) -> bool {
+    projectional_effects_are_retained_hover_only(effects)
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -3704,6 +4204,9 @@ pub(crate) mod wasm {
         feature_pending: Vec<FeatureAuthoringPick>,
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
+        camera_frames: super::RetainedCameraQueue,
+        work_ledger: super::performance::PresentationWorkLedger,
+        retained_scene: Option<EditorScene>,
         grid_visible: bool,
         annotations_visible: bool,
         show_all_constraints: bool,
@@ -3731,6 +4234,9 @@ pub(crate) mod wasm {
         feature_pending: Vec<FeatureAuthoringPick>,
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
+        camera_frames: super::RetainedCameraQueue,
+        work_ledger: super::performance::PresentationWorkLedger,
+        retained_scene: Option<EditorScene>,
         grid_visible: bool,
         annotations_visible: bool,
         show_all_constraints: bool,
@@ -3862,6 +4368,9 @@ pub(crate) mod wasm {
             feature_pending: Vec::new(),
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
+            camera_frames: super::RetainedCameraQueue::default(),
+            work_ledger: super::performance::PresentationWorkLedger::default(),
+            retained_scene: None,
             grid_visible: true,
             annotations_visible: true,
             show_all_constraints: false,
@@ -3914,6 +4423,9 @@ pub(crate) mod wasm {
             feature_pending: Vec::new(),
             samples,
             camera: super::scene::CanvasCamera::default(),
+            camera_frames: super::RetainedCameraQueue::default(),
+            work_ledger: super::performance::PresentationWorkLedger::default(),
+            retained_scene: None,
             grid_visible: true,
             annotations_visible: true,
             show_all_constraints: false,
@@ -3998,11 +4510,7 @@ pub(crate) mod wasm {
         if policy.render_durable {
             let _ = render_projectional(document, workbench);
         } else if policy.render_transient {
-            let _ = render_projectional_canvas(
-                document,
-                &workbench.borrow(),
-                super::WorkbenchRenderScope::Transient,
-            );
+            let _ = reproject_projectional_canvas(document, &mut workbench.borrow_mut());
             let _ = render_projectional_tool_options_overlay(document, &workbench.borrow());
         }
         response
@@ -4083,12 +4591,23 @@ pub(crate) mod wasm {
     }
 
     fn projectional_scene(wb: &ProjectionalWorkbench) -> Option<EditorScene> {
-        projectional_scene_presentation(wb).scene
+        wb.retained_scene
+            .as_ref()
+            .filter(|scene| {
+                scene.viewport == wb.camera.viewport()
+                    && scene.annotations_visible == wb.annotations_visible
+                    && scene.show_all_constraint_annotations == wb.show_all_constraints
+                    && wb.authority.retained_scene_is_current(scene)
+            })
+            .cloned()
+            .or_else(|| projectional_scene_presentation(wb).scene)
     }
 
     fn projectional_scene_presentation(
         wb: &ProjectionalWorkbench,
     ) -> super::ProjectionalScenePresentation {
+        wb.work_ledger
+            .record(super::performance::PresentationWork::SceneComposition);
         super::ProjectionalScenePresentation::from_editor(
             wb.editor(),
             wb.camera.viewport(),
@@ -4947,8 +5466,13 @@ pub(crate) mod wasm {
             .borrow_mut()
             .problems
             .reconcile(problem_identity.as_ref());
+        {
+            let mut wb = workbench.borrow_mut();
+            render_projectional_canvas(document, &mut wb, super::WorkbenchRenderScope::Durable)?;
+        }
         let wb = workbench.borrow();
-        render_projectional_canvas(document, &wb, super::WorkbenchRenderScope::Durable)?;
+        wb.work_ledger
+            .record(super::performance::PresentationWork::DurablePanelRebuild);
         let source = wb.editor().coordinator().presentation_session();
         let selection = wb.editor().editor().selection();
 
@@ -5087,10 +5611,59 @@ pub(crate) mod wasm {
     /// Problems, and every other durable panel.
     fn render_projectional_canvas(
         document: &Document,
-        wb: &ProjectionalWorkbench,
+        wb: &mut ProjectionalWorkbench,
         scope: super::WorkbenchRenderScope,
     ) -> Result<(), JsValue> {
         let presentation = projectional_scene_presentation(wb);
+        let state_key = presentation.state_key();
+        let status = presentation.status_message(&wb.notice).to_owned();
+        wb.retained_scene = presentation.scene;
+        paint_projectional_canvas(document, wb, scope, state_key, &status)
+    }
+
+    /// Rebuilds exact current-camera paint from the already accepted scene DTO.
+    /// This retessellates and relayouts presentation geometry only; it cannot
+    /// materialize Intent, evaluate computed features, solve, save, or rebuild
+    /// durable panels.
+    fn reproject_projectional_canvas(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+    ) -> Result<(), JsValue> {
+        let viewport = wb.camera.viewport();
+        let Some(mut scene) = wb.retained_scene.take() else {
+            return render_projectional_canvas(
+                document,
+                wb,
+                super::WorkbenchRenderScope::Transient,
+            );
+        };
+        wb.work_ledger
+            .record(super::performance::PresentationWork::ExactReprojection);
+        if wb.editor().reproject_scene(&mut scene, viewport).is_err() {
+            return render_projectional_canvas(
+                document,
+                wb,
+                super::WorkbenchRenderScope::Transient,
+            );
+        }
+        wb.retained_scene = Some(scene);
+        let status = wb.notice.clone();
+        paint_projectional_canvas(
+            document,
+            wb,
+            super::WorkbenchRenderScope::Transient,
+            "ready",
+            &status,
+        )
+    }
+
+    fn paint_projectional_canvas(
+        document: &Document,
+        wb: &mut ProjectionalWorkbench,
+        scope: super::WorkbenchRenderScope,
+        state_key: &str,
+        status: &str,
+    ) -> Result<(), JsValue> {
         let source = wb.editor().presentation_session();
         let accepted = source.and_then(
             geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
@@ -5119,9 +5692,11 @@ pub(crate) mod wasm {
         pending.dedup();
         let provisional = wb.editor().offset_authoring_provisional_items();
         let hover = wb.editor().editor().hover_state();
-        required(document, "wb-viewport")?.set_inner_html(
-            &super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
-                presentation.scene.as_ref(),
+        wb.work_ledger
+            .record(super::performance::PresentationWork::SvgSerialization);
+        let markup =
+            super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
+                wb.retained_scene.as_ref(),
                 accepted,
                 &[],
                 &canvas_selection,
@@ -5136,13 +5711,16 @@ pub(crate) mod wasm {
                 wb.editor().editor().geometry_interaction_policy(),
                 super::scene::CanvasDisplayOptions {
                     grid_visible: wb.grid_visible,
+                    retain_contextual_annotations: true,
                 },
                 Some(&offset_presentation),
                 wb.camera.viewport(),
-            ),
-        );
+            );
+        required(document, "wb-viewport")?.set_inner_html(&markup);
+        wb.work_ledger
+            .record(super::performance::PresentationWork::ViewportReplacement);
         let root = required(document, "workbench-root")?;
-        root.set_attribute("data-scene-state", presentation.state_key())?;
+        root.set_attribute("data-scene-state", state_key)?;
         root.set_attribute(
             "data-render-scope",
             match scope {
@@ -5150,8 +5728,7 @@ pub(crate) mod wasm {
                 super::WorkbenchRenderScope::Durable => "durable",
             },
         )?;
-        required(document, "wb-status-message")?
-            .set_text_content(Some(presentation.status_message(&wb.notice)));
+        required(document, "wb-status-message")?.set_text_content(Some(status));
         let coordinate = super::coordinate_hud(
             wb.camera.viewport(),
             wb.pointer_moves.borrow().last_input(),
@@ -5202,6 +5779,9 @@ pub(crate) mod wasm {
             },
         )?;
         render_projectional_authoring_status(document, wb)?;
+        wb.camera_frames.exact_reconciled(wb.camera);
+        root.set_attribute("data-camera-presentation", "exact")?;
+        root.remove_attribute("data-camera-retained-scale")?;
         Ok(())
     }
 
@@ -5255,7 +5835,10 @@ pub(crate) mod wasm {
             return;
         };
         if let Ok(Some(storage)) = window.local_storage() {
-            let _ = storage.set_item(STORAGE_KEY, &json);
+            if storage.set_item(STORAGE_KEY, &json).is_ok() {
+                wb.work_ledger
+                    .record(super::performance::PresentationWork::PersistenceWrite);
+            }
         }
     }
 
@@ -5264,6 +5847,15 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
         event: super::WorkbenchPresentationEvent,
     ) -> Result<(), JsValue> {
+        let work_before = workbench.borrow().work_ledger.snapshot();
+        {
+            let wb = workbench.borrow();
+            super::record_projectional_pointer_semantic_work(
+                &wb.work_ledger,
+                event,
+                wb.code_project.is_some(),
+            );
+        }
         let policy = event.policy();
         if policy.saves_workspace {
             let terminal_pointer = match event {
@@ -5274,14 +5866,45 @@ pub(crate) mod wasm {
             };
             save_projectional_with_terminal_pointer(&mut workbench.borrow_mut(), terminal_pointer);
         }
-        match policy.render_scope {
+        let result = match policy.render_scope {
             super::WorkbenchRenderScope::Transient => render_projectional_canvas(
                 document,
-                &workbench.borrow(),
+                &mut workbench.borrow_mut(),
                 super::WorkbenchRenderScope::Transient,
             ),
             super::WorkbenchRenderScope::Durable => render_projectional(document, workbench),
+        };
+        if result.is_ok() {
+            let wb = workbench.borrow();
+            let delta = wb.work_ledger.snapshot().delta_since(work_before);
+            let root = required(document, "workbench-root")?;
+            root.set_attribute("data-presentation-work-delta", &delta.compact())?;
+            root.set_attribute(
+                "data-pointer-work-admitted",
+                match event {
+                    super::WorkbenchPresentationEvent::PointerMoveFrame => {
+                        if delta.is_transient_preview_only() {
+                            "transient-only"
+                        } else {
+                            "forbidden-work"
+                        }
+                    }
+                    super::WorkbenchPresentationEvent::PointerRelease
+                    | super::WorkbenchPresentationEvent::AuthenticatedPointerRelease(_) => {
+                        if delta.is_single_terminal_publication() {
+                            "single-terminal"
+                        } else {
+                            "forbidden-work"
+                        }
+                    }
+                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+                    | super::WorkbenchPresentationEvent::InteractionCancellation => {
+                        "non-mutating-terminal"
+                    }
+                },
+            )?;
         }
+        result
     }
 
     fn release_projectional_pointer_capture(
@@ -6129,6 +6752,520 @@ pub(crate) mod wasm {
         wb.camera.fit_scene_or_reset(scene.as_ref())
     }
 
+    fn apply_retained_camera_transform(
+        document: &Document,
+        transform: super::scene::RetainedCameraTransform,
+        desired_viewport: geosolve_constraint_editor::Viewport,
+    ) -> Result<(), JsValue> {
+        let viewport_element = required(document, "wb-viewport")?;
+        let scene = viewport_element
+            .query_selector(".wb-accepted-scene")?
+            .ok_or_else(|| JsValue::from_str("the retained accepted-scene group is unavailable"))?;
+        scene.set_attribute(
+            "transform",
+            &format!(
+                "translate({} {}) scale({})",
+                transform.translate[0], transform.translate[1], transform.scale,
+            ),
+        )?;
+        let fixed_size = super::scene::RetainedFixedSizeTransform::for_camera(transform)
+            .ok_or_else(|| JsValue::from_str("the retained camera scale is invalid"))?;
+        scene.set_attribute(
+            "style",
+            &format!("--wb-camera-inverse-scale:{}", fixed_size.inverse_scale),
+        )?;
+        let inverse = format!(
+            "matrix({0} 0 0 {0} {1} {2})",
+            transform.scale.recip(),
+            -transform.translate[0] / transform.scale,
+            -transform.translate[1] / transform.scale,
+        );
+        if let Some(grid) = scene.query_selector(".wb-grid")?
+            && let Some(presentation) = super::scene::retained_grid_presentation(desired_viewport)
+        {
+            grid.set_attribute("transform", &inverse)?;
+            grid.set_attribute(
+                "data-grid-major-model",
+                &format!("{:.12}", presentation.model_major_step),
+            )?;
+            grid.set_attribute(
+                "data-grid-major-pixels",
+                &format!("{:.3}", presentation.major_pixels),
+            )?;
+            if let Some(minor) = grid.query_selector(".wb-grid-minor")? {
+                minor.set_attribute("d", &presentation.minor_path)?;
+            }
+            if let Some(major) = grid.query_selector(".wb-grid-major")? {
+                major.set_attribute("d", &presentation.major_path)?;
+            }
+        }
+        if let Some(reference) = scene.query_selector(".wb-reference-geometry")? {
+            reference.set_attribute("transform", &inverse)?;
+            for (key, datum) in [
+                ("x-axis", geosolve_sketch::SketchDatum::XAxis),
+                ("y-axis", geosolve_sketch::SketchDatum::YAxis),
+            ] {
+                let Some(axis) = reference.query_selector(&format!("[data-datum=\"{key}\"]"))?
+                else {
+                    continue;
+                };
+                let presentation =
+                    super::scene::retained_datum_axis_presentation(desired_viewport, datum)
+                        .expect("axis datum has retained presentation");
+                let path = format!(
+                    "M{:.3} {:.3}L{:.3} {:.3}",
+                    presentation.start.x,
+                    presentation.start.y,
+                    presentation.end.x,
+                    presentation.end.y,
+                );
+                if let Some(hit) = axis.query_selector(".wb-datum-hit")? {
+                    hit.set_attribute("d", &path)?;
+                }
+                if let Some(line) = axis.query_selector(".wb-datum-line")? {
+                    line.set_attribute("d", &path)?;
+                }
+                if let Some(label) = axis.query_selector(".wb-datum-label")? {
+                    label.set_attribute("x", &format!("{:.3}", presentation.label.x))?;
+                    label.set_attribute("y", &format!("{:.3}", presentation.label.y))?;
+                }
+                axis.set_attribute("tabindex", if presentation.visible { "0" } else { "-1" })?;
+                if presentation.visible {
+                    axis.remove_attribute("aria-hidden")?;
+                    axis.remove_attribute("style")?;
+                } else {
+                    axis.set_attribute("aria-hidden", "true")?;
+                    axis.set_attribute("style", "display:none")?;
+                }
+            }
+        }
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-camera-presentation", "retained-transform")?;
+        root.set_attribute("data-camera-retained-scale", &transform.scale.to_string())?;
+        Ok(())
+    }
+
+    /// Runs one camera-only frame. This path deliberately has no access to
+    /// workspace persistence, Intent materialization, solver evaluation, or
+    /// durable panel rendering; it can only transform the retained SVG group
+    /// and refresh the two camera-owned text surfaces.
+    fn present_projectional_camera_frame(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+        generation: u64,
+    ) -> Result<(), JsValue> {
+        let (transform, work_before) = {
+            let mut wb = workbench.borrow_mut();
+            (
+                super::AdmittedCameraFrame::take(&mut wb.camera_frames, generation),
+                wb.work_ledger.snapshot(),
+            )
+        };
+        let Some(frame) = transform else {
+            return Ok(());
+        };
+        let desired_viewport = workbench.borrow().camera.viewport();
+        apply_retained_camera_transform(document, frame.transform, desired_viewport)?;
+        let wb = workbench.borrow();
+        required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
+            "{:.1} px / unit",
+            wb.camera.pixels_per_model_unit,
+        )));
+        let coordinate = super::coordinate_hud(
+            wb.camera.viewport(),
+            wb.pointer_moves.borrow().last_input(),
+            None,
+        );
+        let coordinate_element = required(document, "wb-pointer-coordinate")?;
+        coordinate_element.set_text_content(Some(&coordinate.text));
+        coordinate_element.set_attribute("title", &coordinate.title)?;
+        coordinate_element.set_attribute("data-inference-adjusted", "false")?;
+        frame.complete(&wb.work_ledger);
+        let work = wb.work_ledger.snapshot().delta_since(work_before);
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-presentation-work-delta", &work.compact())?;
+        root.set_attribute(
+            "data-camera-work-admitted",
+            if work.is_camera_frame_only() {
+                "camera-only"
+            } else {
+                "forbidden-work"
+            },
+        )?;
+        Ok(())
+    }
+
+    fn schedule_projectional_camera_frame(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+        generation: u64,
+    ) {
+        let frame_document = document.clone();
+        let frame_workbench = Rc::clone(workbench);
+        let frame = Closure::once_into_js(move || {
+            let _ =
+                present_projectional_camera_frame(&frame_document, &frame_workbench, generation);
+        });
+        let scheduled = super::platform::window()
+            .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
+        if scheduled.is_err() {
+            workbench
+                .borrow_mut()
+                .camera_frames
+                .cancel_frame(generation);
+            let _ = render_projectional_canvas(
+                document,
+                &mut workbench.borrow_mut(),
+                super::WorkbenchRenderScope::Transient,
+            );
+        }
+    }
+
+    fn schedule_projectional_wheel_reconciliation(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+        generation: u64,
+    ) {
+        let idle_document = document.clone();
+        let idle_workbench = Rc::clone(workbench);
+        let idle = Closure::once_into_js(move || {
+            let reconcile = idle_workbench
+                .borrow_mut()
+                .camera_frames
+                .take_idle_reconciliation(generation);
+            if reconcile {
+                let _ =
+                    reproject_projectional_canvas(&idle_document, &mut idle_workbench.borrow_mut());
+            }
+        });
+        let scheduled = super::platform::window().and_then(|window| {
+            window
+                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                    idle.unchecked_ref(),
+                    super::CAMERA_WHEEL_IDLE_RECONCILIATION_MS,
+                )
+                .map(|_| ())
+        });
+        if scheduled.is_err() {
+            let _ = reproject_projectional_canvas(document, &mut workbench.borrow_mut());
+        }
+    }
+
+    /// Exact scene/hit-testing consumers call this before using semantic
+    /// geometry. A provisional camera transform is visual only and never
+    /// becomes scene authority.
+    fn reconcile_projectional_camera_before_semantic_input(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+    ) -> Result<(), JsValue> {
+        if workbench
+            .borrow()
+            .camera_frames
+            .needs_exact_reconciliation()
+        {
+            reproject_projectional_canvas(document, &mut workbench.borrow_mut())?;
+        }
+        Ok(())
+    }
+
+    fn set_class_token(element: &Element, token: &str, enabled: bool) -> Result<(), JsValue> {
+        let mut classes = element
+            .get_attribute("class")
+            .unwrap_or_default()
+            .split_whitespace()
+            .filter(|class| *class != token)
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        if enabled {
+            classes.push(token.to_owned());
+        }
+        element.set_attribute("class", &classes.join(" "))
+    }
+
+    fn set_projectional_item_class(
+        document: &Document,
+        scene: &EditorScene,
+        item: SelectionItem,
+        token: &str,
+        enabled: bool,
+    ) -> Result<(), JsValue> {
+        for id in super::projectional_item_element_ids(scene, item) {
+            if let Some(element) = document.get_element_by_id(&id) {
+                set_class_token(&element, token, enabled)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn projectional_annotation_element(
+        document: &Document,
+        scene: &EditorScene,
+        item: SelectionItem,
+    ) -> Option<Element> {
+        let id = super::projectional_annotation_element_id(scene, item)?;
+        document.get_element_by_id(&id)
+    }
+
+    fn projectional_hover_visibility_context(
+        hover: geosolve_constraint_editor::EditorHoverState,
+    ) -> Option<SelectionItem> {
+        hover
+            .context_owner
+            .or_else(|| hover.target.map(|target| target.item()))
+    }
+
+    fn projectional_related_items(
+        scene: &EditorScene,
+        selection: &[SelectionItem],
+        hover: geosolve_constraint_editor::EditorHoverState,
+    ) -> BTreeSet<SelectionItem> {
+        scene
+            .annotations
+            .iter()
+            .filter(|annotation| {
+                selection.contains(&annotation.item)
+                    || matches!(
+                        hover.target,
+                        Some(geosolve_constraint_editor::EditorHoverTarget::Annotation(
+                            occurrence
+                        )) if occurrence.item == annotation.item
+                    )
+            })
+            .flat_map(|annotation| annotation.operands.iter().copied())
+            .collect()
+    }
+
+    fn reconcile_projectional_hover_context(
+        document: &Document,
+        scene: &EditorScene,
+        selection: &[SelectionItem],
+        problem_items: &[SelectionItem],
+        previous: geosolve_constraint_editor::EditorHoverState,
+        current: geosolve_constraint_editor::EditorHoverState,
+    ) -> Result<(), JsValue> {
+        let previous_context = projectional_hover_visibility_context(previous);
+        let current_context = projectional_hover_visibility_context(current);
+        if previous_context != current_context {
+            for annotation in &scene.annotations {
+                let forced = scene.show_all_constraint_annotations
+                    && matches!(annotation.item, SelectionItem::Constraint(_));
+                let was_visible =
+                    forced || annotation.is_visible(selection, previous_context, problem_items);
+                let is_visible =
+                    forced || annotation.is_visible(selection, current_context, problem_items);
+                if was_visible == is_visible {
+                    continue;
+                }
+                let Some(element) =
+                    projectional_annotation_element(document, scene, annotation.item)
+                else {
+                    continue;
+                };
+                set_class_token(&element, "context-hidden", !is_visible)?;
+                element.set_attribute("tabindex", if is_visible { "0" } else { "-1" })?;
+                if is_visible {
+                    element.remove_attribute("aria-hidden")?;
+                } else {
+                    element.set_attribute("aria-hidden", "true")?;
+                }
+            }
+        }
+
+        let previous_related = projectional_related_items(scene, selection, previous);
+        let current_related = projectional_related_items(scene, selection, current);
+        for item in previous_related.difference(&current_related) {
+            set_projectional_item_class(document, scene, *item, "related", false)?;
+        }
+        for item in current_related.difference(&previous_related) {
+            set_projectional_item_class(document, scene, *item, "related", true)?;
+        }
+        Ok(())
+    }
+
+    fn set_projectional_hover_target(
+        document: &Document,
+        scene: &EditorScene,
+        target: Option<geosolve_constraint_editor::EditorHoverTarget>,
+        enabled: bool,
+    ) -> Result<(), JsValue> {
+        let Some(target) = target else {
+            return Ok(());
+        };
+        for target in super::projectional_hover_dom_targets(scene, target) {
+            match target {
+                super::ProjectionalHoverDomTarget::Geometry(id) => {
+                    if let Some(element) = document.get_element_by_id(&id) {
+                        set_class_token(&element, "geometry-hovered", enabled)?;
+                    }
+                }
+                super::ProjectionalHoverDomTarget::CurveControl(id) => {
+                    if let Some(element) = document.get_element_by_id(&id) {
+                        set_class_token(&element, "hovered", enabled)?;
+                        if let Some(tooltip) =
+                            element.query_selector(".wb-curve-control-tooltip")?
+                        {
+                            set_class_token(&tooltip, "context-hidden", !enabled)?;
+                        }
+                    }
+                }
+                super::ProjectionalHoverDomTarget::CurveControlGuide(id) => {
+                    if let Some(element) = document.get_element_by_id(&id) {
+                        set_class_token(&element, "hovered", enabled)?;
+                    }
+                }
+                super::ProjectionalHoverDomTarget::AnnotationRoot(id) => {
+                    if let Some(element) = document.get_element_by_id(&id) {
+                        set_class_token(&element, "hovered", enabled)?;
+                    }
+                }
+                super::ProjectionalHoverDomTarget::AnnotationMarker { root, selector } => {
+                    let Some(element) = document.get_element_by_id(&root) else {
+                        continue;
+                    };
+                    if let Some(marker) = element.query_selector(&selector)? {
+                        set_class_token(&marker, "hovered", enabled)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn projectional_plain_hover_active(wb: &ProjectionalWorkbench) -> bool {
+        wb.editor().editor().tool() == EditorTool::Select
+            && !projectional_geometry_authoring_active(wb)
+            && !projectional_ordinary_authoring_active(wb)
+            && !projectional_feature_authoring_active(wb)
+            && !projectional_offset_authoring_active(wb)
+            && wb.captured_pointer.is_none()
+            && wb.editor().editor().active_pointer_gesture().is_none()
+    }
+
+    fn apply_projectional_plain_hover(
+        wb: &mut ProjectionalWorkbench,
+        input: PointerInput,
+    ) -> Option<(
+        geosolve_constraint_editor::EditorHoverState,
+        Result<Vec<EditorEffect>, String>,
+    )> {
+        if !projectional_plain_hover_active(wb) {
+            return None;
+        }
+        let previous = wb.editor().editor().hover_state();
+        let ProjectionalWorkbench {
+            authority,
+            retained_scene,
+            ..
+        } = wb;
+        let scene = retained_scene.as_ref()?;
+        Some((
+            previous,
+            authority
+                .projectional_mut()
+                .expect("projectional adapter owns projectional authority")
+                .pointer_move(scene, input)
+                .map_err(|error| error.to_string()),
+        ))
+    }
+
+    fn present_projectional_hover_frame(
+        document: &Document,
+        wb: &ProjectionalWorkbench,
+        previous: geosolve_constraint_editor::EditorHoverState,
+    ) -> Result<(), JsValue> {
+        let editor = wb.editor().editor();
+        let scene = wb.retained_scene.as_ref().ok_or_else(|| {
+            JsValue::from_str("the authenticated retained hover scene is unavailable")
+        })?;
+        present_retained_hover_frame(
+            document,
+            editor,
+            scene,
+            wb.camera.viewport(),
+            wb.pointer_moves.borrow().last_input(),
+            &[],
+            &wb.work_ledger,
+            previous,
+        )
+    }
+
+    /// Reconciles one authenticated hover result against stable retained SVG
+    /// owners. This function deliberately has no render, persistence, solver,
+    /// or scene-composition capability. The work ledger is advanced only once
+    /// every requested DOM mutation has succeeded.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the explicit retained inputs keep semantic and DOM authority reviewable"
+    )]
+    fn present_retained_hover_frame(
+        document: &Document,
+        editor: &geosolve_constraint_editor::ConstraintEditor,
+        scene: &EditorScene,
+        viewport: geosolve_constraint_editor::Viewport,
+        pointer: Option<PointerInput>,
+        problem_items: &[SelectionItem],
+        work_ledger: &super::performance::PresentationWorkLedger,
+        previous: geosolve_constraint_editor::EditorHoverState,
+    ) -> Result<(), JsValue> {
+        let work_before = work_ledger.snapshot();
+        let current = editor.hover_state();
+        reconcile_projectional_hover_context(
+            document,
+            scene,
+            editor.selection(),
+            problem_items,
+            previous,
+            current,
+        )?;
+        if previous.target != current.target {
+            set_projectional_hover_target(document, scene, previous.target, false)?;
+            set_projectional_hover_target(document, scene, current.target, true)?;
+        }
+        if editor.fillet_branch_preview().is_none() {
+            while let Some(action) =
+                document.query_selector("#wb-viewport .wb-fillet-action.previewed")?
+            {
+                set_class_token(&action, "previewed", false)?;
+                if let Some(ghost) = action.query_selector(".wb-fillet-alternative-ghost")?
+                    && let Some(parent) = ghost.parent_node()
+                {
+                    parent.remove_child(&ghost)?;
+                }
+            }
+        }
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-render-scope", "hover")?;
+        root.set_attribute(
+            "data-canvas-cursor",
+            super::canvas_cursor_key_with_curve_control(
+                editor.tool(),
+                false,
+                false,
+                false,
+                false,
+                current,
+                editor.active_pointer_gesture(),
+            ),
+        )?;
+        let coordinate =
+            super::coordinate_hud(viewport, pointer, editor.draft_inference_resolution());
+        let coordinate_element = required(document, "wb-pointer-coordinate")?;
+        coordinate_element.set_text_content(Some(&coordinate.text));
+        coordinate_element.set_attribute("title", &coordinate.title)?;
+        coordinate_element.set_attribute(
+            "data-inference-adjusted",
+            if coordinate.adjusted { "true" } else { "false" },
+        )?;
+        super::complete_retained_hover_presentation(work_ledger);
+        debug_assert!(
+            work_ledger
+                .snapshot()
+                .delta_since(work_before)
+                .is_hover_frame_only()
+        );
+        Ok(())
+    }
+
     fn install_projectional_navigation(
         document: &Document,
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
@@ -6140,6 +7277,8 @@ pub(crate) mod wasm {
             let callback_viewport = viewport.clone();
             let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
                 let mut wb = callback_workbench.borrow_mut();
+                let mut frame_generation = None;
+                let mut reconcile_exact = false;
                 match name {
                     "pointerdown" if event.button() == 1 => {
                         let Some(origin) = client_screen_point(
@@ -6159,6 +7298,7 @@ pub(crate) mod wasm {
                             wb.notice = "Canvas pan canceled because pointer capture failed".into();
                             return;
                         }
+                        wb.camera_frames.require_exact_reconciliation();
                         wb.pan_gesture = Some(PanGesture {
                             pointer_id: event.pointer_id(),
                             origin,
@@ -6182,8 +7322,13 @@ pub(crate) mod wasm {
                             return;
                         };
                         event.prevent_default();
-                        wb.camera
-                            .pan_from(gesture.origin_center, gesture.origin, current);
+                        if wb
+                            .camera
+                            .pan_from(gesture.origin_center, gesture.origin, current)
+                        {
+                            let camera = wb.camera;
+                            frame_generation = wb.camera_frames.request_frame(camera);
+                        }
                     }
                     "pointerup"
                         if wb
@@ -6194,15 +7339,27 @@ pub(crate) mod wasm {
                         wb.pan_gesture = None;
                         let _ = callback_viewport.release_pointer_capture(event.pointer_id());
                         wb.notice = "Canvas pan complete".into();
+                        reconcile_exact = wb.camera_frames.needs_exact_reconciliation();
                     }
                     _ => return,
                 }
                 drop(wb);
-                let _ = render_projectional_canvas(
-                    &callback_document,
-                    &callback_workbench.borrow(),
-                    super::WorkbenchRenderScope::Transient,
-                );
+                if let Some(generation) = frame_generation {
+                    schedule_projectional_camera_frame(
+                        &callback_document,
+                        &callback_workbench,
+                        generation,
+                    );
+                } else if reconcile_exact {
+                    let _ = reproject_projectional_canvas(
+                        &callback_document,
+                        &mut callback_workbench.borrow_mut(),
+                    );
+                } else {
+                    let notice = callback_workbench.borrow().notice.clone();
+                    let _ = required(&callback_document, "wb-status-message")
+                        .map(|status| status.set_text_content(Some(&notice)));
+                }
             });
             viewport.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
             callback.forget();
@@ -6225,10 +7382,9 @@ pub(crate) mod wasm {
                 }
                 wb.notice = "Canvas pan canceled".into();
                 drop(wb);
-                let _ = render_projectional_canvas(
+                let _ = reproject_projectional_canvas(
                     &cancel_document,
-                    &cancel_workbench.borrow(),
-                    super::WorkbenchRenderScope::Transient,
+                    &mut cancel_workbench.borrow_mut(),
                 );
             });
             viewport.add_event_listener_with_callback(name, cancel.as_ref().unchecked_ref())?;
@@ -6249,19 +7405,31 @@ pub(crate) mod wasm {
                 return;
             };
             event.prevent_default();
-            cancel_projectional_before_camera_change(&wheel_viewport, &mut wb);
+            let starts_burst = !wb.camera_frames.needs_exact_reconciliation();
+            if starts_burst {
+                cancel_projectional_before_camera_change(&wheel_viewport, &mut wb);
+                wb.camera_frames.require_exact_reconciliation();
+            }
             let factor = (-event.delta_y() * 0.0015).exp();
-            if wb.camera.zoom_about(anchor, factor) {
+            let mut frame_generation = None;
+            let camera_changed = wb.camera.zoom_about(anchor, factor);
+            if camera_changed {
                 wb.notice = format!(
                     "Canvas zoom {:.1} px / unit",
                     wb.camera.pixels_per_model_unit
                 );
+                let camera = wb.camera;
+                frame_generation = wb.camera_frames.request_frame(camera);
             }
+            let idle_generation = wb.camera_frames.request_idle_reconciliation();
             drop(wb);
-            let _ = render_projectional_canvas(
+            if let Some(generation) = frame_generation {
+                schedule_projectional_camera_frame(&wheel_document, &wheel_workbench, generation);
+            }
+            schedule_projectional_wheel_reconciliation(
                 &wheel_document,
-                &wheel_workbench.borrow(),
-                super::WorkbenchRenderScope::Transient,
+                &wheel_workbench,
+                idle_generation,
             );
         });
         viewport.add_event_listener_with_callback("wheel", wheel.as_ref().unchecked_ref())?;
@@ -6282,6 +7450,14 @@ pub(crate) mod wasm {
             let Some(sample) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
                 return;
             };
+            if reconcile_projectional_camera_before_semantic_input(
+                &frame_document,
+                &frame_workbench,
+            )
+            .is_err()
+            {
+                return;
+            }
             {
                 let mut wb = frame_workbench.borrow_mut();
                 if wb
@@ -6289,6 +7465,35 @@ pub(crate) mod wasm {
                     .and_then(|pointer_id| u64::try_from(pointer_id).ok())
                     .is_some_and(|pointer_id| pointer_id != sample.input.pointer_id)
                 {
+                    return;
+                }
+                if let Some((previous, result)) =
+                    apply_projectional_plain_hover(&mut wb, sample.input)
+                {
+                    match result {
+                        Ok(effects)
+                            if super::projectional_effects_are_retained_hover_only(&effects) =>
+                        {
+                            if present_projectional_hover_frame(&frame_document, &wb, previous)
+                                .is_ok()
+                            {
+                                return;
+                            }
+                        }
+                        Ok(effects) => {
+                            let _ = dispatch_projectional_effects(&mut wb, effects);
+                        }
+                        Err(error) => {
+                            wb.notice =
+                                format!("Projectional pointer preview was retained: {error}");
+                        }
+                    }
+                    drop(wb);
+                    let _ = present_projectional_pointer_event(
+                        &frame_document,
+                        &frame_workbench,
+                        super::WorkbenchPresentationEvent::PointerMoveFrame,
+                    );
                     return;
                 }
                 let Some(scene) = projectional_scene(&wb) else {
@@ -6379,8 +7584,16 @@ pub(crate) mod wasm {
                         .editor_mut()
                         .pointer_move_with_draft_authoring(&scene, sample.input, sample.authoring);
                     let _ = dispatch_projectional_effects(&mut wb, effects);
-                } else if let Err(error) = wb.editor_mut().pointer_move(&scene, sample.input) {
-                    wb.notice = format!("Projectional pointer preview was retained: {error}");
+                } else {
+                    match wb.editor_mut().pointer_move(&scene, sample.input) {
+                        Ok(effects) => {
+                            let _ = dispatch_projectional_effects(&mut wb, effects);
+                        }
+                        Err(error) => {
+                            wb.notice =
+                                format!("Projectional pointer preview was retained: {error}");
+                        }
+                    }
                 }
             }
             let _ = present_projectional_pointer_event(
@@ -6414,6 +7627,11 @@ pub(crate) mod wasm {
         let down_viewport = viewport.clone();
         let down = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             if event.button() != 0 {
+                return;
+            }
+            if reconcile_projectional_camera_before_semantic_input(&down_document, &down_workbench)
+                .is_err()
+            {
                 return;
             }
             let mut wb = down_workbench.borrow_mut();
@@ -6893,6 +8111,11 @@ pub(crate) mod wasm {
             if event.button() != 0 {
                 return;
             }
+            if reconcile_projectional_camera_before_semantic_input(&up_document, &up_workbench)
+                .is_err()
+            {
+                return;
+            }
             let mut wb = up_workbench.borrow_mut();
             if wb.captured_pointer != Some(event.pointer_id()) {
                 return;
@@ -7158,6 +8381,8 @@ pub(crate) mod wasm {
             if wb.captured_pointer.is_some() {
                 return;
             }
+            let retained_hover =
+                projectional_plain_hover_active(&wb).then(|| wb.editor().editor().hover_state());
             let retired_frame = leave_pointer_moves.borrow_mut().clear_stationary_sample();
             let cleared_offset_hover = wb.offset_authoring.hover().is_some();
             if cleared_offset_hover {
@@ -7165,6 +8390,13 @@ pub(crate) mod wasm {
             }
             let effects = wb.editor_mut().editor_mut().pointer_leave();
             if !retired_frame && !cleared_offset_hover && effects.is_empty() {
+                return;
+            }
+            if !cleared_offset_hover
+                && super::projectional_effects_are_retained_hover_only(&effects)
+                && let Some(previous) = retained_hover
+                && present_projectional_hover_frame(&leave_document, &wb, previous).is_ok()
+            {
                 return;
             }
             let _ = dispatch_projectional_effects(&mut wb, effects);
@@ -7186,6 +8418,14 @@ pub(crate) mod wasm {
         let click_viewport = viewport.clone();
         let click_tracker = Rc::clone(&finish_click_tracker);
         let click = Closure::<dyn FnMut(MouseEvent)>::new(move |event: MouseEvent| {
+            if reconcile_projectional_camera_before_semantic_input(
+                &click_document,
+                &click_workbench,
+            )
+            .is_err()
+            {
+                return;
+            }
             let (step_back, finish) = {
                 let wb = click_workbench.borrow();
                 if client_screen_point(
@@ -8060,7 +9300,7 @@ pub(crate) mod wasm {
                     Ok(()) => durable = true,
                     Err(error) => wb.notice = format!("A new sketch could not be created: {error}"),
                 },
-                Some("undo") | Some("redo") => {
+                Some("undo" | "redo") => {
                     cancel_projectional_before_durable_mutation(
                         &click_document,
                         &mut wb,
@@ -8309,40 +9549,48 @@ pub(crate) mod wasm {
                         Err(error) => wb.notice = error,
                     }
                 }
-                Some("zoom-in") | Some("zoom-out") | Some("zoom-fit") | Some("zoom-origin") => {
+                Some("zoom-in" | "zoom-out" | "zoom-fit" | "zoom-origin") => {
                     let Ok(viewport) = required(&click_document, "wb-viewport") else {
                         wb.notice = "Canvas viewport is unavailable".into();
                         return;
                     };
                     cancel_projectional_before_camera_change(&viewport, &mut wb);
-                    match action.as_deref() {
-                        Some("zoom-in") => {
-                            wb.camera.zoom_about(
-                                geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
-                                1.25,
-                            );
-                            wb.notice = "Canvas zoomed in".into();
-                        }
-                        Some("zoom-out") => {
-                            wb.camera.zoom_about(
-                                geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
-                                0.8,
-                            );
-                            wb.notice = "Canvas zoomed out".into();
-                        }
-                        Some("zoom-fit") => {
-                            wb.notice = if fit_projectional_camera(&mut wb) {
-                                "View fitted to sketch geometry".into()
-                            } else {
-                                "Empty sketch reset to the Origin view".into()
-                            };
-                        }
-                        Some("zoom-origin") => {
-                            wb.camera.center_origin();
-                            wb.notice = "View centred on Origin".into();
-                        }
-                        _ => unreachable!("guarded projectional camera action"),
+                    let toolbar = super::CameraToolbarAction::from_workbench_action(
+                        action.as_deref().expect("guarded camera action"),
+                    )
+                    .expect("guarded camera action has a closed semantic mapping");
+                    let outcome = {
+                        let ProjectionalWorkbench {
+                            camera,
+                            retained_scene,
+                            ..
+                        } = &mut *wb;
+                        toolbar.apply(camera, retained_scene.as_ref())
+                    };
+                    wb.notice = toolbar.notice(outcome).into();
+                    let camera = wb.camera;
+                    let admission = wb
+                        .camera_frames
+                        .admit_toolbar_change(camera, outcome.changed);
+                    let notice = wb.notice.clone();
+                    drop(wb);
+                    if let Some(generation) = admission.frame_generation {
+                        schedule_projectional_camera_frame(
+                            &click_document,
+                            &click_workbench,
+                            generation,
+                        );
                     }
+                    if let Some(generation) = admission.idle_generation {
+                        schedule_projectional_wheel_reconciliation(
+                            &click_document,
+                            &click_workbench,
+                            generation,
+                        );
+                    }
+                    let _ = required(&click_document, "wb-status-message")
+                        .map(|status| status.set_text_content(Some(&notice)));
+                    return;
                 }
                 Some(_) | None => return,
             }
@@ -9954,6 +11202,49 @@ pub(crate) mod wasm {
                     }
                     return;
                 }
+                if let Some(toolbar) = super::CameraToolbarAction::from_workbench_action(&action) {
+                    let mut wb = callback_workbench.borrow_mut();
+                    if let Err(error) = cancel_before_camera_change(&callback_document, &mut wb) {
+                        wb.notice = error;
+                        let notice = wb.notice.clone();
+                        drop(wb);
+                        let _ = required(&callback_document, "wb-status-message")
+                            .map(|status| status.set_text_content(Some(&notice)));
+                        return;
+                    }
+                    let outcome = {
+                        let Workbench {
+                            camera,
+                            retained_scene,
+                            ..
+                        } = &mut *wb;
+                        toolbar.apply(camera, retained_scene.as_ref())
+                    };
+                    wb.notice = toolbar.notice(outcome).into();
+                    let camera = wb.camera;
+                    let admission = wb
+                        .camera_frames
+                        .admit_toolbar_change(camera, outcome.changed);
+                    let notice = wb.notice.clone();
+                    drop(wb);
+                    if let Some(generation) = admission.frame_generation {
+                        schedule_flat_camera_frame(
+                            &callback_document,
+                            &callback_workbench,
+                            generation,
+                        );
+                    }
+                    if let Some(generation) = admission.idle_generation {
+                        schedule_flat_wheel_reconciliation(
+                            &callback_document,
+                            &callback_workbench,
+                            generation,
+                        );
+                    }
+                    let _ = required(&callback_document, "wb-status-message")
+                        .map(|status| status.set_text_content(Some(&notice)));
+                    return;
+                }
                 let mut wb = callback_workbench.borrow_mut();
                 if action == "options-close" {
                     focus_select = true;
@@ -10297,6 +11588,27 @@ pub(crate) mod wasm {
         let leave_workbench = Rc::clone(workbench);
         let leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = leave_workbench.borrow_mut();
+            if flat_plain_hover_active(&wb) {
+                let previous = wb.coordinator.editor().hover_state();
+                let cleared_hud_sample = wb.pointer_moves.borrow_mut().clear_stationary_sample();
+                let effects = wb.coordinator.editor_mut().pointer_leave();
+                if !cleared_hud_sample && effects.is_empty() {
+                    return;
+                }
+                if super::flat_effects_are_retained_hover_only(&effects)
+                    && present_flat_hover_frame(&leave_document, &wb, previous).is_ok()
+                {
+                    return;
+                }
+                dispatch_effects(&mut wb, effects);
+                drop(wb);
+                let _ = present_pointer_event(
+                    &leave_document,
+                    &leave_workbench,
+                    super::WorkbenchPresentationEvent::PointerMoveFrame,
+                );
+                return;
+            }
             let cleared_hud_sample = wb.pointer_moves.borrow_mut().clear_stationary_sample();
             let cleared_pointer_context = clear_canvas_pointer_ownership(&mut wb);
             if !cleared_pointer_context && !cleared_hud_sample {
@@ -10501,8 +11813,28 @@ pub(crate) mod wasm {
             let Some(sample) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
                 return;
             };
+            if reconcile_flat_camera_before_semantic_input(&frame_document, &frame_workbench)
+                .is_err()
+            {
+                return;
+            }
             let mut wb = frame_workbench.borrow_mut();
             if wb.pan_gesture.is_some() {
+                return;
+            }
+            if let Some((previous, effects)) = apply_flat_plain_hover(&mut wb, sample) {
+                if super::flat_effects_are_retained_hover_only(&effects)
+                    && present_flat_hover_frame(&frame_document, &wb, previous).is_ok()
+                {
+                    return;
+                }
+                dispatch_effects(&mut wb, effects);
+                drop(wb);
+                let _ = present_pointer_event(
+                    &frame_document,
+                    &frame_workbench,
+                    super::WorkbenchPresentationEvent::PointerMoveFrame,
+                );
                 return;
             }
             let Some(scene) = editor_scene(&wb) else {
@@ -10607,6 +11939,20 @@ pub(crate) mod wasm {
         let callback_viewport = viewport.clone();
         let callback_pointer_moves = Rc::clone(pointer_moves);
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            {
+                let wb = callback_workbench.borrow();
+                if wb.pan_gesture.is_some()
+                    || (!wb.pointer_captures.is_empty()
+                        && !wb.pointer_captures.contains(event.pointer_id()))
+                {
+                    return;
+                }
+            }
+            if reconcile_flat_camera_before_semantic_input(&callback_document, &callback_workbench)
+                .is_err()
+            {
+                return;
+            }
             if event_targets_problem_marker(&event) {
                 callback_pointer_moves
                     .borrow_mut()
@@ -10672,36 +12018,39 @@ pub(crate) mod wasm {
             }
             let (input, captured, painted_item) = {
                 let wb = callback_workbench.borrow();
-                if !wb.pointer_captures.is_empty()
-                    && !wb.pointer_captures.contains(event.pointer_id())
-                {
-                    return;
-                }
                 let captured = wb.pointer_captures.contains(event.pointer_id());
-                if wb.pan_gesture.is_some() {
-                    return;
-                }
-                let Some(scene) = editor_scene(&wb) else {
-                    return;
-                };
-                let input = if captured {
-                    captured_pointer_input(&callback_viewport, scene.viewport, &event)
+                if flat_plain_hover_active(&wb) {
+                    let scene = wb
+                        .retained_scene
+                        .as_ref()
+                        .expect("plain hover authenticated one retained scene");
+                    let input = pointer_input(&callback_viewport, scene.viewport, &event);
+                    (input, false, pointer_event_selection_item(&event))
                 } else {
-                    pointer_input(&callback_viewport, scene.viewport, &event)
-                };
-                let painted_item = match input {
-                    Some(input) if !captured && wb.feature_authoring.active_tool().is_some() => {
-                        feature_authoring_painted_item_at_point(
-                            &callback_document,
-                            &scene,
-                            wb.coordinator.editor().geometry_interaction_policy(),
-                            input.position,
-                            &event,
-                        )
-                    }
-                    Some(_) | None => pointer_event_selection_item(&event),
-                };
-                (input, captured, painted_item)
+                    let Some(scene) = editor_scene(&wb) else {
+                        return;
+                    };
+                    let input = if captured {
+                        captured_pointer_input(&callback_viewport, scene.viewport, &event)
+                    } else {
+                        pointer_input(&callback_viewport, scene.viewport, &event)
+                    };
+                    let painted_item = match input {
+                        Some(input)
+                            if !captured && wb.feature_authoring.active_tool().is_some() =>
+                        {
+                            feature_authoring_painted_item_at_point(
+                                &callback_document,
+                                &scene,
+                                wb.coordinator.editor().geometry_interaction_policy(),
+                                input.position,
+                                &event,
+                            )
+                        }
+                        Some(_) | None => pointer_event_selection_item(&event),
+                    };
+                    (input, captured, painted_item)
+                }
             };
             let Some(input) = input else {
                 if matches!(
@@ -10750,6 +12099,11 @@ pub(crate) mod wasm {
         let callback_viewport = viewport.clone();
         let callback_pointer_moves = Rc::clone(pointer_moves);
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            if reconcile_flat_camera_before_semantic_input(&callback_document, &callback_workbench)
+                .is_err()
+            {
+                return;
+            }
             let mut wb = callback_workbench.borrow_mut();
             let owns_pointer = wb.pointer_captures.contains(event.pointer_id());
             if !owns_pointer
@@ -10945,6 +12299,8 @@ pub(crate) mod wasm {
             let callback_viewport = viewport.clone();
             let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
                 let mut wb = callback_workbench.borrow_mut();
+                let mut frame_generation = None;
+                let mut reconcile_exact = false;
                 match name {
                     "pointerdown" if event.button() == 1 => {
                         let Some(origin) = client_screen_point(
@@ -10974,14 +12330,13 @@ pub(crate) mod wasm {
                             wb.notice = "Canvas pan canceled because pointer capture failed".into();
                             return;
                         }
+                        wb.camera_frames.require_exact_reconciliation();
                         wb.pan_gesture = Some(PanGesture {
                             pointer_id: event.pointer_id(),
                             origin,
                             origin_center: wb.camera.model_center,
                         });
                         wb.notice = "Panning canvas".into();
-                        drop(wb);
-                        let _ = render(&callback_document, &callback_workbench);
                     }
                     "pointermove" => {
                         let Some(gesture) = wb
@@ -10999,14 +12354,13 @@ pub(crate) mod wasm {
                             return;
                         };
                         event.prevent_default();
-                        wb.camera
-                            .pan_from(gesture.origin_center, gesture.origin, current);
-                        drop(wb);
-                        let _ = present_pointer_event(
-                            &callback_document,
-                            &callback_workbench,
-                            super::WorkbenchPresentationEvent::PointerMoveFrame,
-                        );
+                        if wb
+                            .camera
+                            .pan_from(gesture.origin_center, gesture.origin, current)
+                        {
+                            let camera = wb.camera;
+                            frame_generation = wb.camera_frames.request_frame(camera);
+                        }
                     }
                     "pointerup"
                         if wb
@@ -11021,10 +12375,19 @@ pub(crate) mod wasm {
                             event.pointer_id(),
                         );
                         wb.notice = "Canvas pan complete".into();
-                        drop(wb);
-                        let _ = render(&callback_document, &callback_workbench);
+                        reconcile_exact = wb.camera_frames.needs_exact_reconciliation();
                     }
-                    _ => {}
+                    _ => return,
+                }
+                drop(wb);
+                if let Some(generation) = frame_generation {
+                    schedule_flat_camera_frame(&callback_document, &callback_workbench, generation);
+                } else if reconcile_exact {
+                    let _ = reproject_flat_canvas(&callback_document, &callback_workbench);
+                } else {
+                    let notice = callback_workbench.borrow().notice.clone();
+                    let _ = required(&callback_document, "wb-status-message")
+                        .map(|status| status.set_text_content(Some(&notice)));
                 }
             });
             viewport.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
@@ -11051,27 +12414,43 @@ pub(crate) mod wasm {
             ) else {
                 return;
             };
-            if wb.pointer_captures.is_empty() {
-                clear_canvas_pointer_ownership(&mut wb);
-            } else {
-                cancel_captured_canvas_interactions(
-                    &callback_viewport,
-                    &mut wb,
-                    super::CanvasPointerTerminal::CameraCancel,
-                    "Active drag canceled before canvas zoom",
-                );
+            let starts_burst = !wb.camera_frames.needs_exact_reconciliation();
+            if starts_burst {
+                if wb.pointer_captures.is_empty() {
+                    clear_canvas_pointer_ownership(&mut wb);
+                } else {
+                    cancel_captured_canvas_interactions(
+                        &callback_viewport,
+                        &mut wb,
+                        super::CanvasPointerTerminal::CameraCancel,
+                        "Active drag canceled before canvas zoom",
+                    );
+                }
+                invalidate_draft_inference_for_camera_change(&mut wb);
+                wb.camera_frames.require_exact_reconciliation();
             }
-            invalidate_draft_inference_for_camera_change(&mut wb);
             event.prevent_default();
             let factor = (-event.delta_y() * 0.0015).exp();
-            if wb.camera.zoom_about(anchor, factor) {
+            let mut frame_generation = None;
+            let camera_changed = wb.camera.zoom_about(anchor, factor);
+            if camera_changed {
                 wb.notice = format!(
                     "Canvas zoom {:.1} px / unit",
                     wb.camera.pixels_per_model_unit
                 );
+                let camera = wb.camera;
+                frame_generation = wb.camera_frames.request_frame(camera);
             }
+            let idle_generation = wb.camera_frames.request_idle_reconciliation();
             drop(wb);
-            let _ = render(&callback_document, &callback_workbench);
+            if let Some(generation) = frame_generation {
+                schedule_flat_camera_frame(&callback_document, &callback_workbench, generation);
+            }
+            schedule_flat_wheel_reconciliation(
+                &callback_document,
+                &callback_workbench,
+                idle_generation,
+            );
         });
         viewport.add_event_listener_with_callback("wheel", callback.as_ref().unchecked_ref())?;
         callback.forget();
@@ -11099,6 +12478,11 @@ pub(crate) mod wasm {
         let callback_workbench = Rc::clone(workbench);
         let callback_viewport = viewport.clone();
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            if reconcile_flat_camera_before_semantic_input(&callback_document, &callback_workbench)
+                .is_err()
+            {
+                return;
+            }
             let painted_action = pointer_event_fillet_action(&event);
             let mut wb = callback_workbench.borrow_mut();
             if wb.pan_gesture.is_some() {
@@ -11394,9 +12778,27 @@ pub(crate) mod wasm {
         scene: &EditorScene,
         sample: super::DraftingPointerSample,
     ) -> Vec<EditorEffect> {
-        let problem_items = current_problem_items(&wb.coordinator, scene);
-        let mut effects = wb
-            .coordinator
+        let Workbench {
+            coordinator,
+            pointer_moves,
+            ..
+        } = wb;
+        editor_pointer_move_with_stale_preference_recovery_parts(
+            coordinator,
+            pointer_moves,
+            scene,
+            sample,
+        )
+    }
+
+    fn editor_pointer_move_with_stale_preference_recovery_parts(
+        coordinator: &mut RetainedEditorCoordinator,
+        pointer_moves: &Rc<RefCell<super::PointerMoveQueue>>,
+        scene: &EditorScene,
+        sample: super::DraftingPointerSample,
+    ) -> Vec<EditorEffect> {
+        let problem_items = current_problem_items(coordinator, scene);
+        let mut effects = coordinator
             .editor_mut()
             .pointer_move_with_problem_items_and_draft_authoring(
                 scene,
@@ -11406,7 +12808,7 @@ pub(crate) mod wasm {
             );
         let stale_preference = sample.authoring.inference.preferred_candidate.is_some()
             && super::draft_inference_preference_is_stale(
-                wb.coordinator.editor().draft_inference_resolution(),
+                coordinator.editor().draft_inference_resolution(),
             );
         if !stale_preference {
             return effects;
@@ -11415,14 +12817,11 @@ pub(crate) mod wasm {
         // A stale publication is fail-closed headlessly. Retire the exact
         // browser choice and issue one ordinary hover refresh; never turn the
         // replacement cohort into an implicit pointer-down fallback.
-        let refresh = wb
-            .pointer_moves
-            .borrow_mut()
-            .clear_candidate_and_refresh(true);
+        let refresh = pointer_moves.borrow_mut().clear_candidate_and_refresh(true);
         if let Some(refresh) = refresh {
-            let problem_items = current_problem_items(&wb.coordinator, scene);
+            let problem_items = current_problem_items(coordinator, scene);
             effects.extend(
-                wb.coordinator
+                coordinator
                     .editor_mut()
                     .pointer_move_with_problem_items_and_draft_authoring(
                         scene,
@@ -12432,29 +13831,6 @@ pub(crate) mod wasm {
                 wb.problems.dismiss(current.as_ref());
                 Ok(())
             }
-            "zoom-in" => cancel_before_camera_change(document, wb).map(|()| {
-                wb.camera.zoom_about(
-                    geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
-                    1.25,
-                );
-            }),
-            "zoom-out" => cancel_before_camera_change(document, wb).map(|()| {
-                wb.camera.zoom_about(
-                    geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
-                    0.8,
-                );
-            }),
-            "zoom-fit" => cancel_before_camera_change(document, wb).map(|()| {
-                wb.notice = if fit_camera(wb) {
-                    "View fitted to sketch geometry".into()
-                } else {
-                    "Empty sketch reset to the Origin view".into()
-                };
-            }),
-            "zoom-origin" => cancel_before_camera_change(document, wb).map(|()| {
-                wb.camera.center_origin();
-                wb.notice = "View centred on Origin".into();
-            }),
             _ if action.starts_with("curve-property-") => {
                 apply_curve_numeric_property(document, wb, &action["curve-property-".len()..])
             }
@@ -12517,9 +13893,7 @@ pub(crate) mod wasm {
                 | "reproduction-open"
                 | "reproduction-select"
                 | "reproduction-close"
-                | "reproduction-load"
-                | "zoom-fit"
-                | "zoom-origin" => wb.notice.clone(),
+                | "reproduction-load" => wb.notice.clone(),
                 "undo" if stepped_geometry_draft => wb.notice.clone(),
                 action
                     if action.starts_with("curve-property-")
@@ -13811,6 +15185,16 @@ pub(crate) mod wasm {
     }
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
+        if let Some(scene) = wb.retained_scene.as_ref().filter(|scene| {
+            scene.viewport == wb.camera.viewport()
+                && scene.annotations_visible == wb.annotations_visible
+                && scene.show_all_constraint_annotations == wb.show_all_constraints
+                && wb.coordinator.retained_scene_is_current(scene)
+        }) {
+            return Some(scene.clone());
+        }
+        wb.work_ledger
+            .record(super::performance::PresentationWork::SceneComposition);
         let mut scene = wb
             .coordinator
             .scene_presentation(
@@ -13821,6 +15205,73 @@ pub(crate) mod wasm {
         scene.set_annotations_visible(wb.annotations_visible);
         scene.set_show_all_constraint_annotations(wb.show_all_constraints);
         Some(scene)
+    }
+
+    /// Select-mode hover may mutate only the headless hover state and stable
+    /// retained SVG classes. Every gesture, authoring, camera, or stale-scene
+    /// condition remains on the established exact transient render path.
+    fn flat_plain_hover_active(wb: &Workbench) -> bool {
+        wb.coordinator.editor().tool() == EditorTool::Select
+            && wb.authoring.active_tool().is_none()
+            && wb.feature_authoring.active_tool().is_none()
+            && !wb.offset_authoring.is_active()
+            && wb.pan_gesture.is_none()
+            && wb.pointer_captures.is_empty()
+            && wb.coordinator.editor().active_pointer_gesture().is_none()
+            && wb.retained_scene.as_ref().is_some_and(|scene| {
+                scene.viewport == wb.camera.viewport()
+                    && scene.annotations_visible == wb.annotations_visible
+                    && scene.show_all_constraint_annotations == wb.show_all_constraints
+                    && wb.coordinator.retained_scene_is_current(scene)
+            })
+    }
+
+    fn apply_flat_plain_hover(
+        wb: &mut Workbench,
+        sample: super::DraftingPointerSample,
+    ) -> Option<(
+        geosolve_constraint_editor::EditorHoverState,
+        Vec<EditorEffect>,
+    )> {
+        if !flat_plain_hover_active(wb) {
+            return None;
+        }
+        let previous = wb.coordinator.editor().hover_state();
+        let Workbench {
+            coordinator,
+            pointer_moves,
+            retained_scene,
+            ..
+        } = wb;
+        let scene = retained_scene.as_ref()?;
+        let effects = editor_pointer_move_with_stale_preference_recovery_parts(
+            coordinator,
+            pointer_moves,
+            scene,
+            sample,
+        );
+        Some((previous, effects))
+    }
+
+    fn present_flat_hover_frame(
+        document: &Document,
+        wb: &Workbench,
+        previous: geosolve_constraint_editor::EditorHoverState,
+    ) -> Result<(), JsValue> {
+        let scene = wb.retained_scene.as_ref().ok_or_else(|| {
+            JsValue::from_str("the authenticated retained hover scene is unavailable")
+        })?;
+        let problem_items = current_problem_items(&wb.coordinator, scene);
+        present_retained_hover_frame(
+            document,
+            wb.coordinator.editor(),
+            scene,
+            wb.camera.viewport(),
+            wb.pointer_moves.borrow().last_input,
+            &problem_items,
+            &wb.work_ledger,
+            previous,
+        )
     }
 
     fn current_problem_items(
@@ -13886,6 +15337,116 @@ pub(crate) mod wasm {
         wb.camera.fit_scene_or_reset(scene.as_ref())
     }
 
+    fn present_flat_camera_frame(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        generation: u64,
+    ) -> Result<(), JsValue> {
+        let (transform, work_before) = {
+            let mut wb = workbench.borrow_mut();
+            (
+                super::AdmittedCameraFrame::take(&mut wb.camera_frames, generation),
+                wb.work_ledger.snapshot(),
+            )
+        };
+        let Some(frame) = transform else {
+            return Ok(());
+        };
+        let desired_viewport = workbench.borrow().camera.viewport();
+        apply_retained_camera_transform(document, frame.transform, desired_viewport)?;
+        let wb = workbench.borrow();
+        required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
+            "{:.1} px / unit",
+            wb.camera.pixels_per_model_unit,
+        )));
+        let coordinate = super::coordinate_hud(
+            wb.camera.viewport(),
+            wb.pointer_moves.borrow().last_input,
+            None,
+        );
+        let coordinate_element = required(document, "wb-pointer-coordinate")?;
+        coordinate_element.set_text_content(Some(&coordinate.text));
+        coordinate_element.set_attribute("title", &coordinate.title)?;
+        coordinate_element.set_attribute("data-inference-adjusted", "false")?;
+        frame.complete(&wb.work_ledger);
+        let work = wb.work_ledger.snapshot().delta_since(work_before);
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-presentation-work-delta", &work.compact())?;
+        root.set_attribute(
+            "data-camera-work-admitted",
+            if work.is_camera_frame_only() {
+                "camera-only"
+            } else {
+                "forbidden-work"
+            },
+        )?;
+        Ok(())
+    }
+
+    fn schedule_flat_camera_frame(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        generation: u64,
+    ) {
+        let frame_document = document.clone();
+        let frame_workbench = Rc::clone(workbench);
+        let frame = Closure::once_into_js(move || {
+            let _ = present_flat_camera_frame(&frame_document, &frame_workbench, generation);
+        });
+        let scheduled = super::platform::window()
+            .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
+        if scheduled.is_err() {
+            workbench
+                .borrow_mut()
+                .camera_frames
+                .cancel_frame(generation);
+            let _ = reproject_flat_canvas(document, workbench);
+        }
+    }
+
+    fn schedule_flat_wheel_reconciliation(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        generation: u64,
+    ) {
+        let idle_document = document.clone();
+        let idle_workbench = Rc::clone(workbench);
+        let idle = Closure::once_into_js(move || {
+            let reconcile = idle_workbench
+                .borrow_mut()
+                .camera_frames
+                .take_idle_reconciliation(generation);
+            if reconcile {
+                let _ = reproject_flat_canvas(&idle_document, &idle_workbench);
+            }
+        });
+        let scheduled = super::platform::window().and_then(|window| {
+            window
+                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                    idle.unchecked_ref(),
+                    super::CAMERA_WHEEL_IDLE_RECONCILIATION_MS,
+                )
+                .map(|_| ())
+        });
+        if scheduled.is_err() {
+            let _ = reproject_flat_canvas(document, workbench);
+        }
+    }
+
+    fn reconcile_flat_camera_before_semantic_input(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+    ) -> Result<(), JsValue> {
+        if workbench
+            .borrow()
+            .camera_frames
+            .needs_exact_reconciliation()
+        {
+            reproject_flat_canvas(document, workbench)?;
+        }
+        Ok(())
+    }
+
     /// Applies the presentation policy shared by the real RAF and authenticated
     /// pointer-release paths. A move frame cannot reach `save`; a release keeps
     /// the established save-before-full-render terminal behavior.
@@ -13894,14 +15455,50 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<Workbench>>,
         event: super::WorkbenchPresentationEvent,
     ) -> Result<(), JsValue> {
+        let work_before = workbench.borrow().work_ledger.snapshot();
+        {
+            let wb = workbench.borrow();
+            super::record_flat_pointer_semantic_work(&wb.work_ledger, event);
+        }
         let policy = event.policy();
         if policy.saves_workspace {
             save(&workbench.borrow());
         }
-        match policy.render_scope {
+        let result = match policy.render_scope {
             super::WorkbenchRenderScope::Transient => render_transient(document, workbench),
             super::WorkbenchRenderScope::Durable => render(document, workbench),
+        };
+        if result.is_ok() {
+            let wb = workbench.borrow();
+            let delta = wb.work_ledger.snapshot().delta_since(work_before);
+            let root = required(document, "workbench-root")?;
+            root.set_attribute("data-presentation-work-delta", &delta.compact())?;
+            root.set_attribute(
+                "data-pointer-work-admitted",
+                match event {
+                    super::WorkbenchPresentationEvent::PointerMoveFrame => {
+                        if delta.is_transient_preview_only() {
+                            "transient-only"
+                        } else {
+                            "forbidden-work"
+                        }
+                    }
+                    super::WorkbenchPresentationEvent::PointerRelease
+                    | super::WorkbenchPresentationEvent::AuthenticatedPointerRelease(_) => {
+                        if delta.is_single_terminal_publication() {
+                            "single-terminal"
+                        } else {
+                            "forbidden-work"
+                        }
+                    }
+                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+                    | super::WorkbenchPresentationEvent::InteractionCancellation => {
+                        "non-mutating-terminal"
+                    }
+                },
+            )?;
         }
+        result
     }
 
     fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
@@ -13915,17 +15512,70 @@ pub(crate) mod wasm {
         render_with_scope(document, workbench, super::WorkbenchRenderScope::Transient)
     }
 
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one scoped render pass synchronizes either exact transient paint or the complete retained workbench snapshot"
-    )]
     fn render_with_scope(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
         scope: super::WorkbenchRenderScope,
     ) -> Result<(), JsValue> {
-        let scene = editor_scene(&workbench.borrow());
-        if let Some(scene) = scene.as_ref() {
+        render_with_scope_inner(document, workbench, scope, None)?;
+        let mut wb = workbench.borrow_mut();
+        let camera = wb.camera;
+        wb.camera_frames.exact_reconciled(camera);
+        required(document, "workbench-root")?.set_attribute("data-camera-presentation", "exact")?;
+        required(document, "workbench-root")?.remove_attribute("data-camera-retained-scale")?;
+        Ok(())
+    }
+
+    fn reproject_flat_canvas(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+    ) -> Result<(), JsValue> {
+        let mut scene = workbench.borrow().retained_scene.clone();
+        let viewport = workbench.borrow().camera.viewport();
+        let Some(retained) = scene.as_mut() else {
+            return render_transient(document, workbench);
+        };
+        if !workbench
+            .borrow()
+            .coordinator
+            .retained_scene_is_current(retained)
+        {
+            return render_transient(document, workbench);
+        }
+        workbench
+            .borrow()
+            .work_ledger
+            .record(super::performance::PresentationWork::ExactReprojection);
+        if retained.reproject_viewport(viewport).is_err() {
+            return render_transient(document, workbench);
+        }
+        render_with_scope_inner(
+            document,
+            workbench,
+            super::WorkbenchRenderScope::Transient,
+            scene,
+        )?;
+        let mut wb = workbench.borrow_mut();
+        let camera = wb.camera;
+        wb.camera_frames.exact_reconciled(camera);
+        required(document, "workbench-root")?.set_attribute("data-camera-presentation", "exact")?;
+        required(document, "workbench-root")?.remove_attribute("data-camera-retained-scale")?;
+        Ok(())
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one scoped render pass synchronizes either exact transient paint or the complete retained workbench snapshot"
+    )]
+    fn render_with_scope_inner(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        scope: super::WorkbenchRenderScope,
+        scene_override: Option<EditorScene>,
+    ) -> Result<(), JsValue> {
+        let camera_only = scene_override.is_some();
+        let scene = scene_override.or_else(|| editor_scene(&workbench.borrow()));
+        if !camera_only && let Some(scene) = scene.as_ref() {
             let mut wb = workbench.borrow_mut();
             let effects = wb
                 .coordinator
@@ -13933,6 +15583,7 @@ pub(crate) mod wasm {
                 .reconcile_fillet_branch_preview(scene);
             dispatch_effects(&mut wb, effects);
         }
+        workbench.borrow_mut().retained_scene.clone_from(&scene);
         let fillet_action_stamp = workbench.borrow_mut().fillet_action_render.reconcile(
             scene
                 .as_ref()
@@ -14044,8 +15695,10 @@ pub(crate) mod wasm {
         let hover = coordinator.editor().hover_state();
         let computed_problems = coordinator.computed_feature_problems();
         let active_fillet_preview = coordinator.editor().fillet_branch_preview();
-        required(document, "wb-viewport")?.set_inner_html(
-            &super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
+        wb.work_ledger
+            .record(super::performance::PresentationWork::SvgSerialization);
+        let markup =
+            super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
                 scene.as_ref(),
                 accepted,
                 &computed_problems,
@@ -14061,11 +15714,14 @@ pub(crate) mod wasm {
                 coordinator.editor().geometry_interaction_policy(),
                 super::scene::CanvasDisplayOptions {
                     grid_visible: wb.grid_visible,
+                    retain_contextual_annotations: true,
                 },
                 Some(&offset_presentation),
                 wb.camera.viewport(),
-            ),
-        );
+            );
+        required(document, "wb-viewport")?.set_inner_html(&markup);
+        wb.work_ledger
+            .record(super::performance::PresentationWork::ViewportReplacement);
         required(document, "workbench-root")?.set_attribute(
             "data-render-scope",
             if scope.rebuilds_durable_panels() {
@@ -14114,6 +15770,8 @@ pub(crate) mod wasm {
             )?;
             return Ok(());
         }
+        wb.work_ledger
+            .record(super::performance::PresentationWork::DurablePanelRebuild);
         let design = coordinator.session().design_document();
         let constraint_entries = geosolve_constraint_editor::constraint_entries(design);
         required(document, "wb-tree")?.set_inner_html(&super::panels::tree_markup_with_features(
@@ -15394,7 +17052,10 @@ pub(crate) mod wasm {
             return;
         };
         if let Ok(Some(storage)) = window.local_storage() {
-            let _ = storage.set_item(STORAGE_KEY, &json);
+            if storage.set_item(STORAGE_KEY, &json).is_ok() {
+                wb.work_ledger
+                    .record(super::performance::PresentationWork::PersistenceWrite);
+            }
         }
     }
 
@@ -15870,40 +17531,599 @@ mod tests {
     use super::ProjectionalCellMove;
     use super::persistence::WorkspaceSnapshot;
     use super::{
-        AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
-        CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
-        CanvasPointerCaptures, CanvasPointerContextRoute, CanvasPointerMoveOwner,
-        CanvasPointerOwnership, CanvasPointerTerminal, CanvasPointerTerminalDisposition,
-        CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
-        DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
-        ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
-        PointerMoveQueue, ProjectionalConstructionDispatch, ProjectionalInspectorControl,
+        AdmittedCameraFrame, AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS,
+        CANVAS_PAN_POINTER_EVENTS, CANVAS_POINTER_TERMINAL_EVENTS, CameraToolbarAction,
+        CanvasPanPointerDownRoute, CanvasPointerCaptureKind, CanvasPointerCaptures,
+        CanvasPointerContextRoute, CanvasPointerMoveOwner, CanvasPointerOwnership,
+        CanvasPointerTerminal, CanvasPointerTerminalDisposition, CanvasPrimaryPointerDownRoute,
+        CapturedCanvasPointer, DismissibleDisclosure, DraftingPointerSample,
+        FilletActionRenderAuthority, FinishDoubleClickTracker, ForegroundOverlayEscapeOwner,
+        HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
+        ProjectionalConstructionDispatch, ProjectionalInspectorControl,
         ProjectionalInspectorDispatch, ProjectionalInspectorStamp, ProjectionalInspectorSubmission,
-        ProjectionalPointerMoveQueue, ReproductionFocusReturn, WorkbenchDocumentAuthority,
-        WorkbenchPresentationCounters, WorkbenchPresentationEvent, WorkbenchRenderScope,
-        annotation_family_name, annotation_inspector_presentation, apply_native_fillet_profile,
-        apply_projectional_scene_display, apply_validated_reproduction, canvas_cursor_key,
-        canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
-        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, current_problem_items, curve_control_inspector_detail,
-        curve_control_inspector_markup, decode_projectional_inspector_control,
-        dispatch_projectional_authoring_application, dispatch_projectional_construction_effects,
-        dispatch_projectional_inspector_control, draft_inference_preference_is_stale,
-        feature_apply_returns_focus_to_select, foreground_overlay_escape_owner,
-        geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
-        native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
-        offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
-        offset_target_for_selection, owns_authoring_pick, projectional_cell_drop_before,
-        projectional_cell_move_patch, projectional_design_markup,
-        projectional_direct_gesture_is_capturable, projectional_outline_drop_before,
-        projectional_outline_move_patch, projectional_terminal_owns_capture,
-        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
-        reproduction_focus_target_after_action, reproduction_overlay_presentation,
-        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
-        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
-        route_projectional_terminal_capture, should_route_stationary_draft_inference,
+        ProjectionalPointerMoveQueue, ReproductionFocusReturn, RetainedCameraQueue,
+        WorkbenchDocumentAuthority, WorkbenchPresentationCounters, WorkbenchPresentationEvent,
+        WorkbenchRenderScope, annotation_family_name, annotation_inspector_presentation,
+        apply_native_fillet_profile, apply_projectional_scene_display,
+        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
+        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
+        compose_editor_scene, coordinate_hud, current_problem_items,
+        curve_control_inspector_detail, curve_control_inspector_markup,
+        decode_projectional_inspector_control, dispatch_projectional_authoring_application,
+        dispatch_projectional_construction_effects, dispatch_projectional_inspector_control,
+        draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
+        foreground_overlay_escape_owner, geometry_sweep_flip_available,
+        geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
+        observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
+        offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
+        owns_authoring_pick, projectional_cell_drop_before, projectional_cell_move_patch,
+        projectional_design_markup, projectional_direct_gesture_is_capturable,
+        projectional_outline_drop_before, projectional_outline_move_patch,
+        projectional_terminal_owns_capture, rational_conic_construction_copy,
+        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        route_canvas_primary_pointer_down, route_projectional_terminal_capture,
+        should_route_stationary_draft_inference,
     };
+
+    #[test]
+    fn retained_camera_queue_coalesces_latest_frame_and_authenticates_idle_boundary() {
+        let exact = super::scene::CanvasCamera::default();
+        let mut queue = RetainedCameraQueue::default();
+        queue.exact_reconciled(exact);
+        let first = super::scene::CanvasCamera {
+            model_center: [1.0, -2.0],
+            pixels_per_model_unit: 75.0,
+        };
+        let latest = super::scene::CanvasCamera {
+            model_center: [-3.0, 4.0],
+            pixels_per_model_unit: 100.0,
+        };
+
+        let frame = queue
+            .request_frame(first)
+            .expect("first raw event schedules RAF");
+        assert_eq!(queue.request_frame(latest), None, "one RAF per frame");
+        assert!(queue.take_frame(frame.wrapping_add(1)).is_none());
+        let transform = queue
+            .take_frame(frame)
+            .expect("current RAF uses newest camera");
+        assert_eq!(
+            transform,
+            super::scene::RetainedCameraTransform::between(exact, latest)
+                .expect("finite retained transform"),
+        );
+        assert!(queue.needs_exact_reconciliation());
+
+        let stale_idle = queue.request_idle_reconciliation();
+        let current_idle = queue.request_idle_reconciliation();
+        assert!(!queue.take_idle_reconciliation(stale_idle));
+        assert!(queue.take_idle_reconciliation(current_idle));
+
+        queue.exact_reconciled(latest);
+        assert!(!queue.needs_exact_reconciliation());
+        assert!(queue.take_frame(frame).is_none());
+        assert!(!queue.take_idle_reconciliation(current_idle));
+    }
+
+    #[test]
+    fn retained_camera_exact_reconciliation_revokes_an_unpainted_frame() {
+        let mut queue = RetainedCameraQueue::default();
+        let desired = super::scene::CanvasCamera {
+            model_center: [8.0, 5.0],
+            pixels_per_model_unit: 35.0,
+        };
+        let stale = queue
+            .request_frame(desired)
+            .expect("scheduled camera frame");
+        assert!(queue.needs_exact_reconciliation());
+
+        queue.exact_reconciled(desired);
+        assert!(queue.take_frame(stale).is_none());
+        assert!(!queue.needs_exact_reconciliation());
+        assert!(queue.request_frame(desired).is_some());
+        let identity = queue
+            .take_frame(queue.next_frame_generation)
+            .expect("matching camera has a finite identity mapping");
+        assert_eq!(identity.scale.to_bits(), 1.0_f64.to_bits());
+        assert_eq!(
+            identity.translate.map(f64::to_bits),
+            [0.0, 0.0].map(f64::to_bits)
+        );
+    }
+
+    #[test]
+    fn production_camera_admission_records_one_completed_paint_and_stale_callbacks_record_zero() {
+        let ledger = super::performance::PresentationWorkLedger::default();
+        let mut queue = RetainedCameraQueue::default();
+        let desired = super::scene::CanvasCamera {
+            model_center: [2.0, -7.0],
+            pixels_per_model_unit: 91.0,
+        };
+        let generation = queue.request_frame(desired).expect("scheduled frame");
+        let before = ledger.snapshot();
+
+        assert!(AdmittedCameraFrame::take(&mut queue, generation.wrapping_add(1)).is_none());
+        assert_eq!(ledger.snapshot(), before, "stale callback is inert");
+
+        let admitted = AdmittedCameraFrame::take(&mut queue, generation)
+            .expect("authenticated production frame helper");
+        admitted.complete(&ledger);
+        let delta = ledger.snapshot().delta_since(before);
+        assert!(delta.is_camera_frame_only());
+        assert!(AdmittedCameraFrame::take(&mut queue, generation).is_none());
+        assert_eq!(
+            ledger.snapshot().delta_since(before),
+            delta,
+            "replayed callback cannot record a second paint"
+        );
+    }
+
+    #[test]
+    fn toolbar_camera_commands_have_route_parity_and_admit_no_durable_work() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        document
+            .add_rectangle("camera parity", [-2.0, -1.0], 7.0, 4.0)
+            .expect("rectangle");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted rectangle");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            test_viewport(),
+            0.8,
+        )
+        .expect("scene");
+        let initial = super::scene::CanvasCamera {
+            model_center: [3.5, -4.25],
+            pixels_per_model_unit: 73.0,
+        };
+        let mut projectional_camera = initial;
+        let mut flat_camera = initial;
+        let mut projectional_queue = RetainedCameraQueue::default();
+        let mut flat_queue = RetainedCameraQueue::default();
+        projectional_queue.exact_reconciled(initial);
+        flat_queue.exact_reconciled(initial);
+        let mut projectional_frame = None;
+        let mut flat_frame = None;
+        let mut projectional_idle = None;
+        let mut flat_idle = None;
+
+        for (action, key) in CameraToolbarAction::ALL.into_iter().zip([
+            "zoom-in",
+            "zoom-out",
+            "zoom-fit",
+            "zoom-origin",
+        ]) {
+            assert_eq!(
+                CameraToolbarAction::from_workbench_action(key),
+                Some(action)
+            );
+            let projectional_outcome = action.apply(&mut projectional_camera, Some(&scene));
+            let flat_outcome = action.apply(&mut flat_camera, Some(&scene));
+            assert_eq!(projectional_outcome, flat_outcome);
+            assert!(!action.notice(projectional_outcome).is_empty());
+            assert_eq!(
+                projectional_camera.model_center.map(f64::to_bits),
+                flat_camera.model_center.map(f64::to_bits),
+            );
+            assert_eq!(
+                projectional_camera.pixels_per_model_unit.to_bits(),
+                flat_camera.pixels_per_model_unit.to_bits(),
+            );
+
+            let projectional = projectional_queue
+                .admit_toolbar_change(projectional_camera, projectional_outcome.changed);
+            let flat = flat_queue.admit_toolbar_change(flat_camera, flat_outcome.changed);
+            assert!(!projectional.saves_workspace());
+            assert!(!flat.saves_workspace());
+            assert_eq!(projectional.durable_render_scope(), None);
+            assert_eq!(flat.durable_render_scope(), None);
+            projectional_frame = projectional_frame.or(projectional.frame_generation);
+            flat_frame = flat_frame.or(flat.frame_generation);
+            projectional_idle = projectional.idle_generation;
+            flat_idle = flat.idle_generation;
+        }
+
+        assert_eq!(projectional_frame, flat_frame);
+        assert_eq!(projectional_idle, flat_idle);
+        let projectional_transform = projectional_queue
+            .take_frame(projectional_frame.expect("first mutation schedules one retained frame"))
+            .expect("projectional retained camera frame");
+        let flat_transform = flat_queue
+            .take_frame(flat_frame.expect("first mutation schedules one retained frame"))
+            .expect("flat retained camera frame");
+        assert_eq!(projectional_transform, flat_transform);
+        assert!(projectional_queue.take_idle_reconciliation(
+            projectional_idle.expect("latest toolbar command authenticates exact idle paint")
+        ));
+        assert!(flat_queue.take_idle_reconciliation(
+            flat_idle.expect("latest toolbar command authenticates exact idle paint")
+        ));
+    }
+
+    #[test]
+    fn retained_hover_routes_share_admission_and_reject_semantic_effects() {
+        use geosolve_constraint_editor::EditorEffect;
+
+        let cases = [
+            (
+                vec![EditorEffect::HoverChanged(EditorHoverState::default())],
+                true,
+                "ordinary hover",
+            ),
+            (
+                vec![
+                    EditorEffect::HoverChanged(EditorHoverState::default()),
+                    EditorEffect::FilletBranchPreviewChanged { target: None },
+                ],
+                true,
+                "hover plus preview retirement",
+            ),
+            (
+                vec![EditorEffect::SelectionChanged(Vec::new())],
+                false,
+                "selection",
+            ),
+            (
+                vec![EditorEffect::ClearPointPreview],
+                false,
+                "semantic preview",
+            ),
+            (
+                vec![EditorEffect::ClearConstructionPreview],
+                false,
+                "construction",
+            ),
+        ];
+        for (effects, expected, label) in cases {
+            let projectional = super::projectional_effects_are_retained_hover_only(&effects);
+            let flat = super::flat_effects_are_retained_hover_only(&effects);
+            assert_eq!(projectional, expected, "projectional {label}");
+            assert_eq!(flat, expected, "flat {label}");
+            assert_eq!(flat, projectional, "route parity for {label}");
+        }
+    }
+
+    #[test]
+    fn production_retained_hover_completion_records_exactly_one_presentation() {
+        let ledger = super::performance::PresentationWorkLedger::default();
+        let before = ledger.snapshot();
+        super::complete_retained_hover_presentation(&ledger);
+        assert!(ledger.snapshot().delta_since(before).is_hover_frame_only());
+    }
+
+    #[test]
+    fn production_pointer_semantic_ledger_distinguishes_preview_native_and_code_terminals() {
+        let preview = super::performance::PresentationWorkLedger::default();
+        super::record_projectional_pointer_semantic_work(
+            &preview,
+            WorkbenchPresentationEvent::PointerMoveFrame,
+            true,
+        );
+        let preview = preview.snapshot();
+        assert_eq!(
+            preview.count(super::performance::PresentationWork::SolverPreview),
+            1
+        );
+        for forbidden in [
+            super::performance::PresentationWork::IntentMaterialization,
+            super::performance::PresentationWork::ComputedEvaluation,
+            super::performance::PresentationWork::CodeExpansion,
+            super::performance::PresentationWork::PersistenceWrite,
+            super::performance::PresentationWork::DurablePanelRebuild,
+        ] {
+            assert_eq!(preview.count(forbidden), 0, "preview work: {forbidden:?}");
+        }
+
+        let native = super::performance::PresentationWorkLedger::default();
+        super::record_projectional_pointer_semantic_work(
+            &native,
+            WorkbenchPresentationEvent::PointerRelease,
+            false,
+        );
+        assert_eq!(
+            native
+                .snapshot()
+                .count(super::performance::PresentationWork::IntentMaterialization),
+            1
+        );
+        assert_eq!(
+            native
+                .snapshot()
+                .count(super::performance::PresentationWork::ComputedEvaluation),
+            1
+        );
+        assert_eq!(
+            native
+                .snapshot()
+                .count(super::performance::PresentationWork::CodeExpansion),
+            0
+        );
+
+        let code = super::performance::PresentationWorkLedger::default();
+        super::record_projectional_pointer_semantic_work(
+            &code,
+            WorkbenchPresentationEvent::AuthenticatedPointerRelease(91),
+            true,
+        );
+        assert_eq!(
+            code.snapshot()
+                .count(super::performance::PresentationWork::CodeExpansion),
+            1
+        );
+
+        let non_mutating = super::performance::PresentationWorkLedger::default();
+        super::record_projectional_pointer_semantic_work(
+            &non_mutating,
+            WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+            true,
+        );
+        assert_eq!(
+            non_mutating.snapshot(),
+            super::performance::PresentationWorkSnapshot::default()
+        );
+
+        let flat = super::performance::PresentationWorkLedger::default();
+        super::record_flat_pointer_semantic_work(&flat, WorkbenchPresentationEvent::PointerRelease);
+        let flat = flat.snapshot();
+        assert_eq!(
+            flat.count(super::performance::PresentationWork::SolverPreview),
+            1
+        );
+        assert_eq!(
+            flat.count(super::performance::PresentationWork::ComputedEvaluation),
+            1
+        );
+        assert_eq!(
+            flat.count(super::performance::PresentationWork::IntentMaterialization),
+            0
+        );
+        assert_eq!(
+            flat.count(super::performance::PresentationWork::CodeExpansion),
+            0
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one compact native fixture freezes every retained geometry and annotation selector"
+    )]
+    fn retained_hover_native_selectors_cover_geometry_datums_and_annotations() {
+        use super::ProjectionalHoverDomTarget;
+
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("retained hover", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted rectangle");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            test_viewport(),
+            0.8,
+        )
+        .expect("scene");
+
+        let point = rectangle.points[0];
+        let point_index = scene
+            .points
+            .iter()
+            .position(|candidate| candidate.id == point)
+            .expect("painted point");
+        let point_target = EditorHoverTarget::Geometry(SelectionItem::Point(point));
+        let point_dom_targets = super::projectional_hover_dom_targets(&scene, point_target);
+        assert_eq!(
+            point_dom_targets,
+            vec![ProjectionalHoverDomTarget::Geometry(format!(
+                "wb-scene-point-{point_index}"
+            ))]
+        );
+        assert_eq!(
+            super::projectional_hover_dom_targets(&scene, point_target),
+            point_dom_targets,
+            "both runtime presenters share this exact retained SVG target mapping",
+        );
+
+        let span = CurveSpan::line(rectangle.curves[0]);
+        let span_ids = scene
+            .curves
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| candidate.span == span)
+            .map(|(index, _)| {
+                ProjectionalHoverDomTarget::Geometry(format!("wb-scene-curve-{index}"))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            super::projectional_hover_dom_targets(
+                &scene,
+                EditorHoverTarget::Geometry(SelectionItem::Curve(span)),
+            ),
+            span_ids,
+        );
+
+        for datum in [
+            geosolve_sketch::SketchDatum::XAxis,
+            geosolve_sketch::SketchDatum::YAxis,
+        ] {
+            let index = scene
+                .datums
+                .iter()
+                .position(|candidate| candidate.datum == datum)
+                .expect("axis datum");
+            assert_eq!(
+                super::projectional_hover_dom_targets(
+                    &scene,
+                    EditorHoverTarget::Geometry(SelectionItem::Datum(datum)),
+                ),
+                vec![ProjectionalHoverDomTarget::Geometry(format!(
+                    "wb-scene-datum-{index}"
+                ))],
+            );
+        }
+        assert!(
+            super::projectional_hover_dom_targets(
+                &scene,
+                EditorHoverTarget::Geometry(SelectionItem::Datum(
+                    geosolve_sketch::SketchDatum::Origin,
+                )),
+            )
+            .is_empty(),
+            "Origin deliberately has no duplicate painted hover target"
+        );
+
+        for item in [
+            SelectionItem::Constraint(rectangle.constraints[0]),
+            SelectionItem::Dimension(rectangle.dimensions[0]),
+        ] {
+            let root = super::projectional_annotation_element_id(&scene, item)
+                .expect("annotation root identity");
+            assert_eq!(
+                super::projectional_hover_dom_targets(
+                    &scene,
+                    EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                        item,
+                        marker_index: None,
+                    }),
+                ),
+                vec![ProjectionalHoverDomTarget::AnnotationRoot(root.clone())],
+            );
+            assert_eq!(
+                super::projectional_hover_dom_targets(
+                    &scene,
+                    EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                        item,
+                        marker_index: Some(1),
+                    }),
+                ),
+                vec![ProjectionalHoverDomTarget::AnnotationMarker {
+                    root,
+                    selector: ".wb-constraint-symbol[data-annotation-marker=\"1\"]".into(),
+                }],
+                "a proximate marker must not also classify the annotation root as hovered",
+            );
+        }
+    }
+
+    #[test]
+    fn retained_hover_selectors_cover_features_and_direct_curve_controls() {
+        use super::ProjectionalHoverDomTarget;
+
+        let (mut coordinator, _, points) = grouped_fillet_fixture();
+        let mut state = FeatureAuthoringState::default();
+        let (_, metadata) =
+            prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
+        let preview = coordinator
+            .feature_authoring_preview()
+            .expect("held grouped preview");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted source");
+        let mut scene = EditorScene::from_accepted_with_computed(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            &coordinator
+                .session()
+                .accepted_prepared_input()
+                .expect("accepted prepared input"),
+            &metadata.input,
+            preview.snapshot(),
+            test_viewport(),
+            0.8,
+        )
+        .expect("computed scene");
+        let owner = scene.computed_curves[0].owner;
+        assert_eq!(
+            super::projectional_hover_dom_targets(
+                &scene,
+                EditorHoverTarget::Geometry(SelectionItem::FeatureCorner(owner)),
+            ),
+            vec![ProjectionalHoverDomTarget::Geometry(
+                "wb-scene-computed-curve-0".into(),
+            )],
+        );
+        let feature_targets = scene
+            .computed_curves
+            .iter()
+            .enumerate()
+            .filter(|(_, curve)| curve.owner.feature == owner.feature)
+            .map(|(index, _)| {
+                ProjectionalHoverDomTarget::Geometry(format!("wb-scene-computed-curve-{index}"))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            super::projectional_hover_dom_targets(
+                &scene,
+                EditorHoverTarget::Geometry(SelectionItem::Feature(owner.feature)),
+            ),
+            feature_targets,
+        );
+
+        let (mut curve_coordinator, curve) = m77_rational_coordinator(0.5);
+        curve_coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(curve)]);
+        scene = compose_editor_scene(&curve_coordinator, test_viewport(), 0.25)
+            .expect("selected rational scene");
+        let (control_index, control) = scene
+            .curve_controls
+            .iter()
+            .enumerate()
+            .find(|(_, control)| {
+                matches!(
+                    control.interaction,
+                    geosolve_constraint_editor::SceneCurveControlInteraction::Direct
+                )
+            })
+            .expect("direct rational control");
+        let mut expected = vec![ProjectionalHoverDomTarget::CurveControl(format!(
+            "wb-scene-control-{control_index}"
+        ))];
+        expected.extend(
+            scene
+                .curve_control_guides
+                .iter()
+                .enumerate()
+                .filter(|(_, guide)| guide.control == Some(control.id))
+                .map(|(index, _)| {
+                    ProjectionalHoverDomTarget::CurveControlGuide(format!(
+                        "wb-scene-control-guide-{index}"
+                    ))
+                }),
+        );
+        assert_eq!(
+            super::projectional_hover_dom_targets(
+                &scene,
+                EditorHoverTarget::CurveControl {
+                    control: control.id,
+                    owner: control.owner,
+                },
+            ),
+            expected,
+        );
+    }
 
     #[test]
     fn design_projection_tabs_are_closed_and_presentation_only() {
@@ -16075,7 +18295,7 @@ mod tests {
         assert!(history.contains("return changed;"));
 
         let click = source
-            .split("Some(\"undo\") | Some(\"redo\") => {")
+            .split("Some(\"undo\" | \"redo\") => {")
             .nth(1)
             .and_then(|source| source.split("Some(\"clear-selection\")").next())
             .expect("projectional click history route");
@@ -21931,6 +24151,38 @@ mod tests {
     }
 
     #[test]
+    fn flat_pointer_leave_clears_hover_and_hud_with_hover_only_work() {
+        let (coordinator, _, _, _) = rejected_constraint_fixture();
+        let scene = compose_editor_scene(&coordinator, super::scene::viewport(), 0.25)
+            .expect("accepted presentation scene");
+        let point = scene.points.first().expect("accepted point");
+        let input = PointerInput {
+            pointer_id: 303,
+            position: point.screen_position,
+            modifiers: Modifiers::default(),
+        };
+        let mut editor = ConstraintEditor::default();
+        let _ = editor.pointer_move(&scene, input);
+        assert!(editor.hover_state().target.is_some());
+
+        let mut queue = PointerMoveQueue::default();
+        let _ = queue.push(input);
+        assert!(
+            queue.clear_stationary_sample(),
+            "pointer HUD sample cleared"
+        );
+        let effects = editor.pointer_leave();
+        assert!(super::flat_effects_are_retained_hover_only(&effects));
+        assert_eq!(editor.hover_state(), EditorHoverState::default());
+        assert_eq!(queue.last_input, None);
+
+        let ledger = super::performance::PresentationWorkLedger::default();
+        let before = ledger.snapshot();
+        ledger.record(super::performance::PresentationWork::HoverPresentation);
+        assert!(ledger.snapshot().delta_since(before).is_hover_frame_only());
+    }
+
+    #[test]
     fn foreign_regularization_transition_preserves_queued_projected_pointer_sample() {
         let input = |x, shift| PointerInput {
             pointer_id: 23,
@@ -22829,7 +25081,7 @@ mod tests {
             "pick scope must not hide a visible Construction result"
         );
         let scoped_computed_item = scoped_markup
-            .split("<g class=\"wb-computed-item")
+            .split("<g id=\"wb-scene-computed-curve-0\" class=\"wb-computed-item")
             .nth(1)
             .and_then(|markup| markup.split("</g>").next())
             .expect("visible scope-excluded computed item");
