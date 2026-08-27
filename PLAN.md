@@ -5793,15 +5793,15 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the M84-F011 manifold dogfood amendment withdraws the F010
-nomination while its ninth sample, relational mechanical vocabulary and PNG export undergo
-replacement clean qualification and immutable Tailscale nomination**. Ordinary GUI
-dependencies project as lexical
+Status: **active and unaccepted; the clean-qualified immutable M84-F011 manifold dogfood
+replacement is nominated on Tailscale while refreshed M84-U1 through M84-U16 remain pending**.
+Ordinary GUI dependencies project as lexical
 managed TypeScript while low-level transport remains truthfully labelled Intent IR. Exact product
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn
 historical rollback evidence. Exact F010 source `cf463838`, tree `992e587`, and immutable snapshot
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback authority until F011 replacement
-qualification completes. F007
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback evidence. Exact F011 source
+`e28721a`, tree `0152097`, and immutable snapshot
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. F007
 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and
 all earlier nominations are also withdrawn historical evidence; accepted M83 remains public Pages
 authority.
@@ -5988,7 +5988,7 @@ authority.
   accepted geometry, normalized Hard residual at most `1e-9`, numerical/equality/bidirectional
   DOF zero, exactly one FixedPoint, zero FixedCoordinate, eight solved radius-2.5/diameter-5
   circles, three open routes, three closed seals, 21 construction spans and six Current Fillets.
-- [ ] Commit and clean-qualify F011, freeze the exact no-rebuild output, verify the ninth sample and
+- [x] Commit and clean-qualify F011, freeze the exact no-rebuild output, verify the ninth sample and
   PNG download on temporary frozen bytes, then replace the retained F010 Tailscale service.
 - [ ] Receive explicit refreshed M84-U1 through M84-U16 approval, then publish/exact-verify Pages,
   retire the service and close M84.
@@ -6129,6 +6129,36 @@ snapshot installed at `http://100.94.63.83:8080/` under retained `geosolve-m84-u
 `650971`. Temporary and mutable listeners are retired; the F009 snapshot remains preserved as
 historical rollback evidence. Refreshed U1-U14, explicit approval, Pages publication, service
 retirement and milestone closure remain pending.
+
+M84-F011 replacement qualification/nomination record (2026-08-27): exact committed product source
+`e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+`015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate from
+18:38:08.068586771 through 18:55:55.205076185 AEST, exit 0. Its 6,251-line, 422,664-byte log
+`/tmp/geosolve-m84-f011-gate.GvBT6f/release-gate.log` has SHA-256
+`ceea545929196981e2790a822b384596642f63a6ef93ecea98f76799cdd7e353`; the final Trunk build
+succeeds. The unchanged 271-row golden and expanded nine-demo M84 ledger have SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`c610a229e490467f59c9d57f334c96f23f61ea98a713eb2c98daa3c773eab66f`.
+
+Without rebuilding, its exact seven-regular-file, zero-symlink output is frozen at
+`/tmp/geosolve-m84-f011-uat.ps736NLh`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, with complete evidence at
+`/tmp/geosolve-m84-f011-freeze-evidence.4deymgss`. Temporary `:18093` and retained `:8080`
+eight-path HTTP ledgers are byte-identical at SHA-256
+`9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`. The focused frozen
+manifold/PNG/authority browser case passes 1/1 in 12.8 seconds on temporary bytes and 1/1 in 12.9
+seconds on retained bytes. Both runs preserve lifecycle, history length, project title and
+viewport markup authority around export. Their exact 233,543-byte PNGs have SHA-256
+`2378a8c74216524c42fc8910d79e28a6dacc54fc437ac705518ab42122363dc2`, valid PNG signature and
+2000 × 1400 IHDR; their canvas screenshots have SHA-256
+`2db91740662d19adf9f38518ed25deca91ad92e37022dfa3549caad0d608bcb0`.
+
+Only after temporary exact-byte/browser proof passed was F010 PID `650971` retired and the F011
+snapshot installed at `http://100.94.63.83:8080/` under retained `geosolve-m84-uat.service`, PID
+`1485656`, invocation `f04bc05089d94947b7a24d8ec6a6f26d`, with the immutable snapshot as its
+working directory. Temporary `:18093` is retired. Refreshed U1-U16, explicit approval, Pages
+publication, service retirement and milestone closure remain pending; accepted M83 stays public
+authority.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree

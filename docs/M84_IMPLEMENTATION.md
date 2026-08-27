@@ -2,22 +2,22 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **the M84-F011 PC water-manifold dogfood amendment withdraws the clean-qualified F010
-nomination; M84 remains active and unaccepted while replacement qualification is pending**. Exact
-F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
-`992e587609e61768a9af76af193df2fad8325829`, and snapshot
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical rollback authority and retained Tailscale
-bytes until F011 is clean-qualified and independently verified. F009 source `c74651c`, tree
+Status: **the clean-qualified immutable M84-F011 PC water-manifold dogfood replacement is
+nominated on Tailscale; M84 remains active and unaccepted pending refreshed U1-U16**. Exact F011
+source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+`015209773f81ec1a254817c65ef2a71b984e3b08`, and snapshot
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. F010 source `cf463838`,
+tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback
+evidence. F009 source `c74651c`, tree
 `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect
 evidence; F007 source `cc2f05e` and its immutable snapshot are likewise historical.
 Direct-authoring source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, is withdrawn historical evidence with the initial,
 F003 and F004 candidates. Combined F005/F006 source `ff2e142` and its frozen candidate are also
-withdrawn by F007. F011 implementation is present but has no final source/tree/freeze authority yet;
-do not infer any such identity from this ledger. M84-U1 through U16, replacement Tailscale proof,
-explicit approval, Pages publication and closure remain pending. No UAT row is accepted, no M84
-Pages publication is claimed, and accepted M83 remains public authority.
+withdrawn by F007. M84-U1 through U16, explicit approval, Pages publication and closure remain
+pending. No UAT row is accepted, no M84 Pages publication is claimed, and accepted M83 remains
+public authority.
 
 ## Baseline and authority
 
@@ -270,7 +270,7 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   bidirectional DOF, one FixedPoint, zero FixedCoordinate, exact route/seal/datum/circle inventories
   and six one-output adaptive Fillets. The expanded nine-row ledger is reviewed separately from the
   unchanged milestone-neutral golden.
-- [ ] Commit and run the complete clean release qualification; freeze the exact no-rebuild output;
+- [x] Commit and run the complete clean release qualification; freeze the exact no-rebuild output;
   verify the ninth project plus PNG signature and 2000 × 1400 IHDR in a real browser; then replace
   the retained F010 service only after temporary exact-byte/browser proof. M84-U15/U16, all other
   refreshed UAT, Pages publication and milestone closure remain pending.
@@ -667,14 +667,13 @@ verifies exact reload. Retained collateral spec/config SHA-256 values are
 
 Only after temporary exact-byte and browser proof passed did
 `geosolve-m84-uat.service`, PID `650971`, replace F009 at
-`http://100.94.63.83:8080/`; its working directory is the immutable F010 snapshot. Historical F009
+`http://100.94.63.83:8080/`; its working directory was the immutable F010 snapshot. Historical F009
 PID `3965271` and temporary F010 PIDs `238809`/`621532` are retired, while the F009 snapshot is
 preserved. This is the clean immutable F010 replacement nomination, not acceptance. Refreshed
-U1-U14 were pending when this evidence was recorded. M84-F011 now withdraws the nomination; its
-frozen service remains rollback authority only until the F011 replacement passes temporary
-exact-byte/browser proof.
+U1-U14 were pending when this evidence was recorded. M84-F011 withdraws the nomination; F010 PID
+`650971` is retired and its frozen snapshot remains historical rollback evidence.
 
-## Current F011 implementation awaiting replacement qualification
+## Current F011 implementation and replacement qualification
 
 The ninth **PC Water Manifold** project is implemented as the milestone's first substantial
 AI-authored mechanical dogfood sketch. Its managed source describes a 240 × 120 mm plate, 60 × 84
@@ -700,12 +699,42 @@ geometry is fitted, inspects managed/custom hybrid source and downloads a PNG wi
 console or request error. The 233,543-byte download has PNG signature, IHDR 2000 × 1400 and
 SHA-256 `2378a8c74216524c42fc8910d79e28a6dacc54fc437ac705518ab42122363dc2`.
 
-This is proportional mutable-build evidence, not a clean committed source identity, release-gate
-result, no-rebuild freeze, temporary/retained HTTP ledger or replacement service nomination. U15
-owns the manifold dogfood check and U16 owns PNG export; both remain pending alongside U1-U14.
-F010 PID `650971` continues to serve its immutable rollback snapshot at
-`http://100.94.63.83:8080/` until the F011 temporary candidate is fully verified. No M84 Pages
+That proportional mutable-build run is superseded by the exact frozen proof below. U15 owns the
+manifold dogfood check and U16 owns PNG export; both remain pending alongside U1-U14. No M84 Pages
 publication or milestone closure is authorized.
+
+Exact committed source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+`015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean release gate from
+18:38:08.068586771 through 18:55:55.205076185 AEST on 2026-08-27, exit 0. Its 6,251-line,
+422,664-byte log `/tmp/geosolve-m84-f011-gate.GvBT6f/release-gate.log` has SHA-256
+`ceea545929196981e2790a822b384596642f63a6ef93ecea98f76799cdd7e353` and final Trunk success.
+The unchanged 271-row golden and expanded nine-demo ledger have SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`c610a229e490467f59c9d57f334c96f23f61ea98a713eb2c98daa3c773eab66f`.
+
+Without rebuilding, its exact seven-regular-file, zero-symlink output is frozen at
+`/tmp/geosolve-m84-f011-uat.ps736NLh`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, with complete evidence at
+`/tmp/geosolve-m84-f011-freeze-evidence.4deymgss`. Temporary `:18093` and retained `:8080`
+eight-path HTTP ledgers are byte-identical at SHA-256
+`9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`. The focused frozen
+manifold/PNG/authority suite passes 1/1 in 12.8 seconds on temporary bytes and 1/1 in 12.9 seconds
+on retained bytes. It verifies the accepted ninth project, hybrid managed/custom source, fitted
+finite geometry, six Fillets and PNG export while preserving exact lifecycle, history length,
+project title and viewport markup authority around the action. Both 233,543-byte PNGs have SHA-256
+`2378a8c74216524c42fc8910d79e28a6dacc54fc437ac705518ab42122363dc2`, valid signature and
+2000 × 1400 IHDR; both screenshots have SHA-256
+`2db91740662d19adf9f38518ed25deca91ad92e37022dfa3549caad0d608bcb0`.
+The retained focused spec and config have SHA-256
+`44e40a877c1bfbbf90c9d725ea402a9bbb54d1522241130b5bd1c467ad943bd4` and
+`f9b17a19922e8b6d569d55e6fa1a0c4207caf302653557670261beb33dd49827`; both successful
+`.last-run.json` files have SHA-256
+`91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903`.
+
+Only after temporary proof passed was F010 PID `650971` retired. Retained
+`geosolve-m84-uat.service`, PID `1485656`, invocation
+`f04bc05089d94947b7a24d8ec6a6f26d`, serves only the immutable F011 snapshot from its snapshot
+working directory at `http://100.94.63.83:8080/`; temporary `:18093` is retired.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -924,8 +953,8 @@ direct-authoring record because it predates the collaborative overlay and semant
 contract. Combined F005/F006 source `ff2e142` and its later frozen candidate are themselves
 withdrawn by F007's terminal-lens reproduction. Those snapshot/service records are historical only,
 not current candidates. The withdrawn F009 and historical F010 qualification records are above;
-F011 replacement qualification remains open. GitHub Pages deliberately remains on accepted M83
-pending refreshed UAT and explicit approval.
+the current F011 nomination record is also above. GitHub Pages deliberately remains on accepted
+M83 pending refreshed UAT and explicit approval.
 
 ## Known bounds and truthful limitations
 
@@ -946,11 +975,7 @@ pending refreshed UAT and explicit approval.
 
 ## Remaining release sequence
 
-1. Commit and clean-qualify F011, freeze only the exact no-rebuild output, then verify its ninth
-   sample, PNG signature/2000 × 1400 IHDR and exact HTTP bytes on a temporary endpoint.
-2. Only after that proof passes, replace the retained F010 Tailscale service and record the exact
-   F011 source/tree/log/ledger/snapshot/browser identities.
-3. Complete refreshed M84-U1 through M84-U16 against only the frozen F011 replacement and record
+1. Complete refreshed M84-U1 through M84-U16 against only the frozen F011 replacement and record
    explicit supervising-user approval or open another numbered finding.
-4. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+2. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

@@ -2,14 +2,14 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. The clean-qualified immutable M84-F010 replacement at source
-`cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
-`992e587609e61768a9af76af193df2fad8325829`, snapshot
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz` is nominated for refreshed UAT. F009 source `c74651c`, tree
-`a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, and F007 source `cc2f05e` are withdrawn
-historical evidence. The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`,
-initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are likewise historical. M84 remains
-active and unaccepted; GitHub Pages remains on accepted M83.
+Status: accepted for M84. The clean-qualified immutable M84-F011 replacement at source
+`e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+`015209773f81ec1a254817c65ef2a71b984e3b08`, snapshot
+`/tmp/geosolve-m84-f011-uat.ps736NLh` is nominated for refreshed UAT. F010 source `cf463838`, tree
+`992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, F009 source `c74651c`, and F007 source
+`cc2f05e` are withdrawn historical evidence. The direct-authoring `41e65a4` snapshot, combined
+F005/F006 source `ff2e142`, initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are
+likewise historical. M84 remains active and unaccepted; GitHub Pages remains on accepted M83.
 
 ## Context
 
@@ -358,7 +358,7 @@ geometry, solver equations, constraints, priority, tolerance and branch behavior
   `23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, passes byte-identical
   temporary/retained HTTP verification and the 14-case browser matrix on both endpoints. It is
   withdrawn by F010; PID `3965271` is retired and the snapshot is preserved.
-- Current F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+- Historical F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
   `992e587609e61768a9af76af193df2fad8325829`, passes the clean gate from
   15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exit 0. Its 6,209-line,
   420,425-byte log has SHA-256
@@ -371,9 +371,26 @@ geometry, solver equations, constraints, priority, tolerance and branch behavior
   at `/tmp/geosolve-m84-f010-freeze-evidence.sXWXNG0Z`. Temporary/retained eight-path ledgers are
   byte-identical at SHA-256
   `57f2f4c2b47a11db8fc76a7f6a2e3d30555cb36e96b191081454a4c47fb85cbe`; focused Compass 1/1 and
-  carried 14/14 browser cases pass on both endpoints. PID `650971` serves only these immutable
-  bytes at `http://100.94.63.83:8080/`; temporary PIDs `238809`/`621532` are retired. Refreshed
-  U1-U14, acceptance and public publication remain pending.
+  carried 14/14 browser cases pass on both endpoints. M84-F011 withdraws this nomination; PID
+  `650971` and temporary PIDs `238809`/`621532` are retired, and the snapshot remains historical
+  rollback evidence.
+- Current F011 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+  `015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate from
+  18:38:08.068586771 through 18:55:55.205076185 AEST on 2026-08-27, exit 0. Its 6,251-line,
+  422,664-byte log has SHA-256
+  `ceea545929196981e2790a822b384596642f63a6ef93ecea98f76799cdd7e353` and final Trunk success;
+  golden/nine-demo-ledger SHA-256 values are
+  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+  `c610a229e490467f59c9d57f334c96f23f61ea98a713eb2c98daa3c773eab66f`. Its exact no-rebuild
+  seven-file snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh`, modes `0555`/`0444`, aggregate
+  `056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, is retained with evidence
+  at `/tmp/geosolve-m84-f011-freeze-evidence.4deymgss`. Temporary/retained eight-path ledgers are
+  byte-identical at SHA-256
+  `9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`; final focused frozen
+  manifold/PNG/authority cases pass 1/1 on each endpoint and preserve lifecycle, history length,
+  project title and viewport markup authority. PID `1485656`, invocation
+  `f04bc05089d94947b7a24d8ec6a6f26d`, serves only these immutable bytes at
+  `http://100.94.63.83:8080/`. Refreshed U1-U16, acceptance and public publication remain pending.
 
 ## Rejected alternatives
 

@@ -3386,12 +3386,12 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. The M84-F011 PC water-manifold dogfood amendment withdraws the
-otherwise clean-qualified F010 nomination while its ninth code project, relational mechanical
-vocabulary and presentation-only PNG export undergo replacement qualification. Refreshed M84-U1
-through M84-U16 and explicit approval remain pending. Exact F010 source `cf463838`, tree `992e587`,
-and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical rollback authority and stay
-served on Tailscale only until an exact F011 replacement is verified. Exact F009
+Status: active and unaccepted. The clean-qualified immutable M84-F011 PC water-manifold dogfood
+replacement is nominated on Tailscale. Refreshed M84-U1 through M84-U16 and explicit approval
+remain pending. Exact F011 source `e28721a`, tree `0152097`, and snapshot
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. Exact F010 source
+`cf463838`, tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical
+rollback evidence. Exact F009
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remain
 historical rollback evidence. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot,
 combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn historical
@@ -3612,7 +3612,10 @@ and cold-materialized through the ordinary accepted-scene authority.
   mutable-listener delayed-snap checks pass. Exact F010 source `cf463838`, tree `992e587`, then
   passes the complete clean gate, immutable no-rebuild freeze, byte-identical temporary/retained
   HTTP verification, focused Compass 1/1 and the carried 14/14 matrix on both endpoints. This
-  mechanical nomination does not substitute for refreshed human UAT.
+  mechanical nomination does not substitute for refreshed human UAT. Exact F011 source
+  `e28721a`, tree `0152097`, then passes the complete clean gate, immutable no-rebuild freeze,
+  byte-identical temporary/retained HTTP verification and focused frozen manifold/PNG/authority
+  1/1 on both endpoints. This current mechanical nomination likewise accepts no UAT row.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3741,7 +3744,7 @@ and diff hygiene pass. The mutable development listener keeps the original Compa
 stable through +50/+250/+500/+1000 ms and through six successive drags, with every spoke attached
 and no browser errors.
 
-Historical F010 rollback authority is exact product source
+Historical F010 rollback evidence is exact product source
 `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`. Its complete clean gate ran from
 15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exited 0 and ended with a
@@ -3757,12 +3760,43 @@ at directory/file modes `0555`/`0444`, ordered-manifest aggregate
 eight-path ledgers are byte-identical at SHA-256
 `57f2f4c2b47a11db8fc76a7f6a2e3d30555cb36e96b191081454a4c47fb85cbe`. The focused Compass
 suite passes 1/1 on both endpoints across six drags, release/+50/+250/+500/+1000 ms, reload and all
-four attached spokes; the carried 14/14 browser matrix also passes on both. Retained
-`geosolve-m84-uat.service`, PID `650971`, serves those immutable bytes at
-`http://100.94.63.83:8080/`. Temporary and mutable listeners are retired; the F009 snapshot remains
-preserved as historical rollback evidence. M84-F011 withdraws this F010 nomination while keeping
-it as rollback authority. Refreshed M84-U1 through M84-U16 remain open, so Pages
-remains accepted M83 authority and no M84 public publication is claimed.
+four attached spokes; the carried 14/14 browser matrix also passes on both. At that nomination
+checkpoint retained `geosolve-m84-uat.service`, PID `650971`, served those immutable bytes at
+`http://100.94.63.83:8080/`. Temporary and mutable listeners were retired; the F009 snapshot
+remains preserved as historical rollback evidence. M84-F011 withdraws this F010 nomination while
+keeping it as rollback evidence; PID `650971` was later retired after F011 temporary proof.
+
+Current F011 nomination authority is exact product source
+`e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+`015209773f81ec1a254817c65ef2a71b984e3b08`. Its complete clean gate ran from
+18:38:08.068586771 through 18:55:55.205076185 AEST on 2026-08-27, exited 0 and ended with a
+successful Trunk build. The 6,251-line, 422,664-byte log
+`/tmp/geosolve-m84-f011-gate.GvBT6f/release-gate.log` has SHA-256
+`ceea545929196981e2790a822b384596642f63a6ef93ecea98f76799cdd7e353`; unchanged golden and
+nine-demo M84-ledger hashes are
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`c610a229e490467f59c9d57f334c96f23f61ea98a713eb2c98daa3c773eab66f`.
+
+Without rebuilding, the exact seven-regular-file, zero-symlink snapshot
+`/tmp/geosolve-m84-f011-uat.ps736NLh` is frozen at directory/file modes `0555`/`0444`,
+ordered-manifest aggregate `056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`,
+with complete evidence at `/tmp/geosolve-m84-f011-freeze-evidence.4deymgss`. Temporary `:18093`
+and retained `:8080` eight-path ledgers are byte-identical at SHA-256
+`9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`. The focused frozen
+manifold/PNG/authority suite passes 1/1 in 12.8 seconds on temporary bytes and 1/1 in 12.9 seconds
+on retained bytes while preserving lifecycle, history length, project title and viewport markup
+authority.
+Both exact 233,543-byte PNGs have SHA-256
+`2378a8c74216524c42fc8910d79e28a6dacc54fc437ac705518ab42122363dc2`, valid signature and
+2000 × 1400 IHDR; both screenshots have SHA-256
+`2db91740662d19adf9f38518ed25deca91ad92e37022dfa3549caad0d608bcb0`.
+
+Only after temporary proof passed was F010 PID `650971` retired. Retained
+`geosolve-m84-uat.service`, PID `1485656`, invocation
+`f04bc05089d94947b7a24d8ec6a6f26d`, now serves only the immutable F011 snapshot from its snapshot
+working directory at `http://100.94.63.83:8080/`; temporary `:18093` is retired. Refreshed M84-U1
+through M84-U16 remain open, so Pages remains accepted M83 authority and no M84 public publication
+is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

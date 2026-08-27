@@ -79,13 +79,14 @@ construction/NURBS UAT and certified all-family visual profiles.
   after a valid Compass Rose center release durably rematerialized to another solution. Snapshot
   `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remains historical rollback evidence. Exact F010 source
   `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
-  `992e587609e61768a9af76af193df2fad8325829`, passes complete clean qualification and immutable
-  no-rebuild nomination at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. M84-F011 withdraws that
+  `992e587609e61768a9af76af193df2fad8325829`, passed complete clean qualification and immutable
+  no-rebuild nomination at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, but M84-F011 withdraws that
   nomination while adding a ninth fully constrained PC water-manifold dogfood project, the
-  relational managed vocabulary it needs and presentation-only PNG export. Retained PID `650971`
-  keeps the F010 rollback bytes at `http://100.94.63.83:8080/` until an exact F011 replacement is
-  verified; F007 source `cc2f05e` is also historical. Refreshed U1-U16 remain pending, and Pages
-  stays on accepted M83.
+  relational managed vocabulary it needs and presentation-only PNG export. Exact F011 source
+  `e28721a`, tree `0152097`, and immutable snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh` pass
+  clean qualification plus exact temporary/retained byte and focused browser verification.
+  Retained PID `1485656` serves only those F011 bytes at `http://100.94.63.83:8080/`; F007 source
+  `cc2f05e` is also historical. Refreshed U1-U16 remain pending, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -995,15 +996,14 @@ geometry, equation, constraint, priority, tolerance or branch inference changes.
 and the 14/14 browser matrix on both endpoints. M84-F010 withdraws those bytes, retires historical
 PID `3965271` and preserves the snapshot as rollback evidence.
 
-Exact F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+Historical F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, passes the complete clean gate, ending in successful
 Trunk assembly, and its exact no-rebuild seven-file output is frozen at
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz`. Temporary `:18091` and retained `:8080` serve byte-identical
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`. Temporary `:18091` and retained `:8080` served byte-identical
 eight-path ledgers. The focused Compass case passes 1/1 on each endpoint across six drags,
 release/+50/+250/+500/+1000 ms, reload and four attached spokes; the carried 14/14 browser matrix
-also passes on each. Retained `geosolve-m84-uat.service`, PID `650971`, serves the immutable F010
-snapshot at `http://100.94.63.83:8080/`; temporary and mutable listeners are retired. This is the
-historical rollback authority, not human acceptance or public authority.
+also passes on each. M84-F011 withdraws this as historical rollback evidence; F010 PID `650971`
+is retired. This is not human acceptance or public authority.
 
 M84-F011 dogfoods the optional boundary with a ninth real sketch rather than a transport-only
 fixture. Managed source defines one 240 × 120 mm manifold plate, a 60 × 84 mm reservoir bay, three
@@ -1028,6 +1028,18 @@ rasterizes through Canvas at 2000 × 1400 and downloads `geosolve-sketch.png`. I
 native document to reconstruct geometry nor mutates selection, persistence, history, accepted
 authority or the optional code session. The feature therefore remains available to plain flat
 workbench deployments as presentation functionality.
+
+Exact F011 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+`015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate and freezes without
+rebuild at `/tmp/geosolve-m84-f011-uat.ps736NLh`, ordered-manifest aggregate
+`056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`. Temporary and retained
+eight-path ledgers are byte-identical at SHA-256
+`9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`; focused frozen
+manifold/PNG/authority checks pass 1/1 on each endpoint and preserve lifecycle, history length,
+project title and viewport markup authority. Retained `geosolve-m84-uat.service`, PID `1485656`,
+invocation `f04bc05089d94947b7a24d8ec6a6f26d`, serves only this immutable snapshot at
+`http://100.94.63.83:8080/`. This is current mechanical nomination authority, not human acceptance
+or public authority.
 
 ### `geosolve-sketch-features`
 
@@ -1995,8 +2007,10 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws it and implements complete
   authenticated solver-coupled terminal durability. Exact source `cf463838`, tree `992e587`,
   passes clean qualification and immutable no-rebuild nomination at
-  `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. M84-F011 withdraws that nomination for a ninth fully
+  `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, but M84-F011 withdraws that nomination for a ninth fully
   constrained PC water-manifold dogfood project, hybrid adaptive water-channel patch and isolated
-  PNG export; replacement qualification is pending. Retained PID `650971` serves the exact F010
-  rollback bytes on Tailscale. Combined source `ff2e142` is withdrawn; refreshed human UAT U1-U16
-  remains pending. Accepted M83 remains Pages authority and no M84 publication is claimed.
+  PNG export. Exact F011 source `e28721a`, tree `0152097`, and immutable snapshot
+  `/tmp/geosolve-m84-f011-uat.ps736NLh` are clean-qualified and byte/browser-verified; retained PID
+  `1485656` serves those exact bytes on Tailscale. Combined source `ff2e142` is withdrawn; refreshed
+  human UAT U1-U16 remains pending. Accepted M83 remains Pages authority and no M84 publication is
+  claimed.

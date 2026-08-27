@@ -436,17 +436,20 @@ no-rebuild immutable nomination. The seven-file snapshot
 `ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`, passes byte-identical
 temporary/retained HTTP verification plus the carried 14/14 matrix and a focused Compass 1/1 on
 both endpoints. The focused browser case covers six consecutive drags, release and
-+50/+250/+500/+1000 ms stability, reload and all four attached spokes. Retained
-`geosolve-m84-uat.service`, PID `650971`, serves only those immutable bytes at
-`http://100.94.63.83:8080/`; temporary and mutable listeners are retired, and the F009 snapshot is
-preserved as historical rollback evidence. M84-F011 now withdraws the F010 nomination for the
++50/+250/+500/+1000 ms stability, reload and all four attached spokes. The F010 and F009 snapshots
+are preserved as historical rollback evidence. M84-F011 withdraws the F010 nomination for the
 first real dogfood amendment: a ninth, fully constrained 240 × 120 mm PC water-manifold project
 with one absolute FixedPoint, relational datums, reservoir bay, three adaptive water routes, three
 O-ring loops and eight 5 mm screw circles. Its AI-authored `waterChannel` patch uses keyed `each`
 expansion to adapt existing native Fillets, while presentation-only **Export PNG** rasterizes the
-authoritative canvas at 2000 × 1400 without changing document or history authority. Replacement
-clean qualification/freeze and refreshed U1-U16 remain pending. Pages remains on accepted M83 and
-no M84 public publication is claimed.
+authoritative canvas at 2000 × 1400 without changing document or history authority. Exact F011
+source `e28721a`, tree `0152097`, passes complete clean qualification; its immutable no-rebuild
+snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh`, aggregate
+`056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, passes byte-identical
+temporary/retained HTTP verification and focused manifold/PNG/authority 1/1 on both endpoints.
+Retained `geosolve-m84-uat.service`, PID `1485656`, serves only those F011 bytes at
+`http://100.94.63.83:8080/`. Refreshed U1-U16 remain pending. Pages remains on accepted M83 and no
+M84 public publication is claimed.
 
 ## Read first
 
@@ -484,7 +487,7 @@ no M84 public publication is claimed.
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005-F010 ledger, withdrawn F009 nomination, verified immutable F010 replacement
+    implemented F005-F011 ledger, withdrawn F010 nomination, verified immutable F011 replacement
     nomination and pending human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
@@ -865,12 +868,12 @@ The historical eight-demo creative-catalog amendment and M84-F008/F009 correctio
 exact source `c74651c`, tree `a904584`, and immutable snapshot
 `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remain historical defect evidence. M84-F010 withdraws that
 nomination and implements coupled semantic-terminal durability. Exact source `cf463838`, tree
-`992e587`, passes complete clean qualification and immutable Tailscale nomination at
-`/tmp/geosolve-m84-f010-uat.7R5eXQoz`; retained PID `650971` serves those bytes at
-`http://100.94.63.83:8080/`. M84-F011 withdraws that nomination while its ninth fully constrained
-PC water-manifold dogfood sample and isolated PNG export undergo replacement qualification. F007
-source `cc2f05e` and combined source `ff2e142` are also withdrawn, and human UAT U1-U16 remains
-open.
+`992e587`, passed complete clean qualification and immutable Tailscale nomination at
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`, but M84-F011 withdraws that nomination. Exact F011 source
+`e28721a`, tree `0152097`, and immutable snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh` are now
+clean-qualified and byte/browser-verified; retained PID `1485656` serves those exact bytes at
+`http://100.94.63.83:8080/`. F007 source `cc2f05e` and combined source `ff2e142` are also
+withdrawn, and human UAT U1-U16 remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -989,9 +992,9 @@ Durable milestone and cleanup records:
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
 - `docs/M84_IMPLEMENTATION.md` (implemented F001-F011 ledger, historical eight-demo amendment,
-  withdrawn F010 authority and PC water-manifold/PNG replacement qualification record)
-- `docs/M84_UAT.md` (withdrawn immutable F010 rollback authority and refreshed pending U1-U16
-  scorecard, including the manifold and PNG-export dogfood rows)
+  withdrawn F010 authority and clean-qualified PC water-manifold/PNG nomination record)
+- `docs/M84_UAT.md` (current immutable F011 nomination and refreshed pending U1-U16 scorecard,
+  including the manifold and PNG-export dogfood rows)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

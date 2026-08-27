@@ -4696,9 +4696,11 @@ catalog amendment and M84-F008/F009 corrections were clean-qualified and frozen 
 that nomination after a Compass Rose center release durably selected another valid solution.
 Coupled semantic-terminal durability is implemented, clean-qualified and frozen without rebuild at
 source `cf463838`, tree `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. M84-F011
-withdraws that nomination while the ninth PC-water-manifold dogfood project and presentation-only
-PNG export undergo replacement qualification. Refreshed UAT U1-U16 remains required. M84 is active
-and unaccepted, and accepted M83 remains Pages authority.
+withdraws that nomination. Exact F011 source `e28721a`, tree `0152097`, snapshot
+`/tmp/geosolve-m84-f011-uat.ps736NLh` passes replacement clean qualification, immutable freeze,
+exact temporary/retained byte verification and focused frozen manifold/PNG/authority 1/1 on both
+endpoints. Refreshed UAT U1-U16 remains required. M84 is active and unaccepted, and accepted M83
+remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -5191,11 +5193,19 @@ bytes and MIME. Focused Compass 1/1 and the carried 14/14 browser matrix pass on
 spec and config have SHA-256 `4b97f570d5122a353b4ee104b26ea46427ca1c3b79aa5a8d35fee7875302dab0`
 and `c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
 
-`geosolve-m84-uat.service`, PID `650971`, serves only this immutable snapshot from its snapshot
-working directory at `http://100.94.63.83:8080/`. Temporary F010 PIDs `238809`/`621532` are
-retired. M84-F011 withdraws this nomination while keeping it online as rollback authority until
-the replacement is byte/browser-verified. Pages remains accepted M83 authority and no M84 public
-publication is claimed; refreshed U1-U16 remain pending.
+Historical F010 PID `650971` and temporary F010 PIDs `238809`/`621532` are retired. M84-F011
+withdraws this nomination; its snapshot remains rollback evidence.
+
+Current F011 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+`015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate. Its immutable
+no-rebuild snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh`, aggregate
+`056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, passes byte-identical
+temporary/retained HTTP verification at ledger SHA-256
+`9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`. Focused frozen
+manifold/PNG/authority checks pass 1/1 on both endpoints and preserve lifecycle, history length,
+project title and viewport markup authority. Retained `geosolve-m84-uat.service`, PID `1485656`,
+serves only this immutable snapshot at `http://100.94.63.83:8080/`. Pages remains accepted M83
+authority and no M84 public publication is claimed; refreshed U1-U16 remain pending.
 
 ## Frozen near-singular fixtures
 
