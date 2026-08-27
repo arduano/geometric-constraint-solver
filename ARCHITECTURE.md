@@ -72,9 +72,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   correction and repairs M84-F009's multi-output shorthand routing. The clean-qualified F003/F004,
   direct-authoring `41e65a4` and combined F005/F006
   `ff2e142` candidates are historical because they predate the current scope or were withdrawn by a
-  finding. F007 source `cc2f05e`, tree `6b8fc41`, remains retained UAT authority while the
-  eight-demo/F008/F009 replacement is implemented and development-qualified but not yet clean-
-  nominated. Refreshed U1-U14 remain pending, and Pages stays on accepted M83.
+  finding. Exact eight-demo/F008/F009 source `c74651c`, tree `a904584`, passes clean qualification,
+  no-rebuild freeze and exact temporary/retained Tailscale verification. Snapshot
+  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` is retained UAT authority; F007 source `cc2f05e` is now
+  historical. Refreshed U1-U14 remain pending, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -954,8 +955,8 @@ Clippy/WASM checks pass. Exact replacement source
 `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, then passes the complete clean gate. Its exact
 no-rebuild snapshot `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
 `8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`, passes identical temporary
-and retained HTTP ledgers and refreshed 14/14 browser cases on each endpoint. PID `62376` serves
-that immutable authority at `http://100.94.63.83:8080/`; U1-U14 remain pending.
+and retained HTTP ledgers and refreshed 14/14 browser cases on each endpoint. PID `62376` served
+that immutable authority at `http://100.94.63.83:8080/` and is now retired; U1-U14 remain pending.
 
 The creative-catalog amendment adds Adaptive Lantern Garland, Suspension Bridge, Compass Rose and
 Neon Manifold. All eight projects cold-materialize through ordinary accepted native authority with
@@ -970,8 +971,11 @@ root structure. Exact alias/nesting/mapping regressions and exhaustive all-eight
 semantic output's declared reference kind and expanded target kind, including Mounting Plate
 `plate.profile` as Profile rather than the
 `ne` Point. These are optional-layer API, routing, sample and presentation changes only; no native
-geometry, equation, constraint, priority, tolerance or branch inference changes. F007 remains the retained served
-authority until this replacement passes clean qualification and exact temporary verification.
+geometry, equation, constraint, priority, tolerance or branch inference changes. Exact source
+`c74651c`, tree `a904584`, passes clean qualification; its immutable no-rebuild snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` passes byte-identical temporary/retained HTTP verification
+and the 14/14 browser matrix on both endpoints. Retained PID `3965271` serves only that snapshot;
+the F007 listener is retired.
 
 ### `geosolve-sketch-features`
 
@@ -1933,8 +1937,9 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
   nominations and direct artifact-free authored source `41e65a4` are withdrawn historical
   evidence. M84-F005's collaborative overlay/semantic drag/deletion authority, M84-F006 audit
-  hardening and M84-F007 terminal-lens classification are clean-qualified at exact source
-  `cc2f05e`, tree `6b8fc41`. The eight-demo/M84-F008/F009 replacement is implemented and
-  development-qualified but not yet nominated; F007 remains retained UAT authority. Combined source `ff2e142`
-  is withdrawn; refreshed human UAT U1-U14 remains pending. Accepted M83 remains Pages authority
-  and no M84 publication is claimed.
+  hardening and M84-F007 terminal-lens classification are historical clean-qualified evidence at
+  source `cc2f05e`, tree `6b8fc41`. The eight-demo/M84-F008/F009 replacement is clean-qualified,
+  frozen and retained at exact source `c74651c`, tree `a904584`, snapshot
+  `/tmp/geosolve-m84-f009-uat.q8cKIN3v`. Combined source `ff2e142` is withdrawn; refreshed human
+  UAT U1-U14 remains pending. Accepted M83 remains Pages authority and no M84 publication is
+  claimed.

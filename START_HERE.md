@@ -390,7 +390,7 @@ source and Apply route first cancels captured canvas authority; the generic-save
 preserves an unexpected live route without restoring underneath it. No-motion release/cancel is
 history-neutral. This does not add a fifth bundled-ledger demo. Exact direct-authoring source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, combined F005/F006 source `ff2e142` and their frozen
-candidates are withdrawn historical evidence. Current exact product source
+candidates are withdrawn historical evidence. Historical F007 product source
 `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
 `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the complete clean release gate. Its exact
 no-rebuild snapshot `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
@@ -398,9 +398,9 @@ no-rebuild snapshot `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
 temporary and retained eight-path verification plus refreshed baseline 4/4, direct-authored 3/3,
 F003 1/1, F004 2/2 and F005-F007 4/4 browser suites on both endpoints. Complete evidence is at
 `/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Historical PID `4081080` and temporary PID
-`34895` are retired; PID `62376` serves only the immutable snapshot at
-`http://100.94.63.83:8080/`. A creative-catalog amendment adds Adaptive Lantern Garland,
-Suspension Bridge, Compass Rose and Neon Manifold. All eight projects cold-materialize with finite
+`34895` are retired; PID `62376` served only the immutable snapshot at
+`http://100.94.63.83:8080/` and is now retired. A creative-catalog amendment adds Adaptive Lantern
+Garland, Suspension Bridge, Compass Rose and Neon Manifold. All eight projects cold-materialize with finite
 accepted geometry; representative producer drags keep keyed generated consumers attached and
 current. M84-F008 fits newly installed projects to accepted composed scene authority and increases
 Rounded Polyline's sample radius to `mm(4)` so its four Fillets remain visible beyond point
@@ -414,9 +414,12 @@ kind and expanded target kind. This changes no native
 geometry, solver equation, constraint, priority, tolerance or branch rule. The separate eight-row
 M84 ledger is reviewed at SHA-256
 `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`; the milestone-neutral
-271-row golden remains unchanged. That replacement is implemented and development-qualified but
-not yet clean-nominated, so the F007 service remains retained authority until exact temporary
-verification passes. U1-U14 remain pending. Pages remains on accepted M83 and no M84 public
+271-row golden remains unchanged. Exact replacement source `c74651c`, tree `a904584`, passes the
+complete clean gate. Its no-rebuild snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, aggregate
+`23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, passes byte-identical
+temporary/retained HTTP verification and the 14/14 browser matrix on both endpoints. Retained PID
+`3965271` serves only those immutable bytes at `http://100.94.63.83:8080/`; the temporary and F007
+listeners are retired. U1-U14 remain pending. Pages remains on accepted M83 and no M84 public
 publication is claimed.
 
 ## Read first
@@ -455,8 +458,8 @@ publication is claimed.
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005-F009 ledger, retained F007 nomination, pending clean replacement, withdrawn
-    historical nominations and pending human scorecard.
+    implemented F005-F009 ledger, current frozen F009 nomination, withdrawn historical
+    nominations and pending human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -832,10 +835,10 @@ M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and po
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
 The clean-qualified F003/F004 and direct-authoring candidates remain withdrawn historical evidence.
-The eight-demo creative-catalog amendment, M84-F008 presentation correction and M84-F009 optional-
-layer output-routing correction are implemented and development-qualified. F007 source `cc2f05e`,
-tree `6b8fc41`, remains retained UAT authority until clean replacement nomination; combined source
-`ff2e142` is withdrawn and human UAT remains open.
+The eight-demo creative-catalog amendment and M84-F008/F009 corrections are implemented,
+clean-qualified and frozen. Exact source `c74651c`, tree `a904584`, and immutable snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are retained Tailscale authority; F007 source `cc2f05e` and
+combined source `ff2e142` are withdrawn and human UAT remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -954,9 +957,9 @@ Durable milestone and cleanup records:
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
 - `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F009 ledger, eight-demo amendment,
-  retained F007 authority and withdrawn historical nominations)
-- `docs/M84_UAT.md` (development-qualified eight-demo/F008/F009 replacement and refreshed pending
-  U1-U14 scorecard; retained F007 candidate live on Tailscale)
+  current frozen F009 authority and withdrawn historical nominations)
+- `docs/M84_UAT.md` (clean-qualified eight-demo/F008/F009 replacement and refreshed pending U1-U14
+  scorecard; retained F009 candidate live on Tailscale)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

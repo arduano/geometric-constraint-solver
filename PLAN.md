@@ -5793,14 +5793,15 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the eight-demo creative-catalog amendment, M84-F008 presentation
-correction and M84-F009 optional-layer output-routing correction are implemented and development-
-qualified, while clean replacement nomination and refreshed UAT remain pending**. Ordinary GUI
+Status: **active and unaccepted; the eight-demo/M84-F008/F009 replacement is clean-qualified,
+frozen and exact-verified as the retained Tailscale candidate, while refreshed UAT remains
+pending**. Ordinary GUI
 dependencies project as lexical
-managed TypeScript while low-level transport remains truthfully labelled Intent IR. F007 source
-`cc2f05e`, tree `6b8fc41`, remains the retained UAT authority until replacement qualification.
-The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier
-nominations are withdrawn historical evidence; accepted M83 remains public Pages authority.
+managed TypeScript while low-level transport remains truthfully labelled Intent IR. Exact product
+source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current
+mechanical authority. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined
+F005/F006 source `ff2e142` and all earlier nominations are withdrawn historical evidence; accepted
+M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5944,9 +5945,9 @@ nominations are withdrawn historical evidence; accepted M83 remains public Pages
   output of all eight demos for both declared reference kind and expanded target kind. Mounting
   Plate `plate.profile` must resolve to Profile rather than the `ne` Point. Change no native
   geometry, equation, constraint, priority, tolerance or branch rule.
-- [ ] Commit and clean-qualify the eight-demo/F008/F009 replacement, freeze its no-rebuild output,
-  exact-verify temporary bytes/browser behavior, then and only then replace retained F007 UAT
-  service authority and reconcile exact nomination evidence.
+- [x] Commit and clean-qualify the eight-demo/F008/F009 replacement, freeze its no-rebuild output,
+  exact-verify temporary bytes/browser behavior, then and only then replace the then-retained F007
+  UAT service authority and reconcile exact nomination evidence.
 - [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages,
   retire the service and close M84.
 
@@ -6006,9 +6007,29 @@ eight-path ledgers are byte-identical at SHA-256
 zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/` equals
 `index.html`. Baseline 4/4, direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser
 suites pass on both endpoints. Only after temporary qualification passed were withdrawn PID
-`4081080` and temporary PID `34895` retired. `geosolve-m84-uat.service`, PID `62376`, serves only
-the exact frozen snapshot at `http://100.94.63.83:8080/`. U1-U14, explicit approval, Pages
-publication, service retirement and milestone closure remain pending.
+`4081080` and temporary PID `34895` retired. `geosolve-m84-uat.service`, PID `62376`, served only
+the exact frozen snapshot at `http://100.94.63.83:8080/`. The F009 replacement below supersedes
+it and PID `62376` is retired.
+
+M84-F009 replacement qualification/nomination record (2026-08-27): exact product source
+`c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+`a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. Its 6,218-line,
+421,590-byte log has SHA-256
+`c9b743c8f95d6df7706b04e2d820ac67426f1b11ec447d2bffdc08cd1fe0f6f1`. The unchanged 271-row
+golden and expanded eight-demo M84 ledger have SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+Without rebuilding, its exact seven-file output is frozen at
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, with complete evidence at
+`/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`. Temporary `:18089` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
+direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
+Temporary PID `3943194` and superseded F007 PID `62376` are retired. Retained PID `3965271`
+serves only this immutable snapshot at `http://100.94.63.83:8080/`. U1-U14, explicit approval,
+Pages publication, service retirement and milestone closure remain pending.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree

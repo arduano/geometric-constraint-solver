@@ -2,11 +2,10 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. The eight-demo creative-catalog amendment, M84-F008 presentation
-correction and M84-F009 optional-layer output-routing correction are implemented and development-
-qualified; clean replacement nomination and refreshed UAT remain pending. F007 source `cc2f05e`,
-tree `6b8fc41`, remains the retained UAT authority until
-that replacement passes the clean gate and exact temporary verification. The direct-authoring
+Status: accepted for M84. The eight-demo creative-catalog amendment and M84-F008/F009 corrections
+are implemented, clean-qualified, frozen and exact-verified at source `c74651c`, tree `a904584`,
+snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`; refreshed UAT remains pending. F007 source
+`cc2f05e` is withdrawn historical evidence. The direct-authoring
 `41e65a4` snapshot, combined F005/F006 source `ff2e142`, initial `79078ec`, F003 `b9e67bad` and F004
 `c2cf160` snapshots are withdrawn historical evidence. No M84 candidate is accepted; GitHub Pages
 remains on accepted M83.
@@ -334,14 +333,19 @@ geometry, solver equations, constraints, priority, tolerance and branch behavior
 - Exact source `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
   `d31b805549a29433e157074bc181517bdb50fb67`, and its immutable snapshot are historical
   direct-authoring evidence only. Combined F005/F006 source `ff2e142` and its frozen candidate are
-  also withdrawn by F007. Exact replacement source
+  also withdrawn by F007. Historical F007 source
   `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
   `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the clean gate and is frozen without rebuild
   at `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
   `8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`. Exact temporary and
   retained Tailscale verification plus the 14-case browser matrix pass on both endpoints; PID
-  `62376` serves that snapshot at `http://100.94.63.83:8080/`. Refreshed UAT and public publication
-  remain pending.
+  `62376` is retired. Current exact source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+  `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. Its immutable
+  no-rebuild snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, aggregate
+  `23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, passes byte-identical
+  temporary/retained HTTP verification and the 14-case browser matrix on both endpoints. PID
+  `3965271` serves only this snapshot at `http://100.94.63.83:8080/`. Refreshed UAT and public
+  publication remain pending.
 
 ## Rejected alternatives
 

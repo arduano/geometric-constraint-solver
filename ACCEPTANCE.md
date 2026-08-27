@@ -3386,14 +3386,13 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. The eight-demo creative-catalog amendment, M84-F008 presentation
-correction and M84-F009 optional-layer output-routing correction are implemented and development-
-qualified; clean replacement nomination, refreshed
-M84-U1 through M84-U14 and explicit approval remain pending. F007 source `cc2f05e`, tree
-`6b8fc41`, remains retained UAT authority until replacement qualification. The direct-authoring
-`41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn
-historical evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance
-contract. Accepted M83 remains public product authority.
+Status: active and unaccepted. The eight-demo/M84-F008/F009 replacement is clean-qualified, frozen
+and exact-verified as the retained Tailscale candidate; refreshed M84-U1 through M84-U14 and
+explicit approval remain pending. Exact product source `c74651c`, tree `a904584`, and snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current mechanical authority. F007 source `cc2f05e`, the
+direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier nominations
+remain withdrawn historical evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section
+own the acceptance contract. Accepted M83 remains public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3557,17 +3556,19 @@ and cold-materialized through the ordinary accepted-scene authority.
   regressions and an exhaustive all-eight audit check both the declared reference kind and expanded
   target kind of every semantic output. This changes no native geometry, solver equation,
   constraint, priority, tolerance or branch rule.
-- The replacement must pass formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests,
-  actual WASM, TypeScript, golden require-clean, Trunk and the complete clean release gate.
+- Exact replacement source `c74651c` passes formatting, warnings-denied Clippy/Rustdoc, locked
+  all-feature tests, actual WASM, TypeScript, golden require-clean, Trunk and the complete clean
+  release gate.
 - Focused post-F006 qualification passes `geosolve-sketch-code`, native composition 11/11,
   semantic overlay 8/8, demo-web 264/264 with its existing test stack, the unchanged 271/271
   golden, TypeScript package checks and package closure. The earlier provisional F007
   release-WASM/browser matrix passed 14/14. Post-audit F007 evidence passes demo-web 270/270,
   sketch-code suites, focused terminal-lifecycle/mutation-order/generic-save regressions and
-  warnings-denied Clippy/WASM. Exact committed source `cc2f05e` subsequently passes the complete
-  clean gate, immutable no-rebuild freeze, byte-identical temporary/retained HTTP verification and
-  the refreshed 14/14 browser matrix on both endpoints. This nominates bytes but does not
-  substitute for refreshed human UAT.
+  warnings-denied Clippy/WASM. Historical source `cc2f05e` passed its complete clean gate and
+  immutable freeze. Current source `c74651c` additionally passes the eight-demo/F008/F009 clean
+  gate, immutable no-rebuild freeze, byte-identical temporary/retained HTTP verification and the
+  refreshed 14/14 browser matrix on both endpoints. This nominates bytes but does not substitute
+  for refreshed human UAT.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3650,7 +3651,7 @@ The PID `4081080` service record and evidence at
 nomination because it predates the collaborative overlay/semantic-authority scope. Combined
 F005/F006 source `ff2e142` and its frozen candidate are themselves withdrawn by F007.
 
-Current F007 mechanical authority is exact product source
+Historical F007 mechanical authority is exact product source
 `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
 `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`. Its complete clean gate log has 6,194 lines,
 419,126 bytes and SHA-256
@@ -3662,9 +3663,29 @@ directory/file modes `0555`/`0444` and ordered-manifest aggregate
 are byte-identical at SHA-256
 `efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
-Historical PID `4081080` and temporary PID `34895` are retired. PID `62376` serves only those
-frozen bytes at `http://100.94.63.83:8080/`. Refreshed M84-U1 through M84-U14 remain open, so Pages
-remains accepted M83 authority and no M84 public publication is claimed.
+Historical PID `4081080` and temporary PID `34895` are retired. PID `62376` served only those
+frozen bytes at `http://100.94.63.83:8080/`; the F009 replacement below supersedes them and PID
+`62376` is retired.
+
+Current F009 mechanical authority is exact product source
+`c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+`a904584410ca9a8cd3112d17ad70c0e84c29e8d9`. Its complete clean gate log has 6,218 lines,
+421,590 bytes and SHA-256
+`c9b743c8f95d6df7706b04e2d820ac67426f1b11ec447d2bffdc08cd1fe0f6f1`. The 271-row golden and
+expanded eight-demo M84 ledger have SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+The exact no-rebuild snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` has seven regular non-symlink
+files at directory/file modes `0555`/`0444` and ordered-manifest aggregate
+`23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`. Complete evidence is
+under `/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`. Temporary and retained eight-path HTTP
+ledgers are byte-identical at SHA-256
+`add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
+direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
+Temporary PID `3943194` and superseded F007 PID `62376` are retired. PID `3965271` serves only the
+F009 frozen bytes at `http://100.94.63.83:8080/`. Refreshed M84-U1 through M84-U14 remain open, so
+Pages remains accepted M83 authority and no M84 public publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

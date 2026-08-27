@@ -2,14 +2,13 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the eight-demo creative-catalog amendment, M84-F008 presentation
-correction and M84-F009 optional-layer output-routing correction are implemented and development-
-qualified, while clean replacement
-nomination and refreshed UAT remain pending**. F007 source `cc2f05e`, tree `6b8fc41`, and its
-immutable snapshot remain the retained UAT authority until the replacement passes the clean gate
-and exact temporary verification. The direct-authoring snapshot `41e65a4`, combined F005/F006
-source `ff2e142` and all earlier M84 nominations are withdrawn historical evidence. No UAT row is
-accepted, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; the eight-demo/M84-F008/F009 replacement is clean-qualified,
+frozen and exact-verified as the retained Tailscale candidate, while refreshed UAT remains
+pending**. Exact product source `c74651c`, tree `a904584`, and immutable snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current mechanical authority. F007 source `cc2f05e`, the
+direct-authoring snapshot `41e65a4`, combined F005/F006 source `ff2e142` and all earlier M84
+nominations are withdrawn historical evidence. No UAT row is accepted, and accepted M83 remains
+GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -282,10 +281,9 @@ diagonal whose endpoints are lexical `frame.corners.*` references.
   golden require-clean, Trunk and the complete clean release gate.
 - Freeze one no-rebuild M84 candidate, verify it locally and through retained Tailscale UAT, and
   publish to Pages only after explicit supervising-user approval and exact hosted-byte proof.
-- Post-audit F007 lifecycle regressions pass with demo-web 270/270. The exact committed source then
-  passes the complete clean gate, no-rebuild freeze, identical temporary/retained eight-path HTTP
-  ledgers and refreshed 14/14 browser matrix on both endpoints. Refreshed human UAT remains
-  pending.
+- Exact replacement source `c74651c` passes the complete clean gate, no-rebuild freeze, identical
+  temporary/retained eight-path HTTP ledgers and refreshed 14/14 browser matrix on both endpoints.
+  Refreshed human UAT remains pending.
 
 Withdrawn nomination record (2026-08-25): exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -330,7 +328,7 @@ The former PID `4081080` record is historical evidence only. This adds no solver
 execution, custom artifact or fifth bundled golden row. The later combined F005/F006 source
 `ff2e142` and its frozen candidate are withdrawn by M84-F007.
 
-Current F007 nomination (2026-08-27): exact product source
+Historical F007 nomination (2026-08-27): exact product source
 `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
 `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the complete clean gate. The 6,194-line,
 419,126-byte log `/tmp/geosolve-m84-f007-release-gate.fn6ZHE.log` has SHA-256
@@ -345,8 +343,28 @@ Without rebuilding, the exact seven-file output is frozen at
 eight-path ledgers are byte-identical at SHA-256
 `efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; all 14 browser cases pass
 on both endpoints. Historical PID `4081080` and temporary PID `34895` are retired. PID `62376`
-serves only that immutable snapshot at `http://100.94.63.83:8080/`. Refreshed M84-U1 through
-M84-U14, explicit approval, Pages publication, service retirement and closure remain open.
+served only that immutable snapshot at `http://100.94.63.83:8080/`. The F009 replacement below
+supersedes it as retained UAT authority; PID `62376` is retired.
+
+Current F009 replacement nomination (2026-08-27): exact product source
+`c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+`a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean release gate. Its
+6,218-line, 421,590-byte log has SHA-256
+`c9b743c8f95d6df7706b04e2d820ac67426f1b11ec447d2bffdc08cd1fe0f6f1`. The unchanged 271-row
+golden and expanded eight-demo M84 ledger have SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+Without rebuilding, the exact seven-file output is frozen at
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, with complete evidence at
+`/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`. Temporary `:18089` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; all 14 browser cases pass
+on both endpoints. Temporary PID `3943194` and superseded F007 PID `62376` are retired.
+`geosolve-m84-uat.service`, PID `3965271`, serves only this immutable snapshot at
+`http://100.94.63.83:8080/`. Refreshed M84-U1 through M84-U14, explicit approval, Pages
+publication, service retirement and closure remain open.
 
 ## Bounds and non-goals
 

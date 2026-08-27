@@ -2,14 +2,12 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **the eight-demo creative-catalog amendment, M84-F008 presentation correction and M84-F009
-optional-layer output-routing correction are implemented and development-qualified but not
-accepted; clean replacement nomination and refreshed UAT U1-U14 are pending**. No row is accepted.
-F007 source `cc2f05e`, tree `6b8fc41`, and
-its immutable snapshot remain the retained UAT authority until the replacement passes the clean
-gate and exact temporary verification. The direct-authoring `41e65a4` snapshot, combined F005/F006
-source `ff2e142` and the initial/F003/F004 snapshots are withdrawn historical evidence. Pages
-remains on accepted M83.
+Status: **the eight-demo/M84-F008/F009 replacement is clean-qualified, frozen and exact-verified as
+the retained Tailscale candidate but not accepted; refreshed UAT U1-U14 is pending**. No row is
+accepted. Exact product source `c74651c`, tree `a904584`, and immutable snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current mechanical authority. F007 source `cc2f05e`, the
+direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and the initial/F003/F004
+snapshots are withdrawn historical evidence. Pages remains on accepted M83.
 
 ## Withdrawn candidate evidence
 
@@ -226,7 +224,7 @@ matrix passed 14/14. Post-audit web library 270/270,
 sketch-code suites and focused Clippy/WASM checks pass. This is historical focused evidence; the
 clean replacement nomination is recorded below and no UAT row is claimed by automation.
 
-## Current F007 replacement nomination
+## Historical F007 replacement nomination
 
 Exact product source `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
 `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the complete clean gate from 00:52:15 through
@@ -267,13 +265,37 @@ terminal and bit-conflict adversarial internals remain Rust/WASM-owned because n
 gesture exists for them.
 
 Only after temporary byte/browser verification passed was withdrawn PID `4081080` retired.
-Temporary PID `34895` is retired. `geosolve-m84-uat.service`, PID `62376`, serves only the exact
-snapshot at `http://100.94.63.83:8080/`. This evidence nominates bytes; it does not accept U1-U14.
+Temporary PID `34895` is retired. `geosolve-m84-uat.service`, PID `62376`, served only the exact
+snapshot at `http://100.94.63.83:8080/`. The F009 replacement below supersedes it; PID `62376` is
+retired. This historical evidence accepts no UAT row.
+
+## Current F009 replacement nomination
+
+Exact product source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+`a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. The 6,218-line,
+421,590-byte log has SHA-256
+`c9b743c8f95d6df7706b04e2d820ac67426f1b11ec447d2bffdc08cd1fe0f6f1`. The unchanged 271-row
+golden and eight-demo ledger retain SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+The exact no-rebuild seven-file output is frozen at
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`. Complete evidence is at
+`/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`. Temporary `:18089` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
+direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
+Every sample card opens fitted finite geometry at `1440x900` and `1024x720`.
+
+Temporary PID `3943194` and superseded F007 PID `62376` are retired.
+`geosolve-m84-uat.service`, PID `3965271`, serves only the exact immutable F009 snapshot at
+`http://100.94.63.83:8080/`. This evidence nominates bytes; it does not accept U1-U14.
 
 | Release state | Status |
 | --- | --- |
-| M84-F007 clean qualification, immutable freeze and exact Tailscale replacement | complete |
-| Eight-demo/M84-F008/F009 clean replacement qualification and immutable freeze | pending |
+| M84-F007 clean qualification and historical freeze | superseded |
+| Eight-demo/M84-F008/F009 clean replacement qualification and immutable freeze | complete |
 | Supervising-user refreshed M84-U1 through M84-U14 | pending |
 | GitHub Pages publication, service retirement and M84 closure | pending |
 
@@ -323,6 +345,6 @@ withdraws the candidate and opens an owning-layer regression.
 - Supervising-user UAT: refreshed M84-U1 through M84-U14 pending; every previous candidate,
   including direct-authoring `41e65a4`, remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Replacement Tailscale nomination: exact `cc2f05e` candidate is live at
-  `http://100.94.63.83:8080/` under PID `62376`; immutable snapshot
-  `/tmp/geosolve-m84-f007-uat.KgW8fpLf` remains current until approval or another finding.
+- Replacement Tailscale nomination: exact `c74651c` candidate is live at
+  `http://100.94.63.83:8080/` under PID `3965271`; immutable snapshot
+  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remains current until approval or another finding.

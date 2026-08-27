@@ -4690,9 +4690,9 @@ nominations remain withdrawn historical evidence. M84-F005 also withdraws the di
 `41e65a4` nomination. Collaborative overlay and semantic interaction authority plus F006 audit
 hardening are implemented and focused-qualified. F007 then withdraws combined source `ff2e142` and
 its frozen candidate after reproducing false terminal conflicts on multi-frame producer drags.
-F007 source `cc2f05e`, tree `6b8fc41`, remains retained UAT authority. The eight-demo creative-
-catalog amendment, M84-F008 presentation correction and M84-F009 optional-layer output-routing
-correction are implemented and development-qualified, but not yet clean-nominated. UAT U1-U14
+F007 source `cc2f05e`, tree `6b8fc41`, is historical mechanical evidence. The eight-demo creative-
+catalog amendment and M84-F008/F009 corrections are clean-qualified, frozen and exact-verified at
+source `c74651c`, tree `a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`. UAT U1-U14
 remains required. Accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
@@ -5065,7 +5065,7 @@ browser suites on each endpoint. The PID `4081080` service record and complete e
 `/tmp/geosolve-m84-authored-freeze-evidence.ngNf7jxZ` are historical only. M84-F005 withdraws this
 nomination because it predates collaborative draft overlay and semantic drag/deletion authority.
 F007 also withdraws the later frozen `ff2e142` candidate. M84 remains active and unaccepted with
-refreshed U1-U14 pending. Current F007 product source
+refreshed U1-U14 pending. Historical F007 product source
 `cc2f05ed97500f4bae4c0da6839362dbbc8c2e53`, tree
 `6b8fc417ac9464843ac14fb350a8e5f794b1cdb1`, passes the clean gate; its no-rebuild snapshot
 `/tmp/geosolve-m84-f007-uat.KgW8fpLf` has aggregate
@@ -5073,10 +5073,27 @@ refreshed U1-U14 pending. Current F007 product source
 eight-path ledgers match at
 `efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
-PID `62376` serves the exact frozen bytes at `http://100.94.63.83:8080/`; complete evidence is at
-`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Pages remains accepted M83 authority and no M84
-public publication is claimed. The eight-demo/F008/F009 replacement remains pending clean
-qualification and does not replace this served authority yet.
+PID `62376` served the exact frozen bytes at `http://100.94.63.83:8080/`; complete evidence is at
+`/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. The F009 replacement supersedes it and PID
+`62376` is retired.
+
+Current F009 source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+`a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. Its 6,218-line,
+421,590-byte log has SHA-256
+`c9b743c8f95d6df7706b04e2d820ac67426f1b11ec447d2bffdc08cd1fe0f6f1`; the unchanged 271-row
+golden and expanded eight-demo M84 ledger have SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`. The exact no-rebuild
+snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, directory/files `0555`/`0444`, has ordered-
+manifest aggregate `23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`; complete evidence is
+at `/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`.
+
+Temporary and retained eight-path ledgers are byte-identical at SHA-256
+`add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
+direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
+Temporary PID `3943194` and F007 PID `62376` are retired. Retained PID `3965271` serves only the
+F009 frozen bytes at `http://100.94.63.83:8080/`. Pages remains accepted M83 authority and no M84
+public publication is claimed; U1-U14 remain pending.
 
 ## Frozen near-singular fixtures
 
