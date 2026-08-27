@@ -3543,7 +3543,7 @@ and cold-materialized through the ordinary accepted-scene authority.
   GUI→code→GUI braced frame; reusable AI-authored mounting plate; adaptive Lantern Garland;
   typed Suspension Bridge; generated Compass Rose; and artifact-free Neon Manifold.
 - A canonical fresh workspace's Code surface exposes exactly one direct **Start from code** action
-  and those eight genuine project cards. Freshness requires exact current/accepted semantic parity
+  and all nine genuine project cards. Freshness requires exact current/accepted semantic parity
   plus independently validated empty native/computed authority. Starting creates a distinct
   artifact-free `Authored` project, not a promoted ordinary scene.
 - The complete editable starter uses lexical `frame.corners.*` references. Valid Apply and complete
@@ -3553,7 +3553,7 @@ and cold-materialized through the ordinary accepted-scene authority.
 - The milestone-neutral 271-row golden remains byte-identical. A separate reviewed code-project
   ledger plus native/WASM/RPC/TypeScript parity, type-failure, reconciliation, tombstone, history,
   failure, bound, persistence and performance owners pass.
-- The reviewed eight-row M84 ledger has SHA-256
+- The historical F009/F010 eight-row M84 ledger has SHA-256
   `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`; the milestone-neutral
   golden remains `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
   Every demo cold-materializes with finite points/scalars, current computed features and
@@ -3741,7 +3741,7 @@ and diff hygiene pass. The mutable development listener keeps the original Compa
 stable through +50/+250/+500/+1000 ms and through six successive drags, with every spoke attached
 and no browser errors.
 
-Current F010 mechanical authority is exact product source
+Historical F010 rollback authority is exact product source
 `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`. Its complete clean gate ran from
 15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exited 0 and ended with a

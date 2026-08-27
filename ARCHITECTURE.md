@@ -892,12 +892,12 @@ materialization and independent native validation before replacing the live proj
 ordinary scenes.
 
 On an exact canonical fresh workspace only, the demo workbench presents one **Start from code**
-action beside eight genuine sample cards. Freshness requires the canonical document foundation,
+action beside nine genuine sample cards. Freshness requires the canonical document foundation,
 matching current/accepted semantic identities and independently validated empty native/computed
 authority. Starting installs a complete editable rectangle-plus-diagonal project whose dependency
 is lexical `frame.corners.*`; valid Apply, retained-invalid intent, whole-source replacement,
-Undo/Redo, reload and repro remain one atomic code-session authority. The starter is not a ninth
-bundled project and does not change the separate eight-demo ledger.
+Undo/Redo, reload and repro remain one atomic code-session authority. The starter is not a bundled
+project and does not add a row to the separate nine-demo ledger.
 
 M84-F005 adds a bounded persistent interaction overlay between managed code seeds and intent
 instance leaves. Its addresses carry project identity, readable semantic owner/output/field and

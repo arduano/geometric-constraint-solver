@@ -354,7 +354,7 @@ verification plus browser 4/4, F003 1/1 and F004 2/2 on temporary and retained T
 Those F004 bytes remain historical evidence: the post-F004 direct-authoring amendment withdrew
 them from current nomination because they predated the amended scope. On an exact independently
 validated fresh workspace, Code now exposes one
-**Start from code** action and the same eight genuine sample cards. The action installs a distinct
+**Start from code** action and all nine genuine sample cards. The action installs a distinct
 persisted artifact-free `Authored` project through public
 `CodeProject::managed_only(ProjectKey, source)`; its complete editable rectangle-plus-diagonal
 source uses lexical `frame.corners.*` references and gains geometry authority only through the

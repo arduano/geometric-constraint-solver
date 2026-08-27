@@ -4748,7 +4748,8 @@ accepted preview once after cold parity; existing M83 frame/terminal ceilings re
 
 ### M84-G6 — genuine demos and offline persistence
 
-Qualify all eight code-project sessions rather than equivalent flat imports:
+The original F009/F010 catalog qualified these eight code-project sessions rather than equivalent
+flat imports:
 
 1. adaptive rounded Polyline with keyed corner Fillets;
 2. typed aligned panel with mapped named Fillets and compile-fail cases;
@@ -4771,7 +4772,7 @@ project boundary reject atomically while preserving the previous accepted scene.
 ### M84-G6 extension — direct code-authored starter
 
 On an exact canonical fresh workspace, open Code and require exactly one **Start from code**
-action plus all eight genuine project cards. Fresh classification requires only the canonical
+action plus all nine genuine project cards. Fresh classification requires only the canonical
 document foundation, exact current/accepted semantic-identity parity and independently validated
 empty native/computed authority. Starting must install a distinct artifact-free `Authored` project
 through public `CodeProject::managed_only(ProjectKey, source)`, not promote or fabricate an
@@ -4784,8 +4785,9 @@ must cold-materialize finite geometry through ordinary native validation and ali
 the rectangle's exact native point IDs. A valid managed edit, retained-invalid collapsed
 rectangle, exact Undo/Redo, save/reload and repro must preserve authored origin, source and prior
 accepted canvas atomically. Sample identity and managed-source focus change only after successful
-installation. This extension adds neither an M84-F005 finding nor a ninth bundled project/ledger
-row; the separate eight-demo ledger remains distinct from the milestone-neutral golden.
+installation. At its original direct-authoring checkpoint this extension added neither an
+M84-F005 finding nor another bundled project/ledger row; F011 later adds the ninth project while
+the separate code-project ledger remains distinct from the milestone-neutral golden.
 
 ### M84-F005 — collaborative overlay and semantic interaction authority
 
@@ -4853,8 +4855,8 @@ Submit duplicate same-tier point seeds in both orders. Bit-identical IEEE values
 deterministic provenance; unequal values, including `+0.0` versus `-0.0`, reject atomically. F006
 changes no residual equation, solver priority, constraint, tolerance or branch state. Its focused
 owners live beside F005's semantic-overlay, native-composition, persistence and workbench suites;
-the historical F007/F009 clean qualifications and current F010 replacement nomination are recorded
-in the release gate section below.
+the historical F007/F009 clean qualifications and now-withdrawn F010 replacement nomination are
+recorded in the release gate section below.
 
 ### M84-F007 — pointer-down lens owns semantic terminal publication
 
@@ -5170,7 +5172,7 @@ direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on
 Temporary PID `3943194` and F007 PID `62376` are retired. M84-F010 withdraws these bytes;
 historical retained PID `3965271` is retired and the immutable F009 snapshot remains preserved.
 
-Current F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+Historical F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
 `992e587609e61768a9af76af193df2fad8325829`, passes the clean release gate from
 15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exit 0. The 6,209-line,
 420,425-byte log `/tmp/geosolve-m84-f010-gate.9NvAi3z5/release-gate.log` has SHA-256
