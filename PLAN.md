@@ -5793,13 +5793,14 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F005 collaborative semantic interaction, M84-F006 adversarial
-authority hardening and M84-F007 exact terminal-lens classification are implemented,
-clean-qualified and immutably nominated, while refreshed UAT remains pending**. Ordinary GUI
-dependencies project as lexical managed TypeScript while low-level transport remains truthfully
-labelled Intent IR. The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`
-and all earlier nominations are withdrawn historical evidence. Exact product source `cc2f05e`,
-tree `6b8fc41`, is the current candidate; accepted M83 remains public Pages authority.
+Status: **active and unaccepted; the eight-demo creative-catalog amendment, M84-F008 presentation
+correction and M84-F009 optional-layer output-routing correction are implemented and development-
+qualified, while clean replacement nomination and refreshed UAT remain pending**. Ordinary GUI
+dependencies project as lexical
+managed TypeScript while low-level transport remains truthfully labelled Intent IR. F007 source
+`cc2f05e`, tree `6b8fc41`, remains the retained UAT authority until replacement qualification.
+The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier
+nominations are withdrawn historical evidence; accepted M83 remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5822,6 +5823,9 @@ tree `6b8fc41`, is the current candidate; accepted M83 remains public Pages auth
   for reused retired keys and reject removal with outside dependents.
 - [x] Implement explicit keyed Polyline vertex/segment/corner continuation so
   Fillet-every-corner adapts to insertion/removal/reorder without ordinal retargeting.
+- [x] Publish direct Polyline `vertices` and `segments` as typed keyed root collections beside the
+  existing exact member paths and `filletableCorners`; map keys to native Point/CurveSpan ports and
+  permit recorded artifact `each`/mapping consumption without raw IDs or ordinal identity.
 - [x] Add one `SketchCodeSession` history around project files/artifacts/program/expansion/
   overrides plus a delegated nested editor checkpoint; one GUI/code/organization/terminal action
   creates one Undo entry.
@@ -5831,8 +5835,9 @@ tree `6b8fc41`, is the current candidate; accepted M83 remains public Pages auth
 - [x] Add bounded code-project save/reload/repro and the focused Design-panel file/artifact/
   ownership/generated-member/lens/override UI. Custom helpers remain read-only; no browser IDE or
   `eval` is introduced.
-- [x] Ship the four genuine code-project demonstrations: adaptive rounded Polyline, typed panel
-  with keyed Fillets, GUI→code→GUI braced frame and reusable AI-authored mounting plate.
+- [x] Ship eight genuine code-project demonstrations: adaptive rounded Polyline, typed panel with
+  keyed Fillets, GUI→code→GUI braced frame, reusable AI-authored mounting plate, adaptive Lantern
+  Garland, typed Suspension Bridge, generated Compass Rose and artifact-free Neon Manifold.
 - [x] Preserve the milestone-neutral 271-row golden byte-for-byte; add a separate reviewed code-
   project ledger and complete parser/rewrite, artifact, type-failure, keyed identity, history,
   retained-failure, bound, parity, persistence and performance qualification.
@@ -5869,7 +5874,7 @@ tree `6b8fc41`, is the current candidate; accepted M83 remains public Pages auth
   candidate.
 - [x] Add direct code-only creation through public
   `CodeProject::managed_only(ProjectKey, source)`. On an independently validated canonical fresh
-  workspace, expose one **Start from code** action plus the four existing genuine sample cards;
+  workspace, expose one **Start from code** action plus the eight genuine sample cards;
   create a distinct persisted `authored` project with artifact-free editable `sketch.ts`, lexical
   `frame.corners.*` dependencies and no manufactured GUI/promotion step.
 - [x] Qualify the direct starter through full code/workbench/WASM/TypeScript collateral, an actual
@@ -5923,6 +5928,25 @@ tree `6b8fc41`, is the current candidate; accepted M83 remains public Pages auth
 - [x] Commit the reconciled F007 implementation/documentation, pass the clean full release gate,
   refresh browser/UAT collateral, freeze the exact no-rebuild output and exact-verify one
   replacement on temporary and retained Tailscale listeners.
+- [x] Expand the separate reviewed M84 ledger from four to eight rows; cold-materialize all eight
+  projects with finite accepted geometry and independently validated Hard residual at most
+  `1e-9`; prove representative Lantern/Bridge/Compass/Neon semantic drags keep their generated
+  consumers attached and current. Preserve the milestone-neutral 271-row golden byte-for-byte.
+- [x] Resolve M84-F008 by fitting every newly installed code project to accepted composed scene
+  authority and increasing the Rounded Polyline sample radius from `mm(0.4)` to `mm(4)`. Native
+  adapter tests require off-origin geometry within viewport margins and four finite Fillet paths
+  visibly clear of point markers; no solver mathematics changes.
+- [x] Resolve M84-F009 after independent optional-layer review: a multi-output template must not
+  publish whichever output sorts first as its direct shorthand. Record the exact selected
+  `result_output` in the data-only artifact independently of renamed/nested result paths; publish
+  only that selection, preserve nested root structure and fail closed when no collection result is
+  recorded. Cover renamed/nested and mapped multi-output results, then exhaustively check every
+  output of all eight demos for both declared reference kind and expanded target kind. Mounting
+  Plate `plate.profile` must resolve to Profile rather than the `ne` Point. Change no native
+  geometry, equation, constraint, priority, tolerance or branch rule.
+- [ ] Commit and clean-qualify the eight-demo/F008/F009 replacement, freeze its no-rebuild output,
+  exact-verify temporary bytes/browser behavior, then and only then replace retained F007 UAT
+  service authority and reconcile exact nomination evidence.
 - [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages,
   retire the service and close M84.
 
@@ -6111,7 +6135,7 @@ recorded above.
 Gate: managed source and pinned data artifacts are the only code-layer authority; keyed expansion
 is deterministic and equation-free; ordinary intent/materialization/solver validation remains the
 sole accepted geometry path; plain deployments do not link the code layer; one history spans
-source and nested editor state; pointer frames never parse or expand; all four demonstrations,
+source and nested editor state; pointer frames never parse or expand; all eight demonstrations,
 type failures, bounds, golden preservation, clean qualification and explicit UAT pass before
 publication.
 

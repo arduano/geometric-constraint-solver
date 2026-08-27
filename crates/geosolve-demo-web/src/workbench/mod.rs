@@ -25,7 +25,7 @@ mod samples;
 #[cfg(any(target_arch = "wasm32", test))]
 mod scene;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 const WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -381,6 +381,19 @@ impl WorkbenchDocumentAuthority {
                 .map_err(|error| error.to_string()),
         }
     }
+}
+
+/// Fits one newly installed accepted authority through the same composed scene
+/// that the canvas will render. Empty or unavailable authority deliberately
+/// falls back to the canonical Origin camera.
+#[cfg(any(target_arch = "wasm32", test))]
+fn fit_projectional_camera_to_authority(
+    camera: &mut scene::CanvasCamera,
+    authority: &WorkbenchDocumentAuthority,
+) -> bool {
+    let presentation =
+        authority.scene_presentation(camera.viewport(), WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS);
+    camera.fit_scene_or_reset(presentation.scene.as_ref())
 }
 
 /// Builds the canonical empty projectional workspace used by startup and New.
@@ -4198,7 +4211,7 @@ pub(crate) mod wasm {
         wb.pointer_moves.borrow_mut().invalidate();
         wb.captured_pointer = None;
         wb.outline_drag = None;
-        wb.camera.reset();
+        let _ = super::fit_projectional_camera_to_authority(&mut wb.camera, &wb.authority);
         Ok(())
     }
 
@@ -23584,6 +23597,128 @@ export default sketch(($) => {
                 redo_point,
             );
             assert_code_editor_valid(&fixture.editor);
+        });
+    }
+
+    #[test]
+    fn newly_installed_off_origin_code_scene_is_fitted_to_the_canvas() {
+        run_projectional_test_with_large_stack("m84-code-project-camera-fit", || {
+            let (_, editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("mounting-plate")
+                    .expect("off-origin bundled code project");
+            let authority = super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("projectional code authority");
+            let mut camera = super::scene::CanvasCamera::default();
+            let initial = authority.scene_presentation(
+                camera.viewport(),
+                super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            );
+            let initial_scene = initial.scene.expect("accepted off-origin code scene");
+            let (_, initial_maximum) = initial_scene.model_bounds().expect("finite scene bounds");
+            let initial_maximum = camera.viewport().model_to_screen(initial_maximum);
+            assert!(
+                initial_maximum.x > 1_000.0 || initial_maximum.y > 700.0,
+                "the fixture must begin outside the canonical Origin camera"
+            );
+
+            assert!(super::fit_projectional_camera_to_authority(
+                &mut camera,
+                &authority,
+            ));
+            assert_ne!(camera, super::scene::CanvasCamera::default());
+            let fitted = authority.scene_presentation(
+                camera.viewport(),
+                super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            );
+            let fitted_scene = fitted.scene.expect("fitted accepted code scene");
+            let (minimum, maximum) = fitted_scene.model_bounds().expect("finite fitted bounds");
+            let viewport = camera.viewport();
+            for corner in [
+                [minimum[0], minimum[1]],
+                [minimum[0], maximum[1]],
+                [maximum[0], minimum[1]],
+                [maximum[0], maximum[1]],
+            ] {
+                let point = viewport.model_to_screen(corner);
+                assert!((63.0..=937.0).contains(&point.x), "fitted x={}", point.x);
+                assert!((63.0..=637.0).contains(&point.y), "fitted y={}", point.y);
+            }
+        });
+    }
+
+    #[test]
+    fn rounded_polyline_code_scene_paints_four_visible_radius_four_fillets() {
+        run_projectional_test_with_large_stack("m84-rounded-polyline-visible-fillets", || {
+            let (_, editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("rounded-polyline")
+                    .expect("rounded Polyline code project");
+            let authority = super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("projectional code authority");
+            let mut camera = super::scene::CanvasCamera::default();
+            assert!(super::fit_projectional_camera_to_authority(
+                &mut camera,
+                &authority,
+            ));
+            let presentation = authority.scene_presentation(
+                camera.viewport(),
+                super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            );
+            let scene = presentation.scene.expect("accepted rounded Polyline scene");
+            assert_eq!(scene.computed_curves.len(), 4);
+            let accepted_materialization = authority
+                .projectional_ref()
+                .expect("projectional code editor")
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted code materialization");
+            let accepted = accepted_materialization
+                .session
+                .accepted_state_for_current_input()
+                .expect("accepted native sketch state");
+            let markup = super::scene::svg_markup(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                None,
+                None,
+                camera.viewport(),
+            );
+            assert_eq!(
+                markup
+                    .matches("class=\"wb-curve wb-computed-fillet\"")
+                    .count(),
+                4,
+            );
+
+            for fillet in &scene.computed_curves {
+                assert_eq!(fillet.radius.to_bits(), 4.0_f64.to_bits());
+                assert!(fillet.screen_polyline.len() >= 3);
+                assert!(fillet.screen_polyline.iter().all(|point| {
+                    point.x.is_finite()
+                        && point.y.is_finite()
+                        && (0.0..=1_000.0).contains(&point.x)
+                        && (0.0..=700.0).contains(&point.y)
+                }));
+
+                let visible_clearance = fillet
+                    .screen_polyline
+                    .iter()
+                    .map(|sample| {
+                        scene
+                            .points
+                            .iter()
+                            .map(|point| {
+                                (sample.x - point.screen_position.x)
+                                    .hypot(sample.y - point.screen_position.y)
+                            })
+                            .fold(f64::INFINITY, f64::min)
+                    })
+                    .fold(0.0_f64, f64::max);
+                assert!(
+                    visible_clearance > 10.0,
+                    "the radius-4 arc must extend clearly beyond every 5 px point marker; clearance={visible_clearance}"
+                );
+            }
         });
     }
 }

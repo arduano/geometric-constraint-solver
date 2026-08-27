@@ -24,11 +24,17 @@ trap cleanup EXIT
 
 contents="$(cargo package --locked --allow-dirty --list -p "$package_name")"
 for required in \
+  assets/artifacts/adaptive-lanterns.artifact.json \
+  assets/artifacts/bridge-cables.artifact.json \
+  assets/artifacts/compass-core.artifact.json \
   assets/artifacts/cross-brace.artifact.json \
   assets/artifacts/fillet-record.artifact.json \
   assets/artifacts/mounting-plate.artifact.json \
   assets/artifacts/round-every-corner.artifact.json \
+  assets/patches/adaptive-lanterns.patch.ts \
   assets/patches/braced-frame.patch.ts \
+  assets/patches/bridge-cables.patch.ts \
+  assets/patches/compass-core.patch.ts \
   assets/patches/mounting-plate.patch.ts \
   assets/patches/rounded-polyline.patch.ts \
   assets/patches/typed-panel.patch.ts

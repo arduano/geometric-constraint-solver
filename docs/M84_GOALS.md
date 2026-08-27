@@ -2,12 +2,14 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; M84-F005, M84-F006 and M84-F007 are implemented, clean-qualified
-and immutably nominated, while refreshed UAT remains pending**. Exact product source `cc2f05e`,
-tree `6b8fc41`, is the current candidate. The direct-authoring snapshot `41e65a4`, combined
-F005/F006 source `ff2e142` and all earlier M84 nominations are withdrawn historical evidence. No
-UAT row is accepted, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling
-design.
+Status: **active and unaccepted; the eight-demo creative-catalog amendment, M84-F008 presentation
+correction and M84-F009 optional-layer output-routing correction are implemented and development-
+qualified, while clean replacement
+nomination and refreshed UAT remain pending**. F007 source `cc2f05e`, tree `6b8fc41`, and its
+immutable snapshot remain the retained UAT authority until the replacement passes the clean gate
+and exact temporary verification. The direct-authoring snapshot `41e65a4`, combined F005/F006
+source `ff2e142` and all earlier M84 nominations are withdrawn historical evidence. No UAT row is
+accepted, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -89,6 +91,11 @@ layer optional.
   reject schema drift, raw IDs, cross-project references and port-kind mismatch.
 - Give rectangles named corner/edge/profile outputs, preserve exact keys for named Fillet records,
   and carry Polyline corner keys through adaptive Fillet collections.
+- Publish direct Polyline `vertices` and `segments` as typed keyed root collections as well as the
+  existing exact member paths and `filletableCorners`. Each vertex key maps to its native Point
+  port; each directed span's starting key maps to its native CurveSpan port. Recorded artifact
+  `each`/mapping rules may consume those roots without coordinate copies, raw IDs or ordinal
+  identity.
 
 ### M84-G5 — keyed identity and one history
 
@@ -147,7 +154,7 @@ layer optional.
 - Preserve ordinary M83 selection, Inspector, canvas constraints/dimensions and accepted-scene
   authority for generated outputs.
 - On only an exact canonical fresh workspace whose current and accepted semantic identities match
-  an independently validated empty native scene, show one **Start from code** action and all four
+  an independently validated empty native scene, show one **Start from code** action and all eight
   centrally owned genuine sample cards. Nonempty or retained-failed scenes keep their existing
   Preview/Unavailable behavior.
 - Starting from code creates a distinct persisted `Authored` origin, an artifact-free editable
@@ -194,13 +201,38 @@ layer optional.
 - Keep ordinary GUI-owned points on the delegated M83 editor path. Add no equation, constraint,
   solver priority, tolerance or branch rule.
 
+### M84-F008 — fitted code scenes and visible sample Fillets
+
+- Fit a newly installed code project to its accepted composed scene instead of resetting the
+  camera to the canonical Origin view. Fall back to Origin only when accepted scene authority is
+  empty or unavailable.
+- Use `mm(4)` for the Rounded Polyline sample so all four valid computed Fillets extend visibly
+  beyond the point markers. This is sample/presentation correction only.
+- Require native adapter regressions for an off-origin scene inside the fitted viewport and for
+  exactly four finite, visibly separated radius-4 Fillet paths. Add no equation, constraint,
+  solver priority, tolerance or branch rule.
+
+### M84-F009 — exact multi-output shorthand routing
+
+- Record the exact compiler-selected `result_output` in the data-only template independently of
+  renamed/nested public paths. Publish only that authenticated selection, preserve nested root
+  collections and never let canonical map order or a generic prefix fallback select an output.
+- Require Mounting Plate `plate.profile` to resolve to Profile rather than the alphabetically first
+  `ne` Point, while every full output path remains available.
+- Cover renamed/nested and mapped multi-output selection; a collection member without recorded
+  result provenance must fail closed.
+- Exhaustively check every semantic output across all eight demos: its declared reference kind and
+  expanded target kind must both equal the reviewed catalog kind.
+- Treat this as optional-layer output routing only. Add or change no native geometry, solver
+  equation, constraint, priority, tolerance or branch rule.
+
 ## Required demonstrations
 
-The four bundled demonstrations below remain the reviewed artifact-project catalog. A separate,
+The eight bundled demonstrations below are the reviewed code-project catalog. A separate,
 non-bundled entry path starts an **Untitled code sketch** directly from an editable rectangle plus
 diagonal whose endpoints are lexical `frame.corners.*` references.
 
-1. **Rounded polyline · dynamic corners** — six keyed vertices/radius `0.4` yield five spans/four
+1. **Rounded polyline · dynamic corners** — six keyed vertices/radius `4` yield five spans/four
    Fillets; inserting `crest` yields seven/six/five. Reorder/remove/Undo preserve unaffected
    identities; radius lens, point override/reset, open/closed mode and impossible-radius retained
    failure are visible.
@@ -213,16 +245,34 @@ diagonal whose endpoints are lexical `frame.corners.*` references.
 4. **Mounting plate · reusable AI-authored module** — a custom helper structurally generates a
    rounded profile and `nw/ne/se/sw` holes. Managed inputs remain GUI-editable, the helper stays
    byte-identical and save/repro restores the complete offline project.
+5. **Lantern garland · adaptive decorations** — seven keyed Polyline vertices feed a bulb at every
+   vertex and a Fillet at every interior corner through separate keyed collections and bulb/bend
+   scalar lenses.
+6. **Suspension bridge · typed structural graph** — three constrained deck spans and two towers
+   feed a reusable typed module producing three cable spans and two stays; producer-point drags
+   retain attached consumers.
+7. **Compass rose · generated semantic lattice** — four editable shared-centre native spokes and
+   ordinary Horizontal/Vertical relations feed a generated diamond ring and four marker circles
+   with a marker-radius lens.
+8. **Neon manifold · explicit native bends** — artifact-free managed TypeScript combines four
+   connected axis-constrained native lines with one branch-explicit two-corner direct FilletSet;
+   native endpoint dragging recomputes the feature.
 
 ## Acceptance summary
 
 - Preserve the milestone-neutral 271-row authoring/scene golden byte-for-byte and add a separate
-  reviewed code-project ledger.
+  reviewed eight-row code-project ledger.
 - Qualify lossless parsing/exact-span rewrites, artifact compilation/locks, TypeScript type failures,
   keyed reconciliation/tombstones/high-water/Undo, one-transaction expansion, retained failures,
   bounds and save/repro.
 - Prove cold/warm and native/WASM/RPC/TypeScript parity, finite geometry, explicit branches and
   normalized Hard residual `<= 1e-9` through existing validation.
+- Materialize all eight demonstrations through accepted native authority and prove representative
+  Lantern vertex, Bridge tower, Compass spoke and Neon shared-endpoint drags keep their generated
+  consumers attached and current. Require the eight-row M84 ledger SHA-256
+  `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18` while the milestone-neutral
+  271-row golden remains
+  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
 - Compile the checked-in managed-v1 two-line/Horizontal/Vertical/one-Fillet fixture through
   TypeScript, parse that same source in Rust and cold-materialize it through the unchanged
   accepted-scene path.

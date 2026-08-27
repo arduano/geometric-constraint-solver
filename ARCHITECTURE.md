@@ -67,11 +67,14 @@ construction/NURBS UAT and certified all-family visual profiles.
   adds a bounded collaborative semantic overlay and provenance-owned drag/deletion route; M84-F006
   adversarially hardens its persistence, owner pruning, generated detachment/rebinding and exact
   duplicate/conflict authority; M84-F007 makes one pointer-down semantic lens the sole terminal
-  seed authority. The clean-qualified F003/F004, direct-authoring `41e65a4` and combined F005/F006
+  seed authority. The creative-catalog amendment expands the genuine catalog to eight projects,
+  publishes typed keyed Polyline vertex/segment roots, adds M84-F008's camera/sample presentation
+  correction and repairs M84-F009's multi-output shorthand routing. The clean-qualified F003/F004,
+  direct-authoring `41e65a4` and combined F005/F006
   `ff2e142` candidates are historical because they predate the current scope or were withdrawn by a
-  finding. Exact replacement source `cc2f05e`, tree `6b8fc41`, passes the clean gate, immutable
-  freeze and temporary/retained Tailscale qualification. Refreshed U1-U14 remain pending, and Pages
-  stays on accepted M83.
+  finding. F007 source `cc2f05e`, tree `6b8fc41`, remains retained UAT authority while the
+  eight-demo/F008/F009 replacement is implemented and development-qualified but not yet clean-
+  nominated. Refreshed U1-U14 remain pending, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -820,6 +823,11 @@ Generated members reconcile by invocation/template/member-key/output paths. Matc
 logical/native identities; insertion advances high-water; removal tombstones; reused retired keys
 receive a new generation. Typed clients expose project-branded semantic refs, fixed named outputs,
 mapped records and keyed/derived collections rather than raw wire IDs.
+Direct Polyline lowering publishes `vertices` and `segments` as typed keyed root collections beside
+its exact member paths and `filletableCorners`: every vertex key maps to its native Point port and
+each directed span's starting key maps to its native CurveSpan port. Recorded artifact
+`each`/mapping rules may consume those roots without copied coordinates, raw IDs or ordinal
+identity.
 
 `SketchCodeSession` owns one history over project files, artifact locks, program, expansion,
 current/accepted semantic overlays and one delegated nested editor checkpoint. Pointer frames
@@ -873,12 +881,12 @@ materialization and independent native validation before replacing the live proj
 ordinary scenes.
 
 On an exact canonical fresh workspace only, the demo workbench presents one **Start from code**
-action beside four genuine sample cards. Freshness requires the canonical document foundation,
+action beside eight genuine sample cards. Freshness requires the canonical document foundation,
 matching current/accepted semantic identities and independently validated empty native/computed
 authority. Starting installs a complete editable rectangle-plus-diagonal project whose dependency
 is lexical `frame.corners.*`; valid Apply, retained-invalid intent, whole-source replacement,
-Undo/Redo, reload and repro remain one atomic code-session authority. The starter is not a fifth
-bundled project and does not change the separate four-demo ledger.
+Undo/Redo, reload and repro remain one atomic code-session authority. The starter is not a ninth
+bundled project and does not change the separate eight-demo ledger.
 
 M84-F005 adds a bounded persistent interaction overlay between managed code seeds and intent
 instance leaves. Its addresses carry project identity, readable semantic owner/output/field and
@@ -948,6 +956,22 @@ no-rebuild snapshot `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
 `8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`, passes identical temporary
 and retained HTTP ledgers and refreshed 14/14 browser cases on each endpoint. PID `62376` serves
 that immutable authority at `http://100.94.63.83:8080/`; U1-U14 remain pending.
+
+The creative-catalog amendment adds Adaptive Lantern Garland, Suspension Bridge, Compass Rose and
+Neon Manifold. All eight projects cold-materialize through ordinary accepted native authority with
+finite geometry and validated Hard residuals; representative producer drags keep their keyed
+generated consumers attached/current. M84-F008 fits a newly installed project to its accepted
+composed scene and falls back to the canonical Origin camera only for empty/unavailable authority.
+Rounded Polyline uses `mm(4)` so its four already-valid computed Fillets are visibly clear of point
+markers. M84-F009 prevents canonical map order from choosing an unrelated output as a multi-output
+patch result. The caller-owned compiler records the exact selected `result_output` independently of
+its renamed/nested public path; Rust publishes only that selection and preserves nested collection
+root structure. Exact alias/nesting/mapping regressions and exhaustive all-eight coverage check each
+semantic output's declared reference kind and expanded target kind, including Mounting Plate
+`plate.profile` as Profile rather than the
+`ne` Point. These are optional-layer API, routing, sample and presentation changes only; no native
+geometry, equation, constraint, priority, tolerance or branch inference changes. F007 remains the retained served
+authority until this replacement passes clean qualification and exact temporary verification.
 
 ### `geosolve-sketch-features`
 
@@ -1905,11 +1929,12 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   immutably nominated, accepted by the supervising user and exact-verified on GitHub Pages through
   approval descendant `2006c86` and run `32817232564`.
 - M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
-  typed semantic references, keyed reconciliation, one code/editor history and four required
+  typed semantic references, keyed reconciliation, one code/editor history and eight required
   demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
   nominations and direct artifact-free authored source `41e65a4` are withdrawn historical
   evidence. M84-F005's collaborative overlay/semantic drag/deletion authority, M84-F006 audit
-  hardening and M84-F007 terminal-lens classification are implemented, clean-qualified and
-  immutably nominated at exact source `cc2f05e`, tree `6b8fc41`. Combined source `ff2e142` is
-  withdrawn; refreshed human UAT U1-U14 remains pending. Accepted M83 remains Pages authority and
-  no M84 publication is claimed.
+  hardening and M84-F007 terminal-lens classification are clean-qualified at exact source
+  `cc2f05e`, tree `6b8fc41`. The eight-demo/M84-F008/F009 replacement is implemented and
+  development-qualified but not yet nominated; F007 remains retained UAT authority. Combined source `ff2e142`
+  is withdrawn; refreshed human UAT U1-U14 remains pending. Accepted M83 remains Pages authority
+  and no M84 publication is claimed.

@@ -829,6 +829,8 @@ export type ArtifactTemplateBinding =
 
 export interface ArtifactTemplateNode {
   readonly path: readonly string[];
+  /** Exact template output exposed at `path`; null means the path is only a namespace. */
+  readonly result_output: string | null;
   readonly declaration_family: string;
   readonly inputs: Readonly<Record<string, ArtifactTemplateBinding>>;
   readonly fields: Readonly<Record<string, ManagedArtifactValue>>;
@@ -874,6 +876,7 @@ export interface PatchArtifactPlan {
 interface PendingTemplate {
   readonly id: number;
   path?: string[];
+  resultOutput?: string;
   readonly familyPath: string;
   readonly declarationFamily: string;
   readonly inputs: Record<string, RuntimeBinding>;
@@ -1009,13 +1012,15 @@ class StructuralRecorder implements PatchRecorder<PatchBuildProject> {
       throw new TypeError("each key selector must return the symbolic member key");
     }
     const before = this.collectionContext;
+    let result: Result;
     this.collectionContext = templateIds;
     try {
-      build(callbackMember as never);
+      result = build(callbackMember as never);
     } finally {
       this.collectionContext = before;
     }
     if (templateIds.length === 0) throw new TypeError(`${rule} callback must record a template`);
+    visitCollectionMemberResult(result!, new Set(templateIds), this.templates);
     this.rules.push({
       id,
       rule,
@@ -1155,6 +1160,7 @@ export function recordPatchArtifact<Schemas extends InputSchemas, Result>(
   }
   const templates = recorder.templates.map((template) => ({
     path: template.path ?? [template.familyPath],
+    result_output: template.resultOutput ?? null,
     declaration_family: template.declarationFamily,
     inputs: sortedObject(Object.fromEntries(
       sortedEntries(template.inputs).map(([key, binding]) => [key, artifactBinding(binding, templatePaths)]),
@@ -1204,8 +1210,17 @@ function visitResult(
     if (outputs[outputName] === undefined) outputs[outputName] = runtime.expectedKind;
     if (runtime.templateId !== undefined) {
       const template = templates[runtime.templateId];
-      if (template !== undefined && template.path === undefined) {
-        template.path = path.length === 0 ? [template.familyPath] : [...path];
+      if (template !== undefined) {
+        const resultPath = path.length === 0 ? [template.familyPath] : [...path];
+        if (template.path !== undefined && !sameStringPath(template.path, resultPath)) {
+          throw new TypeError("one template result cannot be exported at multiple semantic paths");
+        }
+        template.path = resultPath;
+        const binding = runtime.binding;
+        if (binding?.source !== "template_output" || binding.templateId !== runtime.templateId) {
+          throw new TypeError("template result is missing exact output provenance");
+        }
+        recordTemplateResultOutput(runtime, template);
       }
     }
     return;
@@ -1234,6 +1249,52 @@ function visitResult(
     }
     visitResult(child, [...path, key], outputs, templates, rules);
   }
+}
+
+function sameStringPath(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((segment, index) => segment === right[index]);
+}
+
+function visitCollectionMemberResult(
+  value: unknown,
+  templateIds: ReadonlySet<number>,
+  templates: PendingTemplate[],
+): void {
+  if (isReference(value)) {
+    const runtime = referenceData(value);
+    if (runtime.templateId === undefined || !templateIds.has(runtime.templateId)) {
+      throw new TypeError("collection callback must return its recorded template result");
+    }
+    const template = templates[runtime.templateId];
+    if (template === undefined) throw new TypeError("collection result references an unknown template");
+    recordTemplateResultOutput(runtime, template);
+    return;
+  }
+  if (collectionData(value) !== undefined || typeof value !== "object" || value === null
+      || Array.isArray(value)) {
+    throw new TypeError("collection callback results must be typed template references or records");
+  }
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    visitCollectionMemberResult(child, templateIds, templates);
+  }
+}
+
+function recordTemplateResultOutput(runtime: ReferenceRuntime, template: PendingTemplate): void {
+  const binding = runtime.binding;
+  if (binding?.source !== "template_output" || binding.templateId !== runtime.templateId) {
+    throw new TypeError("template result is missing exact output provenance");
+  }
+  const outputNames = Object.keys(template.outputs);
+  const resultOutput = binding.output === "feature"
+    ? (outputNames.length === 1 ? outputNames[0] : undefined)
+    : binding.output;
+  if (resultOutput === undefined || template.outputs[resultOutput] === undefined) {
+    throw new TypeError("a multi-output template result must select one explicit named output");
+  }
+  if (template.resultOutput !== undefined && template.resultOutput !== resultOutput) {
+    throw new TypeError("one template cannot export multiple selected outputs");
+  }
+  template.resultOutput = resultOutput;
 }
 
 function artifactBinding(

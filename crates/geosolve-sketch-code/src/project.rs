@@ -313,7 +313,7 @@ export default sketch(($) => {
     }
 
     #[test]
-    fn four_projects_round_trip_with_custom_source_byte_identity() {
+    fn all_bundled_projects_round_trip_with_custom_source_byte_identity() {
         for demo in bundled_code_project_demos() {
             let project = demo.project();
             project.validate().unwrap();

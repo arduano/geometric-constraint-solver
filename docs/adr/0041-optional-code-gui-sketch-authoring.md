@@ -2,12 +2,14 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. M84-F005's collaborative semantic-interaction amendment, M84-F006's
-adversarial authority hardening and M84-F007's exact terminal-lens classification are implemented,
-clean-qualified and immutably nominated at exact source `cc2f05e`, tree `6b8fc41`; refreshed UAT
-remains pending. The direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142`,
-initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are withdrawn historical evidence.
-No M84 candidate is accepted; GitHub Pages remains on accepted M83.
+Status: accepted for M84. The eight-demo creative-catalog amendment, M84-F008 presentation
+correction and M84-F009 optional-layer output-routing correction are implemented and development-
+qualified; clean replacement nomination and refreshed UAT remain pending. F007 source `cc2f05e`,
+tree `6b8fc41`, remains the retained UAT authority until
+that replacement passes the clean gate and exact temporary verification. The direct-authoring
+`41e65a4` snapshot, combined F005/F006 source `ff2e142`, initial `79078ec`, F003 `b9e67bad` and F004
+`c2cf160` snapshots are withdrawn historical evidence. No M84 candidate is accepted; GitHub Pages
+remains on accepted M83.
 
 ## Context
 
@@ -101,12 +103,12 @@ validation path remains mandatory before a session can publish accepted geometry
 The demo workbench exposes this seam only for an exact canonical fresh workspace: current and
 accepted semantic identities must match, the accepted native/computed scene must independently
 validate as empty and only the canonical document foundation may exist. Code then shows one
-**Start from code** action and four genuine bundled-project cards. Starting creates a distinct
+**Start from code** action and eight genuine bundled-project cards. Starting creates a distinct
 persisted `CodeProjectOrigin::Authored` project with complete editable artifact-free source, not a
 promotion or fabricated GUI history. Its rectangle-plus-diagonal starter uses lexical
 `frame.corners.*` dependencies. Valid Apply, retained-invalid intent, whole-source replacement,
 Undo/Redo, persistence, reload and repro retain the existing atomic code-session authority. This
-entry is not a fifth bundled demonstration and does not alter the four-demo ledger.
+entry is not a ninth bundled demonstration and does not alter the eight-demo ledger.
 
 The M83 `IntentSourceSnapshot` remains a data-only audit/RPC/Inspector projection and is labelled
 **Intent IR** in code-enabled presentation. It is never presented as authoring TypeScript. The
@@ -195,6 +197,11 @@ checked for Rust/TypeScript schema parity. An axis-aligned rectangle exposes
 roles. A Fillet record preserves its input record keys in its mapped output type. A Fillet-every-
 corner patch returns a collection keyed by the owning Polyline corner keys; statically known vertex
 keys infer a literal key union, while externally variable collections use branded key lookup.
+Direct Polyline lowering also publishes `vertices` and `segments` as keyed root collections beside
+the existing exact member paths and `filletableCorners`. `vertices` maps every authored key to its
+native Point port; `segments` maps each directed span's starting key to its native CurveSpan port.
+Those roots may be returned directly or consumed by recorded artifact `each`/mapping rules without
+copying coordinates, exposing raw native IDs or introducing ordinal identity.
 
 ### Keyed expansion and reconciliation
 
@@ -296,6 +303,23 @@ of restoring underneath it. No-motion release/cancel is history-neutral; Apply/U
 stale terminal without reverting newer accepted authority.
 Ordinary GUI-owned points retain the delegated editor path. This resolves terminal authority without
 weakening F006's bit-exact conflict rule or adding solver behavior.
+
+M84-F008 corrects only code-project presentation and sample content. Project installation now fits
+the camera to the accepted composed scene, falling back to the canonical Origin camera only for
+empty or unavailable authority. Rounded Polyline uses radius `mm(4)` so its four already-valid
+computed Fillets remain visibly separated from point markers. Native adapter regressions require
+an off-origin accepted scene to fit inside the viewport and require exactly four finite, visibly
+separated radius-4 Fillet paths. No architectural or numerical solver behavior changes.
+
+M84-F009 makes custom-patch result routing explicit. The caller-owned compiler records an exact
+nullable `result_output` on each data-only template, independently of the selected value's renamed
+or nested public path. Rust publishes only that authenticated selection, preserves nested root
+collections and no longer infers a value from a one-child prefix or canonical `BTreeMap` order.
+Collection callbacks likewise record their selected output and fail closed when absent. This
+preserves exact full output paths and prevents cases such as Mounting Plate `plate.profile`
+resolving to the unrelated `ne` Point. Exact alias/nesting/mapping regressions and every bundled
+output check both declared reference kind and expanded target kind. This changes only optional-layer semantic routing; native
+geometry, solver equations, constraints, priority, tolerance and branch behavior remain unchanged.
 
 ## Consequences
 

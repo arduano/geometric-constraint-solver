@@ -3386,10 +3386,11 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. M84-F005's collaborative draft overlay/semantic interaction,
-M84-F006's adversarial authority hardening and M84-F007's exact terminal-lens classification are
-implemented, clean-qualified and immutably nominated at exact source `cc2f05e`, tree `6b8fc41`.
-Refreshed M84-U1 through M84-U14 and explicit approval remain pending. The direct-authoring
+Status: active and unaccepted. The eight-demo creative-catalog amendment, M84-F008 presentation
+correction and M84-F009 optional-layer output-routing correction are implemented and development-
+qualified; clean replacement nomination, refreshed
+M84-U1 through M84-U14 and explicit approval remain pending. F007 source `cc2f05e`, tree
+`6b8fc41`, remains retained UAT authority until replacement qualification. The direct-authoring
 `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn
 historical evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance
 contract. Accepted M83 remains public product authority.
@@ -3464,6 +3465,10 @@ and cold-materialized through the ordinary accepted-scene authority.
 - TypeScript exposes project-branded semantic references and descriptor-generated fixed, mapped
   record and keyed/derived result types. Raw IDs, cross-project references, kind mismatch and
   schema drift reject. Adaptive corner Fillets retain source vertex keys.
+- Direct Polyline `vertices` and `segments` are exact keyed root collections beside individual
+  paths and `filletableCorners`: vertex keys resolve to native Point ports and directed-span start
+  keys resolve to native CurveSpan ports. Recorded artifact mapping may consume them without
+  coordinate copies, raw IDs or ordinal identity.
 - Dynamic identity is invocation/template/member-key/output based. Reorder preserves identity;
   insertion uses allocator high-water; removal tombstones; retired-key reuse gets a new generation;
   outside dependents prevent silent deletion or retargeting.
@@ -3520,10 +3525,11 @@ and cold-materialized through the ordinary accepted-scene authority.
 - Managed source is at most 4 MiB, each artifact 16 MiB and the complete project 64 MiB. Save,
   reload and repro restore complete offline authority/history atomically; malformed, missing,
   tampered or oversized inputs reject before replacement.
-- All four genuine demonstrations pass: adaptive rounded Polyline; typed panel/keyed Fillets;
-  GUI→code→GUI braced frame; reusable AI-authored mounting plate with byte-invariant custom helper.
+- All eight genuine demonstrations pass: adaptive rounded Polyline; typed panel/keyed Fillets;
+  GUI→code→GUI braced frame; reusable AI-authored mounting plate; adaptive Lantern Garland;
+  typed Suspension Bridge; generated Compass Rose; and artifact-free Neon Manifold.
 - A canonical fresh workspace's Code surface exposes exactly one direct **Start from code** action
-  and those four genuine project cards. Freshness requires exact current/accepted semantic parity
+  and those eight genuine project cards. Freshness requires exact current/accepted semantic parity
   plus independently validated empty native/computed authority. Starting creates a distinct
   artifact-free `Authored` project, not a promoted ordinary scene.
 - The complete editable starter uses lexical `frame.corners.*` references. Valid Apply and complete
@@ -3533,6 +3539,24 @@ and cold-materialized through the ordinary accepted-scene authority.
 - The milestone-neutral 271-row golden remains byte-identical. A separate reviewed code-project
   ledger plus native/WASM/RPC/TypeScript parity, type-failure, reconciliation, tombstone, history,
   failure, bound, persistence and performance owners pass.
+- The reviewed eight-row M84 ledger has SHA-256
+  `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`; the milestone-neutral
+  golden remains `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+  Every demo cold-materializes with finite points/scalars, current computed features and
+  independently validated normalized Hard residual at most `1e-9`. Representative Lantern,
+  Bridge, Compass and Neon producer drags keep generated consumers attached/current.
+- M84-F008 requires code-project installation to fit accepted composed scene authority, with
+  canonical Origin fallback only for empty/unavailable authority. Rounded Polyline uses `mm(4)`;
+  adapter tests require off-origin bounds inside viewport margins and exactly four finite radius-4
+  Fillet paths visibly separated from point markers. This changes no solver mathematics.
+- M84-F009 requires the data-only artifact to carry the exact compiler-selected `result_output`
+  independently of its renamed or nested public path. Rust publishes only that authenticated
+  selection, retains nested collection-root shape and rejects a collection member with no recorded
+  result; canonical map order never chooses an unrelated output. Mounting Plate `plate.profile`
+  resolves to Profile, not the alphabetically first `ne` Point. Exact renamed/nested/mapped
+  regressions and an exhaustive all-eight audit check both the declared reference kind and expanded
+  target kind of every semantic output. This changes no native geometry, solver equation,
+  constraint, priority, tolerance or branch rule.
 - The replacement must pass formatting, warnings-denied Clippy/Rustdoc, locked all-feature tests,
   actual WASM, TypeScript, golden require-clean, Trunk and the complete clean release gate.
 - Focused post-F006 qualification passes `geosolve-sketch-code`, native composition 11/11,

@@ -3811,8 +3811,14 @@ mod tests {
     }
 
     #[test]
-    fn all_four_samples_open_with_nonempty_independently_validated_native_canvases() {
-        for demo in bundled_code_project_demos() {
+    fn all_eight_samples_open_with_nonempty_independently_validated_native_canvases() {
+        let demos = bundled_code_project_demos();
+        assert_eq!(
+            demos.len(),
+            8,
+            "the curated M84 catalog is closed at eight demos"
+        );
+        for demo in demos {
             let (workbench, editor) = open_with_editor(demo.id.key());
             let accepted = editor
                 .coordinator()
@@ -3843,11 +3849,17 @@ mod tests {
     }
 
     #[test]
-    fn menu_owns_one_distinct_code_group_and_four_genuine_project_leaves() {
+    fn menu_owns_one_distinct_code_group_and_eight_genuine_project_leaves() {
         let markup = sample_group_markup(None);
         assert!(markup.contains("Code &amp; reusable patches"));
-        assert_eq!(markup.matches("data-code-sample-id=").count(), 4);
-        for demo in bundled_code_project_demos() {
+        let demos = bundled_code_project_demos();
+        assert_eq!(
+            demos.len(),
+            8,
+            "the curated M84 catalog is closed at eight demos"
+        );
+        assert_eq!(markup.matches("data-code-sample-id=").count(), demos.len());
+        for demo in demos {
             assert_eq!(
                 markup
                     .matches(&format!("data-code-sample-id=\"{}\"", demo.id.key()))
@@ -4624,7 +4636,7 @@ export default sketch(($) => {
         assert_eq!(
             workbench
                 .managed_source()
-                .replace("radius: mm(0.75)", "radius: mm(0.4)"),
+                .replace("radius: mm(0.75)", "radius: mm(4)"),
             before,
         );
         let undone = workbench.step_history(true).unwrap().unwrap();
@@ -4834,7 +4846,7 @@ export default sketch(($) => {
         workbench.set_managed_draft(
             workbench
                 .managed_source()
-                .replace("radius: mm(0.4)", "radius: mm(0.6)"),
+                .replace("radius: mm(4)", "radius: mm(0.6)"),
         );
         let CodeApplyOutcome::Accepted(applied) = workbench.apply_managed_draft().unwrap() else {
             panic!("valid managed Apply unexpectedly retained a failure")
@@ -4994,7 +5006,7 @@ export default sketch(($) => {
             .session
             .design_document()
             .clone();
-        workbench.set_managed_draft(workbench.managed_source().replace("mm(0.4)", "mm(400)"));
+        workbench.set_managed_draft(workbench.managed_source().replace("mm(4)", "mm(400)"));
         let CodeApplyOutcome::RetainedFailure {
             receipt,
             diagnostic,
@@ -5075,7 +5087,7 @@ export default sketch(($) => {
         let (mut workbench, _) = open_with_editor("rounded-polyline");
         let before_source = workbench.managed_source().to_owned();
         let before_expansion = workbench.session.snapshot().expansion.clone();
-        let draft = before_source.replace("mm(0.4)", "mm(0.7)");
+        let draft = before_source.replace("mm(4)", "mm(0.7)");
         workbench.set_managed_draft(draft.clone());
         let CodeApplyOutcome::Accepted(applied) = workbench.apply_managed_draft().unwrap() else {
             panic!("valid radius edit must acquire native authority")
@@ -5370,7 +5382,7 @@ export default sketch(($) => {
         workbench.set_managed_draft(
             workbench
                 .managed_source()
-                .replace("radius: mm(0.4)", "radius: mm(0.55)"),
+                .replace("radius: mm(4)", "radius: mm(0.55)"),
         );
         let CodeApplyOutcome::Accepted(source_edit) = workbench.apply_managed_draft().unwrap()
         else {
@@ -5549,7 +5561,7 @@ export default sketch(($) => {
         workbench.set_managed_draft(
             accepted_source
                 .replacen("      { key: \"shoulder\", position: [24, 12] },\n", "", 1)
-                .replace("radius: mm(0.4)", "radius: mm(400)"),
+                .replace("radius: mm(4)", "radius: mm(400)"),
         );
         let CodeApplyOutcome::RetainedFailure { diagnostic, .. } =
             workbench.apply_managed_draft().unwrap()
@@ -6219,7 +6231,7 @@ export default sketch(($) => {
         workbench.set_managed_draft(
             workbench
                 .managed_source()
-                .replace("radius: mm(0.4)", "radius: mm(0.55)"),
+                .replace("radius: mm(4)", "radius: mm(0.55)"),
         );
         let CodeApplyOutcome::Accepted(applied) = workbench.apply_managed_draft().unwrap() else {
             panic!("valid warm radius edit unexpectedly retained a failure")
@@ -7163,6 +7175,17 @@ export default sketch(($) => {
         }
         let runtime_evaluation_call = ["ev", "al("].concat();
         assert!(!include_str!("code_projects.rs").contains(&runtime_evaluation_call));
+
+        let install = source
+            .split("fn install_projectional_code_project(")
+            .nth(1)
+            .and_then(|source| source.split("fn promote_projectional_code_project(").next())
+            .expect("bounded code-project installation adapter");
+        assert!(install.contains("fit_projectional_camera_to_authority"));
+        assert!(
+            !install.contains("camera.reset()"),
+            "an accepted code scene must be fitted rather than left on the origin camera"
+        );
     }
 
     #[test]

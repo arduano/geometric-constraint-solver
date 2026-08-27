@@ -18,7 +18,7 @@ export default sketch(($) => {
   });
   const rounded = $.use("rounded", roundEveryCorner, {
     corners: path.filletableCorners,
-    radius: mm(0.4),
+    radius: mm(4),
   });
   $.organize("Adaptive profile", [path, rounded]);
   return $.outputs({ path, rounded });

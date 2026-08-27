@@ -155,6 +155,38 @@ fn point_for_field<'a>(
         .unwrap()
 }
 
+fn generated_point_for<'a>(
+    expansion: &'a ExpandedCodeProject,
+    invocation: &str,
+    template: &[&str],
+    field: &str,
+) -> &'a ExpandedWritablePoint {
+    expansion
+        .writable_points
+        .iter()
+        .find(|point| {
+            matches!(
+                &point.edit,
+                CodePointEdit::Point { address }
+                    if matches!(
+                        &address.owner.address,
+                        geosolve_sketch_code::CodeOwnerAddress::GeneratedMember { address: member }
+                            if member.invocation == invocation
+                                && member.template.iter().map(String::as_str).eq(template.iter().copied())
+                    )
+                    && address.output
+                        == SemanticOutputPath(vec![ManagedPathSegment::Field(field.into())])
+            )
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "missing generated point lens {invocation}.{}.{}",
+                template.join("."),
+                field
+            )
+        })
+}
+
 #[test]
 fn direct_rectangle_line_and_reference_drags_use_semantic_seed_ownership() {
     let project = direct_project();
@@ -270,6 +302,226 @@ fn direct_rectangle_line_and_reference_drags_use_semantic_seed_ownership() {
         ),
         "detaching a referenced consumer must allocate a distinct native point"
     );
+}
+
+#[test]
+fn creative_demos_keep_code_producers_and_generated_consumers_ux_editable() {
+    let demos = bundled_code_project_demos();
+
+    let bridge = demos
+        .iter()
+        .find(|demo| demo.id == CodeProjectDemoId::SuspensionBridge)
+        .unwrap()
+        .project();
+    let bridge_generated = reconciled(&bridge);
+    let bridge_expansion = expansion(&bridge, &bridge_generated, 0x84f0_5040);
+    let left_peak = point_for_field(&bridge_expansion, "leftTower", "end");
+    let cable_peak =
+        generated_point_for(&bridge_expansion, "cables", &["mainCable", "left"], "end");
+    let stay_peak =
+        generated_point_for(&bridge_expansion, "cables", &["stays", "falling"], "start");
+    let bridge_overlay = left_peak
+        .stage_drag(&CodeInteractionOverlay::empty(), [-28.0, 44.0])
+        .unwrap();
+    let bridge_materialized = materialize_code_project_cold_with_overlay(
+        &bridge,
+        &bridge_generated,
+        &bridge_overlay,
+        IntentSessionId::from_raw(0x84f0_5041),
+        DocumentId(PersistentId::from_u128(0x84f0_5041)),
+        1.0,
+    )
+    .unwrap();
+    assert_valid(&bridge_materialized);
+    for point in [left_peak, cable_peak, stay_peak] {
+        let current = bridge_materialized
+            .expansion
+            .writable_points
+            .iter()
+            .find(|candidate| candidate.edit == point.edit)
+            .unwrap();
+        assert_eq!(
+            point_position(&bridge_materialized, &current.handle),
+            [-28.0, 44.0]
+        );
+    }
+    let current_peak = bridge_materialized
+        .expansion
+        .writable_points
+        .iter()
+        .find(|point| point.edit == left_peak.edit)
+        .unwrap();
+    let current_cable = bridge_materialized
+        .expansion
+        .writable_points
+        .iter()
+        .find(|point| point.edit == cable_peak.edit)
+        .unwrap();
+    assert_eq!(
+        point_binding(&bridge_materialized, &current_peak.handle),
+        point_binding(&bridge_materialized, &current_cable.handle),
+        "an unselected generated cable must stay attached to its code-owned tower peak"
+    );
+
+    let compass = demos
+        .iter()
+        .find(|demo| demo.id == CodeProjectDemoId::CompassRose)
+        .unwrap()
+        .project();
+    let compass_generated = reconciled(&compass);
+    let compass_expansion = expansion(&compass, &compass_generated, 0x84f0_5042);
+    let north = point_for_field(&compass_expansion, "north", "end");
+    let ring_north =
+        generated_point_for(&compass_expansion, "core", &["ring", "northEast"], "start");
+    let marker_north =
+        generated_point_for(&compass_expansion, "core", &["markers", "north"], "center");
+    let compass_overlay = north
+        .stage_drag(&CodeInteractionOverlay::empty(), [0.0, 40.0])
+        .unwrap();
+    let compass_materialized = materialize_code_project_cold_with_overlay(
+        &compass,
+        &compass_generated,
+        &compass_overlay,
+        IntentSessionId::from_raw(0x84f0_5043),
+        DocumentId(PersistentId::from_u128(0x84f0_5043)),
+        1.0,
+    )
+    .unwrap();
+    assert_valid(&compass_materialized);
+    for point in [north, ring_north, marker_north] {
+        let current = compass_materialized
+            .expansion
+            .writable_points
+            .iter()
+            .find(|candidate| candidate.edit == point.edit)
+            .unwrap();
+        assert_eq!(
+            point_position(&compass_materialized, &current.handle),
+            [0.0, 40.0]
+        );
+    }
+
+    let lanterns = demos
+        .iter()
+        .find(|demo| demo.id == CodeProjectDemoId::AdaptiveLanterns)
+        .unwrap()
+        .project();
+    let lantern_generated = reconciled(&lanterns);
+    let lantern_expansion = expansion(&lanterns, &lantern_generated, 0x84f0_5044);
+    let gold = lantern_expansion
+        .writable_points
+        .iter()
+        .find(|point| {
+            matches!(
+            &point.edit,
+            CodePointEdit::Point { address }
+                if matches!(
+                    &address.owner.address,
+                    geosolve_sketch_code::CodeOwnerAddress::GeneratedMember { address: member }
+                        if member.invocation == "wire"
+                            && member.template == ["polyline", "vertex"]
+                            && member.member_key == ["gold"]
+                )
+            )
+        })
+        .unwrap();
+    let gold_bulb = lantern_expansion
+        .writable_points
+        .iter()
+        .find(|point| {
+            matches!(
+                &point.edit,
+                CodePointEdit::Point { address }
+                    if matches!(
+                        &address.owner.address,
+                        geosolve_sketch_code::CodeOwnerAddress::GeneratedMember { address: member }
+                            if member.invocation == "decorations"
+                                && member.template == ["circle"]
+                                && member.member_key == ["gold"]
+                    )
+                    && address.output
+                        == SemanticOutputPath(vec![ManagedPathSegment::Field("center".into())])
+            )
+        })
+        .unwrap();
+    let lantern_overlay = gold
+        .stage_drag(&CodeInteractionOverlay::empty(), [0.0, 22.0])
+        .unwrap();
+    let lantern_materialized = materialize_code_project_cold_with_overlay(
+        &lanterns,
+        &lantern_generated,
+        &lantern_overlay,
+        IntentSessionId::from_raw(0x84f0_5045),
+        DocumentId(PersistentId::from_u128(0x84f0_5045)),
+        1.0,
+    )
+    .unwrap();
+    assert_valid(&lantern_materialized);
+    for point in [gold, gold_bulb] {
+        let current = lantern_materialized
+            .expansion
+            .writable_points
+            .iter()
+            .find(|candidate| candidate.edit == point.edit)
+            .unwrap();
+        assert_eq!(
+            point_position(&lantern_materialized, &current.handle),
+            [0.0, 22.0]
+        );
+    }
+    assert_eq!(
+        lantern_materialized
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .validation
+            .feature_count,
+        5
+    );
+
+    let neon = demos
+        .iter()
+        .find(|demo| demo.id == CodeProjectDemoId::NeonManifold)
+        .unwrap()
+        .project();
+    let neon_generated = reconciled(&neon);
+    let neon_expansion = expansion(&neon, &neon_generated, 0x84f0_5046);
+    let bridge_end = point_for_field(&neon_expansion, "bridge", "end");
+    let stack_start = point_for_field(&neon_expansion, "stack", "start");
+    let neon_overlay = bridge_end
+        .stage_drag(&CodeInteractionOverlay::empty(), [28.0, 12.0])
+        .unwrap();
+    let neon_materialized = materialize_code_project_cold_with_overlay(
+        &neon,
+        &neon_generated,
+        &neon_overlay,
+        IntentSessionId::from_raw(0x84f0_5047),
+        DocumentId(PersistentId::from_u128(0x84f0_5047)),
+        1.0,
+    )
+    .unwrap();
+    assert_valid(&neon_materialized);
+    for point in [bridge_end, stack_start] {
+        let current = neon_materialized
+            .expansion
+            .writable_points
+            .iter()
+            .find(|candidate| candidate.edit == point.edit)
+            .unwrap();
+        assert_eq!(
+            point_position(&neon_materialized, &current.handle),
+            [28.0, 12.0]
+        );
+    }
+    let neon_validation = &neon_materialized
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .validation;
+    assert_eq!(neon_validation.feature_count, 1);
+    assert_eq!(neon_validation.computed_edge_count, 6);
 }
 
 #[test]

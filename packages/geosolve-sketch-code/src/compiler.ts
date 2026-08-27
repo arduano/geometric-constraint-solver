@@ -130,6 +130,7 @@ export function canonicalArtifactJson(artifact: PatchModuleArtifact): string {
     outputs: artifact.outputs,
     templates: artifact.templates.map((template) => ({
       path: template.path,
+      result_output: template.result_output,
       declaration_family: template.declaration_family,
       inputs: template.inputs,
       fields: Object.fromEntries(

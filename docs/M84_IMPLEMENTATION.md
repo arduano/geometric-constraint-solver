@@ -2,10 +2,12 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **M84-F005 collaborative semantic interaction, M84-F006 adversarial authority hardening and
-M84-F007 exact terminal-lens classification are implemented, clean-qualified and immutably
-nominated; refreshed UAT remains pending**. Exact product source `cc2f05e`, tree `6b8fc41`, is the
-current candidate. Direct-authoring source
+Status: **the eight-demo creative-catalog amendment, M84-F008 presentation correction and M84-F009
+optional-layer output-routing correction are implemented and development-qualified; clean
+replacement nomination and refreshed UAT remain pending**. F007 source `cc2f05e`, tree `6b8fc41`,
+and its immutable snapshot remain the retained
+UAT authority until the replacement passes the clean gate and exact temporary verification.
+Direct-authoring source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, is withdrawn historical evidence with the initial,
 F003 and F004 candidates. Combined F005/F006 source `ff2e142` and its frozen candidate are also
@@ -26,7 +28,7 @@ remains public authority.
 - `crates/geosolve-sketch-code/` is the optional pure-Rust code-project layer. It owns bounded
   managed-v1 parsing, authenticated edits, artifact admission, declaration-family execution,
   typed semantic expansion, keyed reconciliation, overrides, composite history, bootstrap and the
-  four bundled projects.
+  eight bundled projects.
 - `CodeProject::managed_only(ProjectKey, source)` is its smallest code-only host seam. It accepts
   only artifact-free managed source and the SDK import, validates the complete envelope, and
   publishes no native geometry by parsing alone.
@@ -41,7 +43,7 @@ remains public authority.
   coordinator, ownership and scene APIs. Persistence carries either the unchanged plain
   workspace-v8 authority or a bounded authenticated code-project envelope.
 - `scripts/verify-geosolve-sketch-code-package.sh` packages the real normalized Rust crate, checks
-  all eight crate-owned runtime assets, extracts it and performs a locked offline build with local
+  all fourteen crate-owned runtime assets, extracts it and performs a locked offline build with local
   patches for GeoSolve crates that are not yet on crates.io. `scripts/release-gate.sh` runs this
   verifier and both TypeScript packages.
 
@@ -79,6 +81,10 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
 - [x] Generate named rectangle results, mapped Fillet records and Polyline-derived corner
   collections from Rust declaration descriptors. Raw IDs, cross-project references, misspelled
   outputs and point/curve/corner mismatch fail TypeScript compilation.
+- [x] Publish direct Polyline `vertices` and `segments` as exact keyed root collections. Vertex
+  keys map to native Point ports and each directed span's starting key maps to its native CurveSpan
+  port; recorded artifact `each`/mapping rules consume those roots without coordinate copies,
+  native IDs or ordinal identity.
 - [x] Describe direct `computed.filletSet` as an opaque `FilletSetFeature`: its explicit parent
   spans are typed, but it does not falsely expose evaluated child arcs as ordinary native ports.
 - [x] Generate `NativeCurveSpanRef` from the central Rust declaration-result catalog only for
@@ -170,10 +176,11 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   atomically. M84-F005 carries separate current/accepted overlays and deterministically prunes
   attempted owners removed by a retained structural/native failure without advancing the accepted
   overlay or canvas.
-- [x] Ship four genuine sessions: adaptive rounded Polyline; typed panel/keyed Fillets; GUI↔code
-  braced frame; reusable mounting plate.
+- [x] Ship eight genuine sessions: adaptive rounded Polyline; typed panel/keyed Fillets; GUI↔code
+  braced frame; reusable mounting plate; adaptive Lantern Garland; typed Suspension Bridge;
+  generated Compass Rose; and artifact-free Neon Manifold.
 - [x] On only the canonical, current-and-accepted empty workspace, show a dedicated Code landing
-  with one **Start from code** action and four centrally sourced project cards. Starting installs
+  with one **Start from code** action and eight centrally sourced project cards. Starting installs
   an artifact-free `Authored` project through the shared cold-validated project path, focuses the
   editable source, and never manufactures a GUI scene or promotion entry.
 - [x] Persist `CodeProjectOrigin::Authored` separately from bundled/promoted origins; reject a
@@ -182,6 +189,36 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
 - [x] Prove an ordinary GUI reference CurveLength dimension on
   `brace.diagonals.rising` retains its native identity, follows a managed frame rewrite, updates
   its measured value, remains GUI-editable and shares exact outer Undo/Redo.
+
+### Creative catalog amendment and M84-F008/F009
+
+- [x] Add `adaptive-lanterns`, `bridge-cables` and `compass-core` as trusted TypeScript patches plus
+  byte-exact canonical Rust/runtime artifacts. Keep Neon Manifold artifact-free managed-v1 source
+  with an explicit two-corner direct FilletSet.
+- [x] Require exact eight-demo native inventories and cold-materialize every project with finite
+  points/scalars, all active computed features current and independently validated Hard residual
+  at most `1e-9`.
+- [x] Prove representative semantic UX edits: a Bridge tower peak keeps cables/stay attached; a
+  Compass spoke keeps its ring/marker attached; a Lantern vertex moves its keyed bulb while five
+  Fillets remain current; and a Neon shared endpoint moves its connected consumer while the
+  two-corner FilletSet recomputes.
+- [x] Expand the separate M84 code-project ledger from four to eight reviewed rows, SHA-256
+  `bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`. Preserve the milestone-
+  neutral 271-row golden byte-for-byte at
+  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+- [x] Resolve M84-F008: install code projects with a camera fit over the accepted composed scene,
+  falling back to Origin only for empty/unavailable authority; increase the Rounded Polyline
+  sample radius from `mm(0.4)` to `mm(4)`. Native adapter tests require the off-origin Mounting
+  Plate inside viewport margins and exactly four finite radius-4 Fillet paths visibly clear of
+  point markers. No solver mathematics changed.
+- [x] Resolve M84-F009 after independent optional-layer review. Multi-output patch-template
+  shorthand previously inherited whichever output sorted first, so Mounting Plate `plate.profile`
+  resolved to the `ne` Point. Record exact `result_output` provenance in each compiled data-only
+  template, publish it independently of renamed/nested paths, preserve nested roots and apply the
+  same selection to dynamic collection members. Remove arbitrary prefix inference and fail closed
+  when collection result provenance is absent. Exact alias/nesting/mapping regressions and the
+  all-eight audit require declared reference and expanded target kinds to equal the reviewed
+  catalog. No native geometry or solver behavior changed.
 
 The semantic-overlay addition intentionally changes the still-unreleased optional persistence
 contract. Code sessions now identify as `geosolve-sketch-code-session-v2`; composed workbench
@@ -369,6 +406,24 @@ generic-save preservation regressions; the sketch-code suites and focused warnin
 Clippy/WASM checks pass. Exact committed source `cc2f05e` then passes the clean release gate and
 the refreshed browser matrix on temporary and retained frozen endpoints. This withdraws the
 `ff2e142` candidate and establishes the current mechanical nomination, but not UAT acceptance.
+
+### M84-F009 — canonical map order selected an unrelated multi-output shorthand
+
+Reproduction owner: optional code-project patch expansion. `publish_invocation_declaration`
+published a one-segment template path while iterating each output and used insert-if-absent
+semantics. For a multi-output template, canonical `BTreeMap` order therefore chose the first output
+as shorthand even when it had another name. Mounting Plate's `profile` template consequently made
+`plate.profile` alias its alphabetically first `ne` Point instead of its Profile output.
+
+Repair: the caller-owned TypeScript recorder now persists the exact selected `result_output` on the
+data-only template independently of its renamed/nested public path. Rust publishes only that
+selection, builds the corresponding nested collection root and removes its prior arbitrary
+one-child prefix fallback. Dynamic `each`/`mapRecord` callbacks record and filter by the same
+selection; absent collection result provenance rejects. Every fully qualified output path remains
+unchanged. A public expansion regression covers `{ nested: { shape: rounded.profile } }`, the
+TypeScript runtime covers mapped selection, and the all-eight native-composition audit independently
+checks both `FeatureRef.expected_kind` and actual expanded target kind. This is an optional-layer semantic-routing repair only; native geometry,
+solver equations, constraints, priority, tolerance and branch state are unchanged.
 
 ## Focused F005-F007 qualification
 
@@ -660,7 +715,7 @@ approval.
   still reject the complete all-or-nothing promotion and expose a read-only diagnostic rather than
   disappearing. The bundled Braced Frame remains a genuine managed code project.
 - Integration test sources which inspect workspace TypeScript/manifests are intentionally not part
-  of the published Rust archive. Runtime library code and all eight required assets are
+  of the published Rust archive. Runtime library code and all fourteen required assets are
   self-contained and extraction-built.
 - General ejection, arbitrary formulas/new constraints, arbitrary TypeScript execution, general
   topological naming, 3D/B-rep behavior and the deferred Offset redesign remain out of scope.
@@ -670,10 +725,10 @@ approval.
 
 ## Remaining release sequence
 
-1. Commit the implemented F007 correction, run the exact clean release gate, freeze its no-rebuild
-   output, exact-verify temporary and retained Tailscale service bytes, run the refreshed baseline/
-   authored/F003/F004/F005-F007 browser suites, and reconcile the nomination documentation.
-   **Complete at exact product source `cc2f05e`; this documentation is its nomination descendant.**
+1. Commit the eight-demo/F008/F009 replacement, run the exact clean release gate, freeze its no-rebuild
+   output, exact-verify temporary and retained Tailscale service bytes, run the refreshed browser
+   suites and reconcile the nomination documentation. **Pending clean replacement qualification;
+   retained F007 authority remains untouched until temporary verification passes.**
 2. Complete refreshed M84-U1 through M84-U14 against only that replacement and record explicit supervising-
    user approval or open another numbered finding.
 3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately

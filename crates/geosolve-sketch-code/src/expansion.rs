@@ -683,6 +683,9 @@ type CollectionPlan = BTreeMap<Vec<String>, Vec<(String, SemanticValue)>>;
 type TemplateOutputKey = (Vec<String>, Vec<String>, String);
 type GeneratedAddressPlan = BTreeMap<TemplateOutputKey, GeneratedMemberAddress>;
 type TemplateOutputPlan = BTreeMap<TemplateOutputKey, SemanticValue>;
+type SemanticPathMap = BTreeMap<SemanticOutputPath, SemanticValue>;
+type SemanticMemberMap = BTreeMap<String, SemanticValue>;
+type InvocationCollectionPublication = (SemanticPathMap, SemanticMemberMap);
 
 #[derive(Clone, Debug)]
 enum SemanticValue {
@@ -936,17 +939,8 @@ impl ExpansionBuilder {
         if let Some(value) = value.paths.get(path) {
             return Ok(value.clone());
         }
-        // Fixed template output paths mirror their declared TypeScript result
-        // shape. A one-output template such as `diagonals.rising.span` is also
-        // addressable at `diagonals.rising` because the patch return type
-        // exposes the span itself, not an implementation-only `{ span }` box.
-        if let Some(value) = value.paths.iter().find_map(|(candidate, value)| {
-            (candidate.0.len() == path.0.len().saturating_add(1)
-                && candidate.0.starts_with(&path.0))
-            .then_some(value)
-        }) {
-            return Ok(value.clone());
-        }
+        // Every public shorthand is emitted from compiler-recorded exact
+        // output provenance. Never infer one from canonical map order.
         // `mapRecord`/`each` collections retain their exact TypeScript return
         // field even when the invocation root itself is a collection. The
         // flattened root remains an internal keyed view, never a substitute
@@ -2185,8 +2179,11 @@ fn lower_direct_polyline(
     builder.push_node(&declaration.symbol, alias.clone(), draft)?;
 
     let mut paths = BTreeMap::new();
+    let mut vertices = BTreeMap::new();
+    let mut segments = BTreeMap::new();
     let mut corners = BTreeMap::new();
     for (ordinal, ((key, _, _), point)) in effective_vertices.iter().zip(&points).enumerate() {
+        vertices.insert(key.clone(), SemanticValue::Port(point.clone()));
         insert_path(
             &mut paths,
             member_path(&["vertices"], key, &["position"]),
@@ -2200,6 +2197,7 @@ fn lower_direct_polyline(
             declaration,
         )?;
         if ordinal < segment_count {
+            segments.insert(key.clone(), SemanticValue::Port(spans[ordinal].clone()));
             insert_path(
                 &mut paths,
                 member_path(&["segments"], key, &[]),
@@ -2236,6 +2234,14 @@ fn lower_direct_polyline(
             )?;
         }
     }
+    paths.insert(
+        fields_path(&["vertices"]),
+        SemanticValue::Collection(vertices),
+    );
+    paths.insert(
+        fields_path(&["segments"]),
+        SemanticValue::Collection(segments),
+    );
     paths.insert(
         fields_path(&["filletableCorners"]),
         SemanticValue::Collection(corners),
@@ -3654,6 +3660,71 @@ fn publish_invocation_declaration(
     plan: &InvocationPlan,
     outputs: &TemplateOutputPlan,
 ) -> Result<(), CodeExpansionError> {
+    let (mut paths, mut root_members) = publish_invocation_collections(plan, outputs)?;
+    for ((template, member, output), value) in outputs {
+        if member.as_slice() == ["self"] {
+            let mut path = template.clone();
+            path.push(output.clone());
+            paths.insert(
+                SemanticOutputPath(path.into_iter().map(ManagedPathSegment::Field).collect()),
+                value.clone(),
+            );
+            let template_node = plan
+                .pinned
+                .artifact
+                .artifact()
+                .templates
+                .iter()
+                .find(|candidate| candidate.path == *template)
+                .expect("planned output belongs to one authenticated template");
+            // The caller-owned compiler records the exact selected output
+            // independently of its renamed or nested public path.
+            if template_node.result_output.as_ref() == Some(output) {
+                paths.insert(
+                    SemanticOutputPath(
+                        template
+                            .iter()
+                            .cloned()
+                            .map(ManagedPathSegment::Field)
+                            .collect(),
+                    ),
+                    value.clone(),
+                );
+                insert_nested_root_member(
+                    &mut root_members,
+                    template,
+                    value.clone(),
+                    &plan.declaration.symbol,
+                )?;
+            }
+        }
+    }
+    let root_kind = if plan.pinned.artifact.artifact().outputs.len() == 1
+        && plan.pinned.artifact.artifact().outputs.values().next() == Some(&FeatureKind::Collection)
+    {
+        FeatureKind::Collection
+    } else {
+        FeatureKind::Feature
+    };
+    let root = if root_kind == FeatureKind::Collection {
+        SemanticValue::Collection(root_members)
+    } else {
+        let alias = semantic_alias("patch", &builder.project, &plan.declaration.symbol, &[])?;
+        SemanticValue::Declaration {
+            alias,
+            kind: FeatureKind::Feature,
+        }
+    };
+    builder.insert_declaration(
+        plan.declaration.symbol.clone(),
+        SemanticDeclaration { root, paths },
+    )
+}
+
+fn publish_invocation_collections(
+    plan: &InvocationPlan,
+    outputs: &TemplateOutputPlan,
+) -> Result<InvocationCollectionPublication, CodeExpansionError> {
     let mut paths = BTreeMap::new();
     let mut root_members = BTreeMap::new();
     for rule in &plan.pinned.artifact.artifact().collections {
@@ -3667,15 +3738,32 @@ fn publish_invocation_declaration(
         };
         let mut members = BTreeMap::new();
         for (key, _) in plan.collections.get(collection_path).into_iter().flatten() {
-            let mut member_outputs = templates
-                .iter()
-                .flat_map(|template| {
-                    outputs.iter().filter(move |((path, member, _), _)| {
-                        path == template && member == &vec![key.clone()]
-                    })
-                })
-                .map(|((_, _, output), value)| (output.clone(), value.clone()))
-                .collect::<BTreeMap<_, _>>();
+            let mut member_outputs = BTreeMap::new();
+            for template in templates {
+                let template_node = plan
+                    .pinned
+                    .artifact
+                    .artifact()
+                    .templates
+                    .iter()
+                    .find(|candidate| candidate.path == *template)
+                    .expect("collection rule references one authenticated template");
+                for ((_, _, output), value) in outputs.iter().filter(|((path, member, _), _)| {
+                    path == template && member == &vec![key.clone()]
+                }) {
+                    if template_node.result_output.as_ref() == Some(output) {
+                        member_outputs.insert(output.clone(), value.clone());
+                    }
+                }
+            }
+            if member_outputs.is_empty() {
+                return Err(CodeExpansionError::InvalidDeclaration {
+                    declaration: plan.declaration.symbol.0.clone(),
+                    message: format!(
+                        "collection member `{key}` has no compiler-recorded result output"
+                    ),
+                });
+            }
             let value = if member_outputs.len() == 1 {
                 member_outputs.pop_first().expect("one output").1
             } else {
@@ -3713,42 +3801,40 @@ fn publish_invocation_declaration(
         );
         root_members.extend(members);
     }
-    for ((template, member, output), value) in outputs {
-        if member.as_slice() == ["self"] {
-            let mut path = template.clone();
-            path.push(output.clone());
-            paths.insert(
-                SemanticOutputPath(path.into_iter().map(ManagedPathSegment::Field).collect()),
-                value.clone(),
-            );
-            if template.len() == 1 {
-                paths
-                    .entry(fields_path(&[&template[0]]))
-                    .or_insert(value.clone());
-            }
-            root_members.insert(template.join("."), value.clone());
+    Ok((paths, root_members))
+}
+
+fn insert_nested_root_member(
+    members: &mut BTreeMap<String, SemanticValue>,
+    path: &[String],
+    value: SemanticValue,
+    declaration: &SemanticSymbol,
+) -> Result<(), CodeExpansionError> {
+    let Some((head, tail)) = path.split_first() else {
+        return Err(CodeExpansionError::InvalidDeclaration {
+            declaration: declaration.0.clone(),
+            message: "patch result path cannot be empty".into(),
+        });
+    };
+    if tail.is_empty() {
+        if members.insert(head.clone(), value).is_some() {
+            return Err(CodeExpansionError::InvalidDeclaration {
+                declaration: declaration.0.clone(),
+                message: format!("duplicate patch result path `{}`", path.join(".")),
+            });
         }
+        return Ok(());
     }
-    let root_kind = if plan.pinned.artifact.artifact().outputs.len() == 1
-        && plan.pinned.artifact.artifact().outputs.values().next() == Some(&FeatureKind::Collection)
-    {
-        FeatureKind::Collection
-    } else {
-        FeatureKind::Feature
+    let entry = members
+        .entry(head.clone())
+        .or_insert_with(|| SemanticValue::Collection(BTreeMap::new()));
+    let SemanticValue::Collection(children) = entry else {
+        return Err(CodeExpansionError::InvalidDeclaration {
+            declaration: declaration.0.clone(),
+            message: format!("overlapping patch result path `{}`", path.join(".")),
+        });
     };
-    let root = if root_kind == FeatureKind::Collection {
-        SemanticValue::Collection(root_members)
-    } else {
-        let alias = semantic_alias("patch", &builder.project, &plan.declaration.symbol, &[])?;
-        SemanticValue::Declaration {
-            alias,
-            kind: FeatureKind::Feature,
-        }
-    };
-    builder.insert_declaration(
-        plan.declaration.symbol.clone(),
-        SemanticDeclaration { root, paths },
-    )
+    insert_nested_root_member(children, tail, value, declaration)
 }
 
 fn lower_constraints(

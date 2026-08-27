@@ -21,6 +21,8 @@ const MAX_ARTIFACT_KEY_BYTES: usize = 256;
 #[serde(deny_unknown_fields)]
 pub struct PatchTemplateNode {
     pub path: Vec<String>,
+    /// Exact output exposed at `path`; `None` keeps the path as a namespace.
+    pub result_output: Option<String>,
     pub declaration_family: String,
     pub inputs: BTreeMap<String, TemplateBinding>,
     pub fields: BTreeMap<String, ManagedValue>,
@@ -279,6 +281,15 @@ fn validate_artifact(artifact: &PatchModuleArtifact) -> Result<(), ArtifactValid
             .chain(template.outputs.keys())
         {
             validate_key(key)?;
+        }
+        if let Some(output) = &template.result_output {
+            validate_key(output)?;
+            if !template.outputs.contains_key(output) {
+                return Err(ArtifactValidationError::InvalidReference(format!(
+                    "template `{}` exposes unknown result output `{output}`",
+                    path_text(&template.path)
+                )));
+            }
         }
         for value in template.fields.values() {
             validate_managed_value(value, 0)?;
@@ -892,6 +903,7 @@ mod tests {
             outputs: BTreeMap::from([("fillets".into(), FeatureKind::Collection)]),
             templates: vec![PatchTemplateNode {
                 path: vec!["fillet".into()],
+                result_output: Some("arc".into()),
                 declaration_family: "computed.fillet".into(),
                 inputs: BTreeMap::from([
                     (
@@ -981,6 +993,13 @@ mod tests {
             Err(ArtifactValidationError::InvalidFamilySchema { .. })
         ));
 
+        let mut unknown_result = artifact();
+        unknown_result.templates[0].result_output = Some("alphabeticAccident".into());
+        assert!(matches!(
+            unknown_result.validate(),
+            Err(ArtifactValidationError::InvalidReference(_))
+        ));
+
         let canonical = artifact().validate().unwrap().canonical_json().to_owned();
         let with_raw_id = canonical.replacen(
             "\"export_name\":\"roundEveryCorner\"",
@@ -1034,6 +1053,7 @@ mod tests {
         );
         valid.push(PatchTemplateNode {
             path: vec!["later".into()],
+            result_output: Some("point".into()),
             declaration_family: "test.future".into(),
             inputs: BTreeMap::new(),
             fields: BTreeMap::new(),

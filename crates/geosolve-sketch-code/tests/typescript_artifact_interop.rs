@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_sketch_code::{
-    ArtifactValidationError, FeatureKind, ManagedPathSegment, PatchModuleArtifact, TemplateBinding,
-    bundled_code_project_demos,
+    ArtifactValidationError, CodeProjectDemoId, FeatureKind, ManagedPathSegment,
+    PatchModuleArtifact, TemplateBinding, bundled_code_project_demos,
 };
 use geosolve_sketch_intent::intent_content_digest;
 
@@ -12,7 +12,50 @@ struct Fixture {
     canonical_json: &'static str,
 }
 
-fn fixtures() -> [Fixture; 4] {
+#[test]
+fn new_bundled_managed_programs_are_exact_type_checked_typescript_fixtures() {
+    let fixtures = [
+        (
+            CodeProjectDemoId::AdaptiveLanterns,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/adaptive-lanterns.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::SuspensionBridge,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/suspension-bridge.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::CompassRose,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/compass-rose.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::NeonManifold,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/neon-manifold.managed.ts"
+            ),
+        ),
+    ];
+    let demos = bundled_code_project_demos();
+    for (id, fixture) in fixtures {
+        let demo = demos
+            .iter()
+            .find(|demo| demo.id == id)
+            .unwrap_or_else(|| panic!("missing bundled demo `{}`", id.key()));
+        assert_eq!(
+            demo.managed_source.as_bytes(),
+            fixture.as_bytes(),
+            "{} must display the exact managed program checked by tsconfig.managed.json",
+            id.key(),
+        );
+    }
+}
+
+fn fixtures() -> [Fixture; 7] {
     [
         Fixture {
             module: "./patches/round-every-corner.patch.ts",
@@ -48,6 +91,33 @@ fn fixtures() -> [Fixture; 4] {
             ),
             canonical_json: include_str!(
                 "../../../packages/geosolve-sketch-code/test/fixtures/mounting-plate.artifact.json"
+            ),
+        },
+        Fixture {
+            module: "./patches/adaptive-lanterns.patch.ts",
+            source: include_str!(
+                "../../../packages/geosolve-sketch-code/examples/adaptive-lanterns.patch.ts"
+            ),
+            canonical_json: include_str!(
+                "../../../packages/geosolve-sketch-code/test/fixtures/adaptive-lanterns.artifact.json"
+            ),
+        },
+        Fixture {
+            module: "./patches/bridge-cables.patch.ts",
+            source: include_str!(
+                "../../../packages/geosolve-sketch-code/examples/bridge-cables.patch.ts"
+            ),
+            canonical_json: include_str!(
+                "../../../packages/geosolve-sketch-code/test/fixtures/bridge-cables.artifact.json"
+            ),
+        },
+        Fixture {
+            module: "./patches/compass-core.patch.ts",
+            source: include_str!(
+                "../../../packages/geosolve-sketch-code/examples/compass-core.patch.ts"
+            ),
+            canonical_json: include_str!(
+                "../../../packages/geosolve-sketch-code/test/fixtures/compass-core.artifact.json"
             ),
         },
     ]
@@ -110,6 +180,12 @@ fn brace_paths_are_segmented_and_mounting_plate_has_profile_and_keyed_holes() {
         .unwrap()
         .into_artifact();
     assert_eq!(cross.outputs["diagonals"], FeatureKind::Collection);
+    assert!(
+        cross
+            .templates
+            .iter()
+            .all(|template| template.result_output.as_deref() == Some("span"))
+    );
     let TemplateBinding::Input {
         path,
         expected_kind,
@@ -140,8 +216,13 @@ fn brace_paths_are_segmented_and_mounting_plate_has_profile_and_keyed_holes() {
     assert!(mounting.collections.is_empty());
     assert_eq!(mounting.templates.len(), 5);
     assert_eq!(mounting.templates[0].path, ["profile"]);
+    assert_eq!(
+        mounting.templates[0].result_output.as_deref(),
+        Some("profile")
+    );
     for (template, key) in mounting.templates[1..].iter().zip(["nw", "ne", "se", "sw"]) {
         assert_eq!(template.path, ["holes", key]);
+        assert_eq!(template.result_output.as_deref(), Some("circle"));
         let TemplateBinding::TemplateOutput { output, .. } = &template.inputs["center"] else {
             panic!("mounting hole center must bind the rounded-profile template");
         };

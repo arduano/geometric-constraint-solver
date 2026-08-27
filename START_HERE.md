@@ -316,7 +316,10 @@ through `AuthoringProgram` and deterministic keyed expansion into the ordinary M
 the unchanged Rust materializer/solver and independent validation remain sole geometry authority.
 Custom TypeScript is never executed by Rust, WASM, browser runtime or workspace load. Typed
 semantic references, keyed generations/tombstones, edit lenses/overrides and one code/editor
-history support four genuine demonstrations. The former clean-qualified source `79078ec` and
+history support eight genuine demonstrations. Direct Polyline lowering publishes typed keyed
+`vertices` Point and `segments` CurveSpan root collections beside its existing exact member paths
+and `filletableCorners`; artifact `each`/mapping rules may consume those roots without coordinate
+copies, raw IDs or ordinal identity. The former clean-qualified source `79078ec` and
 immutable snapshot `/tmp/geosolve-m84-uat.aHw5ePSW` are withdrawn after human UAT opened
 `M84-F003`: ordinary GUI Structured Source still exposed the data-only M83 intent-reference DTO
 rather than real lexical managed TypeScript. The repair keeps that projection as honestly labelled
@@ -351,7 +354,7 @@ verification plus browser 4/4, F003 1/1 and F004 2/2 on temporary and retained T
 Those F004 bytes remain historical evidence: the post-F004 direct-authoring amendment withdrew
 them from current nomination because they predated the amended scope. On an exact independently
 validated fresh workspace, Code now exposes one
-**Start from code** action and the same four genuine sample cards. The action installs a distinct
+**Start from code** action and the same eight genuine sample cards. The action installs a distinct
 persisted artifact-free `Authored` project through public
 `CodeProject::managed_only(ProjectKey, source)`; its complete editable rectangle-plus-diagonal
 source uses lexical `frame.corners.*` references and gains geometry authority only through the
@@ -396,8 +399,25 @@ temporary and retained eight-path verification plus refreshed baseline 4/4, dire
 F003 1/1, F004 2/2 and F005-F007 4/4 browser suites on both endpoints. Complete evidence is at
 `/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Historical PID `4081080` and temporary PID
 `34895` are retired; PID `62376` serves only the immutable snapshot at
-`http://100.94.63.83:8080/`. U1-U14 remain pending. Pages remains on accepted M83 and no M84
-public publication is claimed.
+`http://100.94.63.83:8080/`. A creative-catalog amendment adds Adaptive Lantern Garland,
+Suspension Bridge, Compass Rose and Neon Manifold. All eight projects cold-materialize with finite
+accepted geometry; representative producer drags keep keyed generated consumers attached and
+current. M84-F008 fits newly installed projects to accepted composed scene authority and increases
+Rounded Polyline's sample radius to `mm(4)` so its four Fillets remain visible beyond point
+markers. Independent optional-layer review then opened M84-F009: canonical map order could publish
+an unrelated first output as a multi-output patch template's shorthand, so Mounting Plate
+`plate.profile` resolved to the `ne` Point. The caller-owned compiler now records the exact selected
+`result_output` independently of any renamed or nested public path, and Rust publishes only that
+authenticated selection; it never infers a shorthand from map order. Exact renamed/nested and
+collection-member regressions plus an exhaustive all-eight audit check both the declared reference
+kind and expanded target kind. This changes no native
+geometry, solver equation, constraint, priority, tolerance or branch rule. The separate eight-row
+M84 ledger is reviewed at SHA-256
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`; the milestone-neutral
+271-row golden remains unchanged. That replacement is implemented and development-qualified but
+not yet clean-nominated, so the F007 service remains retained authority until exact temporary
+verification passes. U1-U14 remain pending. Pages remains on accepted M83 and no M84 public
+publication is claimed.
 
 ## Read first
 
@@ -435,8 +455,8 @@ public publication is claimed.
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005-F007 ledger, current immutable replacement nomination, withdrawn historical
-    nominations and pending human scorecard.
+    implemented F005-F009 ledger, retained F007 nomination, pending clean replacement, withdrawn
+    historical nominations and pending human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -812,9 +832,10 @@ M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and po
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
 The clean-qualified F003/F004 and direct-authoring candidates remain withdrawn historical evidence.
-F005 collaborative semantic authority, F006 audit hardening and F007 exact terminal-lens
-classification are implemented, clean-qualified and immutably nominated at exact source
-`cc2f05e`, tree `6b8fc41`. Combined source `ff2e142` is withdrawn; human UAT remains open.
+The eight-demo creative-catalog amendment, M84-F008 presentation correction and M84-F009 optional-
+layer output-routing correction are implemented and development-qualified. F007 source `cc2f05e`,
+tree `6b8fc41`, remains retained UAT authority until clean replacement nomination; combined source
+`ff2e142` is withdrawn and human UAT remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -932,10 +953,10 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F007 ledger, current immutable
-  nomination and withdrawn historical nominations)
-- `docs/M84_UAT.md` (implemented/clean-qualified F005-F007 and refreshed pending U1-U14
-  scorecard; current replacement candidate live on Tailscale)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F009 ledger, eight-demo amendment,
+  retained F007 authority and withdrawn historical nominations)
+- `docs/M84_UAT.md` (development-qualified eight-demo/F008/F009 replacement and refreshed pending
+  U1-U14 scorecard; retained F007 candidate live on Tailscale)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

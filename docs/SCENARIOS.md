@@ -4690,9 +4690,10 @@ nominations remain withdrawn historical evidence. M84-F005 also withdraws the di
 `41e65a4` nomination. Collaborative overlay and semantic interaction authority plus F006 audit
 hardening are implemented and focused-qualified. F007 then withdraws combined source `ff2e142` and
 its frozen candidate after reproducing false terminal conflicts on multi-frame producer drags.
-Exact replacement source `cc2f05e`, tree `6b8fc41`, passes clean qualification, immutable
-nomination and temporary/retained frozen-browser verification. UAT U1-U14 remains required.
-Accepted M83 remains Pages authority.
+F007 source `cc2f05e`, tree `6b8fc41`, remains retained UAT authority. The eight-demo creative-
+catalog amendment, M84-F008 presentation correction and M84-F009 optional-layer output-routing
+correction are implemented and development-qualified, but not yet clean-nominated. UAT U1-U14
+remains required. Accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4716,6 +4717,11 @@ Type-check named rectangle corners/edges/profile, a Fillet record keyed exactly 
 `lowerLeft | upperRight`, and a derived Fillet collection keyed by Polyline corners. Compile-fail
 raw IDs, misspelled paths, cross-project refs and point/curve/corner mismatch. Generated
 TypeScript result descriptors and the central Rust declaration catalog must agree exactly.
+Direct Polyline `vertices` and `segments` must lower as keyed root collections beside the existing
+member paths and `filletableCorners`: each authored vertex key maps to a Point port and each
+directed span's starting key maps to a CurveSpan port. Return those roots directly and consume
+`vertices` through one recorded artifact `each`; neither path may copy coordinates, expose raw IDs
+or derive identity from ordinal position.
 
 ### M84-G4 — adaptive keyed reconciliation
 
@@ -4737,13 +4743,20 @@ accepted preview once after cold parity; existing M83 frame/terminal ceilings re
 
 ### M84-G6 — genuine demos and offline persistence
 
-Qualify all four code-project sessions rather than equivalent flat imports:
+Qualify all eight code-project sessions rather than equivalent flat imports:
 
 1. adaptive rounded Polyline with keyed corner Fillets;
 2. typed aligned panel with mapped named Fillets and compile-fail cases;
 3. GUI rectangle → `crossBrace(frame)` → ordinary GUI dimension/constraint on
    `brace.diagonals.rising`;
 4. reusable AI-authored mounting plate with rounded profile and keyed `nw/ne/se/sw` holes.
+5. adaptive Lantern Garland with one keyed bulb per Polyline vertex and one keyed Fillet per
+   interior corner;
+6. typed Suspension Bridge with native deck/tower producers and generated cables/stays;
+7. Compass Rose with native shared-centre spokes, ordinary axis relations and generated
+   ring/markers;
+8. artifact-free Neon Manifold with connected native spans and one branch-explicit two-corner
+   direct FilletSet.
 
 The mounting helper remains byte-identical after GUI edits. Save/reload/repro restores every file,
 artifact, lock, expansion provenance, override, nested accepted intent and unified history
@@ -4753,11 +4766,11 @@ project boundary reject atomically while preserving the previous accepted scene.
 ### M84-G6 extension — direct code-authored starter
 
 On an exact canonical fresh workspace, open Code and require exactly one **Start from code**
-action plus all four genuine project cards. Fresh classification requires only the canonical
+action plus all eight genuine project cards. Fresh classification requires only the canonical
 document foundation, exact current/accepted semantic-identity parity and independently validated
 empty native/computed authority. Starting must install a distinct artifact-free `Authored` project
 through public `CodeProject::managed_only(ProjectKey, source)`, not promote or fabricate an
-ordinary GUI scene. Invalid project brands, malformed managed source and custom patch imports
+ordinary GUI scene. Every card must open fitted finite visible accepted geometry. Invalid project brands, malformed managed source and custom patch imports
 without pinned artifacts reject before installation; parsing alone grants no solver authority.
 
 The complete editable starter declares a rectangle and a dependent diagonal using lexical
@@ -4766,8 +4779,8 @@ must cold-materialize finite geometry through ordinary native validation and ali
 the rectangle's exact native point IDs. A valid managed edit, retained-invalid collapsed
 rectangle, exact Undo/Redo, save/reload and repro must preserve authored origin, source and prior
 accepted canvas atomically. Sample identity and managed-source focus change only after successful
-installation. This extension adds neither an M84-F005 finding nor a fifth bundled project/ledger
-row; the existing four-demo golden remains unchanged.
+installation. This extension adds neither an M84-F005 finding nor a ninth bundled project/ledger
+row; the separate eight-demo ledger remains distinct from the milestone-neutral golden.
 
 ### M84-F005 — collaborative overlay and semantic interaction authority
 
@@ -4877,6 +4890,40 @@ Clippy/WASM checks pass. The frozen `ff2e142` candidate is withdrawn. Exact repl
 `cc2f05e`, tree `6b8fc41`, then passes the complete clean gate, immutable freeze, retained
 Tailscale `:8080` publication and refreshed 14/14 browser matrix on both endpoints. UAT remains
 pending.
+
+### M84-F008 — fitted installed scenes and visible sample Fillets
+
+Open the off-origin Mounting Plate through the ordinary code-project installer. The composed
+accepted scene must be fitted inside the canvas margins rather than left outside a canonical
+Origin reset; empty or unavailable scene authority alone falls back to Origin. Open Rounded
+Polyline and require exactly four finite computed Fillet paths of radius `4`, each visibly clear of
+the five-pixel point markers and inside the fitted viewport. Catalog/card tests must enumerate all
+eight distinct demos. This fixture changes camera/sample presentation only and adds no equation,
+constraint, priority, tolerance or branch inference.
+
+Cold-materialize all eight demos and independently require finite points/scalars, current computed
+features and normalized Hard residual at most `1e-9`. Drag a Bridge tower peak, Compass spoke,
+Lantern vertex and Neon shared endpoint; their generated cables/markers/bulbs/Fillets must remain
+attached and current. The separate eight-row M84 ledger is reviewed at SHA-256
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`; the milestone-neutral
+271-row golden remains
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+
+### M84-F009 — multi-output shorthand preserves semantic output kind
+
+Expand Mounting Plate and inspect `plate.profile`. Before repair, a multi-output template published
+the first canonical-map output as its direct shorthand, so `profile` could resolve to the unrelated
+alphabetically first `ne` Point. Compile and expand an additional patch returning a renamed nested
+`{ nested: { shape: rounded.profile } }` result and a mapped multi-output selection. The artifact
+must record `result_output: "profile"`; expansion must publish that exact Profile at its public path
+and nested collection root while removing arbitrary one-child prefix fallback. A collection member
+without compiler-recorded result provenance fails closed. Full qualified paths remain available.
+
+For all eight demos, enumerate every declared semantic output and independently require its
+`FeatureRef` expected kind to equal both the reviewed catalog kind and the kind derived from the
+expanded target. In particular, Mounting Plate `plate.profile` is Profile and each keyed hole output
+retains its declared Curve kind. This is optional-layer routing only; native geometry, solver
+equations, constraints, priority, tolerance and branch state remain unchanged.
 
 ### M84-F001 — generated-point terminal checkpoint parity
 
@@ -5028,7 +5075,8 @@ eight-path ledgers match at
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
 PID `62376` serves the exact frozen bytes at `http://100.94.63.83:8080/`; complete evidence is at
 `/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. Pages remains accepted M83 authority and no M84
-public publication is claimed.
+public publication is claimed. The eight-demo/F008/F009 replacement remains pending clean
+qualification and does not replace this served authority yet.
 
 ## Frozen near-singular fixtures
 

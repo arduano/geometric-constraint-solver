@@ -3,7 +3,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { adaptiveLanterns } from "../examples/adaptive-lanterns.patch.js";
 import { crossBrace } from "../examples/braced-frame.patch.js";
+import { bridgeCables } from "../examples/bridge-cables.patch.js";
+import { compassCore } from "../examples/compass-core.patch.js";
 import { mountingPlate } from "../examples/mounting-plate.patch.js";
 import { roundEveryCorner } from "../examples/rounded-polyline.patch.js";
 import { fillets as mappedFillets } from "../examples/typed-panel.patch.js";
@@ -63,13 +66,37 @@ test("each records a canonical Rust-shaped, equation-free artifact", () => {
     templates: [["fillet"]],
   }]);
   assert.equal(compiled.artifact.templates[0]?.declaration_family, "computed.fillet");
-  assert.equal(compiled.artifactDigest, "8c2f57f221a751a825011c6ab14a985a15cb29407930ad4c7307d7e852fb27a3");
+  assert.equal(compiled.artifactDigest, "f1be23340eee0210215ee2e6ed61c2c679b5c300ffabf2644cac861f5bbbedcf");
   assert.deepEqual(JSON.parse(compiled.canonicalJson), compiled.artifact);
   assert.doesNotMatch(compiled.canonicalJson, /node_id|port_id|equation|residual|function/u);
 });
 
-test("mapRecord and all four examples compile deterministically", () => {
+test("mapRecord and all seven examples compile deterministically", () => {
   const builds = [
+    () => compilePatchArtifact({
+      source: "adaptiveLanterns",
+      moduleSpecifier: "./patches/adaptive-lanterns.patch.ts",
+      exportName: "adaptiveLanterns",
+      patch: adaptiveLanterns,
+    }),
+    () => compilePatchArtifact({
+      source: "bridgeCables",
+      moduleSpecifier: "./patches/bridge-cables.patch.ts",
+      exportName: "bridgeCables",
+      patch: bridgeCables,
+    }),
+    () => compilePatchArtifact({
+      source: "compassCore",
+      moduleSpecifier: "./patches/compass-core.patch.ts",
+      exportName: "compassCore",
+      patch: compassCore,
+    }),
+    () => compilePatchArtifact({
+      source: "roundEveryCorner",
+      moduleSpecifier: "./patches/round-every-corner.patch.ts",
+      exportName: "roundEveryCorner",
+      patch: roundEveryCorner,
+    }),
     () => compilePatchArtifact({
       source: "fillets",
       moduleSpecifier: "./patches/fillet-record.patch.ts",
@@ -107,6 +134,63 @@ test("mapRecord and all four examples compile deterministically", () => {
     input: "corners",
     templates: [["fillet"]],
   }]);
+});
+
+test("renamed nested multi-output results retain the exact selected output", () => {
+  const aliasedProfile = definePatch(
+    { width: t.length(), height: t.length(), radius: t.length() },
+    (p, input) => {
+      const rounded = p.roundedRectangle(input.width, input.height, input.radius);
+      return { nested: { shape: rounded.profile } };
+    },
+  );
+  const compiled = compilePatchArtifact({
+    source: "aliasedProfile",
+    moduleSpecifier: "./patches/aliased-profile.patch.ts",
+    exportName: "aliasedProfile",
+    patch: aliasedProfile,
+  });
+  assert.deepEqual(compiled.artifact.outputs, { nested: "collection" });
+  assert.deepEqual(compiled.artifact.templates[0]?.path, ["nested", "shape"]);
+  assert.equal(compiled.artifact.templates[0]?.result_output, "profile");
+
+  const ambiguousRoot = definePatch(
+    { width: t.length(), height: t.length(), radius: t.length() },
+    (p, input) => ({
+      shape: p.roundedRectangle(input.width, input.height, input.radius),
+    }),
+  );
+  assert.throws(
+    () => compilePatchArtifact({
+      source: "ambiguousRoot",
+      moduleSpecifier: "./patches/ambiguous-root.patch.ts",
+      exportName: "ambiguousRoot",
+      patch: ambiguousRoot,
+    }),
+    /multi-output template result must select one explicit named output/u,
+  );
+
+  const mappedProfiles = definePatch(
+    {
+      centers: t.keyed(t.point()),
+      width: t.length(),
+      height: t.length(),
+      radius: t.length(),
+    },
+    (p, input) => ({
+      profiles: p.each(
+        input.centers,
+        () => p.roundedRectangle(input.width, input.height, input.radius).profile,
+      ),
+    }),
+  );
+  const mapped = compilePatchArtifact({
+    source: "mappedProfiles",
+    moduleSpecifier: "./patches/mapped-profiles.patch.ts",
+    exportName: "mappedProfiles",
+    patch: mappedProfiles,
+  });
+  assert.equal(mapped.artifact.templates[0]?.result_output, "profile");
 });
 
 test("compiler rejects invalid authority and non-data literals", () => {

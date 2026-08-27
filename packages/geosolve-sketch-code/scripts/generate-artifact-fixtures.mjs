@@ -6,6 +6,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { crossBrace } from "../dist/examples/braced-frame.patch.js";
+import { adaptiveLanterns } from "../dist/examples/adaptive-lanterns.patch.js";
+import { bridgeCables } from "../dist/examples/bridge-cables.patch.js";
+import { compassCore } from "../dist/examples/compass-core.patch.js";
 import { mountingPlate } from "../dist/examples/mounting-plate.patch.js";
 import { roundEveryCorner } from "../dist/examples/rounded-polyline.patch.js";
 import { fillets } from "../dist/examples/typed-panel.patch.js";
@@ -14,6 +17,27 @@ import { compilePatchArtifact } from "../dist/src/compiler.js";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const check = process.argv.includes("--check");
 const fixtures = [
+  {
+    source: "examples/adaptive-lanterns.patch.ts",
+    fixture: "test/fixtures/adaptive-lanterns.artifact.json",
+    moduleSpecifier: "./patches/adaptive-lanterns.patch.ts",
+    exportName: "adaptiveLanterns",
+    patch: adaptiveLanterns,
+  },
+  {
+    source: "examples/bridge-cables.patch.ts",
+    fixture: "test/fixtures/bridge-cables.artifact.json",
+    moduleSpecifier: "./patches/bridge-cables.patch.ts",
+    exportName: "bridgeCables",
+    patch: bridgeCables,
+  },
+  {
+    source: "examples/compass-core.patch.ts",
+    fixture: "test/fixtures/compass-core.artifact.json",
+    moduleSpecifier: "./patches/compass-core.patch.ts",
+    exportName: "compassCore",
+    patch: compassCore,
+  },
   {
     source: "examples/rounded-polyline.patch.ts",
     fixture: "test/fixtures/round-every-corner.artifact.json",

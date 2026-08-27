@@ -6,9 +6,9 @@ use geosolve_constraint_editor::{ComputedCornerRef, IntentNativeBinding};
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
     CodeCompositionError, CodeHostRequest, CodeInteractionOverlay, CodePointSeedSource,
-    CodeProject, CodeProjectDemoId, ExpandedCodeProject, ExpandedSemanticTarget,
-    GeneratedMemberAddress, KeyedReconcileState, MaterializedCodeProject, SemanticSymbol,
-    bundled_code_project_demos, materialize_code_project_cold,
+    CodeProject, CodeProjectDemo, CodeProjectDemoId, ExpandedCodeProject, ExpandedSemanticTarget,
+    FeatureKind, GeneratedMemberAddress, KeyedReconcileState, MaterializedCodeProject,
+    SemanticSymbol, bundled_code_project_demos, materialize_code_project_cold,
     materialize_code_project_incremental, materialize_code_project_incremental_with_overlay,
     parse_managed_source, rehydrate_materialized_code_project, required_generated_members,
     rounded_polyline_member_addresses,
@@ -16,8 +16,9 @@ use geosolve_sketch_code::{
 use geosolve_sketch_intent::{
     AggregateKind, DimensionKind, InputRole, InputSlot, IntentFieldKey, IntentKey, IntentLiteral,
     IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
-    IntentPlanDisposition, IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservation,
-    IntentSessionId, NodeId, PatchPortRef, PortId, ReservationId, intent_content_digest,
+    IntentPlanDisposition, IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
+    IntentReservation, IntentSessionId, NodeId, PatchPortRef, PortId, ReservationId,
+    intent_content_digest,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -37,11 +38,90 @@ struct HostNativeIdentity {
     owner: ComputedCornerRef,
 }
 
+fn expanded_target_kind(target: &ExpandedSemanticTarget) -> FeatureKind {
+    match target {
+        ExpandedSemanticTarget::Declaration { kind, .. }
+        | ExpandedSemanticTarget::HostOutput { kind, .. } => *kind,
+        ExpandedSemanticTarget::Port { port } => match port.kind {
+            IntentPortKind::Point | IntentPortKind::HandlePoint => FeatureKind::Point,
+            IntentPortKind::Scalar
+            | IntentPortKind::Contact
+            | IntentPortKind::Parameter
+            | IntentPortKind::ParameterBinding
+            | IntentPortKind::ParameterOutput
+            | IntentPortKind::ExternalBinding
+            | IntentPortKind::SemanticCatalog
+            | IntentPortKind::Source
+            | IntentPortKind::Annotation => FeatureKind::Scalar,
+            IntentPortKind::Curve => FeatureKind::Curve,
+            IntentPortKind::CurveSpan => FeatureKind::CurveSpan,
+            IntentPortKind::Constraint => FeatureKind::Constraint,
+            IntentPortKind::Dimension => FeatureKind::Dimension,
+            IntentPortKind::Profile => FeatureKind::Profile,
+            IntentPortKind::Chain => FeatureKind::Chain,
+            IntentPortKind::Operation => FeatureKind::Operation,
+            IntentPortKind::Feature => FeatureKind::Feature,
+            IntentPortKind::FeatureCorner => FeatureKind::FeatureCorner,
+            IntentPortKind::Collection => FeatureKind::Collection,
+        },
+        ExpandedSemanticTarget::FeatureCorner { .. } => FeatureKind::FeatureCorner,
+        ExpandedSemanticTarget::Collection { .. } => FeatureKind::Collection,
+    }
+}
+
+fn assert_demo_output_kinds(demo: &CodeProjectDemo, expansion: &ExpandedCodeProject) {
+    assert_eq!(expansion.semantic_outputs.len(), demo.output_kinds.len());
+    for (name, expected_kind) in &demo.output_kinds {
+        let output = expansion
+            .semantic_outputs
+            .get(*name)
+            .unwrap_or_else(|| panic!("{} is missing typed output `{name}`", demo.id.key()));
+        assert_eq!(
+            output.reference.expected_kind,
+            *expected_kind,
+            "{} output `{name}` reference kind",
+            demo.id.key(),
+        );
+        assert_eq!(
+            expanded_target_kind(&output.target),
+            *expected_kind,
+            "{} output `{name}` target kind",
+            demo.id.key(),
+        );
+    }
+}
+
+type DemoInventory = (
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+);
+
+fn expected_demo_inventory(demo: CodeProjectDemoId) -> DemoInventory {
+    match demo {
+        CodeProjectDemoId::RoundedPolyline => (2, 15, 2, 6, 5, 0, 4, 4, 9),
+        CodeProjectDemoId::TypedPanel => (2, 3, 3, 4, 4, 4, 2, 2, 6),
+        CodeProjectDemoId::BracedFrame => (3, 3, 4, 4, 6, 4, 0, 0, 0),
+        CodeProjectDemoId::MountingPlate => (1, 9, 6, 8, 8, 4, 1, 4, 8),
+        CodeProjectDemoId::AdaptiveLanterns => (2, 25, 3, 7, 13, 0, 5, 5, 11),
+        CodeProjectDemoId::SuspensionBridge => (11, 10, 8, 6, 10, 5, 0, 0, 0),
+        CodeProjectDemoId::CompassRose => (9, 12, 14, 5, 12, 4, 0, 0, 0),
+        CodeProjectDemoId::NeonManifold => (9, 4, 9, 5, 4, 4, 0, 1, 6),
+    }
+}
+
 #[test]
-fn all_four_code_projects_materialize_through_native_authority() {
+fn all_bundled_code_projects_materialize_through_native_authority() {
     for (ordinal, demo) in bundled_code_project_demos().into_iter().enumerate() {
         let project = demo.project();
         let desired = required_generated_members(&project).unwrap();
+        let generated_count = desired.len();
         let plan = KeyedReconcileState::empty()
             .plan(desired, &BTreeSet::new())
             .unwrap();
@@ -93,29 +173,48 @@ fn all_four_code_projects_materialize_through_native_authority() {
                 &accepted.features,
             )
             .unwrap();
-        assert_eq!(
-            materialized.expansion.semantic_outputs.len(),
-            demo.output_kinds.len()
-        );
+        assert_demo_output_kinds(&demo, &materialized.expansion);
 
-        match demo.id {
-            CodeProjectDemoId::RoundedPolyline => {
-                assert_eq!(materialized.host_outputs.len(), 4);
-                assert_eq!(accepted.validation.feature_count, 4);
-            }
-            CodeProjectDemoId::TypedPanel => {
-                assert_eq!(materialized.host_outputs.len(), 2);
-                assert_eq!(accepted.validation.feature_count, 2);
-            }
-            CodeProjectDemoId::BracedFrame => {
-                assert!(materialized.host_outputs.is_empty());
-                assert_eq!(accepted.validation.feature_count, 0);
-            }
-            CodeProjectDemoId::MountingPlate => {
-                assert_eq!(materialized.host_outputs.len(), 1);
-                assert_eq!(accepted.validation.feature_count, 4);
-                assert_eq!(materialized.host_outputs.values().next().unwrap().len(), 4);
-            }
+        let expected = expected_demo_inventory(demo.id);
+        let actual = (
+            project.managed.program.declarations.len(),
+            generated_count,
+            materialized.expansion.semantic_outputs.len(),
+            accepted.validation.point_count,
+            accepted.validation.curve_count,
+            accepted.validation.constraint_count,
+            materialized.host_outputs.len(),
+            accepted.validation.feature_count,
+            accepted.validation.computed_edge_count,
+        );
+        assert_eq!(actual, expected, "{} native inventory", demo.id.key());
+        let document = accepted.session.design_document();
+        assert!(
+            document
+                .points()
+                .iter()
+                .all(|point| point.position.into_iter().all(f64::is_finite)),
+            "{} accepted points must all be finite",
+            demo.id.key()
+        );
+        assert!(
+            document
+                .scalars()
+                .iter()
+                .all(|scalar| scalar.value.is_finite()),
+            "{} accepted scalars must all be finite",
+            demo.id.key()
+        );
+        if demo.id == CodeProjectDemoId::MountingPlate {
+            assert_eq!(materialized.host_outputs.values().next().unwrap().len(), 4);
+        }
+        if demo.id == CodeProjectDemoId::AdaptiveLanterns {
+            assert!(
+                materialized
+                    .host_outputs
+                    .values()
+                    .all(|outputs| outputs.len() == 1)
+            );
         }
     }
 }
@@ -138,6 +237,13 @@ fn restored_editor_rehydrates_exact_base_aliases_and_generated_owners() {
         .unwrap();
         let expected_aliases = materialized.base_outcome.aliases.clone();
         let expected_hosts = materialized.host_outputs.clone();
+        let expected_feature_count = materialized
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .validation
+            .feature_count;
         let expected_identity = materialized.editor.coordinator().intent().identity();
         let restored = rehydrate_materialized_code_project(
             Box::new(materialized.editor),
@@ -151,7 +257,7 @@ fn restored_editor_rehydrates_exact_base_aliases_and_generated_owners() {
             restored.editor.coordinator().intent().identity(),
             expected_identity
         );
-        assert_valid_native_authority(&restored, expected_hosts.values().map(Vec::len).sum());
+        assert_valid_native_authority(&restored, expected_feature_count);
     }
 }
 
@@ -436,11 +542,11 @@ fn managed_radius_edit_retains_every_fillet_owner_node_port_and_reservation() {
     .unwrap();
     let before_direct = direct_native_identities(&before);
     let before_hosts = host_native_identities(&before);
-    assert_eq!(fillet_radii(&before), BTreeSet::from([0.4_f64.to_bits()]));
+    assert_eq!(fillet_radii(&before), BTreeSet::from([4.0_f64.to_bits()]));
 
     let mut edited = project.clone();
     edited.managed = parse_managed_source(&edited.managed.source.replacen(
-        "radius: mm(0.4)",
+        "radius: mm(4)",
         "radius: mm(0.65)",
         1,
     ))
@@ -583,7 +689,7 @@ fn warm_structural_edit_preserves_ordinary_outside_dependent_on_retained_output(
 
     let mut edited = project.clone();
     edited.managed = parse_managed_source(&edited.managed.source.replacen(
-        "radius: mm(0.4)",
+        "radius: mm(4)",
         "radius: mm(0.65)",
         1,
     ))
