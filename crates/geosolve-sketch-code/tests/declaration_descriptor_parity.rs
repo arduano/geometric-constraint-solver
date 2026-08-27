@@ -7,8 +7,9 @@ use geosolve_sketch_code::{
     CODE_DECLARATION_FAMILIES, NativeDeclarationContract, code_declaration_family,
     declaration_result_catalog, typescript_declaration_result_catalog,
 };
-use geosolve_sketch_intent::ConstraintKind;
-use geosolve_sketch_intent::{ComputedFeatureKind, GeometryRecipeKind, IntentNodeKind};
+use geosolve_sketch_intent::{
+    ComputedFeatureKind, ConstraintKind, DimensionKind, GeometryRecipeKind, IntentNodeKind,
+};
 
 #[test]
 fn checked_in_typescript_result_catalog_is_exactly_rust_generated() {
@@ -45,6 +46,11 @@ fn executable_code_families_are_unique_and_grounded_in_central_intent_schemas() 
                 let schema = IntentNodeKind::Constraint { constraint }.schema(0);
                 assert!(schema.maximum_children <= 4_096);
                 assert!(ConstraintKind::ALL.contains(&constraint));
+            }
+            NativeDeclarationContract::Dimension(dimension) => {
+                let schema = IntentNodeKind::Dimension { dimension }.schema(0);
+                assert!(schema.maximum_children <= 4_096);
+                assert!(DimensionKind::ALL.contains(&dimension));
             }
             NativeDeclarationContract::Aggregate(kind) => {
                 let schema = IntentNodeKind::Aggregate { aggregate: kind }.schema(0);

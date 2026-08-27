@@ -139,6 +139,26 @@ export type VerticalConstraintRef<Project> = DescriptorResult<
   (typeof DECLARATION_RESULT_CATALOG)["constraint.vertical"]["outputs"]
 >;
 
+export type FixedPointConstraintRef<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["constraint.fixedPoint"]["outputs"]
+>;
+
+export type FixedCoordinateConstraintRef<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["constraint.fixedCoordinate"]["outputs"]
+>;
+
+export type CurveLengthDimensionRef<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["dimension.curveLength"]["outputs"]
+>;
+
+export type DiameterDimensionRef<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["dimension.diameter"]["outputs"]
+>;
+
 export type RectangleOutputs<Project> = DescriptorResult<
   Project,
   (typeof DECLARATION_RESULT_CATALOG)["geometry.rectangle"]["outputs"]
@@ -695,6 +715,13 @@ export interface ManagedGeometryBuilder<Project> {
       readonly end: ManagedLineEndpoint<Project>;
     },
   ): LineFeature<Project>;
+  circle(
+    symbol: string,
+    values: {
+      readonly center: ManagedLineEndpoint<Project>;
+      readonly radius: number | UnitLiteral<"mm">;
+    },
+  ): CircleFeature<Project>;
   polyline<const Vertices extends readonly ManagedPolylineVertex[]>(
     symbol: string,
     values: {
@@ -705,6 +732,23 @@ export interface ManagedGeometryBuilder<Project> {
 }
 
 export interface ManagedConstraintBuilder<Project> {
+  fixedPoint(
+    symbol: string,
+    values: {
+      readonly point: PointLikeRef<Project>;
+      readonly target: readonly [number, number];
+      readonly suppressed?: boolean;
+    },
+  ): FixedPointConstraintRef<Project>;
+  fixedCoordinate(
+    symbol: string,
+    values: {
+      readonly point: PointLikeRef<Project>;
+      readonly axis: "x" | "y";
+      readonly target: number | UnitLiteral<"mm">;
+      readonly suppressed?: boolean;
+    },
+  ): FixedCoordinateConstraintRef<Project>;
   horizontal(
     symbol: string,
     values: {
@@ -719,6 +763,27 @@ export interface ManagedConstraintBuilder<Project> {
       readonly suppressed?: boolean;
     },
   ): VerticalConstraintRef<Project>;
+}
+
+export interface ManagedDimensionBuilder<Project> {
+  curveLength(
+    symbol: string,
+    values: {
+      readonly curve: NativeCurveSpanRef<Project> | LineFeature<Project>;
+      readonly target: number | UnitLiteral<"mm">;
+      readonly mode?: "driving" | "reference";
+      readonly suppressed?: boolean;
+    },
+  ): CurveLengthDimensionRef<Project>;
+  diameter(
+    symbol: string,
+    values: {
+      readonly curve: CurveRef<Project> | CircleFeature<Project>;
+      readonly target: number | UnitLiteral<"mm">;
+      readonly mode?: "driving" | "reference";
+      readonly suppressed?: boolean;
+    },
+  ): DiameterDimensionRef<Project>;
 }
 
 export type ManagedFilletNeighborhood =
@@ -779,6 +844,7 @@ type ManagedPatchResult<Result, Project> = Reproject<Result, Project>;
 export interface ManagedSketchBuilder<Project> {
   readonly geometry: ManagedGeometryBuilder<Project>;
   readonly constraint: ManagedConstraintBuilder<Project>;
+  readonly dimension: ManagedDimensionBuilder<Project>;
   readonly computed: ManagedComputedBuilder<Project>;
   use<Schemas extends InputSchemas, Result>(
     symbol: string,

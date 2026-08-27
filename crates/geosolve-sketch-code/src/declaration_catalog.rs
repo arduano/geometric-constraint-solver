@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use geosolve_sketch_intent::{
-    AggregateKind, ComputedFeatureKind, ConstraintKind, GeometryRecipeKind,
+    AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, GeometryRecipeKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,9 @@ use crate::FeatureKind;
 /// Closed direct-managed lowering routes owned by the optional adapter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DirectDeclarationLowering {
+    Circle,
     Constraint(ConstraintKind),
+    Dimension(DimensionKind),
     FilletSet,
     Line,
     Polyline,
@@ -37,6 +39,7 @@ pub enum TemplateDeclarationLowering {
 pub enum NativeDeclarationContract {
     Geometry(GeometryRecipeKind),
     Constraint(ConstraintKind),
+    Dimension(DimensionKind),
     Aggregate(AggregateKind),
     ComputedFeature(ComputedFeatureKind),
     CompositePolyline,
@@ -54,7 +57,7 @@ pub struct CodeDeclarationFamilyDescriptor {
 }
 
 /// Every declaration family executable by the optional code adapter.
-pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 10] = [
+pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 14] = [
     CodeDeclarationFamilyDescriptor {
         family: "aggregate.chain",
         direct: None,
@@ -80,6 +83,22 @@ pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 10] = [
         native: NativeDeclarationContract::ComputedFeature(ComputedFeatureKind::FilletSet),
     },
     CodeDeclarationFamilyDescriptor {
+        family: "constraint.fixedCoordinate",
+        direct: Some(DirectDeclarationLowering::Constraint(
+            ConstraintKind::FixedCoordinate,
+        )),
+        template: None,
+        native: NativeDeclarationContract::Constraint(ConstraintKind::FixedCoordinate),
+    },
+    CodeDeclarationFamilyDescriptor {
+        family: "constraint.fixedPoint",
+        direct: Some(DirectDeclarationLowering::Constraint(
+            ConstraintKind::FixedPoint,
+        )),
+        template: None,
+        native: NativeDeclarationContract::Constraint(ConstraintKind::FixedPoint),
+    },
+    CodeDeclarationFamilyDescriptor {
         family: "constraint.horizontal",
         direct: Some(DirectDeclarationLowering::Constraint(
             ConstraintKind::Horizontal,
@@ -96,8 +115,24 @@ pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 10] = [
         native: NativeDeclarationContract::Constraint(ConstraintKind::Vertical),
     },
     CodeDeclarationFamilyDescriptor {
+        family: "dimension.curveLength",
+        direct: Some(DirectDeclarationLowering::Dimension(
+            DimensionKind::CurveLength,
+        )),
+        template: None,
+        native: NativeDeclarationContract::Dimension(DimensionKind::CurveLength),
+    },
+    CodeDeclarationFamilyDescriptor {
+        family: "dimension.diameter",
+        direct: Some(DirectDeclarationLowering::Dimension(
+            DimensionKind::Diameter,
+        )),
+        template: None,
+        native: NativeDeclarationContract::Dimension(DimensionKind::Diameter),
+    },
+    CodeDeclarationFamilyDescriptor {
         family: "geometry.circle",
-        direct: None,
+        direct: Some(DirectDeclarationLowering::Circle),
         template: Some(TemplateDeclarationLowering::Circle),
         native: NativeDeclarationContract::Geometry(GeometryRecipeKind::CenterRadiusCircle),
     },
@@ -173,12 +208,28 @@ pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDes
         ),
         ("computed.filletSet".into(), descriptor(object([]))),
         (
+            "constraint.fixedCoordinate".into(),
+            descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),
+        ),
+        (
+            "constraint.fixedPoint".into(),
+            descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),
+        ),
+        (
             "constraint.horizontal".into(),
             descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),
         ),
         (
             "constraint.vertical".into(),
             descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),
+        ),
+        (
+            "dimension.curveLength".into(),
+            descriptor_kind(FeatureKind::Dimension, leaf(FeatureKind::Dimension)),
+        ),
+        (
+            "dimension.diameter".into(),
+            descriptor_kind(FeatureKind::Dimension, leaf(FeatureKind::Dimension)),
         ),
         (
             "geometry.circle".into(),

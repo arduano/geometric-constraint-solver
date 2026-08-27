@@ -6,11 +6,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch_intent::{
-    AggregateKind, ComputedFeatureKind, ConstraintKind, GeometryRecipeKind, InputRole, InputSlot,
-    IntentFieldKey, IntentKey, IntentKeyError, IntentLiteral, IntentNodeDraft, IntentNodeKind,
-    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRole,
-    IntentPortSelector, IntentSessionIdentity, IntentUnit, LeafField, PatchPortRef,
-    intent_content_digest,
+    AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, GeometryRecipeKind,
+    InputRole, InputSlot, IntentFieldKey, IntentKey, IntentKeyError, IntentLiteral,
+    IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+    IntentPortKind, IntentPortRole, IntentPortSelector, IntentSessionIdentity, IntentUnit,
+    LeafField, PatchPortRef, intent_content_digest,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1058,7 +1058,8 @@ fn direct_generated_members(
         }
         match declaration.builder_path.as_slice() {
             [geometry, family]
-                if geometry == "geometry" && matches!(family.as_str(), "line" | "rectangle") =>
+                if geometry == "geometry"
+                    && matches!(family.as_str(), "circle" | "line" | "rectangle") =>
             {
                 addresses.push(direct_declaration_owner_address(
                     &declaration.symbol,
@@ -1178,6 +1179,7 @@ pub fn expand_code_project_with_overlay(
     }
     lower_computed(project, &mut builder)?;
     lower_constraints(project, &mut builder)?;
+    lower_dimensions(project, &mut builder)?;
 
     let mut semantic_outputs = BTreeMap::new();
     for output in &project.managed.program.outputs {
@@ -1496,6 +1498,9 @@ fn lower_direct_geometry(
 ) -> Result<(), CodeExpansionError> {
     let family = declaration.builder_path.join(".");
     match code_declaration_family(&family).and_then(|descriptor| descriptor.direct) {
+        Some(DirectDeclarationLowering::Circle) => {
+            lower_direct_circle(builder, declaration, reconciliation, overlay)
+        }
         Some(DirectDeclarationLowering::Line) => {
             lower_direct_line(builder, declaration, reconciliation, overlay)
         }
@@ -1508,9 +1513,11 @@ fn lower_direct_geometry(
         Some(DirectDeclarationLowering::FilletSet) => Err(CodeExpansionError::Unsupported(
             format!("managed computed family `{family}` used through geometry"),
         )),
-        Some(DirectDeclarationLowering::Constraint(_)) => Err(CodeExpansionError::Unsupported(
-            format!("managed constraint family `{family}` used through geometry"),
-        )),
+        Some(
+            DirectDeclarationLowering::Constraint(_) | DirectDeclarationLowering::Dimension(_),
+        ) => Err(CodeExpansionError::Unsupported(format!(
+            "managed non-geometry family `{family}` used through geometry"
+        ))),
         None => Err(CodeExpansionError::Unsupported(format!(
             "managed geometry family `{family}`"
         ))),
@@ -1525,10 +1532,12 @@ fn lower_direct_computed(
     match code_declaration_family(&family).and_then(|descriptor| descriptor.direct) {
         Some(DirectDeclarationLowering::FilletSet) => lower_direct_fillet_set(builder, declaration),
         Some(
-            DirectDeclarationLowering::Line
+            DirectDeclarationLowering::Circle
+            | DirectDeclarationLowering::Line
             | DirectDeclarationLowering::Polyline
             | DirectDeclarationLowering::Rectangle
-            | DirectDeclarationLowering::Constraint(_),
+            | DirectDeclarationLowering::Constraint(_)
+            | DirectDeclarationLowering::Dimension(_),
         ) => Err(CodeExpansionError::Unsupported(format!(
             "managed geometry family `{family}` used through computed"
         ))),
@@ -2040,6 +2049,123 @@ fn lower_direct_line(
 
 #[allow(
     clippy::too_many_lines,
+    reason = "direct circle lowering keeps center-reference, overlay, seed, and writable provenance together"
+)]
+fn lower_direct_circle(
+    builder: &mut ExpansionBuilder,
+    declaration: &AuthoringDeclaration,
+    reconciliation: Option<&KeyedReconcileState>,
+    overlay: &CodeInteractionOverlay,
+) -> Result<(), CodeExpansionError> {
+    let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
+    exact_object_keys(arguments, &["center", "radius"], &declaration.symbol.0)?;
+    let radius = length_value(
+        required(arguments, "radius", &declaration.symbol.0)?,
+        "circle radius",
+    )?;
+    if radius <= 0.0 {
+        return invalid_declaration(
+            declaration,
+            "circle radius must be finite and positive".into(),
+        );
+    }
+
+    let owner = direct_owner_identity(declaration, "circle", reconciliation);
+    let center_value = required(arguments, "center", &declaration.symbol.0)?;
+    let center_reference = format!("{}.center", declaration.symbol.0);
+    let center_address = owner.map(|identity| {
+        direct_point_address(
+            &builder.project,
+            &declaration.symbol,
+            identity,
+            fields_path(&["center"]),
+        )
+    });
+    let center_source = match center_value {
+        ManagedValue::Reference { declaration, path } => CodePointSeedSource::Reference {
+            declaration: declaration.clone(),
+            path: path.clone(),
+        },
+        _ => CodePointSeedSource::Literal,
+    };
+    let drafted_center = center_address
+        .as_ref()
+        .and_then(|address| overlay_point(overlay, address));
+    let resolved_center = if let Some(position) = drafted_center {
+        SemanticValue::PointLiteral(position)
+    } else {
+        builder.resolve_managed(
+            center_value,
+            &SemanticOutputPath::default(),
+            &center_reference,
+        )?
+    };
+    let center_seed = builder.point_seed(&resolved_center).ok_or_else(|| {
+        CodeExpansionError::Unsupported(format!(
+            "circle `{}` has no deterministic center seed",
+            declaration.symbol.0
+        ))
+    })?;
+
+    let alias = semantic_alias("decl", &builder.project, &declaration.symbol, &[])?;
+    let center_selector = node_selector(IntentPortRole::Center, 0);
+    let mut draft = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::CenterRadiusCircle,
+        },
+        alias.clone(),
+    )
+    .with_instance_leaf(
+        node_selector(IntentPortRole::Target, 0),
+        LeafField::Value,
+        length(radius),
+    );
+    match resolved_center {
+        SemanticValue::PointLiteral(position) => {
+            draft = draft
+                .with_instance_leaf(center_selector, LeafField::X, length(position[0]))
+                .with_instance_leaf(center_selector, LeafField::Y, length(position[1]));
+        }
+        value => {
+            let center = value.as_port(IntentPortKind::Point, &center_reference)?;
+            draft = draft.with_input(InputSlot::new(InputRole::Point, 0), center.patch_ref());
+        }
+    }
+    builder.push_node(&declaration.symbol, alias.clone(), draft)?;
+    let center = port(&alias, center_selector, IntentPortKind::Point);
+    builder.add_point_seed(&center, center_seed)?;
+    if let Some(address) = center_address {
+        builder.add_writable_point(ExpandedWritablePoint {
+            handle: center.clone(),
+            source: center_source,
+            edit: CodePointEdit::Point { address },
+        });
+    }
+
+    builder.insert_declaration(
+        declaration.symbol.clone(),
+        SemanticDeclaration {
+            root: SemanticValue::Declaration {
+                alias: alias.clone(),
+                kind: FeatureKind::Feature,
+            },
+            paths: BTreeMap::from([
+                (fields_path(&["center"]), SemanticValue::Port(center)),
+                (
+                    fields_path(&["circle"]),
+                    SemanticValue::Port(port(
+                        &alias,
+                        node_selector(IntentPortRole::Curve, 0),
+                        IntentPortKind::Curve,
+                    )),
+                ),
+            ]),
+        },
+    )
+}
+
+#[allow(
+    clippy::too_many_lines,
     reason = "one keyed Polyline lowering keeps point, span, aggregate and typed corner paths auditable together"
 )]
 fn lower_direct_polyline(
@@ -2196,6 +2322,12 @@ fn lower_direct_polyline(
             SemanticValue::Port(point.clone()),
             declaration,
         )?;
+        insert_path(
+            &mut paths,
+            fields_path(&["vertices", "byKey", key.as_str()]),
+            SemanticValue::Port(point.clone()),
+            declaration,
+        )?;
         if ordinal < segment_count {
             segments.insert(key.clone(), SemanticValue::Port(spans[ordinal].clone()));
             insert_path(
@@ -2207,6 +2339,12 @@ fn lower_direct_polyline(
             insert_path(
                 &mut paths,
                 index_path(&["segments"], ordinal, &[]),
+                SemanticValue::Port(spans[ordinal].clone()),
+                declaration,
+            )?;
+            insert_path(
+                &mut paths,
+                fields_path(&["segments", "byKey", key.as_str()]),
                 SemanticValue::Port(spans[ordinal].clone()),
                 declaration,
             )?;
@@ -2229,6 +2367,12 @@ fn lower_direct_polyline(
             insert_path(
                 &mut paths,
                 member_path(&["filletableCorners"], key, &[]),
+                SemanticValue::Corner(corner.clone()),
+                declaration,
+            )?;
+            insert_path(
+                &mut paths,
+                fields_path(&["filletableCorners", "byKey", key.as_str()]),
                 SemanticValue::Corner(corner),
                 declaration,
             )?;
@@ -3837,6 +3981,10 @@ fn insert_nested_root_member(
     insert_nested_root_member(children, tail, value, declaration)
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "the closed managed constraint table keeps typed operands and native fields visibly adjacent"
+)]
 fn lower_constraints(
     project: &CodeProject,
     builder: &mut ExpansionBuilder,
@@ -3850,50 +3998,88 @@ fn lower_constraints(
         let family = declaration.builder_path.join(".");
         match code_declaration_family(&family).and_then(|descriptor| descriptor.direct) {
             Some(DirectDeclarationLowering::Constraint(constraint)) => {
-                let relation_name = match constraint {
-                    ConstraintKind::Horizontal => "horizontal",
-                    ConstraintKind::Vertical => "vertical",
-                    _ => unreachable!("closed catalog admits only managed axis constraints"),
-                };
                 let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
-                let curve = required(arguments, "curve", &declaration.symbol.0)?;
-                let value = builder.resolve_managed(
-                    curve,
-                    &SemanticOutputPath::default(),
-                    &format!("{}.curve", declaration.symbol.0),
-                )?;
-                let span = match value
-                    .as_port(IntentPortKind::CurveSpan, &format!("{relation_name} curve"))
-                {
-                    Ok(span) => span,
-                    Err(error) => {
-                        let ManagedValue::Reference {
-                            declaration: owner,
-                            path,
-                        } = curve
-                        else {
-                            return Err(error);
-                        };
-                        let SemanticValue::Declaration {
-                            kind: FeatureKind::Feature,
-                            ..
-                        } = value
-                        else {
-                            return Err(error);
-                        };
-                        builder
-                            .resolve(owner, &join_paths(path, &fields_path(&["span"])))?
-                            .as_port(
-                                IntentPortKind::CurveSpan,
-                                &format!("{relation_name} line span"),
-                            )?
-                    }
-                };
                 let alias =
                     semantic_alias("constraint", &builder.project, &declaration.symbol, &[])?;
-                let mut draft =
-                    IntentNodeDraft::new(IntentNodeKind::Constraint { constraint }, alias.clone())
-                        .with_input(InputSlot::new(InputRole::Span, 0), span.patch_ref());
+                let mut draft = match constraint {
+                    ConstraintKind::Horizontal | ConstraintKind::Vertical => {
+                        let relation_name = if constraint == ConstraintKind::Horizontal {
+                            "horizontal"
+                        } else {
+                            "vertical"
+                        };
+                        let curve = required(arguments, "curve", &declaration.symbol.0)?;
+                        let span = resolve_direct_span_operand(
+                            builder,
+                            curve,
+                            &format!("{}.curve", declaration.symbol.0),
+                            relation_name,
+                        )?;
+                        IntentNodeDraft::new(
+                            IntentNodeKind::Constraint { constraint },
+                            alias.clone(),
+                        )
+                        .with_input(InputSlot::new(InputRole::Span, 0), span.patch_ref())
+                    }
+                    ConstraintKind::FixedPoint => {
+                        let point_value = required(arguments, "point", &declaration.symbol.0)?;
+                        let point_port = resolve_direct_point_operand(
+                            builder,
+                            point_value,
+                            &format!("{}.point", declaration.symbol.0),
+                        )?;
+                        let target = point(
+                            required(arguments, "target", &declaration.symbol.0)?,
+                            "fixedPoint target",
+                        )?;
+                        if target.iter().any(|coordinate| !coordinate.is_finite()) {
+                            return invalid_declaration(
+                                declaration,
+                                "fixedPoint target must contain two finite coordinates".into(),
+                            );
+                        }
+                        IntentNodeDraft::new(
+                            IntentNodeKind::Constraint { constraint },
+                            alias.clone(),
+                        )
+                        .with_input(InputSlot::new(InputRole::Point, 0), point_port.patch_ref())
+                        .with_field(field_key("target")?, IntentLiteral::Point(target))
+                    }
+                    ConstraintKind::FixedCoordinate => {
+                        let point_value = required(arguments, "point", &declaration.symbol.0)?;
+                        let point = resolve_direct_point_operand(
+                            builder,
+                            point_value,
+                            &format!("{}.point", declaration.symbol.0),
+                        )?;
+                        let axis = string(
+                            required(arguments, "axis", &declaration.symbol.0)?,
+                            "fixedCoordinate axis",
+                        )?;
+                        if !matches!(axis, "x" | "y") {
+                            return invalid_declaration(
+                                declaration,
+                                "fixedCoordinate axis must be `x` or `y`".into(),
+                            );
+                        }
+                        let target = length_value(
+                            required(arguments, "target", &declaration.symbol.0)?,
+                            "fixedCoordinate target",
+                        )?;
+                        IntentNodeDraft::new(
+                            IntentNodeKind::Constraint { constraint },
+                            alias.clone(),
+                        )
+                        .with_input(InputSlot::new(InputRole::Point, 0), point.patch_ref())
+                        .with_field(field_key("axis")?, enum_value(axis)?)
+                        .with_field(field_key("target")?, length(target))
+                    }
+                    _ => {
+                        return Err(CodeExpansionError::Unsupported(format!(
+                            "managed constraint family `{family}`"
+                        )));
+                    }
+                };
                 draft.suppressed = arguments
                     .get("suppressed")
                     .map(|value| boolean(value, "suppressed"))
@@ -3921,6 +4107,180 @@ fn lower_constraints(
         }
     }
     Ok(())
+}
+
+fn lower_dimensions(
+    project: &CodeProject,
+    builder: &mut ExpansionBuilder,
+) -> Result<(), CodeExpansionError> {
+    for declaration in &project.managed.program.declarations {
+        if declaration.patch.is_some()
+            || declaration.builder_path.first().map(String::as_str) != Some("dimension")
+        {
+            continue;
+        }
+        let family = declaration.builder_path.join(".");
+        let Some(DirectDeclarationLowering::Dimension(dimension)) =
+            code_declaration_family(&family).and_then(|descriptor| descriptor.direct)
+        else {
+            return Err(CodeExpansionError::Unsupported(format!(
+                "managed dimension family `{family}`"
+            )));
+        };
+        if !matches!(
+            dimension,
+            DimensionKind::CurveLength | DimensionKind::Diameter
+        ) {
+            return Err(CodeExpansionError::Unsupported(format!(
+                "managed dimension family `{family}`"
+            )));
+        }
+
+        let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
+        let curve_value = required(arguments, "curve", &declaration.symbol.0)?;
+        let target = length_value(
+            required(arguments, "target", &declaration.symbol.0)?,
+            "dimension target",
+        )?;
+        if target <= 0.0 {
+            return invalid_declaration(
+                declaration,
+                "dimension target must be finite and positive".into(),
+            );
+        }
+        let mode = arguments
+            .get("mode")
+            .map(|value| string(value, "dimension mode"))
+            .transpose()?
+            .unwrap_or("driving");
+        if !matches!(mode, "driving" | "reference") {
+            return invalid_declaration(
+                declaration,
+                "dimension mode must be `driving` or `reference`".into(),
+            );
+        }
+
+        let alias = semantic_alias("dimension", &builder.project, &declaration.symbol, &[])?;
+        let mut draft =
+            IntentNodeDraft::new(IntentNodeKind::Dimension { dimension }, alias.clone())
+                .with_instance_leaf(
+                    node_selector(IntentPortRole::Target, 0),
+                    LeafField::Value,
+                    length(target),
+                )
+                .with_field(field_key("mode")?, enum_value(mode)?);
+        draft = match dimension {
+            DimensionKind::CurveLength => {
+                let span = resolve_direct_span_operand(
+                    builder,
+                    curve_value,
+                    &format!("{}.curve", declaration.symbol.0),
+                    "curveLength",
+                )?;
+                draft.with_input(InputSlot::new(InputRole::Span, 0), span.patch_ref())
+            }
+            DimensionKind::Diameter => {
+                let curve = resolve_direct_curve_operand(
+                    builder,
+                    curve_value,
+                    &format!("{}.curve", declaration.symbol.0),
+                    "diameter",
+                )?;
+                draft.with_input(InputSlot::new(InputRole::Curve, 0), curve.patch_ref())
+            }
+            _ => unreachable!("managed dimension catalog is closed above"),
+        };
+        draft.suppressed = arguments
+            .get("suppressed")
+            .map(|value| boolean(value, "suppressed"))
+            .transpose()?
+            .unwrap_or(false);
+        builder.push_node(&declaration.symbol, alias.clone(), draft)?;
+        builder.insert_declaration(
+            declaration.symbol.clone(),
+            SemanticDeclaration {
+                root: SemanticValue::Port(port(
+                    &alias,
+                    node_selector(IntentPortRole::Dimension, 0),
+                    IntentPortKind::Dimension,
+                )),
+                paths: BTreeMap::new(),
+            },
+        )?;
+    }
+    Ok(())
+}
+
+fn resolve_direct_point_operand(
+    builder: &ExpansionBuilder,
+    value: &ManagedValue,
+    reference: &str,
+) -> Result<ExpandedPort, CodeExpansionError> {
+    builder
+        .resolve_managed(value, &SemanticOutputPath::default(), reference)?
+        .as_port(IntentPortKind::Point, reference)
+}
+
+fn resolve_direct_span_operand(
+    builder: &ExpansionBuilder,
+    value: &ManagedValue,
+    reference: &str,
+    label: &str,
+) -> Result<ExpandedPort, CodeExpansionError> {
+    let resolved = builder.resolve_managed(value, &SemanticOutputPath::default(), reference)?;
+    match resolved.as_port(IntentPortKind::CurveSpan, reference) {
+        Ok(span) => Ok(span),
+        Err(error) => {
+            let ManagedValue::Reference {
+                declaration: owner,
+                path,
+            } = value
+            else {
+                return Err(error);
+            };
+            let SemanticValue::Declaration {
+                kind: FeatureKind::Feature,
+                ..
+            } = resolved
+            else {
+                return Err(error);
+            };
+            builder
+                .resolve(owner, &join_paths(path, &fields_path(&["span"])))?
+                .as_port(IntentPortKind::CurveSpan, &format!("{label} line span"))
+        }
+    }
+}
+
+fn resolve_direct_curve_operand(
+    builder: &ExpansionBuilder,
+    value: &ManagedValue,
+    reference: &str,
+    label: &str,
+) -> Result<ExpandedPort, CodeExpansionError> {
+    let resolved = builder.resolve_managed(value, &SemanticOutputPath::default(), reference)?;
+    match resolved.as_port(IntentPortKind::Curve, reference) {
+        Ok(curve) => Ok(curve),
+        Err(error) => {
+            let ManagedValue::Reference {
+                declaration: owner,
+                path,
+            } = value
+            else {
+                return Err(error);
+            };
+            let SemanticValue::Declaration {
+                kind: FeatureKind::Feature,
+                ..
+            } = resolved
+            else {
+                return Err(error);
+            };
+            builder
+                .resolve(owner, &join_paths(path, &fields_path(&["circle"])))?
+                .as_port(IntentPortKind::Curve, &format!("{label} circle curve"))
+        }
+    }
 }
 
 fn invocation_number(plan: &InvocationPlan, name: &str) -> Result<f64, CodeExpansionError> {

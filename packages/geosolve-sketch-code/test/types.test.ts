@@ -5,6 +5,7 @@ import {
   definePatch,
   fillets,
   line,
+  mm,
   point,
   polyline,
   rectangle,
@@ -134,6 +135,62 @@ const managedRectangleDiagonal = sketch(($) => {
   return $.outputs({ frame, diagonal, mixedEndpointLine, literalLine });
 });
 managedRectangleDiagonal;
+
+const managedManifoldVocabulary = sketch(($) => {
+  const route = $.geometry.polyline("route", {
+    vertices: [
+      { key: "inlet", position: [0, 0] },
+      { key: "elbow", position: [20, 0] },
+      { key: "outlet", position: [20, 10] },
+    ],
+    closed: false,
+  });
+  const screw = $.geometry.circle("screw", {
+    center: [30, 10],
+    radius: mm(2.5),
+  });
+  const anchor = $.constraint.fixedPoint("anchor", {
+    point: route.vertices.byKey.inlet,
+    target: [0, 0],
+  });
+  const screwX = $.constraint.fixedCoordinate("screwX", {
+    point: screw.center,
+    axis: "x",
+    target: mm(30),
+  });
+  const routeLength = $.dimension.curveLength("routeLength", {
+    curve: route.segments.byKey.inlet,
+    target: mm(20),
+  });
+  const screwDiameter = $.dimension.diameter("screwDiameter", {
+    curve: screw,
+    target: mm(5),
+    mode: "driving",
+  });
+  const typedAnchor: OutputRef<ManagedSketchProject, "constraint"> = anchor;
+  const typedLength: OutputRef<ManagedSketchProject, "dimension"> = routeLength;
+  const typedDiameter: OutputRef<ManagedSketchProject, "dimension"> = screwDiameter;
+  typedAnchor;
+  typedLength;
+  typedDiameter;
+  screwX;
+
+  // @ts-expect-error Exact keyed Polyline members reject unknown keys.
+  route.segments.byKey.missing;
+  // @ts-expect-error A curve span cannot be fixed as a point.
+  $.constraint.fixedPoint("spanFix", { point: route.segments.byKey.inlet, target: [0, 0] });
+  // @ts-expect-error Fixed-coordinate axes are the closed Cartesian x/y set.
+  $.constraint.fixedCoordinate("badAxis", { point: screw.center, axis: "z", target: 30 });
+  // @ts-expect-error Curve-length dimensions require a native span or owning line.
+  $.dimension.curveLength("pointLength", { curve: screw.center, target: 20 });
+  // @ts-expect-error Diameter dimensions require a curve or owning circle.
+  $.dimension.diameter("spanDiameter", { curve: route.segments.byKey.inlet, target: 5 });
+  // @ts-expect-error Managed circles reject point references from another project.
+  $.geometry.circle("foreignCircle", { center: alphaStart, radius: 2.5 });
+
+  return $.outputs({ route, screw, anchor, routeLength, screwDiameter });
+});
+managedManifoldVocabulary;
 
 const managedFilletSet = sketch(($) => {
   const first = $.geometry.line("first", { start: [0, 0], end: [30, 0] });

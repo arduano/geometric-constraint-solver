@@ -22,6 +22,20 @@ export const DECLARATION_RESULT_CATALOG = {
       "fields": {}
     }
   },
+  "constraint.fixedCoordinate": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "constraint"
+    }
+  },
+  "constraint.fixedPoint": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "constraint"
+    }
+  },
   "constraint.horizontal": {
     "feature_kind": "constraint",
     "outputs": {
@@ -34,6 +48,20 @@ export const DECLARATION_RESULT_CATALOG = {
     "outputs": {
       "shape": "leaf",
       "kind": "constraint"
+    }
+  },
+  "dimension.curveLength": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "dimension"
+    }
+  },
+  "dimension.diameter": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "dimension"
     }
   },
   "geometry.circle": {
