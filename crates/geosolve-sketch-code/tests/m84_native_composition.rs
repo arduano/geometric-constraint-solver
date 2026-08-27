@@ -13,7 +13,8 @@ use geosolve_sketch_code::{
     FeatureKind, GeneratedMemberAddress, KeyedReconcileState, ManagedValue,
     MaterializedCodeProject, SemanticSymbol, bundled_code_project_demos,
     materialize_code_project_cold, materialize_code_project_incremental,
-    materialize_code_project_incremental_with_overlay, parse_managed_source,
+    materialize_code_project_incremental_with_overlay,
+    materialize_code_project_incremental_with_overlay_audited, parse_managed_source,
     rehydrate_materialized_code_project, required_generated_members,
     rounded_polyline_member_addresses,
 };
@@ -408,6 +409,89 @@ fn restored_editor_rehydrates_exact_base_aliases_and_generated_owners() {
         );
         assert_valid_native_authority(&restored, expected_feature_count);
     }
+}
+
+#[test]
+fn m85_large_unchanged_host_overlay_is_default_stack_and_history_neutral() {
+    let project = bundled_code_project_demos()
+        .into_iter()
+        .find(|demo| demo.id == CodeProjectDemoId::PcWaterManifold)
+        .unwrap()
+        .project();
+    let generated = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let before = materialize_code_project_cold(
+        &project,
+        &generated,
+        IntentSessionId::from_raw(0x85_1000),
+        DocumentId(PersistentId::from_u128(0x85_1000)),
+        1.0,
+    )
+    .unwrap();
+    let point = before
+        .expansion
+        .writable_points
+        .iter()
+        .find(|point| !point.source.is_reference())
+        .expect("the manifold must expose one literal writable seed")
+        .clone();
+    let intent = before.editor.coordinator().intent();
+    let node = intent.graph().node_by_symbol(&point.handle.alias).unwrap();
+    let port = node
+        .port_by_selector(point.handle.selector)
+        .unwrap()
+        .as_ref(node.id);
+    let accepted = before
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    let IntentNativeBinding::Point(native_point) = accepted.ownership.port(port).unwrap() else {
+        panic!("the manifold writable lens must resolve to a native point")
+    };
+    let origin = accepted
+        .session
+        .design_document()
+        .point(native_point)
+        .unwrap()
+        .position;
+    let overlay = point
+        .stage_drag(
+            &CodeInteractionOverlay::empty(),
+            [origin[0] + 0.25, origin[1] - 0.125],
+        )
+        .unwrap();
+    let host_identities_before = host_native_identities(&before);
+    assert_eq!(host_identities_before.len(), 6);
+
+    // This call deliberately remains on the ordinary test thread. It guards
+    // the production terminal path against stack-expensive post-solve history
+    // cleanup as well as accidental cold reconstruction of the large project.
+    let audited = materialize_code_project_incremental_with_overlay_audited(
+        &before, &project, &generated, &overlay,
+    );
+    assert_eq!(audited.work.managed_parse_attempts(), 0);
+    assert_eq!(audited.work.expansion_attempts(), 1);
+    assert_eq!(audited.work.accepted_publications(), 0);
+    let after = audited.outcome.unwrap();
+
+    assert_eq!(
+        after.expansion.host_requests,
+        before.expansion.host_requests
+    );
+    assert_eq!(host_native_identities(&after), host_identities_before);
+    assert_eq!(after.editor.coordinator().intent().undo_len(), 0);
+    assert_eq!(after.editor.coordinator().intent().redo_len(), 0);
+    assert_eq!(
+        after.base_outcome.identity,
+        after.editor.coordinator().intent().identity(),
+    );
+    assert_valid_native_authority(&after, 6);
 }
 
 #[test]
@@ -1257,6 +1341,8 @@ fn generated_referenced_circle_center_detaches_without_moving_its_producer() {
         1.0,
     )
     .unwrap();
+    let host_identities_before = host_native_identities(&before);
+    assert_eq!(host_identities_before.len(), 4);
     let center = before
         .expansion
         .writable_points
@@ -1382,6 +1468,17 @@ fn generated_referenced_circle_center_detaches_without_moving_its_producer() {
             .position
             .map(f64::to_bits),
         target.map(f64::to_bits),
+    );
+    assert_eq!(
+        host_native_identities(&after),
+        host_identities_before,
+        "a point-only overlay must retain every unchanged native host owner",
+    );
+    assert_eq!(after.editor.coordinator().intent().undo_len(), 0);
+    assert_eq!(after.editor.coordinator().intent().redo_len(), 0);
+    assert_eq!(
+        after.base_outcome.identity,
+        after.editor.coordinator().intent().identity(),
     );
     assert_valid_native_authority(&after, 4);
 }

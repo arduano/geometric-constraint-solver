@@ -20,16 +20,18 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeGeneratedChildAddress, CodeInteractionOverlay, CodePointEdit, CodeProject, CodeProjectDemo,
-    CodeProjectDemoId, CodeRectangleCorner, CodeSessionIdentity, CodeSessionReceipt,
-    CodeWritableAddress, EditorBootstrapDeclaration, ExpandedCodeProject, ExpandedPort,
-    ExpandedSemanticTarget, ExpandedWritablePoint, KeyedReconcileState, ManagedDiagnostic,
-    ManagedEdit, ManagedValue, MaterializedCodeProject, PatchModuleArtifact, ProjectKey,
-    SemanticSymbol, SketchCodeSession, UnitLiteral, apply_managed_edit, bundled_code_project_demos,
-    expand_code_project_for_structural_edit, initialize_code_project_from_editor,
-    materialize_code_project_cold, materialize_code_project_incremental_for_structural_edit,
-    materialize_code_project_incremental_with_overlay, parse_managed_source, plan_managed_edit,
-    rehydrate_materialized_code_project, required_generated_members,
+    AuditedCodeWork, CodeGeneratedChildAddress, CodeInteractionOverlay, CodePointEdit, CodeProject,
+    CodeProjectDemo, CodeProjectDemoId, CodeRectangleCorner, CodeSessionIdentity,
+    CodeSessionReceipt, CodeWorkReceipt, CodeWritableAddress, EditorBootstrapDeclaration,
+    ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget, ExpandedWritablePoint,
+    KeyedReconcileState, ManagedDiagnostic, ManagedEdit, ManagedValue, MaterializedCodeProject,
+    PatchModuleArtifact, ProjectKey, SemanticSymbol, SketchCodeSession, UnitLiteral,
+    apply_managed_edit, bundled_code_project_demos, expand_code_project_for_structural_edit,
+    initialize_code_project_from_editor, materialize_code_project_cold,
+    materialize_code_project_incremental_for_structural_edit,
+    materialize_code_project_incremental_with_overlay,
+    materialize_code_project_incremental_with_overlay_audited, parse_managed_source,
+    plan_managed_edit, rehydrate_materialized_code_project, required_generated_members,
 };
 use geosolve_sketch_intent::{
     BootstrapNativeKind, GeometryRecipeKind, IntentLiteral, IntentNode, IntentNodeKind,
@@ -708,6 +710,51 @@ impl CodeProjectWorkbench {
         editor_checkpoint: &serde_json::Value,
         label: &str,
     ) -> Result<Option<AcceptedCodePublication>, String> {
+        let candidate_editor = restore_editor_checkpoint(editor_checkpoint)?;
+        self.publish_pointer_terminal_editor(pointer_id, &candidate_editor, label)
+    }
+
+    /// Publishes an authenticated code-owned point terminal directly from the
+    /// already accepted live editor.
+    ///
+    /// The browser owns that editor and has just completed exact pointer-up
+    /// validation, so serializing and cold-restoring it merely to classify the
+    /// same semantic delta would duplicate authority work. The terminal still
+    /// rematerializes the staged overlay through the ordinary code/Intent/
+    /// solver path and persists one independently restorable checkpoint.
+    pub(crate) fn publish_pointer_terminal_editor(
+        &mut self,
+        pointer_id: u64,
+        candidate_editor: &ProjectionalEditorSession,
+        label: &str,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
+        self.publish_pointer_terminal_editor_audited(pointer_id, candidate_editor, label)
+            .into_outcome()
+    }
+
+    pub(crate) fn publish_pointer_terminal_editor_audited(
+        &mut self,
+        pointer_id: u64,
+        candidate_editor: &ProjectionalEditorSession,
+        label: &str,
+    ) -> AuditedCodeWork<Result<Option<AcceptedCodePublication>, String>> {
+        let mut work = CodeWorkReceipt::default();
+        let outcome = self.publish_pointer_terminal_editor_with_work(
+            pointer_id,
+            candidate_editor,
+            label,
+            &mut work,
+        );
+        AuditedCodeWork { outcome, work }
+    }
+
+    fn publish_pointer_terminal_editor_with_work(
+        &mut self,
+        pointer_id: u64,
+        candidate_editor: &ProjectionalEditorSession,
+        label: &str,
+        work: &mut CodeWorkReceipt,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
         let pending = self.pending_semantic_point_drag.as_ref().ok_or_else(|| {
             "semantic point terminal has no pending authenticated route".to_owned()
         })?;
@@ -720,18 +767,26 @@ impl CodeProjectWorkbench {
                 "semantic point gesture was invalidated by a newer code-session revision".into(),
             );
         }
+        self.ensure_materialized_cache()?;
         let pending = self
             .pending_semantic_point_drag
             .take()
             .expect("the authenticated pending semantic drag was present");
-        let candidate_editor = restore_editor_checkpoint(editor_checkpoint)?;
-        let origin_editor = match pending.detached_origin_checkpoint.as_ref() {
-            Some(checkpoint) => restore_editor_checkpoint(checkpoint)?,
-            None => restore_editor_checkpoint(self.session.pointer_frame_checkpoint())?,
-        };
+        let detached_origin = pending
+            .detached_origin_checkpoint
+            .as_ref()
+            .map(restore_editor_checkpoint)
+            .transpose()?;
+        let origin_editor = detached_origin.as_deref().unwrap_or_else(|| {
+            &self
+                .materialized
+                .as_deref()
+                .expect("the materialized cache was ensured above")
+                .editor
+        });
         let change = classify_code_owned_editor_change(
-            &origin_editor,
-            &candidate_editor,
+            origin_editor,
+            candidate_editor,
             self.session
                 .snapshot()
                 .accepted_expansion
@@ -744,12 +799,13 @@ impl CodeProjectWorkbench {
             );
         };
         let bundle =
-            self.canonical_terminal_point_bundle(&pending.point, placements, &candidate_editor)?;
-        self.publish_semantic_point_overlay(
+            self.canonical_terminal_point_bundle(&pending.point, placements, candidate_editor)?;
+        self.publish_semantic_point_overlay_with_work(
             &bundle.placements,
-            &candidate_editor,
+            candidate_editor,
             &bundle.rectangle_projections,
             label,
+            work,
         )
     }
 
@@ -973,6 +1029,23 @@ impl CodeProjectWorkbench {
         rectangle_projections: &[RectangleTerminalProjection],
         label: &str,
     ) -> Result<Option<AcceptedCodePublication>, String> {
+        self.publish_semantic_point_overlay_with_work(
+            placements,
+            candidate_editor,
+            rectangle_projections,
+            label,
+            &mut CodeWorkReceipt::default(),
+        )
+    }
+
+    fn publish_semantic_point_overlay_with_work(
+        &mut self,
+        placements: &[(ExpandedWritablePoint, [f64; 2])],
+        candidate_editor: &ProjectionalEditorSession,
+        rectangle_projections: &[RectangleTerminalProjection],
+        label: &str,
+        work: &mut CodeWorkReceipt,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
         if self.is_dirty() {
             return Err(
                 "Apply or Revert the managed-source draft before dragging code-owned geometry"
@@ -1004,15 +1077,16 @@ impl CodeProjectWorkbench {
             )
             .map_err(|error| error.to_string())?;
         self.ensure_materialized_cache()?;
-        let materialized = materialize_code_project_incremental_with_overlay(
+        let audited = materialize_code_project_incremental_with_overlay_audited(
             self.materialized
                 .as_deref()
                 .ok_or_else(|| "code project has no warm native authority".to_owned())?,
             &self.project,
             &self.session.snapshot().generated,
             &overlay,
-        )
-        .map_err(|error| error.to_string())?;
+        );
+        work.merge(audited.work);
+        let materialized = audited.outcome.map_err(|error| error.to_string())?;
         for (point, position) in placements {
             let staged_position = expanded_port_position(&materialized.editor, &point.handle)
                 .ok_or_else(|| "staged code point has no Cartesian instance seed".to_owned())?;
@@ -1032,8 +1106,12 @@ impl CodeProjectWorkbench {
         )?;
         let expansion = materialized.expansion.clone();
         let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
-        let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
-        let candidate_cache = rehydrate_editor_checkpoint(&checkpoint, expansion.clone())?;
+        let delegated_editor = Box::new(
+            materialized
+                .editor
+                .fork_accepted_authority()
+                .map_err(|error| error.to_string())?,
+        );
         let prepared = self
             .session
             .prepare_project_overlay(
@@ -1044,11 +1122,10 @@ impl CodeProjectWorkbench {
                 label,
             )
             .map_err(|error| error.to_string())?;
-        let receipt = self
-            .session
-            .apply_prepared(prepared)
-            .map_err(|error| error.to_string())?;
-        self.materialized = Some(candidate_cache);
+        let audited = self.session.apply_prepared_audited(prepared);
+        work.merge(audited.work);
+        let receipt = audited.outcome.map_err(|error| error.to_string())?;
+        self.materialized = Some(Box::new(materialized));
         self.last_receipt = Some(receipt.clone());
         Ok(Some(AcceptedCodePublication {
             editor: delegated_editor,
@@ -2808,11 +2885,12 @@ fn next_materialization_ids() -> Result<(IntentSessionId, DocumentId), String> {
 fn encode_editor_checkpoint(
     editor: &ProjectionalEditorSession,
 ) -> Result<serde_json::Value, String> {
-    let ordinary = super::persistence::WorkspaceSnapshot::from_projectional_editor(editor)?;
+    let (computed_evaluation_high_water, revisions) =
+        super::persistence::WorkspaceSnapshot::projectional_authority_metadata(editor)?;
     let delegated = super::persistence::WorkspaceSnapshot::from_delegated_projectional_editor(
         editor,
-        ordinary.computed_evaluation_high_water(),
-        ordinary.revisions,
+        computed_evaluation_high_water,
+        revisions,
     )?;
     delegated.validate_delegated_intent_checkpoint()?;
     delegated.encode().map(serde_json::Value::String)
@@ -8164,11 +8242,7 @@ export default sketch(($) => {
             .unwrap()
             .position;
         let publication = workbench
-            .publish_pointer_terminal_checkpoint(
-                8406,
-                &encode_editor_checkpoint(&editor).unwrap(),
-                "Move selected frame corner",
-            )
+            .publish_pointer_terminal_editor(8406, &editor, "Move selected frame corner")
             .unwrap()
             .unwrap();
 
@@ -8219,6 +8293,40 @@ export default sketch(($) => {
                 .all(|draft| draft.provenance
                     == geosolve_sketch_code::CodeDraftProvenance::CanvasDrag),
         );
+        assert_eq!(publication.editor.coordinator().intent().undo_len(), 0);
+        assert_eq!(publication.editor.coordinator().intent().redo_len(), 0);
+        let warm = workbench
+            .materialized
+            .as_deref()
+            .expect("pointer terminal must retain its staged native cache");
+        assert_eq!(warm.editor.coordinator().intent().undo_len(), 0);
+        assert_eq!(warm.editor.coordinator().intent().redo_len(), 0);
+        assert_eq!(
+            warm.base_outcome.identity,
+            warm.editor.coordinator().intent().identity(),
+        );
+        assert_eq!(
+            warm.expansion.digest,
+            workbench
+                .session
+                .snapshot()
+                .accepted_expansion
+                .as_ref()
+                .expect("accepted terminal expansion")
+                .digest,
+        );
+        let restored = rehydrate_editor_checkpoint(
+            workbench.accepted_editor_checkpoint(),
+            warm.expansion.clone(),
+        )
+        .expect("persisted staged terminal must independently restore");
+        validate_terminal_native_parity(
+            &publication.editor,
+            &restored.editor,
+            &restored.expansion,
+            &[],
+        )
+        .expect("persisted staged terminal and retained cache must remain exact");
     }
 
     #[test]
@@ -8344,11 +8452,7 @@ export default sketch(($) => {
         let revision_before = workbench.session.identity().revision;
 
         let publication = workbench
-            .publish_pointer_terminal_checkpoint(
-                pointer_id,
-                &encode_editor_checkpoint(&editor).expect("terminal delegated checkpoint"),
-                "Move Compass Rose shared center",
-            )
+            .publish_pointer_terminal_editor(pointer_id, &editor, "Move Compass Rose shared center")
             .expect("semantic terminal publication")
             .expect("one outer history row");
         let published_center = expanded_port_point(&publication.editor, &center_lens.handle)
@@ -8394,6 +8498,19 @@ export default sketch(($) => {
             "outer code publication must preserve the exact solved terminal scene",
         );
         assert_eq!(workbench.session.identity().revision, revision_before + 1);
+        assert_eq!(publication.editor.coordinator().intent().undo_len(), 0);
+        assert_eq!(publication.editor.coordinator().intent().redo_len(), 0);
+        let warm = workbench
+            .materialized
+            .as_deref()
+            .expect("published warm materialization");
+        assert_eq!(warm.editor.coordinator().intent().undo_len(), 0);
+        assert_eq!(warm.editor.coordinator().intent().redo_len(), 0);
+        assert_eq!(
+            warm.base_outcome.identity,
+            warm.editor.coordinator().intent().identity(),
+            "history-neutral publication identity must describe the retained editor",
+        );
         for declaration in ["east", "south", "west"] {
             let referenced_start = expansion
                 .writable_points
@@ -8555,9 +8672,9 @@ export default sketch(($) => {
                         .is_some()
                 );
                 let first = workbench
-                    .publish_pointer_terminal_checkpoint(
+                    .publish_pointer_terminal_editor(
                         8410,
-                        &encode_editor_checkpoint(&editor).unwrap(),
+                        &editor,
                         "Detach generated rising brace endpoint",
                     )
                     .unwrap()
@@ -8644,14 +8761,26 @@ export default sketch(($) => {
                         .is_some()
                 );
                 let second = workbench
-                    .publish_pointer_terminal_checkpoint(
+                    .publish_pointer_terminal_editor(
                         8411,
-                        &encode_editor_checkpoint(&editor).unwrap(),
+                        &editor,
                         "Move detached generated endpoint again",
                     )
                     .unwrap()
                     .unwrap();
                 assert_eq!(workbench.session.identity().revision, revision_before + 2);
+                assert_eq!(second.editor.coordinator().intent().undo_len(), 0);
+                assert_eq!(second.editor.coordinator().intent().redo_len(), 0);
+                let warm = workbench
+                    .materialized
+                    .as_deref()
+                    .expect("repeated terminal warm materialization");
+                assert_eq!(warm.editor.coordinator().intent().undo_len(), 0);
+                assert_eq!(warm.editor.coordinator().intent().redo_len(), 0);
+                assert_eq!(
+                    warm.base_outcome.identity,
+                    warm.editor.coordinator().intent().identity(),
+                );
                 let second_checkpoint = workbench.accepted_editor_checkpoint().clone();
                 let accepted = second
                     .editor

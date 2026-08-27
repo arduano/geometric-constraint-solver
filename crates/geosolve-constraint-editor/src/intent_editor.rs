@@ -34,22 +34,22 @@ use crate::intent_bootstrap::{
 };
 use crate::intent_coordinator::PreparedProjectionalTransaction;
 use crate::{
-    AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
-    ConstraintEditor, EditorEffect, EditorError, EditorScene, FeatureAuthoringCandidate,
-    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
-    GeometryRoleSelectionState, IntentBootstrapError, IntentInspectorEditError,
-    IntentInspectorEditTarget, IntentInspectorEditValue, IntentInspectorProjection,
-    IntentNativeBinding, IntentSourceEditError, IntentSourceTokenId, IntentValidationEvidence,
-    IntentWorkbenchProjection, Modifiers, OffsetAuthoringCandidate, OffsetAuthoringOutcome,
-    OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
-    ProjectionalAuthoringError, ProjectionalCoordinatorError, ProjectionalFilletAuthoringError,
-    ProjectionalIntentCoordinator, ProjectionalPatchOutcome, ProjectionalProfileOffsetError,
-    SelectionItem, Viewport, decode_flat_intent_bootstrap,
-    flat_intent_bootstrap_materialization_map, projectional_application_patch,
-    projectional_construction_patch, projectional_fillet_patch, projectional_fillet_radius_patch,
-    projectional_profile_offset_delete_node_patch, projectional_profile_offset_delete_patch,
-    projectional_profile_offset_direction_patch, projectional_profile_offset_distance_patch,
-    projectional_profile_offset_patch,
+    AuditedInteraction, AuthoringApplication, AuthoringState, ColdIntentMaterialization,
+    ColdIntentMaterializer, ConstraintEditor, EditorEffect, EditorError, EditorScene,
+    FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+    FeatureAuthoringState, FeatureAuthoringTool, GeometryRoleSelectionState, IntentBootstrapError,
+    IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,
+    IntentInspectorProjection, IntentNativeBinding, IntentSourceEditError, IntentSourceTokenId,
+    IntentValidationEvidence, IntentWorkbenchProjection, InteractionWorkReceipt, Modifiers,
+    OffsetAuthoringCandidate, OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance,
+    PointerInput, ProfileOffsetDirectionState, ProjectionalAuthoringError,
+    ProjectionalCoordinatorError, ProjectionalFilletAuthoringError, ProjectionalIntentCoordinator,
+    ProjectionalPatchOutcome, ProjectionalProfileOffsetError, SelectionItem, Viewport,
+    decode_flat_intent_bootstrap, flat_intent_bootstrap_materialization_map,
+    projectional_application_patch, projectional_construction_patch, projectional_fillet_patch,
+    projectional_fillet_radius_patch, projectional_profile_offset_delete_node_patch,
+    projectional_profile_offset_delete_patch, projectional_profile_offset_direction_patch,
+    projectional_profile_offset_distance_patch, projectional_profile_offset_patch,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -432,6 +432,53 @@ impl ProjectionalEditorSession {
         }
     }
 
+    /// Forks the current independently accepted authority for one adjacent
+    /// transactional composition attempt.
+    ///
+    /// Durable Intent/native state, allocator authority and annotation layout
+    /// are preserved, while nested Intent Undo/Redo, selection, hover, drafts,
+    /// previews and active pointer ownership are deliberately discarded. The
+    /// fork performs no materialization, solve or history publication; any
+    /// subsequent delegated patch still traverses the ordinary cold
+    /// materializer and independent residual validation before success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProjectionalEditorError::Coordinator`] when no accepted
+    /// projectional authority is available to fork.
+    pub fn fork_accepted_authority(&self) -> Result<Self, ProjectionalEditorError> {
+        let coordinator = self.coordinator.fork_accepted()?;
+        let mut editor = self.editor.clone();
+        let _ = editor.cancel();
+        editor.set_selection([]);
+        Ok(Self::with_editor_and_control(
+            coordinator,
+            editor,
+            self.preview_control.clone(),
+        ))
+    }
+
+    /// Consumes a composition result and removes nested Intent Undo/Redo.
+    ///
+    /// Adjacent composite sessions use this after their independently
+    /// validated patch succeeds so the outer session remains the sole
+    /// user-visible history owner. Accepted geometry, semantic identity,
+    /// allocator high-water state and annotation layout are retained.
+    ///
+    /// # Errors
+    ///
+    /// Returns a coordinator error if accepted authority is unavailable or
+    /// the history-neutral Intent checkpoint does not validate.
+    pub fn into_delegated_accepted_authority(mut self) -> Result<Self, ProjectionalEditorError> {
+        self.cancel_direct_manipulation();
+        self.clear_authoring_previews();
+        let _ = self.editor.cancel();
+        self.editor.set_selection([]);
+        self.selected_declaration = None;
+        self.coordinator = self.coordinator.into_delegated_accepted()?;
+        Ok(self)
+    }
+
     /// Canonical durable authority.
     #[must_use]
     pub const fn coordinator(&self) -> &ProjectionalIntentCoordinator {
@@ -577,6 +624,26 @@ impl ProjectionalEditorSession {
         viewport: Viewport,
         chord_tolerance_pixels: f64,
     ) -> Result<EditorScene, ProjectionalEditorError> {
+        self.scene_audited(viewport, chord_tolerance_pixels)
+            .into_outcome()
+    }
+
+    pub fn scene_audited(
+        &self,
+        viewport: Viewport,
+        chord_tolerance_pixels: f64,
+    ) -> AuditedInteraction<Result<EditorScene, ProjectionalEditorError>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.scene_with_work(viewport, chord_tolerance_pixels, &mut work);
+        AuditedInteraction::new(outcome, work)
+    }
+
+    fn scene_with_work(
+        &self,
+        viewport: Viewport,
+        chord_tolerance_pixels: f64,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<EditorScene, ProjectionalEditorError> {
         let (materialization, session, property_preview_active) = self.scene_materialization()?;
         let accepted = session
             .accepted_state_for_current_input()
@@ -588,6 +655,7 @@ impl ProjectionalEditorSession {
         let computed = if materialization.computed.input().sketch == accepted_input {
             &materialization.computed
         } else {
+            work.record_computed_evaluation_attempt();
             let mut allocator = ComputedEvaluationAllocator::from_high_water(
                 materialization.computed_evaluation_high_water,
             );
@@ -627,7 +695,7 @@ impl ProjectionalEditorSession {
         let mut scene = scene.with_retained_session(session)?;
         self.editor.populate_curve_controls(&mut scene)?;
         if !property_preview_active {
-            self.attach_computed_fillet_radius_rails(&mut scene, session, materialization)?;
+            self.attach_computed_fillet_radius_rails(&mut scene, session, materialization, work)?;
         }
         if property_preview_active && let Some(drag) = self.fillet_radius_drag.as_ref() {
             scene.set_computed_fillet_interaction_origin(drag.expected)?;
@@ -709,6 +777,7 @@ impl ProjectionalEditorSession {
         scene: &mut EditorScene,
         session: &RetainedSketchDocumentSession,
         materialization: &ColdIntentMaterialization,
+        work: &mut InteractionWorkReceipt,
     ) -> Result<(), ProjectionalEditorError> {
         if materialization.features.features().is_empty() {
             return Ok(());
@@ -732,6 +801,7 @@ impl ProjectionalEditorSession {
                 .collect::<Vec<_>>();
             affected_owners.sort_unstable();
             for corner in &fillet.corners {
+                work.record_computed_evaluation_attempt();
                 let outcome = snapshot.continue_fillet_corner(
                     corner.without_id(),
                     fillet.radius,
@@ -1011,6 +1081,29 @@ impl ProjectionalEditorSession {
         scene: &EditorScene,
         input: PointerInput,
     ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
+        self.pointer_move_feature_authoring_radius_audited(state, scene, input)
+            .into_outcome()
+    }
+
+    pub fn pointer_move_feature_authoring_radius_audited(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> AuditedInteraction<Result<Vec<EditorEffect>, ProjectionalEditorError>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome =
+            self.pointer_move_feature_authoring_radius_with_work(state, scene, input, &mut work);
+        AuditedInteraction::new(outcome, work)
+    }
+
+    fn pointer_move_feature_authoring_radius_with_work(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
         let active = self
             .fillet_authoring_radius_drag
             .clone()
@@ -1039,9 +1132,10 @@ impl ProjectionalEditorSession {
                     else {
                         return Err(ProjectionalEditorError::AuthoringPreviewRejected);
                     };
-                    let preview = self.prepare_computed_fillet_authoring_preview(
+                    let preview = self.prepare_computed_fillet_authoring_preview_with_work(
                         active.symbol.clone(),
                         &candidate,
+                        work,
                     )?;
                     if preview.feature != feature
                         || preview.candidate != candidate
@@ -1200,6 +1294,19 @@ impl ProjectionalEditorSession {
         symbol: IntentKey,
         candidate: &FeatureAuthoringCandidate,
     ) -> Result<ProjectionalFilletAuthoringPreview, ProjectionalEditorError> {
+        self.prepare_computed_fillet_authoring_preview_with_work(
+            symbol,
+            candidate,
+            &mut InteractionWorkReceipt::default(),
+        )
+    }
+
+    fn prepare_computed_fillet_authoring_preview_with_work(
+        &self,
+        symbol: IntentKey,
+        candidate: &FeatureAuthoringCandidate,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<ProjectionalFilletAuthoringPreview, ProjectionalEditorError> {
         let accepted = self
             .coordinator
             .accepted_materialization()
@@ -1221,9 +1328,12 @@ impl ProjectionalEditorSession {
             symbol.clone(),
             candidate,
         )?;
-        let prepared = self
+        let audited = self
             .coordinator
-            .prepare_patch_transaction(translated.patch)?
+            .prepare_patch_transaction_audited(translated.patch);
+        work.merge(audited.work);
+        let prepared = audited
+            .outcome?
             .ok_or(ProjectionalEditorError::AuthoringPreviewRejected)?;
         let features = prepared
             .materialization()
@@ -1308,6 +1418,19 @@ impl ProjectionalEditorSession {
         state: &OffsetAuthoringState,
         symbol: IntentKey,
     ) -> Result<ProjectionalProfileOffsetAuthoringPreview, ProjectionalEditorError> {
+        self.prepare_profile_offset_authoring_preview_with_work(
+            state,
+            symbol,
+            &mut InteractionWorkReceipt::default(),
+        )
+    }
+
+    fn prepare_profile_offset_authoring_preview_with_work(
+        &self,
+        state: &OffsetAuthoringState,
+        symbol: IntentKey,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<ProjectionalProfileOffsetAuthoringPreview, ProjectionalEditorError> {
         let candidate = state
             .candidate()
             .ok_or(ProjectionalEditorError::AuthoringCandidateIncomplete)?;
@@ -1323,9 +1446,12 @@ impl ProjectionalEditorSession {
             state,
             symbol.clone(),
         )?;
-        let prepared = self
+        let audited = self
             .coordinator
-            .prepare_patch_transaction(translated.patch)?
+            .prepare_patch_transaction_audited(translated.patch);
+        work.merge(audited.work);
+        let prepared = audited
+            .outcome?
             .ok_or(ProjectionalEditorError::AuthoringPreviewRejected)?;
         let materialization = prepared.materialization();
         let provisional_items = provisional_items(&accepted.ownership, &materialization.ownership);
@@ -1453,6 +1579,29 @@ impl ProjectionalEditorSession {
         scene: &EditorScene,
         input: PointerInput,
     ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
+        self.pointer_move_offset_authoring_distance_audited(state, scene, input)
+            .into_outcome()
+    }
+
+    pub fn pointer_move_offset_authoring_distance_audited(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> AuditedInteraction<Result<Vec<EditorEffect>, ProjectionalEditorError>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome =
+            self.pointer_move_offset_authoring_distance_with_work(state, scene, input, &mut work);
+        AuditedInteraction::new(outcome, work)
+    }
+
+    fn pointer_move_offset_authoring_distance_with_work(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
         let active = self
             .profile_offset_authoring_distance_drag
             .clone()
@@ -1484,8 +1633,11 @@ impl ProjectionalEditorSession {
                     ) {
                         return Err(ProjectionalEditorError::AuthoringPreviewRejected);
                     }
-                    let preview = self
-                        .prepare_profile_offset_authoring_preview(&trial, active.symbol.clone())?;
+                    let preview = self.prepare_profile_offset_authoring_preview_with_work(
+                        &trial,
+                        active.symbol.clone(),
+                        work,
+                    )?;
                     if preview.dimension != dimension
                         || !self
                             .editor
@@ -1635,6 +1787,31 @@ impl ProjectionalEditorSession {
         Ok(outcome)
     }
 
+    /// Applies one independently validated patch over a history-free accepted
+    /// fork without constructing nested Intent Undo/Redo.
+    ///
+    /// This is reserved for adjacent composite owners which publish the sole
+    /// user-visible transaction in their own history. Ordinary GUI actions
+    /// must continue to use [`Self::apply_patch`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary projectional planning/materialization error, and
+    /// rejects a fork which still contains nested Intent history.
+    pub fn apply_delegated_patch(
+        &mut self,
+        patch: IntentPatch,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        self.cancel_interaction();
+        self.clear_authoring_previews();
+        let outcome = self.coordinator.apply_delegated_patch(patch)?;
+        if outcome.disposition == IntentPlanDisposition::Accepted {
+            self.clear_transient_selection();
+        }
+        self.reconcile_declaration_selection();
+        Ok(outcome)
+    }
+
     fn apply_prepared_patch(
         &mut self,
         prepared: PreparedProjectionalTransaction,
@@ -1642,6 +1819,23 @@ impl ProjectionalEditorSession {
         self.cancel_interaction();
         self.clear_authoring_previews();
         let outcome = self.coordinator.commit_prepared_transaction(prepared)?;
+        self.clear_transient_selection();
+        self.reconcile_declaration_selection();
+        Ok(outcome)
+    }
+
+    fn apply_prepared_patch_with_work(
+        &mut self,
+        prepared: PreparedProjectionalTransaction,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        self.cancel_interaction();
+        self.clear_authoring_previews();
+        let audited = self
+            .coordinator
+            .commit_prepared_transaction_audited(prepared);
+        work.merge(audited.work);
+        let outcome = audited.outcome?;
         self.clear_transient_selection();
         self.reconcile_declaration_selection();
         Ok(outcome)
@@ -2653,8 +2847,18 @@ impl ProjectionalEditorSession {
         scene: &EditorScene,
         input: PointerInput,
     ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
+        self.pointer_move_audited(scene, input).into_outcome()
+    }
+
+    pub fn pointer_move_audited(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> AuditedInteraction<Result<Vec<EditorEffect>, ProjectionalEditorError>> {
+        let mut work = InteractionWorkReceipt::default();
         let effects = self.editor.pointer_move(scene, input);
-        self.resolve_pointer_frame(effects)
+        let outcome = self.resolve_pointer_frame(effects, &mut work);
+        AuditedInteraction::new(outcome, work)
     }
 
     /// Finishes a pointer gesture and publishes at most one intent transaction.
@@ -2670,6 +2874,29 @@ impl ProjectionalEditorSession {
         &mut self,
         scene: &EditorScene,
         input: PointerInput,
+    ) -> Result<ProjectionalEditorPointerOutcome, ProjectionalEditorError> {
+        self.pointer_up_audited(scene, input).into_outcome()
+    }
+
+    pub fn pointer_up_audited(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> AuditedInteraction<Result<ProjectionalEditorPointerOutcome, ProjectionalEditorError>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.pointer_up_with_work(scene, input, &mut work);
+        AuditedInteraction::new(outcome, work)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one terminal dispatcher proves every direct-manipulation route can publish at most one transaction"
+    )]
+    fn pointer_up_with_work(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        work: &mut InteractionWorkReceipt,
     ) -> Result<ProjectionalEditorPointerOutcome, ProjectionalEditorError> {
         if !input.position.x.is_finite() || !input.position.y.is_finite() {
             if self
@@ -2721,10 +2948,11 @@ impl ProjectionalEditorSession {
                         self.coordinator.cancel_point_drag();
                         return Err(ProjectionalEditorError::PointPreviewMismatch);
                     }
-                    transaction = Some(
-                        self.coordinator
-                            .finish_point_drag(input.pointer_id, request_id)?,
-                    );
+                    let audited = self
+                        .coordinator
+                        .finish_point_drag_audited(input.pointer_id, request_id);
+                    work.merge(audited.work);
+                    transaction = Some(audited.outcome?);
                 }
                 EditorEffect::ClearPointPreview => {
                     self.cancel_point_drag();
@@ -2753,9 +2981,11 @@ impl ProjectionalEditorSession {
                         self.coordinator.cancel_curve_control_drag();
                         return Err(ProjectionalEditorError::MissingAcceptedCurveControlSample);
                     }
-                    transaction = self
-                        .coordinator
-                        .finish_curve_control_drag(pointer_id, request_id, expected, control)?;
+                    let audited = self.coordinator.finish_curve_control_drag_audited(
+                        pointer_id, request_id, expected, control,
+                    );
+                    work.merge(audited.work);
+                    transaction = audited.outcome?;
                 }
                 EditorEffect::ClearCurveControlPreview => {
                     self.cancel_curve_control_drag();
@@ -2788,7 +3018,7 @@ impl ProjectionalEditorSession {
                     let prepared = drag
                         .latest
                         .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?;
-                    transaction = Some(self.apply_prepared_patch(prepared)?);
+                    transaction = Some(self.apply_prepared_patch_with_work(prepared, work)?);
                 }
                 EditorEffect::ClearComputedFeaturePreview => {
                     self.cancel_fillet_radius_drag();
@@ -2822,7 +3052,7 @@ impl ProjectionalEditorSession {
                     let prepared = drag
                         .latest
                         .ok_or(ProjectionalEditorError::MissingProfileOffsetDistanceDragRoute)?;
-                    transaction = Some(self.apply_prepared_patch(prepared)?);
+                    transaction = Some(self.apply_prepared_patch_with_work(prepared, work)?);
                 }
                 EditorEffect::ClearAcceptedProfileOffsetPreview => {
                     self.cancel_profile_offset_distance_drag();
@@ -2851,6 +3081,7 @@ impl ProjectionalEditorSession {
     fn resolve_pointer_frame(
         &mut self,
         effects: Vec<EditorEffect>,
+        work: &mut InteractionWorkReceipt,
     ) -> Result<Vec<EditorEffect>, ProjectionalEditorError> {
         let mut presentation = Vec::new();
         for effect in effects {
@@ -2862,12 +3093,14 @@ impl ProjectionalEditorSession {
                     model_position,
                 } => {
                     self.authenticate_point_drag(pointer_id, point)?;
-                    let preview = self.coordinator.preview_point_drag(
+                    let audited = self.coordinator.preview_point_drag_audited(
                         pointer_id,
                         request_id,
                         model_position,
                         self.preview_control.clone(),
-                    )?;
+                    );
+                    work.merge(audited.work);
+                    let preview = audited.outcome?;
                     let accepted_position = preview.map(|preview| preview.accepted_position);
                     if let Some(accepted_position) = accepted_position
                         && let Some(drag) = self.point_drag.as_mut()
@@ -2894,14 +3127,16 @@ impl ProjectionalEditorSession {
                     model_position,
                 } => {
                     self.authenticate_curve_control_drag(pointer_id, expected, control)?;
-                    let preview = self.coordinator.preview_curve_control_drag(
+                    let audited = self.coordinator.preview_curve_control_drag_audited(
                         pointer_id,
                         request_id,
                         expected,
                         control,
                         model_position,
                         self.preview_control.clone(),
-                    )?;
+                    );
+                    work.merge(audited.work);
+                    let preview = audited.outcome?;
                     let accepted_position = preview.map(|preview| preview.accepted_position);
                     if let Some(preview) = preview
                         && let Some(drag) = self.curve_control_drag.as_mut()
@@ -2939,7 +3174,9 @@ impl ProjectionalEditorSession {
                             radius,
                         )?
                     };
-                    if let Some(preview) = self.coordinator.prepare_patch_transaction(patch)? {
+                    let audited = self.coordinator.prepare_patch_transaction_audited(patch);
+                    work.merge(audited.work);
+                    if let Some(preview) = audited.outcome? {
                         if !self
                             .editor
                             .accept_computed_feature_radius_preview(&expected, feature, radius)
@@ -2982,7 +3219,9 @@ impl ProjectionalEditorSession {
                             distance,
                         )?
                     };
-                    if let Some(preview) = self.coordinator.prepare_patch_transaction(patch)? {
+                    let audited = self.coordinator.prepare_patch_transaction_audited(patch);
+                    work.merge(audited.work);
+                    if let Some(preview) = audited.outcome? {
                         if !self
                             .editor
                             .accept_profile_offset_distance_preview(&expected, dimension, distance)
@@ -3480,3 +3719,15 @@ pub enum ProjectionalEditorError {
 #[cfg(test)]
 #[path = "intent_editor_prepared_tests.rs"]
 mod prepared_route_tests;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod native_auto_trait_tests {
+    use super::ProjectionalEditorSession;
+
+    fn assert_send<T: Send>() {}
+
+    #[test]
+    fn projectional_editor_remains_native_send() {
+        assert_send::<ProjectionalEditorSession>();
+    }
+}

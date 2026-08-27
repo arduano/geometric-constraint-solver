@@ -1112,6 +1112,50 @@ impl IntentSession {
     where
         F: FnOnce(&IntentCandidate) -> IntentEvaluation,
     {
+        self.plan_patch_with_history(patch, materialize, true)
+    }
+
+    /// Plans and fully validates one unordered patch without constructing a
+    /// nested user Undo/Redo snapshot.
+    ///
+    /// This is the narrow transaction seam for an adjacent composite owner
+    /// which already owns the sole user-visible history row. The source must
+    /// already be a history-free delegated checkpoint; the accepted graph,
+    /// materialization evidence, exact-CAS revision, allocator high-water and
+    /// plan-token checks otherwise remain identical to [`Self::plan_patch`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary typed planning error, or rejects a source which
+    /// still contains nested Undo/Redo. Every error leaves the session
+    /// unchanged.
+    pub fn plan_delegated_patch<F>(
+        &self,
+        patch: IntentPatch,
+        materialize: F,
+    ) -> Result<IntentPatchPlan, IntentPlanError>
+    where
+        F: FnOnce(&IntentCandidate) -> IntentEvaluation,
+    {
+        if !self.undo.is_empty() || !self.redo.is_empty() {
+            return Err(IntentSessionError::DelegatedCheckpointContainsHistory.into());
+        }
+        self.plan_patch_with_history(patch, materialize, false)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one staging path authenticates the complete exact-CAS transaction before publication"
+    )]
+    fn plan_patch_with_history<F>(
+        &self,
+        patch: IntentPatch,
+        materialize: F,
+        publish_history: bool,
+    ) -> Result<IntentPatchPlan, IntentPlanError>
+    where
+        F: FnOnce(&IntentCandidate) -> IntentEvaluation,
+    {
         self.ensure_current(patch.expected)?;
         if patch.operations().len() > MAX_INTENT_PATCH_OPERATIONS {
             return Err(IntentPlanError::ResourceLimit {
@@ -1264,16 +1308,22 @@ impl IntentSession {
         let descriptor =
             IntentTransactionDescriptor::new(revision, disposition, operation_kinds, diff.clone());
         descriptor.validate()?;
-        let mut undo = self.undo.clone();
-        push_bounded(
-            &mut undo,
-            HistoryEntry {
-                before: history_checkpoint_digest(&base_checkpoint),
-                after: history_checkpoint_digest(&staged),
-                checkpoint: base_checkpoint,
-                descriptor: descriptor.clone(),
-            },
-        );
+        let mut undo = if publish_history {
+            self.undo.clone()
+        } else {
+            Vec::new()
+        };
+        if publish_history {
+            push_bounded(
+                &mut undo,
+                HistoryEntry {
+                    before: history_checkpoint_digest(&base_checkpoint),
+                    after: history_checkpoint_digest(&staged),
+                    checkpoint: base_checkpoint,
+                    descriptor: descriptor.clone(),
+                },
+            );
+        }
         let redo = Vec::new();
         let target = session_identity(
             self.id,
@@ -1704,12 +1754,47 @@ impl IntentSession {
     /// authority fails validation.
     pub fn delegated_checkpoint(&self) -> Result<Self, IntentSessionError> {
         self.validate()?;
-        let mut delegated = self.clone();
-        delegated.undo.clear();
-        delegated.redo.clear();
+        let mut delegated = Self {
+            id: self.id,
+            revision: self.revision,
+            identity: self.identity,
+            semantic_identity: self.semantic_identity,
+            graph: self.graph.clone(),
+            instance: self.instance.clone(),
+            reservations: self.reservations.clone(),
+            organization: self.organization.clone(),
+            external_inputs: self.external_inputs.clone(),
+            latest_attempt: self.latest_attempt.clone(),
+            accepted: self.accepted.clone(),
+            undo: Vec::new(),
+            redo: Vec::new(),
+            allocator: self.allocator,
+        };
         delegated.refresh_cached_identities();
         delegated.validate()?;
         Ok(delegated)
+    }
+
+    /// Consumes this session and removes nested user Undo/Redo in place.
+    ///
+    /// This is the allocation- and stack-bounded form for adjacent composite
+    /// owners which already own the session value. Unlike
+    /// [`Self::delegated_checkpoint`], it does not clone the current graph,
+    /// accepted authority, or potentially deep bounded history before
+    /// discarding that history.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the resulting history-free authority fails strict
+    /// validation. A constructed [`IntentSession`] already satisfies its
+    /// private source invariants; history is discarded before validation so a
+    /// deep but bounded outer-owned history is never needlessly traversed.
+    pub fn into_delegated_checkpoint(mut self) -> Result<Self, IntentSessionError> {
+        self.undo.clear();
+        self.redo.clear();
+        self.refresh_cached_identities();
+        self.validate()?;
+        Ok(self)
     }
 
     /// Encodes [`Self::delegated_checkpoint`] using the ordinary strict
@@ -3473,6 +3558,7 @@ mod tests {
     fn delegated_checkpoint_is_history_free_but_retains_current_and_allocator_authority() {
         let session = session_with_undo_and_redo();
         let delegated = session.delegated_checkpoint().unwrap();
+        let consumed = session.clone().into_delegated_checkpoint().unwrap();
         assert_eq!(session.undo_len(), 2);
         assert_eq!(session.redo_len(), 1);
         assert_eq!(delegated.undo_len(), 0);
@@ -3491,6 +3577,7 @@ mod tests {
         );
         assert_eq!(delegated.identity().revision, session.identity().revision);
         assert_ne!(delegated.identity().digest, session.identity().digest);
+        assert_eq!(consumed, delegated);
 
         let json = session.to_delegated_checkpoint_json().unwrap();
         let restored = IntentSession::from_delegated_checkpoint_json(&json).unwrap();
@@ -3500,6 +3587,53 @@ mod tests {
             IntentSession::from_delegated_checkpoint_json(&session.to_canonical_json().unwrap()),
             Err(IntentSessionError::DelegatedCheckpointContainsHistory)
         ));
+    }
+
+    #[test]
+    fn delegated_patch_never_constructs_nested_history_and_rejects_non_delegated_sources() {
+        let mut ordinary =
+            IntentSession::with_id(IntentSessionId::from_raw(0x85_de1e_6a7e)).unwrap();
+        commit_point(&mut ordinary, "point-a", "delegated.point.a");
+        let patch_for = |session: &IntentSession| {
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::CreateNode {
+                    alias: key("point-b"),
+                    draft: Box::new(IntentNodeDraft::new(
+                        IntentNodeKind::Geometry {
+                            recipe: GeometryRecipeKind::SketchPoint,
+                        },
+                        key("delegated.point.b"),
+                    )),
+                    cell: None,
+                }],
+            )
+        };
+
+        assert!(matches!(
+            ordinary.plan_delegated_patch(patch_for(&ordinary), accepted),
+            Err(IntentPlanError::Session(error))
+                if matches!(
+                    *error,
+                    IntentSessionError::DelegatedCheckpointContainsHistory
+                )
+        ));
+
+        let mut delegated = ordinary.delegated_checkpoint().unwrap();
+        let base = delegated.identity();
+        let plan = delegated
+            .plan_delegated_patch(patch_for(&delegated), accepted)
+            .unwrap();
+        assert_eq!(plan.base(), base);
+        assert_eq!(plan.disposition(), IntentPlanDisposition::Accepted);
+        let target = delegated.commit_plan(plan).unwrap();
+        assert_eq!(target, delegated.identity());
+        assert_eq!(target.revision.raw(), base.revision.raw() + 1);
+        assert_eq!(delegated.graph().nodes().len(), 2);
+        assert_eq!(delegated.undo_len(), 0);
+        assert_eq!(delegated.redo_len(), 0);
+        delegated.validate().unwrap();
     }
 
     #[test]

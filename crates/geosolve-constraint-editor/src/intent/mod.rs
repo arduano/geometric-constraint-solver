@@ -1320,6 +1320,18 @@ impl ColdIntentMaterializer {
         &self,
         candidate: &dyn IntentMaterializationSource,
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
+        self.materialize_source_with_work(candidate, &mut crate::InteractionWorkReceipt::default())
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one auditable cold transaction retains validation, exact work evidence and evidence publication in one scope"
+    )]
+    fn materialize_source_with_work(
+        &self,
+        candidate: &dyn IntentMaterializationSource,
+        work: &mut crate::InteractionWorkReceipt,
+    ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         candidate.graph().validate()?;
         preflight_supported(candidate)?;
         if self.bootstrap.is_none()
@@ -1418,6 +1430,7 @@ impl ColdIntentMaterializer {
         state.validate_aggregates(&session)?;
 
         let mut ownership = state.finish(candidate.reservations().entries());
+        work.record_computed_evaluation_attempt();
         let computed = crate::intent_computed::materialize_computed_features(
             candidate.graph(),
             accepted.document().id(),
@@ -1677,12 +1690,26 @@ impl ColdIntentMaterializer {
         &self,
         candidate: &IntentCandidate,
     ) -> (IntentEvaluation, Option<ColdIntentMaterialization>) {
-        match self.materialize(candidate) {
+        let audited = self.evaluate_with_materialization_audited(candidate);
+        (audited.0, audited.1)
+    }
+
+    pub(crate) fn evaluate_with_materialization_audited(
+        &self,
+        candidate: &IntentCandidate,
+    ) -> (
+        IntentEvaluation,
+        Option<ColdIntentMaterialization>,
+        crate::InteractionWorkReceipt,
+    ) {
+        let mut work = crate::InteractionWorkReceipt::default();
+        work.record_intent_materialization_attempt();
+        match self.materialize_source_with_work(candidate, &mut work) {
             Ok(materialized) => {
                 let evaluation = IntentEvaluation::Accepted {
                     evidence: materialized.evidence.clone(),
                 };
-                (evaluation, Some(materialized))
+                (evaluation, Some(materialized), work)
             }
             Err(error) => {
                 let mut failed_nodes = error.failed_node().into_iter().collect::<BTreeSet<_>>();
@@ -1702,17 +1729,15 @@ impl ColdIntentMaterializer {
                     // structurally valid and never invent a non-graph owner.
                     failed_nodes.extend(candidate.graph().nodes().keys().copied());
                 }
-                (
-                    IntentEvaluation::Failed {
-                        failure: IntentEvaluationFailure {
-                            kind: error.failure_kind(),
-                            failed_nodes,
-                            diagnostic: IntentKey::new(error.diagnostic_key())
-                                .expect("static intent materialization diagnostics are valid keys"),
-                        },
+                let evaluation = IntentEvaluation::Failed {
+                    failure: IntentEvaluationFailure {
+                        kind: error.failure_kind(),
+                        failed_nodes,
+                        diagnostic: IntentKey::new(error.diagnostic_key())
+                            .expect("static intent materialization diagnostics are valid keys"),
                     },
-                    None,
-                )
+                };
+                (evaluation, None, work)
             }
         }
     }

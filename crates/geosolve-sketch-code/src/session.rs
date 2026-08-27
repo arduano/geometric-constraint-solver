@@ -12,11 +12,11 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOverlayError, CodeProject,
-    ExpandedCodeProject, ExpandedWritablePoint, GeneratedMemberAddress, GeneratedMemberIdentity,
-    KeyedReconcileError, KeyedReconcilePlan, KeyedReconcileState, ManagedDocument,
-    ManagedParseError, ManagedValue, ProjectKey, expand_code_project_with_overlay,
-    parse_managed_source, stage_point_drags,
+    AuditedCodeWork, CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOverlayError,
+    CodeProject, CodeWorkReceipt, ExpandedCodeProject, ExpandedWritablePoint,
+    GeneratedMemberAddress, GeneratedMemberIdentity, KeyedReconcileError, KeyedReconcilePlan,
+    KeyedReconcileState, ManagedDocument, ManagedParseError, ManagedValue, ProjectKey,
+    expand_code_project_with_overlay, parse_managed_source, stage_point_drags,
 };
 
 const MAX_HISTORY: usize = 256;
@@ -890,6 +890,23 @@ impl SketchCodeSession {
         &mut self,
         prepared: PreparedCodeEdit,
     ) -> Result<CodeSessionReceipt, CodeSessionError> {
+        self.apply_prepared_audited(prepared).into_outcome()
+    }
+
+    pub fn apply_prepared_audited(
+        &mut self,
+        prepared: PreparedCodeEdit,
+    ) -> AuditedCodeWork<Result<CodeSessionReceipt, CodeSessionError>> {
+        let mut work = CodeWorkReceipt::default();
+        let outcome = self.apply_prepared_with_work(prepared, &mut work);
+        AuditedCodeWork::new(outcome, work)
+    }
+
+    fn apply_prepared_with_work(
+        &mut self,
+        prepared: PreparedCodeEdit,
+        work: &mut CodeWorkReceipt,
+    ) -> Result<CodeSessionReceipt, CodeSessionError> {
         self.authenticate(&prepared.expected)?;
         validate_snapshot(&prepared.next)?;
         if !prepared
@@ -941,6 +958,7 @@ impl SketchCodeSession {
         self.snapshot = prepared.next;
         self.identity = next_identity;
         self.structural_expansions = structural_expansions;
+        work.record_accepted_publication();
         Ok(CodeSessionReceipt {
             before,
             after: self.identity.clone(),
@@ -1642,13 +1660,19 @@ export default sketch(($) => {
                 "Expand point handles",
             )
             .unwrap();
-        session.apply_prepared(prepared.clone()).unwrap();
+        let published = session.apply_prepared_audited(prepared.clone());
+        published.outcome.unwrap();
+        assert_eq!(published.work.managed_parse_attempts(), 0);
+        assert_eq!(published.work.expansion_attempts(), 0);
+        assert_eq!(published.work.accepted_publications(), 1);
         assert!(session.can_undo());
         assert_eq!(session.structural_expansions(), 1);
+        let stale = session.apply_prepared_audited(prepared);
         assert!(matches!(
-            session.apply_prepared(prepared),
+            stale.outcome,
             Err(CodeSessionError::StaleSession { .. })
         ));
+        assert_eq!(stale.work, CodeWorkReceipt::default());
     }
 
     #[test]

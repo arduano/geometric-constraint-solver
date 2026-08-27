@@ -27,6 +27,7 @@ mod intent_inputs;
 mod intent_offset_authoring;
 mod intent_projection;
 mod intent_rpc;
+mod interaction_work;
 mod offset_authoring;
 
 pub use annotations::{
@@ -150,6 +151,7 @@ pub use intent_rpc::{
     MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES, MAX_INTENT_RPC_REQUEST_BYTES,
     MAX_INTENT_RPC_RESPONSE_BYTES, apply_intent_rpc_json_to_editor, apply_intent_rpc_to_editor,
 };
+pub use interaction_work::{AuditedInteraction, InteractionWorkReceipt};
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
     OffsetAuthoringGuidance, OffsetAuthoringHover, OffsetAuthoringOperand, OffsetAuthoringOutcome,

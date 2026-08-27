@@ -7,6 +7,9 @@
 //! accepted authority or gesture-local numerical continuation state; their own
 //! command histories are never exposed or persisted.
 
+#[cfg(target_arch = "wasm32")]
+use std::rc::Rc;
+
 use geosolve_sketch::{
     CurveDefinition, CurveId, DesignPointId, DesignScalarId, DocumentCurveControlAvailability,
     DocumentCurveControlId, DocumentCurveControlProjection, DocumentCurveControlTarget,
@@ -24,9 +27,61 @@ use geosolve_sketch_intent::{
 use thiserror::Error;
 
 use crate::{
-    ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
-    IntentNativeWritableLeaf,
+    AuditedInteraction, ColdIntentMaterialization, ColdIntentMaterializer,
+    IntentMaterializationError, IntentNativeWritableLeaf, InteractionWorkReceipt,
 };
+
+#[cfg(target_arch = "wasm32")]
+type AcceptedMaterialization = Rc<ColdIntentMaterialization>;
+#[cfg(not(target_arch = "wasm32"))]
+type AcceptedMaterialization = Box<ColdIntentMaterialization>;
+
+#[cfg(target_arch = "wasm32")]
+fn retain_accepted(accepted: &AcceptedMaterialization) -> AcceptedMaterialization {
+    Rc::clone(accepted)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn retain_accepted(accepted: &AcceptedMaterialization) -> AcceptedMaterialization {
+    Box::new(accepted.as_ref().clone())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn own_accepted(accepted: ColdIntentMaterialization) -> AcceptedMaterialization {
+    Rc::new(accepted)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn own_accepted(accepted: ColdIntentMaterialization) -> AcceptedMaterialization {
+    Box::new(accepted)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn own_boxed_accepted(accepted: Box<ColdIntentMaterialization>) -> AcceptedMaterialization {
+    Rc::from(accepted)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn own_boxed_accepted(accepted: Box<ColdIntentMaterialization>) -> AcceptedMaterialization {
+    accepted
+}
+
+fn accepted_authority_is_current(
+    intent: &IntentSession,
+    accepted: &ColdIntentMaterialization,
+) -> bool {
+    let semantic = intent.semantic_identity();
+    intent.accepted().is_some_and(|authority| {
+        authority.target == semantic
+            && accepted.validation.semantic == semantic
+            && accepted.ownership.semantic == semantic
+            && accepted.evidence == authority.evidence
+            && accepted
+                .session
+                .accepted_state_for_current_input()
+                .is_some()
+    })
+}
 
 /// Result of one committed projectional transaction.
 #[derive(Clone, Debug, PartialEq)]
@@ -124,7 +179,7 @@ struct ProjectionalCurveControlDrag {
 pub struct ProjectionalIntentCoordinator {
     intent: IntentSession,
     materializer: ColdIntentMaterializer,
-    accepted: Option<Box<ColdIntentMaterialization>>,
+    accepted: Option<AcceptedMaterialization>,
     point_drag: Option<ProjectionalPointDrag>,
     curve_control_drag: Option<ProjectionalCurveControlDrag>,
 }
@@ -177,6 +232,56 @@ pub(crate) fn plan_patch_calls() -> usize {
 }
 
 impl ProjectionalIntentCoordinator {
+    /// Forks the exact accepted projectional authority without replaying or
+    /// re-solving it.
+    ///
+    /// The returned coordinator owns a history-free clone of current Intent,
+    /// the already independently validated materialization and no disposable
+    /// pointer state. This is the transactional starting point used by
+    /// adjacent composition layers that own outer Undo/Redo and must prepare
+    /// one new cold-validated patch without first cold-restoring the unchanged
+    /// accepted graph.
+    pub(crate) fn fork_accepted(&self) -> Result<Self, ProjectionalCoordinatorError> {
+        let accepted = self
+            .accepted
+            .as_ref()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?;
+        if !accepted_authority_is_current(&self.intent, accepted) {
+            return Err(ProjectionalCoordinatorError::NoAcceptedAuthority);
+        }
+        Ok(Self {
+            intent: self.intent.delegated_checkpoint()?,
+            materializer: self.materializer.clone(),
+            accepted: Some(retain_accepted(accepted)),
+            point_drag: None,
+            curve_control_drag: None,
+        })
+    }
+
+    /// Consumes one accepted coordinator and removes its nested Intent
+    /// Undo/Redo while retaining the exact current graph, allocator and
+    /// independently validated native authority.
+    pub(crate) fn into_delegated_accepted(self) -> Result<Self, ProjectionalCoordinatorError> {
+        let Self {
+            intent,
+            materializer,
+            accepted,
+            point_drag: _,
+            curve_control_drag: _,
+        } = self;
+        let accepted = accepted.ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?;
+        if !accepted_authority_is_current(&intent, &accepted) {
+            return Err(ProjectionalCoordinatorError::NoAcceptedAuthority);
+        }
+        Ok(Self {
+            intent: intent.into_delegated_checkpoint()?,
+            materializer,
+            accepted: Some(accepted),
+            point_drag: None,
+            curve_control_drag: None,
+        })
+    }
+
     /// Creates an empty projectional session.
     ///
     /// # Errors
@@ -214,7 +319,7 @@ impl ProjectionalIntentCoordinator {
         Ok(Self {
             intent,
             materializer,
-            accepted: accepted.map(Box::new),
+            accepted: accepted.map(own_accepted),
             point_drag: None,
             curve_control_drag: None,
         })
@@ -249,7 +354,7 @@ impl ProjectionalIntentCoordinator {
         Ok(Self {
             intent,
             materializer,
-            accepted: Some(Box::new(accepted)),
+            accepted: Some(own_accepted(accepted)),
             point_drag: None,
             curve_control_drag: None,
         })
@@ -280,7 +385,7 @@ impl ProjectionalIntentCoordinator {
         Ok(Self {
             intent,
             materializer,
-            accepted: Some(Box::new(accepted)),
+            accepted: Some(own_accepted(accepted)),
             point_drag: None,
             curve_control_drag: None,
         })
@@ -331,6 +436,24 @@ impl ProjectionalIntentCoordinator {
         self.commit_planned(planned)
     }
 
+    /// Applies one independently materialized exact-CAS patch without
+    /// constructing nested Intent Undo/Redo.
+    ///
+    /// Adjacent composite owners use this only over a history-free accepted
+    /// fork while publishing the sole user-visible history row themselves.
+    /// Native materialization, computed-feature evaluation, validation and
+    /// accepted-authority publication are otherwise identical to
+    /// [`Self::apply_patch`].
+    pub(crate) fn apply_delegated_patch(
+        &mut self,
+        patch: IntentPatch,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.cancel_interaction();
+        let mut work = InteractionWorkReceipt::default();
+        let planned = self.plan_delegated_patch_with_work(patch, &mut work)?;
+        self.commit_delegated_planned_with_work(planned, &mut work)
+    }
+
     /// Plans and independently cold-materializes one typed patch without
     /// publishing its intent plan, accepted authority, or history entry.
     ///
@@ -343,14 +466,19 @@ impl ProjectionalIntentCoordinator {
     /// # Errors
     ///
     /// Returns the ordinary exact-CAS planning or cold-materialization error.
-    pub(crate) fn prepare_patch_transaction(
+    pub(crate) fn prepare_patch_transaction_audited(
         &self,
         patch: IntentPatch,
-    ) -> Result<Option<PreparedProjectionalTransaction>, ProjectionalCoordinatorError> {
-        match self.plan_patch(patch)? {
-            PlannedProjectionalTransaction::Accepted(prepared) => Ok(Some(prepared)),
-            PlannedProjectionalTransaction::NonPublishing { .. } => Ok(None),
-        }
+    ) -> AuditedInteraction<
+        Result<Option<PreparedProjectionalTransaction>, ProjectionalCoordinatorError>,
+    > {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = match self.plan_patch_with_work(patch, &mut work) {
+            Ok(PlannedProjectionalTransaction::Accepted(prepared)) => Ok(Some(prepared)),
+            Ok(PlannedProjectionalTransaction::NonPublishing { .. }) => Ok(None),
+            Err(error) => Err(error),
+        };
+        AuditedInteraction::new(outcome, work)
     }
 
     /// Publishes an exact previously prepared accepted transaction.
@@ -363,8 +491,21 @@ impl ProjectionalIntentCoordinator {
         &mut self,
         prepared: PreparedProjectionalTransaction,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.commit_prepared_transaction_audited(prepared)
+            .into_outcome()
+    }
+
+    pub(crate) fn commit_prepared_transaction_audited(
+        &mut self,
+        prepared: PreparedProjectionalTransaction,
+    ) -> AuditedInteraction<Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError>> {
         self.cancel_interaction();
-        self.commit_planned(PlannedProjectionalTransaction::Accepted(prepared))
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.commit_planned_with_work(
+            PlannedProjectionalTransaction::Accepted(prepared),
+            &mut work,
+        );
+        AuditedInteraction::new(outcome, work)
     }
 
     /// Deletes one declaration and its exact Rust-computed dependent closure
@@ -398,15 +539,47 @@ impl ProjectionalIntentCoordinator {
         &self,
         patch: IntentPatch,
     ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
+        self.plan_patch_with_work(patch, &mut InteractionWorkReceipt::default())
+    }
+
+    fn plan_patch_with_work(
+        &self,
+        patch: IntentPatch,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
+        self.plan_patch_with_work_mode(patch, work, false)
+    }
+
+    fn plan_delegated_patch_with_work(
+        &self,
+        patch: IntentPatch,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
+        self.plan_patch_with_work_mode(patch, work, true)
+    }
+
+    fn plan_patch_with_work_mode(
+        &self,
+        patch: IntentPatch,
+        work: &mut InteractionWorkReceipt,
+        delegated: bool,
+    ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
         #[cfg(test)]
         PLAN_PATCH_CALLS.with(|calls| calls.set(calls.get() + 1));
         let mut captured = None;
-        let plan = self.intent.plan_patch(patch, |candidate| {
-            let (evaluation, materialized) =
-                self.materializer.evaluate_with_materialization(candidate);
+        let evaluate = |candidate: &geosolve_sketch_intent::IntentCandidate| {
+            let (evaluation, materialized, materialization_work) = self
+                .materializer
+                .evaluate_with_materialization_audited(candidate);
+            work.merge(materialization_work);
             captured = materialized;
             evaluation
-        })?;
+        };
+        let plan = if delegated {
+            self.intent.plan_delegated_patch(patch, evaluate)?
+        } else {
+            self.intent.plan_patch(patch, evaluate)?
+        };
         if plan.disposition() == IntentPlanDisposition::Accepted {
             return Ok(PlannedProjectionalTransaction::Accepted(
                 PreparedProjectionalTransaction {
@@ -428,6 +601,31 @@ impl ProjectionalIntentCoordinator {
         &mut self,
         planned: PlannedProjectionalTransaction,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.commit_planned_with_work(planned, &mut InteractionWorkReceipt::default())
+    }
+
+    fn commit_planned_with_work(
+        &mut self,
+        planned: PlannedProjectionalTransaction,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.commit_planned_with_work_mode(planned, work, true)
+    }
+
+    fn commit_delegated_planned_with_work(
+        &mut self,
+        planned: PlannedProjectionalTransaction,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.commit_planned_with_work_mode(planned, work, false)
+    }
+
+    fn commit_planned_with_work_mode(
+        &mut self,
+        planned: PlannedProjectionalTransaction,
+        work: &mut InteractionWorkReceipt,
+        publish_history: bool,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
         let (plan, materialization) = match planned {
             PlannedProjectionalTransaction::Accepted(PreparedProjectionalTransaction {
                 plan,
@@ -438,8 +636,11 @@ impl ProjectionalIntentCoordinator {
         let disposition = plan.disposition();
         let aliases = plan.aliases().clone();
         let identity = self.intent.commit_plan(plan)?;
+        if publish_history {
+            work.record_history_publication();
+        }
         if let Some(materialization) = materialization {
-            self.accepted = Some(materialization);
+            self.accepted = Some(own_boxed_accepted(materialization));
         }
         Ok(ProjectionalPatchOutcome {
             identity,
@@ -495,7 +696,7 @@ impl ProjectionalIntentCoordinator {
         };
         let identity = staged.identity();
         self.intent = staged;
-        self.accepted = accepted.map(Box::new);
+        self.accepted = accepted.map(own_accepted);
         Ok(Some(identity))
     }
 
@@ -566,6 +767,33 @@ impl ProjectionalIntentCoordinator {
         target: [f64; 2],
         control: OperationControl,
     ) -> Result<Option<ProjectionalPointDragPreview>, ProjectionalCoordinatorError> {
+        self.preview_point_drag_audited(pointer_id, request_id, target, control)
+            .into_outcome()
+    }
+
+    pub(crate) fn preview_point_drag_audited(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        target: [f64; 2],
+        control: OperationControl,
+    ) -> AuditedInteraction<
+        Result<Option<ProjectionalPointDragPreview>, ProjectionalCoordinatorError>,
+    > {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome =
+            self.preview_point_drag_with_work(pointer_id, request_id, target, control, &mut work);
+        AuditedInteraction::new(outcome, work)
+    }
+
+    fn preview_point_drag_with_work(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        target: [f64; 2],
+        control: OperationControl,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<Option<ProjectionalPointDragPreview>, ProjectionalCoordinatorError> {
         if !target.iter().all(|value| value.is_finite()) {
             return Err(ProjectionalCoordinatorError::NonFiniteDragTarget);
         }
@@ -596,6 +824,7 @@ impl ProjectionalIntentCoordinator {
                 .without_temporary_targets()
                 .with_drag(drag.point, target);
             let mut candidate = drag.origin.as_ref().clone();
+            work.record_native_preview_attempt();
             let outcome = if let Some(previous) = &drag.latest {
                 candidate.reattempt_from_accepted_preview_with_drag_locality_controlled(
                     candidate.design_identity(),
@@ -664,6 +893,26 @@ impl ProjectionalIntentCoordinator {
         pointer_id: u64,
         request_id: u64,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.finish_point_drag_audited(pointer_id, request_id)
+            .into_outcome()
+    }
+
+    pub(crate) fn finish_point_drag_audited(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+    ) -> AuditedInteraction<Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.finish_point_drag_with_work(pointer_id, request_id, &mut work);
+        AuditedInteraction::new(outcome, work)
+    }
+
+    fn finish_point_drag_with_work(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
         let drag = self
             .point_drag
             .take()
@@ -715,7 +964,7 @@ impl ProjectionalIntentCoordinator {
             IntentPatchPolicy::RequireAccepted,
             operations,
         );
-        let prepared = self.plan_patch(patch)?.into_accepted()?;
+        let prepared = self.plan_patch_with_work(patch, work)?.into_accepted()?;
         let materialized = prepared.materialization();
         let preview_document = latest
             .session
@@ -735,7 +984,7 @@ impl ProjectionalIntentCoordinator {
         ) {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
-        self.commit_planned(PlannedProjectionalTransaction::Accepted(prepared))
+        self.commit_planned_with_work(PlannedProjectionalTransaction::Accepted(prepared), work)
     }
 
     /// Cancels any active gesture without changing intent, accepted authority,
@@ -910,6 +1159,52 @@ impl ProjectionalIntentCoordinator {
         target: [f64; 2],
         operation_control: OperationControl,
     ) -> Result<Option<ProjectionalCurveControlPreview>, ProjectionalCoordinatorError> {
+        self.preview_curve_control_drag_audited(
+            pointer_id,
+            request_id,
+            expected,
+            control,
+            target,
+            operation_control,
+        )
+        .into_outcome()
+    }
+
+    pub(crate) fn preview_curve_control_drag_audited(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        target: [f64; 2],
+        operation_control: OperationControl,
+    ) -> AuditedInteraction<
+        Result<Option<ProjectionalCurveControlPreview>, ProjectionalCoordinatorError>,
+    > {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.preview_curve_control_drag_with_work(
+            pointer_id,
+            request_id,
+            expected,
+            control,
+            target,
+            operation_control,
+            &mut work,
+        );
+        AuditedInteraction::new(outcome, work)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn preview_curve_control_drag_with_work(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        target: [f64; 2],
+        operation_control: OperationControl,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<Option<ProjectionalCurveControlPreview>, ProjectionalCoordinatorError> {
         if !target.iter().all(|value| value.is_finite()) {
             return Err(ProjectionalCoordinatorError::NonFiniteDragTarget);
         }
@@ -944,6 +1239,7 @@ impl ProjectionalIntentCoordinator {
             }
             let edit = curve_control_projection_edit(projection)
                 .ok_or(ProjectionalCoordinatorError::CurveControlRouteMismatch)?;
+            work.record_native_preview_attempt();
             let Ok(outcome) = drag
                 .origin
                 .prepared_snapshot()
@@ -1006,6 +1302,33 @@ impl ProjectionalIntentCoordinator {
         expected: SketchDesignIdentity,
         control: DocumentCurveControlId,
     ) -> Result<Option<ProjectionalPatchOutcome>, ProjectionalCoordinatorError> {
+        self.finish_curve_control_drag_audited(pointer_id, request_id, expected, control)
+            .into_outcome()
+    }
+
+    pub(crate) fn finish_curve_control_drag_audited(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+    ) -> AuditedInteraction<Result<Option<ProjectionalPatchOutcome>, ProjectionalCoordinatorError>>
+    {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.finish_curve_control_drag_with_work(
+            pointer_id, request_id, expected, control, &mut work,
+        );
+        AuditedInteraction::new(outcome, work)
+    }
+
+    fn finish_curve_control_drag_with_work(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        work: &mut InteractionWorkReceipt,
+    ) -> Result<Option<ProjectionalPatchOutcome>, ProjectionalCoordinatorError> {
         let drag = self
             .curve_control_drag
             .take()
@@ -1035,7 +1358,7 @@ impl ProjectionalIntentCoordinator {
             IntentPatchPolicy::RequireAccepted,
             latest.operations,
         );
-        let prepared = self.plan_patch(patch)?.into_accepted()?;
+        let prepared = self.plan_patch_with_work(patch, work)?.into_accepted()?;
         let materialized = prepared.materialization();
         let ownership = &self
             .accepted
@@ -1059,7 +1382,7 @@ impl ProjectionalIntentCoordinator {
         ) {
             return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
         }
-        self.commit_planned(PlannedProjectionalTransaction::Accepted(prepared))
+        self.commit_planned_with_work(PlannedProjectionalTransaction::Accepted(prepared), work)
             .map(Some)
     }
 
@@ -1252,8 +1575,16 @@ mod prepared_transaction_tests {
     fn accepted_prepared_transaction_installs_its_exact_validated_materialization() {
         let mut coordinator = coordinator(0x8300_7001);
         PLAN_PATCH_CALLS.with(|calls| calls.set(0));
-        let prepared = coordinator
-            .prepare_patch_transaction(point_patch(&coordinator, "prepared.point", [2.0, 3.0]))
+        let prepared = coordinator.prepare_patch_transaction_audited(point_patch(
+            &coordinator,
+            "prepared.point",
+            [2.0, 3.0],
+        ));
+        assert_eq!(prepared.work.intent_materialization_attempts(), 1);
+        assert_eq!(prepared.work.computed_evaluation_attempts(), 1);
+        assert_eq!(prepared.work.history_publications(), 0);
+        let prepared = prepared
+            .outcome
             .expect("prepare")
             .expect("accepted transaction");
         assert_eq!(PLAN_PATCH_CALLS.with(std::cell::Cell::get), 1);
@@ -1261,8 +1592,12 @@ mod prepared_transaction_tests {
         let expected_evidence = prepared.materialization().evidence.clone();
         assert!(coordinator.accepted_materialization().is_none());
 
-        let outcome = coordinator
-            .commit_prepared_transaction(prepared)
+        let committed = coordinator.commit_prepared_transaction_audited(prepared);
+        assert_eq!(committed.work.intent_materialization_attempts(), 0);
+        assert_eq!(committed.work.computed_evaluation_attempts(), 0);
+        assert_eq!(committed.work.history_publications(), 1);
+        let outcome = committed
+            .outcome
             .expect("commit exact prepared transaction");
 
         assert_eq!(
@@ -1286,7 +1621,8 @@ mod prepared_transaction_tests {
     fn stale_prepared_transaction_cannot_replace_newer_intent_or_native_authority() {
         let mut coordinator = coordinator(0x8300_7002);
         let prepared = coordinator
-            .prepare_patch_transaction(point_patch(&coordinator, "stale.point", [2.0, 3.0]))
+            .prepare_patch_transaction_audited(point_patch(&coordinator, "stale.point", [2.0, 3.0]))
+            .into_outcome()
             .expect("prepare")
             .expect("accepted transaction");
         coordinator

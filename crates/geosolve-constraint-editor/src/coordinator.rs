@@ -62,20 +62,22 @@ use history::{AcceptedCheckpointRestore, checkpoint, mutation_from, restore_sket
 
 use crate::feature_authoring::resolve_feature_item_picks;
 use crate::{
-    ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringState,
-    AuthoringTool, ComputedFilletContinuationLimit, ComputedFilletContinuationLimitKind,
-    ComputedFilletContinuationStatus, ComputedFilletInteractionSample, ConstraintActionRequest,
-    ConstraintEditor, ConstraintIntent, ConstraintRelationChoice, ConstructionCommitPlan,
-    ConstructionCommitResult, ConstructionCommitToken, ConstructionProposal,
-    ConstructionRelationProvenance, ConstructionResult, CurveControlPreviewRequestDisposition,
-    DimensionActionRequest, DimensionKind, DraftAuthoringInput, DraftInferenceInput, EditorEffect,
-    EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+    ActionChoice, AuditedInteraction, AuthoringApplication, AuthoringOperand, AuthoringOptions,
+    AuthoringState, AuthoringTool, ComputedFilletContinuationLimit,
+    ComputedFilletContinuationLimitKind, ComputedFilletContinuationStatus,
+    ComputedFilletInteractionSample, ConstraintActionRequest, ConstraintEditor, ConstraintIntent,
+    ConstraintRelationChoice, ConstructionCommitPlan, ConstructionCommitResult,
+    ConstructionCommitToken, ConstructionProposal, ConstructionRelationProvenance,
+    ConstructionResult, CurveControlPreviewRequestDisposition, DimensionActionRequest,
+    DimensionKind, DraftAuthoringInput, DraftInferenceInput, EditorEffect, EditorScene,
+    FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
     FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
-    GeometryInteractionPolicy, OffsetAuthoringCandidate, OffsetAuthoringOperand,
-    OffsetAuthoringOutcome, OffsetAuthoringState, OffsetDistanceGestureSeed, PickTolerance,
-    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
-    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
-    SceneFilletActionId, ScreenPoint, SelectionItem,
+    GeometryInteractionPolicy, InteractionWorkReceipt, OffsetAuthoringCandidate,
+    OffsetAuthoringOperand, OffsetAuthoringOutcome, OffsetAuthoringState,
+    OffsetDistanceGestureSeed, PickTolerance, PointGestureSnapshot, PointerInput,
+    ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
+    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
+    ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -6069,6 +6071,40 @@ impl RetainedEditorCoordinator {
         point: DesignPointId,
         model_position: [f64; 2],
     ) -> Vec<EditorEffect> {
+        self.resolve_projected_point_move_audited(pointer_id, request_id, point, model_position)
+            .into_outcome()
+    }
+
+    pub fn resolve_projected_point_move_audited(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        point: DesignPointId,
+        model_position: [f64; 2],
+    ) -> AuditedInteraction<Vec<EditorEffect>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.resolve_projected_point_move_with_work(
+            pointer_id,
+            request_id,
+            point,
+            model_position,
+            &mut work,
+        );
+        AuditedInteraction::new(outcome, work)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "gesture validation, controlled planning, solving, and typed work evidence form one atomic preview transition"
+    )]
+    fn resolve_projected_point_move_with_work(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        point: DesignPointId,
+        model_position: [f64; 2],
+        work: &mut InteractionWorkReceipt,
+    ) -> Vec<EditorEffect> {
         let disposition = self
             .editor
             .projected_drag_request_disposition(pointer_id, request_id, point);
@@ -6211,6 +6247,7 @@ impl RetainedEditorCoordinator {
         attempt_control.limits =
             remaining_operation_limits(planning_operation.configured, planning_operation.consumed);
         let mut candidate = self.session.clone();
+        work.record_native_preview_attempt();
         let outcome = if let Some(preview) = preview.as_ref() {
             candidate.reattempt_from_accepted_preview_with_drag_locality_controlled(
                 candidate.design_identity(),
@@ -6255,23 +6292,26 @@ impl RetainedEditorCoordinator {
                         .filter(|position| position.iter().all(|value| value.is_finite()));
                     if accepted_position.is_none() {
                         rejection_stage = Some(ProjectedDragRejectionStage::AcceptedState);
-                    } else if self
-                        .mark_solved_preview_continuing_controlled(
-                            &candidate,
-                            bounded_geometry_control(),
-                            gesture.last_valid_computed_snapshot.as_ref(),
-                            SolvedPreviewPublicationPolicy::RequireCompleteComputedScene,
-                            &mut gesture.computed_problems,
-                        )
-                        .is_err()
-                    {
-                        accepted_position = None;
-                        rejection_stage = Some(ProjectedDragRejectionStage::PreviewPublication);
                     } else {
-                        if let Some(snapshot) = self.computed_preview_snapshot.as_ref() {
-                            gesture.last_valid_computed_snapshot = Some(snapshot.clone());
+                        work.record_computed_evaluation_attempt();
+                        if self
+                            .mark_solved_preview_continuing_controlled(
+                                &candidate,
+                                bounded_geometry_control(),
+                                gesture.last_valid_computed_snapshot.as_ref(),
+                                SolvedPreviewPublicationPolicy::RequireCompleteComputedScene,
+                                &mut gesture.computed_problems,
+                            )
+                            .is_err()
+                        {
+                            accepted_position = None;
+                            rejection_stage = Some(ProjectedDragRejectionStage::PreviewPublication);
+                        } else {
+                            if let Some(snapshot) = self.computed_preview_snapshot.as_ref() {
+                                gesture.last_valid_computed_snapshot = Some(snapshot.clone());
+                            }
+                            gesture.last_accepted_preview = self.solved_preview.take();
                         }
-                        gesture.last_accepted_preview = self.solved_preview.take();
                     }
                 }
             }
@@ -6315,6 +6355,49 @@ impl RetainedEditorCoordinator {
         expected: SketchDesignIdentity,
         control: DocumentCurveControlId,
         model_position: [f64; 2],
+    ) -> Vec<EditorEffect> {
+        self.resolve_curve_control_preview_audited(
+            pointer_id,
+            request_id,
+            expected,
+            control,
+            model_position,
+        )
+        .into_outcome()
+    }
+
+    pub fn resolve_curve_control_preview_audited(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        model_position: [f64; 2],
+    ) -> AuditedInteraction<Vec<EditorEffect>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.resolve_curve_control_preview_with_work(
+            pointer_id,
+            request_id,
+            expected,
+            control,
+            model_position,
+            &mut work,
+        );
+        AuditedInteraction::new(outcome, work)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "gesture authentication, prepared native solve, computed evaluation, and work evidence remain one preview transition"
+    )]
+    fn resolve_curve_control_preview_with_work(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        model_position: [f64; 2],
+        work: &mut InteractionWorkReceipt,
     ) -> Vec<EditorEffect> {
         match self
             .editor
@@ -6380,6 +6463,7 @@ impl RetainedEditorCoordinator {
             request_id,
             control,
             model_position,
+            work,
         );
         let accepted_position = match accepted {
             Ok(CurveControlPreparedSample::Accepted(sample)) => {
@@ -6426,6 +6510,7 @@ impl RetainedEditorCoordinator {
         request_id: u64,
         control: DocumentCurveControlId,
         model_position: [f64; 2],
+        work: &mut InteractionWorkReceipt,
     ) -> Result<CurveControlPreparedSample, CoordinatorError> {
         let accepted_document = snapshot
             .accepted_state()
@@ -6454,6 +6539,7 @@ impl RetainedEditorCoordinator {
                 },
             ));
         }
+        work.record_native_preview_attempt();
         let outcome = snapshot
             .clone()
             .prepare(PreparedSketchOperation::Apply(edit.clone()))
@@ -6473,6 +6559,7 @@ impl RetainedEditorCoordinator {
             .as_ref()
             .filter(|snapshot| snapshot.input().features == self.features.identity());
         let mut computed_allocator = base_computed_allocator.clone();
+        work.record_computed_evaluation_attempt();
         let evaluated = evaluate_computed_features_continuing(
             candidate_session,
             &self.features,
@@ -9435,7 +9522,20 @@ impl RetainedEditorCoordinator {
         &mut self,
         effect: &EditorEffect,
     ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
-        self.apply_editor_effect_with_projected_release_control(effect, projected_drag_control())
+        self.apply_editor_effect_audited(effect).into_outcome()
+    }
+
+    pub fn apply_editor_effect_audited(
+        &mut self,
+        effect: &EditorEffect,
+    ) -> AuditedInteraction<Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError>> {
+        let mut work = InteractionWorkReceipt::default();
+        let outcome = self.apply_editor_effect_with_projected_release_control_and_work(
+            effect,
+            projected_drag_control(),
+            &mut work,
+        );
+        AuditedInteraction::new(outcome, work)
     }
 
     #[allow(
@@ -9448,6 +9548,7 @@ impl RetainedEditorCoordinator {
         point: DesignPointId,
         model_position: [f64; 2],
         release_control: OperationControl,
+        work: &mut InteractionWorkReceipt,
     ) -> Result<MutationOutcome<EditorMutation>, CoordinatorError> {
         self.ensure_expected(expected)?;
         let preview = self
@@ -9504,6 +9605,7 @@ impl RetainedEditorCoordinator {
             position: model_position,
         };
         let mut candidate_session = self.session.clone();
+        work.record_native_preview_attempt();
         let retained = if let Some(locality) = locality.as_ref() {
             complete_projected_drag_release(
                 candidate_session.apply_point_position_from_preview_with_drag_locality_controlled(
@@ -9534,6 +9636,7 @@ impl RetainedEditorCoordinator {
         }
 
         let mut candidate_allocator = self.computed_evaluation_allocator.clone();
+        work.record_computed_evaluation_attempt();
         let continued = evaluate_computed_features_continuing(
             &candidate_session,
             &self.features,
@@ -9556,6 +9659,7 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::ComputedFeaturePreviewInvalidated);
         }
+        work.record_computed_evaluation_attempt();
         let (candidate_features, cold) = evaluate_durable_computed_reanchor(
             &candidate_session,
             &self.features,
@@ -9606,6 +9710,7 @@ impl RetainedEditorCoordinator {
         self.computed_snapshot = Some(cold);
         self.computed_evaluation_problem = None;
         self.record_feature_mutation(next, replay);
+        work.record_history_publication();
         Ok(MutationOutcome {
             value: EditorMutation::PointMove(outcome.value),
             design: outcome.design,
@@ -9620,9 +9725,10 @@ impl RetainedEditorCoordinator {
         pointer_id: u64,
         request_id: u64,
         control: DocumentCurveControlId,
+        work: &mut InteractionWorkReceipt,
     ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
-        let outcome =
-            self.commit_curve_control_preview_inner(expected, pointer_id, request_id, control);
+        let outcome = self
+            .commit_curve_control_preview_inner(expected, pointer_id, request_id, control, work);
         if outcome.is_err() {
             self.clear_curve_control_preview();
         }
@@ -9639,6 +9745,7 @@ impl RetainedEditorCoordinator {
         pointer_id: u64,
         request_id: u64,
         control: DocumentCurveControlId,
+        work: &mut InteractionWorkReceipt,
     ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
         self.ensure_expected(expected)?;
         let Some(gesture) = self.curve_control_continuation.as_ref() else {
@@ -9687,6 +9794,7 @@ impl RetainedEditorCoordinator {
         }
 
         let mut candidate_allocator = preview.computed_allocator.clone();
+        work.record_computed_evaluation_attempt();
         let (candidate_features, cold) = evaluate_durable_computed_reanchor(
             candidate_session,
             &self.features,
@@ -9751,6 +9859,7 @@ impl RetainedEditorCoordinator {
         self.computed_snapshot = Some(cold);
         self.computed_evaluation_problem = None;
         self.record_feature_mutation(next, replay);
+        work.record_history_publication();
         Ok(Some(MutationOutcome {
             value: EditorMutation::CurveControl(effect),
             design: committed.design_identity(),
@@ -9773,10 +9882,28 @@ impl RetainedEditorCoordinator {
         clippy::too_many_lines,
         reason = "one closed effect dispatcher keeps all editor preview/commit/rollback variants exhaustive"
     )]
+    #[cfg(test)]
     fn apply_editor_effect_with_projected_release_control(
         &mut self,
         effect: &EditorEffect,
         release_control: OperationControl,
+    ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
+        self.apply_editor_effect_with_projected_release_control_and_work(
+            effect,
+            release_control,
+            &mut InteractionWorkReceipt::default(),
+        )
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed effect dispatcher keeps all editor preview/commit/rollback variants and their exact work receipts exhaustive"
+    )]
+    fn apply_editor_effect_with_projected_release_control_and_work(
+        &mut self,
+        effect: &EditorEffect,
+        release_control: OperationControl,
+        work: &mut InteractionWorkReceipt,
     ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
         match effect {
             EditorEffect::CommitPointMove {
@@ -9784,14 +9911,20 @@ impl RetainedEditorCoordinator {
                 point,
                 model_position,
             } => self
-                .commit_solved_point_move(*expected, *point, *model_position, release_control)
+                .commit_solved_point_move(*expected, *point, *model_position, release_control, work)
                 .map(Some),
             EditorEffect::CommitCurveControl {
                 expected,
                 pointer_id,
                 request_id,
                 control,
-            } => self.commit_curve_control_preview(*expected, *pointer_id, *request_id, *control),
+            } => self.commit_curve_control_preview(
+                *expected,
+                *pointer_id,
+                *request_id,
+                *control,
+                work,
+            ),
             EditorEffect::ClearCurveControlPreview => {
                 self.clear_curve_control_preview();
                 Ok(None)
@@ -9814,6 +9947,7 @@ impl RetainedEditorCoordinator {
                 let prior_snapshot = self.computed_preview_snapshot.clone();
                 let prior_input = self.computed_preview_input;
                 let prior_preview = self.computed_fillet_preview.clone();
+                work.record_computed_evaluation_attempt();
                 if let Err(error) =
                     self.preview_computed_fillet_radius_exact(*expected, *feature, *radius)
                 {
@@ -9851,6 +9985,7 @@ impl RetainedEditorCoordinator {
                     return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
                 }
                 self.publish_computed_fillet_preview(expected, *feature, *radius)?;
+                work.record_history_publication();
                 Ok(None)
             }
             EditorEffect::RestoreComputedFeatureRadius {
@@ -9881,6 +10016,7 @@ impl RetainedEditorCoordinator {
                 let prior_snapshot = self.computed_preview_snapshot.clone();
                 let prior_input = self.computed_preview_input;
                 let prior_preview = self.computed_fillet_preview.clone();
+                work.record_computed_evaluation_attempt();
                 if let Err(error) = self.prepare_computed_fillet_contact_preview(
                     expected, *owner, *parent, *source, *parameter,
                 ) {
@@ -9914,6 +10050,7 @@ impl RetainedEditorCoordinator {
                 self.publish_computed_fillet_contact_preview(
                     expected, *owner, *parent, *source, *parameter,
                 )?;
+                work.record_history_publication();
                 Ok(None)
             }
             EditorEffect::RestoreComputedFeatureContact { expected, .. } => {
@@ -9942,7 +10079,9 @@ impl RetainedEditorCoordinator {
                 if self.feature_authoring_preview.is_some() {
                     return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
                 }
+                work.record_computed_evaluation_attempt();
                 self.apply_computed_fillet_action(target.expected, target.owner, target.action)?;
+                work.record_history_publication();
                 Ok(None)
             }
             EditorEffect::CommitConstruction {
@@ -9951,7 +10090,10 @@ impl RetainedEditorCoordinator {
                 role,
             } => {
                 self.ensure_expected(*expected)?;
+                work.record_native_preview_attempt();
+                work.record_computed_evaluation_attempt();
                 let outcome = self.apply_construction_with_role(*expected, proposal, *role)?;
+                work.record_history_publication();
                 Ok(Some(MutationOutcome {
                     value: EditorMutation::Construction(outcome.value),
                     design: outcome.design,
@@ -9975,11 +10117,14 @@ impl RetainedEditorCoordinator {
                 else {
                     return Err(CoordinatorError::InferredConstructionCommitMismatch);
                 };
+                work.record_native_preview_attempt();
+                work.record_computed_evaluation_attempt();
                 let outcome = self.apply_authenticated_construction_plan(
                     expected.as_ref(),
                     plan,
                     &droppable_direction_relations,
                 )?;
+                work.record_history_publication();
                 Ok(Some(MutationOutcome {
                     value: EditorMutation::InferredConstruction(outcome.value),
                     design: outcome.design,
@@ -19044,12 +19189,17 @@ mod tests {
         };
         assert_eq!(*point, points[0]);
 
-        let effects = coordinator.resolve_projected_point_move(
+        let audited = coordinator.resolve_projected_point_move_audited(
             *pointer_id,
             *request_id,
             *point,
             *model_position,
         );
+        let effects = audited.outcome;
+        assert_eq!(audited.work.native_preview_attempts(), 1);
+        assert_eq!(audited.work.intent_materialization_attempts(), 0);
+        assert_eq!(audited.work.computed_evaluation_attempts(), 1);
+        assert_eq!(audited.work.history_publications(), 0);
         assert!(matches!(
             effects.as_slice(),
             [EditorEffect::PreviewPointMove {
@@ -19062,6 +19212,25 @@ mod tests {
             coordinator.lifecycle().status,
             LifecycleStatus::SolvedPreview
         );
+
+        let stale = coordinator.resolve_projected_point_move_audited(
+            *pointer_id,
+            *request_id,
+            *point,
+            *model_position,
+        );
+        assert!(stale.outcome.is_empty());
+        assert_eq!(stale.work, InteractionWorkReceipt::default());
+    }
+
+    #[test]
+    fn audited_flat_clear_effect_crosses_no_semantic_work() {
+        let (session, _, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let audited =
+            coordinator.apply_editor_effect_audited(&EditorEffect::ClearCurveControlPreview);
+        assert!(audited.outcome.unwrap().is_none());
+        assert_eq!(audited.work, InteractionWorkReceipt::default());
     }
 
     #[test]

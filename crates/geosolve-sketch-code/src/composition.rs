@@ -21,9 +21,10 @@ use geosolve_sketch_intent::{
 use thiserror::Error;
 
 use crate::{
-    CodeExpansionError, CodeHostRequest, CodeInteractionOverlay, CodeProject, ExpandedCodeProject,
-    ExpandedFeatureCorner, GeneratedMemberAddress, GeneratedMemberIdentity, KeyedFilletHostRequest,
-    KeyedReconcileState, expand_code_project_for_structural_edit, expand_code_project_with_overlay,
+    AuditedCodeWork, CodeExpansionError, CodeHostRequest, CodeInteractionOverlay, CodeProject,
+    CodeWorkReceipt, ExpandedCodeProject, ExpandedFeatureCorner, GeneratedMemberAddress,
+    GeneratedMemberIdentity, KeyedFilletHostRequest, KeyedReconcileState,
+    expand_code_project_for_structural_edit, expand_code_project_with_overlay,
 };
 
 /// One exact native computed output produced for a generated member.
@@ -172,13 +173,33 @@ pub fn materialize_code_project_cold_with_overlay(
     document: DocumentId,
     model_scale: f64,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
-    let intent = IntentSession::with_id(intent_session).map_err(|error| {
+    let intent = fresh_intent_session(intent_session)?;
+    let expansion =
+        expand_code_project_with_overlay(project, reconciliation, overlay, intent.identity())?;
+    materialize_expanded_code_project_cold(expansion, intent, document, model_scale)
+}
+
+fn fresh_intent_session(
+    intent_session: IntentSessionId,
+) -> Result<IntentSession, CodeCompositionError> {
+    IntentSession::with_id(intent_session).map_err(|error| {
         ProjectionalEditorError::Coordinator(
             geosolve_constraint_editor::ProjectionalCoordinatorError::Intent(error),
         )
-    })?;
-    let expansion =
-        expand_code_project_with_overlay(project, reconciliation, overlay, intent.identity())?;
+        .into()
+    })
+}
+
+/// Materializes one already expanded project through an independent fresh
+/// Intent/native authority. Keeping expansion outside this helper lets the
+/// incremental composer select its warm unchanged-host path without parsing
+/// or lowering the same project a second time.
+fn materialize_expanded_code_project_cold(
+    expansion: ExpandedCodeProject,
+    intent: IntentSession,
+    document: DocumentId,
+    model_scale: f64,
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
     let mut editor = if expansion.patch.operations().is_empty() {
         ProjectionalEditorSession::restore_pristine_empty(intent, document, model_scale)?
     } else {
@@ -447,10 +468,11 @@ fn authenticate_rehydrated_fillet(
 /// composition while retaining every structurally compatible declaration and
 /// its stable ports, reservations, and native ownership.
 ///
-/// The complete desired project is cold-materialized first as independent
-/// branch/data evidence. Its ordinary declarations are then reconciled into
-/// one unordered native patch over a transaction-local restoration of the
-/// prior accepted authority. Compatible nodes, ports, reservations and native
+/// Expansion runs exactly once. When native host requests are unchanged, their
+/// authenticated drafts and outputs are retained while one unordered ordinary
+/// patch is solved transactionally on a fork of prior accepted authority.
+/// Host-structural edits retain the complete cold branch/data oracle before
+/// warm reconciliation. Compatible nodes, ports, reservations and native
 /// owners survive exactly; removals and changed Fillet corners are therefore
 /// never exposed as invalid intermediate scenes.
 ///
@@ -518,17 +540,65 @@ pub fn materialize_code_project_incremental_with_overlay(
     reconciliation: &KeyedReconcileState,
     overlay: &CodeInteractionOverlay,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
+    materialize_code_project_incremental_with_overlay_audited(
+        previous,
+        project,
+        reconciliation,
+        overlay,
+    )
+    .into_outcome()
+}
+
+/// Audited counterpart of
+/// [`materialize_code_project_incremental_with_overlay`].
+///
+/// The receipt records entry into the deterministic expansion boundary even
+/// when later native composition rejects. Merely holding a code project or
+/// calling a stale outer API therefore cannot be mistaken for code work.
+pub fn materialize_code_project_incremental_with_overlay_audited(
+    previous: &MaterializedCodeProject,
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+) -> AuditedCodeWork<Result<MaterializedCodeProject, CodeCompositionError>> {
+    let mut work = CodeWorkReceipt::default();
+    let outcome = materialize_code_project_incremental_with_overlay_and_work(
+        previous,
+        project,
+        reconciliation,
+        overlay,
+        &mut work,
+    );
+    AuditedCodeWork::new(outcome, work)
+}
+
+fn materialize_code_project_incremental_with_overlay_and_work(
+    previous: &MaterializedCodeProject,
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+    work: &mut CodeWorkReceipt,
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
+    validate_native_authority(&previous.editor)?;
+    authenticate_expansion_envelope(&previous.editor, &previous.expansion)?;
     let accepted = previous
         .editor
         .coordinator()
         .accepted_materialization()
         .ok_or(CodeCompositionError::BaseNotAccepted)?;
     let document = accepted.session.design_document();
-    let desired = materialize_code_project_cold_with_overlay(
-        project,
-        reconciliation,
-        overlay,
-        previous.editor.coordinator().intent().identity().session,
+    let cold_intent =
+        fresh_intent_session(previous.editor.coordinator().intent().identity().session)?;
+    work.record_expansion_attempt();
+    let expansion =
+        expand_code_project_with_overlay(project, reconciliation, overlay, cold_intent.identity())?;
+    if expansion.host_requests == previous.expansion.host_requests {
+        return materialize_unchanged_host_project_incremental(previous, expansion);
+    }
+
+    let desired = materialize_expanded_code_project_cold(
+        expansion,
+        cold_intent,
         document.id(),
         document.model_scale(),
     )?;
@@ -605,6 +675,8 @@ pub fn materialize_code_project_incremental_with_overlay(
         outputs.sort_by(|left, right| left.member_key.cmp(&right.member_key));
     }
     validate_native_authority(&editor)?;
+    let editor = editor.into_delegated_accepted_authority()?;
+    base_outcome.identity = editor.coordinator().intent().identity();
 
     Ok(MaterializedCodeProject {
         editor,
@@ -612,6 +684,85 @@ pub fn materialize_code_project_incremental_with_overlay(
         base_outcome,
         host_outputs,
     })
+}
+
+/// Applies one ordinary incremental patch over a transaction-local fork when
+/// code expansion leaves every native host request unchanged.
+///
+/// Existing host declarations and outputs are authenticated and retained;
+/// their source dependencies participate in the ordinary native solve, but no
+/// cold project reconstruction or Fillet re-authoring is needed. The result is
+/// consumed into a history-neutral delegated authority because the adjacent
+/// code session owns the sole user-visible Undo/Redo row.
+fn materialize_unchanged_host_project_incremental(
+    previous: &MaterializedCodeProject,
+    expansion: ExpandedCodeProject,
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
+    let replacement_slots = detached_reference_replacement_slots(&previous.expansion, &expansion);
+    let previous_symbols = materialized_project_symbols(previous)?;
+    let mut desired_drafts = create_drafts(&expansion)?
+        .into_iter()
+        .map(|(alias, draft)| (alias, draft.clone()))
+        .collect::<Vec<_>>();
+    desired_drafts.extend(materialized_host_drafts(previous)?);
+    let mut editor = previous.editor.fork_accepted_authority()?;
+    let (patch, retained_aliases) = incremental_project_patch(
+        editor.coordinator().intent(),
+        &previous_symbols,
+        &desired_drafts,
+        &replacement_slots,
+        OutsideDependentPolicy::Reject,
+    )?;
+
+    let mut base_outcome = if patch.operations().is_empty() {
+        ProjectionalPatchOutcome {
+            identity: editor.coordinator().intent().identity(),
+            disposition: IntentPlanDisposition::Accepted,
+            aliases: IntentAliasMap::default(),
+        }
+    } else {
+        editor
+            .apply_delegated_patch(patch)
+            .map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))?
+    };
+    if base_outcome.disposition != IntentPlanDisposition::Accepted {
+        return Err(CodeCompositionError::BaseNotAccepted);
+    }
+    merge_retained_aliases(
+        &mut base_outcome.aliases,
+        editor.coordinator().intent(),
+        &retained_aliases,
+    )?;
+    validate_native_authority(&editor)?;
+    authenticate_expansion_envelope(&editor, &expansion)?;
+    let authenticated_aliases = rehydrate_base_aliases(&editor, &expansion)?;
+    let observed_host_outputs =
+        rehydrate_host_outputs(&editor, &authenticated_aliases, &expansion.host_requests)?;
+    if observed_host_outputs != previous.host_outputs {
+        let member = expansion
+            .host_requests
+            .first()
+            .map_or_else(|| "retained host outputs".into(), host_request_display_path);
+        return Err(CodeCompositionError::RehydratedHostMismatch { member });
+    }
+    base_outcome.aliases = authenticated_aliases;
+    let host_outputs = previous.host_outputs.clone();
+    base_outcome.identity = editor.coordinator().intent().identity();
+    validate_native_authority(&editor)?;
+
+    Ok(MaterializedCodeProject {
+        editor,
+        expansion,
+        base_outcome,
+        host_outputs,
+    })
+}
+
+fn host_request_display_path(request: &CodeHostRequest) -> String {
+    match request {
+        CodeHostRequest::FilletAtCorner(request) => request.output.display_path(),
+        CodeHostRequest::RoundedRectangleProfile { output, .. } => output.display_path(),
+    }
 }
 
 /// Keeps an existing native host declaration as the continuation seed when
@@ -1065,6 +1216,17 @@ fn materialized_project_symbols(
 fn complete_project_drafts(
     materialized: &MaterializedCodeProject,
 ) -> Result<Vec<(IntentKey, IntentNodeDraft)>, CodeCompositionError> {
+    let mut drafts = create_drafts(&materialized.expansion)?
+        .into_iter()
+        .map(|(alias, draft)| (alias, draft.clone()))
+        .collect::<Vec<_>>();
+    drafts.extend(materialized_host_drafts(materialized)?);
+    Ok(drafts)
+}
+
+fn materialized_host_drafts(
+    materialized: &MaterializedCodeProject,
+) -> Result<Vec<(IntentKey, IntentNodeDraft)>, CodeCompositionError> {
     let intent = materialized.editor.coordinator().intent();
     let reverse_aliases = materialized
         .base_outcome
@@ -1077,10 +1239,7 @@ fn complete_project_drafts(
                 .map(move |(selector, port)| (*port, (alias.clone(), *selector)))
         })
         .collect::<BTreeMap<_, _>>();
-    let mut drafts = create_drafts(&materialized.expansion)?
-        .into_iter()
-        .map(|(alias, draft)| (alias, draft.clone()))
-        .collect::<Vec<_>>();
+    let mut drafts = Vec::new();
     for member in expand_host_members(&materialized.expansion.host_requests)?.values() {
         let symbol = host_symbol(
             &member.key.address,
@@ -1472,11 +1631,21 @@ fn expand_host_members(
 fn validate_native_authority(
     editor: &ProjectionalEditorSession,
 ) -> Result<(), CodeCompositionError> {
+    let intent = editor.coordinator().intent();
     let accepted = editor
         .coordinator()
         .accepted_materialization()
         .ok_or(CodeCompositionError::BaseNotAccepted)?;
-    if !accepted.validation.hard_residuals_validated
+    let semantic = intent.semantic_identity();
+    if intent.accepted().is_none_or(|authority| {
+        authority.target != semantic || authority.evidence != accepted.evidence
+    }) || accepted.validation.semantic != semantic
+        || accepted.ownership.semantic != semantic
+        || accepted
+            .session
+            .accepted_state_for_current_input()
+            .is_none()
+        || !accepted.validation.hard_residuals_validated
         || !accepted.validation.all_active_features_current
         || accepted
             .validation

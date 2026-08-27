@@ -25,13 +25,16 @@ pub(crate) enum PresentationWork {
     SolverPreview,
     IntentMaterialization,
     ComputedEvaluation,
+    NativeHistoryPublication,
+    CodeParse,
     CodeExpansion,
+    CodePublication,
     PersistenceWrite,
     DurablePanelRebuild,
 }
 
 impl PresentationWork {
-    const COUNT: usize = 12;
+    const COUNT: usize = 15;
 
     const ALL: [Self; Self::COUNT] = [
         Self::CameraPresentation,
@@ -43,7 +46,10 @@ impl PresentationWork {
         Self::SolverPreview,
         Self::IntentMaterialization,
         Self::ComputedEvaluation,
+        Self::NativeHistoryPublication,
+        Self::CodeParse,
         Self::CodeExpansion,
+        Self::CodePublication,
         Self::PersistenceWrite,
         Self::DurablePanelRebuild,
     ];
@@ -59,7 +65,10 @@ impl PresentationWork {
             Self::SolverPreview => "solver-previews",
             Self::IntentMaterialization => "intent-materializations",
             Self::ComputedEvaluation => "computed-evaluations",
+            Self::NativeHistoryPublication => "native-history-publications",
+            Self::CodeParse => "code-parses",
             Self::CodeExpansion => "code-expansions",
+            Self::CodePublication => "code-publications",
             Self::PersistenceWrite => "persistence-writes",
             Self::DurablePanelRebuild => "durable-panel-rebuilds",
         }
@@ -73,8 +82,12 @@ pub(crate) struct PresentationWorkLedger {
 
 impl PresentationWorkLedger {
     pub(crate) fn record(&self, work: PresentationWork) {
+        self.record_count(work, 1);
+    }
+
+    pub(crate) fn record_count(&self, work: PresentationWork, count: u64) {
         let mut snapshot = self.snapshot.get();
-        snapshot.counts[work as usize] = snapshot.counts[work as usize].saturating_add(1);
+        snapshot.counts[work as usize] = snapshot.counts[work as usize].saturating_add(count);
         self.snapshot.set(snapshot);
     }
 
@@ -117,24 +130,24 @@ impl PresentationWorkSnapshot {
                 .all(|work| self.count(work) == 0)
     }
 
-    /// A semantic pointer preview may solve/evaluate its disposable native
-    /// preview and repaint the canvas, but it cannot cross any durable or
-    /// code-authoring boundary. Scene composition is explicit because the
-    /// browser currently projects the newest accepted preview into a fresh
-    /// screen-space DTO before serializing it.
+    /// A semantic pointer preview may solve, materialize or evaluate its
+    /// disposable native preview and repaint the canvas, but it cannot cross
+    /// any durable or code-authoring boundary. Scene composition is explicit
+    /// because the browser currently projects the newest accepted preview
+    /// into a fresh screen-space DTO before serializing it.
     #[must_use]
     pub(crate) fn is_transient_preview_only(self) -> bool {
-        self.count(PresentationWork::SolverPreview) >= 1
-            && self.count(PresentationWork::SceneComposition) >= 1
+        self.count(PresentationWork::SceneComposition) >= 1
             && self.count(PresentationWork::SvgSerialization) >= 1
             && self.count(PresentationWork::ViewportReplacement) >= 1
             && [
                 PresentationWork::CameraPresentation,
                 PresentationWork::ExactReprojection,
                 PresentationWork::HoverPresentation,
-                PresentationWork::IntentMaterialization,
-                PresentationWork::ComputedEvaluation,
+                PresentationWork::NativeHistoryPublication,
+                PresentationWork::CodeParse,
                 PresentationWork::CodeExpansion,
+                PresentationWork::CodePublication,
                 PresentationWork::PersistenceWrite,
                 PresentationWork::DurablePanelRebuild,
             ]
@@ -151,6 +164,8 @@ impl PresentationWorkSnapshot {
     pub(crate) fn is_single_terminal_publication(self) -> bool {
         self.count(PresentationWork::PersistenceWrite) == 1
             && self.count(PresentationWork::DurablePanelRebuild) == 1
+            && self.count(PresentationWork::NativeHistoryPublication) == 1
+            && self.count(PresentationWork::CodePublication) <= 1
             && self.count(PresentationWork::SceneComposition) >= 1
             && self.count(PresentationWork::SvgSerialization) >= 1
             && self.count(PresentationWork::ViewportReplacement) >= 1
@@ -193,7 +208,10 @@ mod tests {
             PresentationWork::SolverPreview,
             PresentationWork::IntentMaterialization,
             PresentationWork::ComputedEvaluation,
+            PresentationWork::NativeHistoryPublication,
+            PresentationWork::CodeParse,
             PresentationWork::CodeExpansion,
+            PresentationWork::CodePublication,
             PresentationWork::PersistenceWrite,
             PresentationWork::DurablePanelRebuild,
         ] {
@@ -243,7 +261,10 @@ mod tests {
             PresentationWork::SolverPreview,
             PresentationWork::IntentMaterialization,
             PresentationWork::ComputedEvaluation,
+            PresentationWork::NativeHistoryPublication,
+            PresentationWork::CodeParse,
             PresentationWork::CodeExpansion,
+            PresentationWork::CodePublication,
             PresentationWork::PersistenceWrite,
             PresentationWork::DurablePanelRebuild,
         ] {
@@ -283,7 +304,7 @@ mod tests {
         assert_eq!(delta.count(PresentationWork::SceneComposition), 0);
         assert_eq!(
             delta.compact(),
-            "camera-presentations=2,exact-reprojections=0,hover-presentations=1,scene-compositions=0,svg-serializations=0,viewport-replacements=0,solver-previews=0,intent-materializations=0,computed-evaluations=0,code-expansions=0,persistence-writes=0,durable-panel-rebuilds=0"
+            "camera-presentations=2,exact-reprojections=0,hover-presentations=1,scene-compositions=0,svg-serializations=0,viewport-replacements=0,solver-previews=0,intent-materializations=0,computed-evaluations=0,native-history-publications=0,code-parses=0,code-expansions=0,code-publications=0,persistence-writes=0,durable-panel-rebuilds=0"
         );
     }
 
@@ -293,6 +314,8 @@ mod tests {
         let before = ledger.snapshot();
         for work in [
             PresentationWork::SolverPreview,
+            PresentationWork::IntentMaterialization,
+            PresentationWork::ComputedEvaluation,
             PresentationWork::SceneComposition,
             PresentationWork::SvgSerialization,
             PresentationWork::ViewportReplacement,
@@ -307,9 +330,10 @@ mod tests {
         );
 
         for forbidden in [
-            PresentationWork::IntentMaterialization,
-            PresentationWork::ComputedEvaluation,
+            PresentationWork::NativeHistoryPublication,
+            PresentationWork::CodeParse,
             PresentationWork::CodeExpansion,
+            PresentationWork::CodePublication,
             PresentationWork::PersistenceWrite,
             PresentationWork::DurablePanelRebuild,
         ] {
@@ -342,7 +366,9 @@ mod tests {
             PresentationWork::SolverPreview,
             PresentationWork::IntentMaterialization,
             PresentationWork::ComputedEvaluation,
+            PresentationWork::NativeHistoryPublication,
             PresentationWork::CodeExpansion,
+            PresentationWork::CodePublication,
             PresentationWork::PersistenceWrite,
             PresentationWork::DurablePanelRebuild,
             PresentationWork::SceneComposition,

@@ -364,51 +364,49 @@ fn complete_retained_hover_presentation(ledger: &performance::PresentationWorkLe
     ledger.record(performance::PresentationWork::HoverPresentation);
 }
 
-/// Records the semantic work already completed by one pointer lifecycle event
-/// immediately before its browser presentation. This is event evidence, not a
-/// prediction: retained plain hover bypasses this function, and only an
-/// authenticated mutating release records cold Intent/code publication.
+/// Merges presentation-independent owner receipts into the browser ledger.
+/// Counts describe work that actually ran, including rejected attempts; the
+/// browser never infers solver or materialization work from an event label.
 #[cfg(any(target_arch = "wasm32", test))]
-fn record_projectional_pointer_semantic_work(
+fn record_interaction_work(
     ledger: &performance::PresentationWorkLedger,
-    event: WorkbenchPresentationEvent,
-    code_owned: bool,
+    work: geosolve_constraint_editor::InteractionWorkReceipt,
 ) {
-    match event {
-        WorkbenchPresentationEvent::PointerMoveFrame => {
-            ledger.record(performance::PresentationWork::SolverPreview);
-        }
-        WorkbenchPresentationEvent::PointerRelease
-        | WorkbenchPresentationEvent::AuthenticatedPointerRelease(_) => {
-            ledger.record(performance::PresentationWork::SolverPreview);
-            ledger.record(performance::PresentationWork::IntentMaterialization);
-            ledger.record(performance::PresentationWork::ComputedEvaluation);
-            if code_owned {
-                ledger.record(performance::PresentationWork::CodeExpansion);
-            }
-        }
-        WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
-        | WorkbenchPresentationEvent::InteractionCancellation => {}
-    }
+    ledger.record_count(
+        performance::PresentationWork::SolverPreview,
+        work.native_preview_attempts(),
+    );
+    ledger.record_count(
+        performance::PresentationWork::IntentMaterialization,
+        work.intent_materialization_attempts(),
+    );
+    ledger.record_count(
+        performance::PresentationWork::ComputedEvaluation,
+        work.computed_evaluation_attempts(),
+    );
+    ledger.record_count(
+        performance::PresentationWork::NativeHistoryPublication,
+        work.history_publications(),
+    );
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
-fn record_flat_pointer_semantic_work(
+fn record_code_work(
     ledger: &performance::PresentationWorkLedger,
-    event: WorkbenchPresentationEvent,
+    work: geosolve_sketch_code::CodeWorkReceipt,
 ) {
-    match event {
-        WorkbenchPresentationEvent::PointerMoveFrame => {
-            ledger.record(performance::PresentationWork::SolverPreview);
-        }
-        WorkbenchPresentationEvent::PointerRelease
-        | WorkbenchPresentationEvent::AuthenticatedPointerRelease(_) => {
-            ledger.record(performance::PresentationWork::SolverPreview);
-            ledger.record(performance::PresentationWork::ComputedEvaluation);
-        }
-        WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
-        | WorkbenchPresentationEvent::InteractionCancellation => {}
-    }
+    ledger.record_count(
+        performance::PresentationWork::CodeParse,
+        work.managed_parse_attempts(),
+    );
+    ledger.record_count(
+        performance::PresentationWork::CodeExpansion,
+        work.expansion_attempts(),
+    );
+    ledger.record_count(
+        performance::PresentationWork::CodePublication,
+        work.accepted_publications(),
+    );
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -511,6 +509,7 @@ impl RetainedCameraQueue {
 struct ProjectionalScenePresentation {
     scene: Option<geosolve_constraint_editor::EditorScene>,
     status_override: Option<String>,
+    work: geosolve_constraint_editor::InteractionWorkReceipt,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -522,7 +521,9 @@ impl ProjectionalScenePresentation {
         annotations_visible: bool,
         show_all_constraints: bool,
     ) -> Self {
-        match editor.scene(viewport, chord_tolerance_pixels) {
+        let audited = editor.scene_audited(viewport, chord_tolerance_pixels);
+        let work = audited.work;
+        match audited.outcome {
             Ok(mut scene) => {
                 apply_projectional_scene_display(
                     &mut scene,
@@ -532,15 +533,18 @@ impl ProjectionalScenePresentation {
                 Self {
                     scene: Some(scene),
                     status_override: None,
+                    work,
                 }
             }
             Err(geosolve_constraint_editor::ProjectionalEditorError::NoAcceptedAuthority) => Self {
                 scene: None,
                 status_override: None,
+                work,
             },
             Err(error) => Self {
                 scene: None,
                 status_override: Some(format!("Canvas scene unavailable: {error}")),
+                work,
             },
         }
     }
@@ -706,6 +710,7 @@ impl WorkbenchDocumentAuthority {
             Self::Flat(coordinator) => ProjectionalScenePresentation {
                 scene: compose_editor_scene(coordinator, viewport, chord_tolerance_pixels),
                 status_override: None,
+                work: geosolve_constraint_editor::InteractionWorkReceipt::default(),
             },
             Self::Projectional { editor, .. } => ProjectionalScenePresentation::from_editor(
                 editor,
@@ -2286,7 +2291,10 @@ fn publish_projectional_code_checkpoint_for_save(
     authority: &mut WorkbenchDocumentAuthority,
     notice: &mut String,
     terminal_pointer: Option<u64>,
-) -> ProjectionalCodeSavePublication {
+) -> (
+    ProjectionalCodeSavePublication,
+    geosolve_sketch_code::CodeWorkReceipt,
+) {
     if code_project.has_any_pending_semantic_point_drag()
         && !terminal_pointer
             .is_some_and(|pointer_id| code_project.has_pending_semantic_point_drag(pointer_id))
@@ -2294,25 +2302,42 @@ fn publish_projectional_code_checkpoint_for_save(
         // This guard deliberately precedes checkpoint encoding. A generic or
         // foreign save is neither a cancellation nor a terminal and therefore
         // may not touch preview/editor, token, notice, history or persistence.
-        return ProjectionalCodeSavePublication::Abort;
+        return (
+            ProjectionalCodeSavePublication::Abort,
+            geosolve_sketch_code::CodeWorkReceipt::default(),
+        );
     }
-    let checkpoint = match projectional_code_checkpoint_for_save(authority) {
-        Ok(checkpoint) => checkpoint,
-        Err(error) => {
-            *notice =
-                format!("Code-project workspace could not stage its native checkpoint: {error}");
-            return ProjectionalCodeSavePublication::Abort;
-        }
-    };
-    let publication = match terminal_pointer {
-        Some(pointer_id) => code_project.publish_pointer_terminal_checkpoint(
+    let (publication, code_work) = if let Some(pointer_id) = terminal_pointer {
+        let Some(editor) = authority.projectional_ref() else {
+            *notice = "Code projects require projectional editor authority".into();
+            return (
+                ProjectionalCodeSavePublication::Abort,
+                geosolve_sketch_code::CodeWorkReceipt::default(),
+            );
+        };
+        let audited = code_project.publish_pointer_terminal_editor_audited(
             pointer_id,
-            &checkpoint,
+            editor,
             "Direct GUI sketch edit",
-        ),
-        None => {
-            code_project.publish_delegated_editor_checkpoint(checkpoint, "Direct GUI sketch edit")
-        }
+        );
+        (audited.outcome, audited.work)
+    } else {
+        let checkpoint = match projectional_code_checkpoint_for_save(authority) {
+            Ok(checkpoint) => checkpoint,
+            Err(error) => {
+                *notice = format!(
+                    "Code-project workspace could not stage its native checkpoint: {error}"
+                );
+                return (
+                    ProjectionalCodeSavePublication::Abort,
+                    geosolve_sketch_code::CodeWorkReceipt::default(),
+                );
+            }
+        };
+        (
+            code_project.publish_delegated_editor_checkpoint(checkpoint, "Direct GUI sketch edit"),
+            geosolve_sketch_code::CodeWorkReceipt::default(),
+        )
     };
     match publication {
         Ok(Some(publication)) => {
@@ -2322,7 +2347,7 @@ fn publish_projectional_code_checkpoint_for_save(
                     *notice = format!(
                         "Accepted code-owned edit could not install its validated native authority: {error}"
                     );
-                    return ProjectionalCodeSavePublication::Abort;
+                    return (ProjectionalCodeSavePublication::Abort, code_work);
                 }
             }
         }
@@ -2333,7 +2358,7 @@ fn publish_projectional_code_checkpoint_for_save(
                 // non-pointer mutation cancels before dispatch, but an
                 // unexpected generic/foreign save must leave the live
                 // gesture, token, notice and persistence untouched.
-                return ProjectionalCodeSavePublication::Abort;
+                return (ProjectionalCodeSavePublication::Abort, code_work);
             }
             let restored = code_project
                 .restore_accepted_editor()
@@ -2347,10 +2372,13 @@ fn publish_projectional_code_checkpoint_for_save(
                     "Code-owned edit was rejected ({error}); accepted authority could not be restored: {restore_error}"
                 ),
             };
-            return ProjectionalCodeSavePublication::Abort;
+            return (ProjectionalCodeSavePublication::Abort, code_work);
         }
     }
-    ProjectionalCodeSavePublication::ContinuePersistence
+    (
+        ProjectionalCodeSavePublication::ContinuePersistence,
+        code_work,
+    )
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -4668,13 +4696,15 @@ pub(crate) mod wasm {
     ) -> super::ProjectionalScenePresentation {
         wb.work_ledger
             .record(super::performance::PresentationWork::SceneComposition);
-        super::ProjectionalScenePresentation::from_editor(
+        let presentation = super::ProjectionalScenePresentation::from_editor(
             wb.editor(),
             wb.camera.viewport(),
             super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
             wb.annotations_visible,
             wb.show_all_constraints,
-        )
+        );
+        super::record_interaction_work(&wb.work_ledger, presentation.work);
+        presentation
     }
 
     fn projectional_geometry_authoring_active(wb: &ProjectionalWorkbench) -> bool {
@@ -5854,7 +5884,7 @@ pub(crate) mod wasm {
         terminal_pointer: Option<u64>,
     ) {
         if wb.code_project.is_some() {
-            let publication = {
+            let (publication, code_work) = {
                 let ProjectionalWorkbench {
                     authority,
                     code_project,
@@ -5870,6 +5900,7 @@ pub(crate) mod wasm {
                     terminal_pointer,
                 )
             };
+            super::record_code_work(&wb.work_ledger, code_work);
             if publication == super::ProjectionalCodeSavePublication::Abort {
                 return;
             }
@@ -5907,14 +5938,24 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<ProjectionalWorkbench>>,
         event: super::WorkbenchPresentationEvent,
     ) -> Result<(), JsValue> {
+        present_projectional_pointer_event_with_work(
+            document,
+            workbench,
+            event,
+            geosolve_constraint_editor::InteractionWorkReceipt::default(),
+        )
+    }
+
+    fn present_projectional_pointer_event_with_work(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+        event: super::WorkbenchPresentationEvent,
+        interaction_work: geosolve_constraint_editor::InteractionWorkReceipt,
+    ) -> Result<(), JsValue> {
         let work_before = workbench.borrow().work_ledger.snapshot();
         {
             let wb = workbench.borrow();
-            super::record_projectional_pointer_semantic_work(
-                &wb.work_ledger,
-                event,
-                wb.code_project.is_some(),
-            );
+            super::record_interaction_work(&wb.work_ledger, interaction_work);
         }
         let policy = event.policy();
         if policy.saves_workspace {
@@ -7579,6 +7620,8 @@ pub(crate) mod wasm {
             {
                 return;
             }
+            let mut interaction_work =
+                geosolve_constraint_editor::InteractionWorkReceipt::default();
             {
                 let mut wb = frame_workbench.borrow_mut();
                 if wb
@@ -7629,14 +7672,16 @@ pub(crate) mod wasm {
                             feature_authoring,
                             ..
                         } = &mut *wb;
-                        authority
+                        let audited = authority
                             .projectional_mut()
                             .expect("projectional adapter owns projectional authority")
-                            .pointer_move_feature_authoring_radius(
+                            .pointer_move_feature_authoring_radius_audited(
                                 feature_authoring,
                                 &scene,
                                 sample.input,
-                            )
+                            );
+                        interaction_work.merge(audited.work);
+                        audited.outcome
                     } else {
                         let authoring = wb.feature_authoring.clone();
                         wb.editor_mut().pointer_move_feature_authoring(
@@ -7664,14 +7709,16 @@ pub(crate) mod wasm {
                                 offset_authoring,
                                 ..
                             } = &mut *wb;
-                            authority
+                            let audited = authority
                                 .projectional_mut()
                                 .expect("projectional adapter owns projectional authority")
-                                .pointer_move_offset_authoring_distance(
+                                .pointer_move_offset_authoring_distance_audited(
                                     offset_authoring,
                                     &scene,
                                     sample.input,
-                                )
+                                );
+                            interaction_work.merge(audited.work);
+                            audited.outcome
                         };
                         match result {
                             Ok(_) => {}
@@ -7706,7 +7753,9 @@ pub(crate) mod wasm {
                         .pointer_move_with_draft_authoring(&scene, sample.input, sample.authoring);
                     let _ = dispatch_projectional_effects(&mut wb, effects);
                 } else {
-                    match wb.editor_mut().pointer_move(&scene, sample.input) {
+                    let audited = wb.editor_mut().pointer_move_audited(&scene, sample.input);
+                    interaction_work.merge(audited.work);
+                    match audited.outcome {
                         Ok(effects) => {
                             let _ = dispatch_projectional_effects(&mut wb, effects);
                         }
@@ -7717,10 +7766,11 @@ pub(crate) mod wasm {
                     }
                 }
             }
-            let _ = present_projectional_pointer_event(
+            let _ = present_projectional_pointer_event_with_work(
                 &frame_document,
                 &frame_workbench,
                 super::WorkbenchPresentationEvent::PointerMoveFrame,
+                interaction_work,
             );
         });
         let scheduled = super::platform::window()
@@ -8274,6 +8324,8 @@ pub(crate) mod wasm {
             let pending = pending
                 .filter(|sample| sample.input.pointer_id == input.pointer_id)
                 .map(|sample| sample.input);
+            let mut interaction_work =
+                geosolve_constraint_editor::InteractionWorkReceipt::default();
             let result = super::replay_projectional_terminal_samples(pending, input, |sample| {
                 let Some(scene) = projectional_scene(&wb) else {
                     return Err("the accepted scene became unavailable".to_owned());
@@ -8284,22 +8336,36 @@ pub(crate) mod wasm {
                         feature_authoring,
                         ..
                     } = &mut *wb;
-                    authority
+                    let audited = authority
                         .projectional_mut()
                         .expect("projectional adapter owns projectional authority")
-                        .pointer_move_feature_authoring_radius(feature_authoring, &scene, sample)
+                        .pointer_move_feature_authoring_radius_audited(
+                            feature_authoring,
+                            &scene,
+                            sample,
+                        );
+                    interaction_work.merge(audited.work);
+                    audited.outcome
                 } else if offset_authoring_drag {
                     let ProjectionalWorkbench {
                         authority,
                         offset_authoring,
                         ..
                     } = &mut *wb;
-                    authority
+                    let audited = authority
                         .projectional_mut()
                         .expect("projectional adapter owns projectional authority")
-                        .pointer_move_offset_authoring_distance(offset_authoring, &scene, sample)
+                        .pointer_move_offset_authoring_distance_audited(
+                            offset_authoring,
+                            &scene,
+                            sample,
+                        );
+                    interaction_work.merge(audited.work);
+                    audited.outcome
                 } else {
-                    wb.editor_mut().pointer_move(&scene, sample)
+                    let audited = wb.editor_mut().pointer_move_audited(&scene, sample);
+                    interaction_work.merge(audited.work);
+                    audited.outcome
                 };
                 result.map(|_| ()).map_err(|error| error.to_string())
             });
@@ -8313,10 +8379,11 @@ pub(crate) mod wasm {
                     &format!("Projectional point gesture canceled: {error}"),
                 );
                 drop(wb);
-                let _ = present_projectional_pointer_event(
+                let _ = present_projectional_pointer_event_with_work(
                     &up_document,
                     &up_workbench,
                     super::WorkbenchPresentationEvent::InteractionCancellation,
+                    interaction_work,
                 );
                 return;
             }
@@ -8388,17 +8455,21 @@ pub(crate) mod wasm {
                     }
                 };
                 drop(wb);
-                let _ =
-                    present_projectional_pointer_event(&up_document, &up_workbench, presentation);
+                let _ = present_projectional_pointer_event_with_work(
+                    &up_document,
+                    &up_workbench,
+                    presentation,
+                    interaction_work,
+                );
                 return;
             }
-            let outcome = projectional_scene(&wb)
-                .ok_or_else(|| "the exact terminal preview scene is unavailable".to_owned())
-                .and_then(|scene| {
-                    wb.editor_mut()
-                        .pointer_up(&scene, input)
-                        .map_err(|error| error.to_string())
-                });
+            let outcome = if let Some(scene) = projectional_scene(&wb) {
+                let audited = wb.editor_mut().pointer_up_audited(&scene, input);
+                interaction_work.merge(audited.work);
+                audited.outcome.map_err(|error| error.to_string())
+            } else {
+                Err("the exact terminal preview scene is unavailable".to_owned())
+            };
             let event = match outcome {
                 Ok(outcome) => {
                     release_projectional_pointer_capture(
@@ -8449,7 +8520,12 @@ pub(crate) mod wasm {
                 }
             };
             drop(wb);
-            let _ = present_projectional_pointer_event(&up_document, &up_workbench, event);
+            let _ = present_projectional_pointer_event_with_work(
+                &up_document,
+                &up_workbench,
+                event,
+                interaction_work,
+            );
         });
         viewport.add_event_listener_with_callback(
             super::CANVAS_POINTER_TERMINAL_EVENTS[0],
@@ -11949,12 +12025,13 @@ pub(crate) mod wasm {
                 {
                     return;
                 }
-                dispatch_effects(&mut wb, effects);
+                let interaction_work = dispatch_effects(&mut wb, effects);
                 drop(wb);
-                let _ = present_pointer_event(
+                let _ = present_pointer_event_with_work(
                     &frame_document,
                     &frame_workbench,
                     super::WorkbenchPresentationEvent::PointerMoveFrame,
+                    interaction_work,
                 );
                 return;
             }
@@ -12034,12 +12111,13 @@ pub(crate) mod wasm {
                     }
                 }
             };
-            dispatch_effects(&mut wb, effects);
+            let interaction_work = dispatch_effects(&mut wb, effects);
             drop(wb);
-            let _ = present_pointer_event(
+            let _ = present_pointer_event_with_work(
                 &frame_document,
                 &frame_workbench,
                 super::WorkbenchPresentationEvent::PointerMoveFrame,
+                interaction_work,
             );
         });
         let scheduled = super::platform::window()
@@ -12293,6 +12371,8 @@ pub(crate) mod wasm {
                 }
                 return;
             }
+            let mut interaction_work =
+                geosolve_constraint_editor::InteractionWorkReceipt::default();
             if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
                 let problem_items = current_problem_items(&wb.coordinator, &scene);
                 let effects = wb
@@ -12304,19 +12384,25 @@ pub(crate) mod wasm {
                         &problem_items,
                         pending.authoring,
                     );
-                dispatch_effects(&mut wb, effects);
+                interaction_work.merge(dispatch_effects(&mut wb, effects));
             }
             callback_pointer_moves.borrow_mut().observe(input);
             let coordinator = &mut wb.coordinator;
             let expected = coordinator.session().design_identity();
             let effects = coordinator.editor_mut().pointer_up(&scene, expected, input);
-            dispatch_effects(&mut wb, effects);
+            interaction_work.merge(dispatch_effects(&mut wb, effects));
             release_canvas_pointer_capture(&callback_viewport, &mut wb, event.pointer_id());
+            let presentation = if interaction_work.history_publications() == 0 {
+                super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+            } else {
+                super::WorkbenchPresentationEvent::PointerRelease
+            };
             drop(wb);
-            let _ = present_pointer_event(
+            let _ = present_pointer_event_with_work(
                 &callback_document,
                 &callback_workbench,
-                super::WorkbenchPresentationEvent::PointerRelease,
+                presentation,
+                interaction_work,
             );
         });
         viewport.add_event_listener_with_callback(
@@ -13465,7 +13551,10 @@ pub(crate) mod wasm {
         clippy::too_many_lines,
         reason = "one exhaustive adapter keeps every typed editor effect on a single dispatch path"
     )]
-    fn dispatch_effects(wb: &mut Workbench, effects: Vec<EditorEffect>) {
+    fn dispatch_effects(
+        wb: &mut Workbench,
+        effects: Vec<EditorEffect>,
+    ) -> geosolve_constraint_editor::InteractionWorkReceipt {
         use super::effect_adapter::{
             ConstructionDispatch, PlannedConstructionDispatch, dispatch_construction_effect,
             dispatch_planned_construction_effect, planned_construction_notice,
@@ -13473,6 +13562,7 @@ pub(crate) mod wasm {
 
         let mut pending = VecDeque::from(effects);
         let mut failed_construction_commit = false;
+        let mut interaction_work = geosolve_constraint_editor::InteractionWorkReceipt::default();
         while let Some(effect) = pending.pop_front() {
             match dispatch_construction_effect(
                 &mut wb.construction_preview,
@@ -13481,7 +13571,9 @@ pub(crate) mod wasm {
                 &mut failed_construction_commit,
             ) {
                 ConstructionDispatch::ApplyCommit => {
-                    let result = wb.coordinator.apply_editor_effect(&effect);
+                    let audited = wb.coordinator.apply_editor_effect_audited(&effect);
+                    interaction_work.merge(audited.work);
+                    let result = audited.outcome;
                     dispatch_construction_effect(
                         &mut wb.construction_preview,
                         &effect,
@@ -13517,12 +13609,14 @@ pub(crate) mod wasm {
                     point,
                     model_position,
                 } => {
-                    let next = wb.resolve_projected_point_move(
+                    let audited = wb.coordinator.resolve_projected_point_move_audited(
                         *pointer_id,
                         *request_id,
                         *point,
                         *model_position,
                     );
+                    interaction_work.merge(audited.work);
+                    let next = audited.outcome;
                     pending.extend(next);
                 }
                 EditorEffect::PreviewPointMove { .. } => {
@@ -13538,13 +13632,15 @@ pub(crate) mod wasm {
                     control,
                     model_position,
                 } => {
-                    let next = wb.coordinator.resolve_curve_control_preview(
+                    let audited = wb.coordinator.resolve_curve_control_preview_audited(
                         *pointer_id,
                         *request_id,
                         *expected,
                         *control,
                         *model_position,
                     );
+                    interaction_work.merge(audited.work);
+                    let next = audited.outcome;
                     if next.is_empty() {
                         wb.notice =
                             "Curve-control sample was rejected; the last valid preview is retained"
@@ -13557,7 +13653,9 @@ pub(crate) mod wasm {
                     wb.notice = "Curve-control preview".into();
                 }
                 EditorEffect::CommitCurveControl { .. } => {
-                    match wb.coordinator.apply_editor_effect(&effect) {
+                    let audited = wb.coordinator.apply_editor_effect_audited(&effect);
+                    interaction_work.merge(audited.work);
+                    match audited.outcome {
                         Ok(Some(_)) => wb.notice = "Curve control retained".into(),
                         Ok(None) => {}
                         Err(error) => {
@@ -13568,7 +13666,9 @@ pub(crate) mod wasm {
                     }
                 }
                 EditorEffect::ClearCurveControlPreview => {
-                    match wb.coordinator.apply_editor_effect(&effect) {
+                    let audited = wb.coordinator.apply_editor_effect_audited(&effect);
+                    interaction_work.merge(audited.work);
+                    match audited.outcome {
                         Ok(_) => {
                             wb.notice =
                                 "Curve-control preview cleared; accepted geometry is unchanged"
@@ -13730,7 +13830,9 @@ pub(crate) mod wasm {
                 | EditorEffect::HoverChanged(_)
                 | EditorEffect::DraftInferenceChanged(_) => {}
                 EditorEffect::CommitPointMove { .. } => {
-                    match wb.coordinator.apply_editor_effect(&effect) {
+                    let audited = wb.coordinator.apply_editor_effect_audited(&effect);
+                    interaction_work.merge(audited.work);
+                    match audited.outcome {
                         Ok(Some(_)) => wb.notice = "Edit retained".into(),
                         Ok(None) => {}
                         Err(error) => wb.notice = error.to_string(),
@@ -13744,6 +13846,7 @@ pub(crate) mod wasm {
                 }
             }
         }
+        interaction_work
     }
 
     fn apply_computed_feature_editor_effect(
@@ -15587,10 +15690,24 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<Workbench>>,
         event: super::WorkbenchPresentationEvent,
     ) -> Result<(), JsValue> {
+        present_pointer_event_with_work(
+            document,
+            workbench,
+            event,
+            geosolve_constraint_editor::InteractionWorkReceipt::default(),
+        )
+    }
+
+    fn present_pointer_event_with_work(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        event: super::WorkbenchPresentationEvent,
+        interaction_work: geosolve_constraint_editor::InteractionWorkReceipt,
+    ) -> Result<(), JsValue> {
         let work_before = workbench.borrow().work_ledger.snapshot();
         {
             let wb = workbench.borrow();
-            super::record_flat_pointer_semantic_work(&wb.work_ledger, event);
+            super::record_interaction_work(&wb.work_ledger, interaction_work);
         }
         let policy = event.policy();
         if policy.saves_workspace {
@@ -18088,94 +18205,17 @@ mod tests {
     }
 
     #[test]
-    fn production_pointer_semantic_ledger_distinguishes_preview_native_and_code_terminals() {
-        let preview = super::performance::PresentationWorkLedger::default();
-        super::record_projectional_pointer_semantic_work(
-            &preview,
-            WorkbenchPresentationEvent::PointerMoveFrame,
-            true,
+    fn semantic_work_ledger_does_not_infer_work_from_attached_owners() {
+        let ledger = super::performance::PresentationWorkLedger::default();
+        super::record_interaction_work(
+            &ledger,
+            geosolve_constraint_editor::InteractionWorkReceipt::default(),
         );
-        let preview = preview.snapshot();
+        super::record_code_work(&ledger, geosolve_sketch_code::CodeWorkReceipt::default());
         assert_eq!(
-            preview.count(super::performance::PresentationWork::SolverPreview),
-            1
-        );
-        for forbidden in [
-            super::performance::PresentationWork::IntentMaterialization,
-            super::performance::PresentationWork::ComputedEvaluation,
-            super::performance::PresentationWork::CodeExpansion,
-            super::performance::PresentationWork::PersistenceWrite,
-            super::performance::PresentationWork::DurablePanelRebuild,
-        ] {
-            assert_eq!(preview.count(forbidden), 0, "preview work: {forbidden:?}");
-        }
-
-        let native = super::performance::PresentationWorkLedger::default();
-        super::record_projectional_pointer_semantic_work(
-            &native,
-            WorkbenchPresentationEvent::PointerRelease,
-            false,
-        );
-        assert_eq!(
-            native
-                .snapshot()
-                .count(super::performance::PresentationWork::IntentMaterialization),
-            1
-        );
-        assert_eq!(
-            native
-                .snapshot()
-                .count(super::performance::PresentationWork::ComputedEvaluation),
-            1
-        );
-        assert_eq!(
-            native
-                .snapshot()
-                .count(super::performance::PresentationWork::CodeExpansion),
-            0
-        );
-
-        let code = super::performance::PresentationWorkLedger::default();
-        super::record_projectional_pointer_semantic_work(
-            &code,
-            WorkbenchPresentationEvent::AuthenticatedPointerRelease(91),
-            true,
-        );
-        assert_eq!(
-            code.snapshot()
-                .count(super::performance::PresentationWork::CodeExpansion),
-            1
-        );
-
-        let non_mutating = super::performance::PresentationWorkLedger::default();
-        super::record_projectional_pointer_semantic_work(
-            &non_mutating,
-            WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
-            true,
-        );
-        assert_eq!(
-            non_mutating.snapshot(),
-            super::performance::PresentationWorkSnapshot::default()
-        );
-
-        let flat = super::performance::PresentationWorkLedger::default();
-        super::record_flat_pointer_semantic_work(&flat, WorkbenchPresentationEvent::PointerRelease);
-        let flat = flat.snapshot();
-        assert_eq!(
-            flat.count(super::performance::PresentationWork::SolverPreview),
-            1
-        );
-        assert_eq!(
-            flat.count(super::performance::PresentationWork::ComputedEvaluation),
-            1
-        );
-        assert_eq!(
-            flat.count(super::performance::PresentationWork::IntentMaterialization),
-            0
-        );
-        assert_eq!(
-            flat.count(super::performance::PresentationWork::CodeExpansion),
-            0
+            ledger.snapshot(),
+            super::performance::PresentationWorkSnapshot::default(),
+            "an attached projectional/code owner performs no semantic work until it issues a receipt",
         );
     }
 
@@ -18739,15 +18779,14 @@ mod tests {
                     .and_then(|snapshot| snapshot.encode())
                     .expect("encoded live editor authority");
                 let code_before = code.to_persistence_json().unwrap();
-                assert_eq!(
-                    super::publish_projectional_code_checkpoint_for_save(
-                        code,
-                        authority,
-                        notice,
-                        terminal_pointer,
-                    ),
-                    super::ProjectionalCodeSavePublication::Abort,
+                let (publication, work) = super::publish_projectional_code_checkpoint_for_save(
+                    code,
+                    authority,
+                    notice,
+                    terminal_pointer,
                 );
+                assert_eq!(publication, super::ProjectionalCodeSavePublication::Abort);
+                assert_eq!(work, geosolve_sketch_code::CodeWorkReceipt::default());
                 assert!(code.has_pending_semantic_point_drag(8_420));
                 assert_eq!(code.to_persistence_json().unwrap(), code_before);
                 assert_eq!(notice, &notice_before);
@@ -19417,6 +19456,41 @@ mod tests {
                 .expect("projectional canvas render");
             assert!(canvas.contains("presentation.status_message(&wb.notice)"));
             assert!(canvas.contains("data-scene-state"));
+        });
+    }
+
+    #[test]
+    fn projectional_scene_presentation_retains_computed_preview_work() {
+        run_projectional_test_with_large_stack("projectional-scene-work", || {
+            let mut editor = projectional_authoring_fixture();
+            let viewport = test_viewport();
+            let scene = editor.scene(viewport, 0.5).unwrap();
+            let point = scene
+                .points
+                .iter()
+                .find(|point| {
+                    point.model_position.map(f64::to_bits) == [1.0, 2.0].map(f64::to_bits)
+                })
+                .expect("authored point")
+                .id;
+            let pointer = |model_position| PointerInput {
+                pointer_id: 85_001,
+                position: viewport.model_to_screen(model_position),
+                modifiers: Modifiers::default(),
+            };
+            editor
+                .pointer_down_exact_point(&scene, pointer([1.0, 2.0]), point)
+                .unwrap();
+            editor.pointer_move(&scene, pointer([1.25, 2.5])).unwrap();
+
+            let presentation = super::ProjectionalScenePresentation::from_editor(
+                &editor, viewport, 0.5, true, false,
+            );
+            assert!(presentation.scene.is_some());
+            assert_eq!(presentation.work.native_preview_attempts(), 0);
+            assert_eq!(presentation.work.intent_materialization_attempts(), 0);
+            assert_eq!(presentation.work.computed_evaluation_attempts(), 1);
+            assert_eq!(presentation.work.history_publications(), 0);
         });
     }
 

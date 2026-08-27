@@ -18,6 +18,7 @@ mod parser;
 mod project;
 mod reconcile;
 mod session;
+mod work_receipt;
 
 pub use artifact::{
     ArtifactValidationError, CollectionRule, EditLens, PATCH_ARTIFACT_FORMAT, PatchModuleArtifact,
@@ -30,7 +31,8 @@ pub use composition::{
     CodeCompositionError, MaterializedCodeProject, MaterializedFilletOutput,
     materialize_code_project_cold, materialize_code_project_cold_with_overlay,
     materialize_code_project_incremental, materialize_code_project_incremental_for_structural_edit,
-    materialize_code_project_incremental_with_overlay, rehydrate_materialized_code_project,
+    materialize_code_project_incremental_with_overlay,
+    materialize_code_project_incremental_with_overlay_audited, rehydrate_materialized_code_project,
 };
 pub use declaration_catalog::{
     CODE_DECLARATION_FAMILIES, CodeDeclarationFamilyDescriptor, CodeDeclarationResultDescriptor,
@@ -79,6 +81,7 @@ pub use session::{
     CodeSessionError, CodeSessionFailure, CodeSessionIdentity, CodeSessionReceipt,
     CodeSessionSnapshot, PreparedCodeEdit, SketchCodeSession,
 };
+pub use work_receipt::{AuditedCodeWork, CodeWorkReceipt};
 
 /// SDK ABI written into every precompiled data-only patch artifact.
 pub const SKETCH_CODE_SDK_ABI: &str = "geosolve-sketch-code-v1";

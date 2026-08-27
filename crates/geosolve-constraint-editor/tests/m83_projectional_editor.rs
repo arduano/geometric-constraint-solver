@@ -4,8 +4,9 @@ use geosolve_constraint_editor::{
     ColdIntentMaterializer, ConstraintEditor, ConstructionCommitPlan, ConstructionPoint,
     ConstructionProposal, ConstructionRelationDefinition, DraftSpanSlot, EditorEffect,
     GeometryRoleSelectionState, GeometryToolVariant, InferredRelation, IntentNativeBinding,
-    IntentSourceTokenTarget, Modifiers, PointerInput, ProjectionalEditorError,
-    ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
+    IntentSourceTokenTarget, InteractionWorkReceipt, Modifiers, PointerInput,
+    ProjectionalCoordinatorError, ProjectionalEditorError, ProjectionalEditorSession,
+    ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
     projectional_construction_patch,
 };
 use geosolve_sketch::{
@@ -401,6 +402,48 @@ fn pointer_frames_are_transient_and_release_commits_one_intent_transaction() {
 }
 
 #[test]
+fn audited_pointer_receipts_report_only_crossed_projectional_work() {
+    let (mut session, _point, viewport) = fixture();
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let origin = viewport.model_to_screen([1.0, 2.0]);
+    let target = viewport.model_to_screen([1.5, 2.25]);
+
+    let hover = session.pointer_move_audited(&scene, pointer(700, origin));
+    hover.outcome.unwrap();
+    assert_eq!(hover.work, InteractionWorkReceipt::default());
+
+    session.pointer_down(&scene, pointer(701, origin)).unwrap();
+    let preview = session.pointer_move_audited(&scene, pointer(701, target));
+    preview.outcome.unwrap();
+    assert_eq!(preview.work.native_preview_attempts(), 1);
+    assert_eq!(preview.work.intent_materialization_attempts(), 0);
+    assert_eq!(preview.work.computed_evaluation_attempts(), 0);
+    assert_eq!(preview.work.history_publications(), 0);
+
+    let preview_scene = session.scene_audited(viewport, 0.5);
+    let preview_scene_value = preview_scene.outcome.unwrap();
+    assert_eq!(preview_scene.work.native_preview_attempts(), 0);
+    assert_eq!(preview_scene.work.intent_materialization_attempts(), 0);
+    assert_eq!(preview_scene.work.computed_evaluation_attempts(), 1);
+    assert_eq!(preview_scene.work.history_publications(), 0);
+
+    let terminal = session.pointer_up_audited(&preview_scene_value, pointer(701, target));
+    assert!(terminal.outcome.unwrap().transaction.is_some());
+    assert_eq!(terminal.work.native_preview_attempts(), 0);
+    assert_eq!(terminal.work.intent_materialization_attempts(), 1);
+    assert_eq!(terminal.work.computed_evaluation_attempts(), 1);
+    assert_eq!(terminal.work.history_publications(), 1);
+
+    let committed_scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_down(&committed_scene, pointer(702, target))
+        .unwrap();
+    let click = session.pointer_up_audited(&committed_scene, pointer(702, target));
+    assert!(click.outcome.unwrap().transaction.is_none());
+    assert_eq!(click.work, InteractionWorkReceipt::default());
+}
+
+#[test]
 fn retained_camera_scene_reauthenticates_after_preview_cancel_and_accepted_replacement() {
     let (mut session, _, viewport) = fixture();
     let origin = viewport.model_to_screen([1.0, 2.0]);
@@ -700,6 +743,12 @@ fn retained_invalid_intent_keeps_the_prior_scene_and_transient_selection() {
         Err(ProjectionalEditorError::RetainedIntentDirectManipulationUnavailable)
     ));
     assert!(session.editor().active_pointer_gesture().is_none());
+    assert!(matches!(
+        session.fork_accepted_authority(),
+        Err(ProjectionalEditorError::Coordinator(
+            ProjectionalCoordinatorError::NoAcceptedAuthority
+        ))
+    ));
     assert_pair(point_position(&session, point), [1.0, 2.0]);
 }
 
