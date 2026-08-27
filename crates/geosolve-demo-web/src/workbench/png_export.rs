@@ -19,6 +19,7 @@ const EXPORT_STYLE: &str = r#"
 .wb-fillet-alternative-ghost,.wb-curve-control-guides,.wb-curve-control-cage,
 .wb-annotation-hit,.wb-annotation-path-hit,.wb-annotation-label-hit,
 .wb-annotation-move-hit,.wb-error-overlay,.wb-offset-chain-cues,
+.wb-draft,.wb-inference-guides,.wb-inference-candidates,
 .authoring-pending,.offset-provisional { display: none; }
 .wb-datum-line { fill: none; stroke: #6f7b7b; stroke-width: 1.25; vector-effect: non-scaling-stroke; }
 .wb-datum-x-axis .wb-datum-line { stroke: #8c5b55; }
@@ -220,6 +221,9 @@ mod tests {
         assert!(svg.contains("fill=\"#121617\""));
         assert!(svg.contains(".wb-computed-hit"));
         assert!(svg.contains(".wb-annotation-hit"));
+        assert!(svg.contains(".wb-draft"));
+        assert!(svg.contains(".wb-inference-guides"));
+        assert!(svg.contains(".wb-inference-candidates"));
         assert!(svg.contains(".wb-right-angle"));
         assert!(svg.contains(".wb-dimension.reference"));
         assert!(svg.contains(".wb-annotation.suppressed"));

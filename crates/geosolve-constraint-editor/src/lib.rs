@@ -1179,6 +1179,13 @@ pub struct EditorScene {
     pub computed_fillet_continuation_statuses: Vec<ComputedFilletContinuationStatus>,
     /// Accepted, geometry-derived constraint and dimension presentation.
     pub annotations: Vec<SceneAnnotation>,
+    /// Whether constraint and dimension annotations participate in this
+    /// transient scene's paint and picking surface.
+    ///
+    /// Hosts may hide annotations without discarding their derived layout or
+    /// accepted identities. Keeping the switch on the shared scene DTO makes
+    /// pointer move/down obey the same visibility policy as rendering.
+    pub annotations_visible: bool,
     /// Whether ordinary contextual constraint marks are part of this scene's
     /// visible and interactive presentation surface.
     ///
@@ -1251,6 +1258,11 @@ impl EditorScene {
     /// Sets the shared paint/pick visibility policy for contextual constraints.
     pub fn set_show_all_constraint_annotations(&mut self, show: bool) {
         self.show_all_constraint_annotations = show;
+    }
+
+    /// Sets the shared paint/pick visibility policy for all annotations.
+    pub fn set_annotations_visible(&mut self, visible: bool) {
+        self.annotations_visible = visible;
     }
 
     fn set_selected_curve_controls(&mut self, owner: Option<CurveSpan>) -> Result<(), EditorError> {
@@ -1438,6 +1450,7 @@ impl EditorScene {
             fillet_affordances: Vec::new(),
             computed_fillet_continuation_statuses: Vec::new(),
             annotations,
+            annotations_visible: true,
             show_all_constraint_annotations: false,
             constraint_entries,
             construction_snap_points,
@@ -3113,7 +3126,7 @@ impl EditorScene {
         visibility_context: Option<SelectionItem>,
         problem_items: &[SelectionItem],
     ) -> Option<(SceneAnnotationOccurrence, f64)> {
-        if !position.is_finite() || !tolerance.is_valid() {
+        if !self.annotations_visible || !position.is_finite() || !tolerance.is_valid() {
             return None;
         }
         self.annotations
@@ -3152,7 +3165,11 @@ impl EditorScene {
         context_origin: ScreenPoint,
         problem_items: &[SelectionItem],
     ) -> bool {
-        if !position.is_finite() || !context_origin.is_finite() || !tolerance.is_valid() {
+        if !self.annotations_visible
+            || !position.is_finite()
+            || !context_origin.is_finite()
+            || !tolerance.is_valid()
+        {
             return false;
         }
         let corridor_tolerance = tolerance.annotation_pixels.max(14.0);
@@ -17686,6 +17703,14 @@ mod tests {
             ),
             Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
         ));
+        fixture.scene.set_annotations_visible(false);
+        assert!(matches!(
+            fixture.scene.resolve_fillet_hit(
+                affordances.radius_rail.screen_rail_start,
+                PickTolerance::default()
+            ),
+            Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
+        ));
         let native = fixture.scene.viewport.model_to_screen([2.0, -2.0]);
         assert!(matches!(
             fixture
@@ -18774,6 +18799,49 @@ mod tests {
         );
         assert_eq!(editor.hover_state(), EditorHoverState::default());
         assert!(editor.pointer_leave().is_empty());
+
+        let mut hidden_scene = show_all_scene;
+        hidden_scene.set_annotations_visible(false);
+        assert!(
+            hidden_scene
+                .annotation_hit_test(marker, PickTolerance::default(), &[], None, &[])
+                .is_none(),
+            "hidden annotations must not retain an invisible direct hit target"
+        );
+        assert!(
+            hidden_scene
+                .annotation_hit_test(
+                    marker,
+                    PickTolerance::default(),
+                    &[horizontal],
+                    None,
+                    &[horizontal],
+                )
+                .is_none(),
+            "master visibility must override selected and problem-forced annotations"
+        );
+        let mut hidden_editor = ConstraintEditor::default();
+        hidden_editor.set_selection([SelectionItem::Curve(related_curve)]);
+        let move_effects = hidden_editor.pointer_move(
+            &hidden_scene,
+            pointer(10, marker.x, marker.y, Modifiers::default()),
+        );
+        assert!(move_effects.iter().all(|effect| !matches!(
+            effect,
+            EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(_)),
+                ..
+            })
+        )));
+        let down_effects = hidden_editor.pointer_down(
+            &hidden_scene,
+            pointer(10, marker.x, marker.y, Modifiers::default()),
+        );
+        assert!(down_effects.iter().all(|effect| !matches!(
+            effect,
+            EditorEffect::SelectionChanged(selection) if selection.contains(&horizontal)
+        )));
+        assert_ne!(hidden_editor.selection(), &[horizontal]);
     }
 
     #[test]
@@ -21206,6 +21274,27 @@ mod tests {
                 context_owner: None,
             })],
             "a visible annotation must precede the intrinsic datum fallback",
+        );
+        scene.set_annotations_visible(false);
+        let mut hidden_overlap = super::ConstraintEditor::default();
+        assert_eq!(
+            hidden_overlap
+                .pointer_move(&scene, pointer(5, origin.x, origin.y, Modifiers::default()),),
+            vec![EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Geometry(SelectionItem::Datum(
+                    SketchDatum::Origin,
+                ))),
+                context_owner: Some(SelectionItem::Datum(SketchDatum::Origin)),
+            })],
+            "hiding annotations must expose the exact underlying datum hover owner",
+        );
+        assert_eq!(
+            hidden_overlap
+                .pointer_down(&scene, pointer(5, origin.x, origin.y, Modifiers::default()),),
+            vec![EditorEffect::SelectionChanged(vec![SelectionItem::Datum(
+                SketchDatum::Origin,
+            )])],
+            "hiding annotations must expose the exact underlying datum click owner",
         );
     }
 

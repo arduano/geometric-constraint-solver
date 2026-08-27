@@ -214,11 +214,12 @@
               <label>Canvas picks<select id="wb-geometry-pick-scope"><option value="all">All geometry</option><option value="profile">Profile only</option><option value="construction">Construction only</option></select></label>
               <label class="wb-option-check"><input id="wb-show-reference-geometry" type="checkbox" checked />Reference geometry</label>
               <label class="wb-option-check"><input id="wb-show-grid" type="checkbox" checked />Adaptive grid</label>
+              <label class="wb-option-check"><input id="wb-show-annotations" type="checkbox" checked />Annotations</label>
               <label class="wb-option-check"><input id="wb-show-all-constraints" type="checkbox" />Show all constraint marks</label>
               <label class="wb-option-check"><input id="wb-show-explicit-construction" type="checkbox" checked />Explicit guides</label>
               <label class="wb-option-check"><input id="wb-show-implicit-construction" type="checkbox" checked />Fillet-hidden portions</label>
               <div class="wb-option-actions"><button type="button" data-wb-action="annotation-reset-selected">Reset selected annotations</button><button type="button" data-wb-action="annotation-reset-all">Reset all annotations</button></div>
-              <p class="wb-option-help">The grid is visual only. Native geometry wins overlapping datum picks; a hidden Fillet portion still selects its complete native source.</p>
+              <p class="wb-option-help">Annotations controls constraint symbols and dimensions. The grid is visual only. Native geometry wins overlapping datum picks; a hidden Fillet portion still selects its complete native source.</p>
             </div>
           </section>
           <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>

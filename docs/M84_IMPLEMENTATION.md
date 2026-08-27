@@ -2,11 +2,14 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **the clean-qualified immutable M84-F011 PC water-manifold dogfood replacement is
-nominated on Tailscale; M84 remains active and unaccepted pending refreshed U1-U16**. Exact F011
+Status: **M84-F012 withdraws the otherwise clean-qualified immutable F011 PC water-manifold
+nomination while the annotation-visibility presentation amendment undergoes replacement
+qualification; M84 remains active and unaccepted pending refreshed U1-U16**. Exact F011
 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. F010 source `cf463838`,
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback authority and remain served until an
+exact F012 replacement is qualified. No committed F012 source/tree/freeze authority or acceptance
+is claimed. F010 source `cf463838`,
 tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback
 evidence. F009 source `c74651c`, tree
 `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect
@@ -274,6 +277,24 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   verify the ninth project plus PNG signature and 2000 × 1400 IHDR in a real browser; then replace
   the retained F010 service only after temporary exact-byte/browser proof. M84-U15/U16, all other
   refreshed UAT, Pages publication and milestone closure remain pending.
+
+### M84-F012 — annotation visibility display/pick parity
+
+- [x] Add one default-checked **Annotations** option to the shared workbench display surface and
+  retain it only in each live flat/code workbench session. Apply the value to every composed scene
+  without adding it to document, code-session, history, persistence, Intent IR or repro authority.
+- [x] Add a default-true `EditorScene` presentation flag and make annotation SVG composition plus
+  direct/contextual annotation hit tests consume it. Hidden selected/problem annotations publish
+  no hit target; display-option changes clear stale hover so underlying geometry/datums can own the
+  next pointer move/down. Preserve derived layout and selection, and keep Fillet affordance picking
+  independent of annotation visibility.
+- [x] Preserve WYSIWYG PNG behavior by cloning the current composed SVG: annotations are exported
+  only when visible. Extend export-only cleanup to draft/inference guides/candidates and existing
+  provisional/hit/error paint without mutating the live canvas or durable authority.
+- [ ] Run focused headless paint/pick, flat/code adapter and PNG-cleanup qualification; commit the
+  final implementation; pass the complete clean gate; freeze exact no-rebuild output; verify both
+  workbenches and both annotation states in a real browser; then replace retained F011 only after
+  temporary exact-byte/browser proof. Do not accept U16 or any other UAT row mechanically.
 
 The semantic-overlay addition intentionally changes the still-unreleased optional persistence
 contract. Code sessions now identify as `geosolve-sketch-code-session-v2`; composed workbench
@@ -673,7 +694,7 @@ preserved. This is the clean immutable F010 replacement nomination, not acceptan
 U1-U14 were pending when this evidence was recorded. M84-F011 withdraws the nomination; F010 PID
 `650971` is retired and its frozen snapshot remains historical rollback evidence.
 
-## Current F011 implementation and replacement qualification
+## Historical F011 implementation and replacement qualification
 
 The ninth **PC Water Manifold** project is implemented as the milestone's first substantial
 AI-authored mechanical dogfood sketch. Its managed source describes a 240 × 120 mm plate, 60 × 84
@@ -735,6 +756,10 @@ Only after temporary proof passed was F010 PID `650971` retired. Retained
 `geosolve-m84-uat.service`, PID `1485656`, invocation
 `f04bc05089d94947b7a24d8ec6a6f26d`, serves only the immutable F011 snapshot from its snapshot
 working directory at `http://100.94.63.83:8080/`; temporary `:18093` is retired.
+
+M84-F012 withdraws this nomination while leaving the exact F011 service as rollback authority.
+The F012 implementation record above is not a clean committed source identity, complete gate,
+freeze, HTTP/browser ledger or replacement service nomination.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -952,9 +977,9 @@ retired. The temporary PID `4027499` is also retired. M84-F005 withdraws this ot
 direct-authoring record because it predates the collaborative overlay and semantic-authority
 contract. Combined F005/F006 source `ff2e142` and its later frozen candidate are themselves
 withdrawn by F007's terminal-lens reproduction. Those snapshot/service records are historical only,
-not current candidates. The withdrawn F009 and historical F010 qualification records are above;
-the current F011 nomination record is also above. GitHub Pages deliberately remains on accepted
-M83 pending refreshed UAT and explicit approval.
+not current candidates. The withdrawn F009/F010 and historical F011 qualification records are
+above. GitHub Pages deliberately remains on accepted M83 pending an exact F012 replacement,
+refreshed UAT and explicit approval.
 
 ## Known bounds and truthful limitations
 
@@ -975,7 +1000,10 @@ M83 pending refreshed UAT and explicit approval.
 
 ## Remaining release sequence
 
-1. Complete refreshed M84-U1 through M84-U16 against only the frozen F011 replacement and record
-   explicit supervising-user approval or open another numbered finding.
-2. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+1. Finish focused F012 qualification, commit the exact replacement, pass the complete clean gate,
+   freeze without rebuild and exact-verify flat/code paint, picking and visible/hidden PNG behavior
+   on temporary bytes before replacing the retained F011 rollback service.
+2. Complete refreshed M84-U1 through M84-U16 against only that qualified frozen F012 replacement
+   and record explicit supervising-user approval or open another numbered finding.
+3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

@@ -2,11 +2,14 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the clean-qualified immutable M84-F011 manifold dogfood
-replacement is nominated on Tailscale while refreshed U1-U16 remain pending**. Exact F011 source
+Status: **active and unaccepted; M84-F012 withdraws the otherwise clean-qualified immutable F011
+manifold dogfood nomination while the annotation-visibility presentation amendment undergoes
+replacement qualification; refreshed U1-U16 remain pending**. Exact F011 source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and no-rebuild snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. F010 source `cf463838`,
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback authority and remain served until an
+exact F012 replacement is qualified. No F012 source/tree/freeze authority or acceptance is
+claimed. F010 source `cf463838`,
 tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback
 evidence. F009 source `c74651c`, tree `a904584`, and snapshot
 `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect evidence; F007 source
@@ -277,6 +280,28 @@ layer optional.
   retained F010 Tailscale service. Pages publication, human acceptance and milestone closure remain
   out of bounds until explicit approval.
 
+### M84-F012 — annotation visibility shares paint and picking
+
+- Add one **Annotations** checkbox to the existing display options in both the flat and code
+  workbenches. It is on for every new browser session and remains session-local presentation state:
+  do not place it in the sketch/code document, accepted scene identity, history, persistence,
+  Intent IR or repro payload.
+- Carry the value on the shared headless scene DTO used by rendering and pointer resolution. When
+  false, omit every constraint/dimension annotation and DOM hit corridor and make direct plus
+  contextual/corridor hit tests return no annotation, even for selected or problem-forced items.
+  Clear any stale annotation hover so the exact underlying geometry or datum owns the next move/
+  down. Do not discard or rewrite derived annotation layout or its disposable presentation cache.
+- Keep Fillet radius/continuation affordances available and pickable while annotations are hidden;
+  they are independent computed-feature interaction authority, not dimension annotations.
+- Export the already-composed canvas WYSIWYG: annotations appear in the PNG exactly when currently
+  visible. Export-only styling must remove hit targets, errors, drafts, inference guides/candidates
+  and all other provisional authoring paint without mutating selection, layout, history, accepted
+  authority, code state, IR, persistence or repro.
+- Qualify both workbench variants, overlapping annotation/geometry/datum picks, selected/problem
+  annotations, Fillet handles, visible/hidden PNGs and provisional-export cleanup. F011 remains
+  rollback-only until a clean, frozen, byte/browser-verified F012 replacement exists; U1-U16,
+  explicit approval, Pages publication and closure remain pending.
+
 ## Required demonstrations
 
 The eight bundled demonstrations below are the historical reviewed F009/F010 code-project catalog.
@@ -456,7 +481,7 @@ and `c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
 Historical F010 PID `650971`, F009 PID `3965271` and temporary F010 PIDs `238809`/`621532` are
 retired; their snapshots remain preserved. M84-F011 withdraws F010 from current nomination.
 
-Current F011 qualification/nomination (2026-08-27): exact source
+Historical F011 qualification/nomination (2026-08-27): exact source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate from
 18:38:08.068586771 through 18:55:55.205076185 AEST, exit 0. The 6,251-line, 422,664-byte log
@@ -480,6 +505,10 @@ passed was F010 PID `650971` retired. Retained `geosolve-m84-uat.service`, PID `
 `f04bc05089d94947b7a24d8ec6a6f26d`, serves only F011 from its immutable snapshot working directory
 at `http://100.94.63.83:8080/`; temporary `:18093` is retired. M84-U1 through M84-U16, explicit
 approval, Pages publication, service retirement and closure remain open.
+
+M84-F012 withdraws that nomination while the exact F011 service remains rollback-only. The F012
+implementation has no clean committed source/tree, release-gate log, frozen snapshot, HTTP/browser
+ledger or replacement PID yet; none may be inferred from the historical F011 evidence.
 
 ## Bounds and non-goals
 

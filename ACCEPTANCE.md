@@ -3386,10 +3386,13 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. The clean-qualified immutable M84-F011 PC water-manifold dogfood
-replacement is nominated on Tailscale. Refreshed M84-U1 through M84-U16 and explicit approval
-remain pending. Exact F011 source `e28721a`, tree `0152097`, and snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. Exact F010 source
+Status: active and unaccepted. M84-F012 withdraws the otherwise clean-qualified immutable F011 PC
+water-manifold nomination while its annotation-visibility presentation amendment undergoes
+replacement qualification. Refreshed M84-U1 through M84-U16 and explicit approval remain pending.
+Exact F011 source `e28721a`, tree `0152097`, and snapshot
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback authority and remain served only
+until an exact F012 replacement is qualified. No F012 source/tree/freeze or acceptance is claimed.
+Exact F010 source
 `cf463838`, tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical
 rollback evidence. Exact F009
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remain
@@ -3596,6 +3599,18 @@ and cold-materialized through the ordinary accepted-scene authority.
   annotation presentation. The action must not inspect or reinterpret native equations, mutate the
   document, create history, alter persistence or require the optional code module. A real-browser
   check must validate the downloaded PNG signature and IHDR dimensions.
+- M84-F012 adds one default-on, session-local **Annotations** display switch to both the ordinary
+  flat and code workbenches. The shared headless scene flag must govern annotation paint and direct/
+  corridor picking together: when off, no constraint or dimension annotation—including selected or
+  problem-forced presentation—may hover, select or otherwise steal pointer ownership from underlying
+  geometry/datums. Existing Fillet radius and continuation handles remain available because they
+  are not annotation authority. Toggling must clear stale annotation hover while preserving the
+  derived layout/cache, selection, accepted document/scene, history, Intent IR, persistence and
+  repro bytes; the switch itself is not durable design intent.
+- F012 also makes PNG output WYSIWYG for that session-local switch: visible annotations remain in
+  the composed export and hidden annotations remain absent. Export-only cleanup must additionally
+  remove draft/inference candidates and guides plus all other provisional paint, without changing
+  the live display choice or any document, selection, history, code-session, IR or repro authority.
 - Historical replacement source `c74651c` passes formatting, warnings-denied Clippy/Rustdoc, locked
   all-feature tests, actual WASM, TypeScript, golden require-clean, Trunk and the complete clean
   release gate.
@@ -3615,7 +3630,8 @@ and cold-materialized through the ordinary accepted-scene authority.
   mechanical nomination does not substitute for refreshed human UAT. Exact F011 source
   `e28721a`, tree `0152097`, then passes the complete clean gate, immutable no-rebuild freeze,
   byte-identical temporary/retained HTTP verification and focused frozen manifold/PNG/authority
-  1/1 on both endpoints. This current mechanical nomination likewise accepts no UAT row.
+  1/1 on both endpoints. That then-current mechanical nomination likewise accepted no UAT row;
+  M84-F012 now withdraws it without invalidating the preserved evidence.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3766,7 +3782,7 @@ checkpoint retained `geosolve-m84-uat.service`, PID `650971`, served those immut
 remains preserved as historical rollback evidence. M84-F011 withdraws this F010 nomination while
 keeping it as rollback evidence; PID `650971` was later retired after F011 temporary proof.
 
-Current F011 nomination authority is exact product source
+Historical F011 rollback authority is exact product source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`. Its complete clean gate ran from
 18:38:08.068586771 through 18:55:55.205076185 AEST on 2026-08-27, exited 0 and ended with a
@@ -3797,6 +3813,11 @@ Only after temporary proof passed was F010 PID `650971` retired. Retained
 working directory at `http://100.94.63.83:8080/`; temporary `:18093` is retired. Refreshed M84-U1
 through M84-U16 remain open, so Pages remains accepted M83 authority and no M84 public publication
 is claimed.
+
+M84-F012 withdraws this nomination while retaining the exact F011 service only as rollback
+authority. Its annotation paint/pick and WYSIWYG export amendment is implemented in the working
+tree, but no clean committed source, release gate, freeze, HTTP/browser ledger or replacement
+service identity is claimed. All UAT rows remain pending.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

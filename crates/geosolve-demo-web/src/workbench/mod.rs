@@ -178,11 +178,16 @@ impl ProjectionalScenePresentation {
         editor: &geosolve_constraint_editor::ProjectionalEditorSession,
         viewport: geosolve_constraint_editor::Viewport,
         chord_tolerance_pixels: f64,
+        annotations_visible: bool,
         show_all_constraints: bool,
     ) -> Self {
         match editor.scene(viewport, chord_tolerance_pixels) {
             Ok(mut scene) => {
-                apply_projectional_scene_display(&mut scene, show_all_constraints);
+                apply_projectional_scene_display(
+                    &mut scene,
+                    annotations_visible,
+                    show_all_constraints,
+                );
                 Self {
                     scene: Some(scene),
                     status_override: None,
@@ -364,6 +369,7 @@ impl WorkbenchDocumentAuthority {
                 editor,
                 viewport,
                 chord_tolerance_pixels,
+                true,
                 false,
             ),
         }
@@ -1991,8 +1997,10 @@ fn route_projectional_terminal_capture(
 #[cfg(any(target_arch = "wasm32", test))]
 fn apply_projectional_scene_display(
     scene: &mut geosolve_constraint_editor::EditorScene,
+    annotations_visible: bool,
     show_all_constraints: bool,
 ) {
+    scene.set_annotations_visible(annotations_visible);
     scene.set_show_all_constraint_annotations(show_all_constraints);
 }
 
@@ -3697,6 +3705,7 @@ pub(crate) mod wasm {
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
+        annotations_visible: bool,
         show_all_constraints: bool,
         pan_gesture: Option<PanGesture>,
         pointer_captures: super::CanvasPointerCaptures,
@@ -3723,6 +3732,7 @@ pub(crate) mod wasm {
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
+        annotations_visible: bool,
         show_all_constraints: bool,
         pan_gesture: Option<PanGesture>,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
@@ -3853,6 +3863,7 @@ pub(crate) mod wasm {
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
+            annotations_visible: true,
             show_all_constraints: false,
             pan_gesture: None,
             pointer_captures: super::CanvasPointerCaptures::default(),
@@ -3904,6 +3915,7 @@ pub(crate) mod wasm {
             samples,
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
+            annotations_visible: true,
             show_all_constraints: false,
             pan_gesture: None,
             pointer_moves: Rc::new(RefCell::new(super::ProjectionalPointerMoveQueue::default())),
@@ -4081,6 +4093,7 @@ pub(crate) mod wasm {
             wb.editor(),
             wb.camera.viewport(),
             super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            wb.annotations_visible,
             wb.show_all_constraints,
         )
     }
@@ -4782,6 +4795,7 @@ pub(crate) mod wasm {
                 policy.visibility.reference_geometry,
             ),
             ("wb-show-grid", wb.grid_visible),
+            ("wb-show-annotations", wb.annotations_visible),
             ("wb-show-all-constraints", wb.show_all_constraints),
         ] {
             if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
@@ -8731,6 +8745,9 @@ pub(crate) mod wasm {
                         .map(|()| "Dimension options updated".to_owned())
                     }
                     Some(super::OptionOverlayKind::ConstructionDisplay) => {
+                        wb.pointer_moves.borrow_mut().clear_stationary_sample();
+                        let effects = wb.editor_mut().editor_mut().pointer_leave();
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
                         let scope = match select_value(&change_document, "wb-geometry-pick-scope")
                             .as_deref()
                         {
@@ -8765,6 +8782,11 @@ pub(crate) mod wasm {
                             };
                             wb.grid_visible = checkbox_checked(&change_document, "wb-show-grid")
                                 .ok_or_else(|| "grid visibility is unavailable".to_owned())?;
+                            wb.annotations_visible =
+                                checkbox_checked(&change_document, "wb-show-annotations")
+                                    .ok_or_else(|| {
+                                        "annotation visibility is unavailable".to_owned()
+                                    })?;
                             wb.show_all_constraints =
                                 checkbox_checked(&change_document, "wb-show-all-constraints")
                                     .ok_or_else(|| {
@@ -8778,7 +8800,7 @@ pub(crate) mod wasm {
                                     visibility,
                                 });
                             let _ = dispatch_projectional_effects(&mut wb, effects);
-                            Ok("Canvas geometry scope updated".to_owned())
+                            Ok("Canvas display updated".to_owned())
                         })
                     }
                     Some(super::OptionOverlayKind::Fillet) => {
@@ -10046,7 +10068,7 @@ pub(crate) mod wasm {
                         }
                         Some(super::OptionOverlayKind::ConstructionDisplay) => {
                             update_geometry_interaction_policy(&change_document, &mut wb)
-                                .map(|()| "Canvas geometry scope updated".to_owned())
+                                .map(|()| "Canvas display updated".to_owned())
                         }
                         None => Ok("Tool options closed".to_owned()),
                     };
@@ -13796,6 +13818,7 @@ pub(crate) mod wasm {
                 super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
             )
             .scene?;
+        scene.set_annotations_visible(wb.annotations_visible);
         scene.set_show_all_constraint_annotations(wb.show_all_constraints);
         Some(scene)
     }
@@ -14197,6 +14220,7 @@ pub(crate) mod wasm {
             document,
             coordinator,
             wb.grid_visible,
+            wb.annotations_visible,
             wb.show_all_constraints,
         )?;
         render_action_availability(
@@ -14340,6 +14364,7 @@ pub(crate) mod wasm {
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
         grid_visible: bool,
+        annotations_visible: bool,
         show_all_constraints: bool,
     ) -> Result<(), JsValue> {
         let policy = coordinator.editor().geometry_interaction_policy();
@@ -14367,6 +14392,7 @@ pub(crate) mod wasm {
                 policy.visibility.reference_geometry,
             ),
             ("wb-show-grid", grid_visible),
+            ("wb-show-annotations", annotations_visible),
             ("wb-show-all-constraints", show_all_constraints),
         ] {
             if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
@@ -15559,6 +15585,8 @@ pub(crate) mod wasm {
         };
         let grid_visible = checkbox_checked(document, "wb-show-grid")
             .ok_or_else(|| "grid visibility is unavailable".to_owned())?;
+        let annotations_visible = checkbox_checked(document, "wb-show-annotations")
+            .ok_or_else(|| "annotation visibility is unavailable".to_owned())?;
         let show_all_constraints = checkbox_checked(document, "wb-show-all-constraints")
             .ok_or_else(|| "constraint annotation visibility is unavailable".to_owned())?;
         let policy = GeometryInteractionPolicy { scope, visibility };
@@ -15574,6 +15602,7 @@ pub(crate) mod wasm {
         let effects = wb.coordinator.set_geometry_interaction_policy(policy);
         dispatch_effects(wb, effects);
         wb.grid_visible = grid_visible;
+        wb.annotations_visible = annotations_visible;
         wb.show_all_constraints = show_all_constraints;
         if let Some(viewport) = captured_viewport {
             let canceled = cancel_captured_canvas_interactions(
@@ -16792,9 +16821,11 @@ mod tests {
                 .unwrap();
             assert!(!scene.show_all_constraint_annotations);
 
-            apply_projectional_scene_display(&mut scene, true);
+            apply_projectional_scene_display(&mut scene, true, true);
+            assert!(scene.annotations_visible);
             assert!(scene.show_all_constraint_annotations);
-            apply_projectional_scene_display(&mut scene, false);
+            apply_projectional_scene_display(&mut scene, false, false);
+            assert!(!scene.annotations_visible);
             assert!(!scene.show_all_constraint_annotations);
         });
     }
@@ -16809,6 +16840,7 @@ mod tests {
                 &editor,
                 test_viewport(),
                 0.0,
+                true,
                 false,
             );
             assert!(unavailable.scene.is_none());
@@ -16822,6 +16854,7 @@ mod tests {
                 &editor,
                 test_viewport(),
                 0.5,
+                true,
                 false,
             );
             assert!(ready.scene.is_some());
@@ -19940,6 +19973,7 @@ mod tests {
         for needle in [
             "id=\"wb-show-reference-geometry\"",
             "id=\"wb-show-grid\"",
+            "id=\"wb-show-annotations\"",
             "id=\"wb-show-all-constraints\"",
             "data-wb-action=\"annotation-reset-selected\"",
             "data-wb-action=\"annotation-reset-all\"",

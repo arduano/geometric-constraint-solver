@@ -85,8 +85,12 @@ construction/NURBS UAT and certified all-family visual profiles.
   relational managed vocabulary it needs and presentation-only PNG export. Exact F011 source
   `e28721a`, tree `0152097`, and immutable snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh` pass
   clean qualification plus exact temporary/retained byte and focused browser verification.
-  Retained PID `1485656` serves only those F011 bytes at `http://100.94.63.83:8080/`; F007 source
-  `cc2f05e` is also historical. Refreshed U1-U16 remain pending, and Pages stays on accepted M83.
+  M84-F012 withdraws that nomination while adding a default-on, session-local annotation display
+  toggle whose shared scene state governs paint and picking in flat and code workbenches, plus
+  WYSIWYG PNG visibility and stricter provisional-paint cleanup. Retained PID `1485656` serves only
+  the F011 rollback bytes at `http://100.94.63.83:8080/` until a qualified F012 replacement exists;
+  no F012 source/tree/freeze authority is claimed. F007 source `cc2f05e` is also historical.
+  Refreshed U1-U16 remain pending, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -1029,6 +1033,18 @@ native document to reconstruct geometry nor mutates selection, persistence, hist
 authority or the optional code session. The feature therefore remains available to plain flat
 workbench deployments as presentation functionality.
 
+M84-F012 keeps annotation visibility in that same presentation boundary. `EditorScene` carries a
+default-true transient flag consumed by both SVG composition and the headless direct/contextual
+annotation hit tests. Both flat and code workbenches expose one session-local **Annotations**
+control and apply it before paint or pointer routing. When false, selected and problem-forced
+constraint/dimension annotations publish neither paint nor hit corridors, stale annotation hover is
+cleared, and the underlying geometry or datum owns pointer move/down; Fillet affordances remain an
+independent computed-feature pick surface. The flag neither deletes derived annotation layout nor
+enters selection, accepted-scene identity, document/code history, Intent IR, persistence or repro.
+Because PNG export clones the composed SVG, annotation inclusion is WYSIWYG; export-only styling
+also removes draft/inference candidates and guides along with existing hit, error and provisional
+paint without mutating the live scene.
+
 Exact F011 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate and freezes without
 rebuild at `/tmp/geosolve-m84-f011-uat.ps736NLh`, ordered-manifest aggregate
@@ -1038,8 +1054,9 @@ eight-path ledgers are byte-identical at SHA-256
 manifold/PNG/authority checks pass 1/1 on each endpoint and preserve lifecycle, history length,
 project title and viewport markup authority. Retained `geosolve-m84-uat.service`, PID `1485656`,
 invocation `f04bc05089d94947b7a24d8ec6a6f26d`, serves only this immutable snapshot at
-`http://100.94.63.83:8080/`. This is current mechanical nomination authority, not human acceptance
-or public authority.
+`http://100.94.63.83:8080/`. M84-F012 withdraws this nomination while leaving the exact service as
+rollback-only authority pending a clean, frozen, byte/browser-verified replacement. No F012
+qualification, human acceptance or public authority is claimed.
 
 ### `geosolve-sketch-features`
 
@@ -2010,7 +2027,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, but M84-F011 withdraws that nomination for a ninth fully
   constrained PC water-manifold dogfood project, hybrid adaptive water-channel patch and isolated
   PNG export. Exact F011 source `e28721a`, tree `0152097`, and immutable snapshot
-  `/tmp/geosolve-m84-f011-uat.ps736NLh` are clean-qualified and byte/browser-verified; retained PID
-  `1485656` serves those exact bytes on Tailscale. Combined source `ff2e142` is withdrawn; refreshed
-  human UAT U1-U16 remains pending. Accepted M83 remains Pages authority and no M84 publication is
-  claimed.
+  `/tmp/geosolve-m84-f011-uat.ps736NLh` are clean-qualified and byte/browser-verified. M84-F012
+  withdraws that nomination for shared annotation paint/pick visibility and WYSIWYG export cleanup;
+  retained PID `1485656` continues to serve the exact F011 rollback bytes until an F012 replacement
+  qualifies. Combined source `ff2e142` is withdrawn; refreshed human UAT U1-U16 remains pending.
+  Accepted M83 remains Pages authority and no M84 publication is claimed.

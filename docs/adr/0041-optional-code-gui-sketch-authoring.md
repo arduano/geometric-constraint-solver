@@ -2,10 +2,14 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. The clean-qualified immutable M84-F011 replacement at source
+Status: accepted for M84. M84-F012 withdraws the otherwise clean-qualified immutable F011
+nomination while its annotation-visibility presentation amendment undergoes replacement
+qualification. F011 source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` is nominated for refreshed UAT. F010 source `cf463838`, tree
+`/tmp/geosolve-m84-f011-uat.ps736NLh` remains served rollback authority until an exact F012
+replacement qualifies; no F012 source/tree/freeze or acceptance is claimed. F010 source
+`cf463838`, tree
 `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, F009 source `c74651c`, and F007 source
 `cc2f05e` are withdrawn historical evidence. The direct-authoring `41e65a4` snapshot, combined
 F005/F006 source `ff2e142`, initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are
@@ -333,6 +337,17 @@ resolving to the unrelated `ne` Point. Exact alias/nesting/mapping regressions a
 output check both declared reference kind and expanded target kind. This changes only optional-layer semantic routing; native
 geometry, solver equations, constraints, priority, tolerance and branch behavior remain unchanged.
 
+M84-F012 does not change the optional-code architecture or any durable authoring contract. One
+default-true transient flag on the shared headless scene DTO governs both constraint/dimension
+annotation paint and annotation picking; flat and code workbenches expose it as session-local
+presentation state. Hidden annotations, including selected/problem-forced ones, publish no hit
+authority and cannot displace underlying geometry/datum pointer ownership, while derived layout and
+Fillet affordances remain intact. The flag is absent from documents, accepted identities, history,
+Intent IR, code sessions, persistence and repro. PNG export clones the already-composed SVG, so
+annotation inclusion is WYSIWYG, and export-only cleanup strips draft/inference/provisional paint
+without mutating the live canvas. This presentation/picking amendment adds no equation, branch,
+priority or persistence schema.
+
 ## Consequences
 
 - Reusable TypeScript can express higher-order structural design while the GUI safely rewrites a
@@ -374,7 +389,7 @@ geometry, solver equations, constraints, priority, tolerance and branch behavior
   carried 14/14 browser cases pass on both endpoints. M84-F011 withdraws this nomination; PID
   `650971` and temporary PIDs `238809`/`621532` are retired, and the snapshot remains historical
   rollback evidence.
-- Current F011 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+- Historical F011 rollback source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
   `015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate from
   18:38:08.068586771 through 18:55:55.205076185 AEST on 2026-08-27, exit 0. Its 6,251-line,
   422,664-byte log has SHA-256
@@ -390,7 +405,9 @@ geometry, solver equations, constraints, priority, tolerance and branch behavior
   manifold/PNG/authority cases pass 1/1 on each endpoint and preserve lifecycle, history length,
   project title and viewport markup authority. PID `1485656`, invocation
   `f04bc05089d94947b7a24d8ec6a6f26d`, serves only these immutable bytes at
-  `http://100.94.63.83:8080/`. Refreshed U1-U16, acceptance and public publication remain pending.
+  `http://100.94.63.83:8080/`. M84-F012 withdraws this nomination while leaving the exact bytes
+  served as rollback evidence; no replacement release identity or qualification is claimed.
+  Refreshed U1-U16, acceptance and public publication remain pending.
 
 ## Rejected alternatives
 

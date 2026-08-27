@@ -610,7 +610,9 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
     }
     output.push_str("</g>");
     output.push_str("<g class=\"wb-annotations\">");
-    if let (Some(scene), Some(accepted)) = (scene, accepted) {
+    if let (Some(scene), Some(accepted)) = (scene, accepted)
+        && scene.annotations_visible
+    {
         render_annotations(
             &mut output,
             &mut problem_markers,
@@ -4243,6 +4245,66 @@ mod tests {
             "<title>{reference_label}; Reference curve-length dimension; 3 model units</title>"
         )));
         assert!(markup.contains("class=\"wb-dimension-arrow\""));
+    }
+
+    #[test]
+    fn hidden_annotations_remove_constraint_and_dimension_paint_and_dom_hit_targets() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("annotation visibility", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted rectangle");
+        let viewport = viewport();
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("scene");
+        scene.set_show_all_constraint_annotations(true);
+        let selection = [
+            SelectionItem::Constraint(rectangle.constraints[0]),
+            SelectionItem::Dimension(rectangle.dimensions[0]),
+        ];
+        let render = |annotations_visible| {
+            let mut scene = scene.clone();
+            scene.set_annotations_visible(annotations_visible);
+            svg_markup_with_computed_context_action_stamp_and_display(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &selection,
+                &[],
+                EditorHoverState::default(),
+                None,
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy::default(),
+                CanvasDisplayOptions::default(),
+                viewport,
+            )
+        };
+
+        let visible = render(true);
+        assert!(visible.contains("data-editor-item=\"constraint\""));
+        assert!(visible.contains("data-editor-item=\"dimension\""));
+        let hidden = render(false);
+        assert!(hidden.contains("class=\"wb-curve"));
+        assert!(hidden.contains("<g class=\"wb-annotations\"></g>"));
+        assert!(!hidden.contains("data-editor-item=\"constraint\""));
+        assert!(!hidden.contains("data-editor-item=\"dimension\""));
+        assert!(!hidden.contains("class=\"wb-annotation wb-"));
     }
 
     #[test]

@@ -4699,8 +4699,10 @@ source `cf463838`, tree `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz
 withdraws that nomination. Exact F011 source `e28721a`, tree `0152097`, snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` passes replacement clean qualification, immutable freeze,
 exact temporary/retained byte verification and focused frozen manifold/PNG/authority 1/1 on both
-endpoints. Refreshed UAT U1-U16 remains required. M84 is active and unaccepted, and accepted M83
-remains Pages authority.
+endpoints. M84-F012 withdraws F011 from current nomination while annotation paint/pick visibility
+and WYSIWYG provisional-clean export undergo replacement qualification; F011 remains the served
+rollback and no F012 release identity is claimed. Refreshed UAT U1-U16 remains required. M84 is
+active and unaccepted, and accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -5005,6 +5007,30 @@ and error overlays. Export must not mutate the accepted document, code session, 
 persistence or selected project, and it must remain available in a build that does not use the
 optional code authoring layer.
 
+### M84-F012 — annotation visibility uses one paint/pick policy
+
+In both an ordinary flat sketch and a code project, open display options and require
+**Annotations** to begin checked. Move a constraint or dimension annotation over underlying
+geometry and over the Origin, select it or mark it as a problem, then uncheck the option. The same
+default-true transient `EditorScene` policy must omit its SVG paint/DOM hit corridors and make
+direct plus contextual/corridor annotation hit tests return none. Any stale annotation hover is
+cleared; the exact underlying geometry/datum owns the next pointer move/down. Toggle back on and
+require the same derived layout to return without changing selection or recomputing durable intent.
+
+With annotations hidden, exercise an existing Fillet radius/continuation affordance and require it
+to remain visible and pickable. Toggle visibility repeatedly and compare accepted document/scene,
+selection, history length, Intent IR, code session, persistence and repro bytes; all remain exact.
+The visibility choice is default-on session-local presentation only and must never acquire design,
+layout, solver, branch, history or serialization authority.
+
+Export PNG once with annotations visible and once hidden in each workbench. Each 2000 × 1400
+image must match the currently composed annotation paint while retaining accepted datum,
+construction, native and computed geometry. Start an authoring draft/inference/provisional state
+before another export; export-only styling must remove draft geometry, inference guides/candidates,
+hit targets, controls and error/provisional overlays without changing the live display, selection,
+layout, history or accepted authority. This scenario is implemented but not yet clean-qualified,
+frozen, accepted or assigned any final source/tree/evidence hash.
+
 ### M84-F001 — generated-point terminal checkpoint parity
 
 Drag one generated rounded-Polyline point through the ordinary retained preview and release a
@@ -5196,7 +5222,7 @@ and `c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
 Historical F010 PID `650971` and temporary F010 PIDs `238809`/`621532` are retired. M84-F011
 withdraws this nomination; its snapshot remains rollback evidence.
 
-Current F011 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
+Historical F011 rollback source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean gate. Its immutable
 no-rebuild snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh`, aggregate
 `056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, passes byte-identical
@@ -5205,7 +5231,9 @@ temporary/retained HTTP verification at ledger SHA-256
 manifold/PNG/authority checks pass 1/1 on both endpoints and preserve lifecycle, history length,
 project title and viewport markup authority. Retained `geosolve-m84-uat.service`, PID `1485656`,
 serves only this immutable snapshot at `http://100.94.63.83:8080/`. Pages remains accepted M83
-authority and no M84 public publication is claimed; refreshed U1-U16 remain pending.
+authority and no M84 public publication is claimed; refreshed U1-U16 remain pending. M84-F012
+withdraws this nomination while retaining the service as rollback-only evidence; no F012 release
+identity or qualification is claimed.
 
 ## Frozen near-singular fixtures
 

@@ -2,11 +2,14 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **the clean-qualified immutable M84-F011 PC water-manifold dogfood replacement is
-nominated on Tailscale; refreshed human UAT U1-U16 is pending**. No row is accepted. Exact F011
+Status: **M84-F012 withdraws the otherwise clean-qualified immutable F011 PC water-manifold
+nomination while the annotation-visibility presentation amendment undergoes replacement
+qualification; refreshed human UAT U1-U16 is pending**. No row is accepted. Exact F011
 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. F010 source `cf463838`,
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback authority and remain served only
+until an exact F012 replacement is qualified. No F012 source/tree/freeze or UAT acceptance is
+claimed. F010 source `cf463838`,
 tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback
 evidence. F009 source `c74651c`, tree
 `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect
@@ -346,7 +349,8 @@ SHA-256
 `2db91740662d19adf9f38518ed25deca91ad92e37022dfa3549caad0d608bcb0`. Only after temporary proof
 passed was F010 PID `650971` retired. Retained `geosolve-m84-uat.service`, PID `1485656`, invocation
 `f04bc05089d94947b7a24d8ec6a6f26d`, serves only F011 from its immutable snapshot working directory
-at `http://100.94.63.83:8080/`; temporary `:18093` is retired. This accepts no UAT row.
+at `http://100.94.63.83:8080/`; temporary `:18093` is retired. M84-F012 withdraws this nomination
+and leaves those exact bytes as rollback-only evidence. This accepts no UAT row.
 
 | Release state | Status |
 | --- | --- |
@@ -355,7 +359,8 @@ at `http://100.94.63.83:8080/`; temporary `:18093` is retired. This accepts no U
 | M84-F010 proportional owner/WASM/mutable-browser qualification | complete |
 | M84-F010 clean qualification and immutable replacement freeze | complete; withdrawn by F011 |
 | M84-F011 manifold/PNG focused qualification | complete on mutable and both frozen endpoints; no UAT row accepted |
-| M84-F011 clean qualification and immutable replacement freeze | complete; current nomination |
+| M84-F011 clean qualification and immutable replacement freeze | complete; withdrawn by F012 and retained as rollback |
+| M84-F012 annotation paint/pick and WYSIWYG export amendment | implemented; focused and clean replacement qualification pending |
 | Supervising-user refreshed M84-U1 through M84-U16 | pending |
 | GitHub Pages publication, service retirement and M84 closure | pending |
 
@@ -373,7 +378,9 @@ multi-frame no-selection and selected-producer drags and verify that only the po
 lens authorizes terminal overlay publication while the complete solver-coupled movement closure is
 persisted atomically and selected-consumer detachment remains local. The Compass center must remain
 at the exact accepted release through at least +500 ms and reload, with every spoke attached. These
-requirements remain part of U14. F011 adds distinct U15 manifold-dogfood and U16 PNG-export rows.
+requirements remain part of U14. F011 adds distinct U15 manifold-dogfood and U16 PNG-export rows;
+F012 extends U16 with the shared annotation paint/pick toggle and WYSIWYG cleanup without adding a
+seventeenth row.
 M84-F009 additionally requires exact renamed/nested and mapped `result_output` regressions plus the
 all-eight automated output-kind audit: each declared reference kind and expanded target kind must
 match the reviewed catalog, including Mounting Plate `plate.profile` as Profile rather than the
@@ -398,7 +405,7 @@ match the reviewed catalog, including Mounting Plate `plate.profile` as Profile 
 | M84-U13 | Click **New**, open **Code**, inspect the starter and nine example cards, then choose **Start from code**. Edit the starter rectangle, Apply, enter a collapsed invalid rectangle, Undo/Redo, reload/repro, return to New, and open every sample card. Check both desktop sizes. | The fresh surface has one direct starter action and nine genuine projects without overflow. Every card opens finite fitted visible geometry. Start creates **Untitled code sketch** with editable artifact-free `sketch.ts`, lexical `frame.corners.*` dependencies and no Promote/fabricated GUI history. Valid edits update finite accepted geometry; invalid edits retain the prior canvas and diagnostic; Undo/Redo/reload/repro preserve authored authority. | pending |
 | M84-U14 | In code projects, drag a literal point and each rectangle-corner role through at least two preview frames; also drag a Lantern vertex, Bridge tower peak, Compass center/spoke and Neon shared endpoint. On a shared rectangle point, repeat a multi-frame drag with no semantic selection and with its producer selected, then drag it with its referenced consumer selected. During one pending route try a generic save, foreign terminal and foreign/reentrant preparation; also verify no-motion release/cancel and stale terminal after Apply/Undo. Repeat the detached-consumer drag, Undo/Redo and Reset. Then select/delete a managed declaration with dependents and one generated child. Repeat deletion with a dirty source draft, retained code failure, a target retained across another revision and a GUI-owned selection. Finally remove a drafted owner in a source edit that also fails native publication, then reload and Undo. | Each accepted release records one bounded point-only semantic overlay/history entry and preserves a finite independently validated accepted scene. Lantern bulbs/Fillets, Bridge cables/stays, Compass ring/markers and Neon bends remain attached/current. The Compass center remains at the exact release through at least +500 ms and reload. Pointer-down authenticates exactly one semantic point lens and stores its exact `CodeSessionIdentity` plus pointer; only the dedicated authenticated terminal publisher may consume it. Generic save, foreign terminal and foreign/reentrant preparation reject while preserving the route. Non-pointer durable code actions invalidate it; no-motion release/cancel is history-neutral; stale terminal after Apply/Undo cannot revert newer accepted authority. Terminal publication atomically persists the complete authenticated solver-coupled semantic point closure; ordinary aliases remain exact and only redundant rectangle aliases receive bounded numerical canonicalization, so incidental roundoff cannot create competing writes while material/signed-zero conflicts still reject. Point-seed precedence is typed overlay draft > legacy generated override > managed source seed; Reset restores the coupled bundle/lower tier. No preference chooses the unique producer and producer selection keeps consumers attached; unique consumer selection detaches only it, truthfully permits Segment identity replacement, rebinds surviving code/GUI dependents and remains repeat-draggable/Undoable. Ordinary GUI points stay delegated. Rectangle coupling is atomic. Selection/deletion resolves through an exact session + accepted alias + semantic-owner token, not a hashed `code.*` alias. Managed deletion rewrites the exact source/code-owned closure; generated-child deletion is reversible suppression. Dirty/failed/stale/GUI-owned cases reject without mutation. A retained structural/native failure keeps its deterministic owner-pruned attempted overlay above the exact accepted overlay/canvas; reload and Undo preserve both. Persisted optional envelopes report `geosolve-sketch-code-session-v2` and `geosolve-code-workbench-v2`, while plain M83 workspace-v8 is unchanged. | pending |
 | M84-U15 | Open **PC water manifold · fully constrained dogfood**. Inspect the plate, reservoir clearance, three restrained routes, three enclosing O-ring groove loops and eight screw holes. In Code, inspect the three `waterChannel` invocations and custom patch; add and then remove/reorder one keyed route corner and Undo/Redo. Inspect diagnostics and attempt ordinary selection/edits without changing the one absolute anchor. | The fitted sketch reads as a plausible acrylic distribution plate rather than a synthetic corpus. All screw circles visibly remain 5 mm; grooves surround their corresponding channels; only one FixedPoint supplies absolute placement and all remaining geometry is relationally constrained. The patch stays read-only, `p.each` adapts Fillet cardinality to current keyed corners, unaffected keyed identities survive, accepted geometry stays finite/Current and diagnostics report zero numerical/equality/bidirectional DOF. | pending |
-| M84-U16 | With the manifold open, click **Export PNG** and inspect the downloaded file; repeat from an ordinary non-code sketch after changing selection/tool state. | Each download is a readable 2000 × 1400 `geosolve-sketch.png` with the accepted scene, dark standalone styling, datums/construction/annotations and no hit targets, provisional controls or error overlay. Export leaves project, accepted geometry, selection, Undo/Redo, repro and persistence state unchanged and remains available without code-project authority. | pending |
+| M84-U16 | In both the manifold code project and an ordinary flat sketch, confirm **Annotations** starts on. Overlap an annotation with geometry or the Origin, turn annotations off/on, exercise a Fillet radius handle, and export once in each annotation state. Also export while a draft/inference/provisional authoring cue is visible. | The toggle is session-local and controls constraint/dimension paint and picking together. Hidden selected/problem annotations have no invisible hover/click corridor and never steal pointer ownership from underlying geometry/datums; Fillet handles remain available. Existing annotation layout and selection do not reset, and toggling creates no history or document/code/Intent-IR/repro/persistence change. Each readable 2000 × 1400 `geosolve-sketch.png` is WYSIWYG for annotation visibility, retains accepted standalone paint, omits all hit/error/draft/inference/provisional paint, and leaves live project, layout, selection, accepted geometry, Undo/Redo and durable authority unchanged. | pending |
 
 Any JavaScript runtime solve, browser `eval`, raw code-facing ID, cross-project retarget, ordinal
 identity churn, silent cascade, duplicate history, blank accepted scene or pointer-frame expansion
@@ -409,6 +416,7 @@ withdraws the candidate and opens an owning-layer regression.
 - Supervising-user UAT: refreshed M84-U1 through M84-U16 pending; every previous candidate,
   including direct-authoring `41e65a4`, remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Tailscale state: current F011 snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh` is served at
-  `http://100.94.63.83:8080/` by `geosolve-m84-uat.service`, PID `1485656`. Withdrawn F010/F009
-  snapshots remain historical evidence; PIDs `650971`/`3965271` are retired.
+- Tailscale state: rollback F011 snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh` remains served at
+  `http://100.94.63.83:8080/` by `geosolve-m84-uat.service`, PID `1485656`, only until an exact F012
+  replacement is qualified. Withdrawn F010/F009 snapshots remain historical evidence; PIDs
+  `650971`/`3965271` are retired.

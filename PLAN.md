@@ -5793,15 +5793,18 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the clean-qualified immutable M84-F011 manifold dogfood
-replacement is nominated on Tailscale while refreshed M84-U1 through M84-U16 remain pending**.
+Status: **active and unaccepted; M84-F012 withdraws the otherwise clean-qualified immutable F011
+nomination while the annotation-visibility presentation amendment undergoes replacement
+qualification; refreshed M84-U1 through M84-U16 remain pending**.
 Ordinary GUI dependencies project as lexical
 managed TypeScript while low-level transport remains truthfully labelled Intent IR. Exact product
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn
 historical rollback evidence. Exact F010 source `cf463838`, tree `992e587`, and immutable snapshot
 `/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historical rollback evidence. Exact F011 source
 `e28721a`, tree `0152097`, and immutable snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` are current nomination authority. F007
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback authority and remain served only
+until a clean F012 replacement is independently verified. No committed F012 source/tree/freeze
+authority or acceptance is claimed. F007
 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and
 all earlier nominations are also withdrawn historical evidence; accepted M83 remains public Pages
 authority.
@@ -5990,6 +5993,18 @@ authority.
   circles, three open routes, three closed seals, 21 construction spans and six Current Fillets.
 - [x] Commit and clean-qualify F011, freeze the exact no-rebuild output, verify the ninth sample and
   PNG download on temporary frozen bytes, then replace the retained F010 Tailscale service.
+- [x] Implement M84-F012 as one default-on, session-local **Annotations** display toggle shared by
+  the flat and code workbenches. Apply it to the same scene DTO used by paint and picking so hidden
+  constraint/dimension annotations, including selected or problem-forced marks, cannot retain
+  hover/click ownership over underlying geometry or datums. Preserve annotation layout, selection,
+  document/code history, Intent IR, persistence and repro authority; keep Fillet radius/continuation
+  handles independently visible and pickable.
+- [x] Make PNG export WYSIWYG with the current annotation display choice and expand export-only
+  cleanup to draft and inference/provisional paint. Export remains presentation-only and must not
+  mutate the live scene, session state or any durable authority.
+- [ ] Commit and proportionally qualify F012, then run the complete clean gate, freeze the exact
+  no-rebuild output, verify the toggle/picking and both annotation-visible/hidden PNG paths in flat
+  and code workbenches on temporary frozen bytes, and only then replace the retained F011 service.
 - [ ] Receive explicit refreshed M84-U1 through M84-U16 approval, then publish/exact-verify Pages,
   retire the service and close M84.
 
@@ -6159,6 +6174,12 @@ snapshot installed at `http://100.94.63.83:8080/` under retained `geosolve-m84-u
 working directory. Temporary `:18093` is retired. Refreshed U1-U16, explicit approval, Pages
 publication, service retirement and milestone closure remain pending; accepted M83 stays public
 authority.
+
+M84-F012 annotation-visibility amendment record (2026-08-27): implementation adds the default-on,
+session-local shared scene paint/pick switch to flat and code workbenches plus WYSIWYG annotation
+export and draft/inference/provisional cleanup. It withdraws F011 from current nomination while
+leaving PID `1485656` and its exact snapshot as rollback-only authority. No F012 source/tree, gate,
+freeze, evidence hash, replacement service, UAT acceptance or Pages publication is recorded yet.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
