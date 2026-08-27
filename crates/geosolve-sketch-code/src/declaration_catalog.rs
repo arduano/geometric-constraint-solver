@@ -57,7 +57,7 @@ pub struct CodeDeclarationFamilyDescriptor {
 }
 
 /// Every declaration family executable by the optional code adapter.
-pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 14] = [
+pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 15] = [
     CodeDeclarationFamilyDescriptor {
         family: "aggregate.chain",
         direct: None,
@@ -81,6 +81,14 @@ pub const CODE_DECLARATION_FAMILIES: [CodeDeclarationFamilyDescriptor; 14] = [
         direct: Some(DirectDeclarationLowering::FilletSet),
         template: None,
         native: NativeDeclarationContract::ComputedFeature(ComputedFeatureKind::FilletSet),
+    },
+    CodeDeclarationFamilyDescriptor {
+        family: "constraint.coincident",
+        direct: Some(DirectDeclarationLowering::Constraint(
+            ConstraintKind::Coincident,
+        )),
+        template: None,
+        native: NativeDeclarationContract::Constraint(ConstraintKind::Coincident),
     },
     CodeDeclarationFamilyDescriptor {
         family: "constraint.fixedCoordinate",
@@ -207,6 +215,10 @@ pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDes
             descriptor(object([("arc", leaf(FeatureKind::CurveSpan))])),
         ),
         ("computed.filletSet".into(), descriptor(object([]))),
+        (
+            "constraint.coincident".into(),
+            descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),
+        ),
         (
             "constraint.fixedCoordinate".into(),
             descriptor_kind(FeatureKind::Constraint, leaf(FeatureKind::Constraint)),

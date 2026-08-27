@@ -139,6 +139,11 @@ export type VerticalConstraintRef<Project> = DescriptorResult<
   (typeof DECLARATION_RESULT_CATALOG)["constraint.vertical"]["outputs"]
 >;
 
+export type CoincidentConstraintRef<Project> = DescriptorResult<
+  Project,
+  (typeof DECLARATION_RESULT_CATALOG)["constraint.coincident"]["outputs"]
+>;
+
 export type FixedPointConstraintRef<Project> = DescriptorResult<
   Project,
   (typeof DECLARATION_RESULT_CATALOG)["constraint.fixedPoint"]["outputs"]
@@ -713,6 +718,7 @@ export interface ManagedGeometryBuilder<Project> {
     values: {
       readonly start: ManagedLineEndpoint<Project>;
       readonly end: ManagedLineEndpoint<Project>;
+      readonly role?: "profile" | "construction";
     },
   ): LineFeature<Project>;
   circle(
@@ -732,6 +738,14 @@ export interface ManagedGeometryBuilder<Project> {
 }
 
 export interface ManagedConstraintBuilder<Project> {
+  coincident(
+    symbol: string,
+    values: {
+      readonly first: PointLikeRef<Project>;
+      readonly second: PointLikeRef<Project>;
+      readonly suppressed?: boolean;
+    },
+  ): CoincidentConstraintRef<Project>;
   fixedPoint(
     symbol: string,
     values: {

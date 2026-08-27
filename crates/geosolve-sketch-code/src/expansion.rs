@@ -1912,6 +1912,16 @@ fn lower_direct_line(
         },
         alias.clone(),
     );
+    if let Some(role) = arguments.get("role") {
+        let role = string(role, "line role")?;
+        if !matches!(role, "profile" | "construction") {
+            return invalid_declaration(
+                declaration,
+                "line role must be `profile` or `construction`".into(),
+            );
+        }
+        draft = draft.with_field(field_key("role")?, enum_value(role)?);
+    }
     let mut endpoint_positions = [None, None];
     let mut writable = Vec::new();
     for (index, (name, role)) in [
@@ -4002,6 +4012,24 @@ fn lower_constraints(
                 let alias =
                     semantic_alias("constraint", &builder.project, &declaration.symbol, &[])?;
                 let mut draft = match constraint {
+                    ConstraintKind::Coincident => {
+                        let first = resolve_direct_point_operand(
+                            builder,
+                            required(arguments, "first", &declaration.symbol.0)?,
+                            &format!("{}.first", declaration.symbol.0),
+                        )?;
+                        let second = resolve_direct_point_operand(
+                            builder,
+                            required(arguments, "second", &declaration.symbol.0)?,
+                            &format!("{}.second", declaration.symbol.0),
+                        )?;
+                        IntentNodeDraft::new(
+                            IntentNodeKind::Constraint { constraint },
+                            alias.clone(),
+                        )
+                        .with_input(InputSlot::new(InputRole::Point, 0), first.patch_ref())
+                        .with_input(InputSlot::new(InputRole::Point, 1), second.patch_ref())
+                    }
                     ConstraintKind::Horizontal | ConstraintKind::Vertical => {
                         let relation_name = if constraint == ConstraintKind::Horizontal {
                             "horizontal"

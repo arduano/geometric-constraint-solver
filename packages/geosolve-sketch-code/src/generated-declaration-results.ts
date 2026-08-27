@@ -22,6 +22,13 @@ export const DECLARATION_RESULT_CATALOG = {
       "fields": {}
     }
   },
+  "constraint.coincident": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "constraint"
+    }
+  },
   "constraint.fixedCoordinate": {
     "feature_kind": "constraint",
     "outputs": {

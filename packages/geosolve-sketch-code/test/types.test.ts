@@ -149,6 +149,15 @@ const managedManifoldVocabulary = sketch(($) => {
     center: [30, 10],
     radius: mm(2.5),
   });
+  const constructionDatum = $.geometry.line("constructionDatum", {
+    start: route.vertices.byKey.outlet,
+    end: screw.center,
+    role: "construction",
+  });
+  const join = $.constraint.coincident("join", {
+    first: route.vertices.byKey.outlet,
+    second: screw.center,
+  });
   const anchor = $.constraint.fixedPoint("anchor", {
     point: route.vertices.byKey.inlet,
     target: [0, 0],
@@ -168,9 +177,11 @@ const managedManifoldVocabulary = sketch(($) => {
     mode: "driving",
   });
   const typedAnchor: OutputRef<ManagedSketchProject, "constraint"> = anchor;
+  const typedJoin: OutputRef<ManagedSketchProject, "constraint"> = join;
   const typedLength: OutputRef<ManagedSketchProject, "dimension"> = routeLength;
   const typedDiameter: OutputRef<ManagedSketchProject, "dimension"> = screwDiameter;
   typedAnchor;
+  typedJoin;
   typedLength;
   typedDiameter;
   screwX;
@@ -187,8 +198,14 @@ const managedManifoldVocabulary = sketch(($) => {
   $.dimension.diameter("spanDiameter", { curve: route.segments.byKey.inlet, target: 5 });
   // @ts-expect-error Managed circles reject point references from another project.
   $.geometry.circle("foreignCircle", { center: alphaStart, radius: 2.5 });
+  // @ts-expect-error Managed line roles are the closed profile/construction set.
+  $.geometry.line("badRole", { start: route.vertices.byKey.inlet, end: screw.center, role: "datum" });
+  // @ts-expect-error Coincident operands must both be point-like references.
+  $.constraint.coincident("curveJoin", { first: route.segments.byKey.inlet, second: screw.center });
+  // @ts-expect-error Coincident rejects a point reference from another project.
+  $.constraint.coincident("foreignJoin", { first: alphaStart, second: screw.center });
 
-  return $.outputs({ route, screw, anchor, routeLength, screwDiameter });
+  return $.outputs({ route, screw, constructionDatum, join, anchor, routeLength, screwDiameter });
 });
 managedManifoldVocabulary;
 
