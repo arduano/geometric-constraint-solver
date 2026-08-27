@@ -2,10 +2,11 @@
 
 # M85 — Responsive retained workbench presentation
 
-Status: **active and unaccepted; M85-F001 through M85-F003 are repaired at committed affected-
-crate-qualified implementation checkpoint `fd2c560`, while the clean release gate, frozen-byte
-browser profile, immutable nomination, human UAT and publication remain pending**. Accepted M84
-product source `84dd768`, immutable snapshot
+Status: **mechanically qualified and nominated for hands-on UAT, but unaccepted; M85-F001 through
+M85-F003 are repaired, the exact final source passes the clean release gate, and its immutable
+local/Tailscale candidate passes the frozen-byte browser profile plus native flat-adapter
+evidence**. Hands-on M85-U1-U9/U11-U12, explicit supervising-user approval and Pages publication
+remain pending. Accepted M84 product source `84dd768`, immutable snapshot
 `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain product and public-byte
 authority until M85 passes every gate below.
 
@@ -125,17 +126,17 @@ WebGL or a production renderer; introduce semantic approximation, geometry LOD o
 validation; restore the retired broad browser E2E/CDP stack; or move camera/DOM policy into
 `geosolve-core`, `geosolve-sketch`, `geosolve-linkage` or `geosolve-constraint-editor`.
 
-## Current implementation checkpoint
+## Current mechanically nominated candidate
 
-Committed source `fd2c560c5c61338a96f145ecb87106af49e93749`, tree
-`97591f3d8c268e36db2e3e728c52163dca87d055`, implements retained camera/hover paths, actual
-interaction/code receipts and the history-neutral unchanged-host code terminal. M85-F003 is
+Exact committed source `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
+`b55d012443f4dbf7551e30041da2912e666de9db`, implements retained camera/hover paths, actual
+interaction/code receipts and the history-neutral unchanged-host code terminal. M85-F003 remains
 repaired without changing any pre-M85 public incremental-code signature: the unaudited adapter
 calls the receipt-aware worker directly, while six large optional projectional Fillet/Offset
 preview and gesture states are privately heap-owned. `ProjectionalEditorSession` shrinks from
 `35,488` to `15,296` bytes and its enclosing `MaterializedCodeProject` from `36,320` to `16,128`.
 
-Final-checkpoint affected-crate evidence passes format and diff hygiene, the explicit 2 MiB
+Implementation-checkpoint affected-crate evidence passes format and diff hygiene, the explicit 2 MiB
 deletion pair (2/2 in approximately `2.04 s`), the Compass Rose exact terminal and adaptive-
 polyline insertion regressions, constraint-editor (756 passed, 3 ignored), the complete sketch-code
 crate, the ordinary-stack PC Water Manifold M85-F002 sentinel (`55.45 s`), demo-web (300/300 in
@@ -145,9 +146,35 @@ A five-test browser profile from an unpinned pre-F003 implementation ancestor di
 recording 1,200/1,200 camera-only admissions, zero forbidden admissions or navigation long tasks,
 approximately `0.8 ms` worst completed-presentation RAF p95 and `59.6–61.3 fps` sustained
 navigation. It is provisional directional evidence only, not final-source or frozen-byte evidence.
-The clean release gate, immutable freeze, exact local/Tailscale verification, frozen-byte browser
-profile, UAT and Pages publication remain pending. `docs/M85_IMPLEMENTATION.md` owns exact commands
-and outcomes.
+
+That historical profile is now superseded for nomination by exact frozen-byte evidence. The clean
+gate ran from 06:40:49 through 07:13:16 AEST on 2026-08-28, exited `0`, and produced a 6,993-line,
+456,580-byte log with SHA-256
+`0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`. Its no-rebuild seven-file
+output is frozen at `/tmp/geosolve-m85-uat.QX8fU3Q6`, with directories/files `0555`/`0444`, zero
+symlinks and ordered-manifest aggregate
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and retained
+Tailscale HTTP ledgers are byte-identical at SHA-256
+`305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
+
+The final frozen profile passes 5/5 in `2.2m`: 1,200/1,200 camera-only admissions, zero forbidden
+admissions and zero navigation long tasks; worst callback/camera-RAF/completed-presentation p95 is
+`0.2`/`0.6`/`0.8 ms`, worst frame-gap p95 is `16.8 ms`, minimum sustained rate is
+`59.8249 fps`, and worst hover p95 is `3.5 ms`. Ordinary, Compass Rose and Rounded Polyline drag
+preview/terminal results are respectively `5.4`/`87.23 ms`, `8.7`/`175.50 ms` and
+`6.6`/`184.93 ms`, all with preview/terminal parity, no delayed motion and exactly one save per
+mutating release. The captured profile log SHA-256 is
+`d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7`; its summary SHA-256 is
+`db508a28f46774fbc74f9bdebfc20c513c46934bfd29a7b0775d96962caa63e6`.
+
+Final-source native M85-U10 evidence passes 19/19 exact tests for flat/shared camera, hover,
+interaction, history/work-neutrality and v1-v6 normalization contracts. Evidence is
+`/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
+`5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545`,
+`5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
+`ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`. Only hands-on UAT,
+approval and post-approval Pages publication remain. `docs/M85_IMPLEMENTATION.md` owns the full
+evidence record.
 
 ## Release sequence
 

@@ -3867,13 +3867,12 @@ feature or general topological-naming claim is accepted by M84.
 
 ### M85: responsive retained workbench presentation
 
-Status: **active and unaccepted**. M85-F001 through M85-F003 are repaired at committed
-implementation checkpoint `fd2c560c5c61338a96f145ecb87106af49e93749`, tree
-`97591f3d8c268e36db2e3e728c52163dca87d055`. Format/diff, affected-crate warnings-denied Clippy,
-constraint-editor 756/756, the complete sketch-code crate, demo-web 300/300, the ordinary-stack
-F002 sentinel and the explicit 2 MiB F003 pair pass. The clean release gate, frozen final-byte
-browser profile, candidate nomination, hands-on M85-U1-U9/U11-U12 and native flat-adapter M85-U10
-evidence remain pending. Accepted M84 stays Pages authority.
+Status: **active and unaccepted**. Exact final candidate source
+`5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
+`b55d012443f4dbf7551e30041da2912e666de9db`, passes complete clean qualification, immutable
+no-rebuild nomination, dual-endpoint byte verification, the frozen-byte browser profile and final-
+source native flat-adapter M85-U10 evidence. Hands-on M85-U1-U9/U11-U12, explicit supervising-user
+approval and Pages publication remain pending. Accepted M84 stays product and Pages authority.
 
 M85 is accepted only when all of the following pass:
 
@@ -3939,11 +3938,36 @@ M85 is accepted only when all of the following pass:
   service. Persisted v1-v6 workspaces normalize into projectional authority, so M85 does not invent
   a test-only flat browser bootstrap solely for UAT.
 
-The affected-crate checkpoint is not milestone acceptance. A provisional five-test browser profile
-from an unpinned pre-F003 implementation ancestor passes the budgets, but its log predates the final
-implementation commits and is not final-source or frozen-byte evidence. No clean release-gate log,
-final timing ledger, immutable distribution, Tailscale service or human scorecard exists for M85 at
-this checkpoint.
+Current gate disposition:
+
+- [x] The complete clean gate passes from the exact committed source. Evidence directory
+  `/tmp/geosolve-m85-gate.8vK5wDu4` records exit `0`; its 6,993-line, 456,580-byte log has SHA-256
+  `0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`.
+- [x] The gate-produced distribution is frozen without rebuild at
+  `/tmp/geosolve-m85-uat.QX8fU3Q6`, directory/files `0555`/`0444`, exactly seven regular files and
+  zero symlinks. Evidence `/tmp/geosolve-m85-freeze-evidence.uj9HviX1` records ordered-manifest
+  aggregate `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5` and byte-identical local
+  and retained-Tailscale eight-path HTTP ledgers at SHA-256
+  `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
+  `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` serve the exact snapshot.
+- [x] The exact frozen-byte browser profile passes 5/5. Its log SHA-256 is
+  `d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7`; summary SHA-256 is
+  `db508a28f46774fbc74f9bdebfc20c513c46934bfd29a7b0775d96962caa63e6`. It records 1,200/1,200
+  camera-only admissions, zero forbidden admissions and zero navigation long tasks. Worst
+  callback/camera-RAF/completed-presentation/frame-gap p95 is `0.2`/`0.6`/`0.8`/`16.8 ms`, with
+  minimum `59.8249 fps`. Ordinary, Compass Rose and Rounded Polyline worst preview/terminal values
+  are `5.4`/`87.23 ms`, `8.7`/`175.50 ms` and `6.6`/`184.93 ms`, all with exact parity and no
+  delayed movement. Native retained preview p95 is `3.667 ms` and exact terminal is `53.058 ms`.
+- [x] Final-source M85-U10 passes 19/19 at `/tmp/geosolve-m85-u10-final.D1auvz5d`; its
+  `results.tsv` has SHA-256
+  `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`.
+- [ ] Complete hands-on M85-U1-U9/U11-U12 and obtain the supervising user's explicit acceptance.
+- [ ] Only after that approval, publish the accepted descendant to Pages, exact-verify the hosted
+  artifact, retire the retained Tailscale service and close M85.
+
+This is a mechanically qualified immutable nomination, not milestone acceptance. M84 source
+`84dd768`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain public
+authority; no M85 Pages publication is claimed.
 
 M85 changes no primitive, constraint, equation, residual, Jacobian, priority, tolerance, branch,
 Intent/code meaning, persistence schema or accepted-scene validation. SVG remains the demo

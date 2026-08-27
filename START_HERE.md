@@ -473,11 +473,15 @@ Committed implementation checkpoint `fd2c560`, tree `97591f3`, repairs all three
 retain and transform accepted paint, hover updates retained SVG state, actual owner receipts replace
 event-label work inference, history-free delegated code patches preserve one outer user-visible
 history, and large optional projectional Fillet/Offset preview state is privately heap-owned without
-changing public incremental-code signatures. Affected-crate Clippy/native/default-stack evidence
-passes; the clean release gate, frozen final-byte browser profile, freeze, UAT and Pages remain
+changing public incremental-code signatures. Exact source `5c265e2`, tree `b55d012`, now passes the
+complete clean release gate, no-rebuild seven-file freeze, byte-identical local/Tailscale HTTP
+verification, the final frozen-byte Chromium profile at 5/5 and final-source flat-adapter evidence
+at 19/19. Snapshot `/tmp/geosolve-m85-uat.QX8fU3Q6` is live at
+`http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` for hands-on UAT. Human
+M85-U1-U9/U11-U12, explicit approval, Pages publication, service retirement and closure remain
 pending. The accepted M84 solver, Intent/code meaning, history, persistence and Pages authority
 remain unchanged. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the
-active contract, evidence ledger and pending scorecard.
+active contract, qualified-candidate ledger and pending human scorecard.
 
 ## Read first
 
@@ -518,8 +522,8 @@ active contract, evidence ledger and pending scorecard.
     implemented F005-F012 ledger, historical F011 nomination, verified immutable F012 replacement
     nomination, milestone-level human scorecard and exact public closeout.
 21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — active retained
-    camera/interaction performance contract, repaired M85-F001-F003 implementation checkpoint,
-    focused validation record and pending complete qualification/scorecard.
+    camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
+    clean-qualified frozen candidate and pending hands-on scorecard/approval/publication.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -921,10 +925,18 @@ passes on the ordinary stack while preserving authenticated host owners, exact c
 outer-only user-visible history. M85-F003 privately heap-owns large optional projectional preview/
 gesture state while restoring every pre-existing incremental-code API; its explicit 2 MiB pair,
 constraint-editor 756/756, complete sketch-code and demo-web 300/300 pass. A provisional browser
-profile from a pre-F003 ancestor passes 5/5 but is not final-source evidence. The clean release gate,
-frozen profile/nomination, UAT and Pages are pending. M85 adds no equation, constraint, solver
-priority, branch rule, persistence schema or managed-code meaning, and accepted M84 remains public
-authority.
+profile from a pre-F003 ancestor passes 5/5 but remains historical rather than final-source
+evidence. Exact candidate source `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
+`b55d012443f4dbf7551e30041da2912e666de9db`, passes the complete clean release gate and its exact
+seven-file, zero-symlink no-rebuild output is frozen at `/tmp/geosolve-m85-uat.QX8fU3Q6` with
+directory/file modes `0555`/`0444` and ordered-manifest aggregate
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and Tailscale HTTP
+ledgers are byte-identical, the exact frozen-byte profile passes 5/5, and final-source U10 direct
+compatibility/parity evidence passes 19/19. The same immutable bytes remain live at
+`http://127.0.0.1:18100/` and `http://100.94.63.83:8080/`. Human U1-U9/U11-U12, explicit approval,
+Pages publication, service retirement and closure are pending. M85 adds no equation, constraint,
+solver priority, branch rule, persistence schema or managed-code meaning, and accepted M84 remains
+public authority.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1048,9 +1060,10 @@ Durable milestone and cleanup records:
   public closeout,
   including manifold plus annotation-aware PNG-export dogfood)
 - `docs/M85_GOALS.md` (active retained workbench-performance contract and fixed budgets)
-- `docs/M85_IMPLEMENTATION.md` (repaired M85-F001-F003 checkpoint, actual-work architecture,
-  focused validation and pending release ledger)
-- `docs/M85_UAT.md` (pending immutable-candidate navigation/interaction scorecard)
+- `docs/M85_IMPLEMENTATION.md` (repaired M85-F001-F003 architecture and exact clean-qualified,
+  frozen-candidate evidence ledger)
+- `docs/M85_UAT.md` (qualified immutable-candidate navigation/interaction scorecard pending human
+  execution and approval)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

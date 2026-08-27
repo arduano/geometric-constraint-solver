@@ -2,26 +2,38 @@
 
 # M85 implementation ledger — Responsive retained workbench presentation
 
-Status: **active and unaccepted; affected-crate-qualified implementation checkpoint `fd2c560`
-repairs M85-F001 through M85-F003, while the clean release gate, frozen artifact, frozen-byte
-browser profile, Tailscale nomination, human UAT and Pages publication remain pending**.
-`docs/M85_GOALS.md` owns the contract. Accepted M84 remains product and public-byte authority.
+Status: **mechanically qualified and nominated for hands-on UAT, but unaccepted**. Exact final
+source `5c265e2` passes the clean release gate; its no-rebuild immutable candidate passes local and
+Tailscale byte verification, the frozen-byte browser profile and native M85-U10 flat-adapter
+evidence. Hands-on M85-U1-U9/U11-U12, explicit supervising-user approval and post-approval Pages
+publication remain pending. `docs/M85_GOALS.md` owns the contract. Accepted M84 remains product and
+public-byte authority.
 
-## Exact implementation checkpoint
+## Exact nominated candidate
 
-- Source: `fd2c560c5c61338a96f145ecb87106af49e93749`.
-- Tree: `97591f3d8c268e36db2e3e728c52163dca87d055`.
-- Source state at checkpoint: clean.
-- Product nomination: **not claimed**.
-- Frozen distribution, local/Tailscale service and UAT candidate: **pending**.
+- Source: `5c265e211e20dabc8a27f6402d530f5d645ff15c`.
+- Tree: `b55d012443f4dbf7551e30041da2912e666de9db`.
+- Source state at qualification: clean.
+- Product nomination: **mechanically nominated for hands-on UAT; not yet accepted**.
+- Frozen distribution: `/tmp/geosolve-m85-uat.QX8fU3Q6`, directories/files `0555`/`0444`, seven
+  regular files, zero symlinks, ordered-manifest aggregate
+  `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`.
+- Nomination evidence: `/tmp/geosolve-m85-freeze-evidence.uj9HviX1`.
+- Local endpoint: `http://127.0.0.1:18100/`, PID `2008536`, invocation
+  `d9fdcccfa9ce46deafcf46f7b6148e6e`.
+- Retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `2008538`, invocation
+  `2c70402e2b2a45a5810ea29722f25f95`.
+- Both services serve only the same immutable snapshot; their complete eight-path HTTP ledgers are
+  byte-identical at SHA-256
+  `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
 - GitHub Pages publication: **blocked until explicit supervising-user UAT approval**.
 
 ## Findings
 
 ### M85-F001 — Camera events rebuild the complete canvas
 
-Disposition: **confirmed DEFECT; repaired at the implementation checkpoint; final candidate timing
-and release qualification pending**.
+Disposition: **confirmed DEFECT; repaired, clean-qualified and frozen-profile qualified; hands-on
+UAT remains pending**.
 
 Reproduction authority is exact M84-F012 source `84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`,
 tree `429ed56d2a5b3988d6604079d19e1002f9049d64` and immutable snapshot
@@ -164,9 +176,10 @@ remains separate and passes after this repair in `55.45 s`.
   step.
 - [x] Mutating terminals retain synchronous exact validation and once-only save/durable rendering;
   no-motion, cancel and stale terminals publish none.
-- [x] A provisional five-test profile on an unpinned pre-F003 implementation ancestor passes the
-  camera, hover, drag and terminal budgets. It must be repeated against exact frozen final bytes
-  before nomination and is not final-source qualification.
+- [x] A provisional five-test profile on an unpinned pre-F003 implementation ancestor passed the
+  camera, hover, drag and terminal budgets. It remains historical directional evidence only.
+- [x] The same five-test profile passes against the exact no-rebuild frozen final bytes with all
+  camera, hover, drag, terminal, durability and delayed-motion budgets satisfied.
 
 ### I4 — API-compatible default-stack repair
 
@@ -225,18 +238,61 @@ sustained performance `59.6–61.3 fps`. Ordinary drag preview worst p95 is `5.9
 maximum `101.8 ms`; Compass Rose is `11.4 ms`/`158.2 ms`; Rounded Polyline is
 `10.2 ms`/`150.6 ms`. Every release records one save, exact preview parity and no delayed movement.
 These results are useful directional evidence only. They do not prove final-source or candidate
-budgets; the same harness must run again against frozen final bytes before UAT nomination.
+budgets; the final-source candidate evidence below, rather than this ancestor, owns nomination.
+
+## Final clean qualification and immutable nomination
+
+The exact clean Nix release gate for source
+`5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
+`b55d012443f4dbf7551e30041da2912e666de9db`, ran from
+`2026-08-28T06:40:49.038108300+10:00` through
+`2026-08-28T07:13:16.391445220+10:00` and exited `0`. Its 6,993-line, 456,580-byte log is
+`/tmp/geosolve-m85-gate.8vK5wDu4/release-gate.log`, SHA-256
+`0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`. The gate passes workspace
+warnings-denied Clippy/tests/doc tests, unchanged 271-row golden checks, WASM parity and adapter
+checks, TypeScript Intent/sketch-code/package verification, warnings-denied Rustdoc, benchmark
+compilation, release performance, 256-body linkage crossover, cargo-deny licences and the final
+Trunk release build.
+
+Without rebuilding, the gate-produced `dist` is frozen at `/tmp/geosolve-m85-uat.QX8fU3Q6`.
+It contains exactly seven regular files and zero symlinks at directory/file modes `0555`/`0444`;
+its ordered-manifest aggregate is
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Complete freeze evidence is
+`/tmp/geosolve-m85-freeze-evidence.uj9HviX1`. Local service PID `2008536`, invocation
+`d9fdcccfa9ce46deafcf46f7b6148e6e`, serves that snapshot at `http://127.0.0.1:18100/`; retained
+Tailscale service PID `2008538`, invocation `2c70402e2b2a45a5810ea29722f25f95`, serves the same
+snapshot at `http://100.94.63.83:8080/`. Both complete eight-path HTTP ledgers have SHA-256
+`305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
+
+The final frozen-byte Playwright profile passes 5/5 in `2.2m`. Its captured log SHA-256 is
+`d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7`, and summary SHA-256 is
+`db508a28f46774fbc74f9bdebfc20c513c46934bfd29a7b0775d96962caa63e6`. Across 30 navigation
+bursts and 1,200 camera samples, all 1,200 admissions are camera-only, with zero forbidden
+admissions and zero navigation long tasks. Worst callback, camera-RAF and completed-presentation
+p95 are `0.2`, `0.6` and `0.8 ms`; worst frame-gap p95 is `16.8 ms`; minimum sustained rate is
+`59.8249 fps`; and worst retained-hover p95 is `3.5 ms`. Ordinary drag preview p95/terminal maximum
+is `5.4`/`87.23 ms`, Compass Rose is `8.7`/`175.50 ms`, and Rounded Polyline is
+`6.6`/`184.93 ms`. All nine releases retain preview/terminal parity, no delayed movement and one
+save each.
+
+Final-source native flat-adapter evidence passes 19/19 exact tests. It covers camera coalescing and
+one-paint work admission, projectional/flat toolbar and terminal-pan parity, authenticated retained
+hover and pointer leave, transient/terminal history and work neutrality, shared retained-
+coordinator receipts, flat v6 compatibility bootstrap and strict v1-v6 history-free normalization.
+Evidence is `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
+`5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545`,
+`5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
+`ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
 
 ## Remaining qualification and release
 
-- [ ] Pass workspace tests, WASM parity/checks, unchanged 271-row clean golden, release performance,
-  warnings-denied workspace Clippy/Rustdoc and the complete clean release gate from the final
-  committed source.
-- [ ] Freeze the gate-produced distribution without rebuild; record exact source/tree, immutable
-  modes, ordered manifest, local/Tailscale HTTP ledgers and retained service identity, then rerun
-  the five-test browser profile against those exact bytes.
-- [ ] Record final-source native flat-adapter evidence, complete `docs/M85_UAT.md` on those exact
-  bytes and obtain explicit supervising-user approval.
+- [x] Pass workspace tests, WASM parity/checks, unchanged 271-row clean golden, release performance,
+  warnings-denied workspace Clippy/Rustdoc and the complete clean release gate from final committed
+  source.
+- [x] Freeze the gate-produced distribution without rebuild, exact-verify local/Tailscale service
+  bytes and pass the five-test browser profile against those exact bytes.
+- [x] Record final-source native flat-adapter M85-U10 evidence and nominate the immutable candidate.
+- [ ] Complete hands-on M85-U1-U9/U11-U12 and obtain explicit supervising-user approval.
 - [ ] Only after approval, publish the accepted descendant to GitHub Pages, download and exact-
   verify the separately rebuilt artifact and hosted paths, retire the retained service and close
   M85.

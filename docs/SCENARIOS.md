@@ -5409,10 +5409,41 @@ An earlier five-test browser profile passes 5/5 in `2.2m`, with 1,200/1,200 came
 zero forbidden admissions/navigation long tasks, worst completed-presentation RAF p95
 approximately `0.8 ms` and sustained navigation `59.6–61.3 fps`. It predates both the experimental
 F003 public API change and the final repair, and its exact source was not pinned, so it is
-provisional pre-F003 ancestor evidence only. The clean release gate, immutable distribution,
-frozen-byte browser profile, local/Tailscale service and verification, final-source M85-U10
-evidence, human UAT and Pages remain pending and cannot be inferred from the implementation
-checkpoint or provisional profile.
+provisional pre-F003 ancestor evidence only and is preserved as historical directional evidence;
+none of the final qualification below is inferred from it.
+
+Exact qualified source `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
+`b55d012443f4dbf7551e30041da2912e666de9db`, passes the clean release gate from
+`06:40:49` through `07:13:16` AEST with exit `0`. The 6,993-line, 456,580-byte log is
+`/tmp/geosolve-m85-gate.8vK5wDu4/release-gate.log`, SHA-256
+`0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`. Without rebuilding, its
+exact seven-regular-file, zero-symlink output is frozen at `/tmp/geosolve-m85-uat.QX8fU3Q6` with
+directory/file modes `0555`/`0444` and ordered-manifest aggregate
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and Tailscale
+eight-path HTTP ledgers are byte-identical at SHA-256
+`305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
+
+The fixed final harness runs against those frozen local bytes and passes 5/5. Its complete log
+SHA-256 is `d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7`
+and machine summary SHA-256 is
+`db508a28f46774fbc74f9bdebfc20c513c46934bfd29a7b0775d96962caa63e6`. Across 30 navigation
+bursts, all 1,200/1,200 camera admissions are camera-only, with zero forbidden admissions or
+navigation long tasks. Worst p95 input callback is `0.2 ms`, camera RAF CPU `0.6 ms`, completed
+presentation `0.8 ms` and frame gap `16.8 ms`; minimum sustained navigation is `59.8249 fps`.
+Worst drag preview/terminal pairs are ordinary `5.4 ms`/`87.23 ms`, Compass Rose
+`8.7 ms`/`175.50 ms` and Rounded Polyline `6.6 ms`/`184.93 ms`; all retain preview/terminal parity,
+one exact save per release and no delayed movement.
+
+Final-source M85-U10 evidence at `/tmp/geosolve-m85-u10-final.D1auvz5d` passes all 19 direct
+compatibility/parity cases without changing source, tree or frozen distribution. Its command and
+result ledgers have SHA-256
+`5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545` and
+`5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`; the evidence manifest file
+has SHA-256 `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
+The same immutable candidate remains live at `http://127.0.0.1:18100/` and
+`http://100.94.63.83:8080/`. Hands-on M85-U1-U9/U11-U12, explicit supervising-user approval, Pages
+publication, service retirement and milestone closure remain pending. Accepted M84 remains public
+authority.
 
 ## Frozen near-singular fixtures
 

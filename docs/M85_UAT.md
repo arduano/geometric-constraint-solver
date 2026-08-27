@@ -2,23 +2,37 @@
 
 # M85 focused UAT — Responsive retained workbench presentation
 
-Status: **implemented with the affected final-code native suites passing at checkpoint `fd2c560`,
-but pending the clean release gate, immutable candidate nomination, frozen-byte browser rerun and
-human review**.
-Do not run this scorecard against a mutable worktree or an unfrozen build, and do not record any
-row as accepted before exact candidate source/tree/snapshot and served-byte evidence are added
-here. Accepted M84 remains Pages authority.
+Status: **mechanically qualified and nominated on exact immutable bytes; hands-on
+M85-U1-U9/U11-U12 and supervising-user approval remain pending**. Automated native M85-U10 passes.
+Run the remaining scorecard only against the retained frozen candidate below. Accepted M84 remains
+Pages authority; M85 has not been published.
 
 ## Candidate identity
 
-- Qualified source: **pending complete clean release gate**.
-- Qualified tree: **pending**.
-- Immutable snapshot and modes: **pending**.
-- Ordered manifest aggregate: **pending**.
-- Temporary local and retained Tailscale endpoints/HTTP ledgers: **pending**.
-- Focused five-test frozen-byte browser timing result and log SHA-256: **pending**. A provisional
-  5/5 profile exists only for an unpinned pre-F003 ancestor and is not final-source evidence.
-- Final-source flat-adapter U10 native compatibility/parity evidence: **pending qualification**.
+- Qualified source: `5c265e211e20dabc8a27f6402d530f5d645ff15c`.
+- Qualified tree: `b55d012443f4dbf7551e30041da2912e666de9db`.
+- Clean release gate: exit `0`, 6,993 lines and 456,580 bytes, from 06:40:49 through 07:13:16 AEST
+  on 2026-08-28. Log `/tmp/geosolve-m85-gate.8vK5wDu4/release-gate.log` has SHA-256
+  `0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`.
+- Immutable snapshot: `/tmp/geosolve-m85-uat.QX8fU3Q6`; directories/files `0555`/`0444`, exactly
+  seven regular files and zero symlinks.
+- Ordered-manifest aggregate:
+  `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`.
+- Complete freeze/nomination evidence: `/tmp/geosolve-m85-freeze-evidence.uj9HviX1`.
+- Local endpoint: `http://127.0.0.1:18100/`, PID `2008536`, invocation
+  `d9fdcccfa9ce46deafcf46f7b6148e6e`.
+- Retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `2008538`, invocation
+  `2c70402e2b2a45a5810ea29722f25f95`.
+- Both endpoints serve the same snapshot. Their complete eight-path HTTP ledgers are byte-identical
+  at SHA-256 `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
+- Focused frozen-byte browser timing: 5/5 in `2.2m`; log SHA-256
+  `d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7`; summary SHA-256
+  `db508a28f46774fbc74f9bdebfc20c513c46934bfd29a7b0775d96962caa63e6`.
+- Final-source flat-adapter U10 native compatibility/parity evidence: 19/19 exact tests pass at
+  `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
+  `5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545`,
+  `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
+  `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
 
 ## Candidate prerequisites
 
@@ -49,7 +63,7 @@ Test at approximately `1440x900` and `1024x720` on the exact retained candidate.
 | M85-U7 | In the ordinary scene, drag a free point through several frames, release, then immediately pan and drag again. Test no-motion release and Escape cancellation. | Preview is responsive; exact release stays fixed through at least 1 s; one mutating history entry is added, while no-motion/cancel add none. | pending |
 | M85-U8 | Open Compass Rose and Rounded Polyline. Repeatedly drag their code-owned controls, including rapid consecutive drags, then pan/zoom between attempts. | Coupled geometry remains attached, each terminal is deterministic, no delayed snap occurs and code/session history remains coherent. | pending |
 | M85-U9 | Begin a drag or authoring preview, then initiate a camera gesture. | The semantic gesture is canceled or retained according to existing policy exactly once; repeated wheel samples do not repeatedly rebuild/cancel state and accepted geometry remains finite. | pending |
-| M85-U10 | Review final-source native compatibility/parity evidence for the flat retained-coordinator adapter. Persisted v1-v6 workspaces normalize into projectional authority, so there is no ordinary flat browser fixture to open. | Direct adapter and shared headless tests prove retained navigation/interaction semantics, final-camera parity and history/work neutrality without inventing a test-only browser bootstrap. | pending automated evidence |
+| M85-U10 | Review final-source native compatibility/parity evidence for the flat retained-coordinator adapter. Persisted v1-v6 workspaces normalize into projectional authority, so there is no ordinary flat browser fixture to open. | Direct adapter and shared headless tests prove retained navigation/interaction semantics, final-camera parity and history/work neutrality without inventing a test-only browser bootstrap. | automated pass: 19/19 exact tests |
 | M85-U11 | Reload the retained candidate after camera-only motion; Copy repro before and after navigation and compare semantic content. | Camera-only motion does not mutate canonical workspace/repro authority; reload is valid and no stale global error appears. | pending |
 | M85-U12 | Leave the manifold open, alternate pan, zoom, hover and selection for at least one minute. | No progressive slowdown, memory-driven blanking, stale selection, lost input, unexpected save or delayed geometry change is observed. | pending |
 
@@ -61,6 +75,15 @@ ledger counts. Ordinary navigation must meet `16.7 ms` p95/55 fps; visible manif
 must meet `33.3 ms` p95/30 fps; no measured burst may contain a task over `50 ms`. Hover/drag must
 meet `33.3 ms` browser p95, and exact terminal visibility/durability must meet `250 ms` ordinary or
 `500 ms` code-coupled with no delayed movement.
+
+The final frozen-byte profile satisfies these prerequisites. Across 30 navigation bursts and 1,200
+camera samples, all 1,200 admissions are camera-only, with zero forbidden admissions and zero
+navigation long tasks. Worst callback/camera-RAF/completed-presentation p95 is
+`0.2`/`0.6`/`0.8 ms`; worst frame-gap p95 is `16.8 ms`; minimum sustained rate is
+`59.8249 fps`; and worst hover p95 is `3.5 ms`. Ordinary, Compass Rose and Rounded Polyline drag
+preview p95/terminal maximum is respectively `5.4`/`87.23 ms`, `8.7`/`175.50 ms` and
+`6.6`/`184.93 ms`. Every measured drag has preview/terminal parity, no delayed movement and one
+save.
 
 ## Pre-nomination implementation evidence
 
@@ -92,9 +115,10 @@ is `0248cf43dfae7d49c2f834b2b900a5cd0faa8b85209e40f77cfc5b31cede0947`, configura
 experimental F003 API change and its final repair, and its exact source was not pinned; it is useful
 pre-F003 ancestor evidence only and must not be cited as final-source or frozen-candidate evidence.
 
-This evidence does not nominate UAT bytes. The clean release gate, freeze, frozen-byte browser
-profile, local/Tailscale service and byte verification, final-source M85-U10 evidence, human UAT
-and Pages publication remain pending; the candidate fields above stay deliberately empty.
+That provisional profile remains historical and does not own nomination. The exact clean gate,
+immutable freeze, local/Tailscale byte verification, final frozen-byte profile and final-source
+M85-U10 evidence recorded above do nominate the current UAT bytes. Hands-on M85-U1-U9/U11-U12,
+explicit supervising-user approval and Pages publication remain pending.
 
 ## Approval and publication
 

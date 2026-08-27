@@ -123,12 +123,20 @@ construction/NURBS UAT and certified all-family visual profiles.
   projectional editor privately heap-owns six large optional Fillet/Offset preview/gesture states;
   `ProjectionalEditorSession` shrinks from `35,488` to `15,296` bytes and its enclosing
   `MaterializedCodeProject` from `36,320` to `16,128`. Every pre-existing public incremental-code
-  signature remains unchanged. The exact default-stack F002 and 2 MiB F003 regressions plus the
-  affected native suites pass, but the clean release gate, frozen final-byte browser profile,
-  freeze, UAT and Pages remain pending. No solver equation, Intent/code meaning, accepted-scene
-  authority, persistence schema or picking semantics changes; deterministic work-admission tests
-  and focused candidate-only Chromium timing own the performance proof, and M85 does not restore
-  broad browser integration CI.
+  signature remains unchanged. Exact qualified source
+  `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
+  `b55d012443f4dbf7551e30041da2912e666de9db`, passes the complete clean release gate and freezes
+  its exact no-rebuild seven-file, zero-symlink output at `/tmp/geosolve-m85-uat.QX8fU3Q6`, modes
+  `0555`/`0444`, aggregate
+  `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Byte-identical local and
+  retained-Tailscale HTTP ledgers, the final frozen-byte Chromium profile at 5/5 and final-source
+  flat-adapter compatibility/parity evidence at 19/19 pass. The immutable candidate remains live at
+  `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/`; hands-on UAT, explicit approval, Pages
+  publication, service retirement and closure remain pending. No solver equation, Intent/code
+  meaning, accepted-scene authority, persistence schema or picking semantics changes;
+  deterministic work-admission tests and focused candidate-only Chromium timing own the
+  performance proof, and M85 does not restore broad browser integration CI. Accepted M84 remains
+  public authority.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

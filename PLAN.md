@@ -6358,12 +6358,13 @@ publication.
 
 ### M85: responsive retained workbench presentation
 
-Status: **active and unaccepted; M85-F001 through M85-F003 are repaired at committed affected-
-crate-qualified implementation checkpoint `fd2c560`, while the clean release gate, frozen final-
-byte browser profile, UAT and publication remain pending**. Accepted M84 source
-`84dd768`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain
-product/public authority. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md`
-own the detailed contract and evidence.
+Status: **active and unaccepted; exact final candidate source `5c265e2`, tree `b55d012`, passes the
+complete clean release gate, immutable no-rebuild freeze, dual-endpoint byte verification, frozen-
+byte browser profile and final-source native flat-adapter audit; hands-on M85-U1-U9/U11-U12,
+explicit approval and Pages publication remain pending**. Accepted M84 source `84dd768`, snapshot
+`/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain product/public authority.
+`docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the detailed contract
+and evidence.
 
 - [x] Reproduce M85-F001 against the exact M84-F012 manifold. A 30-sample pan takes `14,933 ms`,
   replaces viewport children 33 times and has a `583.3 ms` p95 frame gap; an 18-event wheel burst
@@ -6393,22 +6394,50 @@ own the detailed contract and evidence.
   Offset preview and gesture states are privately heap-owned. `ProjectionalEditorSession` falls
   from `35,488` to `15,296` bytes and `MaterializedCodeProject` from `36,320` to `16,128`; both
   explicit 2 MiB deletion regressions, Compass Rose and adaptive-polyline terminals pass.
-- [ ] Complete the fresh final-source browser matrix and prove ≤`16 ms` ordinary native preview,
+- [x] Complete the fresh final-source browser matrix and prove ≤`16 ms` ordinary native preview,
   ≤`33.3 ms` browser preview, ≤`250 ms` ordinary terminal and ≤`500 ms` code-coupled terminal
   publication with exact once-only durability and no delayed movement.
-- [ ] Pass camera callback p95 ≤`1 ms`, RAF CPU p95 ≤`8 ms`, ordinary paint p95 ≤`16.7 ms`/55 fps,
+- [x] Pass camera callback p95 ≤`1 ms`, RAF CPU p95 ≤`8 ms`, ordinary paint p95 ≤`16.7 ms`/55 fps,
   visible-manifold paint p95 ≤`33.3 ms`/30 fps and zero tasks over `50 ms` in warmed bursts.
 - [x] Pass the `fd2c560` affected-crate checkpoint: format/diff, warnings-denied all-target Clippy
   for constraint-editor, sketch-code and demo-web, constraint-editor 756/756, the complete sketch-
   code crate, demo-web 300/300, ordinary-stack F002 and the explicit 2 MiB F003 pair.
-- [ ] Pass workspace tests, release performance, WASM, warnings-denied workspace Clippy/Rustdoc,
+- [x] Pass workspace tests, release performance, WASM, warnings-denied workspace Clippy/Rustdoc,
   unchanged clean golden and complete clean release qualification.
-- [ ] Freeze without rebuild, exact-verify local/Tailscale bytes, run the focused candidate-only
-  Chromium trace and complete hands-on M85-U1-U9/U11-U12 plus final-source native flat-adapter
-  M85-U10 evidence. Persisted v1-v6 workspaces normalize into projectional authority; do not add a
-  test-only flat browser bootstrap or broad browser integration to PR CI.
+- [x] Freeze without rebuild, exact-verify local/Tailscale bytes, pass the focused candidate-only
+  Chromium trace and complete final-source native flat-adapter M85-U10 evidence. Persisted v1-v6
+  workspaces normalize into projectional authority; no test-only flat browser bootstrap or broad
+  browser integration was added to PR CI.
+- [ ] Complete hands-on M85-U1-U9/U11-U12 against the exact retained candidate and record the
+  supervising user's explicit disposition.
 - [ ] After explicit supervising-user UAT approval only, publish the accepted descendant to Pages,
   exact-verify hosted bytes, retire the retained service and close M85.
+
+Final mechanical nomination evidence (2026-08-28): exact source
+`5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
+`b55d012443f4dbf7551e30041da2912e666de9db`, passes the clean gate recorded at
+`/tmp/geosolve-m85-gate.8vK5wDu4`, exit `0`; its 6,993-line, 456,580-byte log has SHA-256
+`0b09720dfd4491575ab10bd3baba2f8f6e7fae9e8e90954ff0026a64de4458eb`. The exact gate output is
+frozen without rebuilding at `/tmp/geosolve-m85-uat.QX8fU3Q6`, with evidence at
+`/tmp/geosolve-m85-freeze-evidence.uj9HviX1`, directory/files `0555`/`0444`, exactly seven regular
+files, zero symlinks and ordered-manifest aggregate
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and retained
+Tailscale endpoints `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` serve those exact
+bytes; their eight-path HTTP ledgers byte-match at SHA-256
+`305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
+
+The exact frozen-byte Chromium profile passes 5/5. Its log and summary have SHA-256
+`d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7` and
+`db508a28f46774fbc74f9bdebfc20c513c46934bfd29a7b0775d96962caa63e6`. All 1,200/1,200 camera
+samples are camera-only, with zero forbidden admissions and zero navigation long tasks; worst
+callback/camera-RAF/completed-presentation/frame-gap p95 values are `0.2`/`0.6`/`0.8`/`16.8 ms`
+and minimum sustained rate is `59.8249 fps`. Ordinary, Compass Rose and Rounded Polyline worst
+preview/terminal values are respectively `5.4`/`87.23 ms`, `8.7`/`175.50 ms` and
+`6.6`/`184.93 ms`, with preview/terminal parity, one save and no delayed movement. Final-source
+native retained preview p95 is `3.667 ms` and exact terminal is `53.058 ms`. M85-U10 passes 19/19
+at `/tmp/geosolve-m85-u10-final.D1auvz5d`; `results.tsv` has SHA-256
+`5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`. These results nominate
+the candidate mechanically; they do not claim hands-on acceptance or authorize publication.
 
 Gate: a camera-only frame admits only lightweight retained camera/grid/HUD presentation; fixed
 ordinary and visible-manifold scenes meet their real-browser budgets; both presentation adapters
