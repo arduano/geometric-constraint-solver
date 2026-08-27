@@ -5287,19 +5287,37 @@ require their exact sequential anchored fold. Stale RAF and idle callback genera
 The final camera matches the exact sequential oracle and is visible no later than two frames.
 
 Snapshot the actual work ledger around every camera-only frame. Exactly one lightweight camera
-presentation is allowed; solver/preview, materialization, computed evaluation, code parse/
-expansion, workspace encoding/write, durable panel, full scene, full SVG and viewport replacement
-counts remain zero. Accepted/current identity, document, Intent/code-session identity, history,
-selection, annotation layout and canonical persistence bytes remain bit-identical.
+presentation is allowed; exact reprojection, solver/preview, materialization, computed evaluation,
+native-history publication, code parse/expansion/publication, workspace encoding/write, durable
+panel, full scene, full SVG and viewport replacement counts remain zero. Accepted/current identity,
+document, Intent/code-session identity, history, selection, annotation layout and canonical
+persistence bytes remain bit-identical. A separately authenticated exact reconciliation may rebase
+retained paint once after a completed burst, but is never admitted as a camera RAF and may cross no
+semantic or durable owner.
+
+Direct owners include
+`retained_camera_queue_coalesces_latest_frame_and_authenticates_idle_boundary`,
+`retained_camera_exact_reconciliation_revokes_an_unpainted_frame`,
+`production_camera_admission_records_one_completed_paint_and_stale_callbacks_record_zero`,
+`toolbar_camera_commands_have_route_parity_and_admit_no_durable_work` and
+`terminal_pan_sample_owns_the_exact_final_camera_for_both_routes` in `geosolve-demo-web`.
 
 ### M85-P3 — Retained/cold camera parity
 
 Use fixed translation, zoom-in, zoom-out, off-centre anchor and combined pan/zoom states. Compare
 retained presentation with a cold exact scene semantically: every finite model position maps to the
 same screen position; grid and protected axes use the same camera; visible geometry/annotations and
-DOM identities agree; strokes, points, labels and hit envelopes remain screen-usable. The first
-hover/click/drag after navigation targets the painted item with current-camera coordinates and no
-visual rebase jump.
+semantic DOM IDs agree; strokes, points, labels and hit envelopes remain screen-usable. Nodes
+remain stable during a burst; a separately authenticated exact reconciliation may replace them once
+afterward while preserving semantic IDs. The first hover/click/drag after navigation targets the
+painted item with current-camera coordinates and no visual rebase jump.
+
+Public headless owners include
+`retained_scene_reprojection_matches_cold_geometry_and_preserves_annotation_layout`,
+`retained_scene_reprojection_updates_computed_fillet_affordances_and_actions`,
+`retained_scene_reprojection_is_transactional_for_malformed_public_geometry` and
+`retained_scene_reprojection_rejects_every_mutable_derived_surface_without_resealing`. Browser-
+adapter owners separately authenticate retained hover against scene, view and display policy.
 
 ### M85-P4 — Real-browser budgets
 
@@ -5318,17 +5336,83 @@ After camera repair, measure ordinary, Compass Rose and Rounded Polyline hover/d
 preview p95 is at most `33.3 ms`; existing ordinary native retained preview remains at most
 `16 ms`. Mutating release creates one history/save/durable-render boundary and becomes visible
 within `250 ms` ordinary or `500 ms` code-coupled; cancel/no-motion creates none. Geometry is
-unchanged at +50/+250/+500/+1000 ms and after reload. Pointer previews never parse/expand code,
-save or rebuild durable panels, and exact terminal publication retains independent solver
-validation.
+unchanged at +50/+250/+500/+1000 ms and after reload.
 
-### M85-P6 — Qualification authority
+`InteractionWorkReceipt` reports attempted native preview/release, cold Intent materialization,
+computed evaluation and native-history publication, including work crossed before rejection.
+Optional `CodeWorkReceipt` independently reports managed parse, deterministic expansion and
+accepted outer-code publication. The browser composes those receipts with transient scene/SVG,
+persistence and durable-panel work rather than inferring work from an event name. Pointer previews
+may solve/materialize/evaluate only when their receipt says they did; they never publish history or
+code, parse/expand code, save or rebuild durable panels. A code-owned release may absorb one native
+accepted transaction into one outer code publication but leaves one user-visible Undo step. Exact
+terminal publication retains independent solver validation.
+
+Focused owners include `audited_pointer_receipts_report_only_crossed_projectional_work`, the
+interaction/code receipt unit suites, browser ledger predicates and the existing Compass Rose,
+rectangle-diagonal and generated-endpoint terminal regressions.
+
+### M85-P6 — Default-stack history-neutral code terminal
+
+Use exact `pc-water-manifold` code authority and stage one literal point overlay without changing
+its six native host requests. The unchanged-host path expands once, performs no managed parse or
+outer publication at the composition layer, preserves all six native host identities, independently
+validates finite accepted authority and returns a delegated editor with empty Undo/Redo whose base
+identity matches its Intent session.
+
+`m85_large_unchanged_host_overlay_is_default_stack_and_history_neutral` runs on the ordinary test
+thread. Before repair, the same path created a normal nested Intent transaction and cleared its
+large Undo snapshot; dropping that snapshot overflowed the ordinary 2 MiB stack and terminated with
+`SIGABRT`. The history-free accepted-authority fork and delegated patch path repair M85-F002. A
+release-wide enlarged test stack is not equivalent evidence. The exact ordinary-stack command
+passes in `52.59 s` at source `e9b4407`.
+
+M85-F003 extends that stack contract to ordinary structural editing. Select the independent
+managed line from the authored rectangle-plus-diagonal project and delete it: the rectangle stays
+finite/current and exact Undo restores the prior source/checkpoint. Then select the rectangle and
+delete it: exact transitive dependency closure produces an authenticated empty project. Before
+repair, inline `MaterializedCodeProject` return slots accumulated across structural, audited and
+warm-native adapters; the partial case reached the constraint compiler at the 2 MiB guard page and
+the process aborted. The final repair preserves every pre-M85 public incremental-code signature:
+the unaudited public path calls the private receipt-aware worker directly instead of constructing a
+large intermediate audited return. Six large optional projectional Fillet/Profile Offset preview
+and gesture states are privately boxed, reducing `ProjectionalEditorSession` from 35,488 to 15,296
+bytes and `MaterializedCodeProject` from 36,320 to 16,128 bytes without a public replacement API or
+an increased thread stack. Experimental public boxed returns at `d2b7d38` are superseded.
+
+`managed_canvas_deletion_publishes_validated_scene_and_exact_undo` and
+`managed_canvas_deletion_uses_exact_transitive_dependency_closure` pass together with explicit
+`RUST_MIN_STACK=2097152` in approximately `2.04 s`; the complete default-stack demo-web library
+passes 300/300 in `98.61 s`. No golden-authoring row is added because this is code-composition
+ownership, not new geometry or solver semantics.
+
+### M85-P7 — Qualification authority
 
 Format, warnings-denied Clippy, workspace tests, release performance owners, WASM/Trunk, unchanged
 clean golden and the complete clean release gate pass. Freeze without rebuild, exact-verify local
-and retained Tailscale bytes, then complete M85-U1 through M85-U12. Only explicit supervising-user
-approval authorizes Pages publication, exact hosted-byte verification, service retirement and
-closure. Until then accepted M84 remains public authority.
+and retained Tailscale bytes, then complete hands-on M85-U1-U9/U11-U12 and final-source native
+flat-adapter M85-U10 evidence. Persisted v1-v6 workspaces normalize into projectional authority and
+the flat retained-coordinator adapter has no normal browser bootstrap; qualification therefore uses
+its direct compatibility/parity owners rather than an artificial UAT fixture. Only explicit
+supervising-user approval authorizes Pages publication, exact hosted-byte verification, service
+retirement and closure. Until then accepted M84 remains public authority.
+
+Committed implementation checkpoint `fd2c560c5c61338a96f145ecb87106af49e93749`, tree
+`97591f3d8c268e36db2e3e728c52163dca87d055`, passes format/diff, affected-crate warnings-denied
+all-target Clippy, `geosolve-constraint-editor` at 756/756 passed with 3 ignored, the complete
+`geosolve-sketch-code` crate, `geosolve-demo-web --lib` at 300/300, the ordinary-stack F002
+sentinel in `55.45 s` and the explicit 2 MiB F003 pair in approximately `2.04 s`. This is final-code
+native evidence; no solver equation, persistence format, branch, constraint or code-authoring
+semantic changed.
+
+An earlier five-test browser profile passes 5/5 in `2.2m`, with 1,200/1,200 camera-only admissions,
+zero forbidden admissions/navigation long tasks, worst completed-presentation RAF p95
+approximately `0.8 ms` and sustained navigation `59.6–61.3 fps`. It predates both the experimental
+F003 public API change and the final repair, and its exact source was not pinned, so it is
+provisional pre-F003 ancestor evidence only. The clean release gate, immutable distribution,
+frozen-byte browser profile, local/Tailscale service and verification, final-source M85-U10
+evidence, human UAT and Pages remain pending and cannot be inferred from the implementation
+checkpoint or provisional profile.
 
 ## Frozen near-singular fixtures
 

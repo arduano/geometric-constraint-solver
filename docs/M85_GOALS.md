@@ -2,8 +2,10 @@
 
 # M85 — Responsive retained workbench presentation
 
-Status: **active; M85-F001 is reproduced; implementation, qualification and human UAT are
-pending**. Accepted M84 product source `84dd768`, immutable snapshot
+Status: **active and unaccepted; M85-F001 through M85-F003 are repaired at committed affected-
+crate-qualified implementation checkpoint `fd2c560`, while the clean release gate, frozen-byte
+browser profile, immutable nomination, human UAT and publication remain pending**. Accepted M84
+product source `84dd768`, immutable snapshot
 `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain product and public-byte
 authority until M85 passes every gate below.
 
@@ -45,14 +47,19 @@ screen-space scene, laying out annotations, serializing full SVG and replacing `
   `ProjectionalEditorSession::scene`, serializing full SVG or replacing viewport `innerHTML`.
 - A camera burst may retire an already active semantic gesture once at admission. That cancellation
   is separately audited; it cannot recur for every wheel or pan sample.
+- After a completed burst, one authenticated exact-reprojection reconciliation may rebase the
+  retained SVG to the desired camera. It is a separately counted boundary, never a raw camera RAF,
+  and may not solve, materialize Intent, evaluate computed features, parse/expand code, publish
+  history, persist or rebuild durable panels. It cannot recur per raw sample.
 - Keep accepted/current identity, document bytes, Intent/code-session identity, history, selection,
   annotation layout and canonical persistence bytes unchanged.
 
 ### G2 — Exact presentation parity
 
 - Retained camera paint must be semantically equivalent to a cold exact scene at the same camera:
-  finite model-to-screen positions, pan direction, zoom anchor, visibility, ordering and stable DOM
-  identities all agree.
+  finite model-to-screen positions, pan direction, zoom anchor, visibility, ordering and stable
+  semantic DOM IDs all agree. Retained nodes stay in place throughout a burst; the separately
+  authenticated exact reconciliation may replace them once without changing their semantic IDs.
 - Screen-sized strokes, points, labels, hit envelopes, datum labels and annotation interaction
   remain usable across pan and zoom. Any lightweight normalization must stay within the camera
   work boundary rather than triggering a full scene rebuild.
@@ -64,9 +71,12 @@ screen-space scene, laying out annotations, serializing full SVG and replacing `
 
 ### G3 — Auditable work and timing
 
-- Replace policy-only presentation counters with an actual work ledger that distinguishes camera
-  presentation, scene composition, SVG serialization, viewport replacement, solver/preview,
-  materialization, computed evaluation, code parse/expansion, persistence and panel work.
+- Replace policy-only presentation counters with actual owner receipts and one browser work ledger.
+  Distinguish camera presentation, exact reprojection, retained hover, scene composition, SVG
+  serialization, viewport replacement, native preview/solve attempts, Intent materialization,
+  computed evaluation, native-history publication, managed-code parse, code expansion, outer-code
+  publication, persistence and durable-panel work. Attempt counters survive rejection; an attached
+  code project records no code work unless its owner issues a receipt.
 - Unit tests own deterministic coalescing, newest-sample, exact-final-camera and zero-forbidden-work
   invariants. They run in ordinary CI without a browser or wall-clock assumptions.
 - A focused candidate-only Chromium trace owns real input/callback/RAF/paint/long-task timing. It is
@@ -75,9 +85,13 @@ screen-space scene, laying out annotations, serializing full SVG and replacing `
 ### G4 — Hover, drag and terminal responsiveness
 
 - Preserve existing newest-sample RAF coalescing and synchronous exact terminal draining.
-- Pointer preview frames never parse/expand code, save workspaces or rebuild durable panels.
-- A mutating release publishes exactly one history/save/durable-render boundary; cancel and
-  no-motion release publish none. No geometry may change after the terminal presentation.
+- Pointer preview frames may cross only the native preview, Intent materialization and computed
+  evaluation boundaries actually required by their owner. They never parse/expand or publish code,
+  publish history, save workspaces or rebuild durable panels.
+- A native mutating release publishes one native history transaction. A code-owned release may
+  absorb that accepted native transaction into one outer code publication, but exposes only one
+  user-visible Undo step, one save and one durable render. Cancel and no-motion release publish
+  none. No geometry may change after the terminal presentation.
 - Profile and optimize only measured residual hot paths after the camera defect is removed; do not
   weaken solver validation or replace exact terminal publication with stale predictive state.
 
@@ -111,13 +125,38 @@ WebGL or a production renderer; introduce semantic approximation, geometry LOD o
 validation; restore the retired broad browser E2E/CDP stack; or move camera/DOM policy into
 `geosolve-core`, `geosolve-sketch`, `geosolve-linkage` or `geosolve-constraint-editor`.
 
+## Current implementation checkpoint
+
+Committed source `fd2c560c5c61338a96f145ecb87106af49e93749`, tree
+`97591f3d8c268e36db2e3e728c52163dca87d055`, implements retained camera/hover paths, actual
+interaction/code receipts and the history-neutral unchanged-host code terminal. M85-F003 is
+repaired without changing any pre-M85 public incremental-code signature: the unaudited adapter
+calls the receipt-aware worker directly, while six large optional projectional Fillet/Offset
+preview and gesture states are privately heap-owned. `ProjectionalEditorSession` shrinks from
+`35,488` to `15,296` bytes and its enclosing `MaterializedCodeProject` from `36,320` to `16,128`.
+
+Final-checkpoint affected-crate evidence passes format and diff hygiene, the explicit 2 MiB
+deletion pair (2/2 in approximately `2.04 s`), the Compass Rose exact terminal and adaptive-
+polyline insertion regressions, constraint-editor (756 passed, 3 ignored), the complete sketch-code
+crate, the ordinary-stack PC Water Manifold M85-F002 sentinel (`55.45 s`), demo-web (300/300 in
+`98.61 s`) and warnings-denied all-target Clippy for constraint-editor, sketch-code and demo-web.
+
+A five-test browser profile from an unpinned pre-F003 implementation ancestor did pass 5/5,
+recording 1,200/1,200 camera-only admissions, zero forbidden admissions or navigation long tasks,
+approximately `0.8 ms` worst completed-presentation RAF p95 and `59.6–61.3 fps` sustained
+navigation. It is provisional directional evidence only, not final-source or frozen-byte evidence.
+The clean release gate, immutable freeze, exact local/Tailscale verification, frozen-byte browser
+profile, UAT and Pages publication remain pending. `docs/M85_IMPLEMENTATION.md` owns exact commands
+and outcomes.
+
 ## Release sequence
 
-1. Freeze deterministic work-ledger and camera-parity regressions for both workbench routes.
+1. Freeze deterministic work-ledger and camera-parity regressions for both presentation adapters.
 2. Implement and qualify camera navigation, then re-profile and harden hover/drag/terminal paths.
 3. Pass format, warnings-denied Clippy, workspace tests, relevant release performance tests, WASM
    build, clean golden checks and the complete clean release gate.
-4. Freeze the exact no-rebuild candidate, serve only those bytes on Tailscale and run the focused
-   Chromium timing trace plus the M85 human UAT scorecard.
+4. Freeze the exact no-rebuild candidate, serve only those bytes on Tailscale, run the focused
+   Chromium timing trace and complete the human scorecard plus native flat-adapter evidence. The
+   flat retained-coordinator compatibility route has no ordinary persisted browser bootstrap.
 5. Only after explicit supervising-user UAT approval publish the accepted descendant to GitHub
    Pages, exact-verify hosted bytes, retire the retained service and close M85.

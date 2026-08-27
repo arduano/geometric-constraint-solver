@@ -99,11 +99,36 @@ construction/NURBS UAT and certified all-family visual profiles.
 - **Active target:** M85 is a semantic-neutral retained-presentation optimization. M85-F001 routes
   the PC Water Manifold's approximately 1 fps navigation to `geosolve-demo-web`: raw camera events
   repeatedly reconstructed the projectional `EditorScene`, derived computed Fillet affordances,
-  serialized complete SVG and replaced viewport children. The repair may coalesce camera samples,
-  reproject already accepted scene geometry and defer context-only presentation work, but cannot
-  change solver equations, Intent/code meaning, accepted-scene authority, history, persistence or
-  picking semantics. Deterministic work-admission tests and focused candidate-only Chromium timing
-  own the performance proof; M85 does not restore broad browser integration CI.
+  serialized complete SVG and replaced viewport children. Committed implementation checkpoint
+  `fd2c560`, tree `97591f3`, now gives both workbench adapters independent newest-camera RAF queues,
+  retained accepted-paint/grid/HUD transforms, retained hover presentation and one separately
+  authenticated post-burst exact-reprojection boundary. Camera RAFs cannot solve, materialize,
+  evaluate computed features, parse/expand/publish code, publish history, persist, compose a scene,
+  serialize SVG or replace the viewport.
+
+  M85 also replaces browser event-label inference with adjacent actual-work receipts. Public
+  `InteractionWorkReceipt` reports attempted native preview/release, Intent materialization,
+  computed evaluation and durable native-history boundaries even when a later operation rejects;
+  optional `CodeWorkReceipt` independently reports managed parse, deterministic expansion and
+  accepted outer-code publication. The browser composes those receipts with presentation,
+  persistence and durable-panel counters. An attached code project is zero-work until its owner
+  issues a receipt.
+
+  M85-F002 exposed an ordinary-stack overflow when an unchanged-host code terminal created and then
+  discarded a large nested Intent Undo snapshot. A history-free accepted-authority fork plus
+  delegated patch path now expands once, reuses authenticated host owners, cold-validates exact
+  authority and keeps the outer code session as the sole user-visible history. Changed-host edits
+  retain their complete cold/warm oracle. M85-F003 then exposed inline return pressure across
+  structural code edits. The unaudited adapter now calls its receipt-aware worker directly and the
+  projectional editor privately heap-owns six large optional Fillet/Offset preview/gesture states;
+  `ProjectionalEditorSession` shrinks from `35,488` to `15,296` bytes and its enclosing
+  `MaterializedCodeProject` from `36,320` to `16,128`. Every pre-existing public incremental-code
+  signature remains unchanged. The exact default-stack F002 and 2 MiB F003 regressions plus the
+  affected native suites pass, but the clean release gate, frozen final-byte browser profile,
+  freeze, UAT and Pages remain pending. No solver equation, Intent/code meaning, accepted-scene
+  authority, persistence schema or picking semantics changes; deterministic work-admission tests
+  and focused candidate-only Chromium timing own the performance proof, and M85 does not restore
+  broad browser integration CI.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

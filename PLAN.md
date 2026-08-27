@@ -6358,10 +6358,12 @@ publication.
 
 ### M85: responsive retained workbench presentation
 
-Status: **active; M85-F001 is reproduced; implementation and UAT are pending**. Accepted M84
-source `84dd768`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169`
-remain product/public authority. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and
-`docs/M85_UAT.md` own the detailed contract and evidence.
+Status: **active and unaccepted; M85-F001 through M85-F003 are repaired at committed affected-
+crate-qualified implementation checkpoint `fd2c560`, while the clean release gate, frozen final-
+byte browser profile, UAT and publication remain pending**. Accepted M84 source
+`84dd768`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain
+product/public authority. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md`
+own the detailed contract and evidence.
 
 - [x] Reproduce M85-F001 against the exact M84-F012 manifold. A 30-sample pan takes `14,933 ms`,
   replaces viewport children 33 times and has a `583.3 ms` p95 frame gap; an 18-event wheel burst
@@ -6369,30 +6371,50 @@ remain product/public authority. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.m
 - [x] Route the finding to `geosolve-demo-web` presentation. Current release native measurements
   remain fast enough to exclude ordinary retained solving as the primary 1 fps cause; camera
   callbacks instead compose the complete scene, serialize SVG and replace viewport DOM per event.
-- [ ] Add an actual admitted-work ledger and independent newest-sample RAF camera queues for both
-  projectional/code and retained flat compatibility routes.
-- [ ] Implement camera-only retained presentation for pan, wheel, Fit, Origin and toolbar zoom.
+- [x] Add actual presentation-independent interaction/code receipts, a composed browser work ledger
+  and independent newest-sample RAF camera queues for both projectional/code and retained flat
+  compatibility routes. Attempted work survives rejection; attached code authority is zero-work
+  until its owner issues a receipt.
+- [x] Implement camera-only retained presentation for pan, wheel, Fit, Origin and toolbar zoom.
   Camera frames must perform zero solver/preview, Intent materialization, computed evaluation,
-  code parse/expansion, persistence, durable-panel, full-scene, full-SVG or viewport-replacement
-  work while preserving exact final camera and current-camera picking.
-- [ ] Prove retained presentation parity with cold exact scenes, including grid, axes, annotations,
-  screen-sized hits and immediate post-navigation hover/click/drag.
-- [ ] Re-profile and optimize hover/drag only after camera repair. Preserve ≤`16 ms` ordinary
-  native preview, ≤`33.3 ms` browser preview, ≤`250 ms` ordinary terminal and ≤`500 ms`
-  code-coupled terminal publication with exact once-only durability and no delayed movement.
+  native-history publication, code parse/expansion/publication, persistence, durable-panel, full-
+  scene, full-SVG or viewport-replacement work while preserving exact final camera and current-
+  camera picking. One separately authenticated exact reconciliation may rebase retained paint only
+  after a completed burst; it is never raw camera-RAF work.
+- [x] Prove focused retained presentation parity with cold exact scenes, including grid, axes,
+  annotations, screen-sized hits, stable semantic DOM IDs and immediate post-navigation hover/
+  click/drag. Retained hover changes presentation state without recomposing or replacing the scene.
+- [x] Optimize transient/terminal paths without weakening exact validation. Native and optional
+  code owners publish exact attempted-work receipts; unchanged-host code terminals expand once,
+  reuse authenticated host owners and retain only outer user-visible history. M85-F002's PC Water
+  Manifold overlay passes on the ordinary default stack with empty delegated Undo/Redo.
+- [x] Resolve M85-F003 without changing the accepted M84 incremental-code API. The unaudited
+  adapter calls its receipt-aware worker directly, while six large optional projectional Fillet/
+  Offset preview and gesture states are privately heap-owned. `ProjectionalEditorSession` falls
+  from `35,488` to `15,296` bytes and `MaterializedCodeProject` from `36,320` to `16,128`; both
+  explicit 2 MiB deletion regressions, Compass Rose and adaptive-polyline terminals pass.
+- [ ] Complete the fresh final-source browser matrix and prove ≤`16 ms` ordinary native preview,
+  ≤`33.3 ms` browser preview, ≤`250 ms` ordinary terminal and ≤`500 ms` code-coupled terminal
+  publication with exact once-only durability and no delayed movement.
 - [ ] Pass camera callback p95 ≤`1 ms`, RAF CPU p95 ≤`8 ms`, ordinary paint p95 ≤`16.7 ms`/55 fps,
   visible-manifold paint p95 ≤`33.3 ms`/30 fps and zero tasks over `50 ms` in warmed bursts.
-- [ ] Pass focused owner tests, format, warnings-denied Clippy, workspace tests, release performance,
-  WASM/Trunk, unchanged clean golden and complete clean release qualification.
-- [ ] Freeze without rebuild, exact-verify local/Tailscale bytes and run the focused candidate-only
-  Chromium trace plus M85-U1 through M85-U12. Do not add broad browser integration to PR CI.
+- [x] Pass the `fd2c560` affected-crate checkpoint: format/diff, warnings-denied all-target Clippy
+  for constraint-editor, sketch-code and demo-web, constraint-editor 756/756, the complete sketch-
+  code crate, demo-web 300/300, ordinary-stack F002 and the explicit 2 MiB F003 pair.
+- [ ] Pass workspace tests, release performance, WASM, warnings-denied workspace Clippy/Rustdoc,
+  unchanged clean golden and complete clean release qualification.
+- [ ] Freeze without rebuild, exact-verify local/Tailscale bytes, run the focused candidate-only
+  Chromium trace and complete hands-on M85-U1-U9/U11-U12 plus final-source native flat-adapter
+  M85-U10 evidence. Persisted v1-v6 workspaces normalize into projectional authority; do not add a
+  test-only flat browser bootstrap or broad browser integration to PR CI.
 - [ ] After explicit supervising-user UAT approval only, publish the accepted descendant to Pages,
   exact-verify hosted bytes, retire the retained service and close M85.
 
 Gate: a camera-only frame admits only lightweight retained camera/grid/HUD presentation; fixed
-ordinary and visible-manifold scenes meet their real-browser budgets; both workbench routes retain
-identical semantic/history/persistence authority; pointer terminals remain exact and independently
-validated; clean qualification, immutable nomination and explicit human UAT precede publication.
+ordinary and visible-manifold scenes meet their real-browser budgets; both presentation adapters
+retain identical semantic/history/persistence authority; pointer terminals remain exact and
+independently validated; clean qualification, immutable nomination and explicit human UAT precede
+publication.
 
 ## Explicit non-goals
 

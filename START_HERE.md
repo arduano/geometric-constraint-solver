@@ -464,13 +464,20 @@ eight-path hosted-byte verification. Former retained PID `2241323` is retired, i
 connections and the immutable F012 snapshot remains preserved. Pages is final M84 public-byte
 authority.
 
-M85 is the active semantic-neutral workbench-performance milestone. `M85-F001` is independently
-reproduced on the exact M84-F012 PC Water Manifold: every raw pan or wheel event rebuilt the
-projectional scene, derived presentation-only computed affordances, serialized the complete SVG
-and replaced the viewport, producing roughly `583 ms` p95 frame gaps and visible 1 fps input. The
-accepted M84 solver, Intent/code, history, persistence and Pages authority remain unchanged.
-`docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the active retained
-camera/interaction contract, evidence ledger and pending scorecard.
+M85 is the active semantic-neutral workbench-performance milestone. `M85-F001` independently
+routed the exact M84-F012 PC Water Manifold's roughly 1 fps navigation to complete per-event
+projectional scene/SVG/viewport reconstruction. `M85-F002` then reproduced an ordinary-stack
+overflow in an unchanged-host code terminal that created and discarded an unnecessary nested
+Intent Undo snapshot; `M85-F003` found further return-slot pressure during structural code edits.
+Committed implementation checkpoint `fd2c560`, tree `97591f3`, repairs all three: camera RAFs
+retain and transform accepted paint, hover updates retained SVG state, actual owner receipts replace
+event-label work inference, history-free delegated code patches preserve one outer user-visible
+history, and large optional projectional Fillet/Offset preview state is privately heap-owned without
+changing public incremental-code signatures. Affected-crate Clippy/native/default-stack evidence
+passes; the clean release gate, frozen final-byte browser profile, freeze, UAT and Pages remain
+pending. The accepted M84 solver, Intent/code meaning, history, persistence and Pages authority
+remain unchanged. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the
+active contract, evidence ledger and pending scorecard.
 
 ## Read first
 
@@ -511,7 +518,8 @@ camera/interaction contract, evidence ledger and pending scorecard.
     implemented F005-F012 ledger, historical F011 nomination, verified immutable F012 replacement
     nomination, milestone-level human scorecard and exact public closeout.
 21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — active retained
-    camera/interaction performance contract, confirmed M85-F001 evidence and pending qualification.
+    camera/interaction performance contract, repaired M85-F001-F003 implementation checkpoint,
+    focused validation record and pending complete qualification/scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -903,11 +911,20 @@ byte/browser-verified. U1-U16 are accepted by milestone-level approval; approval
 retired and the F012 snapshot remains preserved. F011 PID `1485656` is retired and its snapshot
 remains historical rollback evidence. F007 source `cc2f05e` and combined source `ff2e142` are also
 withdrawn.
-M85-F001 is confirmed against immutable M84-F012. Dense-scene camera callbacks rebuild complete
-screen-space scene/SVG presentation on every raw event even though native retained preview remains
-fast. M85 may optimize only presentation scheduling, exact retained reprojection and evidenced
-transient hot paths; it adds no equation, constraint, solver priority, branch rule, persistence
-schema or managed-code meaning. No M85 candidate, UAT acceptance or Pages authority is claimed.
+M85-F001 is repaired at committed affected-crate-qualified implementation checkpoint `fd2c560`:
+both adapters
+coalesce newest camera input, transform retained accepted paint/grid/HUD state, update retained
+hover presentation and admit at most one separately authenticated exact reconciliation after a
+burst. Presentation-independent interaction/code receipts now report actual attempted work instead
+of browser event-label predictions. M85-F002's history-free delegated unchanged-host terminal
+passes on the ordinary stack while preserving authenticated host owners, exact cold validation and
+outer-only user-visible history. M85-F003 privately heap-owns large optional projectional preview/
+gesture state while restoring every pre-existing incremental-code API; its explicit 2 MiB pair,
+constraint-editor 756/756, complete sketch-code and demo-web 300/300 pass. A provisional browser
+profile from a pre-F003 ancestor passes 5/5 but is not final-source evidence. The clean release gate,
+frozen profile/nomination, UAT and Pages are pending. M85 adds no equation, constraint, solver
+priority, branch rule, persistence schema or managed-code meaning, and accepted M84 remains public
+authority.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1031,7 +1048,8 @@ Durable milestone and cleanup records:
   public closeout,
   including manifold plus annotation-aware PNG-export dogfood)
 - `docs/M85_GOALS.md` (active retained workbench-performance contract and fixed budgets)
-- `docs/M85_IMPLEMENTATION.md` (confirmed M85-F001 and in-progress implementation ledger)
+- `docs/M85_IMPLEMENTATION.md` (repaired M85-F001-F003 checkpoint, actual-work architecture,
+  focused validation and pending release ledger)
 - `docs/M85_UAT.md` (pending immutable-candidate navigation/interaction scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

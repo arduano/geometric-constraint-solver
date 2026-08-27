@@ -3867,9 +3867,13 @@ feature or general topological-naming claim is accepted by M84.
 
 ### M85: responsive retained workbench presentation
 
-Status: **active and unaccepted**. M85-F001 is independently reproduced on exact immutable
-M84-F012; implementation, clean qualification, frozen candidate nomination and M85-U1 through
-M85-U12 remain pending. Accepted M84 stays Pages authority.
+Status: **active and unaccepted**. M85-F001 through M85-F003 are repaired at committed
+implementation checkpoint `fd2c560c5c61338a96f145ecb87106af49e93749`, tree
+`97591f3d8c268e36db2e3e728c52163dca87d055`. Format/diff, affected-crate warnings-denied Clippy,
+constraint-editor 756/756, the complete sketch-code crate, demo-web 300/300, the ordinary-stack
+F002 sentinel and the explicit 2 MiB F003 pair pass. The clean release gate, frozen final-byte
+browser profile, candidate nomination, hands-on M85-U1-U9/U11-U12 and native flat-adapter M85-U10
+evidence remain pending. Accepted M84 stays Pages authority.
 
 M85 is accepted only when all of the following pass:
 
@@ -3887,23 +3891,41 @@ M85 is accepted only when all of the following pass:
 - Every ordered wheel delta contributes exactly once and keeps its screen anchor. Pan publishes the
   newest absolute sample. The newest desired camera is visible on the next RAF and never later than
   two frames; exact final center and scale match the sequential input fold.
-- Every camera-only frame records exactly zero solver/projected-preview attempts, Intent
-  materializations, computed evaluations, managed-code parse/expansions, workspace encodes/writes,
-  durable renders/panel rebuilds, full scene compositions, full SVG serializations and viewport
-  `innerHTML` replacements. A pre-existing semantic gesture may be canceled once at camera-burst
-  admission, never once per raw sample.
+- Every camera-only frame records one camera presentation and exactly zero exact reprojections,
+  solver/projected-preview attempts, Intent materializations, computed evaluations, native-history
+  publications, managed-code parse/expansion/publications, workspace encodes/writes, durable
+  renders/panel rebuilds, full scene compositions, full SVG serializations and viewport `innerHTML`
+  replacements. A pre-existing semantic gesture may be canceled once at camera-burst admission,
+  never once per raw sample. One separately authenticated exact reconciliation may rebase retained
+  paint after the burst; it is not a camera RAF and may cross none of the semantic/durable owners.
 - Camera-only motion leaves accepted/current document identity and bytes, Intent/code-session
   identity, history, selection, annotation layout and canonical persistence/reproduction authority
   unchanged in both projectional/code and flat compatibility routes.
 - Retained camera paint is semantically equivalent to a cold exact scene for finite screen
   positions, visibility, ordering, pan direction, zoom anchor, grid/axes, annotations, screen-sized
-  stroke/hit affordances and stable DOM identities. Immediate post-navigation hover/click/drag uses
-  current-camera coordinates without a pause, stale target or delayed visual jump.
+  stroke/hit affordances and stable semantic DOM IDs. Nodes stay retained throughout a burst; one
+  exact reconciliation may replace them afterward without changing their semantic identities.
+  Immediate post-navigation hover/click/drag uses current-camera coordinates without a pause,
+  stale target or delayed visual jump.
 - Existing ordinary native retained preview remains at most `16 ms` p95. Ordinary, Compass Rose and
   Rounded Polyline browser hover/drag preview is at most `33.3 ms` p95. Exact ordinary release is
   visible and durable within `250 ms`; code-coupled release within `500 ms`.
-- A mutating release creates exactly one history/save/durable-render boundary; cancel and no-motion
-  create none. Geometry remains unchanged through at least one second after release and reload.
+- Actual receipts, rather than event labels, own semantic work accounting. Preview may report only
+  native solve, Intent materialization and computed evaluation attempts plus transient scene/SVG
+  presentation; it reports zero native-history/code publication, managed parse/expansion,
+  persistence and durable-panel work. Attempts remain visible when a later boundary rejects.
+- A native mutating release creates one native accepted transaction. A code-owned release may
+  absorb that native transaction into one accepted outer code publication, but exposes exactly one
+  user-visible history step, one save and one durable render. Cancel and no-motion create none.
+  Geometry remains unchanged through at least one second after release and reload.
+- The PC Water Manifold unchanged-host code-overlay terminal passes on the ordinary default stack,
+  expands exactly once, preserves all six authenticated native host owners, independently validates
+  finite accepted authority and retains zero delegated Undo/Redo. The broad release test stack size
+  cannot substitute for this exact F002 regression.
+- Managed partial deletion keeps a finite constrained rectangle and exact Undo; transitive delete-
+  all publishes authenticated empty authority. Both pass together with an explicit 2 MiB stack.
+  Large optional projectional preview/gesture state is privately heap-owned, while every existing
+  incremental-code return signature and caller-facing value contract remains unchanged.
 - Deterministic native tests own coalescing, work admission, camera parity and semantic invariants.
   A narrow local/frozen-candidate Chromium trace owns timing at nomination; broad browser
   integration is not restored to authored PR CI.
@@ -3911,9 +3933,17 @@ M85 is accepted only when all of the following pass:
   clean golden checks and the complete clean release gate pass. No golden-authoring expansion is
   required unless an independent systemic semantic gap is discovered.
 - Exact candidate bytes are frozen without rebuild and exact-verified locally and on retained
-  Tailscale. Supervising-user M85-U1 through M85-U12 approval is explicit. Only then may the
-  accepted descendant publish to Pages, undergo exact hosted-byte verification and retire the
-  retained service.
+  Tailscale. Hands-on M85-U1-U9/U11-U12, final-source native flat-adapter M85-U10 evidence and the
+  supervising user's complete scorecard disposition are explicit. Only then may the accepted
+  descendant publish to Pages, undergo exact hosted-byte verification and retire the retained
+  service. Persisted v1-v6 workspaces normalize into projectional authority, so M85 does not invent
+  a test-only flat browser bootstrap solely for UAT.
+
+The affected-crate checkpoint is not milestone acceptance. A provisional five-test browser profile
+from an unpinned pre-F003 implementation ancestor passes the budgets, but its log predates the final
+implementation commits and is not final-source or frozen-byte evidence. No clean release-gate log,
+final timing ledger, immutable distribution, Tailscale service or human scorecard exists for M85 at
+this checkpoint.
 
 M85 changes no primitive, constraint, equation, residual, Jacobian, priority, tolerance, branch,
 Intent/code meaning, persistence schema or accepted-scene validation. SVG remains the demo
