@@ -5261,6 +5261,75 @@ SHA-256 is `8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`. F
 `geosolve-m84-uat.service` PID `2241323` is retired, its endpoint refuses connections and the
 immutable F012 snapshot remains preserved. M84 is closed and Pages is final public-byte authority.
 
+## M85 retained presentation performance fixtures
+
+M85 adds no residual equation and does not reinterpret or expand the milestone-neutral golden
+authoring matrix. It owns focused `geosolve-demo-web` presentation regressions and a narrow
+candidate-only Chromium timing trace. `docs/M85_GOALS.md` is authoritative.
+
+### M85-P1 — Confirmed full-render camera defect
+
+Against exact immutable M84-F012, open `pc-water-manifold` with annotations visible. Thirty
+middle-button pan samples take `14,933 ms`, replace viewport children 33 times and produce a
+`583.3 ms` p95 frame gap. Eighteen wheel events take `9,976 ms`, replace children 19 times and
+produce a `583.2 ms` p95 gap. The annotations-hidden diagnostic still takes `16,937 ms` with a
+`733.3 ms` p95 pan gap. This is M85-F001: camera callbacks rebuild the complete scene/markup/DOM.
+
+Native release measurements provide the control: retained preview `4.340 ms` p95, relation-heavy
+control `17.094 ms`, Fillet radius `2.313 ms` and Offset distance `5.743 ms`. These do not excuse
+browser timing failures but route the primary defect to presentation rather than solver equations.
+
+### M85-P2 — Camera queue and admitted work
+
+For projectional/code and flat compatibility adapters independently, submit multiple pan samples
+before one RAF and require one presentation of the latest sample. Submit ordered wheel deltas and
+require their exact sequential anchored fold. Stale RAF and idle callback generations do nothing.
+The final camera matches the exact sequential oracle and is visible no later than two frames.
+
+Snapshot the actual work ledger around every camera-only frame. Exactly one lightweight camera
+presentation is allowed; solver/preview, materialization, computed evaluation, code parse/
+expansion, workspace encoding/write, durable panel, full scene, full SVG and viewport replacement
+counts remain zero. Accepted/current identity, document, Intent/code-session identity, history,
+selection, annotation layout and canonical persistence bytes remain bit-identical.
+
+### M85-P3 — Retained/cold camera parity
+
+Use fixed translation, zoom-in, zoom-out, off-centre anchor and combined pan/zoom states. Compare
+retained presentation with a cold exact scene semantically: every finite model position maps to the
+same screen position; grid and protected axes use the same camera; visible geometry/annotations and
+DOM identities agree; strokes, points, labels and hit envelopes remain screen-usable. The first
+hover/click/drag after navigation targets the painted item with current-camera coordinates and no
+visual rebase jump.
+
+### M85-P4 — Real-browser budgets
+
+Measure the ordinary authored rectangle plus diagonal and the exact visible-annotation manifold
+for at least three warmed bursts and 120 samples per action class. Camera callback p95 is at most
+`1 ms`; RAF CPU p95 at most `8 ms`; ordinary next-paint p95 at most `16.7 ms` and 55 fps; manifold
+at most `33.3 ms` and 30 fps. No task exceeds `50 ms` during a two-second burst. The hidden-
+annotation manifold is diagnostic only and cannot replace the visible result.
+
+The real timing trace runs against local/frozen Tailscale candidate bytes at nomination, not broad
+PR CI. Deterministic queue/work/parity regressions remain ordinary native tests.
+
+### M85-P5 — Hover, drag and exact terminal
+
+After camera repair, measure ordinary, Compass Rose and Rounded Polyline hover/drag. Browser
+preview p95 is at most `33.3 ms`; existing ordinary native retained preview remains at most
+`16 ms`. Mutating release creates one history/save/durable-render boundary and becomes visible
+within `250 ms` ordinary or `500 ms` code-coupled; cancel/no-motion creates none. Geometry is
+unchanged at +50/+250/+500/+1000 ms and after reload. Pointer previews never parse/expand code,
+save or rebuild durable panels, and exact terminal publication retains independent solver
+validation.
+
+### M85-P6 — Qualification authority
+
+Format, warnings-denied Clippy, workspace tests, release performance owners, WASM/Trunk, unchanged
+clean golden and the complete clean release gate pass. Freeze without rebuild, exact-verify local
+and retained Tailscale bytes, then complete M85-U1 through M85-U12. Only explicit supervising-user
+approval authorizes Pages publication, exact hosted-byte verification, service retirement and
+closure. Until then accepted M84 remains public authority.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

@@ -3865,6 +3865,61 @@ No new primitive, constraint, residual, formula/expression graph, solver priorit
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep
 feature or general topological-naming claim is accepted by M84.
 
+### M85: responsive retained workbench presentation
+
+Status: **active and unaccepted**. M85-F001 is independently reproduced on exact immutable
+M84-F012; implementation, clean qualification, frozen candidate nomination and M85-U1 through
+M85-U12 remain pending. Accepted M84 stays Pages authority.
+
+M85 is accepted only when all of the following pass:
+
+- Fixed scenes are the ordinary authored rectangle plus diagonal, exact `pc-water-manifold` with
+  annotations visible, the annotations-hidden manifold as a diagnostic, and Compass Rose/Rounded
+  Polyline for code-coupled dragging. Hidden annotations cannot substitute for the visible heavy
+  result.
+- After warm-up, each scene/action class records at least three bursts and 120 measured samples.
+  Report p50, p95, maximum, sustained frames/second, long-task count and admitted-work counts.
+- Raw camera callback CPU p95 is at most `1 ms`; camera RAF CPU p95 is at most `8 ms`; at most one
+  newest-camera paint occurs per animation frame.
+- Ordinary input-to-next-paint p95 is at most `16.7 ms` with at least 55 sustained fps. Visible-
+  annotation manifold p95 is at most `33.3 ms` with at least 30 sustained fps. No task exceeds
+  `50 ms` during a two-second pan/wheel burst after sample load and cold startup.
+- Every ordered wheel delta contributes exactly once and keeps its screen anchor. Pan publishes the
+  newest absolute sample. The newest desired camera is visible on the next RAF and never later than
+  two frames; exact final center and scale match the sequential input fold.
+- Every camera-only frame records exactly zero solver/projected-preview attempts, Intent
+  materializations, computed evaluations, managed-code parse/expansions, workspace encodes/writes,
+  durable renders/panel rebuilds, full scene compositions, full SVG serializations and viewport
+  `innerHTML` replacements. A pre-existing semantic gesture may be canceled once at camera-burst
+  admission, never once per raw sample.
+- Camera-only motion leaves accepted/current document identity and bytes, Intent/code-session
+  identity, history, selection, annotation layout and canonical persistence/reproduction authority
+  unchanged in both projectional/code and flat compatibility routes.
+- Retained camera paint is semantically equivalent to a cold exact scene for finite screen
+  positions, visibility, ordering, pan direction, zoom anchor, grid/axes, annotations, screen-sized
+  stroke/hit affordances and stable DOM identities. Immediate post-navigation hover/click/drag uses
+  current-camera coordinates without a pause, stale target or delayed visual jump.
+- Existing ordinary native retained preview remains at most `16 ms` p95. Ordinary, Compass Rose and
+  Rounded Polyline browser hover/drag preview is at most `33.3 ms` p95. Exact ordinary release is
+  visible and durable within `250 ms`; code-coupled release within `500 ms`.
+- A mutating release creates exactly one history/save/durable-render boundary; cancel and no-motion
+  create none. Geometry remains unchanged through at least one second after release and reload.
+- Deterministic native tests own coalescing, work admission, camera parity and semantic invariants.
+  A narrow local/frozen-candidate Chromium trace owns timing at nomination; broad browser
+  integration is not restored to authored PR CI.
+- Format, warnings-denied Clippy, workspace tests, relevant release performance tests, WASM/Trunk,
+  clean golden checks and the complete clean release gate pass. No golden-authoring expansion is
+  required unless an independent systemic semantic gap is discovered.
+- Exact candidate bytes are frozen without rebuild and exact-verified locally and on retained
+  Tailscale. Supervising-user M85-U1 through M85-U12 approval is explicit. Only then may the
+  accepted descendant publish to Pages, undergo exact hosted-byte verification and retire the
+  retained service.
+
+M85 changes no primitive, constraint, equation, residual, Jacobian, priority, tolerance, branch,
+Intent/code meaning, persistence schema or accepted-scene validation. SVG remains the demo
+renderer; Canvas/WebGL replacement, geometry LOD, stale predictive terminals and broad browser CI
+are outside scope.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.

@@ -96,6 +96,14 @@ construction/NURBS UAT and certified all-family visual profiles.
   endpoint refuses connections and the F012 snapshot remains preserved; F011 PID `1485656` is
   retired and its snapshot remains historical rollback evidence. Pages is final M84 public-byte
   authority and M84 is closed.
+- **Active target:** M85 is a semantic-neutral retained-presentation optimization. M85-F001 routes
+  the PC Water Manifold's approximately 1 fps navigation to `geosolve-demo-web`: raw camera events
+  repeatedly reconstructed the projectional `EditorScene`, derived computed Fillet affordances,
+  serialized complete SVG and replaced viewport children. The repair may coalesce camera samples,
+  reproject already accepted scene geometry and defer context-only presentation work, but cannot
+  change solver equations, Intent/code meaning, accepted-scene authority, history, persistence or
+  picking semantics. Deterministic work-admission tests and focused candidate-only Chromium timing
+  own the performance proof; M85 does not restore broad browser integration CI.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

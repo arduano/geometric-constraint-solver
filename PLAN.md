@@ -6356,6 +6356,44 @@ source and nested editor state; pointer frames never parse or expand; all nine d
 type failures, bounds, golden preservation, clean qualification and explicit UAT pass before
 publication.
 
+### M85: responsive retained workbench presentation
+
+Status: **active; M85-F001 is reproduced; implementation and UAT are pending**. Accepted M84
+source `84dd768`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169`
+remain product/public authority. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and
+`docs/M85_UAT.md` own the detailed contract and evidence.
+
+- [x] Reproduce M85-F001 against the exact M84-F012 manifold. A 30-sample pan takes `14,933 ms`,
+  replaces viewport children 33 times and has a `583.3 ms` p95 frame gap; an 18-event wheel burst
+  takes `9,976 ms` with a `583.2 ms` p95 gap. Hiding annotations does not remove the defect.
+- [x] Route the finding to `geosolve-demo-web` presentation. Current release native measurements
+  remain fast enough to exclude ordinary retained solving as the primary 1 fps cause; camera
+  callbacks instead compose the complete scene, serialize SVG and replace viewport DOM per event.
+- [ ] Add an actual admitted-work ledger and independent newest-sample RAF camera queues for both
+  projectional/code and retained flat compatibility routes.
+- [ ] Implement camera-only retained presentation for pan, wheel, Fit, Origin and toolbar zoom.
+  Camera frames must perform zero solver/preview, Intent materialization, computed evaluation,
+  code parse/expansion, persistence, durable-panel, full-scene, full-SVG or viewport-replacement
+  work while preserving exact final camera and current-camera picking.
+- [ ] Prove retained presentation parity with cold exact scenes, including grid, axes, annotations,
+  screen-sized hits and immediate post-navigation hover/click/drag.
+- [ ] Re-profile and optimize hover/drag only after camera repair. Preserve ≤`16 ms` ordinary
+  native preview, ≤`33.3 ms` browser preview, ≤`250 ms` ordinary terminal and ≤`500 ms`
+  code-coupled terminal publication with exact once-only durability and no delayed movement.
+- [ ] Pass camera callback p95 ≤`1 ms`, RAF CPU p95 ≤`8 ms`, ordinary paint p95 ≤`16.7 ms`/55 fps,
+  visible-manifold paint p95 ≤`33.3 ms`/30 fps and zero tasks over `50 ms` in warmed bursts.
+- [ ] Pass focused owner tests, format, warnings-denied Clippy, workspace tests, release performance,
+  WASM/Trunk, unchanged clean golden and complete clean release qualification.
+- [ ] Freeze without rebuild, exact-verify local/Tailscale bytes and run the focused candidate-only
+  Chromium trace plus M85-U1 through M85-U12. Do not add broad browser integration to PR CI.
+- [ ] After explicit supervising-user UAT approval only, publish the accepted descendant to Pages,
+  exact-verify hosted bytes, retire the retained service and close M85.
+
+Gate: a camera-only frame admits only lightweight retained camera/grid/HUD presentation; fixed
+ordinary and visible-manifold scenes meet their real-browser budgets; both workbench routes retain
+identical semantic/history/persistence authority; pointer terminals remain exact and independently
+validated; clean qualification, immutable nomination and explicit human UAT precede publication.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

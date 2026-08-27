@@ -464,6 +464,14 @@ eight-path hosted-byte verification. Former retained PID `2241323` is retired, i
 connections and the immutable F012 snapshot remains preserved. Pages is final M84 public-byte
 authority.
 
+M85 is the active semantic-neutral workbench-performance milestone. `M85-F001` is independently
+reproduced on the exact M84-F012 PC Water Manifold: every raw pan or wheel event rebuilt the
+projectional scene, derived presentation-only computed affordances, serialized the complete SVG
+and replaced the viewport, producing roughly `583 ms` p95 frame gaps and visible 1 fps input. The
+accepted M84 solver, Intent/code, history, persistence and Pages authority remain unchanged.
+`docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the active retained
+camera/interaction contract, evidence ledger and pending scorecard.
+
 ## Read first
 
 1. `AGENTS.md`
@@ -502,6 +510,8 @@ authority.
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — accepted optional code/GUI architecture,
     implemented F005-F012 ledger, historical F011 nomination, verified immutable F012 replacement
     nomination, milestone-level human scorecard and exact public closeout.
+21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — active retained
+    camera/interaction performance contract, confirmed M85-F001 evidence and pending qualification.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -873,7 +883,7 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M84 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
+M1-M84 are complete and M85 is active. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84's optional code/GUI implementation, F001-F012 repairs,
 frozen F012 nomination, milestone-level acceptance and exact Pages publication also pass.
@@ -893,6 +903,11 @@ byte/browser-verified. U1-U16 are accepted by milestone-level approval; approval
 retired and the F012 snapshot remains preserved. F011 PID `1485656` is retired and its snapshot
 remains historical rollback evidence. F007 source `cc2f05e` and combined source `ff2e142` are also
 withdrawn.
+M85-F001 is confirmed against immutable M84-F012. Dense-scene camera callbacks rebuild complete
+screen-space scene/SVG presentation on every raw event even though native retained preview remains
+fast. M85 may optimize only presentation scheduling, exact retained reprojection and evidenced
+transient hot paths; it adds no equation, constraint, solver priority, branch rule, persistence
+schema or managed-code meaning. No M85 candidate, UAT acceptance or Pages authority is claimed.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1015,6 +1030,9 @@ Durable milestone and cleanup records:
 - `docs/M84_UAT.md` (accepted immutable F012 evidence, milestone-level U1-U16 scorecard and exact
   public closeout,
   including manifold plus annotation-aware PNG-export dogfood)
+- `docs/M85_GOALS.md` (active retained workbench-performance contract and fixed budgets)
+- `docs/M85_IMPLEMENTATION.md` (confirmed M85-F001 and in-progress implementation ledger)
+- `docs/M85_UAT.md` (pending immutable-candidate navigation/interaction scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
