@@ -2,13 +2,15 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. M84-F012 withdraws the otherwise clean-qualified immutable F011
-nomination while its annotation-visibility presentation amendment undergoes replacement
-qualification. F011 source
+Status: accepted for M84. Exact clean-qualified immutable M84-F012 is the current Tailscale UAT
+candidate. F011 source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` remains served rollback authority until an exact F012
-replacement qualifies; no F012 source/tree/freeze or acceptance is claimed. F010 source
+`/tmp/geosolve-m84-f011-uat.ps736NLh` remains historical rollback evidence. Exact F012 source
+`84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`, tree
+`429ed56d2a5b3988d6604079d19e1002f9049d64`, and snapshot
+`/tmp/geosolve-m84-f012-uat.nMOymIIM` are current mechanical nomination authority; no UAT
+acceptance is claimed. F010 source
 `cf463838`, tree
 `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, F009 source `c74651c`, and F007 source
 `cc2f05e` are withdrawn historical evidence. The direct-authoring `41e65a4` snapshot, combined
@@ -404,10 +406,25 @@ priority or persistence schema.
   `9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`; final focused frozen
   manifold/PNG/authority cases pass 1/1 on each endpoint and preserve lifecycle, history length,
   project title and viewport markup authority. PID `1485656`, invocation
-  `f04bc05089d94947b7a24d8ec6a6f26d`, serves only these immutable bytes at
-  `http://100.94.63.83:8080/`. M84-F012 withdraws this nomination while leaving the exact bytes
-  served as rollback evidence; no replacement release identity or qualification is claimed.
-  Refreshed U1-U16, acceptance and public publication remain pending.
+  `f04bc05089d94947b7a24d8ec6a6f26d`, served only these immutable bytes at
+  `http://100.94.63.83:8080/`. M84-F012 withdraws this nomination; PID `1485656` is retired and the
+  exact snapshot remains rollback evidence.
+- Current F012 source `84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`, tree
+  `429ed56d2a5b3988d6604079d19e1002f9049d64`, passes the complete clean gate from
+  20:36:27.840305756 through 21:01:30.826307821 AEST on 2026-08-27, exit 0. Its 6,274-line,
+  424,393-byte log has SHA-256
+  `04e35c73fe92ca3e089b87bd13b5221c60835b72c9eeba5ed38916b51150004a` and final Trunk success.
+  Its exact seven-file, zero-symlink no-rebuild snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM`,
+  modes `0555`/`0444`, aggregate
+  `166abc1298220090ba4c8b0a37a176fb4f945cceae68771efbd601acc1970169`, is retained with evidence
+  at `/tmp/geosolve-m84-f012-freeze-evidence.qua6ci1b`. Temporary/retained eight-path ledgers are
+  byte-identical at SHA-256
+  `66fcd4c852baab5290605066ec856239af7c4f033cef55a4dfd5fb86058645ba`; focused annotation paint/
+  pick, authority-neutrality, exact-restoration and visible/hidden PNG cases pass 1/1 on each
+  endpoint. Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
+  `b621b1a43b8c4ee281f1e8edddf10e57`, serves only this immutable snapshot at
+  `http://100.94.63.83:8080/`; the temporary service is retired. Refreshed U1-U16, acceptance and
+  public publication remain pending.
 
 ## Rejected alternatives
 

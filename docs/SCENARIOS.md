@@ -4700,9 +4700,11 @@ withdraws that nomination. Exact F011 source `e28721a`, tree `0152097`, snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` passes replacement clean qualification, immutable freeze,
 exact temporary/retained byte verification and focused frozen manifold/PNG/authority 1/1 on both
 endpoints. M84-F012 withdraws F011 from current nomination while annotation paint/pick visibility
-and WYSIWYG provisional-clean export undergo replacement qualification; F011 remains the served
-rollback and no F012 release identity is claimed. Refreshed UAT U1-U16 remains required. M84 is
-active and unaccepted, and accepted M83 remains Pages authority.
+and WYSIWYG provisional-clean export become the clean-qualified immutable replacement. Exact F012
+source `84dd768`, tree `429ed56`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` passes exact
+temporary/retained byte verification and focused browser checks 1/1 on both endpoints. F011 remains
+historical rollback evidence. Refreshed UAT U1-U16 remains required. M84 is active and unaccepted,
+and accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -5028,8 +5030,8 @@ image must match the currently composed annotation paint while retaining accepte
 construction, native and computed geometry. Start an authoring draft/inference/provisional state
 before another export; export-only styling must remove draft geometry, inference guides/candidates,
 hit targets, controls and error/provisional overlays without changing the live display, selection,
-layout, history or accepted authority. This scenario is implemented but not yet clean-qualified,
-frozen, accepted or assigned any final source/tree/evidence hash.
+layout, history or accepted authority. This scenario is implemented, clean-qualified, frozen and
+byte/browser-verified at exact source `84dd768`, tree `429ed56`; it is not human-accepted.
 
 ### M84-F001 — generated-point terminal checkpoint parity
 
@@ -5230,10 +5232,25 @@ temporary/retained HTTP verification at ledger SHA-256
 `9339301ea57feb293a27256795344f88805046426e3659bae0f750b67b251b94`. Focused frozen
 manifold/PNG/authority checks pass 1/1 on both endpoints and preserve lifecycle, history length,
 project title and viewport markup authority. Retained `geosolve-m84-uat.service`, PID `1485656`,
-serves only this immutable snapshot at `http://100.94.63.83:8080/`. Pages remains accepted M83
-authority and no M84 public publication is claimed; refreshed U1-U16 remain pending. M84-F012
-withdraws this nomination while retaining the service as rollback-only evidence; no F012 release
-identity or qualification is claimed.
+served only this immutable snapshot at `http://100.94.63.83:8080/`. M84-F012 withdraws this
+nomination; PID `1485656` is retired and the snapshot remains historical rollback evidence.
+
+Current F012 source `84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`, tree
+`429ed56d2a5b3988d6604079d19e1002f9049d64`, passes the complete clean gate from
+20:36:27.840305756 through 21:01:30.826307821 AEST, exit 0. Its 6,274-line, 424,393-byte log
+`/tmp/geosolve-m84-f012-gate.PmjeGNUa/release-gate.log` has SHA-256
+`04e35c73fe92ca3e089b87bd13b5221c60835b72c9eeba5ed38916b51150004a` and final Trunk success.
+Its immutable seven-file, zero-symlink no-rebuild snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM`,
+modes `0555`/`0444`, aggregate `166abc1298220090ba4c8b0a37a176fb4f945cceae68771efbd601acc1970169`,
+has complete evidence at `/tmp/geosolve-m84-f012-freeze-evidence.qua6ci1b`. Temporary/retained
+eight-path ledgers are byte-identical at SHA-256
+`66fcd4c852baab5290605066ec856239af7c4f033cef55a4dfd5fb86058645ba`.
+
+Focused annotation paint/pick, underlying-target, authority-neutrality, exact-restoration and
+WYSIWYG PNG checks pass 1/1 on both endpoints. Retained `geosolve-m84-uat.service`, PID `2241323`,
+invocation `b621b1a43b8c4ee281f1e8edddf10e57`, serves only the immutable F012 snapshot at
+`http://100.94.63.83:8080/`; the temporary service is retired. Pages remains accepted M83 authority
+and no M84 public publication is claimed; refreshed U1-U16 remain pending.
 
 ## Frozen near-singular fixtures
 

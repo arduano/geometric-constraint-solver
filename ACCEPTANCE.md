@@ -3386,12 +3386,12 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. M84-F012 withdraws the otherwise clean-qualified immutable F011 PC
-water-manifold nomination while its annotation-visibility presentation amendment undergoes
-replacement qualification. Refreshed M84-U1 through M84-U16 and explicit approval remain pending.
+Status: active and unaccepted. Exact clean-qualified immutable M84-F012 is the current Tailscale
+UAT candidate. Refreshed M84-U1 through M84-U16 and explicit approval remain pending.
 Exact F011 source `e28721a`, tree `0152097`, and snapshot
-`/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback authority and remain served only
-until an exact F012 replacement is qualified. No F012 source/tree/freeze or acceptance is claimed.
+`/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback evidence. Exact F012 source
+`84dd768`, tree `429ed56`, and snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` are current mechanical
+nomination authority; no UAT acceptance is claimed.
 Exact F010 source
 `cf463838`, tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical
 rollback evidence. Exact F009
@@ -3631,7 +3631,11 @@ and cold-materialized through the ordinary accepted-scene authority.
   `e28721a`, tree `0152097`, then passes the complete clean gate, immutable no-rebuild freeze,
   byte-identical temporary/retained HTTP verification and focused frozen manifold/PNG/authority
   1/1 on both endpoints. That then-current mechanical nomination likewise accepted no UAT row;
-  M84-F012 now withdraws it without invalidating the preserved evidence.
+  M84-F012 withdraws it without invalidating the preserved evidence. Exact F012 source `84dd768`,
+  tree `429ed56`, then passes the complete clean gate, immutable no-rebuild freeze, byte-identical
+  temporary/retained HTTP verification and focused annotation paint/pick, authority-neutrality and
+  visible/hidden PNG checks 1/1 on both endpoints. This current mechanical nomination also accepts
+  no UAT row.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3809,15 +3813,40 @@ Both exact 233,543-byte PNGs have SHA-256
 
 Only after temporary proof passed was F010 PID `650971` retired. Retained
 `geosolve-m84-uat.service`, PID `1485656`, invocation
-`f04bc05089d94947b7a24d8ec6a6f26d`, now serves only the immutable F011 snapshot from its snapshot
-working directory at `http://100.94.63.83:8080/`; temporary `:18093` is retired. Refreshed M84-U1
-through M84-U16 remain open, so Pages remains accepted M83 authority and no M84 public publication
-is claimed.
+`f04bc05089d94947b7a24d8ec6a6f26d`, served only the immutable F011 snapshot from its snapshot
+working directory at `http://100.94.63.83:8080/`; temporary `:18093` is retired. M84-F012
+withdraws this nomination and preserves the snapshot as historical rollback evidence. PID
+`1485656` was retired only after F012 temporary proof passed.
 
-M84-F012 withdraws this nomination while retaining the exact F011 service only as rollback
-authority. Its annotation paint/pick and WYSIWYG export amendment is implemented in the working
-tree, but no clean committed source, release gate, freeze, HTTP/browser ledger or replacement
-service identity is claimed. All UAT rows remain pending.
+Current F012 mechanical authority is exact product source
+`84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`, tree
+`429ed56d2a5b3988d6604079d19e1002f9049d64`. Its complete clean gate ran from
+20:36:27.840305756 through 21:01:30.826307821 AEST on 2026-08-27, exited 0 and ended with a
+successful Trunk build. The 6,274-line, 424,393-byte log
+`/tmp/geosolve-m84-f012-gate.PmjeGNUa/release-gate.log` has SHA-256
+`04e35c73fe92ca3e089b87bd13b5221c60835b72c9eeba5ed38916b51150004a`; unchanged golden and
+nine-demo M84-ledger hashes are
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`c610a229e490467f59c9d57f334c96f23f61ea98a713eb2c98daa3c773eab66f`.
+
+Without rebuilding, the exact seven-regular-file, zero-symlink snapshot
+`/tmp/geosolve-m84-f012-uat.nMOymIIM` is frozen at directory/file modes `0555`/`0444`, ordered-
+manifest aggregate `166abc1298220090ba4c8b0a37a176fb4f945cceae68771efbd601acc1970169`, with complete evidence
+at `/tmp/geosolve-m84-f012-freeze-evidence.qua6ci1b`. Temporary and retained eight-path ledgers are
+byte-identical at SHA-256 `66fcd4c852baab5290605066ec856239af7c4f033cef55a4dfd5fb86058645ba`.
+The focused browser spec passes 1/1 on each endpoint and proves annotation paint/pick removal,
+underlying-target access, authority neutrality, exact restoration and WYSIWYG exports. Its visible
+233,543-byte PNG has SHA-256 `2378a8c74216524c42fc8910d79e28a6dacc54fc437ac705518ab42122363dc2`;
+its hidden 154,969-byte PNG has SHA-256
+`8c4af68f0775066d40bd1e88f9fe42d57f70b49137ac41627c7c530d1c398317`; both have valid signature
+and 2000 × 1400 IHDR. The restored screenshot has SHA-256
+`2db91740662d19adf9f38518ed25deca91ad92e37022dfa3549caad0d608bcb0`.
+
+Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
+`b621b1a43b8c4ee281f1e8edddf10e57`, now serves only the immutable F012 snapshot from its snapshot
+working directory at `http://100.94.63.83:8080/`; the temporary service is retired. Refreshed
+M84-U1 through M84-U16 remain open, so Pages remains accepted M83 authority and no M84 public
+publication is claimed. All UAT rows remain pending.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

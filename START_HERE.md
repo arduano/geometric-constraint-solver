@@ -447,13 +447,18 @@ source `e28721a`, tree `0152097`, passes complete clean qualification; its immut
 snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh`, aggregate
 `056193f4af17437da5430dc86059ad4c4b73ec62e959a461935ca29153b10fc2`, passes byte-identical
 temporary/retained HTTP verification and focused manifold/PNG/authority 1/1 on both endpoints.
-Retained `geosolve-m84-uat.service`, PID `1485656`, serves only those F011 bytes at
-`http://100.94.63.83:8080/`. M84-F012 now withdraws that nomination while retaining it as rollback
-authority: a default-on, session-local **Annotations** option must drive one shared paint/pick flag
+M84-F012 withdraws that nomination while retaining its exact bytes as historical rollback
+evidence: a default-on, session-local **Annotations** option drives one shared paint/pick flag
 in both flat and code workbenches, so hidden constraint/dimension annotations cannot steal pointer
 ownership while layout, selection, history, Intent IR, repro and Fillet handles remain unchanged.
-PNG export follows the live annotation choice and strips draft/inference/provisional paint. No F012
-source/tree/freeze or qualification is claimed. Refreshed U1-U16 remain pending. Pages remains on
+PNG export follows the live annotation choice and strips draft/inference/provisional paint. Exact
+F012 source `84dd768`, tree `429ed56`, passes the complete clean gate; its immutable no-rebuild
+snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM`, aggregate
+`166abc1298220090ba4c8b0a37a176fb4f945cceae68771efbd601acc1970169`, passes byte-identical
+temporary/retained HTTP verification and focused annotation paint/pick, authority and visible/
+hidden PNG browser checks 1/1 on both endpoints. Only after temporary proof passed was F011 PID
+`1485656` retired. Retained `geosolve-m84-uat.service`, PID `2241323`, serves only the immutable
+F012 snapshot at `http://100.94.63.83:8080/`. Refreshed U1-U16 remain pending. Pages remains on
 accepted M83 and no M84 public publication is claimed.
 
 ## Read first
@@ -492,7 +497,7 @@ accepted M83 and no M84 public publication is claimed.
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005-F011 ledger, withdrawn F010 nomination, verified immutable F011 replacement
+    implemented F005-F012 ledger, historical F011 nomination, verified immutable F012 replacement
     nomination and pending human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
@@ -877,10 +882,11 @@ nomination and implements coupled semantic-terminal durability. Exact source `cf
 `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, but M84-F011 withdraws that nomination. Exact F011 source
 `e28721a`, tree `0152097`, and immutable snapshot `/tmp/geosolve-m84-f011-uat.ps736NLh` are
 clean-qualified and byte/browser-verified. M84-F012 withdraws that nomination for the shared
-annotation paint/pick toggle and WYSIWYG export cleanup; retained PID `1485656` serves those exact
-F011 bytes as rollback authority until a replacement qualifies. F007 source `cc2f05e` and combined
-source `ff2e142` are also withdrawn, no F012 release identity is claimed, and human UAT U1-U16
-remains open.
+annotation paint/pick toggle and WYSIWYG export cleanup. Exact F012 source `84dd768`, tree
+`429ed56`, and immutable snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` are clean-qualified and
+byte/browser-verified; retained PID `2241323` serves only those current candidate bytes. F011 PID
+`1485656` is retired and its snapshot remains historical rollback evidence. F007 source `cc2f05e`
+and combined source `ff2e142` are also withdrawn, while human UAT U1-U16 remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -999,8 +1005,8 @@ Durable milestone and cleanup records:
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
 - `docs/M84_IMPLEMENTATION.md` (implemented F001-F012 ledger, historical eight-demo amendment,
-  withdrawn F011 rollback authority and unqualified annotation-visibility amendment)
-- `docs/M84_UAT.md` (rollback immutable F011 evidence and refreshed pending U1-U16 scorecard,
+  historical F011 rollback authority and qualified annotation-visibility replacement)
+- `docs/M84_UAT.md` (current immutable F012 evidence and refreshed pending U1-U16 scorecard,
   including manifold plus annotation-aware PNG-export dogfood)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
