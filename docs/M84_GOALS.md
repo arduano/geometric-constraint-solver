@@ -2,8 +2,8 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; exact clean-qualified immutable M84-F012 is the current Tailscale
-UAT candidate; refreshed U1-U16 remain pending**. Exact F011 source
+Status: **accepted at milestone level on 2026-08-27; exact clean-qualified immutable M84-F012 is
+the accepted product candidate; public publication and final closure remain pending**. Exact F011 source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and no-rebuild snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback evidence. Exact F012 source
@@ -15,9 +15,10 @@ tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historica
 evidence. F009 source `c74651c`, tree `a904584`, and snapshot
 `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect evidence; F007 source
 `cc2f05e`, direct-authoring snapshot `41e65a4`, combined F005/F006 source `ff2e142` and all earlier
-M84 nominations are likewise historical. Human UAT U1-U16 and explicit approval remain pending.
-No UAT row is accepted, M84 is not published or closed, and accepted M83 remains GitHub Pages
-authority. ADR 0041 is the controlling design.
+M84 nominations are likewise historical. The supervising user's milestone-level close decision
+accepts U1-U16 without claiming a separately logged row-by-row hands-on replay. M84 is not yet
+published or closed, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling
+design.
 
 ## Goal
 
@@ -300,8 +301,9 @@ layer optional.
   authority, code state, IR, persistence or repro.
 - Qualify both workbench variants, overlapping annotation/geometry/datum picks, selected/problem
   annotations, Fillet handles, visible/hidden PNGs and provisional-export cleanup. F011 remained
-  rollback-only until the clean, frozen, byte/browser-verified F012 replacement existed; U1-U16,
-  explicit approval, Pages publication and closure remain pending after that mechanical gate.
+  rollback-only until the clean, frozen, byte/browser-verified F012 replacement existed. U1-U16
+  and explicit approval later completed at milestone level; Pages publication and closure remain
+  pending after that mechanical gate.
 
 ## Required demonstrations
 
@@ -531,8 +533,10 @@ neutrality, exact restoration and WYSIWYG visible/hidden 2000 × 1400 PNG export
 
 Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
 `b621b1a43b8c4ee281f1e8edddf10e57`, serves only F012 from its immutable snapshot working directory
-at `http://100.94.63.83:8080/`; the temporary service is retired. M84-U1 through M84-U16, explicit
-approval, Pages publication, service retirement and closure remain open.
+at `http://100.94.63.83:8080/`; the temporary service is retired. On 2026-08-27 the supervising
+user approved M84 and requested closeout. That milestone-level decision accepts M84-U1 through
+M84-U16 without claiming a separately logged row-by-row hands-on replay. Pages publication, exact
+hosted-byte verification, service retirement and closure remain open.
 
 ## Bounds and non-goals
 

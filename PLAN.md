@@ -5793,8 +5793,9 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; exact clean-qualified immutable M84-F012 is the current Tailscale
-UAT candidate; refreshed M84-U1 through M84-U16 remain pending**.
+Status: **accepted at milestone level on 2026-08-27; exact clean-qualified immutable M84-F012 is
+the accepted product candidate; GitHub Pages publication, exact hosted-byte verification, service
+retirement and final closure remain pending**.
 Ordinary GUI dependencies project as lexical
 managed TypeScript while low-level transport remains truthfully labelled Intent IR. Exact product
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn
@@ -6004,8 +6005,11 @@ authority.
 - [x] Commit and proportionally qualify F012, then run the complete clean gate, freeze the exact
   no-rebuild output, verify the toggle/picking and both annotation-visible/hidden PNG paths in flat
   and code workbenches on temporary frozen bytes, and only then replace the retained F011 service.
-- [ ] Receive explicit refreshed M84-U1 through M84-U16 approval, then publish/exact-verify Pages,
-  retire the service and close M84.
+- [x] Receive explicit refreshed M84-U1 through M84-U16 approval. The 2026-08-27 supervising-user
+  milestone-level decision accepts those rows for closeout without claiming a separately logged
+  row-by-row hands-on replay.
+- [ ] Publish the approval descendant through GitHub Pages, exact-verify its separately rebuilt
+  hosted artifact, retire the retained F012 service and close M84.
 
 Implementation record (2026-08-25): the optional Rust crate and TypeScript package, managed parser,
 artifact contract, typed SDK, keyed reconciler, composite session, four workbench projects and
@@ -6201,9 +6205,12 @@ the 154,969-byte hidden PNG has SHA-256
 Only after temporary proof passed was F011 PID `1485656` retired. Retained
 `geosolve-m84-uat.service`, PID `2241323`, invocation
 `b621b1a43b8c4ee281f1e8edddf10e57`, serves only the immutable F012 snapshot from its snapshot
-working directory at `http://100.94.63.83:8080/`; the temporary service is retired. Refreshed
-U1-U16, explicit approval, Pages publication, service retirement and milestone closure remain
-pending; accepted M83 stays public authority.
+working directory at `http://100.94.63.83:8080/`; the temporary service is retired. On 2026-08-27
+the supervising user approved M84 and requested closeout. That milestone-level decision accepts
+M84-U1 through M84-U16 against the qualified F012 candidate without claiming a separately logged
+row-by-row replay or inventing unrecorded observations. Pages publication, exact hosted-byte
+verification, service retirement and milestone closure remain pending; accepted M83 stays public
+authority until that publication succeeds.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree

@@ -2,8 +2,8 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **exact clean-qualified immutable M84-F012 is the current Tailscale UAT candidate; M84
-remains active and unaccepted pending refreshed U1-U16**. Exact F011
+Status: **accepted at milestone level on 2026-08-27; exact clean-qualified immutable M84-F012 is
+the accepted product candidate; public publication and final closure remain pending**. Exact F011
 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback evidence. Exact F012 source
@@ -19,9 +19,10 @@ Direct-authoring source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, is withdrawn historical evidence with the initial,
 F003 and F004 candidates. Combined F005/F006 source `ff2e142` and its frozen candidate are also
-withdrawn by F007. M84-U1 through U16, explicit approval, Pages publication and closure remain
-pending. No UAT row is accepted, no M84 Pages publication is claimed, and accepted M83 remains
-public authority.
+withdrawn by F007. On 2026-08-27 the supervising user accepted M84-U1 through U16 at milestone
+level and requested closeout; this does not claim a separately logged row-by-row hands-on replay.
+Pages publication and closure remain pending. No M84 Pages publication is claimed, and accepted
+M83 remains public authority.
 
 ## Baseline and authority
 
@@ -793,7 +794,8 @@ successful `.last-run.json` have SHA-256
 Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
 `b621b1a43b8c4ee281f1e8edddf10e57`, serves only the immutable F012 snapshot from its snapshot
 working directory at `http://100.94.63.83:8080/`; the temporary service is retired. This is a clean
-immutable replacement nomination, not acceptance; U1-U16 remain pending.
+immutable replacement nomination whose automation alone claimed no acceptance; U1-U16 were later
+accepted by the supervising user's milestone-level close decision.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -1029,12 +1031,24 @@ approval.
 - General ejection, arbitrary formulas/new constraints, arbitrary TypeScript execution, general
   topological naming, 3D/B-rep behavior and the deferred Offset redesign remain out of scope.
 - Human discoverability, presentation feel and repeated real-browser drag/deletion responsiveness
-  remain owned by `docs/M84_UAT.md`. F011 adds explicit manifold and PNG checks U15/U16. Pages must
-  remain M83 until refreshed U1-U16 are explicitly approved.
+  remain owned by `docs/M84_UAT.md`. F011 adds explicit manifold and PNG checks U15/U16. Pages
+  remained M83 through nomination and may change only through the approved, exactly verified
+  closeout publication.
+
+## Supervising-user acceptance
+
+On 2026-08-27 the supervising user approved M84 and requested that the milestone be closed before
+performance work begins. The decision accepts M84-U1 through M84-U16 against the exact qualified
+F012 candidate at milestone level. It does not claim a separate row-by-row replay or invent
+unrecorded observations. The qualified product source/tree and immutable no-rebuild snapshot remain
+`84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`,
+`429ed56d2a5b3988d6604079d19e1002f9049d64` and
+`/tmp/geosolve-m84-f012-uat.nMOymIIM`; this documentation-only acceptance does not rebuild or alter
+them.
 
 ## Remaining release sequence
 
-1. Complete refreshed M84-U1 through M84-U16 against only that qualified frozen F012 replacement
-   and record explicit supervising-user approval or open another numbered finding.
-2. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
-   built hosted artifact, retire `geosolve-m84-uat.service` and close M84.
+1. Publish this accepted descendant to GitHub Pages and exact-verify its separately built hosted
+   artifact against the downloaded Pages artifact.
+2. Only after that proof, retire `geosolve-m84-uat.service`, preserve the immutable F012 evidence
+   and record final M84 closure consistently.
