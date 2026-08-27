@@ -476,11 +476,6 @@ fn authenticate_rehydrated_fillet(
 /// owners survive exactly; removals and changed Fillet corners are therefore
 /// never exposed as invalid intermediate scenes.
 ///
-/// The returned retained authority is heap-owned. Incremental code edits can
-/// nest through structural projection, audited work and native cold validation;
-/// carrying the editor inline through every return slot would consume the
-/// ordinary execution stack without adding authority or value semantics.
-///
 /// # Errors
 ///
 /// Returns the ordinary expansion/materialization diagnostics, or a typed
@@ -494,7 +489,7 @@ pub fn materialize_code_project_incremental(
     previous: &MaterializedCodeProject,
     project: &CodeProject,
     reconciliation: &KeyedReconcileState,
-) -> Result<Box<MaterializedCodeProject>, CodeCompositionError> {
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
     materialize_code_project_incremental_with_overlay(
         previous,
         project,
@@ -517,18 +512,19 @@ pub fn materialize_code_project_incremental_for_structural_edit(
     project: &CodeProject,
     reconciliation: &KeyedReconcileState,
     current_overlay: &CodeInteractionOverlay,
-) -> Result<(Box<MaterializedCodeProject>, CodeInteractionOverlay), CodeCompositionError> {
+) -> Result<(MaterializedCodeProject, CodeInteractionOverlay), CodeCompositionError> {
     let (_, retained) = expand_code_project_for_structural_edit(
         project,
         reconciliation,
         current_overlay,
         previous.editor.coordinator().intent().identity(),
     )?;
-    let materialized = materialize_code_project_incremental_with_overlay(
+    let materialized = materialize_code_project_incremental_with_overlay_and_work(
         previous,
         project,
         reconciliation,
         &retained,
+        &mut CodeWorkReceipt::default(),
     )?;
     Ok((materialized, retained))
 }
@@ -544,7 +540,7 @@ pub fn materialize_code_project_incremental_with_overlay(
     project: &CodeProject,
     reconciliation: &KeyedReconcileState,
     overlay: &CodeInteractionOverlay,
-) -> Result<Box<MaterializedCodeProject>, CodeCompositionError> {
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
     // Call the common worker directly. Wrapping this large retained result in
     // `AuditedCodeWork` only to move it straight back out adds avoidable stack
     // pressure to structural code-edit transactions.
@@ -568,7 +564,7 @@ pub fn materialize_code_project_incremental_with_overlay_audited(
     project: &CodeProject,
     reconciliation: &KeyedReconcileState,
     overlay: &CodeInteractionOverlay,
-) -> AuditedCodeWork<Result<Box<MaterializedCodeProject>, CodeCompositionError>> {
+) -> AuditedCodeWork<Result<MaterializedCodeProject, CodeCompositionError>> {
     let mut work = CodeWorkReceipt::default();
     let outcome = materialize_code_project_incremental_with_overlay_and_work(
         previous,
@@ -586,7 +582,7 @@ fn materialize_code_project_incremental_with_overlay_and_work(
     reconciliation: &KeyedReconcileState,
     overlay: &CodeInteractionOverlay,
     work: &mut CodeWorkReceipt,
-) -> Result<Box<MaterializedCodeProject>, CodeCompositionError> {
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
     validate_native_authority(&previous.editor)?;
     authenticate_expansion_envelope(&previous.editor, &previous.expansion)?;
     let accepted = previous
@@ -686,12 +682,12 @@ fn materialize_code_project_incremental_with_overlay_and_work(
     let editor = editor.into_delegated_accepted_authority()?;
     base_outcome.identity = editor.coordinator().intent().identity();
 
-    Ok(Box::new(MaterializedCodeProject {
+    Ok(MaterializedCodeProject {
         editor,
         expansion,
         base_outcome,
         host_outputs,
-    }))
+    })
 }
 
 /// Applies one ordinary incremental patch over a transaction-local fork when
@@ -705,7 +701,7 @@ fn materialize_code_project_incremental_with_overlay_and_work(
 fn materialize_unchanged_host_project_incremental(
     previous: &MaterializedCodeProject,
     expansion: ExpandedCodeProject,
-) -> Result<Box<MaterializedCodeProject>, CodeCompositionError> {
+) -> Result<MaterializedCodeProject, CodeCompositionError> {
     let replacement_slots = detached_reference_replacement_slots(&previous.expansion, &expansion);
     let previous_symbols = materialized_project_symbols(previous)?;
     let mut desired_drafts = create_drafts(&expansion)?
@@ -758,12 +754,12 @@ fn materialize_unchanged_host_project_incremental(
     base_outcome.identity = editor.coordinator().intent().identity();
     validate_native_authority(&editor)?;
 
-    Ok(Box::new(MaterializedCodeProject {
+    Ok(MaterializedCodeProject {
         editor,
         expansion,
         base_outcome,
         host_outputs,
-    }))
+    })
 }
 
 fn host_request_display_path(request: &CodeHostRequest) -> String {

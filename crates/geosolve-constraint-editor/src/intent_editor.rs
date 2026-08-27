@@ -127,7 +127,7 @@ struct ActiveFilletAuthoringRadiusDrag {
     expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
     feature: geosolve_sketch_features::ComputedFeatureId,
     origin_state: FeatureAuthoringState,
-    origin_preview: ProjectionalFilletAuthoringPreview,
+    origin_preview: Box<ProjectionalFilletAuthoringPreview>,
     latest_radius: Option<f64>,
     symbol: IntentKey,
 }
@@ -139,7 +139,7 @@ struct ActiveProfileOffsetAuthoringDistanceDrag {
     expected: PreparedSketchInput,
     dimension: DocumentDimensionId,
     origin_state: OffsetAuthoringState,
-    origin_preview: ProjectionalProfileOffsetAuthoringPreview,
+    origin_preview: Box<ProjectionalProfileOffsetAuthoringPreview>,
     latest_distance: Option<f64>,
     symbol: IntentKey,
 }
@@ -175,12 +175,12 @@ pub struct ProjectionalEditorSession {
     selected_declaration: Option<NodeId>,
     point_drag: Option<ActivePointDrag>,
     curve_control_drag: Option<ActiveCurveControlDrag>,
-    fillet_radius_drag: Option<ActiveFilletRadiusDrag>,
-    profile_offset_distance_drag: Option<ActiveProfileOffsetDistanceDrag>,
-    fillet_authoring_preview: Option<ProjectionalFilletAuthoringPreview>,
-    profile_offset_authoring_preview: Option<ProjectionalProfileOffsetAuthoringPreview>,
-    fillet_authoring_radius_drag: Option<ActiveFilletAuthoringRadiusDrag>,
-    profile_offset_authoring_distance_drag: Option<ActiveProfileOffsetAuthoringDistanceDrag>,
+    fillet_radius_drag: Option<Box<ActiveFilletRadiusDrag>>,
+    profile_offset_distance_drag: Option<Box<ActiveProfileOffsetDistanceDrag>>,
+    fillet_authoring_preview: Option<Box<ProjectionalFilletAuthoringPreview>>,
+    profile_offset_authoring_preview: Option<Box<ProjectionalProfileOffsetAuthoringPreview>>,
+    fillet_authoring_radius_drag: Option<Box<ActiveFilletAuthoringRadiusDrag>>,
+    profile_offset_authoring_distance_drag: Option<Box<ActiveProfileOffsetAuthoringDistanceDrag>>,
     preview_control: OperationControl,
 }
 
@@ -516,12 +516,12 @@ impl ProjectionalEditorSession {
             .or_else(|| {
                 self.fillet_authoring_preview
                     .as_ref()
-                    .map(ProjectionalFilletAuthoringPreview::materialization)
+                    .map(|preview| preview.materialization())
             })
             .or_else(|| {
                 self.profile_offset_authoring_preview
                     .as_ref()
-                    .map(ProjectionalProfileOffsetAuthoringPreview::materialization)
+                    .map(|preview| preview.materialization())
             })
             .map(|materialization| &materialization.session)
             .or_else(|| self.coordinator.presentation_session())
@@ -575,11 +575,11 @@ impl ProjectionalEditorSession {
         let authoring_preview = self
             .fillet_authoring_preview
             .as_ref()
-            .map(ProjectionalFilletAuthoringPreview::materialization)
+            .map(|preview| preview.materialization())
             .or_else(|| {
                 self.profile_offset_authoring_preview
                     .as_ref()
-                    .map(ProjectionalProfileOffsetAuthoringPreview::materialization)
+                    .map(|preview| preview.materialization())
             });
         let materialization = property_preview.or(authoring_preview).unwrap_or(accepted);
         let session = self
@@ -1055,7 +1055,7 @@ impl ProjectionalEditorSession {
             let _ = self.editor.cancel();
             return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
         }
-        self.fillet_authoring_radius_drag = Some(ActiveFilletAuthoringRadiusDrag {
+        self.fillet_authoring_radius_drag = Some(Box::new(ActiveFilletAuthoringRadiusDrag {
             pointer_id: input.pointer_id,
             intent: self.coordinator.intent().identity(),
             expected: route.expected,
@@ -1064,7 +1064,7 @@ impl ProjectionalEditorSession {
             origin_preview: preview,
             latest_radius: None,
             symbol,
-        });
+        }));
         Ok(Some(effects))
     }
 
@@ -1145,7 +1145,7 @@ impl ProjectionalEditorSession {
                     {
                         return Err(ProjectionalEditorError::FilletRadiusPreviewMismatch);
                     }
-                    self.fillet_authoring_preview = Some(preview);
+                    self.fillet_authoring_preview = Some(Box::new(preview));
                     *state = trial;
                     if let Some(drag) = self.fillet_authoring_radius_drag.as_mut() {
                         drag.latest_radius = Some(radius);
@@ -1272,7 +1272,7 @@ impl ProjectionalEditorSession {
             FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => {
                 let preview = self.prepare_computed_fillet_authoring_preview(symbol, candidate)?;
                 self.profile_offset_authoring_preview = None;
-                self.fillet_authoring_preview = Some(preview);
+                self.fillet_authoring_preview = Some(Box::new(preview));
             }
             FeatureAuthoringOutcome::ModeEntered(_)
             | FeatureAuthoringOutcome::Collecting { .. }
@@ -1409,7 +1409,7 @@ impl ProjectionalEditorSession {
         }
         let preview = self.prepare_profile_offset_authoring_preview(state, symbol)?;
         self.fillet_authoring_preview = None;
-        self.profile_offset_authoring_preview = Some(preview);
+        self.profile_offset_authoring_preview = Some(Box::new(preview));
         Ok(true)
     }
 
@@ -1492,7 +1492,7 @@ impl ProjectionalEditorSession {
                     .map(|_| self.prepare_profile_offset_authoring_preview(&trial, symbol))
                     .transpose()?;
                 self.fillet_authoring_preview = None;
-                self.profile_offset_authoring_preview = preview;
+                self.profile_offset_authoring_preview = preview.map(Box::new);
                 *state = trial;
             }
             OffsetAuthoringOutcome::Warning(_)
@@ -1553,7 +1553,7 @@ impl ProjectionalEditorSession {
             return Err(ProjectionalEditorError::ProfileOffsetDistanceDragRouteMismatch);
         }
         self.profile_offset_authoring_distance_drag =
-            Some(ActiveProfileOffsetAuthoringDistanceDrag {
+            Some(Box::new(ActiveProfileOffsetAuthoringDistanceDrag {
                 pointer_id: input.pointer_id,
                 intent: self.coordinator.intent().identity(),
                 expected,
@@ -1562,7 +1562,7 @@ impl ProjectionalEditorSession {
                 origin_preview: preview,
                 latest_distance: None,
                 symbol,
-            });
+            }));
         Ok(Some(effects))
     }
 
@@ -1645,7 +1645,7 @@ impl ProjectionalEditorSession {
                     {
                         return Err(ProjectionalEditorError::ProfileOffsetDistancePreviewMismatch);
                     }
-                    self.profile_offset_authoring_preview = Some(preview);
+                    self.profile_offset_authoring_preview = Some(Box::new(preview));
                     *state = trial;
                     if let Some(drag) = self.profile_offset_authoring_distance_drag.as_mut() {
                         drag.latest_distance = Some(distance);
@@ -2699,14 +2699,14 @@ impl ProjectionalEditorSession {
                     route.feature,
                     route.origin_radius,
                 )?;
-                self.fillet_radius_drag = Some(ActiveFilletRadiusDrag {
+                self.fillet_radius_drag = Some(Box::new(ActiveFilletRadiusDrag {
                     pointer_id: route.pointer_id,
                     intent: self.coordinator.intent().identity(),
                     expected: route.expected,
                     feature: route.feature,
                     latest_radius: None,
                     latest: None,
-                });
+                }));
             }
         } else if let Some(route) = offset_route {
             if let Some(active) = self.profile_offset_distance_drag.as_ref() {
@@ -2750,14 +2750,15 @@ impl ProjectionalEditorSession {
                     route.dimension,
                     route.origin_distance,
                 )?;
-                self.profile_offset_distance_drag = Some(ActiveProfileOffsetDistanceDrag {
-                    pointer_id: route.pointer_id,
-                    intent: self.coordinator.intent().identity(),
-                    expected: route.expected,
-                    dimension: route.dimension,
-                    latest_distance: None,
-                    latest: None,
-                });
+                self.profile_offset_distance_drag =
+                    Some(Box::new(ActiveProfileOffsetDistanceDrag {
+                        pointer_id: route.pointer_id,
+                        intent: self.coordinator.intent().identity(),
+                        expected: route.expected,
+                        dimension: route.dimension,
+                        latest_distance: None,
+                        latest: None,
+                    }));
             }
         } else {
             self.cancel_direct_manipulation();
