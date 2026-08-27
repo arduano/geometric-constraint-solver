@@ -24,7 +24,7 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M83. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval; M77 completes CAD curve controls, spatial elliptical-arc authoring and exact public verification under scoped approval; M78 completes exact CAD geometry variants, semantic recipe stages and atomic construction publication; M79 completes stable inference cycling, recovery and exact public verification; M80 completes native topology-preserving Profile Offset, native line-line Fillet publication and ordinary line-arc angle propagation; M81 completes behavior-preserving private architecture consolidation and allocator-neutral rejection; M83 completes accepted projectional design intent, F001-F010 hardening and exact public verification. M1-M7 remain the frozen regression baseline.
+- **Baseline:** implemented and accepted behavior through M84. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval; M77 completes CAD curve controls, spatial elliptical-arc authoring and exact public verification under scoped approval; M78 completes exact CAD geometry variants, semantic recipe stages and atomic construction publication; M79 completes stable inference cycling, recovery and exact public verification; M80 completes native topology-preserving Profile Offset, native line-line Fillet publication and ordinary line-arc angle propagation; M81 completes behavior-preserving private architecture consolidation and allocator-neutral rejection; M83 completes accepted projectional design intent, F001-F010 hardening and exact public verification; M84 completes optional hybrid code/GUI authoring, F001-F012 hardening and exact public verification. M1-M7 remain the frozen regression baseline.
 - **Closed design exploration:** M82 attempted a computed all-family Offset architecture but is not
   accepted product behavior. Exact rollback `fa54f30` restores the M81 tree; local and remote branch
   `archive/m82-certified-computed-offset-2026-08-21` at `d1e2613` preserves its kernel, feature
@@ -57,7 +57,7 @@ construction/NURBS UAT and certified all-family visual profiles.
   supervising user accepts it at milestone level without claiming a separate row-by-row replay;
   approval descendant `2006c86`, Pages run `32817232564` and exact hosted-byte verification pass.
   The retained UAT service is retired, Pages is final M83 public-byte authority and M83 is closed.
-- **Active target:** M84 implements an optional code/GUI authoring layer under ADR 0041. Managed source
+- **Latest completed target:** M84 implements an optional code/GUI authoring layer under ADR 0041. Managed source
   and caller-compiled data-only artifacts expand deterministically into the ordinary M83 intent
   graph; the unchanged Rust materializer/solver remains sole equation and accepted-scene authority.
   Base solver/sketch/intent/editor deployments do not depend on this layer. M84-F003 repairs lexical
@@ -89,11 +89,13 @@ construction/NURBS UAT and certified all-family visual profiles.
   toggle whose shared scene state governs paint and picking in flat and code workbenches, plus
   WYSIWYG PNG visibility and stricter provisional-paint cleanup. Exact F012 source `84dd768`, tree
   `429ed56`, and immutable snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` pass clean qualification
-  plus exact temporary/retained byte and focused browser verification. Retained PID `2241323`
-  serves only those F012 candidate bytes at `http://100.94.63.83:8080/`; F011 PID `1485656` is
-  retired and its snapshot remains historical rollback evidence. F007 source `cc2f05e` is also
-  historical.
-  Refreshed U1-U16 remain pending, and Pages stays on accepted M83.
+  plus exact temporary/retained byte and focused browser verification. U1-U16 are accepted by the
+  supervising user's milestone-level close decision without claiming a separate row-by-row replay.
+  Approval descendant `e6e960d`, tree `173c65d`, passes Pages run `33068058169`, artifact
+  `9644770095` and exact hosted-byte verification. Former retained PID `2241323` is retired, its
+  endpoint refuses connections and the F012 snapshot remains preserved; F011 PID `1485656` is
+  retired and its snapshot remains historical rollback evidence. Pages is final M84 public-byte
+  authority and M84 is closed.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -1068,8 +1070,11 @@ eight-path ledgers are byte-identical at SHA-256
 `66fcd4c852baab5290605066ec856239af7c4f033cef55a4dfd5fb86058645ba`; focused annotation paint/
 pick, authority-neutrality and visible/hidden PNG checks pass 1/1 on each endpoint. Retained
 `geosolve-m84-uat.service`, PID `2241323`, invocation
-`b621b1a43b8c4ee281f1e8edddf10e57`, serves only this immutable snapshot at
-`http://100.94.63.83:8080/`. This is mechanical nomination, not human acceptance or public authority.
+`b621b1a43b8c4ee281f1e8edddf10e57`, served only this immutable snapshot at
+`http://100.94.63.83:8080/` through acceptance. Its automation alone claimed no human acceptance.
+U1-U16 later passed by milestone-level approval; Pages run `33068058169` and exact hosted-byte
+verification pass. PID `2241323` is retired, the endpoint refuses connections, the snapshot is
+preserved and Pages is final M84 public-byte authority.
 
 ### `geosolve-sketch-features`
 
@@ -2026,7 +2031,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   domain baseline. Prior nominations through `b0de5af` are historical; F010 is clean-qualified,
   immutably nominated, accepted by the supervising user and exact-verified on GitHub Pages through
   approval descendant `2006c86` and run `32817232564`.
-- M84: active and unaccepted. ADR 0041's optional managed-source/custom-artifact authoring layer,
+- M84: complete and closed 2026-08-27. ADR 0041's optional managed-source/custom-artifact authoring layer,
   typed semantic references, keyed reconciliation, one code/editor history and nine required
   demonstrations are implemented. The `79078ec`, clean-qualified `b9e67bad` and F004 `c2cf160`
   nominations and direct artifact-free authored source `41e65a4` are withdrawn historical
@@ -2043,8 +2048,9 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `/tmp/geosolve-m84-f011-uat.ps736NLh` are clean-qualified and byte/browser-verified. M84-F012
   withdraws that nomination for shared annotation paint/pick visibility and WYSIWYG export cleanup.
   Exact source `84dd768`, tree `429ed56`, and immutable snapshot
-  `/tmp/geosolve-m84-f012-uat.nMOymIIM` are clean-qualified and byte/browser-verified; retained PID
-  `2241323` serves the exact F012 candidate bytes. F011 PID `1485656` is retired and its snapshot
-  remains historical rollback evidence. Combined source `ff2e142` is withdrawn; refreshed human
-  UAT U1-U16 remains pending.
-  Accepted M83 remains Pages authority and no M84 publication is claimed.
+  `/tmp/geosolve-m84-f012-uat.nMOymIIM` are clean-qualified and byte/browser-verified. U1-U16 are
+  accepted by milestone-level approval. Approval descendant `e6e960d` passes Pages run
+  `33068058169`, artifact `9644770095` and exact hosted-byte verification. PID `2241323` is retired
+  and its endpoint refuses connections; the snapshot remains preserved. F011 PID `1485656` is
+  retired and its snapshot remains historical rollback evidence. Combined source `ff2e142` is
+  withdrawn. Pages is final M84 public-byte authority.

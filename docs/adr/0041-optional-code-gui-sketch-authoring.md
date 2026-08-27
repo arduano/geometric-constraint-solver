@@ -2,20 +2,22 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. Exact clean-qualified immutable M84-F012 is the current Tailscale UAT
-candidate. F011 source
+Status: accepted and completed for M84. Exact clean-qualified immutable M84-F012 is accepted,
+exact-verified on GitHub Pages and preserved as frozen UAT evidence. F011 source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` remains historical rollback evidence. Exact F012 source
 `84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`, tree
 `429ed56d2a5b3988d6604079d19e1002f9049d64`, and snapshot
-`/tmp/geosolve-m84-f012-uat.nMOymIIM` are current mechanical nomination authority; no UAT
-acceptance is claimed. F010 source
+`/tmp/geosolve-m84-f012-uat.nMOymIIM` are qualified product authority; their automation alone
+claimed no UAT acceptance. F010 source
 `cf463838`, tree
 `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, F009 source `c74651c`, and F007 source
 `cc2f05e` are withdrawn historical evidence. The direct-authoring `41e65a4` snapshot, combined
 F005/F006 source `ff2e142`, initial `79078ec`, F003 `b9e67bad` and F004 `c2cf160` snapshots are
-likewise historical. M84 remains active and unaccepted; GitHub Pages remains on accepted M83.
+likewise historical. The supervising user accepted U1-U16 at milestone level without claiming a
+separate row-by-row replay. Approval descendant `e6e960d`, Pages run `33068058169` and exact
+hosted-byte verification pass; M84 is closed and Pages is its final public-byte authority.
 
 ## Context
 
@@ -422,9 +424,11 @@ priority or persistence schema.
   `66fcd4c852baab5290605066ec856239af7c4f033cef55a4dfd5fb86058645ba`; focused annotation paint/
   pick, authority-neutrality, exact-restoration and visible/hidden PNG cases pass 1/1 on each
   endpoint. Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
-  `b621b1a43b8c4ee281f1e8edddf10e57`, serves only this immutable snapshot at
-  `http://100.94.63.83:8080/`; the temporary service is retired. Refreshed U1-U16, acceptance and
-  public publication remain pending.
+  `b621b1a43b8c4ee281f1e8edddf10e57`, served only this immutable snapshot at
+  `http://100.94.63.83:8080/` through acceptance; the temporary service is retired. U1-U16 passed
+  by milestone-level approval. Approval descendant `e6e960d7ac297eb099ba80c19148393e46427606`
+  passes Pages run `33068058169`, artifact `9644770095` and exact hosted-byte verification. PID
+  `2241323` is retired, the endpoint refuses connections and the snapshot remains preserved.
 
 ## Rejected alternatives
 

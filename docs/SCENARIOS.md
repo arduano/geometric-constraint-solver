@@ -4703,8 +4703,10 @@ endpoints. M84-F012 withdraws F011 from current nomination while annotation pain
 and WYSIWYG provisional-clean export become the clean-qualified immutable replacement. Exact F012
 source `84dd768`, tree `429ed56`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` passes exact
 temporary/retained byte verification and focused browser checks 1/1 on both endpoints. F011 remains
-historical rollback evidence. Refreshed UAT U1-U16 remains required. M84 is active and unaccepted,
-and accepted M83 remains Pages authority.
+historical rollback evidence. U1-U16 pass under milestone-level approval without claiming a
+separate row-by-row replay. Approval descendant `e6e960d`, Pages run `33068058169`, artifact
+`9644770095`, exact hosted-byte verification and service retirement pass. M84 is closed and Pages
+is final M84 public-byte authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -5247,10 +5249,17 @@ eight-path ledgers are byte-identical at SHA-256
 `66fcd4c852baab5290605066ec856239af7c4f033cef55a4dfd5fb86058645ba`.
 
 Focused annotation paint/pick, underlying-target, authority-neutrality, exact-restoration and
-WYSIWYG PNG checks pass 1/1 on both endpoints. Retained `geosolve-m84-uat.service`, PID `2241323`,
-invocation `b621b1a43b8c4ee281f1e8edddf10e57`, serves only the immutable F012 snapshot at
-`http://100.94.63.83:8080/`; the temporary service is retired. Pages remains accepted M83 authority
-and no M84 public publication is claimed; refreshed U1-U16 remain pending.
+WYSIWYG PNG checks pass 1/1 on both endpoints. The supervising user accepts U1-U16 at milestone
+level without claiming a separate row-by-row replay. Approval descendant
+`e6e960d7ac297eb099ba80c19148393e46427606`, tree
+`173c65d5c39c9cb371869fccf22d5b41ddec6ceb`, passes Pages run `33068058169`, build/deploy jobs
+`98503000701`/`98504823968`, deployment `6121981526` and artifact `9644770095`. Its downloaded
+15,032,320-byte tar has SHA-256
+`da43ee8d85f81461d579cafa24b9e884451c97a58909955ae188ef9281f7412e`; seven-file aggregate is
+`1f2228abcb163e09ff50db2f19d79b13d9c74e638731d6cd26d5ade324b27835`, and exact hosted ledger
+SHA-256 is `8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`. Former retained
+`geosolve-m84-uat.service` PID `2241323` is retired, its endpoint refuses connections and the
+immutable F012 snapshot remains preserved. M84 is closed and Pages is final public-byte authority.
 
 ## Frozen near-singular fixtures
 

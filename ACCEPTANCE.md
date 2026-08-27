@@ -3386,12 +3386,13 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. Exact clean-qualified immutable M84-F012 is the current Tailscale
-UAT candidate. Refreshed M84-U1 through M84-U16 and explicit approval remain pending.
+Status: **complete and closed 2026-08-27**. Exact clean-qualified immutable M84-F012 is accepted at
+milestone level, exact-verified on GitHub Pages and preserved as frozen UAT evidence.
 Exact F011 source `e28721a`, tree `0152097`, and snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback evidence. Exact F012 source
 `84dd768`, tree `429ed56`, and snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` are current mechanical
-nomination authority; no UAT acceptance is claimed.
+nomination authority; its automation alone claimed no UAT acceptance. The supervising user later
+accepted M84-U1 through M84-U16 at milestone level without claiming a separate row-by-row replay.
 Exact F010 source
 `cf463838`, tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` remain historical
 rollback evidence. Exact F009
@@ -3399,7 +3400,7 @@ source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKI
 historical rollback evidence. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot,
 combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn historical
 evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract.
-Accepted M83 remains public product authority.
+Pages run `33068058169` is final M84 public-byte authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3640,9 +3641,9 @@ and cold-materialized through the ordinary accepted-scene authority.
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
   because it predates the direct-authoring amendment. The direct-authoring replacement below is
-  now also withdrawn because it predates F005. Refreshed M84-U1 through M84-U16 plus explicit
-  supervising-user approval remain mandatory before GitHub Pages publication, exact hosted
-  verification, service retirement and closure.
+  now also withdrawn because it predates F005. The supervising user accepted M84-U1 through
+  M84-U16 at milestone level on 2026-08-27 without claiming a separately logged row-by-row replay.
+  Exact GitHub Pages publication, hosted verification and service retirement now pass.
 
 Withdrawn historical nomination authority is exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -3843,10 +3844,22 @@ and 2000 × 1400 IHDR. The restored screenshot has SHA-256
 `2db91740662d19adf9f38518ed25deca91ad92e37022dfa3549caad0d608bcb0`.
 
 Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
-`b621b1a43b8c4ee281f1e8edddf10e57`, now serves only the immutable F012 snapshot from its snapshot
-working directory at `http://100.94.63.83:8080/`; the temporary service is retired. Refreshed
-M84-U1 through M84-U16 remain open, so Pages remains accepted M83 authority and no M84 public
-publication is claimed. All UAT rows remain pending.
+`b621b1a43b8c4ee281f1e8edddf10e57`, served only the immutable F012 snapshot from its snapshot
+working directory at `http://100.94.63.83:8080/` through acceptance. It is now inactive with
+`MainPID=0`, the Tailscale endpoint refuses connections and the snapshot/evidence remain preserved.
+
+Supervising-user approval descendant `e6e960d7ac297eb099ba80c19148393e46427606`, tree
+`173c65d5c39c9cb371869fccf22d5b41ddec6ceb`, passes GitHub Pages run `33068058169`, build job
+`98503000701`, deploy job `98504823968`, deployment `6121981526` and artifact `9644770095`
+(Actions API size 4,890,131 bytes). Downloaded 15,032,320-byte `artifact.tar` has SHA-256
+`da43ee8d85f81461d579cafa24b9e884451c97a58909955ae188ef9281f7412e`; it contains exactly seven
+regular files, no symlinks, with ordered-manifest aggregate
+`1f2228abcb163e09ff50db2f19d79b13d9c74e638731d6cd26d5ade324b27835`. Proxy-disabled,
+cache-bypassed exact verification of `/` plus all seven hosted paths returns HTTP 200 with zero
+redirects, exact MIME/length/artifact bytes, no `Location` or `Content-Encoding`, and root equality
+with `index.html`. Ledger `/tmp/geosolve-m84-pages-verify.f2peZXme/results.tsv` has SHA-256
+`8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`. Qualified product source
+remains `84dd768`; Pages is final M84 public-byte authority and every M84 acceptance gate passes.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

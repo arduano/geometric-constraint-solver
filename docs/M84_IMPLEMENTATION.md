@@ -2,8 +2,8 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **accepted at milestone level on 2026-08-27; exact clean-qualified immutable M84-F012 is
-the accepted product candidate; public publication and final closure remain pending**. Exact F011
+Status: **complete and closed 2026-08-27; exact clean-qualified immutable M84-F012 is accepted,
+exact-verified on GitHub Pages and preserved as frozen UAT evidence**. Exact F011
 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback evidence. Exact F012 source
@@ -21,8 +21,7 @@ Direct-authoring source
 F003 and F004 candidates. Combined F005/F006 source `ff2e142` and its frozen candidate are also
 withdrawn by F007. On 2026-08-27 the supervising user accepted M84-U1 through U16 at milestone
 level and requested closeout; this does not claim a separately logged row-by-row hands-on replay.
-Pages publication and closure remain pending. No M84 Pages publication is claimed, and accepted
-M83 remains public authority.
+Exact Pages publication and closure now pass; Pages is final M84 public authority.
 
 ## Baseline and authority
 
@@ -278,7 +277,7 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
 - [x] Commit and run the complete clean release qualification; freeze the exact no-rebuild output;
   verify the ninth project plus PNG signature and 2000 × 1400 IHDR in a real browser; then replace
   the retained F010 service only after temporary exact-byte/browser proof. M84-U15/U16, all other
-  refreshed UAT, Pages publication and milestone closure remain pending.
+  refreshed UAT, Pages publication and milestone closure later pass under the final record below.
 
 ### M84-F012 — annotation visibility display/pick parity
 
@@ -722,9 +721,9 @@ geometry is fitted, inspects managed/custom hybrid source and downloads a PNG wi
 console or request error. The 233,543-byte download has PNG signature, IHDR 2000 × 1400 and
 SHA-256 `2378a8c74216524c42fc8910d79e28a6dacc54fc437ac705518ab42122363dc2`.
 
-That proportional mutable-build run is superseded by the exact frozen proof below. U15 owns the
-manifold dogfood check and U16 owns PNG export; both remain pending alongside U1-U14. No M84 Pages
-publication or milestone closure is authorized.
+That proportional mutable-build run is superseded by the exact frozen proof below. At that
+historical checkpoint U15 owned the manifold dogfood check and U16 owned PNG export; both remained
+pending alongside U1-U14 and no M84 Pages publication or closure was yet authorized.
 
 Exact committed source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, passes the complete clean release gate from
@@ -792,10 +791,11 @@ successful `.last-run.json` have SHA-256
 `91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903`.
 
 Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
-`b621b1a43b8c4ee281f1e8edddf10e57`, serves only the immutable F012 snapshot from its snapshot
-working directory at `http://100.94.63.83:8080/`; the temporary service is retired. This is a clean
+`b621b1a43b8c4ee281f1e8edddf10e57`, served only the immutable F012 snapshot from its snapshot
+working directory at `http://100.94.63.83:8080/`; the temporary service is retired. This was a clean
 immutable replacement nomination whose automation alone claimed no acceptance; U1-U16 were later
-accepted by the supervising user's milestone-level close decision.
+accepted by the supervising user's milestone-level close decision. PID `2241323` is now retired,
+the endpoint refuses connections and the immutable snapshot remains preserved.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -1046,9 +1046,21 @@ unrecorded observations. The qualified product source/tree and immutable no-rebu
 `/tmp/geosolve-m84-f012-uat.nMOymIIM`; this documentation-only acceptance does not rebuild or alter
 them.
 
-## Remaining release sequence
+## Final GitHub Pages publication and closeout
 
-1. Publish this accepted descendant to GitHub Pages and exact-verify its separately built hosted
-   artifact against the downloaded Pages artifact.
-2. Only after that proof, retire `geosolve-m84-uat.service`, preserve the immutable F012 evidence
-   and record final M84 closure consistently.
+Approval descendant `e6e960d7ac297eb099ba80c19148393e46427606`, tree
+`173c65d5c39c9cb371869fccf22d5b41ddec6ceb`, passes GitHub Pages run `33068058169`, build job
+`98503000701`, deploy job `98504823968`, deployment `6121981526` and artifact `9644770095`
+(Actions API size 4,890,131 bytes). Downloaded
+`/tmp/geosolve-m84-pages-artifact.vkJiVw6d/artifact.tar` is 15,032,320 bytes with SHA-256
+`da43ee8d85f81461d579cafa24b9e884451c97a58909955ae188ef9281f7412e`. It extracts to exactly
+seven regular files, zero symlinks, ordered-manifest aggregate
+`1f2228abcb163e09ff50db2f19d79b13d9c74e638731d6cd26d5ade324b27835`.
+
+Proxy-disabled, cache-bypassed hosted verification proves `/` and all seven paths return HTTP 200,
+zero redirects, exact MIME/length/artifact bytes, no `Location` or `Content-Encoding`, and root
+bytes equal `index.html`. Results `/tmp/geosolve-m84-pages-verify.f2peZXme/results.tsv` have
+SHA-256 `8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`. Only after that proof
+passed was `geosolve-m84-uat.service` stopped: PID `2241323` is retired, `MainPID=0`, the Tailscale
+endpoint refuses connections and the immutable F012 snapshot/evidence remain preserved. Qualified
+product source remains `84dd768`; Pages is final M84 public-byte authority and M84 is closed.

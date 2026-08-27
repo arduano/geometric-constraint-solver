@@ -2,8 +2,8 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **accepted at milestone level on 2026-08-27; exact clean-qualified immutable M84-F012 is
-the accepted product candidate; public publication and final closure remain pending**. Exact F011
+Status: **complete and closed 2026-08-27; exact clean-qualified immutable M84-F012 is accepted,
+exact-verified on GitHub Pages and preserved as frozen UAT evidence**. Exact F011
 source `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback evidence. Exact F012 source
@@ -16,8 +16,8 @@ tree `992e587`, and snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` are historica
 evidence. F009 source `c74651c`, tree
 `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect
 evidence. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source
-`ff2e142` and the initial/F003/F004 snapshots are likewise historical. M84 is accepted but not yet
-published or closed; Pages remains on accepted M83.
+`ff2e142` and the initial/F003/F004 snapshots are likewise historical. M84 is accepted, publicly
+verified and closed; Pages is final M84 public-byte authority.
 
 ## Withdrawn candidate evidence
 
@@ -373,8 +373,9 @@ the hidden 154,969-byte PNG has SHA-256
 `8c4af68f0775066d40bd1e88f9fe42d57f70b49137ac41627c7c530d1c398317`; both are 2000 × 1400. The
 restored screenshot has SHA-256 `2db91740662d19adf9f38518ed25deca91ad92e37022dfa3549caad0d608bcb0`.
 Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
-`b621b1a43b8c4ee281f1e8edddf10e57`, serves only F012 from its immutable snapshot working directory
-at `http://100.94.63.83:8080/`; the temporary service is retired. This accepts no UAT row.
+`b621b1a43b8c4ee281f1e8edddf10e57`, served only F012 from its immutable snapshot working directory
+at `http://100.94.63.83:8080/` through acceptance; the temporary service is retired. This mechanical
+evidence alone accepts no UAT row; the later milestone-level decision does.
 
 | Release state | Status |
 | --- | --- |
@@ -384,9 +385,9 @@ at `http://100.94.63.83:8080/`; the temporary service is retired. This accepts n
 | M84-F010 clean qualification and immutable replacement freeze | complete; withdrawn by F011 |
 | M84-F011 manifold/PNG focused qualification | complete on mutable and both frozen endpoints; no UAT row accepted |
 | M84-F011 clean qualification and immutable replacement freeze | complete; withdrawn by F012 and retained as historical rollback evidence |
-| M84-F012 annotation paint/pick and WYSIWYG export amendment | clean-qualified, immutably frozen and current on Tailscale; no UAT row accepted |
+| M84-F012 annotation paint/pick and WYSIWYG export amendment | clean-qualified, immutably frozen and accepted; automation alone accepted no UAT row |
 | Supervising-user milestone-level acceptance of M84-U1 through M84-U16 | complete |
-| GitHub Pages publication, service retirement and M84 closure | pending |
+| GitHub Pages publication, service retirement and M84 closure | complete |
 
 ## Supervising-user acceptance
 
@@ -395,6 +396,23 @@ performance optimization begins. That milestone-level decision accepts M84-U1 th
 against the exact qualified F012 candidate. It does **not** claim a separate row-by-row hands-on
 replay or invent observations that were not logged. The scorecard statuses therefore say
 `accepted by milestone-level approval`, not `manually passed`.
+
+## Final GitHub Pages publication
+
+Approval descendant `e6e960d7ac297eb099ba80c19148393e46427606`, tree
+`173c65d5c39c9cb371869fccf22d5b41ddec6ceb`, passes Pages run `33068058169`, build/deploy jobs
+`98503000701`/`98504823968`, deployment `6121981526` and artifact `9644770095` (API size
+4,890,131 bytes). Downloaded 15,032,320-byte `artifact.tar` has SHA-256
+`da43ee8d85f81461d579cafa24b9e884451c97a58909955ae188ef9281f7412e`; it contains exactly seven
+regular files, no symlinks, with ordered-manifest aggregate
+`1f2228abcb163e09ff50db2f19d79b13d9c74e638731d6cd26d5ade324b27835`.
+
+Proxy-disabled, cache-bypassed hosted verification passes for `/` and all seven paths: HTTP 200,
+zero redirects, exact media type/length/artifact bytes, no `Location` or `Content-Encoding`, and
+root equals `index.html`. Results `/tmp/geosolve-m84-pages-verify.f2peZXme/results.tsv` have
+SHA-256 `8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`. Retained PID `2241323`
+was retired only after that proof; `MainPID=0`, the Tailscale endpoint refuses connections and the
+immutable F012 snapshot remains preserved. Qualified product source remains `84dd768`.
 
 Run the ordinary desktop workbench at approximately
 `1440x900` and `1024x720`. Use actual code-project samples rather than importing equivalent flat
@@ -447,8 +465,8 @@ withdraws the candidate and opens an owning-layer regression.
 
 - Supervising-user UAT: M84-U1 through M84-U16 accepted by milestone-level approval; every previous
   candidate, including direct-authoring `41e65a4`, remains withdrawn historical evidence.
-- M84 GitHub Pages publication: approved and pending exact publication verification.
-- Tailscale state: current F012 snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` is served at
-  `http://100.94.63.83:8080/` by `geosolve-m84-uat.service`, PID `2241323`. F011 snapshot
+- M84 GitHub Pages publication: exact-verified and final public-byte authority.
+- Tailscale state: F012 snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` remains preserved; former
+  `geosolve-m84-uat.service` PID `2241323` is retired and the endpoint refuses connections. F011 snapshot
   `/tmp/geosolve-m84-f011-uat.ps736NLh` remains historical rollback evidence; PIDs
   `1485656`/`650971`/`3965271` are retired.

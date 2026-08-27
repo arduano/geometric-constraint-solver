@@ -2,8 +2,8 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **accepted at milestone level on 2026-08-27; exact clean-qualified immutable M84-F012 is
-the accepted product candidate; public publication and final closure remain pending**. Exact F011 source
+Status: **complete and closed 2026-08-27; exact clean-qualified immutable M84-F012 is accepted,
+exact-verified on GitHub Pages and preserved as frozen UAT evidence**. Exact F011 source
 `e28721a0ee4eeac1da44b65bf302d071d208178b`, tree
 `015209773f81ec1a254817c65ef2a71b984e3b08`, and no-rebuild snapshot
 `/tmp/geosolve-m84-f011-uat.ps736NLh` are historical rollback evidence. Exact F012 source
@@ -16,9 +16,8 @@ evidence. F009 source `c74651c`, tree `a904584`, and snapshot
 `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect evidence; F007 source
 `cc2f05e`, direct-authoring snapshot `41e65a4`, combined F005/F006 source `ff2e142` and all earlier
 M84 nominations are likewise historical. The supervising user's milestone-level close decision
-accepts U1-U16 without claiming a separately logged row-by-row hands-on replay. M84 is not yet
-published or closed, and accepted M83 remains GitHub Pages authority. ADR 0041 is the controlling
-design.
+accepts U1-U16 without claiming a separately logged row-by-row hands-on replay. Exact Pages
+publication and service retirement pass; ADR 0041 is the controlling design.
 
 ## Goal
 
@@ -381,7 +380,7 @@ lexical `frame.corners.*` references.
   both endpoints. F012 withdraws F011; exact source `84dd768`, tree `429ed56`, passes clean
   qualification, no-rebuild freeze, identical temporary/retained eight-path HTTP ledgers and
   focused annotation paint/pick plus visible/hidden PNG 1/1 on both endpoints. Refreshed human UAT
-  U1-U16 remains pending.
+  U1-U16 later passes by milestone-level approval; exact public closeout also passes.
 
 Withdrawn nomination record (2026-08-25): exact product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree
@@ -532,11 +531,21 @@ are byte-identical at SHA-256
 neutrality, exact restoration and WYSIWYG visible/hidden 2000 × 1400 PNG export.
 
 Retained `geosolve-m84-uat.service`, PID `2241323`, invocation
-`b621b1a43b8c4ee281f1e8edddf10e57`, serves only F012 from its immutable snapshot working directory
-at `http://100.94.63.83:8080/`; the temporary service is retired. On 2026-08-27 the supervising
+`b621b1a43b8c4ee281f1e8edddf10e57`, served only F012 from its immutable snapshot working directory
+at `http://100.94.63.83:8080/` through acceptance; the temporary service is retired. On 2026-08-27 the supervising
 user approved M84 and requested closeout. That milestone-level decision accepts M84-U1 through
-M84-U16 without claiming a separately logged row-by-row hands-on replay. Pages publication, exact
-hosted-byte verification, service retirement and closure remain open.
+M84-U16 without claiming a separately logged row-by-row hands-on replay. Exact Pages publication,
+hosted-byte verification, service retirement and closure now pass.
+
+Final public closeout uses approval descendant `e6e960d7ac297eb099ba80c19148393e46427606`, tree
+`173c65d5c39c9cb371869fccf22d5b41ddec6ceb`, Pages run `33068058169`, build/deploy jobs
+`98503000701`/`98504823968`, deployment `6121981526` and artifact `9644770095`. Its downloaded
+15,032,320-byte tar has SHA-256
+`da43ee8d85f81461d579cafa24b9e884451c97a58909955ae188ef9281f7412e`; the seven-file ordered
+manifest aggregate is `1f2228abcb163e09ff50db2f19d79b13d9c74e638731d6cd26d5ade324b27835`,
+and the eight-path hosted ledger is
+`8930c71b3d7bb9b454653ebcb24c58b594f4750a433f745333cf56c01e4c33fb`. PID `2241323` is retired,
+the endpoint refuses connections and the immutable F012 snapshot is preserved. M84 is closed.
 
 ## Bounds and non-goals
 

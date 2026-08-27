@@ -309,7 +309,7 @@ immutable snapshot remains preserved. Pages is final M83 public-byte authority. 
 annotation-layout cache stays disposable presentation-only workspace state outside graph,
 materialization and history authority.
 
-M84 is the active optional code/GUI authoring milestone under ADR 0041. A new
+M84 is complete and closed under ADR 0041. Its optional code/GUI authoring layer adds a new
 `geosolve-sketch-code` crate and `@geosolve/sketch-code` package sit beside, never beneath, the
 solver/intent/editor layers. Managed `sketch.ts` and caller-compiled canonical data artifacts lower
 through `AuthoringProgram` and deterministic keyed expansion into the ordinary M83 `IntentGraph`;
@@ -332,8 +332,8 @@ retained byte verification plus existing browser 4/4 and F003 1/1 on each endpoi
 creates a genuine persisted code project; lexical endpoints alias exact native points. Raw strings,
 transport DTOs, foreign or forged reserved-project references, wrong kinds and misspelled members
 fail closed. Only the exact canonical fresh-workspace document foundation is omitted, and line-
-branch normalization is limited to current expansion-owned Segments. M84 remains active and
-unaccepted. Human UAT then opened `M84-F004`: two connected Segments plus a computed Fillet made
+branch normalization is limited to current expansion-owned Segments. At that historical checkpoint
+M84 remained active and unaccepted. Human UAT then opened `M84-F004`: two connected Segments plus a computed Fillet made
 all-or-nothing GUI bootstrap reject, and the workbench hid Code for that conversion error. The
 repair adds lexical Segment-to-Segment endpoints and direct `$.computed.filletSet` with two ordered
 lexical `NativeCurveSpanRef` parents, complete explicit persisted contact/branch state and opaque
@@ -457,9 +457,12 @@ snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM`, aggregate
 `166abc1298220090ba4c8b0a37a176fb4f945cceae68771efbd601acc1970169`, passes byte-identical
 temporary/retained HTTP verification and focused annotation paint/pick, authority and visible/
 hidden PNG browser checks 1/1 on both endpoints. Only after temporary proof passed was F011 PID
-`1485656` retired. Retained `geosolve-m84-uat.service`, PID `2241323`, serves only the immutable
-F012 snapshot at `http://100.94.63.83:8080/`. Refreshed U1-U16 remain pending. Pages remains on
-accepted M83 and no M84 public publication is claimed.
+`1485656` retired. The supervising user accepted U1-U16 at milestone level without claiming a
+separate row-by-row replay. Approval descendant `e6e960d`, tree `173c65d`, passes Pages run
+`33068058169`, build/deploy jobs `98503000701`/`98504823968`, artifact `9644770095` and exact
+eight-path hosted-byte verification. Former retained PID `2241323` is retired, its endpoint refuses
+connections and the immutable F012 snapshot remains preserved. Pages is final M84 public-byte
+authority.
 
 ## Read first
 
@@ -469,7 +472,7 @@ accepted M83 and no M84 public publication is claimed.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, accepted ADR 0040 and active ADR 0041.
+7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, accepted ADRs 0040 and 0041.
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
@@ -496,9 +499,9 @@ accepted M83 and no M84 public publication is claimed.
     projectional-intent contract, F001-F010 historical nomination/finding ledger, accepted F010
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
-    `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
+    `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — accepted optional code/GUI architecture,
     implemented F005-F012 ledger, historical F011 nomination, verified immutable F012 replacement
-    nomination and pending human scorecard.
+    nomination, milestone-level human scorecard and exact public closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -870,9 +873,10 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
+M1-M84 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
-acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
+acceptance and exact Pages publication. M84's optional code/GUI implementation, F001-F012 repairs,
+frozen F012 nomination, milestone-level acceptance and exact Pages publication also pass.
 The clean-qualified F003/F004 and direct-authoring candidates remain withdrawn historical evidence.
 The historical eight-demo creative-catalog amendment and M84-F008/F009 corrections are implemented and their
 exact source `c74651c`, tree `a904584`, and immutable snapshot
@@ -884,9 +888,11 @@ nomination and implements coupled semantic-terminal durability. Exact source `cf
 clean-qualified and byte/browser-verified. M84-F012 withdraws that nomination for the shared
 annotation paint/pick toggle and WYSIWYG export cleanup. Exact F012 source `84dd768`, tree
 `429ed56`, and immutable snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` are clean-qualified and
-byte/browser-verified; retained PID `2241323` serves only those current candidate bytes. F011 PID
-`1485656` is retired and its snapshot remains historical rollback evidence. F007 source `cc2f05e`
-and combined source `ff2e142` are also withdrawn, while human UAT U1-U16 remains open.
+byte/browser-verified. U1-U16 are accepted by milestone-level approval; approval descendant
+`e6e960d` passes Pages run `33068058169` and exact hosted-byte verification. PID `2241323` is
+retired and the F012 snapshot remains preserved. F011 PID `1485656` is retired and its snapshot
+remains historical rollback evidence. F007 source `cc2f05e` and combined source `ff2e142` are also
+withdrawn.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1000,13 +1006,14 @@ Durable milestone and cleanup records:
   F001-F010 repairs, architecture hardening, qualification and public-closeout ledger)
 - `docs/M83_UAT.md` (accepted immutable F010 candidate, milestone-level scorecard and exact public
   verification)
-- `docs/adr/0041-optional-code-gui-sketch-authoring.md` (active optional code/GUI authoring
+- `docs/adr/0041-optional-code-gui-sketch-authoring.md` (accepted optional code/GUI authoring
   architecture)
-- `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
+- `docs/M84_GOALS.md` (completed managed-source, artifact, typed-reference and keyed-expansion
   contract)
 - `docs/M84_IMPLEMENTATION.md` (implemented F001-F012 ledger, historical eight-demo amendment,
   historical F011 rollback authority and qualified annotation-visibility replacement)
-- `docs/M84_UAT.md` (current immutable F012 evidence and refreshed pending U1-U16 scorecard,
+- `docs/M84_UAT.md` (accepted immutable F012 evidence, milestone-level U1-U16 scorecard and exact
+  public closeout,
   including manifold plus annotation-aware PNG-export dogfood)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
