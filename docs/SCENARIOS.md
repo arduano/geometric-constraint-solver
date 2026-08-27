@@ -4694,9 +4694,10 @@ F007 source `cc2f05e`, tree `6b8fc41`, is historical mechanical evidence. The ei
 catalog amendment and M84-F008/F009 corrections were clean-qualified and frozen at source
 `c74651c`, tree `a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws
 that nomination after a Compass Rose center release durably selected another valid solution.
-Coupled semantic-terminal durability is implemented and proportionally qualified; a clean immutable
-F010 replacement remains pending. UAT U1-U14 remains required. Accepted M83 remains Pages
-authority.
+Coupled semantic-terminal durability is implemented, clean-qualified and frozen without rebuild at
+source `cf463838`, tree `992e587`, snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz`; this is the
+current immutable nomination. Refreshed UAT U1-U14 remains required. M84 is active and unaccepted,
+and accepted M83 remains Pages authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4851,7 +4852,7 @@ Submit duplicate same-tier point seeds in both orders. Bit-identical IEEE values
 deterministic provenance; unequal values, including `+0.0` versus `-0.0`, reject atomically. F006
 changes no residual equation, solver priority, constraint, tolerance or branch state. Its focused
 owners live beside F005's semantic-overlay, native-composition, persistence and workbench suites;
-the historical F007/F009 clean qualifications and the pending F010 replacement state are recorded
+the historical F007/F009 clean qualifications and current F010 replacement nomination are recorded
 in the release gate section below.
 
 ### M84-F007 — pointer-down lens owns semantic terminal publication
@@ -4953,6 +4954,15 @@ aliases may normalize when finite values are same-sign within 8 ULP or both valu
 reject atomically. Run all four corner roles sequentially and preserve exact Reset/Undo/Redo. This
 is code-workbench terminal transaction/parity behavior; no equation, constraint, solver priority,
 tolerance or branch state changes.
+
+Exact source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`, passes the complete clean gate and is frozen without
+rebuild at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`, modes `0555`/`0444`, aggregate
+`ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`. Focused Compass 1/1 and
+the carried 14/14 browser matrix pass against exact temporary and retained bytes. The focused case
+performs six drags, samples each release at +50/+250/+500/+1000 ms, retains all four spoke
+attachments, finite accepted authority and exact reload. This mechanical nomination accepts no UAT
+row; U1-U14 remain pending.
 
 ### M84-F001 — generated-point terminal checkpoint parity
 
@@ -5120,13 +5130,32 @@ at `/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`.
 Temporary and retained eight-path ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
-Temporary PID `3943194` and F007 PID `62376` are retired. Retained PID `3965271` serves only the
-F009 frozen bytes at `http://100.94.63.83:8080/`. M84-F010 withdraws those bytes; they remain live
-only until a clean immutable F010 candidate passes temporary exact-byte and browser verification.
-Focused Compass regression, demo-web 274/274, formatting, warnings-denied demo-web Clippy,
-all-feature WASM and mutable-browser delayed-snap checks pass; complete clean replacement
-qualification remains pending. Pages remains accepted M83 authority and no M84 public publication
-is claimed; U1-U14 remain pending.
+Temporary PID `3943194` and F007 PID `62376` are retired. M84-F010 withdraws these bytes;
+historical retained PID `3965271` is retired and the immutable F009 snapshot remains preserved.
+
+Current F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`, passes the clean release gate from
+15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exit 0. The 6,209-line,
+420,425-byte log `/tmp/geosolve-m84-f010-gate.9NvAi3z5/release-gate.log` has SHA-256
+`bf57345266005a85b6da20f1105c3cf126d2492ba91e413ef0f07c5d38d3b28a` and final Trunk success.
+The unchanged golden and eight-demo M84 ledger retain SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+The exact seven-file output is frozen without rebuild at
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`, with evidence at
+`/tmp/geosolve-m84-f010-freeze-evidence.sXWXNG0Z`. Temporary `:18091` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`57f2f4c2b47a11db8fc76a7f6a2e3d30555cb36e96b191081454a4c47fb85cbe`; all eight paths have exact
+bytes and MIME. Focused Compass 1/1 and the carried 14/14 browser matrix pass on both. The focused
+spec and config have SHA-256 `4b97f570d5122a353b4ee104b26ea46427ca1c3b79aa5a8d35fee7875302dab0`
+and `c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
+
+`geosolve-m84-uat.service`, PID `650971`, serves only this immutable snapshot from its snapshot
+working directory at `http://100.94.63.83:8080/`. Temporary F010 PIDs `238809`/`621532` are
+retired. This clean immutable replacement is nominated, not accepted. Pages remains accepted M83
+authority and no M84 public publication is claimed; refreshed U1-U14 remain pending.
 
 ## Frozen near-singular fixtures
 

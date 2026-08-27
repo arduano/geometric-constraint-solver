@@ -2,14 +2,15 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **M84-F010 withdraws the clean-qualified eight-demo/F008/F009 candidate; its coupled
-semantic-terminal correction has proportional native/WASM/browser qualification, while a clean
-immutable replacement and refreshed UAT U1-U14 are pending**. No row is accepted. Exact F009
-source `c74651c`, tree `a904584`, and immutable snapshot
-`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are historical defect evidence still served temporarily until
-a verified F010 replacement is ready. F007 source `cc2f05e`, the direct-authoring `41e65a4`
-snapshot, combined F005/F006 source `ff2e142` and the initial/F003/F004 snapshots are withdrawn
-historical evidence. Pages remains on accepted M83.
+Status: **the clean-qualified immutable M84-F010 replacement is nominated; refreshed human UAT
+U1-U14 is pending**. No row is accepted. Exact source
+`cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`, and snapshot
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are current candidate authority. F009 source `c74651c`, tree
+`a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn historical defect
+evidence. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source
+`ff2e142` and the initial/F003/F004 snapshots are likewise historical. M84 remains active and
+unaccepted; Pages remains on accepted M83.
 
 ## Withdrawn candidate evidence
 
@@ -291,18 +292,45 @@ eight-path ledgers are byte-identical at SHA-256
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
 Every sample card opens fitted finite geometry at `1440x900` and `1024x720`.
 
-Temporary PID `3943194` and superseded F007 PID `62376` are retired.
-`geosolve-m84-uat.service`, PID `3965271`, serves only the exact immutable F009 snapshot at
-`http://100.94.63.83:8080/`. M84-F010 withdraws those bytes; the listener remains only until an
-immutable F010 candidate passes temporary exact-byte and browser verification. This evidence does
-not accept U1-U14.
+Temporary PID `3943194` and superseded F007 PID `62376` are retired. M84-F010 withdraws those
+bytes. Historical retained PID `3965271` and temporary development PID `238809` are retired; the
+immutable F009 snapshot remains preserved. This evidence does not accept U1-U14.
+
+## Current F010 replacement nomination
+
+Exact product source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`, passed the clean release gate from
+15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exit 0. Its 6,209-line,
+420,425-byte log `/tmp/geosolve-m84-f010-gate.9NvAi3z5/release-gate.log` has SHA-256
+`bf57345266005a85b6da20f1105c3cf126d2492ba91e413ef0f07c5d38d3b28a` and ends with final Trunk
+success. The unchanged 271-row golden and eight-demo M84 ledger retain SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+The exact seven-file gate output was frozen without rebuilding at
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`. Complete evidence is at
+`/tmp/geosolve-m84-f010-freeze-evidence.sXWXNG0Z`. Temporary `:18091` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`57f2f4c2b47a11db8fc76a7f6a2e3d30555cb36e96b191081454a4c47fb85cbe`; all eight paths have exact
+bytes and MIME. Focused Compass 1/1 and the carried 14/14 browser matrix pass on both endpoints.
+The Compass scenario performs six center drags, proves exact release and
++50/+250/+500/+1000 ms positions, keeps all four spokes attached, requires finite accepted
+authority and verifies exact reload. Retained focused spec/config SHA-256 values are
+`4b97f570d5122a353b4ee104b26ea46427ca1c3b79aa5a8d35fee7875302dab0` and
+`c0900c1132352ed9471321a2cf5727baf2c004d8eebf1a1bcd8a43146289df9c`.
+
+`geosolve-m84-uat.service`, PID `650971`, serves only the immutable F010 snapshot from that
+snapshot working directory at `http://100.94.63.83:8080/`. Historical F009 PID `3965271` and
+temporary F010 PIDs `238809`/`621532` are retired; the F009 snapshot is preserved. These automated
+facts nominate F010 but accept no UAT row.
 
 | Release state | Status |
 | --- | --- |
 | M84-F007 clean qualification and historical freeze | superseded |
 | Eight-demo/M84-F008/F009 clean replacement qualification and immutable freeze | withdrawn by F010 |
 | M84-F010 proportional owner/WASM/mutable-browser qualification | complete |
-| M84-F010 clean qualification and immutable replacement freeze | pending |
+| M84-F010 clean qualification and immutable replacement freeze | complete; nominated |
 | Supervising-user refreshed M84-U1 through M84-U14 | pending |
 | GitHub Pages publication, service retirement and M84 closure | pending |
 
@@ -354,7 +382,7 @@ withdraws the candidate and opens an owning-layer regression.
 - Supervising-user UAT: refreshed M84-U1 through M84-U14 pending; every previous candidate,
   including direct-authoring `41e65a4`, remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Tailscale state: withdrawn exact `c74651c` F009 bytes remain live at
-  `http://100.94.63.83:8080/` under PID `3965271` only until a clean immutable F010 candidate passes
-  temporary byte/browser verification. Snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` is
-  historical defect evidence, not current nomination authority.
+- Tailscale state: current exact F010 snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` is served at
+  `http://100.94.63.83:8080/` by `geosolve-m84-uat.service`, PID `650971`. Withdrawn F009 snapshot
+  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` is preserved as historical defect evidence; PID `3965271`
+  is retired.

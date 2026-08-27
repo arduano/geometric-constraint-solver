@@ -5794,15 +5794,16 @@ all existing constraint mathematics remain solely in the native Rust solver.
 ### M84: optional code/GUI sketch authoring
 
 Status: **active and unaccepted; M84-F010 withdraws the otherwise clean-qualified F009 candidate,
-and its coupled semantic-terminal correction has proportional native/WASM/browser qualification
-while a clean replacement nomination remains pending**. Ordinary GUI
+and its coupled semantic-terminal correction now passes complete clean qualification and immutable
+Tailscale nomination while refreshed human UAT remains pending**. Ordinary GUI
 dependencies project as lexical
 managed TypeScript while low-level transport remains truthfully labelled Intent IR. Exact product
 source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn
-historical defect evidence still retained temporarily on Tailscale until a verified F010 freeze can
-replace them. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006
-source `ff2e142` and all earlier nominations are also withdrawn historical evidence; accepted M83
-remains public Pages authority.
+historical rollback evidence. Exact F010 source `cf463838`, tree `992e587`, and immutable snapshot
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are current mechanical UAT authority on Tailscale. F007
+source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and
+all earlier nominations are also withdrawn historical evidence; accepted M83 remains public Pages
+authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5962,7 +5963,7 @@ remains public Pages authority.
   are exact anchors, the two redundant adjacent aliases may differ only by bounded same-cell
   numerical roundoff, ordinary point aliases remain bit-exact and signed-zero/material conflicts
   reject. This changes no equation, constraint, solver priority, tolerance or branch policy.
-- [ ] Commit and clean-qualify the F010 replacement, freeze the exact no-rebuild output, verify the
+- [x] Commit and clean-qualify the F010 replacement, freeze the exact no-rebuild output, verify the
   Compass delayed-snap reproduction plus the full carried browser matrix against temporary frozen
   bytes, and only then replace the retained F009 Tailscale listener and reconcile nomination
   evidence.
@@ -6046,10 +6047,10 @@ eight-path ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
 Temporary PID `3943194` and superseded F007 PID `62376` are retired. Retained PID `3965271`
-serves only this immutable snapshot at `http://100.94.63.83:8080/`. M84-F010 withdraws these bytes
-from current nomination; they remain live only until the replacement passes temporary frozen-byte
-and browser verification. U1-U14, explicit approval, Pages publication, service retirement and
-milestone closure remain pending.
+served only this immutable snapshot at `http://100.94.63.83:8080/`. M84-F010 withdraws these bytes
+from current nomination. PID `3965271` is retired and its F009 snapshot remains preserved as
+historical rollback evidence. U1-U14, explicit approval, Pages publication, current-service
+retirement and milestone closure remain pending.
 
 M84-F010 development record (2026-08-27): dragging the shared center of **Compass rose** displayed
 the exact newest accepted native preview, but roughly 500 ms after pointer-up the durable scene
@@ -6079,8 +6080,32 @@ formatting, warnings-denied demo-web Clippy, all-feature WASM check and diff hyg
 mutable development listener `:18090`, the original delayed-snap reproduction remains bit-stable at
 release and +50/+250/+500/+1000 ms, six successive center drags preserve their exact releases,
 all spoke starts remain attached and no browser error occurs. This proportional evidence does not
-nominate mutable bytes. A committed-source clean release gate, immutable freeze, carried browser
-matrix and retained-listener replacement remain pending below.
+nominate mutable bytes. The required committed-source clean gate, immutable freeze, carried browser
+matrix and retained-listener replacement are recorded in the nomination below.
+
+M84-F010 replacement qualification/nomination record (2026-08-27): exact committed product source
+`cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`, passes the complete clean gate from
+15:58:23.055857854 through 16:17:18.303733569 AEST, exit 0. Its 6,209-line, 420,425-byte log
+`/tmp/geosolve-m84-f010-gate.9NvAi3z5/release-gate.log` has SHA-256
+`bf57345266005a85b6da20f1105c3cf126d2492ba91e413ef0f07c5d38d3b28a`; the final Trunk build
+succeeds. The unchanged 271-row golden and eight-demo M84 ledger remain
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+Without rebuilding, its exact seven-file output is frozen at
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`, directory/files `0555`/`0444`, ordered-manifest aggregate
+`ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`, with complete evidence at
+`/tmp/geosolve-m84-f010-freeze-evidence.sXWXNG0Z`. Temporary `:18091` and retained `:8080`
+eight-path HTTP ledgers are byte-identical at SHA-256
+`57f2f4c2b47a11db8fc76a7f6a2e3d30555cb36e96b191081454a4c47fb85cbe`. The new focused Compass
+browser suite passes 1/1 on both endpoints: six successive drags remain exact at release and
++50/+250/+500/+1000 ms, survive reload and keep all four spokes attached. The carried 14/14 matrix
+also passes on both endpoints. Only after temporary verification passed was the frozen F010
+snapshot installed at `http://100.94.63.83:8080/` under retained `geosolve-m84-uat.service`, PID
+`650971`. Temporary and mutable listeners are retired; the F009 snapshot remains preserved as
+historical rollback evidence. Refreshed U1-U14, explicit approval, Pages publication, service
+retirement and milestone closure remain pending.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree

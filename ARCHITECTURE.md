@@ -77,9 +77,12 @@ construction/NURBS UAT and certified all-family visual profiles.
   finding. Exact eight-demo/F008/F009 source `c74651c`, tree `a904584`, passed clean qualification,
   no-rebuild freeze and exact temporary/retained Tailscale verification, but M84-F010 withdraws it
   after a valid Compass Rose center release durably rematerialized to another solution. Snapshot
-  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remains historical defect evidence while a clean F010
-  replacement is pending; F007 source `cc2f05e` is also historical. Refreshed U1-U14 remain
-  pending, and Pages stays on accepted M83.
+  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remains historical rollback evidence. Exact F010 source
+  `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+  `992e587609e61768a9af76af193df2fad8325829`, passes complete clean qualification and immutable
+  no-rebuild nomination at `/tmp/geosolve-m84-f010-uat.7R5eXQoz`. Retained PID `650971` serves
+  those bytes at `http://100.94.63.83:8080/`; F007 source `cc2f05e` is also historical. Refreshed
+  U1-U14 remain pending, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -986,8 +989,18 @@ semantic output's declared reference kind and expanded target kind, including Mo
 geometry, equation, constraint, priority, tolerance or branch inference changes. Exact source
 `c74651c`, tree `a904584`, passes clean qualification; its immutable no-rebuild snapshot
 `/tmp/geosolve-m84-f009-uat.q8cKIN3v` passes byte-identical temporary/retained HTTP verification
-and the 14/14 browser matrix on both endpoints. Retained PID `3965271` serves only that snapshot;
-the F007 listener is retired.
+and the 14/14 browser matrix on both endpoints. M84-F010 withdraws those bytes, retires historical
+PID `3965271` and preserves the snapshot as rollback evidence.
+
+Exact F010 source `cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`, passes the complete clean gate, ending in successful
+Trunk assembly, and its exact no-rebuild seven-file output is frozen at
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`. Temporary `:18091` and retained `:8080` serve byte-identical
+eight-path ledgers. The focused Compass case passes 1/1 on each endpoint across six drags,
+release/+50/+250/+500/+1000 ms, reload and four attached spokes; the carried 14/14 browser matrix
+also passes on each. Retained `geosolve-m84-uat.service`, PID `650971`, serves the immutable F010
+snapshot at `http://100.94.63.83:8080/`; temporary and mutable listeners are retired. This is the
+current mechanical UAT nomination, not human acceptance or public authority.
 
 ### `geosolve-sketch-features`
 
@@ -1953,7 +1966,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   source `cc2f05e`, tree `6b8fc41`. The eight-demo/M84-F008/F009 replacement was clean-qualified
   and frozen at exact source `c74651c`, tree `a904584`, snapshot
   `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws it and implements complete
-  authenticated solver-coupled terminal durability. Proportional native/WASM/browser evidence
-  passes; a clean immutable F010 replacement remains pending. Combined source `ff2e142` is
-  withdrawn; refreshed human UAT U1-U14 remains pending. Accepted M83 remains Pages authority and
-  no M84 publication is claimed.
+  authenticated solver-coupled terminal durability. Exact source `cf463838`, tree `992e587`,
+  passes clean qualification and immutable no-rebuild nomination at
+  `/tmp/geosolve-m84-f010-uat.7R5eXQoz`; retained PID `650971` serves those exact bytes on
+  Tailscale. Combined source `ff2e142` is withdrawn; refreshed human UAT U1-U14 remains pending.
+  Accepted M83 remains Pages authority and no M84 publication is claimed.

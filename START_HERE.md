@@ -419,9 +419,8 @@ M84 ledger is reviewed at SHA-256
 271-row golden remains unchanged. Exact replacement source `c74651c`, tree `a904584`, passes the
 complete clean gate. Its no-rebuild snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, aggregate
 `23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, passes byte-identical
-temporary/retained HTTP verification and the 14/14 browser matrix on both endpoints. Retained PID
-`3965271` still serves only those immutable bytes at `http://100.94.63.83:8080/`; the temporary and
-F007 listeners are retired. M84-F010 withdraws that nomination after Compass Rose center release
+temporary/retained HTTP verification and the 14/14 browser matrix on both endpoints. M84-F010
+withdraws that nomination after Compass Rose center release
 was shown to synchronously rematerialize from only the authenticated center seed and stale coupled
 spoke-end seeds, producing a different valid solution after pointer-up. One pointer-down lens
 remains the authorization boundary, but terminal durability now atomically carries the complete
@@ -429,9 +428,19 @@ authenticated solver-coupled semantic point closure and always requires full cur
 native parity. Ordinary aliases remain bit-exact; only redundant rectangle aliases receive tightly
 bounded numerical canonicalization, with signed-zero and material conflicts still rejected. The
 focused Compass owner regression, demo-web 274/274, formatting, warnings-denied focused Clippy,
-WASM and mutable-browser delayed-snap checks pass; clean committed-source qualification and an
-immutable replacement nomination remain pending. U1-U14 remain pending. Pages remains on accepted
-M83 and no M84 public publication is claimed.
+WASM and mutable-browser delayed-snap checks pass. Exact F010 source
+`cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`, then passes the complete clean release gate and a
+no-rebuild immutable nomination. The seven-file snapshot
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`, aggregate
+`ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`, passes byte-identical
+temporary/retained HTTP verification plus the carried 14/14 matrix and a focused Compass 1/1 on
+both endpoints. The focused browser case covers six consecutive drags, release and
++50/+250/+500/+1000 ms stability, reload and all four attached spokes. Retained
+`geosolve-m84-uat.service`, PID `650971`, serves only those immutable bytes at
+`http://100.94.63.83:8080/`; temporary and mutable listeners are retired, and the F009 snapshot is
+preserved as historical rollback evidence. U1-U14 remain pending. Pages remains on accepted M83
+and no M84 public publication is claimed.
 
 ## Read first
 
@@ -469,8 +478,8 @@ M83 and no M84 public publication is claimed.
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005-F010 ledger, withdrawn F009 nomination, pending clean F010 replacement and
-    pending human scorecard.
+    implemented F005-F010 ledger, withdrawn F009 nomination, verified immutable F010 replacement
+    nomination and pending human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -849,9 +858,11 @@ The clean-qualified F003/F004 and direct-authoring candidates remain withdrawn h
 The eight-demo creative-catalog amendment and M84-F008/F009 corrections are implemented and their
 exact source `c74651c`, tree `a904584`, and immutable snapshot
 `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remain historical defect evidence. M84-F010 withdraws that
-nomination and implements coupled semantic-terminal durability; proportional native/WASM/browser
-qualification passes while a clean immutable replacement is pending. F007 source `cc2f05e` and
-combined source `ff2e142` are also withdrawn, and human UAT remains open.
+nomination and implements coupled semantic-terminal durability. Exact source `cf463838`, tree
+`992e587`, passes complete clean qualification and immutable Tailscale nomination at
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz`; retained PID `650971` serves those bytes at
+`http://100.94.63.83:8080/`. F007 source `cc2f05e` and combined source `ff2e142` are also
+withdrawn, and human UAT remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -970,9 +981,9 @@ Durable milestone and cleanup records:
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
 - `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F010 ledger, eight-demo amendment,
-  withdrawn F009 authority and pending clean F010 replacement nomination)
-- `docs/M84_UAT.md` (F010-withdrawn F009 evidence and refreshed pending U1-U14 scorecard; historical
-  F009 bytes remain live on Tailscale only until a verified replacement is ready)
+  withdrawn F009 authority and verified immutable F010 replacement nomination)
+- `docs/M84_UAT.md` (current immutable F010 nomination and refreshed pending U1-U14 scorecard;
+  historical F009 bytes remain preserved as rollback evidence)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

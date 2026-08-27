@@ -3388,14 +3388,15 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 Status: active and unaccepted. M84-F010 withdraws the clean-qualified eight-demo/F008/F009
 candidate after a Compass Rose center release durably selected another valid solution. Its coupled
-semantic-terminal correction has proportional native/WASM/browser qualification; clean committed-
-source qualification and an immutable replacement nomination remain pending. Refreshed M84-U1
-through M84-U14 and explicit approval also remain pending. Exact F009 source `c74651c`, tree
-`a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are historical defect evidence still
-temporarily retained on Tailscale until a verified replacement can take over. F007 source
-`cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all
-earlier nominations remain withdrawn historical evidence. ADR 0041, `docs/M84_GOALS.md` and the
-M84 scenario section own the acceptance contract. Accepted M83 remains public product authority.
+semantic-terminal correction now passes clean committed-source qualification and immutable
+replacement nomination. Refreshed M84-U1 through M84-U14 and explicit approval remain pending.
+Exact F010 source `cf463838`, tree `992e587`, and snapshot
+`/tmp/geosolve-m84-f010-uat.7R5eXQoz` are current mechanical UAT authority on Tailscale. Exact F009
+source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remain
+historical rollback evidence. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot,
+combined F005/F006 source `ff2e142` and all earlier nominations remain withdrawn historical
+evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section own the acceptance contract.
+Accepted M83 remains public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3583,8 +3584,10 @@ and cold-materialized through the ordinary accepted-scene authority.
   gate, immutable no-rebuild freeze, byte-identical temporary/retained HTTP verification and the
   refreshed 14/14 browser matrix on both endpoints. M84-F010 withdraws those bytes. Its focused
   Compass regression, final demo-web 274/274, formatting, warnings-denied focused Clippy, WASM and
-  mutable-listener delayed-snap checks pass, but this proportional evidence is not an immutable
-  replacement nomination and does not substitute for refreshed human UAT.
+  mutable-listener delayed-snap checks pass. Exact F010 source `cf463838`, tree `992e587`, then
+  passes the complete clean gate, immutable no-rebuild freeze, byte-identical temporary/retained
+  HTTP verification, focused Compass 1/1 and the carried 14/14 matrix on both endpoints. This
+  mechanical nomination does not substitute for refreshed human UAT.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3699,9 +3702,9 @@ under `/tmp/geosolve-m84-f009-freeze-evidence.3FoVTQ6m`. Temporary and retained 
 ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
-Temporary PID `3943194` and superseded F007 PID `62376` are retired. PID `3965271` serves only the
+Temporary PID `3943194` and superseded F007 PID `62376` are retired. PID `3965271` served only the
 F009 frozen bytes at `http://100.94.63.83:8080/`. M84-F010 withdraws those bytes; the listener is
-retained only until a clean F010 freeze passes temporary exact-byte and browser verification.
+retired and the F009 snapshot remains preserved as historical rollback evidence.
 
 Focused F010 acceptance evidence passes at the demo adapter owner. Regression
 `compass_rose_shared_center_terminal_matches_the_last_native_preview` requires exact release
@@ -3711,9 +3714,29 @@ geometry, current features and independently validated normalized Hard residual 
 canonicalization refinement; formatting, warnings-denied demo-web Clippy, all-feature WASM check
 and diff hygiene pass. The mutable development listener keeps the original Compass center release
 stable through +50/+250/+500/+1000 ms and through six successive drags, with every spoke attached
-and no browser errors. This does not satisfy the clean release/freeze gate. Refreshed M84-U1 through
-M84-U14 remain open, so Pages remains accepted M83 authority and no M84 public publication is
-claimed.
+and no browser errors.
+
+Current F010 mechanical authority is exact product source
+`cf463838625e42ba9a0f58fe6e061dd7032c753d`, tree
+`992e587609e61768a9af76af193df2fad8325829`. Its complete clean gate ran from
+15:58:23.055857854 through 16:17:18.303733569 AEST on 2026-08-27, exited 0 and ended with a
+successful Trunk build. The 6,209-line, 420,425-byte log has SHA-256
+`bf57345266005a85b6da20f1105c3cf126d2492ba91e413ef0f07c5d38d3b28a`; golden and M84-ledger
+hashes remain `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` and
+`bff42b987f8f8e09c941aa827baedf3a2ae793c5b93d37409e3bfa1eec8dff18`.
+
+Without rebuilding, the exact seven-file snapshot `/tmp/geosolve-m84-f010-uat.7R5eXQoz` is frozen
+at directory/file modes `0555`/`0444`, ordered-manifest aggregate
+`ca2302e0e0a1f08525be98202d593c72de1af303b664f6ff7a64a70727e7f72e`, with complete evidence at
+`/tmp/geosolve-m84-f010-freeze-evidence.sXWXNG0Z`. Temporary `:18091` and retained `:8080`
+eight-path ledgers are byte-identical at SHA-256
+`57f2f4c2b47a11db8fc76a7f6a2e3d30555cb36e96b191081454a4c47fb85cbe`. The focused Compass
+suite passes 1/1 on both endpoints across six drags, release/+50/+250/+500/+1000 ms, reload and all
+four attached spokes; the carried 14/14 browser matrix also passes on both. Retained
+`geosolve-m84-uat.service`, PID `650971`, serves those immutable bytes at
+`http://100.94.63.83:8080/`. Temporary and mutable listeners are retired; the F009 snapshot remains
+preserved as historical rollback evidence. Refreshed M84-U1 through M84-U14 remain open, so Pages
+remains accepted M83 authority and no M84 public publication is claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep
