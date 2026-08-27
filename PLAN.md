@@ -5793,15 +5793,16 @@ all existing constraint mathematics remain solely in the native Rust solver.
 
 ### M84: optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the eight-demo/M84-F008/F009 replacement is clean-qualified,
-frozen and exact-verified as the retained Tailscale candidate, while refreshed UAT remains
-pending**. Ordinary GUI
+Status: **active and unaccepted; M84-F010 withdraws the otherwise clean-qualified F009 candidate,
+and its coupled semantic-terminal correction has proportional native/WASM/browser qualification
+while a clean replacement nomination remains pending**. Ordinary GUI
 dependencies project as lexical
 managed TypeScript while low-level transport remains truthfully labelled Intent IR. Exact product
-source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current
-mechanical authority. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined
-F005/F006 source `ff2e142` and all earlier nominations are withdrawn historical evidence; accepted
-M83 remains public Pages authority.
+source `c74651c`, tree `a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are withdrawn
+historical defect evidence still retained temporarily on Tailscale until a verified F010 freeze can
+replace them. F007 source `cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006
+source `ff2e142` and all earlier nominations are also withdrawn historical evidence; accepted M83
+remains public Pages authority.
 
 - [x] Freeze ADR 0041, `docs/M84_GOALS.md`, the initial implementation ledger and focused UAT
   scorecard.
@@ -5907,8 +5908,10 @@ M83 remains public Pages authority.
   same-tier semantic writes and falsely rejected the legitimate release as a conflict. Authenticate
   one exact semantic point lens at pointer-down. No selection chooses the unique producer; explicit
   producer selection stays attached; a selected consumer still detaches. Materialize terminal
-  overlay authority independently from only that authenticated lens, never from incidental coupled
-  solver roundoff. Keep ordinary GUI-owned points on the delegated editor route.
+  overlay authority under only that authenticated lens, never treating incidental coupled solver
+  roundoff as independently authorized intent. Keep ordinary GUI-owned points on the delegated
+  editor route. M84-F010 below supersedes only the durability interpretation: authentication stays
+  single-lens, while a valid terminal persists its complete authenticated solver-coupled closure.
 - [x] Qualify M84-F005/F006 at their focused owning layers with overlay/seed-precedence/conflict,
   semantic drag/deletion,
   consumer detach/rebind/repeat/Undo, retained/pruned-failure overlay, persistence/history and
@@ -5948,6 +5951,21 @@ M83 remains public Pages authority.
 - [x] Commit and clean-qualify the eight-demo/F008/F009 replacement, freeze its no-rebuild output,
   exact-verify temporary bytes/browser behavior, then and only then replace the then-retained F007
   UAT service authority and reconcile exact nomination evidence.
+- [x] Resolve M84-F010: reproduce Compass Rose center release matching the newest valid native
+  preview and then moving to another valid solution during synchronous terminal rematerialization.
+  Retain one exact pointer-down lens as gesture authorization, but classify the complete native
+  terminal movement closure against the authenticated origin and persist every coupled semantic
+  Cartesian point seed atomically. For referenced-consumer detachment, retain the exact
+  post-detachment origin checkpoint. Always require full terminal/native document, feature,
+  ownership and allocator parity against current accepted-state authority. Canonicalize only the
+  four rectangle aliases over their two real seeds: the authenticated corner and diagonal opposite
+  are exact anchors, the two redundant adjacent aliases may differ only by bounded same-cell
+  numerical roundoff, ordinary point aliases remain bit-exact and signed-zero/material conflicts
+  reject. This changes no equation, constraint, solver priority, tolerance or branch policy.
+- [ ] Commit and clean-qualify the F010 replacement, freeze the exact no-rebuild output, verify the
+  Compass delayed-snap reproduction plus the full carried browser matrix against temporary frozen
+  bytes, and only then replace the retained F009 Tailscale listener and reconcile nomination
+  evidence.
 - [ ] Receive explicit refreshed M84-U1 through M84-U14 approval, then publish/exact-verify Pages,
   retire the service and close M84.
 
@@ -6028,8 +6046,41 @@ eight-path ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
 Temporary PID `3943194` and superseded F007 PID `62376` are retired. Retained PID `3965271`
-serves only this immutable snapshot at `http://100.94.63.83:8080/`. U1-U14, explicit approval,
-Pages publication, service retirement and milestone closure remain pending.
+serves only this immutable snapshot at `http://100.94.63.83:8080/`. M84-F010 withdraws these bytes
+from current nomination; they remain live only until the replacement passes temporary frozen-byte
+and browser verification. U1-U14, explicit approval, Pages publication, service retirement and
+milestone closure remain pending.
+
+M84-F010 development record (2026-08-27): dragging the shared center of **Compass rose** displayed
+the exact newest accepted native preview, but roughly 500 ms after pointer-up the durable scene
+moved to another valid solution. There is no timer or background solver race. Synchronous terminal
+publication persisted only the F007-authenticated `north.start` seed, then independently
+rematerialized against stale east/south/west endpoint seeds and installed that different valid
+solution after persistence completed. F007 remains correct that one pointer-down semantic lens owns
+authorization; its statement that durability should contain only that lens is superseded.
+
+Terminal publication now compares the native terminal to the exact authenticated gesture origin,
+classifies every moved semantic point in that native closure and stages the complete bundle in one
+overlay transaction. A selected referenced consumer classifies from the exact post-detachment
+origin rather than the pre-detachment accepted checkpoint. Ordinary point aliases remain bit-exact.
+Rectangle lenses are a special redundant codec: one authenticated corner plus its diagonal
+opposite canonically reconstruct the two real seeds, while the other two aliases may normalize
+only when each component is same-sign within 8 ULP or both finite values are within
+`32 * f64::EPSILON` of zero. `+0.0` versus `-0.0`, non-finite values and material disagreement
+remain conflicts. Full design/accepted-document, feature, ownership and allocator parity is always
+required, and comparisons read current solved authority through
+`accepted_state_for_current_input()`.
+
+Focused owner regression `compass_rose_shared_center_terminal_matches_the_last_native_preview`
+proves the exact accepted drop, four attached spoke starts, one outer history revision, persistence,
+finite geometry, current computed features and independently validated normalized Hard residual
+`<= 1e-9`. The complete demo-web library passes 274/274 after the final near-zero refinement;
+formatting, warnings-denied demo-web Clippy, all-feature WASM check and diff hygiene pass. On the
+mutable development listener `:18090`, the original delayed-snap reproduction remains bit-stable at
+release and +50/+250/+500/+1000 ms, six successive center drags preserve their exact releases,
+all spoke starts remain attached and no browser error occurs. This proportional evidence does not
+nominate mutable bytes. A committed-source clean release gate, immutable freeze, carried browser
+matrix and retained-listener replacement remain pending below.
 
 Withdrawn qualification/nomination record (2026-08-25): exact committed product source
 `79078eca44a5af4de5cccd92bf6fee570c473624`, tree

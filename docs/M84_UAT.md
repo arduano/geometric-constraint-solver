@@ -2,12 +2,14 @@
 
 # M84 focused UAT — Optional code/GUI sketch authoring
 
-Status: **the eight-demo/M84-F008/F009 replacement is clean-qualified, frozen and exact-verified as
-the retained Tailscale candidate but not accepted; refreshed UAT U1-U14 is pending**. No row is
-accepted. Exact product source `c74651c`, tree `a904584`, and immutable snapshot
-`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current mechanical authority. F007 source `cc2f05e`, the
-direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and the initial/F003/F004
-snapshots are withdrawn historical evidence. Pages remains on accepted M83.
+Status: **M84-F010 withdraws the clean-qualified eight-demo/F008/F009 candidate; its coupled
+semantic-terminal correction has proportional native/WASM/browser qualification, while a clean
+immutable replacement and refreshed UAT U1-U14 are pending**. No row is accepted. Exact F009
+source `c74651c`, tree `a904584`, and immutable snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are historical defect evidence still served temporarily until
+a verified F010 replacement is ready. F007 source `cc2f05e`, the direct-authoring `41e65a4`
+snapshot, combined F005/F006 source `ff2e142` and the initial/F003/F004 snapshots are withdrawn
+historical evidence. Pages remains on accepted M83.
 
 ## Withdrawn candidate evidence
 
@@ -213,7 +215,8 @@ claim a UAT row, acceptance or Pages authority.
 The later frozen candidate at source `ff2e142` is also withdrawn. M84-F007 reproduced a legitimate
 multi-frame rectangle drag rejection when terminal classification copied coupled solver motion into
 multiple same-tier semantic writes. The provisional correction authenticates one point lens at
-pointer-down and rematerializes only that lens at release. Its pending route stores the exact
+pointer-down and historically rematerialized only that seed at release. M84-F010 supersedes this
+single-seed durability rule while retaining the exact authentication rule. Its pending route stores the exact
 `CodeSessionIdentity`, pointer and lens; only that pointer's dedicated terminal publisher consumes
 it. Generic saves reject without consumption; foreign/reentrant preparation and foreign terminals
 preserve the route. Every durable sidebar/code/history route cancels internal capture before
@@ -269,7 +272,7 @@ Temporary PID `34895` is retired. `geosolve-m84-uat.service`, PID `62376`, serve
 snapshot at `http://100.94.63.83:8080/`. The F009 replacement below supersedes it; PID `62376` is
 retired. This historical evidence accepts no UAT row.
 
-## Current F009 replacement nomination
+## Withdrawn F009 replacement nomination
 
 Exact product source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
 `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. The 6,218-line,
@@ -290,12 +293,16 @@ Every sample card opens fitted finite geometry at `1440x900` and `1024x720`.
 
 Temporary PID `3943194` and superseded F007 PID `62376` are retired.
 `geosolve-m84-uat.service`, PID `3965271`, serves only the exact immutable F009 snapshot at
-`http://100.94.63.83:8080/`. This evidence nominates bytes; it does not accept U1-U14.
+`http://100.94.63.83:8080/`. M84-F010 withdraws those bytes; the listener remains only until an
+immutable F010 candidate passes temporary exact-byte and browser verification. This evidence does
+not accept U1-U14.
 
 | Release state | Status |
 | --- | --- |
 | M84-F007 clean qualification and historical freeze | superseded |
-| Eight-demo/M84-F008/F009 clean replacement qualification and immutable freeze | complete |
+| Eight-demo/M84-F008/F009 clean replacement qualification and immutable freeze | withdrawn by F010 |
+| M84-F010 proportional owner/WASM/mutable-browser qualification | complete |
+| M84-F010 clean qualification and immutable replacement freeze | pending |
 | Supervising-user refreshed M84-U1 through M84-U14 | pending |
 | GitHub Pages publication, service retirement and M84 closure | pending |
 
@@ -304,13 +311,15 @@ Run the ordinary desktop workbench at approximately
 scenes. Direct tests, not visual judgment, own exact identities, generations, residuals, payload
 bounds and byte parity.
 
-M84-F006, M84-F007 and M84-F009 are automated authority hardening rather than additional hands-on
-rows. Imported-session and
+M84-F006, M84-F007, M84-F009 and M84-F010 are automated authority hardening rather than additional
+hands-on rows. Imported-session and
 draft bounds, typed Reset/Restore tokens, exact direct/generated owner pruning, generated
 detachment/rebinding/cancellation, repeated-drag Undo/Redo and bit-exact duplicate/conflict handling
 remain acceptance prerequisites for U14 and the clean gate. U14 must additionally exercise
 multi-frame no-selection and selected-producer drags and verify that only the pointer-down semantic
-lens becomes terminal overlay authority while selected-consumer detachment remains local. These
+lens authorizes terminal overlay publication while the complete solver-coupled movement closure is
+persisted atomically and selected-consumer detachment remains local. The Compass center must remain
+at the exact accepted release through at least +500 ms and reload, with every spoke attached. These
 requirements do not reduce U1-U14 or create a new U15.
 M84-F009 additionally requires exact renamed/nested and mapped `result_output` regressions plus the
 all-eight automated output-kind audit: each declared reference kind and expanded target kind must
@@ -334,7 +343,7 @@ match the reviewed catalog, including Mounting Plate `plate.profile` as Profile 
 | M84-U11 | In an ordinary sketch, draw an aligned rectangle and a line between two rectangle corners; inspect Intent IR and Code, then promote the preview and edit the rectangle. | Intent IR is labelled as transport data; Code uses lexical `frame.corners.*` values with no serialized dependency DTO; promotion creates one real managed project and the dependent line follows later edits. | pending |
 | M84-U12 | In an ordinary sketch, draw a Horizontal line, continue it with a Vertical line and Fillet their corner. Inspect Code, promote and reload; edit radius once as a model-unit number and once with `mm(...)`. Then separately try a computed Fillet arc as a direct parent and add another unsupported declaration. | The `line2` declaration contains lexical `start: line.end`; the preview contains `$.constraint.horizontal` over `line.span`, `$.constraint.vertical` over `line2.span`, and `$.computed.filletSet` with those lexical parent spans, no raw ID/DTO and complete explicit branch/contact fields. Both existing axis constraints survive promotion. Line spans are native-branded; a computed host arc cannot be a parent. Positive finite model-unit and branded-mm radii work; forged/other-unit/nonpositive/nonfinite values reject. Promote/reload retains finite Current Fillet geometry with independently validated Hard residual `<= 1e-9`. Unsupported scenes keep Code visible with an escaped truthful diagnostic and Intent IR fallback, while Promote is absent. | pending |
 | M84-U13 | Click **New**, open **Code**, inspect the starter and eight example cards, then choose **Start from code**. Edit the starter rectangle, Apply, enter a collapsed invalid rectangle, Undo/Redo, reload/repro, return to New, and open every sample card. Check both desktop sizes. | The fresh surface has one direct starter action and eight genuine projects without overflow. Every card opens finite fitted visible geometry. Start creates **Untitled code sketch** with editable artifact-free `sketch.ts`, lexical `frame.corners.*` dependencies and no Promote/fabricated GUI history. Valid edits update finite accepted geometry; invalid edits retain the prior canvas and diagnostic; Undo/Redo/reload/repro preserve authored authority. | pending |
-| M84-U14 | In code projects, drag a literal point and each rectangle-corner role through at least two preview frames; also drag a Lantern vertex, Bridge tower peak, Compass spoke and Neon shared endpoint. On a shared rectangle point, repeat a multi-frame drag with no semantic selection and with its producer selected, then drag it with its referenced consumer selected. During one pending route try a generic save, foreign terminal and foreign/reentrant preparation; also verify no-motion release/cancel and stale terminal after Apply/Undo. Repeat the detached-consumer drag, Undo/Redo and Reset. Then select/delete a managed declaration with dependents and one generated child. Repeat deletion with a dirty source draft, retained code failure, a target retained across another revision and a GUI-owned selection. Finally remove a drafted owner in a source edit that also fails native publication, then reload and Undo. | Each accepted release records one bounded point-only semantic overlay/history entry and preserves a finite independently validated accepted scene. Lantern bulbs/Fillets, Bridge cables/stays, Compass ring/markers and Neon bends remain attached/current. Pointer-down authenticates exactly one semantic point lens and stores its exact `CodeSessionIdentity` plus pointer; only the dedicated authenticated terminal publisher may consume it. Generic save, foreign terminal and foreign/reentrant preparation reject while preserving the route. Non-pointer durable code actions invalidate it; no-motion release/cancel is history-neutral; stale terminal after Apply/Undo cannot revert newer accepted authority. Terminal publication rematerializes only that lens and never copies solver-coupled corner roundoff into competing same-tier writes. Point-seed precedence is typed overlay draft > legacy generated override > managed source seed; Reset restores the coupled bundle/lower tier. No preference chooses the unique producer and producer selection keeps consumers attached; unique consumer selection detaches only it, truthfully permits Segment identity replacement, rebinds surviving code/GUI dependents and remains repeat-draggable/Undoable. Ordinary GUI points stay delegated. Rectangle coupling is atomic. Selection/deletion resolves through an exact session + accepted alias + semantic-owner token, not a hashed `code.*` alias. Managed deletion rewrites the exact source/code-owned closure; generated-child deletion is reversible suppression. Dirty/failed/stale/GUI-owned cases reject without mutation. A retained structural/native failure keeps its deterministic owner-pruned attempted overlay above the exact accepted overlay/canvas; reload and Undo preserve both. Persisted optional envelopes report `geosolve-sketch-code-session-v2` and `geosolve-code-workbench-v2`, while plain M83 workspace-v8 is unchanged. | pending |
+| M84-U14 | In code projects, drag a literal point and each rectangle-corner role through at least two preview frames; also drag a Lantern vertex, Bridge tower peak, Compass center/spoke and Neon shared endpoint. On a shared rectangle point, repeat a multi-frame drag with no semantic selection and with its producer selected, then drag it with its referenced consumer selected. During one pending route try a generic save, foreign terminal and foreign/reentrant preparation; also verify no-motion release/cancel and stale terminal after Apply/Undo. Repeat the detached-consumer drag, Undo/Redo and Reset. Then select/delete a managed declaration with dependents and one generated child. Repeat deletion with a dirty source draft, retained code failure, a target retained across another revision and a GUI-owned selection. Finally remove a drafted owner in a source edit that also fails native publication, then reload and Undo. | Each accepted release records one bounded point-only semantic overlay/history entry and preserves a finite independently validated accepted scene. Lantern bulbs/Fillets, Bridge cables/stays, Compass ring/markers and Neon bends remain attached/current. The Compass center remains at the exact release through at least +500 ms and reload. Pointer-down authenticates exactly one semantic point lens and stores its exact `CodeSessionIdentity` plus pointer; only the dedicated authenticated terminal publisher may consume it. Generic save, foreign terminal and foreign/reentrant preparation reject while preserving the route. Non-pointer durable code actions invalidate it; no-motion release/cancel is history-neutral; stale terminal after Apply/Undo cannot revert newer accepted authority. Terminal publication atomically persists the complete authenticated solver-coupled semantic point closure; ordinary aliases remain exact and only redundant rectangle aliases receive bounded numerical canonicalization, so incidental roundoff cannot create competing writes while material/signed-zero conflicts still reject. Point-seed precedence is typed overlay draft > legacy generated override > managed source seed; Reset restores the coupled bundle/lower tier. No preference chooses the unique producer and producer selection keeps consumers attached; unique consumer selection detaches only it, truthfully permits Segment identity replacement, rebinds surviving code/GUI dependents and remains repeat-draggable/Undoable. Ordinary GUI points stay delegated. Rectangle coupling is atomic. Selection/deletion resolves through an exact session + accepted alias + semantic-owner token, not a hashed `code.*` alias. Managed deletion rewrites the exact source/code-owned closure; generated-child deletion is reversible suppression. Dirty/failed/stale/GUI-owned cases reject without mutation. A retained structural/native failure keeps its deterministic owner-pruned attempted overlay above the exact accepted overlay/canvas; reload and Undo preserve both. Persisted optional envelopes report `geosolve-sketch-code-session-v2` and `geosolve-code-workbench-v2`, while plain M83 workspace-v8 is unchanged. | pending |
 
 Any JavaScript runtime solve, browser `eval`, raw code-facing ID, cross-project retarget, ordinal
 identity churn, silent cascade, duplicate history, blank accepted scene or pointer-frame expansion
@@ -345,6 +354,7 @@ withdraws the candidate and opens an owning-layer regression.
 - Supervising-user UAT: refreshed M84-U1 through M84-U14 pending; every previous candidate,
   including direct-authoring `41e65a4`, remains withdrawn historical evidence.
 - M84 GitHub Pages publication: prohibited before explicit approval.
-- Replacement Tailscale nomination: exact `c74651c` candidate is live at
-  `http://100.94.63.83:8080/` under PID `3965271`; immutable snapshot
-  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remains current until approval or another finding.
+- Tailscale state: withdrawn exact `c74651c` F009 bytes remain live at
+  `http://100.94.63.83:8080/` under PID `3965271` only until a clean immutable F010 candidate passes
+  temporary byte/browser verification. Snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` is
+  historical defect evidence, not current nomination authority.

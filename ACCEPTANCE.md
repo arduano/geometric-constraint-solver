@@ -3386,13 +3386,16 @@ remains `ee18dbd`; Pages is final M83 public-byte authority. All M83 acceptance 
 
 ### M84: optional code/GUI sketch authoring
 
-Status: active and unaccepted. The eight-demo/M84-F008/F009 replacement is clean-qualified, frozen
-and exact-verified as the retained Tailscale candidate; refreshed M84-U1 through M84-U14 and
-explicit approval remain pending. Exact product source `c74651c`, tree `a904584`, and snapshot
-`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current mechanical authority. F007 source `cc2f05e`, the
-direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all earlier nominations
-remain withdrawn historical evidence. ADR 0041, `docs/M84_GOALS.md` and the M84 scenario section
-own the acceptance contract. Accepted M83 remains public product authority.
+Status: active and unaccepted. M84-F010 withdraws the clean-qualified eight-demo/F008/F009
+candidate after a Compass Rose center release durably selected another valid solution. Its coupled
+semantic-terminal correction has proportional native/WASM/browser qualification; clean committed-
+source qualification and an immutable replacement nomination remain pending. Refreshed M84-U1
+through M84-U14 and explicit approval also remain pending. Exact F009 source `c74651c`, tree
+`a904584`, and snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are historical defect evidence still
+temporarily retained on Tailscale until a verified replacement can take over. F007 source
+`cc2f05e`, the direct-authoring `41e65a4` snapshot, combined F005/F006 source `ff2e142` and all
+earlier nominations remain withdrawn historical evidence. ADR 0041, `docs/M84_GOALS.md` and the
+M84 scenario section own the acceptance contract. Accepted M83 remains public product authority.
 
 Pre-F003 implementation status (2026-08-25): all structural slices and four genuine projects are
 implemented. Focused Rust, workbench, TypeScript, actual-WASM, package-closure and separate-ledger
@@ -3507,8 +3510,8 @@ and cold-materialized through the ordinary accepted-scene authority.
   priority, tolerance or branch policy changes.
 - M84-F007 authenticates exactly one semantic point lens at pointer-down and retains it across
   preview frames. No selection chooses the unique producer; selected producer remains attached;
-  selected consumer still detaches locally. Terminal publication independently rematerializes only
-  that lens and cannot copy solver-coupled point motion or roundoff into extra same-tier writes.
+  selected consumer still detaches locally. That lens alone authorizes terminal publication; it
+  cannot let unrelated sibling edits hitchhike on the pointer token.
   The pending route stores exact `CodeSessionIdentity`, pointer and lens and only that pointer's
   dedicated authenticated terminal publisher can consume it. Generic saves reject without
   consumption; foreign/reentrant preparation and foreign terminals reject while preserving the
@@ -3521,6 +3524,17 @@ and cold-materialized through the ordinary accepted-scene authority.
   terminals cannot revert newer authority. Ordinary GUI-owned points remain delegated.
   Multi-frame no-selection and producer-selection rectangle releases must publish once without
   weakening bit-exact genuine-conflict rejection.
+- M84-F010 supersedes F007's narrower durability interpretation without changing its authentication
+  boundary. Release must classify the complete native terminal movement closure from the exact
+  authenticated origin and atomically persist every solver-coupled semantic Cartesian point seed.
+  A referenced-consumer route uses its exact post-detachment origin. Independent rematerialization
+  must match the terminal design and current accepted document, computed features, ownership and
+  allocator state. Ordinary point aliases remain bit-exact. Rectangle corners are four lenses over
+  two canonical seeds: the authenticated corner plus diagonal opposite are exact anchors; only the
+  two redundant adjacent aliases may normalize under a bounded finite roundoff rule. Different
+  signed zero, non-finite values and material disagreements reject. One outer history entry,
+  persistence, finite geometry and independently validated Hard residual `<= 1e-9` remain
+  mandatory. No equation, constraint, solver priority, tolerance or branch rule changes.
 - Managed source is at most 4 MiB, each artifact 16 MiB and the complete project 64 MiB. Save,
   reload and repro restore complete offline authority/history atomically; malformed, missing,
   tampered or oversized inputs reject before replacement.
@@ -3556,7 +3570,7 @@ and cold-materialized through the ordinary accepted-scene authority.
   regressions and an exhaustive all-eight audit check both the declared reference kind and expanded
   target kind of every semantic output. This changes no native geometry, solver equation,
   constraint, priority, tolerance or branch rule.
-- Exact replacement source `c74651c` passes formatting, warnings-denied Clippy/Rustdoc, locked
+- Historical replacement source `c74651c` passes formatting, warnings-denied Clippy/Rustdoc, locked
   all-feature tests, actual WASM, TypeScript, golden require-clean, Trunk and the complete clean
   release gate.
 - Focused post-F006 qualification passes `geosolve-sketch-code`, native composition 11/11,
@@ -3565,10 +3579,12 @@ and cold-materialized through the ordinary accepted-scene authority.
   release-WASM/browser matrix passed 14/14. Post-audit F007 evidence passes demo-web 270/270,
   sketch-code suites, focused terminal-lifecycle/mutation-order/generic-save regressions and
   warnings-denied Clippy/WASM. Historical source `cc2f05e` passed its complete clean gate and
-  immutable freeze. Current source `c74651c` additionally passes the eight-demo/F008/F009 clean
+  immutable freeze. Source `c74651c` additionally passes the eight-demo/F008/F009 clean
   gate, immutable no-rebuild freeze, byte-identical temporary/retained HTTP verification and the
-  refreshed 14/14 browser matrix on both endpoints. This nominates bytes but does not substitute
-  for refreshed human UAT.
+  refreshed 14/14 browser matrix on both endpoints. M84-F010 withdraws those bytes. Its focused
+  Compass regression, final demo-web 274/274, formatting, warnings-denied focused Clippy, WASM and
+  mutable-listener delayed-snap checks pass, but this proportional evidence is not an immutable
+  replacement nomination and does not substitute for refreshed human UAT.
 - The former exact no-rebuild candidate passed local and retained-Tailscale byte/browser
   verification but is withdrawn by M84-F003. The clean-qualified F003 replacement is itself
   withdrawn by M84-F004. The exact clean-qualified F004 replacement below is now also historical
@@ -3667,7 +3683,7 @@ Historical PID `4081080` and temporary PID `34895` are retired. PID `62376` serv
 frozen bytes at `http://100.94.63.83:8080/`; the F009 replacement below supersedes them and PID
 `62376` is retired.
 
-Current F009 mechanical authority is exact product source
+Withdrawn F009 mechanical authority is exact product source
 `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
 `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`. Its complete clean gate log has 6,218 lines,
 421,590 bytes and SHA-256
@@ -3684,8 +3700,20 @@ ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
 Temporary PID `3943194` and superseded F007 PID `62376` are retired. PID `3965271` serves only the
-F009 frozen bytes at `http://100.94.63.83:8080/`. Refreshed M84-U1 through M84-U14 remain open, so
-Pages remains accepted M83 authority and no M84 public publication is claimed.
+F009 frozen bytes at `http://100.94.63.83:8080/`. M84-F010 withdraws those bytes; the listener is
+retained only until a clean F010 freeze passes temporary exact-byte and browser verification.
+
+Focused F010 acceptance evidence passes at the demo adapter owner. Regression
+`compass_rose_shared_center_terminal_matches_the_last_native_preview` requires exact release
+position, complete coupled spoke attachment, one outer history revision, persistence, finite
+geometry, current features and independently validated normalized Hard residual `<= 1e-9`.
+`cargo test --locked -p geosolve-demo-web --lib` passes 274/274 after the final rectangle near-zero
+canonicalization refinement; formatting, warnings-denied demo-web Clippy, all-feature WASM check
+and diff hygiene pass. The mutable development listener keeps the original Compass center release
+stable through +50/+250/+500/+1000 ms and through six successive drags, with every spoke attached
+and no browser errors. This does not satisfy the clean release/freeze gate. Refreshed M84-U1 through
+M84-U14 remain open, so Pages remains accepted M83 authority and no M84 public publication is
+claimed.
 
 No new primitive, constraint, residual, formula/expression graph, solver priority, branch policy,
 Offset redesign, runtime arbitrary TypeScript, browser `eval`, remote-package runtime, 3D/B-rep

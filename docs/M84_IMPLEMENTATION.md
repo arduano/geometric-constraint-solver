@@ -2,11 +2,12 @@
 
 # M84 implementation ledger — Optional code/GUI sketch authoring
 
-Status: **the eight-demo creative-catalog amendment and M84-F008/F009 corrections are implemented,
-clean-qualified, frozen and exact-verified as the retained Tailscale candidate; refreshed UAT
-remains pending**. Exact product source `c74651c`, tree `a904584`, and immutable snapshot
-`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current mechanical authority. F007 source `cc2f05e` and
-its immutable snapshot are withdrawn historical evidence.
+Status: **M84-F010 withdraws the otherwise clean-qualified eight-demo/F008/F009 candidate; its
+coupled semantic-terminal correction has proportional native/WASM/browser qualification, while a
+clean immutable replacement nomination and refreshed UAT remain pending**. Exact F009 source
+`c74651c`, tree `a904584`, and immutable snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v` are
+historical defect evidence still temporarily served on Tailscale until a verified replacement can
+take over. F007 source `cc2f05e` and its immutable snapshot are also withdrawn historical evidence.
 Direct-authoring source
 `41e65a4f8c92179412ba2e06f44692377cd5fe51`, tree
 `d31b805549a29433e157074bc181517bdb50fb67`, is withdrawn historical evidence with the initial,
@@ -152,8 +153,7 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   persisted IEEE bits, including `+0.0` versus `-0.0`.
 - [x] M84-F007 authenticates one exact semantic point lens at pointer-down. No selection chooses a
   unique producer; selected producer stays attached; selected consumer retains local detachment.
-  Terminal publication independently rematerializes overlay authority from only that lens and does
-  not copy incidental solver-coupled point movement or roundoff into extra same-tier writes.
+  That lens alone authorizes terminal publication and cannot authorize an unrelated sibling edit.
   The pending route retains its exact `CodeSessionIdentity`, pointer and lens; only its dedicated
   authenticated terminal publisher consumes it. Generic saves, foreign/reentrant preparation and
   foreign terminals reject without consuming or replacing the original route. Non-pointer durable
@@ -164,6 +164,15 @@ No core, geometry, sketch, linkage, intent or constraint-editor manifest depends
   release/cancellation is history-neutral, and exact stored-session mismatch plus Apply/Undo cannot
   let a stale terminal revert newer accepted authority. Ordinary GUI-owned points remain delegated
   to the unchanged editor route.
+- [x] M84-F010 retains F007's single-lens authentication while persisting the complete native
+  solver-coupled semantic point closure at release. Terminal classification compares the exact
+  gesture origin to the accepted terminal checkpoint; referenced-consumer routes preserve their
+  exact post-detachment origin. One atomic overlay stages every moved semantic Cartesian seed, then
+  cold rematerialization must match terminal design/current-accepted documents, computed features,
+  ownership and allocators. Ordinary point aliases stay bit-exact. Rectangle corners are four
+  redundant lenses over two seeds: the authenticated corner and diagonal opposite are exact
+  anchors, and only the adjacent aliases may normalize under tightly bounded finite roundoff.
+  Signed-zero, non-finite and material conflicts still reject.
 
 ### I5 — workbench, persistence and demonstrations
 
@@ -387,6 +396,9 @@ The solver-coupled terminal checkpoint remains preview evidence but cannot manuf
 semantic writes from incidental roundoff. Ordinary GUI-owned points never gain a code semantic
 route and remain delegated to the existing editor.
 
+This paragraph records the historical F007 repair. M84-F010 below supersedes its single-seed
+durability rule while preserving the exact pointer-down authentication and route-lifecycle rules.
+
 The pending route is the exact `CodeSessionIdentity`, pointer and authenticated lens. Only its
 dedicated pointer-terminal publisher may consume it: a generic save rejects without consumption;
 foreign/reentrant preparation and foreign terminals reject while preserving the original route. Any
@@ -405,7 +417,52 @@ passes 270/270, including real no-motion release, exact stored-session mismatch,
 generic-save preservation regressions; the sketch-code suites and focused warnings-denied
 Clippy/WASM checks pass. Exact committed source `cc2f05e` then passes the clean release gate and
 the refreshed browser matrix on temporary and retained frozen endpoints. This withdraws the
-`ff2e142` candidate and establishes the current mechanical nomination, but not UAT acceptance.
+`ff2e142` candidate and establishes historical F007 evidence, but not UAT acceptance. F010 below
+supersedes the single-seed durability interpretation without weakening pointer-down authentication.
+
+### M84-F010 — authenticated release omitted its solver-coupled movement closure
+
+Reproduction owner: retained code-workbench semantic terminal publication in **Compass rose**.
+Drag the shared center and release a valid newest native preview. The displayed point initially
+matches the release, then roughly 500 ms later moves to another valid solution. The delay is the
+synchronous cost of terminal rematerialization and persistence, not a timer, worker or background
+validation race.
+
+Root cause: F007 correctly authenticated `north.start` as the one pointer-down semantic lens, but
+terminal durability persisted only that center seed. Moving the center under the four existing
+Horizontal/Vertical relations also moves the four spoke endpoints in the accepted native preview.
+Cold overlay materialization therefore combined the new center with stale spoke-end seeds and the
+unchanged solver selected a different valid underdetermined solution; the durable render exposed
+it only after the synchronous publication returned. The authenticated single lens was sufficient
+authorization but not a complete replayable terminal state.
+
+Repair: compare the exact authenticated origin editor with the accepted terminal editor using the
+existing closed code-owned-change classifier. A referenced consumer retains the exact
+post-detachment checkpoint as that origin. Require the authenticated lens to be part of the
+resulting closure, then atomically stage all moved semantic point seeds. Never admit an unrelated
+changed leaf: existing provenance and locality classification remain the gate. Durable
+rematerialization always receives full native parity validation against both design and
+`accepted_state_for_current_input()` documents, computed features, logical/native ownership and
+allocator high-water.
+
+Rectangle points require explicit codec canonicalization because four GUI corner lenses describe
+two managed seeds. The authenticated corner and its diagonal opposite are exact anchors. The two
+adjacent aliases may normalize only when finite component values have the same sign within 8 ULP,
+or both values lie within `32 * f64::EPSILON` of zero. Different signed zero remains a conflict;
+ordinary point aliases are bit-exact, and every non-finite or material disagreement fails closed.
+This policy changes no solver equation, hard/soft priority, relation, tolerance or branch state.
+
+Focused owner regression `compass_rose_shared_center_terminal_matches_the_last_native_preview`
+uses the genuine sample and pointer lifecycle. It proves bit-exact accepted release, attached
+east/south/west starts, complete terminal design/accepted parity, one outer history revision,
+round-trip persistence, finite accepted geometry, current computed features and independently
+validated normalized Hard residual `<= 1e-9`. The final post-refinement demo-web suite passes
+274/274; formatting, warnings-denied demo-web Clippy, all-feature WASM and diff hygiene pass. On
+the mutable `:18090` development listener, the original release remains unchanged at release and
++50/+250/+500/+1000 ms; six successive center drags retain their exact releases, all spoke starts
+remain attached and no browser error occurs. Mutable bytes are development evidence only. Clean
+committed-source release qualification, an immutable no-rebuild freeze and the carried browser
+matrix remain required before replacement nomination.
 
 ### M84-F009 — canonical map order selected an unrelated multi-output shorthand
 
@@ -487,7 +544,7 @@ owned by the Rust/WASM regressions because no corresponding public browser gestu
 mechanical nomination evidence. The F009 replacement below supersedes these served bytes; PID
 `62376` is retired.
 
-## Current F009 qualification and immutable nomination
+## Withdrawn F009 qualification and immutable nomination
 
 Exact product source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
 `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passed
@@ -531,7 +588,9 @@ fitted finite projects and the collaborative lifecycle/drag/deletion surface.
 
 Only after temporary byte/browser proof passed was superseded F007 PID `62376` retired. Temporary
 PID `3943194` is retired. `geosolve-m84-uat.service`, PID `3965271`, serves only the exact snapshot
-at `http://100.94.63.83:8080/`. This is mechanical nomination evidence; U1-U14 remain pending.
+at `http://100.94.63.83:8080/`. M84-F010 withdraws this nomination; the historical bytes remain
+live only until a clean F010 freeze passes temporary exact-byte and browser verification. U1-U14
+remain pending.
 
 ## Historical F003 focused evidence observed before its withdrawn nomination
 
@@ -749,9 +808,9 @@ retired. The temporary PID `4027499` is also retired. M84-F005 withdraws this ot
 direct-authoring record because it predates the collaborative overlay and semantic-authority
 contract. Combined F005/F006 source `ff2e142` and its later frozen candidate are themselves
 withdrawn by F007's terminal-lens reproduction. Those snapshot/service records are historical only,
-not current candidates. The current F009 qualification and immutable nomination are recorded
-above. GitHub Pages deliberately remains on accepted M83 pending refreshed UAT and explicit
-approval.
+  not current candidates. The withdrawn F009 qualification and immutable nomination are recorded
+  above. GitHub Pages deliberately remains on accepted M83 pending refreshed UAT and explicit
+  approval.
 
 ## Known bounds and truthful limitations
 
@@ -772,7 +831,10 @@ approval.
 
 ## Remaining release sequence
 
-1. Complete refreshed M84-U1 through M84-U14 against only the frozen F009 replacement and record
+1. Commit the F010 correction and reconciled documentation, pass the complete clean release gate,
+   freeze the no-rebuild output and verify exact bytes plus Compass/carried browser behavior on a
+   temporary listener before replacing retained F009.
+2. Complete refreshed M84-U1 through M84-U14 against only the frozen F010 replacement and record
    explicit supervising-user approval or open another numbered finding.
-2. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
+3. Only after approval, publish the accepted descendant to GitHub Pages, exact-verify its separately
    built hosted artifact, retire `geosolve-m84-uat.service` and close M84.

@@ -2,13 +2,15 @@
 
 # M84 — Optional code/GUI sketch authoring
 
-Status: **active and unaccepted; the eight-demo/M84-F008/F009 replacement is clean-qualified,
-frozen and exact-verified as the retained Tailscale candidate, while refreshed UAT remains
-pending**. Exact product source `c74651c`, tree `a904584`, and immutable snapshot
-`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are current mechanical authority. F007 source `cc2f05e`, the
-direct-authoring snapshot `41e65a4`, combined F005/F006 source `ff2e142` and all earlier M84
-nominations are withdrawn historical evidence. No UAT row is accepted, and accepted M83 remains
-GitHub Pages authority. ADR 0041 is the controlling design.
+Status: **active and unaccepted; M84-F010 withdraws the clean-qualified eight-demo/F008/F009
+candidate, and its coupled semantic-terminal correction has proportional native/WASM/browser
+qualification while a clean immutable replacement and refreshed UAT remain pending**. Exact F009
+source `c74651c`, tree `a904584`, and immutable snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are historical defect evidence still temporarily served until
+a verified replacement is ready. F007 source `cc2f05e`, direct-authoring snapshot `41e65a4`,
+combined F005/F006 source `ff2e142` and all earlier M84 nominations are withdrawn historical
+evidence. No UAT row is accepted, and accepted M83 remains GitHub Pages authority. ADR 0041 is the
+controlling design.
 
 ## Goal
 
@@ -179,13 +181,12 @@ layer optional.
 
 - Authenticate exactly one semantic point lens at pointer-down and retain that route across every
   native preview frame. Do not classify a terminal checkpoint by copying every solver-moved
-  code-owned point into semantic seed writes.
+  code-owned point as independently authorized semantic intent.
 - With no semantic selection, choose the unique producer lens. Explicit producer selection keeps
   referenced consumers attached. Explicit consumer selection still detaches only that consumer.
   Ambiguous producer/selected lenses reject before preview authority changes.
-- Independently rematerialize terminal overlay authority from only the authenticated point lens;
-  solver-derived coupled motion is preview evidence, not another semantic write. This prevents
-  harmless rectangle-corner roundoff from becoming a false same-tier conflict.
+- Let only the authenticated point lens authorize terminal publication. M84-F010 below supersedes
+  the original single-seed durability interpretation while preserving this authorization rule.
 - Store the pending route as that exact `CodeSessionIdentity`, pointer and point lens. Only the
   dedicated authenticated terminal publisher for that pointer may consume it; generic/delegated
   saves reject without consumption, and foreign/reentrant preparation or a foreign terminal
@@ -199,6 +200,26 @@ layer optional.
   and persistence rather than restoring accepted authority beneath that token.
 - Keep ordinary GUI-owned points on the delegated M83 editor path. Add no equation, constraint,
   solver priority, tolerance or branch rule.
+
+### M84-F010 — complete authenticated terminal movement closure
+
+- Reproduce a Compass Rose shared-center drag whose newest native preview is accepted exactly but
+  whose durable scene later rematerializes to another valid point. Classify this at retained code-
+  workbench terminal publication, not as a timer, worker or core-solver race.
+- Retain the one F007 pointer-down lens as gesture authorization. Compare the exact authenticated
+  origin to the accepted terminal checkpoint and atomically persist every solver-coupled semantic
+  Cartesian point seed in that movement closure. Reject any changed leaf outside existing semantic
+  provenance/locality. For a referenced-consumer drag, retain the exact post-detachment origin.
+- Always require full parity for design and current accepted documents, computed features,
+  logical/native ownership and allocators. Read solved authority through
+  `accepted_state_for_current_input()` rather than treating design intent as solved state.
+- Keep ordinary point aliases bit-exact. For the four rectangle corner lenses over two real seeds,
+  make the authenticated corner and diagonal opposite exact anchors; permit only the two redundant
+  adjacent aliases to normalize under tightly bounded finite numerical roundoff. Signed-zero,
+  non-finite and material conflicts reject atomically.
+- Prove exact Compass release through persistence/reload, all spoke starts attached, one history
+  entry, finite geometry, Current features and independently validated Hard residual `<= 1e-9`.
+  Add no equation, constraint, solver priority, tolerance or branch rule.
 
 ### M84-F008 — fitted code scenes and visible sample Fillets
 
@@ -343,10 +364,10 @@ Without rebuilding, the exact seven-file output is frozen at
 eight-path ledgers are byte-identical at SHA-256
 `efa609c6bac127753336c3634730b81bed04699a25c6394ab039c7f06b0b2b64`; all 14 browser cases pass
 on both endpoints. Historical PID `4081080` and temporary PID `34895` are retired. PID `62376`
-served only that immutable snapshot at `http://100.94.63.83:8080/`. The F009 replacement below
-supersedes it as retained UAT authority; PID `62376` is retired.
+served only that immutable snapshot at `http://100.94.63.83:8080/`. The later F009 replacement
+superseded it before F010 withdrew that nomination; PID `62376` is retired.
 
-Current F009 replacement nomination (2026-08-27): exact product source
+Withdrawn F009 replacement nomination (2026-08-27): exact product source
 `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
 `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean release gate. Its
 6,218-line, 421,590-byte log has SHA-256
@@ -363,8 +384,11 @@ eight-path ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; all 14 browser cases pass
 on both endpoints. Temporary PID `3943194` and superseded F007 PID `62376` are retired.
 `geosolve-m84-uat.service`, PID `3965271`, serves only this immutable snapshot at
-`http://100.94.63.83:8080/`. Refreshed M84-U1 through M84-U14, explicit approval, Pages
-publication, service retirement and closure remain open.
+`http://100.94.63.83:8080/`. M84-F010 withdraws it; those bytes remain live only until a clean F010
+freeze passes temporary exact-byte and browser verification. Focused Compass regression,
+demo-web 274/274, formatting, warnings-denied demo-web Clippy, all-feature WASM and mutable-browser
+delayed-snap checks pass, but clean replacement qualification remains open. Refreshed M84-U1
+through M84-U14, explicit approval, Pages publication, service retirement and closure remain open.
 
 ## Bounds and non-goals
 

@@ -4691,9 +4691,12 @@ nominations remain withdrawn historical evidence. M84-F005 also withdraws the di
 hardening are implemented and focused-qualified. F007 then withdraws combined source `ff2e142` and
 its frozen candidate after reproducing false terminal conflicts on multi-frame producer drags.
 F007 source `cc2f05e`, tree `6b8fc41`, is historical mechanical evidence. The eight-demo creative-
-catalog amendment and M84-F008/F009 corrections are clean-qualified, frozen and exact-verified at
-source `c74651c`, tree `a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`. UAT U1-U14
-remains required. Accepted M83 remains Pages authority.
+catalog amendment and M84-F008/F009 corrections were clean-qualified and frozen at source
+`c74651c`, tree `a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws
+that nomination after a Compass Rose center release durably selected another valid solution.
+Coupled semantic-terminal durability is implemented and proportionally qualified; a clean immutable
+F010 replacement remains pending. UAT U1-U14 remains required. Accepted M83 remains Pages
+authority.
 
 ### M84-G1 — optional dependency boundary
 
@@ -4848,8 +4851,8 @@ Submit duplicate same-tier point seeds in both orders. Bit-identical IEEE values
 deterministic provenance; unequal values, including `+0.0` versus `-0.0`, reject atomically. F006
 changes no residual equation, solver priority, constraint, tolerance or branch state. Its focused
 owners live beside F005's semantic-overlay, native-composition, persistence and workbench suites;
-the current clean release qualification and replacement freeze are recorded in the release gate
-section below.
+the historical F007/F009 clean qualifications and the pending F010 replacement state are recorded
+in the release gate section below.
 
 ### M84-F007 — pointer-down lens owns semantic terminal publication
 
@@ -4866,11 +4869,11 @@ attached; a uniquely selected referenced consumer still detaches only itself. Am
 or selected lenses reject without changing transient or durable authority. Ordinary GUI-owned
 points resolve no code lens and remain on the delegated editor route.
 
-Retain the authenticated lens through every native preview frame. On release, stage only its point
-seed, independently expand/cold-materialize that overlay and publish the resulting authority once.
-The terminal native checkpoint is preview evidence, not a source of additional semantic writes;
-solver-derived coupled point motion and roundoff cannot masquerade as user-authored seeds. Exact
-Undo/Redo, attachment/detachment semantics and independent native validation remain mandatory.
+Retain the authenticated lens through every native preview frame. That lens alone authorizes the
+terminal publication; solver-derived movement cannot become independently authorized sibling
+intent. Exact Undo/Redo, attachment/detachment semantics and independent native validation remain
+mandatory. M84-F010 below supersedes only the single-seed durability interpretation by requiring
+the complete authenticated solver-coupled movement closure to be persisted atomically.
 
 The pending route stores exact `CodeSessionIdentity`, pointer and authenticated lens. Only that
 pointer's dedicated terminal publisher may consume it; generic saves reject without consumption,
@@ -4924,6 +4927,32 @@ For all eight demos, enumerate every declared semantic output and independently 
 expanded target. In particular, Mounting Plate `plate.profile` is Profile and each keyed hole output
 retains its declared Curve kind. This is optional-layer routing only; native geometry, solver
 equations, constraints, priority, tolerance and branch state remain unchanged.
+
+### M84-F010 — authenticated terminal persists its complete coupled closure
+
+Open **Compass rose**, drag the shared center through a valid accepted preview and release. The
+accepted native terminal, outer code publication, durable render, +50/+250/+500/+1000 ms samples
+and reload must retain the exact same center. Every spoke start remains attached to that native
+point; the semantic overlay contains the complete coupled Cartesian draft closure in one outer
+history action. Repeat at least six center drags without a delayed alternative solution, non-finite
+geometry, stale feature, request error or browser error.
+
+At pointer-down authenticate one exact producer or selected-consumer lens. At release compare the
+accepted terminal to the exact authenticated origin (the post-detachment checkpoint for a detached
+consumer), classify only provenance-owned semantic point leaves and stage their complete
+solver-coupled closure atomically. The authenticated lens must be present in that closure; an
+unrelated sibling edit cannot hitchhike on its token. Cold rematerialization must match terminal
+design and current accepted documents, computed features, ownership and allocator state. Require
+finite geometry, all active features Current and independently validated normalized Hard residual
+at most `1e-9`.
+
+Ordinary point aliases remain bit-exact. For a rectangle's four corner lenses over two real seeds,
+make the authenticated corner and diagonal opposite exact anchors. Only the two redundant adjacent
+aliases may normalize when finite values are same-sign within 8 ULP or both values lie within
+`32 * f64::EPSILON` of zero. Different signed zero, non-finite values and material disagreement
+reject atomically. Run all four corner roles sequentially and preserve exact Reset/Undo/Redo. This
+is code-workbench terminal transaction/parity behavior; no equation, constraint, solver priority,
+tolerance or branch state changes.
 
 ### M84-F001 — generated-point terminal checkpoint parity
 
@@ -5077,7 +5106,7 @@ PID `62376` served the exact frozen bytes at `http://100.94.63.83:8080/`; comple
 `/tmp/geosolve-m84-f007-freeze-evidence.rP5rQcTG`. The F009 replacement supersedes it and PID
 `62376` is retired.
 
-Current F009 source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+Withdrawn F009 source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
 `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. Its 6,218-line,
 421,590-byte log has SHA-256
 `c9b743c8f95d6df7706b04e2d820ac67426f1b11ec447d2bffdc08cd1fe0f6f1`; the unchanged 271-row
@@ -5092,8 +5121,12 @@ Temporary and retained eight-path ledgers are byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`; baseline 4/4,
 direct-authored 3/3, F003 1/1, F004 2/2 and F005-F007 4/4 browser suites pass on both endpoints.
 Temporary PID `3943194` and F007 PID `62376` are retired. Retained PID `3965271` serves only the
-F009 frozen bytes at `http://100.94.63.83:8080/`. Pages remains accepted M83 authority and no M84
-public publication is claimed; U1-U14 remain pending.
+F009 frozen bytes at `http://100.94.63.83:8080/`. M84-F010 withdraws those bytes; they remain live
+only until a clean immutable F010 candidate passes temporary exact-byte and browser verification.
+Focused Compass regression, demo-web 274/274, formatting, warnings-denied demo-web Clippy,
+all-feature WASM and mutable-browser delayed-snap checks pass; complete clean replacement
+qualification remains pending. Pages remains accepted M83 authority and no M84 public publication
+is claimed; U1-U14 remain pending.
 
 ## Frozen near-singular fixtures
 

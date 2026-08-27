@@ -20,12 +20,12 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeGeneratedChildAddress, CodeInteractionOverlay, CodeProject, CodeProjectDemo,
-    CodeProjectDemoId, CodeSessionIdentity, CodeSessionReceipt, CodeWritableAddress,
-    EditorBootstrapDeclaration, ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget,
-    ExpandedWritablePoint, KeyedReconcileState, ManagedDiagnostic, ManagedEdit, ManagedValue,
-    MaterializedCodeProject, PatchModuleArtifact, ProjectKey, SemanticSymbol, SketchCodeSession,
-    UnitLiteral, apply_managed_edit, bundled_code_project_demos,
+    CodeGeneratedChildAddress, CodeInteractionOverlay, CodePointEdit, CodeProject, CodeProjectDemo,
+    CodeProjectDemoId, CodeRectangleCorner, CodeSessionIdentity, CodeSessionReceipt,
+    CodeWritableAddress, EditorBootstrapDeclaration, ExpandedCodeProject, ExpandedPort,
+    ExpandedSemanticTarget, ExpandedWritablePoint, KeyedReconcileState, ManagedDiagnostic,
+    ManagedEdit, ManagedValue, MaterializedCodeProject, PatchModuleArtifact, ProjectKey,
+    SemanticSymbol, SketchCodeSession, UnitLiteral, apply_managed_edit, bundled_code_project_demos,
     expand_code_project_for_structural_edit, initialize_code_project_from_editor,
     materialize_code_project_cold, materialize_code_project_incremental_for_structural_edit,
     materialize_code_project_incremental_with_overlay, parse_managed_source, plan_managed_edit,
@@ -83,7 +83,10 @@ struct PendingSemanticPointDrag {
     pointer_id: u64,
     session: CodeSessionIdentity,
     point: ExpandedWritablePoint,
-    transient_detachment: bool,
+    /// Exact native authority from which the authenticated point gesture
+    /// began when a referenced consumer first needed local detachment.
+    /// Producer gestures use the accepted code checkpoint directly.
+    detached_origin_checkpoint: Option<serde_json::Value>,
 }
 
 /// A syntactically valid Apply either replaces native authority atomically or
@@ -117,16 +120,161 @@ enum CodeOwnedEditorChange {
     },
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SemanticTerminalParity {
-    /// Pointer-down authenticated one exact semantic lens. The terminal native
-    /// solve is only a preview; the independently rematerialized overlay is
-    /// the accepted authority, so coupled solver roundoff is not copied into
-    /// code state.
-    AuthenticatedPointRoute,
-    /// A checkpoint was classified after the fact and therefore must remain
-    /// completely identical to its independently staged native authority.
-    ClassifiedCheckpoint,
+#[derive(Clone, Debug)]
+struct RectangleTerminalProjection {
+    anchors: [ExpandedPort; 2],
+    redundant_aliases: [ExpandedPort; 2],
+}
+
+#[derive(Clone, Debug)]
+struct CanonicalTerminalPointBundle {
+    placements: Vec<(ExpandedWritablePoint, [f64; 2])>,
+    rectangle_projections: Vec<RectangleTerminalProjection>,
+}
+
+const TERMINAL_SEED_ROUNDOFF_ULPS: u64 = 8;
+const TERMINAL_SEED_ZERO_ROUNDOFF: f64 = 32.0 * f64::EPSILON;
+const F64_SIGN_MASK: u64 = 0x8000_0000_0000_0000;
+
+fn rectangle_corner(edit: &CodePointEdit) -> Option<CodeRectangleCorner> {
+    match edit {
+        CodePointEdit::RectangleCorner { corner, .. } => Some(*corner),
+        CodePointEdit::Point { .. } => None,
+    }
+}
+
+const fn opposite_rectangle_corner(corner: CodeRectangleCorner) -> CodeRectangleCorner {
+    match corner {
+        CodeRectangleCorner::LowerLeft => CodeRectangleCorner::UpperRight,
+        CodeRectangleCorner::LowerRight => CodeRectangleCorner::UpperLeft,
+        CodeRectangleCorner::UpperRight => CodeRectangleCorner::LowerLeft,
+        CodeRectangleCorner::UpperLeft => CodeRectangleCorner::LowerRight,
+    }
+}
+
+fn rectangle_lenses<'a>(
+    expansion: &'a ExpandedCodeProject,
+    key: &(CodeWritableAddress, CodeWritableAddress),
+) -> Result<BTreeMap<CodeRectangleCorner, &'a ExpandedWritablePoint>, String> {
+    if key.0 == key.1 {
+        return Err("rectangle semantic seed codec aliases both seed addresses".into());
+    }
+    let mut lenses = BTreeMap::new();
+    let mut effective = None;
+    for point in &expansion.writable_points {
+        match &point.edit {
+            CodePointEdit::Point { address } if address == &key.0 || address == &key.1 => {
+                return Err(
+                    "rectangle semantic seed address collides with an ordinary point codec".into(),
+                );
+            }
+            CodePointEdit::RectangleCorner {
+                lower_left,
+                upper_right,
+                corner,
+                effective_lower_left,
+                effective_upper_right,
+            } if lower_left == &key.0 && upper_right == &key.1 => {
+                let seed_bits = (
+                    pair_bits(*effective_lower_left),
+                    pair_bits(*effective_upper_right),
+                );
+                if effective.is_some_and(|expected| expected != seed_bits) {
+                    return Err(
+                        "rectangle semantic corner codecs disagree on effective seeds".into(),
+                    );
+                }
+                effective = Some(seed_bits);
+                if lenses.insert(*corner, point).is_some() {
+                    return Err("rectangle semantic seed group has a duplicate corner codec".into());
+                }
+            }
+            CodePointEdit::RectangleCorner {
+                lower_left,
+                upper_right,
+                ..
+            } if [lower_left, upper_right]
+                .into_iter()
+                .any(|address| address == &key.0 || address == &key.1) =>
+            {
+                return Err("rectangle semantic seed groups partially overlap".into());
+            }
+            CodePointEdit::Point { .. } | CodePointEdit::RectangleCorner { .. } => {}
+        }
+    }
+    if lenses.len() != 4 {
+        return Err("rectangle semantic seed group has no complete corner codec".into());
+    }
+    Ok(lenses)
+}
+
+fn canonical_rectangle_seeds(
+    first_corner: CodeRectangleCorner,
+    first_target: [f64; 2],
+    second_corner: CodeRectangleCorner,
+    second_target: [f64; 2],
+) -> Result<([f64; 2], [f64; 2]), String> {
+    let mut lower = [None, None];
+    let mut upper = [None, None];
+    for (corner, target) in [(first_corner, first_target), (second_corner, second_target)] {
+        match corner {
+            CodeRectangleCorner::LowerLeft => lower = target.map(Some),
+            CodeRectangleCorner::LowerRight => {
+                upper[0] = Some(target[0]);
+                lower[1] = Some(target[1]);
+            }
+            CodeRectangleCorner::UpperRight => upper = target.map(Some),
+            CodeRectangleCorner::UpperLeft => {
+                lower[0] = Some(target[0]);
+                upper[1] = Some(target[1]);
+            }
+        }
+    }
+    let complete = |seed: [Option<f64>; 2]| {
+        Some([seed[0]?, seed[1]?]).filter(|seed| seed.iter().all(|value| value.is_finite()))
+    };
+    let lower = complete(lower)
+        .ok_or_else(|| "canonical rectangle lenses do not cover the lower seed".to_owned())?;
+    let upper = complete(upper)
+        .ok_or_else(|| "canonical rectangle lenses do not cover the upper seed".to_owned())?;
+    Ok((lower, upper))
+}
+
+const fn rectangle_corner_position(
+    lower: [f64; 2],
+    upper: [f64; 2],
+    corner: CodeRectangleCorner,
+) -> [f64; 2] {
+    match corner {
+        CodeRectangleCorner::LowerLeft => lower,
+        CodeRectangleCorner::LowerRight => [upper[0], lower[1]],
+        CodeRectangleCorner::UpperRight => upper,
+        CodeRectangleCorner::UpperLeft => [lower[0], upper[1]],
+    }
+}
+
+fn point_seed_roundoff_compatible(left: [f64; 2], right: [f64; 2]) -> bool {
+    left.into_iter()
+        .zip(right)
+        .all(|(left, right)| scalar_seed_roundoff_compatible(left, right))
+}
+
+fn scalar_seed_roundoff_compatible(left: f64, right: f64) -> bool {
+    if !left.is_finite() || !right.is_finite() {
+        return false;
+    }
+    let left = left.to_bits();
+    let right = right.to_bits();
+    if left == right {
+        return true;
+    }
+    if left & !F64_SIGN_MASK == 0 && right & !F64_SIGN_MASK == 0 {
+        return false;
+    }
+    (left & F64_SIGN_MASK == right & F64_SIGN_MASK
+        && left.abs_diff(right) <= TERMINAL_SEED_ROUNDOFF_ULPS)
+        || (f64::from_bits(left).abs() <= TERMINAL_SEED_ZERO_ROUNDOFF
+            && f64::from_bits(right).abs() <= TERMINAL_SEED_ZERO_ROUNDOFF)
 }
 
 fn select_semantic_point_drag_lens(
@@ -577,14 +725,190 @@ impl CodeProjectWorkbench {
             .take()
             .expect("the authenticated pending semantic drag was present");
         let candidate_editor = restore_editor_checkpoint(editor_checkpoint)?;
-        let position = expanded_port_position(&candidate_editor, &pending.point.handle)
-            .ok_or_else(|| "terminal semantic point has no Cartesian instance seed".to_owned())?;
-        self.publish_semantic_point_overlay(
-            &[(pending.point, position)],
+        let origin_editor = match pending.detached_origin_checkpoint.as_ref() {
+            Some(checkpoint) => restore_editor_checkpoint(checkpoint)?,
+            None => restore_editor_checkpoint(self.session.pointer_frame_checkpoint())?,
+        };
+        let change = classify_code_owned_editor_change(
+            &origin_editor,
             &candidate_editor,
+            self.session
+                .snapshot()
+                .accepted_expansion
+                .as_ref()
+                .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?,
+        )?;
+        let Some(CodeOwnedEditorChange::SemanticPoints { placements }) = change else {
+            return Err(
+                "terminal semantic point gesture has no authenticated placement bundle".into(),
+            );
+        };
+        let bundle =
+            self.canonical_terminal_point_bundle(&pending.point, placements, &candidate_editor)?;
+        self.publish_semantic_point_overlay(
+            &bundle.placements,
+            &candidate_editor,
+            &bundle.rectangle_projections,
             label,
-            SemanticTerminalParity::AuthenticatedPointRoute,
         )
+    }
+
+    /// Selects one deterministic semantic representation of the complete
+    /// native point-drag closure. Rectangle corners are four GUI lenses over
+    /// two code seeds, so one authenticated corner and its diagonal opposite
+    /// form the canonical, component-disjoint pair. Solver-roundoff aliases
+    /// must describe that same pair; material disagreements fail closed.
+    /// Independent companion points remain in the atomic bundle.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the authenticated terminal bundle keeps exact point and complete rectangle-codec conflict handling in one atomic classifier"
+    )]
+    fn canonical_terminal_point_bundle(
+        &self,
+        authenticated: &ExpandedWritablePoint,
+        placements: Vec<(ExpandedWritablePoint, [f64; 2])>,
+        candidate_editor: &ProjectionalEditorSession,
+    ) -> Result<CanonicalTerminalPointBundle, String> {
+        if !placements.iter().any(|(point, _)| point == authenticated) {
+            return Err(
+                "terminal semantic placement bundle does not contain its authenticated point lens"
+                    .into(),
+            );
+        }
+        let expansion = self
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+        let mut rectangle_groups = BTreeMap::<
+            (CodeWritableAddress, CodeWritableAddress),
+            Vec<(ExpandedWritablePoint, [f64; 2])>,
+        >::new();
+        let mut point_groups =
+            BTreeMap::<CodeWritableAddress, Vec<(ExpandedWritablePoint, [f64; 2])>>::new();
+        for placement in placements {
+            match &placement.0.edit {
+                CodePointEdit::Point { address } => {
+                    point_groups
+                        .entry(address.clone())
+                        .or_default()
+                        .push(placement);
+                }
+                CodePointEdit::RectangleCorner {
+                    lower_left,
+                    upper_right,
+                    ..
+                } => {
+                    rectangle_groups
+                        .entry((lower_left.clone(), upper_right.clone()))
+                        .or_default()
+                        .push(placement);
+                }
+            }
+        }
+
+        let mut canonical = Vec::new();
+        for (_address, group) in point_groups {
+            let selected = group
+                .iter()
+                .find(|(point, _)| point == authenticated)
+                .unwrap_or(&group[0]);
+            if group
+                .iter()
+                .any(|(_, target)| pair_bits(*target) != pair_bits(selected.1))
+            {
+                return Err(
+                    "conflicting semantic point aliases require distinct exact drafts".into(),
+                );
+            }
+            canonical.push(selected.clone());
+        }
+
+        let mut rectangle_projections = Vec::new();
+        for (key, group) in rectangle_groups {
+            let lenses = rectangle_lenses(expansion, &key)?;
+            let authenticated_corner = group.iter().find_map(|(point, _)| {
+                (point == authenticated)
+                    .then(|| rectangle_corner(&point.edit))
+                    .flatten()
+            });
+            let (first_corner, second_corner) = authenticated_corner.map_or(
+                (
+                    CodeRectangleCorner::LowerLeft,
+                    CodeRectangleCorner::UpperRight,
+                ),
+                |corner| (corner, opposite_rectangle_corner(corner)),
+            );
+            let first = if authenticated_corner == Some(first_corner) {
+                authenticated.clone()
+            } else {
+                (*lenses
+                    .get(&first_corner)
+                    .ok_or_else(|| "canonical rectangle first lens disappeared".to_owned())?)
+                .clone()
+            };
+            let second = (*lenses
+                .get(&second_corner)
+                .ok_or_else(|| "canonical rectangle second lens disappeared".to_owned())?)
+            .clone();
+            let first_target =
+                expanded_port_position(candidate_editor, &first.handle).ok_or_else(|| {
+                    "canonical rectangle lens has no Cartesian instance seed".to_owned()
+                })?;
+            let second_target = expanded_port_position(candidate_editor, &second.handle)
+                .ok_or_else(|| {
+                    "canonical rectangle lens has no Cartesian instance seed".to_owned()
+                })?;
+            let (lower_left, upper_right) = canonical_rectangle_seeds(
+                first_corner,
+                first_target,
+                second_corner,
+                second_target,
+            )?;
+            for (point, target) in &group {
+                let corner = rectangle_corner(&point.edit)
+                    .ok_or_else(|| "rectangle group contains a non-rectangle lens".to_owned())?;
+                let expected = rectangle_corner_position(lower_left, upper_right, corner);
+                if !point_seed_roundoff_compatible(*target, expected) {
+                    return Err(format!(
+                        "conflicting rectangle `{}` aliases disagree beyond solver roundoff",
+                        key.0.display_path(),
+                    ));
+                }
+            }
+            let redundant_aliases = [
+                CodeRectangleCorner::LowerLeft,
+                CodeRectangleCorner::LowerRight,
+                CodeRectangleCorner::UpperRight,
+                CodeRectangleCorner::UpperLeft,
+            ]
+            .into_iter()
+            .filter(|corner| *corner != first_corner && *corner != second_corner)
+            .map(|corner| {
+                lenses
+                    .get(&corner)
+                    .map(|point| point.handle.clone())
+                    .ok_or_else(|| "redundant rectangle parity lens disappeared".to_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .try_into()
+            .map_err(|_| "rectangle parity requires exactly two redundant aliases".to_owned())?;
+            rectangle_projections.push(RectangleTerminalProjection {
+                anchors: [first.handle.clone(), second.handle.clone()],
+                redundant_aliases,
+            });
+            canonical.push((first, first_target));
+            canonical.push((second, second_target));
+        }
+        canonical.sort_by_key(|(point, _)| (point != authenticated, point.handle.clone()));
+        self.session
+            .stage_point_drags(canonical.iter().map(|(point, target)| (point, *target)))
+            .map_err(|error| error.to_string())?;
+        Ok(CanonicalTerminalPointBundle {
+            placements: canonical,
+            rectangle_projections,
+        })
     }
 
     fn publish_delegated_editor_checkpoint_unchecked(
@@ -614,13 +938,9 @@ impl CodeProjectWorkbench {
                 );
             }
             return match change {
-                CodeOwnedEditorChange::SemanticPoints { placements } => self
-                    .publish_semantic_point_overlay(
-                        &placements,
-                        &candidate_editor,
-                        label,
-                        SemanticTerminalParity::ClassifiedCheckpoint,
-                    ),
+                CodeOwnedEditorChange::SemanticPoints { placements } => {
+                    self.publish_semantic_point_overlay(&placements, &candidate_editor, &[], label)
+                }
             };
         }
         let expansion = self
@@ -650,8 +970,8 @@ impl CodeProjectWorkbench {
         &mut self,
         placements: &[(ExpandedWritablePoint, [f64; 2])],
         candidate_editor: &ProjectionalEditorSession,
+        rectangle_projections: &[RectangleTerminalProjection],
         label: &str,
-        terminal_parity: SemanticTerminalParity,
     ) -> Result<Option<AcceptedCodePublication>, String> {
         if self.is_dirty() {
             return Err(
@@ -704,13 +1024,12 @@ impl CodeProjectWorkbench {
                 return Err("semantic point draft failed exact terminal/native seed parity".into());
             }
         }
-        if terminal_parity == SemanticTerminalParity::ClassifiedCheckpoint {
-            validate_terminal_native_parity(
-                candidate_editor,
-                &materialized.editor,
-                &materialized.expansion,
-            )?;
-        }
+        validate_terminal_native_parity(
+            candidate_editor,
+            &materialized.editor,
+            &materialized.expansion,
+            rectangle_projections,
+        )?;
         let expansion = materialized.expansion.clone();
         let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
         let delegated_editor = restore_editor_checkpoint(&checkpoint)?;
@@ -843,7 +1162,7 @@ impl CodeProjectWorkbench {
                 pointer_id,
                 session: self.session.identity().clone(),
                 point,
-                transient_detachment: false,
+                detached_origin_checkpoint: None,
             });
             return Ok(None);
         }
@@ -880,7 +1199,7 @@ impl CodeProjectWorkbench {
             pointer_id,
             session: self.session.identity().clone(),
             point,
-            transient_detachment: true,
+            detached_origin_checkpoint: Some(checkpoint),
         });
         Ok(Some(PreparedCodePointDrag {
             editor: detached_editor,
@@ -916,7 +1235,7 @@ impl CodeProjectWorkbench {
             .pending_semantic_point_drag
             .take()
             .expect("the authenticated pending semantic drag was present");
-        if pending.transient_detachment {
+        if pending.detached_origin_checkpoint.is_some() {
             self.restore_accepted_editor().map(Some)
         } else {
             Ok(None)
@@ -3110,10 +3429,87 @@ fn computed_snapshots_match_for_terminal_parity(
             })
 }
 
+fn documents_match_for_terminal_parity(
+    terminal_editor: &ProjectionalEditorSession,
+    staged_editor: &ProjectionalEditorSession,
+    terminal: &geosolve_sketch::SketchDocument,
+    staged: &geosolve_sketch::SketchDocument,
+    rectangle_projections: &[RectangleTerminalProjection],
+    recomputable_line_branches: &BTreeSet<geosolve_sketch::CurveId>,
+) -> Result<bool, String> {
+    if terminal.exact_except_recomputable_line_branches(staged, recomputable_line_branches) {
+        return Ok(true);
+    }
+    let resolve = |editor: &ProjectionalEditorSession, handle: &ExpandedPort| {
+        expanded_port_point(editor, handle)
+            .ok_or_else(|| "rectangle parity lens has no accepted native point binding".to_owned())
+    };
+    let mut anchors = BTreeSet::new();
+    let mut redundant = BTreeSet::new();
+    for projection in rectangle_projections {
+        for handle in &projection.anchors {
+            let terminal_point = resolve(terminal_editor, handle)?;
+            if terminal_point != resolve(staged_editor, handle)? {
+                return Ok(false);
+            }
+            if !anchors.insert(terminal_point) {
+                return Err("rectangle parity repeats one anchor point".into());
+            }
+        }
+        for handle in &projection.redundant_aliases {
+            let terminal_point = resolve(terminal_editor, handle)?;
+            if terminal_point != resolve(staged_editor, handle)? {
+                return Ok(false);
+            }
+            if !redundant.insert(terminal_point) {
+                return Err("rectangle parity repeats one redundant point".into());
+            }
+        }
+    }
+    if !anchors.is_disjoint(&redundant) {
+        return Err("rectangle parity anchor aliases a redundant point".into());
+    }
+    let mut normalized = terminal.clone();
+    for point in anchors {
+        let terminal_position = terminal
+            .point(point)
+            .ok_or_else(|| "terminal rectangle anchor disappeared".to_owned())?
+            .position;
+        let staged_position = staged
+            .point(point)
+            .ok_or_else(|| "staged rectangle anchor disappeared".to_owned())?
+            .position;
+        if pair_bits(terminal_position) != pair_bits(staged_position) {
+            return Ok(false);
+        }
+    }
+    for point in redundant {
+        let terminal_position = terminal
+            .point(point)
+            .ok_or_else(|| "terminal redundant rectangle point disappeared".to_owned())?
+            .position;
+        let staged_position = staged
+            .point(point)
+            .ok_or_else(|| "staged redundant rectangle point disappeared".to_owned())?
+            .position;
+        if pair_bits(terminal_position) == pair_bits(staged_position) {
+            continue;
+        }
+        if !point_seed_roundoff_compatible(terminal_position, staged_position) {
+            return Ok(false);
+        }
+        normalized
+            .set_point_position(point, staged_position)
+            .map_err(|error| format!("rectangle parity normalization failed: {error}"))?;
+    }
+    Ok(normalized.exact_except_recomputable_line_branches(staged, recomputable_line_branches))
+}
+
 fn validate_terminal_native_parity(
     terminal: &ProjectionalEditorSession,
     staged: &ProjectionalEditorSession,
     expansion: &ExpandedCodeProject,
+    rectangle_projections: &[RectangleTerminalProjection],
 ) -> Result<(), String> {
     let terminal_authority = terminal
         .coordinator()
@@ -3135,15 +3531,21 @@ fn validate_terminal_native_parity(
         .accepted_state_for_current_input()
         .ok_or_else(|| "staged code drag has no current accepted document".to_owned())?
         .document();
-    let same_documents = terminal_authority
-        .session
-        .design_document()
-        .exact_except_recomputable_line_branches(
-            staged_authority.session.design_document(),
-            &recomputable,
-        )
-        && terminal_accepted
-            .exact_except_recomputable_line_branches(staged_accepted, &recomputable);
+    let same_documents = documents_match_for_terminal_parity(
+        terminal,
+        staged,
+        terminal_authority.session.design_document(),
+        staged_authority.session.design_document(),
+        rectangle_projections,
+        &recomputable,
+    )? && documents_match_for_terminal_parity(
+        terminal,
+        staged,
+        terminal_accepted,
+        staged_accepted,
+        rectangle_projections,
+        &recomputable,
+    )?;
     let same_features = feature_documents_match_for_terminal_parity(
         &terminal_authority.features,
         &staged_authority.features,
@@ -3340,6 +3742,30 @@ fn escape_attribute(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rectangle_terminal_roundoff_contract_is_tight_and_signed_zero_exact() {
+        let seed = 1.0_f64;
+        let within = f64::from_bits(seed.to_bits() + TERMINAL_SEED_ROUNDOFF_ULPS);
+        let outside = f64::from_bits(seed.to_bits() + TERMINAL_SEED_ROUNDOFF_ULPS + 1);
+        assert!(scalar_seed_roundoff_compatible(seed, seed));
+        assert!(scalar_seed_roundoff_compatible(seed, within));
+        assert!(!scalar_seed_roundoff_compatible(seed, outside));
+        assert!(scalar_seed_roundoff_compatible(
+            3.0 * f64::EPSILON,
+            -2.0 * f64::EPSILON,
+        ));
+        assert!(!scalar_seed_roundoff_compatible(
+            2.0 * TERMINAL_SEED_ZERO_ROUNDOFF,
+            0.0,
+        ));
+        assert!(!scalar_seed_roundoff_compatible(0.0, -0.0));
+        assert!(!scalar_seed_roundoff_compatible(f64::NAN, f64::NAN));
+        assert!(!scalar_seed_roundoff_compatible(
+            f64::INFINITY,
+            f64::INFINITY,
+        ));
+    }
 
     fn ordinary_rectangle_diagonal() -> ProjectionalEditorSession {
         let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84_f003)).unwrap();
@@ -5544,8 +5970,8 @@ export default sketch(($) => {
             .publish_semantic_point_overlay(
                 &[(point, [26.0, 13.0])],
                 &candidate.editor,
+                &[],
                 "Drag generated shoulder",
-                SemanticTerminalParity::ClassifiedCheckpoint,
             )
             .unwrap()
             .unwrap();
@@ -7803,6 +8229,219 @@ export default sketch(($) => {
     #[test]
     fn selected_producer_pointer_drag_keeps_the_referenced_consumer_attached() {
         assert_producer_pointer_drag_keeps_the_referenced_consumer_attached(true);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one real Compass Rose pointer regression keeps accepted release, complete coupled parity, persistence, identity, finiteness and residual validation together"
+    )]
+    fn compass_rose_shared_center_terminal_matches_the_last_native_preview() {
+        use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
+
+        let (mut workbench, mut editor) = open_boxed("compass-rose");
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("accepted Compass Rose expansion");
+        let center_lens = expansion
+            .writable_points
+            .iter()
+            .find(|point| {
+                !point.source.is_reference()
+                    && expansion.declaration_for_alias(&point.handle.alias)
+                        == Some(&SemanticSymbol("north".into()))
+                    && point.handle.selector
+                        == IntentPortSelector::Node {
+                            role: IntentPortRole::Start,
+                            index: 0,
+                        }
+            })
+            .expect("north.start is the unique shared-center producer")
+            .clone();
+        let center = expanded_port_point(&editor, &center_lens.handle)
+            .expect("Compass Rose shared center native point");
+        let position = |editor: &ProjectionalEditorSession, point| {
+            editor
+                .coordinator()
+                .accepted_materialization()
+                .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                .and_then(|accepted| accepted.document().point(point))
+                .map(|point| point.position)
+                .expect("accepted native point")
+        };
+        let origin = position(&editor, center);
+        let target = [origin[0] + 6.0, origin[1] - 4.0];
+        let pointer_id = 8_421;
+        let viewport = Viewport::new([1_440.0, 900.0], [0.0, 0.0], 10.0).unwrap();
+        let pointer = |model| PointerInput {
+            pointer_id,
+            position: viewport.model_to_screen(model),
+            modifiers: Modifiers::default(),
+        };
+
+        let scene = editor.scene(viewport, 0.5).expect("pointer-down scene");
+        editor
+            .pointer_down(&scene, pointer(origin))
+            .expect("shared-center pointer-down");
+        let route = editor
+            .editor()
+            .prepared_point_drag_route()
+            .expect("shared-center point route");
+        assert_eq!(route.point, center);
+        assert!(
+            workbench
+                .prepare_semantic_point_drag(&editor, pointer_id, center, None)
+                .expect("unique producer semantic route")
+                .is_none(),
+        );
+
+        let scene = editor.scene(viewport, 0.5).expect("pointer-move scene");
+        editor
+            .pointer_move(&scene, pointer(target))
+            .expect("valid shared-center preview");
+        let scene = editor
+            .scene(viewport, 0.5)
+            .expect("replayed terminal pointer-move scene");
+        editor
+            .pointer_move(&scene, pointer(target))
+            .expect("valid duplicate terminal preview");
+        let preview_position = editor
+            .coordinator()
+            .presentation_session()
+            .and_then(|session| session.accepted_state_for_current_input())
+            .and_then(|state| state.document().point(center))
+            .map(|point| point.position)
+            .expect("accepted shared-center preview position");
+        assert_eq!(preview_position.map(f64::to_bits), target.map(f64::to_bits));
+
+        let preview_scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
+        assert!(
+            editor
+                .pointer_up(&preview_scene, pointer(target))
+                .expect("valid shared-center terminal")
+                .transaction
+                .is_some(),
+        );
+        assert_eq!(
+            position(&editor, center).map(f64::to_bits),
+            preview_position.map(f64::to_bits),
+            "native terminal publication must retain the exact preview",
+        );
+        let terminal_authority = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("terminal accepted materialization");
+        let terminal_design = terminal_authority.session.design_document().clone();
+        let terminal_accepted = terminal_authority
+            .session
+            .accepted_state_for_current_input()
+            .expect("terminal current accepted state")
+            .document()
+            .clone();
+        let revision_before = workbench.session.identity().revision;
+
+        let publication = workbench
+            .publish_pointer_terminal_checkpoint(
+                pointer_id,
+                &encode_editor_checkpoint(&editor).expect("terminal delegated checkpoint"),
+                "Move Compass Rose shared center",
+            )
+            .expect("semantic terminal publication")
+            .expect("one outer history row");
+        let published_center = expanded_port_point(&publication.editor, &center_lens.handle)
+            .expect("published shared-center point");
+        assert_eq!(
+            position(&publication.editor, published_center).map(f64::to_bits),
+            preview_position.map(f64::to_bits),
+            "outer code publication must not replace a valid drop with another solution",
+        );
+        let accepted = publication
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("published accepted materialization");
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("published accepted expansion");
+        let mut recomputable = recomputable_code_line_branches(&editor, expansion)
+            .expect("terminal source-derived line branches");
+        recomputable.extend(
+            recomputable_code_line_branches(&publication.editor, expansion)
+                .expect("published source-derived line branches"),
+        );
+        assert!(
+            terminal_design.exact_except_recomputable_line_branches(
+                accepted.session.design_document(),
+                &recomputable,
+            ),
+            "outer code publication must preserve the complete coupled terminal design",
+        );
+        assert!(
+            terminal_accepted.exact_except_recomputable_line_branches(
+                accepted
+                    .session
+                    .accepted_state_for_current_input()
+                    .expect("published current accepted state")
+                    .document(),
+                &recomputable,
+            ),
+            "outer code publication must preserve the exact solved terminal scene",
+        );
+        assert_eq!(workbench.session.identity().revision, revision_before + 1);
+        for declaration in ["east", "south", "west"] {
+            let referenced_start = expansion
+                .writable_points
+                .iter()
+                .find(|point| {
+                    expansion.declaration_for_alias(&point.handle.alias)
+                        == Some(&SemanticSymbol(declaration.into()))
+                        && point.handle.selector
+                            == IntentPortSelector::Node {
+                                role: IntentPortRole::Start,
+                                index: 0,
+                            }
+                })
+                .and_then(|point| expanded_port_point(&publication.editor, &point.handle))
+                .expect("published referenced spoke start");
+            assert_eq!(
+                referenced_start, published_center,
+                "{declaration}.start must remain attached to north.start",
+            );
+        }
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9),
+        );
+        assert!(
+            accepted
+                .session
+                .accepted_state_for_current_input()
+                .expect("published current accepted state")
+                .document()
+                .points()
+                .iter()
+                .flat_map(|point| point.position)
+                .all(f64::is_finite),
+        );
+        let persisted = workbench
+            .to_persistence_json()
+            .expect("persisted code project");
+        let restored =
+            CodeProjectWorkbench::from_persistence_json(&persisted).expect("restored code project");
+        assert_eq!(
+            restored.accepted_editor_checkpoint(),
+            workbench.accepted_editor_checkpoint(),
+        );
     }
 
     #[test]

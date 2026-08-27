@@ -67,15 +67,19 @@ construction/NURBS UAT and certified all-family visual profiles.
   adds a bounded collaborative semantic overlay and provenance-owned drag/deletion route; M84-F006
   adversarially hardens its persistence, owner pruning, generated detachment/rebinding and exact
   duplicate/conflict authority; M84-F007 makes one pointer-down semantic lens the sole terminal
-  seed authority. The creative-catalog amendment expands the genuine catalog to eight projects,
+  gesture authority. M84-F010 retains that authentication boundary while making terminal
+  durability include the complete authenticated solver-coupled semantic point closure. The
+  creative-catalog amendment expands the genuine catalog to eight projects,
   publishes typed keyed Polyline vertex/segment roots, adds M84-F008's camera/sample presentation
   correction and repairs M84-F009's multi-output shorthand routing. The clean-qualified F003/F004,
   direct-authoring `41e65a4` and combined F005/F006
   `ff2e142` candidates are historical because they predate the current scope or were withdrawn by a
-  finding. Exact eight-demo/F008/F009 source `c74651c`, tree `a904584`, passes clean qualification,
-  no-rebuild freeze and exact temporary/retained Tailscale verification. Snapshot
-  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` is retained UAT authority; F007 source `cc2f05e` is now
-  historical. Refreshed U1-U14 remain pending, and Pages stays on accepted M83.
+  finding. Exact eight-demo/F008/F009 source `c74651c`, tree `a904584`, passed clean qualification,
+  no-rebuild freeze and exact temporary/retained Tailscale verification, but M84-F010 withdraws it
+  after a valid Compass Rose center release durably rematerialized to another solution. Snapshot
+  `/tmp/geosolve-m84-f009-uat.q8cKIN3v` remains historical defect evidence while a clean F010
+  replacement is pending; F007 source `cc2f05e` is also historical. Refreshed U1-U14 remain
+  pending, and Pages stays on accepted M83.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -935,17 +939,25 @@ transaction-authority rules, not solver equations or priority semantics.
 M84-F007 separates native preview motion from semantic terminal intent. Pointer-down authenticates
 one exact semantic point lens through accepted expansion provenance and retains it across frames.
 No selection resolves the unique producer, selected producer keeps consumers attached and selected
-consumer retains local detachment. Release stages only that lens and independently rematerializes
-its overlay; other solver-coupled points may move in the preview but cannot become
-additional same-tier writes because of incidental roundoff. Ordinary GUI-owned points remain on
-the delegated M83 route. Its pending route stores the exact `CodeSessionIdentity`, pointer and
-lens, consumable only by that pointer's dedicated authenticated terminal publisher. Generic saves,
-foreign/reentrant preparation and foreign terminals reject without consuming/replacing the route;
-every non-pointer durable workbench mutation first cancels capture and invalidates it; and an
-unexpected generic-save rejection preserves the live native authority rather than restoring under
-an unconsumed token. No-motion release/cancel is history-neutral, and Apply/Undo cannot let a stale
-terminal revert newer accepted authority. Genuine unequal semantic writes still reject bit-exactly
-under F006.
+consumer retains local detachment. Ordinary GUI-owned points remain on the delegated M83 route.
+Its pending route stores the exact `CodeSessionIdentity`, pointer and lens, consumable only by that
+pointer's dedicated authenticated terminal publisher. Generic saves, foreign/reentrant preparation
+and foreign terminals reject without consuming/replacing the route; every non-pointer durable
+workbench mutation first cancels capture and invalidates it; and an unexpected generic-save
+rejection preserves the live native authority rather than restoring under an unconsumed token.
+No-motion release/cancel is history-neutral, and Apply/Undo cannot let a stale terminal revert newer
+accepted authority. Genuine unequal semantic writes still reject bit-exactly under F006.
+
+M84-F010 supersedes only F007's single-seed durability interpretation. One lens still authorizes
+the gesture, but release classifies the complete terminal movement closure against the exact
+authenticated origin and persists all solver-coupled semantic point seeds atomically. A detached
+consumer retains its exact post-detachment origin checkpoint. Durable rematerialization must match
+the complete terminal design and current accepted document, computed features, logical/native
+ownership and allocator state. Ordinary point aliases remain exact. Rectangle corners are four
+semantic lenses over two canonical seeds: the authenticated corner and diagonal opposite are exact
+anchors, while the two redundant adjacent aliases may normalize only under bounded finite
+roundoff; signed-zero and material conflicts still reject. This is semantic transaction and parity
+policy, not a solver equation, tolerance, constraint priority or branch rule.
 
 The combined F005/F006 source `ff2e142` and its frozen candidate are withdrawn by this reproduction.
 The post-audit demo-web library passes 270/270 with real no-motion, exact stored-session mismatch,
@@ -1938,8 +1950,10 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   nominations and direct artifact-free authored source `41e65a4` are withdrawn historical
   evidence. M84-F005's collaborative overlay/semantic drag/deletion authority, M84-F006 audit
   hardening and M84-F007 terminal-lens classification are historical clean-qualified evidence at
-  source `cc2f05e`, tree `6b8fc41`. The eight-demo/M84-F008/F009 replacement is clean-qualified,
-  frozen and retained at exact source `c74651c`, tree `a904584`, snapshot
-  `/tmp/geosolve-m84-f009-uat.q8cKIN3v`. Combined source `ff2e142` is withdrawn; refreshed human
-  UAT U1-U14 remains pending. Accepted M83 remains Pages authority and no M84 publication is
-  claimed.
+  source `cc2f05e`, tree `6b8fc41`. The eight-demo/M84-F008/F009 replacement was clean-qualified
+  and frozen at exact source `c74651c`, tree `a904584`, snapshot
+  `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, but M84-F010 withdraws it and implements complete
+  authenticated solver-coupled terminal durability. Proportional native/WASM/browser evidence
+  passes; a clean immutable F010 replacement remains pending. Combined source `ff2e142` is
+  withdrawn; refreshed human UAT U1-U14 remains pending. Accepted M83 remains Pages authority and
+  no M84 publication is claimed.

@@ -2,10 +2,11 @@
 
 # ADR 0041: Optional code/GUI sketch authoring
 
-Status: accepted for M84. The eight-demo creative-catalog amendment and M84-F008/F009 corrections
-are implemented, clean-qualified, frozen and exact-verified at source `c74651c`, tree `a904584`,
-snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`; refreshed UAT remains pending. F007 source
-`cc2f05e` is withdrawn historical evidence. The direct-authoring
+Status: accepted for M84. M84-F010 withdraws the clean-qualified eight-demo/F008/F009 candidate at
+source `c74651c`, tree `a904584`, snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`. Its coupled
+semantic-terminal correction has proportional native/WASM/browser qualification; a clean immutable
+replacement and refreshed UAT remain pending. F007 source `cc2f05e` is withdrawn historical
+evidence. The direct-authoring
 `41e65a4` snapshot, combined F005/F006 source `ff2e142`, initial `79078ec`, F003 `b9e67bad` and F004
 `c2cf160` snapshots are withdrawn historical evidence. No M84 candidate is accepted; GitHub Pages
 remains on accepted M83.
@@ -289,9 +290,8 @@ equation, constraint, priority, tolerance or branch rule.
 M84-F007 makes pointer-down, rather than terminal checkpoint inference, the semantic edit authority.
 One exact point lens is authenticated from accepted expansion provenance and retained across all
 native preview frames. No selection chooses a unique producer, explicit producer selection retains
-shared attachment and explicit consumer selection retains local detachment. Release stages only
-that lens and independently rematerializes its overlay. Solver-coupled motion remains preview
-evidence and cannot become extra semantic writes merely because several points moved by roundoff.
+shared attachment and explicit consumer selection retains local detachment. That lens alone
+authorizes release; solver-coupled motion cannot become independently authorized sibling intent.
 The pending route stores the exact `CodeSessionIdentity`, pointer and lens. Only the dedicated
 authenticated terminal publisher for that pointer may consume it: generic saves reject without
 consumption, while foreign/reentrant preparation and foreign terminals reject while preserving the
@@ -302,6 +302,19 @@ of restoring underneath it. No-motion release/cancel is history-neutral; Apply/U
 stale terminal without reverting newer accepted authority.
 Ordinary GUI-owned points retain the delegated editor path. This resolves terminal authority without
 weakening F006's bit-exact conflict rule or adding solver behavior.
+
+M84-F010 refines durability while preserving F007 authentication. A valid release compares the
+exact authenticated origin—post-detachment for a selected consumer—to the accepted terminal
+checkpoint, classifies only provenance-owned semantic Cartesian leaves and atomically stages the
+complete solver-coupled movement closure. The authenticated lens must be present; unrelated sibling
+edits remain forbidden. Cold rematerialization always proves parity for design and current accepted
+documents, computed features, ownership and allocator state, using
+`accepted_state_for_current_input()` as solved authority. Ordinary point aliases remain bit-exact.
+Rectangle corners are four lenses over two seeds: the authenticated corner and diagonal opposite
+are exact anchors; only the two redundant adjacent aliases may normalize under tightly bounded
+finite roundoff. Different signed zero, non-finite values and material disagreement reject. This
+changes transaction/parity policy only, not equations, constraints, priority, tolerance or branch
+state.
 
 M84-F008 corrects only code-project presentation and sample content. Project installation now fits
 the camera to the accepted composed scene, falling back to the canonical Origin camera only for
@@ -339,13 +352,14 @@ geometry, solver equations, constraints, priority, tolerance and branch behavior
   at `/tmp/geosolve-m84-f007-uat.KgW8fpLf`, aggregate
   `8f03810911b1ff96c4f825e005125250db804f463389953e937005ec505b7ab9`. Exact temporary and
   retained Tailscale verification plus the 14-case browser matrix pass on both endpoints; PID
-  `62376` is retired. Current exact source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
+  `62376` is retired. Withdrawn F009 source `c74651cc82506e31926042df65a1eeec08a6af9d`, tree
   `a904584410ca9a8cd3112d17ad70c0e84c29e8d9`, passes the complete clean gate. Its immutable
   no-rebuild snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, aggregate
   `23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, passes byte-identical
   temporary/retained HTTP verification and the 14-case browser matrix on both endpoints. PID
-  `3965271` serves only this snapshot at `http://100.94.63.83:8080/`. Refreshed UAT and public
-  publication remain pending.
+  `3965271` serves only this snapshot at `http://100.94.63.83:8080/` until a clean F010 candidate
+  passes temporary verification. Focused F010 owner/WASM/mutable-browser checks pass; its clean
+  qualification, immutable replacement, refreshed UAT and public publication remain pending.
 
 ## Rejected alternatives
 

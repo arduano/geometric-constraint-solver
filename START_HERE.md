@@ -380,9 +380,11 @@ optional formats intentionally identify as
 `geosolve-sketch-code-session-v2` and `geosolve-code-workbench-v2`; plain M83 workspace-v8 is
 unchanged. M84-F007 then repairs a terminal classification seam exposed by multi-frame rectangle
 drags. Pointer-down now authenticates one exact semantic point lens: no selection chooses the
-unique producer, selected producer remains attached and selected consumer still detaches. Release
-independently rematerializes only that lens, so solver-coupled corner roundoff cannot become extra
-same-tier writes; ordinary GUI points remain delegated. The pending route stores exact
+unique producer, selected producer remains attached and selected consumer still detaches. That lens
+alone authorizes terminal publication; ordinary GUI points remain delegated. M84-F010 supersedes
+the original single-seed durability interpretation: release classifies and atomically persists the
+complete authenticated solver-coupled semantic point closure, then requires full current-accepted
+native parity. The pending route stores exact
 `CodeSessionIdentity`, pointer and lens; only its dedicated terminal publisher may consume it.
 Generic saves, foreign/reentrant preparation, foreign terminals and stale terminals reject without
 replacing the route or newer authority. Every durable sidebar, code, Outline, Inspector, history,
@@ -418,9 +420,18 @@ M84 ledger is reviewed at SHA-256
 complete clean gate. Its no-rebuild snapshot `/tmp/geosolve-m84-f009-uat.q8cKIN3v`, aggregate
 `23f2f839f2a3be6b722ae26cb548f0a19ce2f3d6afac90d5f913938a042d1c1f`, passes byte-identical
 temporary/retained HTTP verification and the 14/14 browser matrix on both endpoints. Retained PID
-`3965271` serves only those immutable bytes at `http://100.94.63.83:8080/`; the temporary and F007
-listeners are retired. U1-U14 remain pending. Pages remains on accepted M83 and no M84 public
-publication is claimed.
+`3965271` still serves only those immutable bytes at `http://100.94.63.83:8080/`; the temporary and
+F007 listeners are retired. M84-F010 withdraws that nomination after Compass Rose center release
+was shown to synchronously rematerialize from only the authenticated center seed and stale coupled
+spoke-end seeds, producing a different valid solution after pointer-up. One pointer-down lens
+remains the authorization boundary, but terminal durability now atomically carries the complete
+authenticated solver-coupled semantic point closure and always requires full current-accepted
+native parity. Ordinary aliases remain bit-exact; only redundant rectangle aliases receive tightly
+bounded numerical canonicalization, with signed-zero and material conflicts still rejected. The
+focused Compass owner regression, demo-web 274/274, formatting, warnings-denied focused Clippy,
+WASM and mutable-browser delayed-snap checks pass; clean committed-source qualification and an
+immutable replacement nomination remain pending. U1-U14 remain pending. Pages remains on accepted
+M83 and no M84 public publication is claimed.
 
 ## Read first
 
@@ -458,8 +469,8 @@ publication is claimed.
     scorecard and exact public closeout.
 20. `docs/adr/0041-optional-code-gui-sketch-authoring.md`, `docs/M84_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — active optional code/GUI architecture,
-    implemented F005-F009 ledger, current frozen F009 nomination, withdrawn historical
-    nominations and pending human scorecard.
+    implemented F005-F010 ledger, withdrawn F009 nomination, pending clean F010 replacement and
+    pending human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -835,10 +846,12 @@ M1-M83 are complete. M83's projectional implementation, F001-F010 repairs and po
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84 is active with architecture and acceptance frozen.
 The clean-qualified F003/F004 and direct-authoring candidates remain withdrawn historical evidence.
-The eight-demo creative-catalog amendment and M84-F008/F009 corrections are implemented,
-clean-qualified and frozen. Exact source `c74651c`, tree `a904584`, and immutable snapshot
-`/tmp/geosolve-m84-f009-uat.q8cKIN3v` are retained Tailscale authority; F007 source `cc2f05e` and
-combined source `ff2e142` are withdrawn and human UAT remains open.
+The eight-demo creative-catalog amendment and M84-F008/F009 corrections are implemented and their
+exact source `c74651c`, tree `a904584`, and immutable snapshot
+`/tmp/geosolve-m84-f009-uat.q8cKIN3v` remain historical defect evidence. M84-F010 withdraws that
+nomination and implements coupled semantic-terminal durability; proportional native/WASM/browser
+qualification passes while a clean immutable replacement is pending. F007 source `cc2f05e` and
+combined source `ff2e142` are also withdrawn, and human UAT remains open.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -956,10 +969,10 @@ Durable milestone and cleanup records:
   architecture)
 - `docs/M84_GOALS.md` (active managed-source, artifact, typed-reference and keyed-expansion
   contract)
-- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F009 ledger, eight-demo amendment,
-  current frozen F009 authority and withdrawn historical nominations)
-- `docs/M84_UAT.md` (clean-qualified eight-demo/F008/F009 replacement and refreshed pending U1-U14
-  scorecard; retained F009 candidate live on Tailscale)
+- `docs/M84_IMPLEMENTATION.md` (implemented architecture, F001-F010 ledger, eight-demo amendment,
+  withdrawn F009 authority and pending clean F010 replacement nomination)
+- `docs/M84_UAT.md` (F010-withdrawn F009 evidence and refreshed pending U1-U14 scorecard; historical
+  F009 bytes remain live on Tailscale only until a verified replacement is ready)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
