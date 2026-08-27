@@ -45,6 +45,49 @@ const CANVAS_PAN_POINTER_EVENTS: [&str; 3] = ["pointerdown", "pointermove", "poi
 #[cfg(target_arch = "wasm32")]
 const CAMERA_WHEEL_IDLE_RECONCILIATION_MS: i32 = 120;
 
+/// One captured middle-button camera gesture shared by both browser adapters.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct CanvasPanGesture {
+    pointer_id: i32,
+    origin: geosolve_constraint_editor::ScreenPoint,
+    origin_center: [f64; 2],
+}
+
+/// Applies the terminal pointer coordinate to the desired camera before an
+/// exact retained-scene reconciliation. Pointer-up is an input sample in its
+/// own right; relying on the preceding move would lose a valid final delta.
+#[cfg(any(target_arch = "wasm32", test))]
+fn finish_canvas_pan_camera(
+    camera: &mut scene::CanvasCamera,
+    gesture: CanvasPanGesture,
+    terminal: Option<geosolve_constraint_editor::ScreenPoint>,
+) -> bool {
+    terminal
+        .is_some_and(|terminal| camera.pan_from(gesture.origin_center, gesture.origin, terminal))
+}
+
+/// Shared admission contract for retained Select-hover presentation.
+///
+/// Both browser adapters must authenticate the same viewport and display
+/// policy against their own current scene authority before the headless hover
+/// state or stable SVG DOM may be updated in place.
+#[cfg(any(target_arch = "wasm32", test))]
+fn retained_hover_scene_is_admitted(
+    scene: Option<&geosolve_constraint_editor::EditorScene>,
+    viewport: geosolve_constraint_editor::Viewport,
+    annotations_visible: bool,
+    show_all_constraint_annotations: bool,
+    is_current: impl FnOnce(&geosolve_constraint_editor::EditorScene) -> bool,
+) -> bool {
+    scene.is_some_and(|scene| {
+        scene.viewport == viewport
+            && scene.annotations_visible == annotations_visible
+            && scene.show_all_constraint_annotations == show_all_constraint_annotations
+            && is_current(scene)
+    })
+}
+
 /// Browser presentation work admitted after one exact pointer lifecycle event.
 ///
 /// Pointer motion is intentionally transient: it republishes the exact current
@@ -4032,6 +4075,30 @@ fn projectional_item_element_ids(
     }
 }
 
+/// Origin is intentionally represented by the protected X/Y-axis
+/// intersection and therefore has no duplicate retained SVG owner. Every
+/// other scene-mapped item must resolve to at least one concrete DOM node.
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_item_intentionally_has_no_dom_owner(
+    item: geosolve_constraint_editor::SelectionItem,
+) -> bool {
+    matches!(
+        item,
+        geosolve_constraint_editor::SelectionItem::Datum(geosolve_sketch::SketchDatum::Origin)
+    )
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn projectional_hover_intentionally_has_no_dom_owner(
+    target: geosolve_constraint_editor::EditorHoverTarget,
+) -> bool {
+    matches!(
+        target,
+        geosolve_constraint_editor::EditorHoverTarget::Geometry(item)
+            if projectional_item_intentionally_has_no_dom_owner(item)
+    )
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 fn projectional_annotation_element_id(
     scene: &geosolve_constraint_editor::EditorScene,
@@ -4210,7 +4277,7 @@ pub(crate) mod wasm {
         grid_visible: bool,
         annotations_visible: bool,
         show_all_constraints: bool,
-        pan_gesture: Option<PanGesture>,
+        pan_gesture: Option<super::CanvasPanGesture>,
         pointer_captures: super::CanvasPointerCaptures,
         pointer_moves: Rc<RefCell<super::PointerMoveQueue>>,
         fillet_action_render: super::FilletActionRenderAuthority,
@@ -4240,7 +4307,7 @@ pub(crate) mod wasm {
         grid_visible: bool,
         annotations_visible: bool,
         show_all_constraints: bool,
-        pan_gesture: Option<PanGesture>,
+        pan_gesture: Option<super::CanvasPanGesture>,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
         captured_pointer: Option<i32>,
         outline_drag: Option<super::ProjectionalOutlineDrag>,
@@ -4283,13 +4350,6 @@ pub(crate) mod wasm {
                 model_position,
             )
         }
-    }
-
-    #[derive(Clone, Copy)]
-    struct PanGesture {
-        pointer_id: i32,
-        origin: geosolve_constraint_editor::ScreenPoint,
-        origin_center: [f64; 2],
     }
 
     pub(crate) fn install(document: &Document) -> Result<(), JsValue> {
@@ -6989,10 +7049,21 @@ pub(crate) mod wasm {
         token: &str,
         enabled: bool,
     ) -> Result<(), JsValue> {
-        for id in super::projectional_item_element_ids(scene, item) {
-            if let Some(element) = document.get_element_by_id(&id) {
-                set_class_token(&element, token, enabled)?;
-            }
+        let ids = super::projectional_item_element_ids(scene, item);
+        if ids.is_empty() {
+            return if super::projectional_item_intentionally_has_no_dom_owner(item) {
+                Ok(())
+            } else {
+                Err(JsValue::from_str(
+                    "a retained related item has no scene-mapped DOM owner",
+                ))
+            };
+        }
+        for id in ids {
+            let element = document.get_element_by_id(&id).ok_or_else(|| {
+                JsValue::from_str(&format!("retained scene DOM owner `{id}` is unavailable"))
+            })?;
+            set_class_token(&element, token, enabled)?;
         }
         Ok(())
     }
@@ -7001,9 +7072,15 @@ pub(crate) mod wasm {
         document: &Document,
         scene: &EditorScene,
         item: SelectionItem,
-    ) -> Option<Element> {
-        let id = super::projectional_annotation_element_id(scene, item)?;
-        document.get_element_by_id(&id)
+    ) -> Result<Element, JsValue> {
+        let id = super::projectional_annotation_element_id(scene, item).ok_or_else(|| {
+            JsValue::from_str("a retained annotation has no scene-mapped DOM owner")
+        })?;
+        document.get_element_by_id(&id).ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "retained annotation DOM owner `{id}` is unavailable"
+            ))
+        })
     }
 
     fn projectional_hover_visibility_context(
@@ -7056,11 +7133,7 @@ pub(crate) mod wasm {
                 if was_visible == is_visible {
                     continue;
                 }
-                let Some(element) =
-                    projectional_annotation_element(document, scene, annotation.item)
-                else {
-                    continue;
-                };
+                let element = projectional_annotation_element(document, scene, annotation.item)?;
                 set_class_token(&element, "context-hidden", !is_visible)?;
                 element.set_attribute("tabindex", if is_visible { "0" } else { "-1" })?;
                 if is_visible {
@@ -7091,40 +7164,70 @@ pub(crate) mod wasm {
         let Some(target) = target else {
             return Ok(());
         };
-        for target in super::projectional_hover_dom_targets(scene, target) {
+        let targets = super::projectional_hover_dom_targets(scene, target);
+        if targets.is_empty() {
+            return if super::projectional_hover_intentionally_has_no_dom_owner(target) {
+                Ok(())
+            } else {
+                Err(JsValue::from_str(
+                    "a retained hover target has no scene-mapped DOM owner",
+                ))
+            };
+        }
+        for target in targets {
             match target {
                 super::ProjectionalHoverDomTarget::Geometry(id) => {
-                    if let Some(element) = document.get_element_by_id(&id) {
-                        set_class_token(&element, "geometry-hovered", enabled)?;
-                    }
+                    let element = document.get_element_by_id(&id).ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "retained geometry DOM owner `{id}` is unavailable"
+                        ))
+                    })?;
+                    set_class_token(&element, "geometry-hovered", enabled)?;
                 }
                 super::ProjectionalHoverDomTarget::CurveControl(id) => {
-                    if let Some(element) = document.get_element_by_id(&id) {
-                        set_class_token(&element, "hovered", enabled)?;
-                        if let Some(tooltip) =
-                            element.query_selector(".wb-curve-control-tooltip")?
-                        {
-                            set_class_token(&tooltip, "context-hidden", !enabled)?;
-                        }
-                    }
+                    let element = document.get_element_by_id(&id).ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "retained curve-control DOM owner `{id}` is unavailable"
+                        ))
+                    })?;
+                    set_class_token(&element, "hovered", enabled)?;
+                    let tooltip = element
+                        .query_selector(".wb-curve-control-tooltip")?
+                        .ok_or_else(|| {
+                            JsValue::from_str(&format!(
+                                "retained curve-control tooltip in `{id}` is unavailable"
+                            ))
+                        })?;
+                    set_class_token(&tooltip, "context-hidden", !enabled)?;
                 }
                 super::ProjectionalHoverDomTarget::CurveControlGuide(id) => {
-                    if let Some(element) = document.get_element_by_id(&id) {
-                        set_class_token(&element, "hovered", enabled)?;
-                    }
+                    let element = document.get_element_by_id(&id).ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "retained curve-control guide DOM owner `{id}` is unavailable"
+                        ))
+                    })?;
+                    set_class_token(&element, "hovered", enabled)?;
                 }
                 super::ProjectionalHoverDomTarget::AnnotationRoot(id) => {
-                    if let Some(element) = document.get_element_by_id(&id) {
-                        set_class_token(&element, "hovered", enabled)?;
-                    }
+                    let element = document.get_element_by_id(&id).ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "retained annotation DOM owner `{id}` is unavailable"
+                        ))
+                    })?;
+                    set_class_token(&element, "hovered", enabled)?;
                 }
                 super::ProjectionalHoverDomTarget::AnnotationMarker { root, selector } => {
-                    let Some(element) = document.get_element_by_id(&root) else {
-                        continue;
-                    };
-                    if let Some(marker) = element.query_selector(&selector)? {
-                        set_class_token(&marker, "hovered", enabled)?;
-                    }
+                    let element = document.get_element_by_id(&root).ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "retained annotation DOM owner `{root}` is unavailable"
+                        ))
+                    })?;
+                    let marker = element.query_selector(&selector)?.ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "retained annotation marker `{selector}` in `{root}` is unavailable"
+                        ))
+                    })?;
+                    set_class_token(&marker, "hovered", enabled)?;
                 }
             }
         }
@@ -7137,8 +7240,16 @@ pub(crate) mod wasm {
             && !projectional_ordinary_authoring_active(wb)
             && !projectional_feature_authoring_active(wb)
             && !projectional_offset_authoring_active(wb)
+            && wb.pan_gesture.is_none()
             && wb.captured_pointer.is_none()
             && wb.editor().editor().active_pointer_gesture().is_none()
+            && super::retained_hover_scene_is_admitted(
+                wb.retained_scene.as_ref(),
+                wb.camera.viewport(),
+                wb.annotations_visible,
+                wb.show_all_constraints,
+                |scene| wb.authority.retained_scene_is_current(scene),
+            )
     }
 
     fn apply_projectional_plain_hover(
@@ -7299,7 +7410,7 @@ pub(crate) mod wasm {
                             return;
                         }
                         wb.camera_frames.require_exact_reconciliation();
-                        wb.pan_gesture = Some(PanGesture {
+                        wb.pan_gesture = Some(super::CanvasPanGesture {
                             pointer_id: event.pointer_id(),
                             origin,
                             origin_center: wb.camera.model_center,
@@ -7336,6 +7447,16 @@ pub(crate) mod wasm {
                             .is_some_and(|gesture| gesture.pointer_id == event.pointer_id()) =>
                     {
                         event.prevent_default();
+                        let gesture = wb
+                            .pan_gesture
+                            .expect("matching projectional pan gesture was checked");
+                        let terminal = captured_client_screen_point(
+                            &callback_viewport,
+                            wb.camera.viewport(),
+                            f64::from(event.client_x()),
+                            f64::from(event.client_y()),
+                        );
+                        super::finish_canvas_pan_camera(&mut wb.camera, gesture, terminal);
                         wb.pan_gesture = None;
                         let _ = callback_viewport.release_pointer_capture(event.pointer_id());
                         wb.notice = "Canvas pan complete".into();
@@ -12331,7 +12452,7 @@ pub(crate) mod wasm {
                             return;
                         }
                         wb.camera_frames.require_exact_reconciliation();
-                        wb.pan_gesture = Some(PanGesture {
+                        wb.pan_gesture = Some(super::CanvasPanGesture {
                             pointer_id: event.pointer_id(),
                             origin,
                             origin_center: wb.camera.model_center,
@@ -12368,6 +12489,16 @@ pub(crate) mod wasm {
                             .is_some_and(|gesture| gesture.pointer_id == event.pointer_id()) =>
                     {
                         event.prevent_default();
+                        let gesture = wb
+                            .pan_gesture
+                            .expect("matching flat pan gesture was checked");
+                        let terminal = captured_client_screen_point(
+                            &callback_viewport,
+                            wb.camera.viewport(),
+                            f64::from(event.client_x()),
+                            f64::from(event.client_y()),
+                        );
+                        super::finish_canvas_pan_camera(&mut wb.camera, gesture, terminal);
                         wb.pan_gesture = None;
                         release_canvas_pointer_capture(
                             &callback_viewport,
@@ -15218,12 +15349,13 @@ pub(crate) mod wasm {
             && wb.pan_gesture.is_none()
             && wb.pointer_captures.is_empty()
             && wb.coordinator.editor().active_pointer_gesture().is_none()
-            && wb.retained_scene.as_ref().is_some_and(|scene| {
-                scene.viewport == wb.camera.viewport()
-                    && scene.annotations_visible == wb.annotations_visible
-                    && scene.show_all_constraint_annotations == wb.show_all_constraints
-                    && wb.coordinator.retained_scene_is_current(scene)
-            })
+            && super::retained_hover_scene_is_admitted(
+                wb.retained_scene.as_ref(),
+                wb.camera.viewport(),
+                wb.annotations_visible,
+                wb.show_all_constraints,
+                |scene| wb.coordinator.retained_scene_is_current(scene),
+            )
     }
 
     fn apply_flat_plain_hover(
@@ -17752,6 +17884,70 @@ mod tests {
     }
 
     #[test]
+    fn terminal_pan_sample_owns_the_exact_final_camera_for_both_routes() {
+        let initial = super::scene::CanvasCamera {
+            model_center: [8.0, -3.0],
+            pixels_per_model_unit: 40.0,
+        };
+        let gesture = super::CanvasPanGesture {
+            pointer_id: 17,
+            origin: ScreenPoint { x: 100.0, y: 150.0 },
+            origin_center: initial.model_center,
+        };
+        let preceding_move = ScreenPoint { x: 160.0, y: 180.0 };
+        let terminal = ScreenPoint { x: 220.0, y: 90.0 };
+        let mut projectional = initial;
+        let mut flat = initial;
+
+        assert!(projectional.pan_from(gesture.origin_center, gesture.origin, preceding_move,));
+        assert!(flat.pan_from(gesture.origin_center, gesture.origin, preceding_move,));
+        assert!(super::finish_canvas_pan_camera(
+            &mut projectional,
+            gesture,
+            Some(terminal),
+        ));
+        assert!(super::finish_canvas_pan_camera(
+            &mut flat,
+            gesture,
+            Some(terminal),
+        ));
+
+        let expected = [5.0, -4.5];
+        assert_eq!(
+            projectional.model_center.map(f64::to_bits),
+            expected.map(f64::to_bits)
+        );
+        assert_eq!(
+            flat.model_center.map(f64::to_bits),
+            expected.map(f64::to_bits)
+        );
+        assert_eq!(
+            projectional, flat,
+            "browser adapters share the terminal camera oracle"
+        );
+
+        let mut missing_terminal = initial;
+        assert!(!super::finish_canvas_pan_camera(
+            &mut missing_terminal,
+            gesture,
+            None,
+        ));
+        assert_eq!(missing_terminal, initial);
+
+        let source = include_str!("mod.rs")
+            .split("\n#[cfg(test)]\nmod tests {")
+            .next()
+            .expect("production workbench source");
+        assert_eq!(
+            source
+                .matches("finish_canvas_pan_camera(&mut wb.camera, gesture, terminal);")
+                .count(),
+            2,
+            "projectional and flat pointer-up routes must both apply the terminal sample",
+        );
+    }
+
+    #[test]
     fn retained_hover_routes_share_admission_and_reject_semantic_effects() {
         use geosolve_constraint_editor::EditorEffect;
 
@@ -17792,6 +17988,95 @@ mod tests {
             assert_eq!(flat, expected, "flat {label}");
             assert_eq!(flat, projectional, "route parity for {label}");
         }
+    }
+
+    #[test]
+    fn retained_hover_admission_authenticates_scene_view_and_display_policy() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        document
+            .add_rectangle("hover admission", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted rectangle");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            test_viewport(),
+            0.8,
+        )
+        .expect("scene");
+        let viewport = scene.viewport;
+        let annotations_visible = scene.annotations_visible;
+        let show_all = scene.show_all_constraint_annotations;
+        let admitted = |candidate: Option<&EditorScene>,
+                        candidate_viewport: Viewport,
+                        candidate_annotations: bool,
+                        candidate_show_all: bool,
+                        current: bool| {
+            super::retained_hover_scene_is_admitted(
+                candidate,
+                candidate_viewport,
+                candidate_annotations,
+                candidate_show_all,
+                |_| current,
+            )
+        };
+
+        assert!(admitted(
+            Some(&scene),
+            viewport,
+            annotations_visible,
+            show_all,
+            true,
+        ));
+        assert!(!admitted(
+            None,
+            viewport,
+            annotations_visible,
+            show_all,
+            true,
+        ));
+        let mismatched_viewport = Viewport::new(
+            viewport.screen_size,
+            [viewport.model_center[0] + 1.0, viewport.model_center[1]],
+            viewport.pixels_per_model_unit,
+        )
+        .expect("mismatched viewport");
+        assert!(!admitted(
+            Some(&scene),
+            mismatched_viewport,
+            annotations_visible,
+            show_all,
+            true,
+        ));
+        assert!(!admitted(
+            Some(&scene),
+            viewport,
+            !annotations_visible,
+            show_all,
+            true,
+        ));
+        assert!(!admitted(
+            Some(&scene),
+            viewport,
+            annotations_visible,
+            !show_all,
+            true,
+        ));
+        assert!(!admitted(
+            Some(&scene),
+            viewport,
+            annotations_visible,
+            show_all,
+            false,
+        ));
     }
 
     #[test]
@@ -17990,6 +18275,34 @@ mod tests {
             .is_empty(),
             "Origin deliberately has no duplicate painted hover target"
         );
+        let origin = SelectionItem::Datum(geosolve_sketch::SketchDatum::Origin);
+        assert!(super::projectional_item_intentionally_has_no_dom_owner(
+            origin,
+        ));
+        assert!(super::projectional_hover_intentionally_has_no_dom_owner(
+            EditorHoverTarget::Geometry(origin),
+        ));
+
+        let forged_point = SelectionItem::Point(DesignPointId(PersistentId::from_u128(
+            0x8500_f0f0_u128 << 64,
+        )));
+        assert!(super::projectional_item_element_ids(&scene, forged_point).is_empty());
+        assert!(
+            super::projectional_hover_dom_targets(
+                &scene,
+                EditorHoverTarget::Geometry(forged_point),
+            )
+            .is_empty(),
+        );
+        assert!(!super::projectional_item_intentionally_has_no_dom_owner(
+            forged_point,
+        ));
+        assert!(!super::projectional_hover_intentionally_has_no_dom_owner(
+            EditorHoverTarget::Geometry(forged_point),
+        ));
+        assert!(!super::projectional_item_intentionally_has_no_dom_owner(
+            SelectionItem::Datum(geosolve_sketch::SketchDatum::XAxis),
+        ));
 
         for item in [
             SelectionItem::Constraint(rectangle.constraints[0]),
