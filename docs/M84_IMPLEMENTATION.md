@@ -526,7 +526,7 @@ byte-identical at SHA-256
 `add827e88d17735cfb6cb0bbecec885f5680db0bd11b67bb591673d566b90676`: `/` and all seven files
 return HTTP 200, zero redirects, exact MIME/length/body, no `Location`/`Content-Encoding`, and `/`
 equals `index.html`. Browser suites pass baseline 4/4, direct authored 3/3, F003 1/1, F004 2/2
-and F005-F007 4/4 on both endpoints, 14/14 total, including `1440x900`, `1024x720`, all eight
+and F005-F007 4/4, 14/14 on each endpoint, including `1440x900`, `1024x720`, all eight
 fitted finite projects and the collaborative lifecycle/drag/deletion surface.
 
 Only after temporary byte/browser proof passed was superseded F007 PID `62376` retired. Temporary
