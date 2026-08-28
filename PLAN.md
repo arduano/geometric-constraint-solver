@@ -6466,8 +6466,8 @@ publication.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is implemented and focused-qualified; clean release
-qualification, immutable nomination and UAT are pending**. Accepted M85 Pages run `33128387637`
+Status: **active and unaccepted; M86-F001 is implemented, clean-qualified and nominated as an
+immutable local/Tailscale candidate; UAT is pending**. Accepted M85 Pages run `33128387637`
 remains public-byte authority.
 `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the detailed contract
 and evidence.
@@ -6499,11 +6499,15 @@ and evidence.
 - [x] Pass the focused owner, accepted-diameter, retained-invalid/Undo, thin adapter and GUI-owned
   collateral regressions. Formatting, diff hygiene, warnings-denied affected-crate Clippy and the
   relevant WASM target check also pass.
-- [ ] Pass the complete affected-crate/workspace tests, unchanged clean golden and proportional
-  clean release qualification.
-- [ ] Freeze the exact candidate without rebuild, exact-verify local/Tailscale bytes and complete
-  M86-U1 through M86-U5. Publish to Pages and close M86 only after explicit supervising-user UAT
-  approval.
+- [x] Pass the complete affected-crate/workspace tests, unchanged 271-case clean golden and the
+  complete clean Nix release gate on source `9050424`, tree `65e0925`. The 6,534-line gate exits
+  `0` and includes native/WASM parity, TypeScript/package, licence, Rustdoc, benchmark, release-
+  performance and final Trunk assembly checks.
+- [x] Freeze the exact gate output without rebuild and exact-verify all eight local/Tailscale HTTP
+  paths. Snapshot `/tmp/geosolve-m86-uat.vdEFAxsF` has ordered-manifest aggregate `1f872c6` and is
+  live at `http://127.0.0.1:18101/` and `http://100.94.63.83:8080/`.
+- [ ] Complete M86-U1 through M86-U5. Publish to Pages and close M86 only after explicit
+  supervising-user UAT approval.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
 not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;

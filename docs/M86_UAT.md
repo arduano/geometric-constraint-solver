@@ -2,9 +2,27 @@
 
 # M86 focused UAT — Managed dimension Inspector editing
 
-Status: **implementation and focused qualification pass; complete clean qualification and immutable
-candidate nomination are pending**. Do not record a row as accepted before exact
-source/tree/snapshot and served-byte evidence are added here. Accepted M85 remains public authority.
+Status: **clean-qualified immutable candidate nominated; M86-U1 through M86-U5 are pending**.
+Accepted M85 remains public authority until explicit approval and post-approval Pages publication.
+
+## Candidate identity
+
+- Qualified source: `90504245e19858f986d5f506f6e42d237e9665b5`.
+- Qualified tree: `65e092540dab82618d1129229b566a2e791aa40c`.
+- Clean Nix release gate: exit `0`, 6,534 lines and 436,494 bytes, from 12:04:44 through 12:24:38
+  AEST on 2026-08-28. Log `/tmp/geosolve-m86-nix-gate.CSQkgk/release-gate.log` has SHA-256
+  `4b81a1d12df503ef220b10645f3f4266891edc1eeaf87f3647071e2a77c33584`.
+- Immutable snapshot: `/tmp/geosolve-m86-uat.vdEFAxsF`; directories/files `0555`/`0444`, exactly
+  seven regular files, zero symlinks/non-regular entries, ordered-manifest aggregate
+  `1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`.
+- Complete freeze/nomination evidence: `/tmp/geosolve-m86-freeze-evidence.6fU7WpCl`.
+- Local endpoint: `http://127.0.0.1:18101/`, PID `3879694`, invocation
+  `c00b3e911ce54733be0b4b6a47756de1`.
+- Retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `3879933`, invocation
+  `e56fde25abab4481a9bd7c825d4279b6`.
+- Both endpoints serve the same immutable snapshot. Their complete eight-path ledgers are
+  byte-identical at SHA-256
+  `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`.
 
 ## Candidate prerequisites
 
@@ -14,9 +32,12 @@ source/tree/snapshot and served-byte evidence are added here. Accepted M85 remai
   independently validated finite accepted geometry. History tests prove alias availability rather
   than durable UI selection.
 - Relevant native/WASM tests, formatting, warnings-denied Clippy, unchanged clean golden and the
-  proportional clean release gate pass.
+  complete clean release gate pass.
 - The exact gate output is frozen without rebuild and exact-verified on temporary local and
   retained Tailscale endpoints. No Pages publication occurs before explicit approval.
+
+All candidate prerequisites above pass. Hard-refresh the reused Tailscale origin before testing;
+browser cache/local storage may survive earlier milestone candidates.
 
 Test the exact immutable candidate at approximately `1440x900` and `1024x720`.
 

@@ -2,9 +2,9 @@
 
 # M86 — Focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is implemented and focused-qualified; complete clean
-qualification, immutable nomination and human UAT are pending**. Accepted M85 product/public
-evidence remains authoritative until every M86 gate passes. This initial scope contains exactly one
+Status: **active and unaccepted; M86-F001 is implemented, clean-qualified and nominated as an
+immutable local/Tailscale candidate; human UAT is pending**. Accepted M85 Pages remains public-byte
+authority until explicit M86 approval and publication. This initial scope contains exactly one
 confirmed defect; later reports enter the batch only after independent reproduction and a recorded
 M86 finding.
 
@@ -88,9 +88,10 @@ composition, not a solver equation, convergence or dimension-residual defect.
 - A thin `geosolve-demo-web` Inspector adapter regression and GUI-owned collateral pass. Do not
   expand or rewrite the
   milestone-neutral golden because no authoring family, equation or scene-authority state is new.
-- Focused tests, formatting, diff hygiene, warnings-denied affected-crate Clippy and the relevant
-  WASM target check pass. Unchanged clean golden and proportional workspace/release gates remain
-  required before immutable nomination.
+- Focused tests, formatting, diff hygiene, warnings-denied affected-crate Clippy, relevant WASM
+  parity, unchanged 271-case golden and the complete clean workspace/release gate pass. The exact
+  gate-produced distribution is frozen without rebuild and byte-verified locally and on retained
+  Tailscale before human UAT.
 
 ## Bounds and non-goals
 
@@ -108,3 +109,7 @@ authoring. Additional M86 bug fixes require their own confirmed finding and expl
 4. Freeze without rebuild, exact-verify local/Tailscale bytes and complete M86-U1 through M86-U5.
 5. Only after explicit supervising-user approval, publish the accepted descendant to Pages,
    exact-verify hosted bytes, retire the retained candidate services and close M86.
+
+Steps 1 through 4's mechanical nomination prerequisites pass on source `9050424`, tree `65e0925`.
+The immutable candidate remains live at `http://127.0.0.1:18101/` and
+`http://100.94.63.83:8080/`; the human M86-U1 through M86-U5 portion of step 4 remains pending.

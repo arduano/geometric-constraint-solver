@@ -153,9 +153,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   replaces complete workbench document authority and immediately reselects the stable alias;
   retained-invalid publication keeps the prior accepted checkpoint. GUI-owned targets return
   `NotClaimed`. The route cannot decode opaque aliases, directly edit native authority, add an
-  equation or change ordinary GUI dimension dispatch. Focused qualification passes; complete clean
-  qualification, immutable nomination and UAT remain pending. `docs/M86_GOALS.md` owns the active
-  contract.
+  equation or change ordinary GUI dimension dispatch. Focused and complete clean qualification,
+  unchanged golden, no-rebuild immutable freeze and exact local/Tailscale byte verification pass;
+  human UAT remains pending. `docs/M86_GOALS.md` owns the active contract.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

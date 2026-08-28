@@ -2,17 +2,15 @@
 
 # M86 implementation ledger — Focused bug fixes and UAT follow-up
 
-Status: **active; M86-F001 is implemented and focused-qualified**. Complete affected-crate/
-workspace and clean release qualification, unchanged-golden confirmation, immutable artifact,
-Tailscale nomination, human acceptance and Pages publication are not yet claimed.
-`docs/M86_GOALS.md` owns the contract.
+Status: **active and unaccepted; M86-F001 is implemented, clean-qualified and nominated as an
+immutable local/Tailscale candidate**. Human M86-U1 through M86-U5 acceptance and post-approval
+Pages publication remain pending. `docs/M86_GOALS.md` owns the contract.
 
 ## Finding ledger
 
 ### M86-F001 — Code-owned direct dimension edits reject after nested Intent mutation
 
-Disposition: **repaired; focused qualification passes; clean candidate nomination and human UAT
-remain pending**.
+Disposition: **repaired, clean-qualified and immutably nominated; human UAT remains pending**.
 
 Reproduction baseline is M85 closeout head `4b69a57`. Open PC Water Manifold, select
 `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`,
@@ -94,10 +92,10 @@ Owning tests:
 - [x] Run focused owner, diameter, adapter and GUI-owned collateral tests.
 - [x] Pass format, diff hygiene, warnings-denied affected-crate Clippy and the relevant WASM target
   check.
-- [ ] Pass complete affected-crate/workspace tests, unchanged clean golden and proportional clean
-  release qualification.
-- [ ] Freeze the exact no-rebuild candidate, exact-verify local/Tailscale bytes and complete the
-  pending UAT scorecard.
+- [x] Pass complete affected-crate/workspace tests, unchanged 271-case clean golden and the clean
+  Nix release gate.
+- [x] Freeze the exact no-rebuild candidate and exact-verify local/Tailscale bytes.
+- [ ] Complete the pending M86-U1 through M86-U5 human scorecard.
 - [ ] Publish and exact-verify Pages only after explicit supervising-user approval; retire retained
   services and close M86 afterward.
 
@@ -112,7 +110,7 @@ Owning tests:
 
 ## Commands and focused evidence
 
-The following focused commands genuinely pass on the shared uncommitted M86 implementation:
+The following focused commands genuinely pass on committed M86 product source `9050424`:
 
 ```bash
 cargo test --locked -p geosolve-demo-web --lib \
@@ -141,8 +139,43 @@ The exact manifold owner test covers accepted curve length `16 -> 8`, independen
 finite geometry, one outer row, exact Undo, executed Redo and retained-invalid diameter Undo. The
 small accepted-diameter fixture separately covers `5 -> 8`. The adapter and two existing collateral
 tests prove browser routing, authority replacement, GUI-owned fallback and generic history remain
-coherent. No complete `geosolve-demo-web --lib`, workspace, golden, release, freeze or publication
-claim is made here yet.
+coherent. The complete qualification and freeze evidence below supersede the earlier focused-only
+checkpoint; Pages publication is intentionally not claimed before human approval.
+
+## Clean qualification and immutable nomination
+
+Exact product source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
+`65e092540dab82618d1129229b566a2e791aa40c`, was clean when the complete Nix gate ran from
+2026-08-28 12:04:44 through 12:24:38 AEST. The gate exits `0`; its 6,534-line, 436,494-byte log is
+`/tmp/geosolve-m86-nix-gate.CSQkgk/release-gate.log`, SHA-256
+`4b81a1d12df503ef220b10645f3f4266891edc1eeaf87f3647071e2a77c33584`. It passes warnings-
+denied workspace Clippy, all-feature workspace tests and doc tests, the unchanged 271-case golden,
+native/WASM parity, both TypeScript packages, warnings-denied Rustdoc, benchmark compilation,
+release performance sentinels, cargo-deny licences, package verification and final Trunk release
+assembly.
+
+An earlier direct-PATH clean-gate attempt passed native workspace tests and the golden check, then
+stopped with status `101` before executing its first WASM test because
+`wasm-bindgen-test-runner` was absent from that shell's PATH. This is recorded as a harness error,
+not product evidence, at `/tmp/geosolve-m86-gate.sMkCi9/release-gate.log` (SHA-256
+`13c924c7286e248269802145d8f175dae838dec9baa7d7e5e30bf0f2d6382195`). The complete clean Nix
+gate above supplies the actual WASM and release authority.
+
+Without rebuilding, that gate's seven-file `dist` was copied and frozen read-only at
+`/tmp/geosolve-m86-uat.vdEFAxsF`. It contains exactly seven regular files, zero symlinks or other
+non-regular entries at directory/file modes `0555`/`0444`; source, copied, frozen and post-serve
+manifests are identical. The ordered-manifest aggregate is
+`1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`; complete evidence is
+`/tmp/geosolve-m86-freeze-evidence.6fU7WpCl`.
+
+Local service PID `3879694`, invocation `c00b3e911ce54733be0b4b6a47756de1`, serves only that
+snapshot at `http://127.0.0.1:18101/`. Retained Tailscale service PID `3879933`, invocation
+`e56fde25abab4481a9bd7c825d4279b6`, serves the same snapshot at
+`http://100.94.63.83:8080/`. Both complete eight-path HTTP ledgers are byte-identical at SHA-256
+`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`; every path returns 200,
+zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/` equals
+`index.html`. Both services remain active for UAT. Accepted M85 Pages remains public authority;
+M86 publication and service retirement wait for explicit approval.
 
 ## Semantic-preservation ledger
 

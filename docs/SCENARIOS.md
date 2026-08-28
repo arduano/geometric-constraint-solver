@@ -5463,7 +5463,8 @@ and both endpoints refuse connections. Pages is final M85 public-byte authority 
 
 M86-F001 adds no residual equation and does not reinterpret or expand the milestone-neutral golden.
 Its focused optional code-project regressions and thin browser-Inspector adapter proof pass;
-complete clean qualification and unchanged-golden confirmation are still pending.
+complete clean qualification, unchanged-golden confirmation and exact no-rebuild local/Tailscale
+nomination also pass. Human M86-U1 through M86-U5 remain pending.
 `docs/M86_GOALS.md` is authoritative.
 
 ### M86-C1 — Exact managed curve-length target rewrite
@@ -5507,6 +5508,18 @@ avoid a duplicate save-time outer row, and preserve byte-exact accepted authorit
 invalid edit. Owner assertions remain in C1/C2; this adapter test duplicates no solver equation or
 accepted-state oracle. Existing GUI-owned reference-dimension and generic Inspector Undo/Redo
 regressions remain collateral authority.
+
+### M86-C4 — Immutable candidate authority
+
+Source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
+`65e092540dab82618d1129229b566a2e791aa40c`, passes the complete clean Nix release gate and
+unchanged 271-case golden. Its exact seven-file Trunk output is frozen without rebuild at
+`/tmp/geosolve-m86-uat.vdEFAxsF`, ordered-manifest aggregate
+`1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`. Local
+`http://127.0.0.1:18101/` and retained Tailscale `http://100.94.63.83:8080/` serve only that
+snapshot; all eight paths are exact and their byte-identical ledgers have SHA-256
+`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This is the UAT candidate,
+not public authority; Pages remains M85 until explicit M86 approval.
 
 ## Frozen near-singular fixtures
 

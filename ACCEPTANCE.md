@@ -3992,9 +3992,9 @@ are outside scope.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted**. M86-F001 is implemented and focused-qualified against the M85
-baseline. Complete clean qualification, unchanged-golden confirmation, immutable nomination and
-M86-U1 through M86-U5 remain pending. Accepted M85 stays public-byte authority.
+Status: **active and unaccepted**. M86-F001 is implemented, clean-qualified and nominated as an
+immutable local/Tailscale candidate against the M85 baseline. M86-U1 through M86-U5 remain
+pending. Accepted M85 stays public-byte authority.
 
 M86-F001 is accepted only when all of the following pass:
 
@@ -4038,6 +4038,16 @@ M86-F001 is accepted only when all of the following pass:
   candidate bytes are frozen without rebuild and verified locally and on retained Tailscale.
 - Supervising-user M86-U1 through M86-U5 approval is explicit before Pages publication, exact
   hosted-byte verification, retained-service retirement and milestone closure.
+
+Mechanical qualification passes on source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
+`65e092540dab82618d1129229b566a2e791aa40c`. The complete clean Nix gate exits `0`; unchanged
+271-case golden, native/WASM parity and final Trunk assembly pass. Its no-rebuild seven-file output
+is frozen read-only at `/tmp/geosolve-m86-uat.vdEFAxsF`, ordered-manifest aggregate
+`1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`. Local and Tailscale
+eight-path HTTP ledgers are byte-identical at SHA-256
+`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This satisfies every
+mechanical acceptance prerequisite; the explicit human scorecard and post-approval publication
+remain open.
 
 M86-F001 changes no primitive, constraint, dimension family, residual, Jacobian, solver priority,
 tolerance, branch rule, persistence schema, managed grammar or point-overlay semantics. General
