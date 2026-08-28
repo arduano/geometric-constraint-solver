@@ -6466,8 +6466,8 @@ publication.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is implemented and accepted by the supervising user's
-scoped “Looks good” assessment, and M86-F002 is implemented with replacement qualification
+Status: **active and unaccepted; M86-F001 is accepted by the supervising user's scoped “Looks
+good” assessment, and M86-F002 is clean-qualified and immutably nominated with focused UAT
 pending**. Accepted M85 Pages run `33128387637` remains public-byte authority.
 `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the detailed contract
 and evidence.
@@ -6505,7 +6505,7 @@ and evidence.
   performance and final Trunk assembly checks.
 - [x] Freeze the exact gate output without rebuild and exact-verify all eight local/Tailscale HTTP
   paths. Snapshot `/tmp/geosolve-m86-uat.vdEFAxsF` has ordered-manifest aggregate `1f872c6` and is
-  live at `http://127.0.0.1:18101/` and `http://100.94.63.83:8080/`.
+  retained as historical F001 evidence after verification at the local/Tailscale endpoints.
 - [x] Record the supervising user's scoped “Looks good” assessment as F001/M86-U1-U5 acceptance
   without claiming a separately logged row-by-row replay.
 - [x] Independently reproduce M86-F002 in the headless Select resolver. At one exact shared native
@@ -6519,8 +6519,11 @@ and evidence.
   points; no public API, browser incidence rule, computed-feature branch or solver equation changes.
 - [x] Pass focused native/WASM parity, all editor tests/doc tests, warnings-denied affected Clippy,
   formatting, diff hygiene and unchanged 271-case golden authority.
-- [ ] Pass the complete clean gate, replace and exact-verify the immutable local/Tailscale candidate,
-  then complete M86-U6/U7. Publish to Pages and close M86 only after explicit final supervising-user
+- [x] Pass the complete clean gate on source `dbe94da`, tree `77f86c0`; freeze the exact seven-file
+  output without rebuild at `/tmp/geosolve-m86-f002-uat.CPfe9QD8` (aggregate `e3f9581`), and
+  exact-verify the replacement local/Tailscale services. Both eight-path ledgers are identical at
+  SHA-256 `e5513ab`.
+- [ ] Complete M86-U6/U7. Publish to Pages and close M86 only after explicit final supervising-user
   approval.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,

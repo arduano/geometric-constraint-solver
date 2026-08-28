@@ -506,8 +506,10 @@ native parents. The implemented Select-only exception recognizes exact or explic
 line/polyline endpoints, but not coordinate proximity; native point hover/click/drag wins only at
 that source corner while unrelated point overlaps and ordinary Fillet radius behavior remain
 unchanged. Focused native/WASM, Coincident/non-topology, post-Apply, editor-suite, Clippy and
-unchanged-golden checks pass. Clean replacement nomination and F002 human UAT remain pending, so
-accepted M85 remains public authority.
+unchanged-golden checks pass. Exact replacement source `dbe94da`, tree `77f86c0`, also passes the
+complete clean gate and no-rebuild byte freeze. Its immutable snapshot is live locally and on
+retained Tailscale; focused F002 human UAT remains pending, so accepted M85 remains public
+authority.
 `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the active contract,
 finding ledger and pending scorecard.
 
@@ -553,8 +555,8 @@ finding ledger and pending scorecard.
     camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
     clean-qualified frozen candidate, milestone-level approval and exact public closeout.
 22. `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` — active focused
-    bug-fix contract, clean-qualified/immutably nominated managed-dimension Inspector repair and
-    pending human scorecard.
+    bug-fix contract, human-approved managed-dimension Inspector repair, clean-qualified/immutably
+    nominated Fillet source-corner replacement and pending focused human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -986,8 +988,8 @@ separately logged row-by-row replay. M86-F002 subsequently makes only the exact 
 line/polyline endpoint shared by a Fillet's parents outrank that Fillet's radius surface in the
 shared Select hover/down resolver. Exact identity and active Coincident topology qualify; coordinate
 proximity, unrelated overlying points, passive curves, painted radius reconciliation and authoring
-do not. Focused native/WASM and unchanged-golden checks pass; replacement clean nomination and
-F002 UAT remain open. Pages authority is not yet claimed.
+do not. Focused native/WASM, unchanged-golden and replacement clean nomination pass; focused F002
+UAT remains open. Pages authority is not yet claimed.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at

@@ -3,8 +3,8 @@
 # M86 implementation ledger — Focused bug fixes and UAT follow-up
 
 Status: **active and unaccepted; M86-F001 is implemented and human-approved, and M86-F002 is
-implemented with replacement qualification pending**. Post-F002 human acceptance and
-post-approval Pages publication remain pending. `docs/M86_GOALS.md` owns the contract.
+clean-qualified and immutably nominated**. Focused F002 human acceptance and post-approval Pages
+publication remain pending. `docs/M86_GOALS.md` owns the contract.
 
 ## Finding ledger
 
@@ -32,8 +32,8 @@ golden change is warranted.
 
 ### M86-F002 — Computed Fillet radius surface hides its persistent native corner
 
-Disposition: **repaired and proportionally qualified; clean replacement nomination and human UAT
-remain pending**.
+Disposition: **repaired, clean-qualified and immutably nominated; focused human UAT remains
+pending**.
 
 Reproduction baseline is F001 documentation head `bcc5ae4`. In Select mode, use two joined native
 line/polyline spans with a computed Fillet, expose the selected Fillet radius affordance and sample
@@ -135,8 +135,9 @@ Owning tests:
 - [x] Pass focused native and WASM parity, all 429 editor unit tests plus every editor integration
   and doc test, warnings-denied editor Clippy, formatting, diff hygiene and unchanged 271-case
   golden authority.
-- [ ] Pass the complete clean release gate, freeze and exact-verify a replacement local/Tailscale
-  candidate, then complete the focused F002 human recheck.
+- [x] Pass the complete clean release gate, freeze and exact-verify a replacement local/Tailscale
+  candidate.
+- [ ] Complete the focused F002 human recheck.
 
 ## Files and API surface
 
@@ -213,9 +214,11 @@ git diff --check
 
 The native and WASM parity target passes 15/15 including four F002 rows. The full editor run passes
 429 unit tests, every integration target and doc tests with only the three release-only performance
-sentinels ignored. The complete clean replacement gate and freeze remain the next authority.
+sentinels ignored. The clean replacement gate and freeze below supersede that focused checkpoint.
 
 ## Clean qualification and immutable nomination
+
+### Historical F001 qualification and nomination
 
 Exact product source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`, was clean when the complete Nix gate ran from
@@ -241,14 +244,42 @@ manifests are identical. The ordered-manifest aggregate is
 `1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`; complete evidence is
 `/tmp/geosolve-m86-freeze-evidence.6fU7WpCl`.
 
-Local service PID `3879694`, invocation `c00b3e911ce54733be0b4b6a47756de1`, serves only that
+Local service PID `3879694`, invocation `c00b3e911ce54733be0b4b6a47756de1`, served only that
 snapshot at `http://127.0.0.1:18101/`. Retained Tailscale service PID `3879933`, invocation
-`e56fde25abab4481a9bd7c825d4279b6`, serves the same snapshot at
-`http://100.94.63.83:8080/`. Both complete eight-path HTTP ledgers are byte-identical at SHA-256
+`e56fde25abab4481a9bd7c825d4279b6`, served the same snapshot at
+`http://100.94.63.83:8080/`. Both historical eight-path HTTP ledgers are byte-identical at SHA-256
 `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`; every path returns 200,
 zero redirects, exact MIME/length/body, no `Location` or `Content-Encoding`, and `/` equals
-`index.html`. Both services remain active for UAT. Accepted M85 Pages remains public authority;
-M86 publication and service retirement wait for explicit approval.
+`index.html`. Those services were replaced only after temporary verification of the F002 bytes.
+
+### F002 replacement qualification and nomination
+
+Exact replacement source `dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
+`77f86c0a198af12e10537dc4d6d7d90066ba48e8`, was clean when the complete Nix release gate ran from
+2026-08-28 13:46:55 through 14:20:45 AEST. The gate exits `0`; its 6,570-line, 440,856-byte log is
+`/tmp/geosolve-m86-f002-gate.wSztT0Bb/release-gate.log`, SHA-256
+`34ac3e398953398495d22d480d9a11d88b03020c0235c07db61c443534fa4278`. It passes warnings-denied
+workspace Clippy, all-feature workspace tests/doc tests, unchanged 271-case golden, every native/
+WASM parity target including all 15 M75 rows, both TypeScript packages, warnings-denied Rustdoc,
+benchmark compilation, release performance sentinels, cargo-deny licences, package verification
+and final Trunk release assembly.
+
+Without rebuilding, the gate's exact seven-file `dist` was copied and frozen at
+`/tmp/geosolve-m86-f002-uat.CPfe9QD8`. It contains seven regular files, zero symlinks or other
+non-regular entries at directory/file modes `0555`/`0444`; source, copied, frozen, post-serve and
+source-after manifests are identical. Its ordered-manifest aggregate is
+`e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`; complete evidence is
+`/tmp/geosolve-m86-f002-freeze-evidence.mSh9iwrm`.
+
+The frozen bytes first pass all eight paths on temporary local port `18102`. Local service PID
+`597410`, invocation `7cf7cbbae81a48ee8f492e1dab6e592d`, then replaces the prior candidate at
+`http://127.0.0.1:18101/`; retained Tailscale service PID `597412`, invocation
+`1a777ee174764f3cbb35f7b4863e5e95`, serves the same snapshot at
+`http://100.94.63.83:8080/`. Temporary-local, final-local and Tailscale eight-path ledgers are
+identical at SHA-256 `e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`.
+Every path returns 200 with zero redirects, exact MIME/length/body, no `Location` or
+`Content-Encoding`, and `/` equals `index.html`. Accepted M85 Pages remains public authority; M86
+publication and service retirement wait for explicit approval.
 
 ## Semantic-preservation ledger
 

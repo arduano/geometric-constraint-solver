@@ -164,8 +164,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   radius hit. Coordinate equality, unrelated overlapping points and passive native curves do not.
   Hover and down therefore retain one owner without adding browser incidence logic, computed-
   feature state or solver equations. Focused native/WASM, post-Apply and unchanged-golden checks
-  pass; clean replacement nomination and F002 UAT remain pending. `docs/M86_GOALS.md` owns the
-  active contract.
+  pass. Exact replacement source `dbe94da`, tree `77f86c0`, also passes the complete clean gate,
+  no-rebuild immutable freeze and exact local/Tailscale byte verification; only focused F002 UAT
+  remains pending. `docs/M86_GOALS.md` owns the active contract.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

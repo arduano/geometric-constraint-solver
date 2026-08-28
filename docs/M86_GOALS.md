@@ -2,10 +2,10 @@
 
 # M86 — Focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is implemented and human-approved, and M86-F002 is
-implemented with replacement qualification pending**. Accepted M85 Pages remains public-byte
-authority until explicit M86 approval and publication. The prior F001 immutable candidate remains
-historical evidence while F002 is qualified and replaced.
+Status: **active and unaccepted; M86-F001 is human-approved and M86-F002 is clean-qualified and
+immutably nominated for focused UAT**. Accepted M85 Pages remains public-byte authority until
+explicit M86 approval and publication. The prior F001 immutable candidate is retained only as
+historical evidence; the F002 replacement now owns both UAT endpoints.
 
 ## Goal
 
@@ -137,6 +137,7 @@ entry.
    exact-verify hosted bytes, retire the retained candidate services and close M86.
 
 F001 passed those mechanical prerequisites on source `9050424`, tree `65e0925`, and the supervising
-user reported that candidate looked good before opening F002. Its immutable snapshot remains live
-at `http://127.0.0.1:18101/` and `http://100.94.63.83:8080/` until a qualified F002 replacement is
-ready. F002 replacement qualification and its focused human recheck remain pending.
+user reported that candidate looked good before opening F002. F002 replacement source `dbe94da`,
+tree `77f86c0`, then passed the complete clean gate and no-rebuild freeze. Snapshot
+`/tmp/geosolve-m86-f002-uat.CPfe9QD8` is exact-verified at `http://127.0.0.1:18101/` and
+`http://100.94.63.83:8080/`; only the focused M86-U6/U7 human recheck remains pending.

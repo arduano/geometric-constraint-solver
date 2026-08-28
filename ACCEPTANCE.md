@@ -3993,11 +3993,11 @@ are outside scope.
 ### M86: focused bug fixes and UAT follow-up
 
 Status: **active and unaccepted**. M86-F001 is implemented, clean-qualified, immutably nominated
-and accepted by the supervising user's scoped “Looks good” assessment. M86-F002 is implemented
-with replacement clean qualification and M86-U6/U7 pending. Accepted M85 stays public-byte
+and accepted by the supervising user's scoped “Looks good” assessment. M86-F002 is implemented,
+clean-qualified and immutably nominated with M86-U6/U7 pending. Accepted M85 stays public-byte
 authority.
 
-M86-F001 is accepted only when all of the following pass:
+M86 is accepted only when all of the following pass:
 
 - Exact selected alias
   `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`
@@ -4063,8 +4063,18 @@ is frozen read-only at `/tmp/geosolve-m86-uat.vdEFAxsF`, ordered-manifest aggreg
 `1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`. Local and Tailscale
 eight-path HTTP ledgers are byte-identical at SHA-256
 `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This satisfies F001's
-mechanical prerequisites and is retained as historical evidence while F002 replacement
-qualification runs; final F002 human acceptance and post-approval publication remain open.
+mechanical prerequisites and is retained as historical evidence.
+
+F002 replacement mechanical qualification passes on source
+`dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
+`77f86c0a198af12e10537dc4d6d7d90066ba48e8`. The complete clean Nix gate exits `0`; its
+6,570-line, 440,856-byte log has SHA-256
+`34ac3e398953398495d22d480d9a11d88b03020c0235c07db61c443534fa4278`. The exact no-rebuild
+seven-file output is frozen at `/tmp/geosolve-m86-f002-uat.CPfe9QD8`, aggregate
+`e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`; temporary-local,
+local and Tailscale verification all produce the identical eight-path ledger SHA-256
+`e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`. Final F002 human
+acceptance and post-approval publication remain open.
 
 M86 changes no primitive, constraint, dimension family, residual, Jacobian, solver priority,
 tolerance, branch rule, persistence schema, managed grammar or point-overlay semantics. General

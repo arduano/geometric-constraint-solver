@@ -5466,7 +5466,7 @@ Its focused optional code-project regressions and thin browser-Inspector adapter
 complete clean qualification, unchanged-golden confirmation and exact no-rebuild local/Tailscale
 nomination also pass. The supervising user's scoped “Looks good” assessment accepts F001 without
 claiming a separately logged row-by-row replay. M86-F002 adds only focused headless picking rows;
-replacement clean nomination and M86-U6/U7 remain pending.
+its clean replacement is immutably nominated and M86-U6/U7 remain pending.
 `docs/M86_GOALS.md` is authoritative.
 
 ### M86-C1 — Exact managed curve-length target rewrite
@@ -5517,12 +5517,11 @@ Source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`, passes the complete clean Nix release gate and
 unchanged 271-case golden. Its exact seven-file Trunk output is frozen without rebuild at
 `/tmp/geosolve-m86-uat.vdEFAxsF`, ordered-manifest aggregate
-`1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`. Local
-`http://127.0.0.1:18101/` and retained Tailscale `http://100.94.63.83:8080/` serve only that
-snapshot; all eight paths are exact and their byte-identical ledgers have SHA-256
-`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This is the UAT candidate,
-not public authority and is superseded once the F002 replacement qualifies; Pages remains M85
-until explicit final M86 approval.
+`1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`. The former local and
+retained Tailscale processes served only that snapshot; all eight paths were exact and their
+byte-identical ledgers have SHA-256
+`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This is historical F001
+evidence, not public authority; Pages remains M85 until explicit final M86 approval.
 
 ### M86-C5 — Fillet source-corner Select priority
 
@@ -5544,6 +5543,15 @@ FeatureCorner/FilletRadius for every modifier; removing it still leaves the pass
 below the computed radius surface. Direct radius grip/rail gestures, native authoring at a computed
 contact and painted-radius reconciliation remain unchanged. Native and WASM results must match
 exactly. No new golden row, residual/Jacobian test or browser-specific hit rule is warranted.
+
+Replacement source `dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
+`77f86c0a198af12e10537dc4d6d7d90066ba48e8`, passes the complete clean gate from 13:46:55 through
+14:20:45 AEST. Its exact seven-file output is frozen without rebuild at
+`/tmp/geosolve-m86-f002-uat.CPfe9QD8`, aggregate
+`e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`. Temporary-local, final
+local and Tailscale eight-path verification are identical at SHA-256
+`e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`; the replacement owns
+`http://127.0.0.1:18101/` and `http://100.94.63.83:8080/` for M86-U6/U7.
 
 ## Frozen near-singular fixtures
 
