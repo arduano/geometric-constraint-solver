@@ -2,11 +2,11 @@
 
 # M85 — Responsive retained workbench presentation
 
-Status: **mechanically qualified and nominated for hands-on UAT, but unaccepted; M85-F001 through
-M85-F003 are repaired, the exact final source passes the clean release gate, and its immutable
-local/Tailscale candidate passes the frozen-byte browser profile plus native flat-adapter
-evidence**. Hands-on M85-U1-U9/U11-U12, explicit supervising-user approval and Pages publication
-remain pending. Accepted M84 product source `84dd768`, immutable snapshot
+Status: **accepted at milestone level on 2026-08-28; M85-F001 through M85-F003 are repaired, the
+exact final source passes the clean release gate, and its immutable local/Tailscale candidate passes
+the frozen-byte browser profile plus native flat-adapter evidence**. The supervising user's close
+decision accepts M85-U1 through M85-U12 without claiming a separately logged row-by-row replay.
+Pages publication and final closure remain pending. Accepted M84 product source `84dd768`, immutable snapshot
 `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain product and public-byte
 authority until M85 passes every gate below.
 
@@ -172,9 +172,9 @@ interaction, history/work-neutrality and v1-v6 normalization contracts. Evidence
 `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
 `5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545`,
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
-`ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`. Only hands-on UAT,
-approval and post-approval Pages publication remain. `docs/M85_IMPLEMENTATION.md` owns the full
-evidence record.
+`ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`. Human UAT and approval now
+pass at milestone level; only post-approval Pages publication, hosted-byte verification and service
+retirement remain. `docs/M85_IMPLEMENTATION.md` owns the full evidence record.
 
 ## Release sequence
 

@@ -2,19 +2,19 @@
 
 # M85 implementation ledger — Responsive retained workbench presentation
 
-Status: **mechanically qualified and nominated for hands-on UAT, but unaccepted**. Exact final
+Status: **accepted at milestone level on 2026-08-28; public closeout remains pending**. Exact final
 source `5c265e2` passes the clean release gate; its no-rebuild immutable candidate passes local and
 Tailscale byte verification, the frozen-byte browser profile and native M85-U10 flat-adapter
-evidence. Hands-on M85-U1-U9/U11-U12, explicit supervising-user approval and post-approval Pages
-publication remain pending. `docs/M85_GOALS.md` owns the contract. Accepted M84 remains product and
-public-byte authority.
+evidence. The supervising user's close decision accepts M85-U1 through M85-U12 without claiming a
+separately logged row-by-row replay. `docs/M85_GOALS.md` owns the contract. Accepted M84 remains
+public-byte authority until M85 Pages publication and hosted-byte verification pass.
 
 ## Exact nominated candidate
 
 - Source: `5c265e211e20dabc8a27f6402d530f5d645ff15c`.
 - Tree: `b55d012443f4dbf7551e30041da2912e666de9db`.
 - Source state at qualification: clean.
-- Product nomination: **mechanically nominated for hands-on UAT; not yet accepted**.
+- Product nomination: **accepted by milestone-level supervising-user approval**.
 - Frozen distribution: `/tmp/geosolve-m85-uat.QX8fU3Q6`, directories/files `0555`/`0444`, seven
   regular files, zero symlinks, ordered-manifest aggregate
   `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`.
@@ -26,7 +26,7 @@ public-byte authority.
 - Both services serve only the same immutable snapshot; their complete eight-path HTTP ledgers are
   byte-identical at SHA-256
   `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
-- GitHub Pages publication: **blocked until explicit supervising-user UAT approval**.
+- GitHub Pages publication: **authorized by explicit supervising-user UAT approval; pending**.
 
 ## Findings
 
@@ -292,7 +292,8 @@ Evidence is `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-
 - [x] Freeze the gate-produced distribution without rebuild, exact-verify local/Tailscale service
   bytes and pass the five-test browser profile against those exact bytes.
 - [x] Record final-source native flat-adapter M85-U10 evidence and nominate the immutable candidate.
-- [ ] Complete hands-on M85-U1-U9/U11-U12 and obtain explicit supervising-user approval.
+- [x] Receive milestone-level supervising-user approval for M85-U1 through M85-U12 on 2026-08-28.
+  This accepts the qualified candidate without claiming a separately logged row-by-row replay.
 - [ ] Only after approval, publish the accepted descendant to GitHub Pages, download and exact-
   verify the separately rebuilt artifact and hosted paths, retire the retained service and close
   M85.

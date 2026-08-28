@@ -5441,9 +5441,10 @@ result ledgers have SHA-256
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`; the evidence manifest file
 has SHA-256 `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
 The same immutable candidate remains live at `http://127.0.0.1:18100/` and
-`http://100.94.63.83:8080/`. Hands-on M85-U1-U9/U11-U12, explicit supervising-user approval, Pages
-publication, service retirement and milestone closure remain pending. Accepted M84 remains public
-authority.
+`http://100.94.63.83:8080/`. On 2026-08-28 the supervising user approved M85 and requested closeout;
+that milestone-level decision accepts M85-U1 through M85-U12 without claiming a separately logged
+row-by-row replay. Pages publication, service retirement and milestone closure remain pending.
+Accepted M84 remains public authority until that proof passes.
 
 ## Frozen near-singular fixtures
 

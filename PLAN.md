@@ -6358,10 +6358,10 @@ publication.
 
 ### M85: responsive retained workbench presentation
 
-Status: **active and unaccepted; exact final candidate source `5c265e2`, tree `b55d012`, passes the
-complete clean release gate, immutable no-rebuild freeze, dual-endpoint byte verification, frozen-
-byte browser profile and final-source native flat-adapter audit; hands-on M85-U1-U9/U11-U12,
-explicit approval and Pages publication remain pending**. Accepted M84 source `84dd768`, snapshot
+Status: **accepted at milestone level on 2026-08-28; exact final candidate source `5c265e2`, tree
+`b55d012`, passes the complete clean release gate, immutable no-rebuild freeze, dual-endpoint byte
+verification, frozen-byte browser profile and final-source native flat-adapter audit; Pages
+publication and final closure remain pending**. Accepted M84 source `84dd768`, snapshot
 `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain product/public authority.
 `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the detailed contract
 and evidence.
@@ -6408,8 +6408,8 @@ and evidence.
   Chromium trace and complete final-source native flat-adapter M85-U10 evidence. Persisted v1-v6
   workspaces normalize into projectional authority; no test-only flat browser bootstrap or broad
   browser integration was added to PR CI.
-- [ ] Complete hands-on M85-U1-U9/U11-U12 against the exact retained candidate and record the
-  supervising user's explicit disposition.
+- [x] Receive the supervising user's milestone-level acceptance of M85-U1 through M85-U12 against
+  the exact retained candidate. This records approval without inventing a separate row-by-row replay.
 - [ ] After explicit supervising-user UAT approval only, publish the accepted descendant to Pages,
   exact-verify hosted bytes, retire the retained service and close M85.
 

@@ -131,8 +131,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Byte-identical local and
   retained-Tailscale HTTP ledgers, the final frozen-byte Chromium profile at 5/5 and final-source
   flat-adapter compatibility/parity evidence at 19/19 pass. The immutable candidate remains live at
-  `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/`; hands-on UAT, explicit approval, Pages
-  publication, service retirement and closure remain pending. No solver equation, Intent/code
+  `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` through acceptance. The supervising
+  user's 2026-08-28 close decision accepts M85-U1 through M85-U12 without claiming a separate
+  row-by-row replay; Pages publication, service retirement and closure remain pending. No solver equation, Intent/code
   meaning, accepted-scene authority, persistence schema or picking semantics changes;
   deterministic work-admission tests and focused candidate-only Chromium timing own the
   performance proof, and M85 does not restore broad browser integration CI. Accepted M84 remains

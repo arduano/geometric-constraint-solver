@@ -2,10 +2,10 @@
 
 # M85 focused UAT — Responsive retained workbench presentation
 
-Status: **mechanically qualified and nominated on exact immutable bytes; hands-on
-M85-U1-U9/U11-U12 and supervising-user approval remain pending**. Automated native M85-U10 passes.
-Run the remaining scorecard only against the retained frozen candidate below. Accepted M84 remains
-Pages authority; M85 has not been published.
+Status: **accepted at milestone level on 2026-08-28; the exact clean-qualified immutable candidate
+is approved for public closeout**. Automated native M85-U10 passes. The supervising user's explicit
+"Looks good. Close off that milestone" decision accepts M85-U1 through M85-U12 without claiming a
+separately logged row-by-row replay. Pages publication and final closure remain pending.
 
 ## Candidate identity
 
@@ -54,18 +54,18 @@ Test at approximately `1440x900` and `1024x720` on the exact retained candidate.
 
 | ID | Human action / evidence | Pass condition | Status |
 |---|---|---|---|
-| M85-U1 | Open the ordinary authored rectangle-plus-diagonal scene. Middle-button pan continuously for several seconds, reverse direction, release, then repeat with short bursts. | Motion tracks the pointer smoothly, the newest position wins, release causes no delayed jump, and geometry/selection/history are unchanged. | pending |
-| M85-U2 | On the same scene, wheel zoom rapidly in and out around corners, the Origin and empty canvas space. | Zoom remains anchored under the pointer, ordered deltas are not lost, labels/hit sizes remain usable and no late camera correction is visible. | pending |
-| M85-U3 | Exercise toolbar +/−, Fit and Origin after arbitrary pan/zoom. | All controls use the same camera semantics; Fit contains the sketch, Origin centres the protected datum, and no document/history entry is created. | pending |
-| M85-U4 | Open the exact PC Water Manifold with annotations visible and repeat sustained pan plus wheel bursts. | The dense scene remains at least subjectively 30 fps, with no multi-hundred-millisecond stalls, blank canvas, markup flash or annotation disappearance. | pending |
-| M85-U5 | Hide manifold annotations and repeat, then restore them. | The toggle remains paint/pick-only, both modes navigate smoothly, restoration is exact and hidden mode is not required to achieve the visible-mode budget. | pending |
-| M85-U6 | After a large pan/zoom, immediately hover and click screws, channels, Fillets, axes, points and annotations near the pointer. | Hover and click target exactly the painted item; there is no stale-coordinate pick, first-interaction pause or visual rebase jump. | pending |
-| M85-U7 | In the ordinary scene, drag a free point through several frames, release, then immediately pan and drag again. Test no-motion release and Escape cancellation. | Preview is responsive; exact release stays fixed through at least 1 s; one mutating history entry is added, while no-motion/cancel add none. | pending |
-| M85-U8 | Open Compass Rose and Rounded Polyline. Repeatedly drag their code-owned controls, including rapid consecutive drags, then pan/zoom between attempts. | Coupled geometry remains attached, each terminal is deterministic, no delayed snap occurs and code/session history remains coherent. | pending |
-| M85-U9 | Begin a drag or authoring preview, then initiate a camera gesture. | The semantic gesture is canceled or retained according to existing policy exactly once; repeated wheel samples do not repeatedly rebuild/cancel state and accepted geometry remains finite. | pending |
+| M85-U1 | Open the ordinary authored rectangle-plus-diagonal scene. Middle-button pan continuously for several seconds, reverse direction, release, then repeat with short bursts. | Motion tracks the pointer smoothly, the newest position wins, release causes no delayed jump, and geometry/selection/history are unchanged. | accepted by milestone-level approval |
+| M85-U2 | On the same scene, wheel zoom rapidly in and out around corners, the Origin and empty canvas space. | Zoom remains anchored under the pointer, ordered deltas are not lost, labels/hit sizes remain usable and no late camera correction is visible. | accepted by milestone-level approval |
+| M85-U3 | Exercise toolbar +/−, Fit and Origin after arbitrary pan/zoom. | All controls use the same camera semantics; Fit contains the sketch, Origin centres the protected datum, and no document/history entry is created. | accepted by milestone-level approval |
+| M85-U4 | Open the exact PC Water Manifold with annotations visible and repeat sustained pan plus wheel bursts. | The dense scene remains at least subjectively 30 fps, with no multi-hundred-millisecond stalls, blank canvas, markup flash or annotation disappearance. | accepted by milestone-level approval |
+| M85-U5 | Hide manifold annotations and repeat, then restore them. | The toggle remains paint/pick-only, both modes navigate smoothly, restoration is exact and hidden mode is not required to achieve the visible-mode budget. | accepted by milestone-level approval |
+| M85-U6 | After a large pan/zoom, immediately hover and click screws, channels, Fillets, axes, points and annotations near the pointer. | Hover and click target exactly the painted item; there is no stale-coordinate pick, first-interaction pause or visual rebase jump. | accepted by milestone-level approval |
+| M85-U7 | In the ordinary scene, drag a free point through several frames, release, then immediately pan and drag again. Test no-motion release and Escape cancellation. | Preview is responsive; exact release stays fixed through at least 1 s; one mutating history entry is added, while no-motion/cancel add none. | accepted by milestone-level approval |
+| M85-U8 | Open Compass Rose and Rounded Polyline. Repeatedly drag their code-owned controls, including rapid consecutive drags, then pan/zoom between attempts. | Coupled geometry remains attached, each terminal is deterministic, no delayed snap occurs and code/session history remains coherent. | accepted by milestone-level approval |
+| M85-U9 | Begin a drag or authoring preview, then initiate a camera gesture. | The semantic gesture is canceled or retained according to existing policy exactly once; repeated wheel samples do not repeatedly rebuild/cancel state and accepted geometry remains finite. | accepted by milestone-level approval |
 | M85-U10 | Review final-source native compatibility/parity evidence for the flat retained-coordinator adapter. Persisted v1-v6 workspaces normalize into projectional authority, so there is no ordinary flat browser fixture to open. | Direct adapter and shared headless tests prove retained navigation/interaction semantics, final-camera parity and history/work neutrality without inventing a test-only browser bootstrap. | automated pass: 19/19 exact tests |
-| M85-U11 | Reload the retained candidate after camera-only motion; Copy repro before and after navigation and compare semantic content. | Camera-only motion does not mutate canonical workspace/repro authority; reload is valid and no stale global error appears. | pending |
-| M85-U12 | Leave the manifold open, alternate pan, zoom, hover and selection for at least one minute. | No progressive slowdown, memory-driven blanking, stale selection, lost input, unexpected save or delayed geometry change is observed. | pending |
+| M85-U11 | Reload the retained candidate after camera-only motion; Copy repro before and after navigation and compare semantic content. | Camera-only motion does not mutate canonical workspace/repro authority; reload is valid and no stale global error appears. | accepted by milestone-level approval |
+| M85-U12 | Leave the manifold open, alternate pan, zoom, hover and selection for at least one minute. | No progressive slowdown, memory-driven blanking, stale selection, lost input, unexpected save or delayed geometry change is observed. | accepted by milestone-level approval |
 
 ## Mechanical timing evidence required before UAT
 
@@ -122,7 +122,7 @@ explicit supervising-user approval and Pages publication remain pending.
 
 ## Approval and publication
 
-Explicit supervising-user approval is mandatory. After approval, commit the scorecard, publish
-that accepted descendant through GitHub Pages, download and exact-verify the separately rebuilt
-Pages artifact and all hosted paths, then retire the retained Tailscale service. Until those steps
-pass, M84 remains final public-byte authority and M85 remains open.
+Explicit supervising-user approval was received on 2026-08-28. Commit this scorecard, publish that
+accepted descendant through GitHub Pages, download and exact-verify the separately rebuilt Pages
+artifact and all hosted paths, then retire the retained Tailscale service. Until those steps pass,
+M84 remains final public-byte authority and M85 remains open.

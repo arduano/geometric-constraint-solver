@@ -477,11 +477,12 @@ changing public incremental-code signatures. Exact source `5c265e2`, tree `b55d0
 complete clean release gate, no-rebuild seven-file freeze, byte-identical local/Tailscale HTTP
 verification, the final frozen-byte Chromium profile at 5/5 and final-source flat-adapter evidence
 at 19/19. Snapshot `/tmp/geosolve-m85-uat.QX8fU3Q6` is live at
-`http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` for hands-on UAT. Human
-M85-U1-U9/U11-U12, explicit approval, Pages publication, service retirement and closure remain
-pending. The accepted M84 solver, Intent/code meaning, history, persistence and Pages authority
-remain unchanged. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the
-active contract, qualified-candidate ledger and pending human scorecard.
+`http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` through acceptance. On 2026-08-28 the
+supervising user approved the milestone and requested closeout; this accepts M85-U1 through M85-U12
+without claiming a separately logged row-by-row replay. Pages publication, service retirement and
+closure remain pending. The accepted M84 solver, Intent/code meaning, history, persistence and
+Pages authority remain unchanged until that proof passes. `docs/M85_GOALS.md`,
+`docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the accepted candidate and closeout ledger.
 
 ## Read first
 
@@ -523,7 +524,7 @@ active contract, qualified-candidate ledger and pending human scorecard.
     nomination, milestone-level human scorecard and exact public closeout.
 21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — active retained
     camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
-    clean-qualified frozen candidate and pending hands-on scorecard/approval/publication.
+    clean-qualified frozen candidate, milestone-level approval and pending public closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -933,8 +934,9 @@ directory/file modes `0555`/`0444` and ordered-manifest aggregate
 `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and Tailscale HTTP
 ledgers are byte-identical, the exact frozen-byte profile passes 5/5, and final-source U10 direct
 compatibility/parity evidence passes 19/19. The same immutable bytes remain live at
-`http://127.0.0.1:18100/` and `http://100.94.63.83:8080/`. Human U1-U9/U11-U12, explicit approval,
-Pages publication, service retirement and closure are pending. M85 adds no equation, constraint,
+`http://127.0.0.1:18100/` and `http://100.94.63.83:8080/`. M85-U1 through M85-U12 are accepted by
+the supervising user's 2026-08-28 milestone-level close decision without claiming a separately
+logged row-by-row replay. Pages publication, service retirement and closure are pending. M85 adds no equation, constraint,
 solver priority, branch rule, persistence schema or managed-code meaning, and accepted M84 remains
 public authority.
 M82 closes by explicit
@@ -1062,8 +1064,8 @@ Durable milestone and cleanup records:
 - `docs/M85_GOALS.md` (active retained workbench-performance contract and fixed budgets)
 - `docs/M85_IMPLEMENTATION.md` (repaired M85-F001-F003 architecture and exact clean-qualified,
   frozen-candidate evidence ledger)
-- `docs/M85_UAT.md` (qualified immutable-candidate navigation/interaction scorecard pending human
-  execution and approval)
+- `docs/M85_UAT.md` (accepted immutable-candidate navigation/interaction scorecard and pending
+  public closeout)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

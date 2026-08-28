@@ -3867,12 +3867,13 @@ feature or general topological-naming claim is accepted by M84.
 
 ### M85: responsive retained workbench presentation
 
-Status: **active and unaccepted**. Exact final candidate source
+Status: **accepted at milestone level on 2026-08-28; public closeout remains pending**. Exact final candidate source
 `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
 `b55d012443f4dbf7551e30041da2912e666de9db`, passes complete clean qualification, immutable
 no-rebuild nomination, dual-endpoint byte verification, the frozen-byte browser profile and final-
-source native flat-adapter M85-U10 evidence. Hands-on M85-U1-U9/U11-U12, explicit supervising-user
-approval and Pages publication remain pending. Accepted M84 stays product and Pages authority.
+source native flat-adapter M85-U10 evidence. The supervising user's close decision accepts M85-U1
+through M85-U12 without claiming a separately logged row-by-row replay. Pages publication remains
+pending. Accepted M84 stays product and Pages authority until that public proof passes.
 
 M85 is accepted only when all of the following pass:
 
@@ -3961,7 +3962,8 @@ Current gate disposition:
 - [x] Final-source M85-U10 passes 19/19 at `/tmp/geosolve-m85-u10-final.D1auvz5d`; its
   `results.tsv` has SHA-256
   `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`.
-- [ ] Complete hands-on M85-U1-U9/U11-U12 and obtain the supervising user's explicit acceptance.
+- [x] Receive milestone-level supervising-user acceptance of M85-U1 through M85-U12 without
+  claiming a separately logged row-by-row replay.
 - [ ] Only after that approval, publish the accepted descendant to Pages, exact-verify the hosted
   artifact, retire the retained Tailscale service and close M85.
 
