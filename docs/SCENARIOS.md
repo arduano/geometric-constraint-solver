@@ -5459,12 +5459,14 @@ remains historical evidence. Product source `5c265e2` is an ancestor of the appr
 the eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0`
 and both endpoints refuse connections. Pages is final M85 public-byte authority and M85 is closed.
 
-## M86 managed-dimension Inspector fixtures
+## M86 focused bug-fix fixtures
 
 M86-F001 adds no residual equation and does not reinterpret or expand the milestone-neutral golden.
 Its focused optional code-project regressions and thin browser-Inspector adapter proof pass;
 complete clean qualification, unchanged-golden confirmation and exact no-rebuild local/Tailscale
-nomination also pass. Human M86-U1 through M86-U5 remain pending.
+nomination also pass. The supervising user's scoped “Looks good” assessment accepts F001 without
+claiming a separately logged row-by-row replay. M86-F002 adds only focused headless picking rows;
+replacement clean nomination and M86-U6/U7 remain pending.
 `docs/M86_GOALS.md` is authoritative.
 
 ### M86-C1 — Exact managed curve-length target rewrite
@@ -5519,7 +5521,29 @@ unchanged 271-case golden. Its exact seven-file Trunk output is frozen without r
 `http://127.0.0.1:18101/` and retained Tailscale `http://100.94.63.83:8080/` serve only that
 snapshot; all eight paths are exact and their byte-identical ledgers have SHA-256
 `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This is the UAT candidate,
-not public authority; Pages remains M85 until explicit M86 approval.
+not public authority and is superseded once the F002 replacement qualifies; Pages remains M85
+until explicit final M86 approval.
+
+### M86-C5 — Fillet source-corner Select priority
+
+Create two joined native line/polyline spans and a computed Fillet whose visible radius surface
+also contains their persistent shared endpoint. Independently prove
+`EditorScene::hit_test(position, default_tolerance)` returns that Point and
+`EditorScene::resolve_fillet_hit(position, default_tolerance)` returns the Fillet Radius owner.
+Through one unchanged `ConstraintEditor`, pointer move must publish Point hover/context and pointer
+down must select the same Point and start `ActivePointerGestureKind::Point`.
+
+Repeat with two distinct stored endpoints joined by an active explicit Coincident relation. The
+lowest deterministic hit identity wins as one semantic corner. Repeat without Coincident while
+leaving the two solved coordinates identical: the Fillet retains radius ownership, proving that
+coordinate proximity is not topology. Finally Apply the computed Fillet and repeat against the
+Current persistent scene.
+
+The existing unrelated draggable point at a computed Fillet contact must still resolve to
+FeatureCorner/FilletRadius for every modifier; removing it still leaves the passive native parent
+below the computed radius surface. Direct radius grip/rail gestures, native authoring at a computed
+contact and painted-radius reconciliation remain unchanged. Native and WASM results must match
+exactly. No new golden row, residual/Jacobian test or browser-specific hit rule is warranted.
 
 ## Frozen near-singular fixtures
 

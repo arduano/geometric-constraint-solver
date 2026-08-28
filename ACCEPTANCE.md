@@ -3992,9 +3992,10 @@ are outside scope.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted**. M86-F001 is implemented, clean-qualified and nominated as an
-immutable local/Tailscale candidate against the M85 baseline. M86-U1 through M86-U5 remain
-pending. Accepted M85 stays public-byte authority.
+Status: **active and unaccepted**. M86-F001 is implemented, clean-qualified, immutably nominated
+and accepted by the supervising user's scoped “Looks good” assessment. M86-F002 is implemented
+with replacement clean qualification and M86-U6/U7 pending. Accepted M85 stays public-byte
+authority.
 
 M86-F001 is accepted only when all of the following pass:
 
@@ -4036,22 +4037,39 @@ M86-F001 is accepted only when all of the following pass:
 - Focused owner/adapter tests, format, warnings-denied affected-crate Clippy, relevant native/WASM
   checks, unchanged clean golden and proportional workspace/release qualification pass. Exact
   candidate bytes are frozen without rebuild and verified locally and on retained Tailscale.
-- Supervising-user M86-U1 through M86-U5 approval is explicit before Pages publication, exact
-  hosted-byte verification, retained-service retirement and milestone closure.
+- The F001 scorecard is accepted by the supervising user's scoped “Looks good” assessment without
+  claiming a separately logged M86-U1 through M86-U5 row-by-row replay.
+- M86-F002 reproduces at the public headless Select boundary: one persistent endpoint shared by
+  both computed Fillet parents is simultaneously inside ordinary native-point picking and the
+  Fillet radius surface, yet pre-repair hover/down resolve FeatureCorner rather than Point.
+- At that exact source corner, native identity or active explicit Coincident topology makes the
+  point win Select hover and down. The click selects the persistent Point and begins an ordinary
+  Point gesture. Solved coordinate proximity alone never qualifies.
+- The exception is source-specific and Select-only. An unrelated point over the computed arc,
+  radius grip/spoke/rail away from the source corner, passive native curves, active Fillet authoring
+  and painted-radius reconciliation preserve their established M75 precedence.
+- Exact native/WASM tests cover shared identity, distinct explicitly Coincident identities,
+  coordinate-only non-topology and a persistent post-Apply Fillet. The existing unrelated-point,
+  radius-affordance and native-authoring-contact owners remain passing unchanged; the broad golden
+  stays byte-identical because no systemic family or authority state was added.
+- F002 complete clean qualification, replacement immutable byte verification and supervising-user
+  M86-U6/U7 approval are explicit before Pages publication, exact hosted-byte verification,
+  retained-service retirement and milestone closure.
 
-Mechanical qualification passes on source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
+F001 mechanical qualification passes on source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`. The complete clean Nix gate exits `0`; unchanged
 271-case golden, native/WASM parity and final Trunk assembly pass. Its no-rebuild seven-file output
 is frozen read-only at `/tmp/geosolve-m86-uat.vdEFAxsF`, ordered-manifest aggregate
 `1f872c6b51317ff810b48ab8965e1e0a0f6cb45feb01f5cbfe654eafbedd5882`. Local and Tailscale
 eight-path HTTP ledgers are byte-identical at SHA-256
-`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This satisfies every
-mechanical acceptance prerequisite; the explicit human scorecard and post-approval publication
-remain open.
+`b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This satisfies F001's
+mechanical prerequisites and is retained as historical evidence while F002 replacement
+qualification runs; final F002 human acceptance and post-approval publication remain open.
 
-M86-F001 changes no primitive, constraint, dimension family, residual, Jacobian, solver priority,
+M86 changes no primitive, constraint, dimension family, residual, Jacobian, solver priority,
 tolerance, branch rule, persistence schema, managed grammar or point-overlay semantics. General
-arbitrary Intent-leaf reconciliation and runtime TypeScript remain outside scope.
+arbitrary Intent-leaf reconciliation, runtime TypeScript and a global native-over-computed picking
+inversion remain outside scope.
 
 ## Regression and oracle policy
 

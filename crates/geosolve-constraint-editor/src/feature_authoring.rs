@@ -1542,7 +1542,7 @@ fn shared_endpoint_hints(
     Some(*value)
 }
 
-fn span_endpoint_ids(
+pub(super) fn span_endpoint_ids(
     document: &SketchDocument,
     span: CurveSpan,
 ) -> Option<(DesignPointId, DesignPointId)> {

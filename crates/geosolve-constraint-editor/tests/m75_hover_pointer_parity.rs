@@ -2,12 +2,12 @@
 
 use geosolve_constraint_editor::{
     ActivePointerGesture, ActivePointerGestureKind, AuthoringOutcome, AuthoringState,
-    AuthoringTool, ConstraintEditor, ConstraintIntent, EditorEffect, EditorHoverState,
-    EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringOutcome, FeatureAuthoringPreview,
-    FeatureAuthoringState, FeatureAuthoringTool, GeometryPickScope, Modifiers, PickTolerance,
-    PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence,
-    SceneAnnotationVisibility, SceneFilletHit, SceneGlyphMarker, ScreenPoint, SelectionItem,
-    Viewport,
+    AuthoringTool, ComputedSceneState, ConstraintEditor, ConstraintIntent, EditorEffect,
+    EditorHoverState, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringOutcome,
+    FeatureAuthoringPreview, FeatureAuthoringState, FeatureAuthoringTool, GeometryPickScope,
+    Modifiers, PickTolerance, PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry,
+    SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneFilletHit, SceneGlyphMarker,
+    ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentEdit, DocumentSolveRequest,
@@ -137,9 +137,11 @@ fn parity_fixture() -> PointerParityFixture {
         .session()
         .accepted_state_for_current_input()
         .expect("accepted state");
+    let accepted_revision = accepted.identity().revision().get();
+    let accepted_design_identity = accepted.design_identity();
     let base_scene = EditorScene::from_accepted_for_design(
-        accepted.identity().revision().get(),
-        accepted.design_identity(),
+        accepted_revision,
+        accepted_design_identity,
         accepted.document(),
         coordinator.session().design_document(),
         viewport,
@@ -242,6 +244,171 @@ fn parity_fixture() -> PointerParityFixture {
         circle_center,
         overlap_point,
         overlap,
+        owner,
+    }
+}
+
+struct DistinctCornerPickFixture {
+    scene: EditorScene,
+    first_corner: geosolve_sketch::DesignPointId,
+    second_corner: geosolve_sketch::DesignPointId,
+    corner_position: ScreenPoint,
+    owner: geosolve_constraint_editor::ComputedCornerRef,
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one accepted fixture keeps exact Coincident and coordinate-only Fillet-corner variants structurally identical"
+)]
+fn distinct_corner_pick_fixture(active_coincident: bool) -> DistinctCornerPickFixture {
+    let viewport = Viewport::new([800.0, 600.0], [2.0, 2.0], 50.0).expect("viewport");
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let start = document.add_point("start", [0.0, 0.0]).expect("start");
+    let first_corner = document
+        .add_point("first stored corner", [4.0, 0.0])
+        .expect("first corner");
+    let second_corner = document
+        .add_point("second stored corner", [4.0, 0.0])
+        .expect("second corner");
+    let end = document.add_point("end", [4.0, 4.0]).expect("end");
+    document
+        .add_curve(
+            "first parent",
+            CurveDefinition::Line {
+                start,
+                end: first_corner,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("first line");
+    document
+        .add_curve(
+            "second parent",
+            CurveDefinition::Line {
+                start: second_corner,
+                end,
+                branch_direction: [0.0, 1.0],
+            },
+        )
+        .expect("second line");
+    if active_coincident {
+        document
+            .add_constraint(
+                "explicit corner topology",
+                DocumentConstraintDefinition::Coincident {
+                    first: first_corner,
+                    second: second_corner,
+                },
+            )
+            .expect("Coincident corner");
+    }
+
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("accepted session");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted state");
+    let accepted_revision = accepted.identity().revision().get();
+    let accepted_design_identity = accepted.design_identity();
+    let base_scene = EditorScene::from_accepted_for_design(
+        accepted_revision,
+        accepted_design_identity,
+        accepted.document(),
+        coordinator.session().design_document(),
+        viewport,
+        0.5,
+    )
+    .expect("base scene");
+    let snapshot = coordinator
+        .feature_authoring_snapshot()
+        .expect("feature-authoring snapshot");
+    let accepted_document = snapshot.sketch_document().clone();
+    let mut authoring = FeatureAuthoringState::default();
+    assert!(matches!(
+        authoring.activate(
+            &snapshot,
+            &accepted_document,
+            FeatureAuthoringTool::Fillet,
+            &[],
+        ),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ));
+    for model_position in [[2.0, 0.0], [4.0, 2.0]] {
+        coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &base_scene,
+                viewport.model_to_screen(model_position),
+                PickTolerance::default(),
+                "distinct-corner pointer parity Fillet",
+            )
+            .expect("Fillet parent pick");
+    }
+    assert!(matches!(
+        authoring.apply(),
+        FeatureAuthoringOutcome::Apply(_)
+    ));
+    let preview = coordinator
+        .feature_authoring_preview()
+        .expect("held Fillet preview");
+    let mut scene = EditorScene::from_accepted_with_computed(
+        accepted_revision,
+        accepted_design_identity,
+        &accepted_document,
+        coordinator.session().design_document(),
+        &coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input"),
+        &preview.metadata().input,
+        preview.snapshot(),
+        viewport,
+        0.5,
+    )
+    .expect("computed scene");
+    let owner = scene
+        .computed_curves
+        .first()
+        .expect("computed Fillet arc")
+        .owner;
+    coordinator
+        .populate_computed_fillet_affordances(
+            &mut scene,
+            &[SelectionItem::FeatureCorner(owner)],
+            0.5,
+        )
+        .expect("Fillet radius affordance");
+    let corner_position = scene
+        .points
+        .iter()
+        .find(|point| point.id == first_corner)
+        .map(|point| point.screen_position)
+        .expect("first source corner point");
+    assert_eq!(
+        scene
+            .points
+            .iter()
+            .find(|point| point.id == second_corner)
+            .map(|point| point.screen_position),
+        Some(corner_position),
+        "the fixture's two stored endpoints must paint at one exact corner",
+    );
+    assert!(matches!(
+        scene.resolve_fillet_hit(corner_position, PickTolerance::default()),
+        Some(SceneFilletHit::Radius { owner: hit, .. }) if hit == owner
+    ));
+
+    DistinctCornerPickFixture {
+        scene,
+        first_corner,
+        second_corner,
+        corner_position,
         owner,
     }
 }
@@ -655,6 +822,220 @@ fn fillet_radius_beats_overlapping_draggable_native_geometry_for_every_modifier(
             })
         );
     }
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn m86_f002_fillet_source_corner_remains_selectable_through_its_radius_surface() {
+    let fixture = parity_fixture();
+    let corner_item = SelectionItem::Point(fixture.corner);
+    let corner_position = fixture
+        .computed_scene
+        .points
+        .iter()
+        .find(|point| point.id == fixture.corner)
+        .map(|point| point.screen_position)
+        .expect("persistent Fillet source corner");
+    assert_eq!(
+        fixture
+            .computed_scene
+            .hit_test(corner_position, PickTolerance::default())
+            .map(|hit| hit.item),
+        Some(corner_item),
+        "the ordinary native hit surface must expose the persistent source corner",
+    );
+    assert!(matches!(
+        fixture
+            .computed_scene
+            .resolve_fillet_hit(corner_position, PickTolerance::default()),
+        Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
+    ));
+
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([SelectionItem::FeatureCorner(fixture.owner)]);
+    assert_eq!(
+        editor.pointer_move(
+            &fixture.computed_scene,
+            pointer(20, corner_position, Modifiers::default()),
+        ),
+        hover_change(
+            Some(EditorHoverTarget::Geometry(corner_item)),
+            Some(corner_item),
+        ),
+    );
+    assert_eq!(
+        editor.pointer_down(
+            &fixture.computed_scene,
+            pointer(20, corner_position, Modifiers::default()),
+        ),
+        vec![EditorEffect::SelectionChanged(vec![corner_item])],
+    );
+    assert_eq!(editor.selection(), &[corner_item]);
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 20,
+            kind: ActivePointerGestureKind::Point,
+        }),
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn m86_f002_active_coincident_source_endpoints_resolve_one_deterministic_corner_point() {
+    let fixture = distinct_corner_pick_fixture(true);
+    let expected_point = fixture.first_corner.min(fixture.second_corner);
+    let point_item = SelectionItem::Point(expected_point);
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([SelectionItem::FeatureCorner(fixture.owner)]);
+
+    assert_eq!(
+        editor.pointer_move(
+            &fixture.scene,
+            pointer(21, fixture.corner_position, Modifiers::default()),
+        ),
+        hover_change(
+            Some(EditorHoverTarget::Geometry(point_item)),
+            Some(point_item),
+        ),
+    );
+    assert_eq!(
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(21, fixture.corner_position, Modifiers::default()),
+        ),
+        vec![EditorEffect::SelectionChanged(vec![point_item])],
+    );
+    assert_eq!(editor.selection(), &[point_item]);
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 21,
+            kind: ActivePointerGestureKind::Point,
+        }),
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn m86_f002_coordinate_overlap_without_coincident_does_not_claim_source_corner_priority() {
+    let fixture = distinct_corner_pick_fixture(false);
+    let fillet_item = SelectionItem::FeatureCorner(fixture.owner);
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([fillet_item]);
+
+    assert_eq!(
+        editor.pointer_move(
+            &fixture.scene,
+            pointer(22, fixture.corner_position, Modifiers::default()),
+        ),
+        hover_change(
+            Some(EditorHoverTarget::Geometry(fillet_item)),
+            Some(fillet_item),
+        ),
+    );
+    assert!(
+        editor
+            .pointer_down(
+                &fixture.scene,
+                pointer(22, fixture.corner_position, Modifiers::default()),
+            )
+            .is_empty(),
+        "the already-selected Fillet radius keeps ownership without changing selection",
+    );
+    assert_eq!(editor.selection(), &[fillet_item]);
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 22,
+            kind: ActivePointerGestureKind::FilletRadius,
+        }),
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn m86_f002_applied_fillet_keeps_its_persistent_source_corner_selectable() {
+    let mut fixture = parity_fixture();
+    let applied = match fixture.authoring.apply() {
+        FeatureAuthoringOutcome::Apply(candidate) => candidate,
+        other => panic!("complete Fillet candidate did not apply: {other:?}"),
+    };
+    let token = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("held Fillet preview")
+        .metadata()
+        .token;
+    fixture
+        .coordinator
+        .apply_feature_authoring_preview(token, &applied)
+        .expect("persistent Fillet publication");
+    let accepted = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted persistent source");
+    let mut scene = match fixture.coordinator.computed_scene_state() {
+        ComputedSceneState::Current { expected, snapshot } => {
+            EditorScene::from_accepted_with_computed(
+                accepted.identity().revision().get(),
+                accepted.design_identity(),
+                accepted.document(),
+                fixture.coordinator.session().design_document(),
+                &fixture
+                    .coordinator
+                    .session()
+                    .accepted_prepared_input()
+                    .expect("accepted persistent input"),
+                expected,
+                snapshot,
+                fixture.computed_scene.viewport,
+                0.5,
+            )
+            .expect("persistent computed scene")
+        }
+        state => panic!("persistent Fillet scene is not Current: {state:?}"),
+    };
+    let owner = scene
+        .computed_curves
+        .first()
+        .expect("persistent computed Fillet arc")
+        .owner;
+    fixture
+        .coordinator
+        .populate_computed_fillet_affordances(
+            &mut scene,
+            &[SelectionItem::FeatureCorner(owner)],
+            0.5,
+        )
+        .expect("persistent Fillet affordance");
+    let corner_item = SelectionItem::Point(fixture.corner);
+    let corner_position = scene
+        .points
+        .iter()
+        .find(|point| point.id == fixture.corner)
+        .map(|point| point.screen_position)
+        .expect("persistent source corner");
+    assert!(matches!(
+        scene.resolve_fillet_hit(corner_position, PickTolerance::default()),
+        Some(SceneFilletHit::Radius { owner: hit, .. }) if hit == owner
+    ));
+
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([SelectionItem::FeatureCorner(owner)]);
+    assert_eq!(
+        editor.pointer_down(&scene, pointer(23, corner_position, Modifiers::default()),),
+        vec![EditorEffect::SelectionChanged(vec![corner_item])],
+    );
+    assert_eq!(editor.selection(), &[corner_item]);
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 23,
+            kind: ActivePointerGestureKind::Point,
+        }),
+    );
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]

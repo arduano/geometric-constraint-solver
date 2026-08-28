@@ -6466,9 +6466,9 @@ publication.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is implemented, clean-qualified and nominated as an
-immutable local/Tailscale candidate; UAT is pending**. Accepted M85 Pages run `33128387637`
-remains public-byte authority.
+Status: **active and unaccepted; M86-F001 is implemented and accepted by the supervising user's
+scoped “Looks good” assessment, and M86-F002 is implemented with replacement qualification
+pending**. Accepted M85 Pages run `33128387637` remains public-byte authority.
 `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the detailed contract
 and evidence.
 
@@ -6506,11 +6506,26 @@ and evidence.
 - [x] Freeze the exact gate output without rebuild and exact-verify all eight local/Tailscale HTTP
   paths. Snapshot `/tmp/geosolve-m86-uat.vdEFAxsF` has ordered-manifest aggregate `1f872c6` and is
   live at `http://127.0.0.1:18101/` and `http://100.94.63.83:8080/`.
-- [ ] Complete M86-U1 through M86-U5. Publish to Pages and close M86 only after explicit
-  supervising-user UAT approval.
+- [x] Record the supervising user's scoped “Looks good” assessment as F001/M86-U1-U5 acceptance
+  without claiming a separately logged row-by-row replay.
+- [x] Independently reproduce M86-F002 in the headless Select resolver. At one exact shared native
+  line/polyline endpoint, ordinary scene hit-testing returns the persistent Point while the blended
+  Fillet grip/spoke/rail/arc surface causes both hover and down to return FeatureCorner.
+- [x] Add the smallest native/WASM owner regression and explicit collateral rows for an active
+  Coincident join, coordinate-only overlap without topology and a fully applied persistent Fillet.
+  Preserve the established unrelated-point-over-arc, authoring and radius grip/rail precedence.
+- [x] Implement a Select-only source-corner exception using the existing private span-endpoint
+  semantics and active explicit Coincident representatives. Coordinate proximity never welds
+  points; no public API, browser incidence rule, computed-feature branch or solver equation changes.
+- [x] Pass focused native/WASM parity, all editor tests/doc tests, warnings-denied affected Clippy,
+  formatting, diff hygiene and unchanged 271-case golden authority.
+- [ ] Pass the complete clean gate, replace and exact-verify the immutable local/Tailscale candidate,
+  then complete M86-U6/U7. Publish to Pages and close M86 only after explicit final supervising-user
+  approval.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
-not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;
+not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority; a
+Fillet cannot hide its own persistent source corner but retains radius ownership everywhere else;
 ordinary GUI dimensions and every solver equation remain unchanged; focused regression,
 proportional clean qualification, immutable nomination and explicit UAT precede publication.
 

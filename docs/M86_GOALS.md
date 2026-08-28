@@ -2,19 +2,18 @@
 
 # M86 — Focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is implemented, clean-qualified and nominated as an
-immutable local/Tailscale candidate; human UAT is pending**. Accepted M85 Pages remains public-byte
-authority until explicit M86 approval and publication. This initial scope contains exactly one
-confirmed defect; later reports enter the batch only after independent reproduction and a recorded
-M86 finding.
+Status: **active and unaccepted; M86-F001 is implemented and human-approved, and M86-F002 is
+implemented with replacement qualification pending**. Accepted M85 Pages remains public-byte
+authority until explicit M86 approval and publication. The prior F001 immutable candidate remains
+historical evidence while F002 is qualified and replaced.
 
 ## Goal
 
-Make Inspector editing of code-owned direct dimensions behave like genuine collaborative
-code/GUI authoring. A valid value edit must rewrite the authenticated managed TypeScript
-declaration, rematerialize through the existing Intent/native validation path and publish exactly
-one outer code transaction. It must not mutate an expanded native leaf and then ask generic
-code-checkpoint reconciliation to infer source intent.
+Complete a focused bug-fix/UAT batch without changing solver mathematics. F001 makes Inspector
+editing of code-owned direct dimensions behave like genuine collaborative code/GUI authoring. F002
+makes a persistent line/polyline corner shared by a computed Fillet's two native parents reachable
+through the Fillet radius surface, while retaining the established radius grip/rail/arc precedence
+over unrelated points and passive native curves.
 
 ## Confirmed baseline
 
@@ -37,6 +36,14 @@ The generic Inspector adapter currently edits the nested Intent scalar first. Ge
 checkpoint publication then rejects the changed leaf because its semantic reconciliation supports
 point-placement overlays, not a direct dimension target. This is optional code-project/workbench
 composition, not a solver equation, convergence or dimension-residual defect.
+
+On F001 nomination source `bcc5ae4`, Select-mode hover and pointer-down at the persistent shared
+corner of two Fillet parents both resolve to `FeatureCorner` whenever the computed radius rail or
+arc tolerance also covers that sample. The ordinary native hit surface independently resolves the
+same sample to its persistent `Point`. `ConstraintEditor::resolve_select_pointer_target` asks the
+blended Fillet resolver before every native point, and that resolver deliberately merges grip,
+spoke, continuation rail and arc into one radius surface. This is a headless picking-priority
+defect, not an SVG/DOM hitbox or computed-feature evaluation defect.
 
 ## Required behavior
 
@@ -76,6 +83,19 @@ composition, not a solver equation, convergence or dimension-residual defect.
   materialization, acceptance and history; one thin adapter test proves the displayed Inspector
   control reaches that route.
 
+### G4 — Reachable native Fillet source corners
+
+- In Select mode, a finite interactive persistent point which is the shared endpoint of the two
+  current Fillet parents wins over that Fillet's radius hit surface. Two distinct stored endpoints
+  joined by an active explicit Coincident relation count as the same semantic corner; coordinate
+  proximity alone never does.
+- The exception is source-specific. An unrelated native point overlapping the computed arc, the
+  radius grip/spoke/rail away from the source corner, the computed arc over passive native curves,
+  active Fillet authoring and painted-radius reconciliation retain their established precedence.
+- Hover and pointer-down use the same headless resolver: the corner paints native point hover,
+  selects that point and starts the ordinary Point gesture. No browser adapter reconstructs source
+  incidence or overrides the headless result.
+
 ## Qualification
 
 - The exact manifold alias/declaration is frozen by a focused owner regression. It asserts the sole source
@@ -92,24 +112,31 @@ composition, not a solver equation, convergence or dimension-residual defect.
   parity, unchanged 271-case golden and the complete clean workspace/release gate pass. The exact
   gate-produced distribution is frozen without rebuild and byte-verified locally and on retained
   Tailscale before human UAT.
+- The exact F002 overlap regression proves the ordinary native surface and the Fillet radius
+  surface both contain one shared source-corner sample, then requires identical native/WASM hover
+  and pointer-down ownership by the persistent point. The existing unrelated-point overlap and
+  radius affordance regressions remain passing unchanged.
 
 ## Bounds and non-goals
 
-M86-F001 adds no primitive, constraint, dimension family, residual, Jacobian, solver priority,
+M86 adds no primitive, constraint, dimension family, residual, Jacobian, solver priority,
 tolerance, branch rule, formula language, persistence format, code grammar or point-overlay
 semantics. It does not make computed/generated dimensions editable, generalize arbitrary Intent
-leaf reconciliation, decode opaque aliases, add runtime TypeScript, or redesign M84 collaborative
-authoring. Additional M86 bug fixes require their own confirmed finding and explicit scope entry.
+leaf reconciliation, decode opaque aliases, add runtime TypeScript, redesign M84 collaborative
+authoring, turn coordinate proximity into topology, or globally place all native points above
+computed Fillets. Additional M86 bug fixes require their own confirmed finding and explicit scope
+entry.
 
 ## Release sequence
 
-1. Add the exact failing owner regression and thin adapter proof.
-2. Implement authenticated managed-source routing and qualify valid, invalid and Undo/Redo paths.
+1. Add each exact failing owner regression and the thin adapter proof where a boundary is crossed.
+2. Implement authenticated managed-source routing and the narrow Fillet source-corner precedence.
 3. Pass proportional native/WASM/workspace/release gates with unchanged golden authority.
-4. Freeze without rebuild, exact-verify local/Tailscale bytes and complete M86-U1 through M86-U5.
+4. Freeze without rebuild, exact-verify local/Tailscale bytes and complete the M86 UAT scorecard.
 5. Only after explicit supervising-user approval, publish the accepted descendant to Pages,
    exact-verify hosted bytes, retire the retained candidate services and close M86.
 
-Steps 1 through 4's mechanical nomination prerequisites pass on source `9050424`, tree `65e0925`.
-The immutable candidate remains live at `http://127.0.0.1:18101/` and
-`http://100.94.63.83:8080/`; the human M86-U1 through M86-U5 portion of step 4 remains pending.
+F001 passed those mechanical prerequisites on source `9050424`, tree `65e0925`, and the supervising
+user reported that candidate looked good before opening F002. Its immutable snapshot remains live
+at `http://127.0.0.1:18101/` and `http://100.94.63.83:8080/` until a qualified F002 replacement is
+ready. F002 replacement qualification and its focused human recheck remain pending.

@@ -2,15 +2,16 @@
 
 # M86 implementation ledger — Focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is implemented, clean-qualified and nominated as an
-immutable local/Tailscale candidate**. Human M86-U1 through M86-U5 acceptance and post-approval
-Pages publication remain pending. `docs/M86_GOALS.md` owns the contract.
+Status: **active and unaccepted; M86-F001 is implemented and human-approved, and M86-F002 is
+implemented with replacement qualification pending**. Post-F002 human acceptance and
+post-approval Pages publication remain pending. `docs/M86_GOALS.md` owns the contract.
 
 ## Finding ledger
 
 ### M86-F001 — Code-owned direct dimension edits reject after nested Intent mutation
 
-Disposition: **repaired, clean-qualified and immutably nominated; human UAT remains pending**.
+Disposition: **repaired, clean-qualified, immutably nominated and accepted by the supervising
+user's scoped “Looks good” assessment**.
 
 Reproduction baseline is M85 closeout head `4b69a57`. Open PC Water Manifold, select
 `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`,
@@ -28,6 +29,22 @@ authenticated Inspector-to-managed-source route.
 First regression owner: `geosolve-demo-web`'s optional code-project workbench composition. The
 crossed browser adapter receives one thin dispatch test. No core/sketch residual, Jacobian or broad
 golden change is warranted.
+
+### M86-F002 — Computed Fillet radius surface hides its persistent native corner
+
+Disposition: **repaired and proportionally qualified; clean replacement nomination and human UAT
+remain pending**.
+
+Reproduction baseline is F001 documentation head `bcc5ae4`. In Select mode, use two joined native
+line/polyline spans with a computed Fillet, expose the selected Fillet radius affordance and sample
+their retained shared endpoint where the radius rail also hits. `EditorScene::hit_test` returns the
+persistent point, but both `pointer_move` and `pointer_down` return the computed `FeatureCorner`, so
+the original corner cannot be selected or dragged.
+
+The headless Select resolver unconditionally asked the blended Fillet resolver first. That resolver
+correctly treats grip, spoke, continuation rail and arc as one radius surface for M75 painted-item
+parity, but could not express the narrower source-corner exception. First regression owner is
+`geosolve-constraint-editor`; no browser-only or solver-layer correction is warranted.
 
 ## Implemented design
 
@@ -95,9 +112,31 @@ Owning tests:
 - [x] Pass complete affected-crate/workspace tests, unchanged 271-case clean golden and the clean
   Nix release gate.
 - [x] Freeze the exact no-rebuild candidate and exact-verify local/Tailscale bytes.
-- [ ] Complete the pending M86-U1 through M86-U5 human scorecard.
+- [x] Record the supervising user's scoped “Looks good” assessment as acceptance of M86-U1 through
+  M86-U5 without claiming a separately logged row-by-row replay.
 - [ ] Publish and exact-verify Pages only after explicit supervising-user approval; retire retained
   services and close M86 afterward.
+
+### I5 — Source-specific Fillet corner precedence
+
+- [x] Add exact native/WASM hover/down parity regression
+  `m86_f002_fillet_source_corner_remains_selectable_through_its_radius_surface`. It independently
+  proves that both ordinary native point picking and the computed radius surface contain the same
+  sample before requiring Point hover, Point selection and an ordinary Point gesture.
+- [x] Reuse the feature-authoring owner's exact line/polyline span-endpoint query. In Select mode
+  only, resolve a point-sized hit as a Fillet source corner when it is an endpoint of both current
+  parents. Active explicit Coincident equivalence is accepted; solved coordinate proximity is not.
+- [x] Keep `EditorScene::resolve_fillet_hit_with_policy` unchanged for active Fillet authoring,
+  painted-radius reconciliation and public Fillet-aware picking. The exception is applied only by
+  the shared Select hover/click resolver after an actual radius-surface hit.
+- [x] Add explicit Coincident, coordinate-only non-topology and post-Apply persistent-feature rows.
+  Keep the pre-existing unrelated-point-over-arc row, native-authoring contact row and radius
+  affordance/gesture owners passing unchanged.
+- [x] Pass focused native and WASM parity, all 429 editor unit tests plus every editor integration
+  and doc test, warnings-denied editor Clippy, formatting, diff hygiene and unchanged 271-case
+  golden authority.
+- [ ] Pass the complete clean release gate, freeze and exact-verify a replacement local/Tailscale
+  candidate, then complete the focused F002 human recheck.
 
 ## Files and API surface
 
@@ -106,7 +145,15 @@ Owning tests:
 - `crates/geosolve-demo-web/src/workbench/mod.rs` asks that route before generic Inspector mutation,
   installs complete returned authority on acceptance, retains current authority on failure and owns
   the thin adapter regression.
-- No public crate API, persistence/wire version, code grammar, Intent schema or solver API changes.
+- `crates/geosolve-constraint-editor/src/feature_authoring.rs` exposes its existing private
+  line/polyline span-endpoint query to the parent module.
+- `crates/geosolve-constraint-editor/src/lib.rs` adds the private source-corner point resolver and
+  the Select-only precedence exception.
+- `crates/geosolve-constraint-editor/tests/m75_hover_pointer_parity.rs` adds four focused native/WASM
+  F002 rows covering shared identity, Coincident equivalence, coordinate-only overlap and an applied
+  persistent Fillet.
+- No public crate API, persistence/wire version, code grammar, Intent schema, solver API, residual or
+  Jacobian changes.
 
 ## Commands and focused evidence
 
@@ -141,6 +188,32 @@ small accepted-diameter fixture separately covers `5 -> 8`. The adapter and two 
 tests prove browser routing, authority replacement, GUI-owned fallback and generic history remain
 coherent. The complete qualification and freeze evidence below supersede the earlier focused-only
 checkpoint; Pages publication is intentionally not claimed before human approval.
+
+The following F002 commands genuinely pass on the implementation checkpoint represented by this
+ledger:
+
+```bash
+cargo test --locked -p geosolve-constraint-editor --test m75_hover_pointer_parity -- --nocapture
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+   cargo test --locked -p geosolve-constraint-editor --test m75_hover_pointer_parity \
+   --target wasm32-unknown-unknown'
+cargo test --locked -p geosolve-constraint-editor --lib \
+  tests::fillet_affordances_validate_actions_and_expose_only_radius_canvas_handles \
+  -- --exact --nocapture
+cargo test --locked -p geosolve-demo-web --lib \
+  workbench::tests::native_authoring_hit_remains_available_at_a_computed_fillet_contact \
+  -- --exact --nocapture
+cargo clippy --locked -p geosolve-constraint-editor --all-targets --all-features -- -D warnings
+RUST_MIN_STACK=16777216 cargo test --locked -p geosolve-constraint-editor --all-features
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+cargo fmt --all -- --check
+git diff --check
+```
+
+The native and WASM parity target passes 15/15 including four F002 rows. The full editor run passes
+429 unit tests, every integration target and doc tests with only the three release-only performance
+sentinels ignored. The complete clean replacement gate and freeze remain the next authority.
 
 ## Clean qualification and immutable nomination
 
@@ -179,7 +252,9 @@ M86 publication and service retirement wait for explicit approval.
 
 ## Semantic-preservation ledger
 
-The repair remains an optional code-authoring transaction adapter. It changes no solver
-equation, dimension residual, Jacobian, hard/soft policy, branch state, persistence format or
-ordinary GUI Inspector behavior. Success still requires ordinary Intent materialization, native
-solve and independent residual validation; rejection preserves complete prior accepted authority.
+F001 remains an optional code-authoring transaction adapter. F002 remains a private headless
+Select-priority rule over already accepted scene semantics. Neither changes a solver equation,
+dimension residual, Jacobian, hard/soft policy, computed branch state, persistence format or
+ordinary GUI Inspector behavior. F001 success still requires ordinary Intent materialization,
+native solve and independent residual validation; F002 derives only exact persistent endpoint and
+active Coincident incidence and never treats solved coordinate proximity as topology.

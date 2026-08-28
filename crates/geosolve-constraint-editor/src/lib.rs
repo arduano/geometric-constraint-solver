@@ -2942,6 +2942,81 @@ impl EditorScene {
         best_policy_hit(hits, policy.scope)
     }
 
+    fn fillet_source_corner_point_hit_with_policy(
+        &self,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<Hit> {
+        let curve = self
+            .computed_curves
+            .iter()
+            .find(|curve| curve.owner == owner && curve.is_pickable(policy))?;
+        let first = feature_authoring::span_endpoint_ids(
+            &self.accepted_document,
+            curve.contacts[0].source.span,
+        )?;
+        let second = feature_authoring::span_endpoint_ids(
+            &self.accepted_document,
+            curve.contacts[1].source.span,
+        )?;
+        let endpoint_ids = |endpoints: (DesignPointId, DesignPointId)| [endpoints.0, endpoints.1];
+        let first_ids = endpoint_ids(first);
+        let second_ids = endpoint_ids(second);
+        // Only a visible endpoint owned by one of these two parents can be
+        // their source corner. Besides keeping unrelated overlapping points
+        // below the radius surface, this bounds ordinary corner hit work to
+        // the at-most-four persistent source endpoints.
+        let candidates = self
+            .points
+            .iter()
+            .filter(|point| {
+                point.is_pickable(policy)
+                    && (first_ids.contains(&point.id) || second_ids.contains(&point.id))
+            })
+            .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
+            .collect::<Vec<_>>();
+        if candidates.is_empty() {
+            return None;
+        }
+        let exact = candidates.iter().copied().filter(|hit| {
+            let SelectionItem::Point(point) = hit.item else {
+                return false;
+            };
+            first_ids.contains(&point) && second_ids.contains(&point)
+        });
+        if let Some(hit) = best_policy_hit(exact, policy.scope) {
+            return Some(hit);
+        }
+
+        // Coincident endpoint identities are one semantic Fillet corner even
+        // when the two native parents retain distinct stored points. Compute
+        // equivalence only after a point-sized hit exists so ordinary rail
+        // hover stays independent of document-wide incidence work.
+        let representatives = self.accepted_document.point_coincidence_representatives();
+        let representative = |point: DesignPointId| representatives.get(&point).copied();
+        let shared_representatives = first_ids
+            .into_iter()
+            .filter_map(representative)
+            .filter(|first| {
+                second_ids
+                    .into_iter()
+                    .filter_map(representative)
+                    .any(|second| *first == second)
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        best_policy_hit(
+            candidates.into_iter().filter(|hit| {
+                let SelectionItem::Point(point) = hit.item else {
+                    return false;
+                };
+                representative(point).is_some_and(|value| shared_representatives.contains(&value))
+            }),
+            policy.scope,
+        )
+    }
+
     fn geometry_hit_test_candidates(
         &self,
         position: ScreenPoint,
@@ -6282,9 +6357,12 @@ impl ConstraintEditor {
         position: ScreenPoint,
         problem_items: &[SelectionItem],
     ) -> Option<ResolvedSelectPointerTarget> {
-        // This order is the single Select-mode pointer contract. In particular,
-        // direct manipulation predicts the same click through visible leaders,
-        // while annotations still precede passive geometry and intrinsic datums.
+        // This order is the single Select-mode pointer contract. A computed
+        // Fillet keeps its complete radius surface above unrelated native
+        // geometry, but cannot hide the persistent endpoint corner shared by
+        // its own two parents. Direct manipulation otherwise predicts the same
+        // click through visible leaders, while annotations still precede
+        // passive geometry and intrinsic datums.
         if !position.is_finite() || !self.pick_tolerance.is_valid() {
             return None;
         }
@@ -6296,6 +6374,14 @@ impl ConstraintEditor {
             self.pick_tolerance,
             self.geometry_policy,
         ) {
+            if let Some(hit) = scene.fillet_source_corner_point_hit_with_policy(
+                owner,
+                position,
+                self.pick_tolerance,
+                self.geometry_policy,
+            ) {
+                return Some(ResolvedSelectPointerTarget::Geometry(hit));
+            }
             return Some(ResolvedSelectPointerTarget::FilletRadius(Hit {
                 item: SelectionItem::FeatureCorner(owner),
                 distance_pixels,

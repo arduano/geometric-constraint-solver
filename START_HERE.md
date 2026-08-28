@@ -488,7 +488,8 @@ M85 is closed. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_U
 accepted candidate and public-closeout ledger.
 
 M86 is the active focused bug-fix/UAT follow-up milestone. `M86-F001` is implemented,
-clean-qualified and immutably nominated after independent reproduction on the PC Water Manifold:
+clean-qualified, immutably nominated and accepted by the supervising user's scoped “Looks good”
+assessment after independent reproduction on the PC Water Manifold:
 Inspector editing of
 direct code-owned dimension alias
 `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`
@@ -499,7 +500,14 @@ Accepted expansion provenance authenticates the alias to managed declaration
 length/diameter targets through the existing source scalar lens and ordinary atomic
 rematerialization. Focused owner, accepted-diameter, retained-invalid/Undo, adapter and GUI-owned
 collateral tests pass, as do the complete clean gate, unchanged golden and exact no-rebuild
-local/Tailscale freeze. Human UAT remains pending, so accepted M85 remains public authority.
+local/Tailscale freeze. `M86-F002` then independently reproduces a headless Select-priority defect:
+the blended Fillet grip/spoke/rail/arc surface hides the persistent shared endpoint of its own two
+native parents. The implemented Select-only exception recognizes exact or explicitly Coincident
+line/polyline endpoints, but not coordinate proximity; native point hover/click/drag wins only at
+that source corner while unrelated point overlaps and ordinary Fillet radius behavior remain
+unchanged. Focused native/WASM, Coincident/non-topology, post-Apply, editor-suite, Clippy and
+unchanged-golden checks pass. Clean replacement nomination and F002 human UAT remain pending, so
+accepted M85 remains public authority.
 `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the active contract,
 finding ledger and pending scorecard.
 
@@ -973,7 +981,13 @@ curve-length/diameter target scalars: it authenticates accepted provenance and t
 rewrites managed source, rematerializes atomically, reselects the stable alias on immediate accepted
 publication, retains one outer history and preserves prior accepted authority on invalid input.
 Focused and complete clean qualification, unchanged golden and exact immutable local/Tailscale
-nomination pass. Human UAT acceptance and Pages authority are not yet claimed.
+nomination pass. The supervising user accepted F001 with a scoped “Looks good” assessment without a
+separately logged row-by-row replay. M86-F002 subsequently makes only the exact persistent
+line/polyline endpoint shared by a Fillet's parents outrank that Fillet's radius surface in the
+shared Select hover/down resolver. Exact identity and active Coincident topology qualify; coordinate
+proximity, unrelated overlying points, passive curves, painted radius reconciliation and authoring
+do not. Focused native/WASM and unchanged-golden checks pass; replacement clean nomination and
+F002 UAT remain open. Pages authority is not yet claimed.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1101,10 +1115,10 @@ Durable milestone and cleanup records:
   frozen-candidate evidence ledger)
 - `docs/M85_UAT.md` (accepted immutable-candidate navigation/interaction scorecard and exact
   public closeout)
-- `docs/M86_GOALS.md` (active focused bug-fix and managed-dimension edit contract)
-- `docs/M86_IMPLEMENTATION.md` (implemented M86-F001 design, clean qualification and immutable
-  nomination ledger)
-- `docs/M86_UAT.md` (pending human managed-dimension Inspector scorecard on the nominated candidate)
+- `docs/M86_GOALS.md` (active focused managed-dimension and Fillet source-corner contract)
+- `docs/M86_IMPLEMENTATION.md` (implemented M86-F001/F002 design, qualification and nomination
+  ledger)
+- `docs/M86_UAT.md` (accepted scoped F001 scorecard and pending F002 replacement recheck)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
