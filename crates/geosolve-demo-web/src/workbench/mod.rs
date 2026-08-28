@@ -1086,6 +1086,8 @@ struct ProjectionalInspectorControl {
 /// Only `Committed` may save the v8 workspace or rebuild durable panels as a
 /// new transaction. Retained-invalid intent is still a committed transaction;
 /// its disposition truthfully preserves the prior accepted canvas authority.
+/// A code-owned accepted edit replaces the complete workbench authority so
+/// persistence high-water metadata cannot trail the delegated editor.
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ProjectionalInspectorDispatch {
@@ -1103,9 +1105,15 @@ impl ProjectionalInspectorDispatch {
 
 #[cfg(any(target_arch = "wasm32", test))]
 fn dispatch_projectional_inspector_control(
-    editor: &mut geosolve_constraint_editor::ProjectionalEditorSession,
+    authority: &mut WorkbenchDocumentAuthority,
+    code_project: Option<&mut code_projects::CodeProjectWorkbench>,
     control: &ProjectionalInspectorControl,
 ) -> ProjectionalInspectorDispatch {
+    let Some(editor) = authority.projectional_ref() else {
+        return ProjectionalInspectorDispatch::Rejected(
+            "the Inspector requires projectional editor authority".into(),
+        );
+    };
     let projection = editor.workbench_projection();
     if !control.stamp.matches(projection.identity) {
         return ProjectionalInspectorDispatch::Rejected(
@@ -1123,6 +1131,42 @@ fn dispatch_projectional_inspector_control(
     };
     let Some((target, value)) = decoded else {
         return ProjectionalInspectorDispatch::Unchanged;
+    };
+
+    if let Some(code_project) = code_project {
+        let route = code_project
+            .apply_managed_dimension_inspector_edit(editor, &inspector, &target, &value);
+        match route {
+            Ok(code_projects::CodeInspectorEditRoute::NotClaimed) => {}
+            Ok(code_projects::CodeInspectorEditRoute::Claimed(
+                code_projects::CodeApplyOutcome::Accepted(publication),
+            )) => {
+                let accepted =
+                    match WorkbenchDocumentAuthority::from_projectional_editor(*publication.editor)
+                    {
+                        Ok(accepted) => accepted,
+                        Err(error) => return ProjectionalInspectorDispatch::Rejected(error),
+                    };
+                *authority = accepted;
+                return ProjectionalInspectorDispatch::Committed(
+                    geosolve_sketch_intent::IntentPlanDisposition::Accepted,
+                );
+            }
+            Ok(code_projects::CodeInspectorEditRoute::Claimed(
+                code_projects::CodeApplyOutcome::RetainedFailure { .. },
+            )) => {
+                return ProjectionalInspectorDispatch::Committed(
+                    geosolve_sketch_intent::IntentPlanDisposition::RetainedFailed,
+                );
+            }
+            Err(error) => return ProjectionalInspectorDispatch::Rejected(error),
+        }
+    }
+
+    let Some(editor) = authority.projectional_mut() else {
+        return ProjectionalInspectorDispatch::Rejected(
+            "the Inspector requires projectional editor authority".into(),
+        );
     };
     match editor.edit_inspector(&inspector, &target, value) {
         Ok(outcome) => ProjectionalInspectorDispatch::Committed(outcome.disposition),
@@ -10274,8 +10318,18 @@ pub(crate) mod wasm {
                     &mut wb,
                     "committing an Inspector edit",
                 );
-                let dispatch =
-                    super::dispatch_projectional_inspector_control(wb.editor_mut(), &control);
+                let dispatch = {
+                    let ProjectionalWorkbench {
+                        authority,
+                        code_project,
+                        ..
+                    } = &mut *wb;
+                    super::dispatch_projectional_inspector_control(
+                        authority,
+                        code_project.as_mut(),
+                        &control,
+                    )
+                };
                 let committed = dispatch.saves_workspace();
                 match dispatch {
                     super::ProjectionalInspectorDispatch::Unchanged => return,
@@ -18728,7 +18782,7 @@ mod tests {
             ),
             (
                 "if edit != \"name\" {",
-                "dispatch_projectional_inspector_control(wb.editor_mut(), &control)",
+                "dispatch_projectional_inspector_control(",
             ),
             ("let unchanged = wb", "wb.editor_mut().apply_patch(patch)"),
             (
@@ -19932,7 +19986,32 @@ mod tests {
         );
     }
 
-    fn projectional_circle_inspector_fixture() -> ProjectionalEditorSession {
+    struct ProjectionalInspectorFixture(WorkbenchDocumentAuthority);
+
+    impl ProjectionalInspectorFixture {
+        fn from_editor(editor: ProjectionalEditorSession) -> Self {
+            Self(
+                WorkbenchDocumentAuthority::from_projectional_editor(editor)
+                    .expect("projectional Inspector fixture authority"),
+            )
+        }
+    }
+
+    impl std::ops::Deref for ProjectionalInspectorFixture {
+        type Target = ProjectionalEditorSession;
+
+        fn deref(&self) -> &Self::Target {
+            self.0.projectional_ref().unwrap()
+        }
+    }
+
+    impl std::ops::DerefMut for ProjectionalInspectorFixture {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            self.0.projectional_mut().unwrap()
+        }
+    }
+
+    fn projectional_circle_inspector_fixture() -> ProjectionalInspectorFixture {
         let document = DocumentId(PersistentId::from_u128(0x8308_1201_u128 << 64));
         let mut coordinator = ProjectionalIntentCoordinator::empty(
             IntentSessionId::from_raw(0x8308_1201),
@@ -19972,7 +20051,7 @@ mod tests {
         let node = *coordinator.intent().graph().nodes().keys().next().unwrap();
         let mut editor = ProjectionalEditorSession::new(coordinator);
         assert!(editor.set_selected_declaration(Some(node)));
-        editor
+        ProjectionalInspectorFixture::from_editor(editor)
     }
 
     fn accepted_circle_radius(editor: &ProjectionalEditorSession) -> f64 {
@@ -19991,21 +20070,22 @@ mod tests {
     #[test]
     fn projectional_browser_inspector_commits_accepted_edits_once_and_undo_redo_restores_them() {
         run_projectional_test_with_large_stack("projectional-browser-inspector-accepted", || {
-            let mut editor = projectional_circle_inspector_fixture();
-            let history_before = editor
+            let mut authority = projectional_circle_inspector_fixture();
+            let history_before = authority
                 .coordinator()
                 .intent()
                 .history_projection()
                 .applied
                 .len();
 
-            let unchanged = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "2.0");
+            let unchanged =
+                instance_inspector_control(&authority, LeafField::Value, Some(2.0), "2.0");
             assert_eq!(
-                dispatch_projectional_inspector_control(&mut editor, &unchanged),
+                dispatch_projectional_inspector_control(&mut authority.0, None, &unchanged),
                 ProjectionalInspectorDispatch::Unchanged
             );
             assert_eq!(
-                editor
+                authority
                     .coordinator()
                     .intent()
                     .history_projection()
@@ -20014,16 +20094,19 @@ mod tests {
                 history_before
             );
 
-            let edit = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "3.5");
-            let dispatch = dispatch_projectional_inspector_control(&mut editor, &edit);
+            let edit = instance_inspector_control(&authority, LeafField::Value, Some(2.0), "3.5");
+            let dispatch = dispatch_projectional_inspector_control(&mut authority.0, None, &edit);
             assert_eq!(
                 dispatch,
                 ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
             );
             assert!(dispatch.saves_workspace());
-            assert_eq!(accepted_circle_radius(&editor).to_bits(), 3.5_f64.to_bits());
             assert_eq!(
-                editor
+                accepted_circle_radius(&authority).to_bits(),
+                3.5_f64.to_bits()
+            );
+            assert_eq!(
+                authority
                     .coordinator()
                     .intent()
                     .history_projection()
@@ -20032,34 +20115,188 @@ mod tests {
                 history_before + 1
             );
 
-            assert!(editor.undo().unwrap().is_some());
-            assert_eq!(accepted_circle_radius(&editor).to_bits(), 2.0_f64.to_bits());
-            assert!(editor.redo().unwrap().is_some());
-            assert_eq!(accepted_circle_radius(&editor).to_bits(), 3.5_f64.to_bits());
-
-            let suppression = suppression_inspector_control(&editor, true);
+            assert!(authority.undo().unwrap().is_some());
             assert_eq!(
-                dispatch_projectional_inspector_control(&mut editor, &suppression),
+                accepted_circle_radius(&authority).to_bits(),
+                2.0_f64.to_bits()
+            );
+            assert!(authority.redo().unwrap().is_some());
+            assert_eq!(
+                accepted_circle_radius(&authority).to_bits(),
+                3.5_f64.to_bits()
+            );
+
+            let suppression = suppression_inspector_control(&authority, true);
+            assert_eq!(
+                dispatch_projectional_inspector_control(&mut authority.0, None, &suppression),
                 ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
             );
             assert!(
-                editor
+                authority
                     .coordinator()
                     .intent()
                     .graph()
-                    .node(editor.selected_declaration().unwrap())
+                    .node(authority.selected_declaration().unwrap())
                     .unwrap()
                     .suppressed
             );
-            assert!(editor.undo().unwrap().is_some());
+            assert!(authority.undo().unwrap().is_some());
             assert!(
-                !editor
+                !authority
                     .coordinator()
                     .intent()
                     .graph()
-                    .node(editor.selected_declaration().unwrap())
+                    .node(authority.selected_declaration().unwrap())
                     .unwrap()
                     .suppressed
+            );
+        });
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one crossed-adapter regression keeps the exact reported identity, source route, installed authority metadata, history, and persistence proof together"
+    )]
+    fn m86_f001_projectional_browser_inspector_routes_managed_dimension_to_source() {
+        run_projectional_test_with_large_stack("m86-browser-managed-dimension-inspector", || {
+            const REPORTED_ALIAS: &str =
+                "code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b";
+            const BEFORE: &str = "const topScrewRail3Length = $.dimension.curveLength(\"topScrewRail3Length\", { curve: topScrewRail3.span, target: mm(16) });";
+            const AFTER: &str = "const topScrewRail3Length = $.dimension.curveLength(\"topScrewRail3Length\", { curve: topScrewRail3.span, target: mm(8) });";
+
+            let (mut code_project, mut editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("pc-water-manifold")
+                    .expect("PC Water Manifold code project");
+            let alias = IntentKey::new(REPORTED_ALIAS).expect("reported semantic alias");
+            let node = editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&alias)
+                .expect("reported managed dimension")
+                .id;
+            assert!(editor.set_selected_declaration(Some(node)));
+            let control = instance_inspector_control(&editor, LeafField::Value, Some(16.0), "8");
+            let mut authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("manifold browser authority");
+
+            let dispatch = dispatch_projectional_inspector_control(
+                &mut authority,
+                Some(&mut code_project),
+                &control,
+            );
+
+            assert_eq!(
+                dispatch,
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
+            );
+            assert!(dispatch.saves_workspace());
+            assert!(code_project.managed_source().contains(AFTER));
+            assert!(!code_project.managed_source().contains(BEFORE));
+            let editor = authority
+                .projectional_ref()
+                .expect("installed code authority");
+            let selected = editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node(editor.selected_declaration().expect("retained selection"))
+                .expect("selected declaration after rematerialization");
+            assert_eq!(selected.symbol.as_str(), REPORTED_ALIAS);
+
+            let snapshot = authority.snapshot().expect("installed authority snapshot");
+            let accepted = editor
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted managed dimension materialization")
+                .session
+                .revision_high_water();
+            assert_eq!(snapshot.revisions.design, accepted.design().get());
+            assert_eq!(snapshot.revisions.attempt, accepted.attempt().get());
+            assert_eq!(
+                snapshot.revisions.accepted,
+                accepted
+                    .accepted()
+                    .map(geosolve_sketch::SketchAcceptedRevision::get)
+            );
+            let mut notice = String::new();
+            let (save, _) = super::publish_projectional_code_checkpoint_for_save(
+                &mut code_project,
+                &mut authority,
+                &mut notice,
+                None,
+            );
+            assert_eq!(
+                save,
+                super::ProjectionalCodeSavePublication::ContinuePersistence
+            );
+            assert!(code_project.can_undo());
+            let undone = code_project
+                .step_history(true)
+                .expect("managed dimension outer Undo")
+                .expect("one managed dimension outer history row");
+            assert!(
+                !code_project.can_undo(),
+                "the Inspector edit must create exactly one outer code-history row",
+            );
+            authority = WorkbenchDocumentAuthority::from_projectional_editor(*undone.editor)
+                .expect("undone manifold authority");
+            let editor = authority.projectional_mut().unwrap();
+            let node = editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&alias)
+                .expect("managed dimension after Undo")
+                .id;
+            assert!(editor.set_selected_declaration(Some(node)));
+            let retained = instance_inspector_control(editor, LeafField::Value, Some(16.0), "0");
+            let accepted_before = authority
+                .snapshot()
+                .expect("accepted authority before retained edit")
+                .encode()
+                .expect("encoded accepted authority");
+
+            let dispatch = dispatch_projectional_inspector_control(
+                &mut authority,
+                Some(&mut code_project),
+                &retained,
+            );
+
+            assert_eq!(
+                dispatch,
+                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::RetainedFailed)
+            );
+            assert_eq!(
+                authority
+                    .snapshot()
+                    .expect("authority after retained edit")
+                    .encode()
+                    .expect("encoded retained authority"),
+                accepted_before,
+            );
+            assert!(code_project.managed_source().contains("target: mm(0)"));
+            let (save, _) = super::publish_projectional_code_checkpoint_for_save(
+                &mut code_project,
+                &mut authority,
+                &mut notice,
+                None,
+            );
+            assert_eq!(
+                save,
+                super::ProjectionalCodeSavePublication::ContinuePersistence
+            );
+            assert!(code_project.can_undo());
+            assert!(
+                code_project
+                    .step_history(true)
+                    .expect("retained managed dimension Undo")
+                    .is_some()
+            );
+            assert!(
+                !code_project.can_undo(),
+                "the retained Inspector edit must also create exactly one outer history row",
             );
         });
     }
@@ -20094,8 +20331,9 @@ mod tests {
                 },
             );
             branch.component = Some("y".into());
+            let mut editor = ProjectionalInspectorFixture::from_editor(editor);
             assert_eq!(
-                dispatch_projectional_inspector_control(&mut editor, &branch),
+                dispatch_projectional_inspector_control(&mut editor.0, None, &branch),
                 ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
             );
             assert_eq!(
@@ -20116,7 +20354,7 @@ mod tests {
                 ProjectionalInspectorSubmission::Text("construction".into()),
             );
             assert_eq!(
-                dispatch_projectional_inspector_control(&mut editor, &role),
+                dispatch_projectional_inspector_control(&mut editor.0, None, &role),
                 ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
             );
             assert_eq!(
@@ -20138,29 +20376,30 @@ mod tests {
     #[test]
     fn projectional_browser_inspector_retains_invalid_intent_over_accepted_scene() {
         run_projectional_test_with_large_stack("projectional-browser-inspector-retained", || {
-            let mut editor = projectional_circle_inspector_fixture();
-            let accepted_before = editor
+            let mut authority = projectional_circle_inspector_fixture();
+            let accepted_before = authority
                 .coordinator()
                 .accepted_materialization()
                 .unwrap()
                 .session
                 .design_document()
                 .clone();
-            let history_before = editor
+            let history_before = authority
                 .coordinator()
                 .intent()
                 .history_projection()
                 .applied
                 .len();
-            let invalid = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "0");
-            let dispatch = dispatch_projectional_inspector_control(&mut editor, &invalid);
+            let invalid = instance_inspector_control(&authority, LeafField::Value, Some(2.0), "0");
+            let dispatch =
+                dispatch_projectional_inspector_control(&mut authority.0, None, &invalid);
             assert_eq!(
                 dispatch,
                 ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::RetainedFailed)
             );
             assert!(dispatch.saves_workspace());
             assert_eq!(
-                editor
+                authority
                     .coordinator()
                     .intent()
                     .history_projection()
@@ -20169,7 +20408,7 @@ mod tests {
                 history_before + 1
             );
             assert_eq!(
-                editor
+                authority
                     .coordinator()
                     .accepted_materialization()
                     .unwrap()
@@ -20177,11 +20416,14 @@ mod tests {
                     .design_document(),
                 &accepted_before
             );
-            assert!(editor.undo().unwrap().is_some());
-            assert_eq!(accepted_circle_radius(&editor).to_bits(), 2.0_f64.to_bits());
-            assert!(editor.redo().unwrap().is_some());
+            assert!(authority.undo().unwrap().is_some());
             assert_eq!(
-                editor
+                accepted_circle_radius(&authority).to_bits(),
+                2.0_f64.to_bits()
+            );
+            assert!(authority.redo().unwrap().is_some());
+            assert_eq!(
+                authority
                     .coordinator()
                     .accepted_materialization()
                     .unwrap()
@@ -20195,9 +20437,9 @@ mod tests {
     #[test]
     fn projectional_browser_inspector_rejects_wrong_and_stale_controls_without_history() {
         run_projectional_test_with_large_stack("projectional-browser-inspector-auth", || {
-            let mut editor = projectional_circle_inspector_fixture();
-            let stale = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "4");
-            let history_before = editor
+            let mut authority = projectional_circle_inspector_fixture();
+            let stale = instance_inspector_control(&authority, LeafField::Value, Some(2.0), "4");
+            let history_before = authority
                 .coordinator()
                 .intent()
                 .history_projection()
@@ -20206,7 +20448,8 @@ mod tests {
 
             let mut wrong_unit = stale.clone();
             wrong_unit.unit = Some("angle".into());
-            let rejected = dispatch_projectional_inspector_control(&mut editor, &wrong_unit);
+            let rejected =
+                dispatch_projectional_inspector_control(&mut authority.0, None, &wrong_unit);
             assert!(matches!(
                 rejected,
                 ProjectionalInspectorDispatch::Rejected(_)
@@ -20215,14 +20458,15 @@ mod tests {
 
             let mut wrong_node = stale.clone();
             wrong_node.node = Some(NodeId::from_raw(0xdead).to_string());
-            let rejected = dispatch_projectional_inspector_control(&mut editor, &wrong_node);
+            let rejected =
+                dispatch_projectional_inspector_control(&mut authority.0, None, &wrong_node);
             assert!(matches!(
                 rejected,
                 ProjectionalInspectorDispatch::Rejected(_)
             ));
             assert!(!rejected.saves_workspace());
             assert_eq!(
-                editor
+                authority
                     .coordinator()
                     .intent()
                     .history_projection()
@@ -20231,25 +20475,25 @@ mod tests {
                 history_before
             );
 
-            let current = instance_inspector_control(&editor, LeafField::Value, Some(2.0), "3");
+            let current = instance_inspector_control(&authority, LeafField::Value, Some(2.0), "3");
             assert!(matches!(
-                dispatch_projectional_inspector_control(&mut editor, &current),
+                dispatch_projectional_inspector_control(&mut authority.0, None, &current),
                 ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::Accepted)
             ));
-            let history_after_current = editor
+            let history_after_current = authority
                 .coordinator()
                 .intent()
                 .history_projection()
                 .applied
                 .len();
-            let rejected = dispatch_projectional_inspector_control(&mut editor, &stale);
+            let rejected = dispatch_projectional_inspector_control(&mut authority.0, None, &stale);
             assert!(matches!(
                 rejected,
                 ProjectionalInspectorDispatch::Rejected(_)
             ));
             assert!(!rejected.saves_workspace());
             assert_eq!(
-                editor
+                authority
                     .coordinator()
                     .intent()
                     .history_projection()
@@ -20257,7 +20501,10 @@ mod tests {
                     .len(),
                 history_after_current
             );
-            assert_eq!(accepted_circle_radius(&editor).to_bits(), 3.0_f64.to_bits());
+            assert_eq!(
+                accepted_circle_radius(&authority).to_bits(),
+                3.0_f64.to_bits()
+            );
         });
     }
 

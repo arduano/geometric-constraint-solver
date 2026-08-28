@@ -15,7 +15,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_constraint_editor::{
     BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1, ComputedFeatureDefinition, ComputedFeatureDocument,
-    ComputedFeatureEvaluationState, ComputedFeatureSnapshot, IntentNativeBinding,
+    ComputedFeatureEvaluationState, ComputedFeatureSnapshot, IntentInspectorEditTarget,
+    IntentInspectorEditValue, IntentInspectorProjection, IntentNativeBinding,
     ProjectionalEditorSession, SelectionItem,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
@@ -34,15 +35,16 @@ use geosolve_sketch_code::{
     plan_managed_edit, rehydrate_materialized_code_project, required_generated_members,
 };
 use geosolve_sketch_intent::{
-    BootstrapNativeKind, GeometryRecipeKind, IntentLiteral, IntentNode, IntentNodeKind,
-    IntentPortKind, IntentSessionId, IntentUnit, LeafField, LeafRef, NodeId,
+    BootstrapNativeKind, DimensionKind, GeometryRecipeKind, IntentLiteral, IntentNode,
+    IntentNodeKind, IntentPortKind, IntentPortRole, IntentPortSelector, IntentSessionId,
+    IntentUnit, LeafField, LeafRef, NodeId,
 };
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use geosolve_sketch_code::{FeatureKind, GeneratedMemberAddress};
 #[cfg(test)]
-use geosolve_sketch_intent::{IntentPortRole, IntentPortSelector, IntentSession};
+use geosolve_sketch_intent::IntentSession;
 
 const MANAGED_FILE: &str = "sketch.ts";
 const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v2";
@@ -99,6 +101,15 @@ pub(crate) enum CodeApplyOutcome {
         receipt: CodeSessionReceipt,
         diagnostic: String,
     },
+}
+
+/// Closed ownership result for one already decoded Inspector edit. Only the
+/// authenticated managed-dimension target route is claimed here; ordinary GUI
+/// declarations and existing semantic point routes remain with their current
+/// projectional/code-owned classifiers.
+pub(crate) enum CodeInspectorEditRoute {
+    NotClaimed,
+    Claimed(CodeApplyOutcome),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1429,6 +1440,191 @@ impl CodeProjectWorkbench {
             ),
             None => Ok(None),
         }
+    }
+
+    /// Reverse-projects one authenticated direct-dimension Inspector target
+    /// into its managed `target` scalar and rematerializes the complete code
+    /// project atomically.
+    ///
+    /// This is deliberately a closed route: unrelated GUI/code-owned
+    /// declarations return `NotClaimed`; once a supported direct managed
+    /// dimension is recognized, only its exact target leaf can be claimed.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed adapter route authenticates selection, provenance, exact leaf ownership, source parity, and atomic publication together"
+    )]
+    pub(crate) fn apply_managed_dimension_inspector_edit(
+        &mut self,
+        editor: &ProjectionalEditorSession,
+        inspector: &IntentInspectorProjection,
+        target: &IntentInspectorEditTarget,
+        value: &IntentInspectorEditValue,
+    ) -> Result<CodeInspectorEditRoute, String> {
+        let projection = editor.workbench_projection();
+        if editor.selected_inspector(&projection).as_ref() != Some(inspector) {
+            return Err("the Inspector edit belongs to a stale code-project projection".into());
+        }
+        self.ensure_materialized_cache()?;
+        if self
+            .materialized
+            .as_deref()
+            .map(|materialized| materialized.editor.coordinator().intent().identity())
+            != Some(editor.coordinator().intent().identity())
+        {
+            return Err("the Inspector edit does not match accepted code-project authority".into());
+        }
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(inspector.node)
+            .ok_or_else(|| "the selected Inspector declaration disappeared".to_owned())?;
+        if node.symbol != inspector.symbol {
+            return Err("the selected Inspector symbol no longer matches its declaration".into());
+        }
+        let expansion = self
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+        let Some(declaration) = expansion.declaration_for_alias(&node.symbol).cloned() else {
+            if node.symbol.as_str().starts_with("code.") {
+                return Err(
+                    "selected code-owned declaration has no authenticated managed-source provenance"
+                        .into(),
+                );
+            }
+            return Ok(CodeInspectorEditRoute::NotClaimed);
+        };
+        let IntentNodeKind::Dimension { dimension } = node.kind else {
+            return Ok(CodeInspectorEditRoute::NotClaimed);
+        };
+        if !matches!(
+            dimension,
+            DimensionKind::CurveLength | DimensionKind::Diameter
+        ) {
+            return Ok(CodeInspectorEditRoute::NotClaimed);
+        }
+        if self.session.snapshot().failure.is_some() {
+            return Err(
+                "resolve or Undo the retained code failure before editing a code-owned dimension"
+                    .into(),
+            );
+        }
+
+        let managed_declaration = self
+            .project
+            .managed
+            .program
+            .declarations
+            .iter()
+            .find(|candidate| candidate.symbol == declaration)
+            .ok_or_else(|| {
+                "managed dimension provenance no longer resolves to source".to_owned()
+            })?;
+        let expected_builder = match dimension {
+            DimensionKind::CurveLength => ["dimension", "curveLength"],
+            DimensionKind::Diameter => ["dimension", "diameter"],
+            _ => unreachable!("direct managed dimensions are closed above"),
+        };
+        if managed_declaration.patch.is_some()
+            || managed_declaration.builder_path.as_slice() != expected_builder
+        {
+            return Err(
+                "managed dimension provenance does not authenticate a direct supported family"
+                    .into(),
+            );
+        }
+
+        let IntentInspectorEditTarget::Instance { leaf } = target else {
+            return Err(
+                "this code-owned dimension property has no managed Inspector lens; edit managed source"
+                    .into(),
+            );
+        };
+        let target_port = node
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Target,
+                index: 0,
+            })
+            .ok_or_else(|| "managed dimension has no target scalar port".to_owned())?;
+        let expected_leaf = LeafRef {
+            node: node.id,
+            port: target_port.id,
+            field: LeafField::Value,
+        };
+        if *leaf != expected_leaf {
+            return Err(
+                "this code-owned dimension leaf has no managed Inspector lens; edit managed source"
+                    .into(),
+            );
+        }
+        let IntentInspectorEditValue::Literal {
+            literal:
+                IntentLiteral::Quantity {
+                    value,
+                    unit: IntentUnit::Length,
+                },
+        } = value
+        else {
+            return Err("managed dimension target requires a finite length literal".into());
+        };
+        if !value.is_finite() {
+            return Err("managed dimension target must be finite".into());
+        }
+        let source_target =
+            managed_object_path(&managed_declaration.arguments, &["target".to_owned()])
+                .and_then(managed_length_value)
+                .ok_or_else(|| {
+                    "managed dimension target is not a direct scalar literal".to_owned()
+                })?;
+        let accepted_target = editor
+            .coordinator()
+            .intent()
+            .instance()
+            .values()
+            .get(&expected_leaf);
+        if accepted_target
+            != Some(&IntentLiteral::Quantity {
+                value: source_target,
+                unit: IntentUnit::Length,
+            })
+        {
+            return Err(
+                "managed dimension source and accepted target leaf no longer authenticate each other"
+                    .into(),
+            );
+        }
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before editing a code-owned dimension"
+                    .into(),
+            );
+        }
+        if self.pending_semantic_point_drag.is_some() {
+            return Err(
+                "finish or cancel the pending semantic point gesture before editing a code-owned dimension"
+                    .into(),
+            );
+        }
+        let selected_alias = node.symbol.clone();
+        let mut outcome = self.apply_scalar_lens(&declaration.0, "target", *value)?;
+        if let CodeApplyOutcome::Accepted(publication) = &mut outcome {
+            let selected = publication
+                .editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&selected_alias)
+                .expect("accepted managed dimension expansion preserves its semantic alias")
+                .id;
+            assert!(
+                publication.editor.set_selected_declaration(Some(selected)),
+                "accepted managed dimension expansion preserves selectable semantic ownership",
+            );
+        }
+        Ok(CodeInspectorEditRoute::Claimed(outcome))
     }
 
     /// Resolves Delete through accepted code expansion. A generated host
@@ -3804,6 +4000,16 @@ fn managed_object_path<'a>(value: &'a ManagedValue, path: &[String]) -> Option<&
     })
 }
 
+fn managed_length_value(value: &ManagedValue) -> Option<f64> {
+    match value {
+        ManagedValue::Number(value) if value.is_finite() => Some(*value),
+        ManagedValue::Unit(UnitLiteral { unit, value }) if unit == "mm" && value.is_finite() => {
+            Some(*value)
+        }
+        _ => None,
+    }
+}
+
 fn escape_html(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -4667,12 +4873,12 @@ export default sketch(($) => {
 
     #[test]
     fn selected_code_node_resolves_through_semantic_provenance_not_hashed_symbol_text() {
-        let (workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let (mut workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
         let expansion = workbench
             .session
             .snapshot()
             .accepted_expansion
-            .as_ref()
+            .clone()
             .unwrap();
         for expected in ["frame", "diagonal"] {
             let expected = SemanticSymbol(expected.into());
@@ -4697,6 +4903,19 @@ export default sketch(($) => {
                 workbench.selected_managed_declaration(&editor).unwrap(),
                 Some(expected),
             );
+            let projection = editor.workbench_projection();
+            let inspector = editor.selected_inspector(&projection).unwrap();
+            assert!(matches!(
+                workbench
+                    .apply_managed_dimension_inspector_edit(
+                        &editor,
+                        &inspector,
+                        &IntentInspectorEditTarget::Suppressed,
+                        &IntentInspectorEditValue::Suppressed { suppressed: false },
+                    )
+                    .unwrap(),
+                CodeInspectorEditRoute::NotClaimed,
+            ));
         }
     }
 
@@ -5148,6 +5367,569 @@ export default sketch(($) => {
         assert_eq!(
             encode_editor_checkpoint(&undone.editor).unwrap(),
             *workbench.accepted_editor_checkpoint(),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact reported manifold regression audits opaque provenance, one-leaf source rewrite, native validity, selection, outer history, Undo, and retained-invalid authority together"
+    )]
+    fn m86_f001_manifold_dimension_inspector_rewrites_managed_target_atomically() {
+        const REPORTED_ALIAS: &str =
+            "code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b";
+        const DECLARATION: &str = "topScrewRail3Length";
+        const BEFORE_LINE: &str = "  const topScrewRail3Length = $.dimension.curveLength(\"topScrewRail3Length\", { curve: topScrewRail3.span, target: mm(16) });";
+        const AFTER_LINE: &str = "  const topScrewRail3Length = $.dimension.curveLength(\"topScrewRail3Length\", { curve: topScrewRail3.span, target: mm(8) });";
+
+        let (mut workbench, mut editor) = open_with_editor("pc-water-manifold");
+        let source_before = workbench.managed_source().to_owned();
+        assert!(source_before.contains(BEFORE_LINE));
+        assert!(!workbench.can_undo());
+        let revision_before = workbench.session.identity().revision;
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("manifold expansion authority");
+        let (alias, resolved_declaration) = expansion
+            .declaration_provenance
+            .iter()
+            .find(|(_, declaration)| declaration.0 == DECLARATION)
+            .expect("reported dimension provenance");
+        assert_eq!(alias.as_str(), REPORTED_ALIAS);
+        assert_eq!(resolved_declaration.0, DECLARATION);
+
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(alias)
+            .expect("reported dimension declaration");
+        assert_eq!(
+            node.kind,
+            IntentNodeKind::Dimension {
+                dimension: DimensionKind::CurveLength,
+            }
+        );
+        let node_id = node.id;
+        let target_port = node
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Target,
+                index: 0,
+            })
+            .expect("dimension target port")
+            .as_ref(node_id);
+        let target_leaf = LeafRef {
+            node: node_id,
+            port: target_port.port,
+            field: LeafField::Value,
+        };
+        assert_eq!(
+            editor
+                .coordinator()
+                .intent()
+                .instance()
+                .values()
+                .get(&target_leaf),
+            Some(&IntentLiteral::Quantity {
+                value: 16.0,
+                unit: IntentUnit::Length,
+            })
+        );
+        let IntentNativeBinding::Scalar(target_scalar) = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted manifold authority")
+            .ownership
+            .port(target_port)
+            .expect("native target ownership")
+        else {
+            panic!("managed dimension target must own one native scalar")
+        };
+        assert_eq!(
+            editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .session
+                .design_document()
+                .scalar(target_scalar)
+                .unwrap()
+                .value
+                .to_bits(),
+            16.0_f64.to_bits(),
+        );
+
+        assert!(editor.set_selected_declaration(Some(node_id)));
+        let projection = editor.workbench_projection();
+        let inspector = editor
+            .selected_inspector(&projection)
+            .expect("selected managed dimension Inspector");
+        let route = workbench
+            .apply_managed_dimension_inspector_edit(
+                &editor,
+                &inspector,
+                &IntentInspectorEditTarget::Instance { leaf: target_leaf },
+                &IntentInspectorEditValue::Literal {
+                    literal: IntentLiteral::Quantity {
+                        value: 8.0,
+                        unit: IntentUnit::Length,
+                    },
+                },
+            )
+            .expect("valid managed dimension Inspector edit");
+        let CodeInspectorEditRoute::Claimed(CodeApplyOutcome::Accepted(publication)) = route else {
+            panic!("valid managed dimension Inspector edit must claim accepted authority")
+        };
+        assert_eq!(publication.receipt.before.revision, revision_before);
+        assert_eq!(publication.receipt.after.revision, revision_before + 1);
+        editor = publication.editor;
+        let source_after = workbench.managed_source().to_owned();
+        assert_eq!(
+            source_after,
+            source_before.replacen(BEFORE_LINE, AFTER_LINE, 1)
+        );
+        assert_eq!(source_after.matches(AFTER_LINE).count(), 1);
+        assert_eq!(editor.selected_declaration(), Some(node_id));
+        assert_eq!(
+            editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node(node_id)
+                .unwrap()
+                .symbol
+                .as_str(),
+            REPORTED_ALIAS,
+        );
+        assert_eq!(
+            editor
+                .coordinator()
+                .intent()
+                .instance()
+                .values()
+                .get(&target_leaf),
+            Some(&IntentLiteral::Quantity {
+                value: 8.0,
+                unit: IntentUnit::Length,
+            })
+        );
+        let accepted = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("edited manifold authority");
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+        );
+        let document = accepted.session.design_document();
+        assert!(
+            document
+                .points()
+                .iter()
+                .flat_map(|point| point.position)
+                .all(f64::is_finite)
+        );
+        assert!(
+            document
+                .scalars()
+                .iter()
+                .map(|scalar| scalar.value)
+                .all(f64::is_finite)
+        );
+        assert_eq!(
+            document.scalar(target_scalar).unwrap().value.to_bits(),
+            8.0_f64.to_bits(),
+        );
+        let checkpoint_after = workbench.accepted_editor_checkpoint().clone();
+        assert!(workbench.can_undo());
+        assert!(!workbench.can_redo());
+
+        let undone = workbench
+            .step_history(true)
+            .expect("managed dimension Undo")
+            .expect("one outer code history entry");
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert!(!workbench.can_undo());
+        assert!(workbench.can_redo());
+        let undone_intent = undone.editor.coordinator().intent();
+        assert_eq!(
+            undone_intent.instance().values().get(&target_leaf),
+            Some(&IntentLiteral::Quantity {
+                value: 16.0,
+                unit: IntentUnit::Length,
+            })
+        );
+        let undone_accepted = undone
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("undone manifold authority");
+        assert!(undone_accepted.validation.hard_residuals_validated);
+        assert_eq!(
+            undone_accepted
+                .session
+                .design_document()
+                .scalar(target_scalar)
+                .unwrap()
+                .value
+                .to_bits(),
+            16.0_f64.to_bits(),
+        );
+
+        let redone = workbench
+            .step_history(false)
+            .expect("managed dimension Redo")
+            .expect("one outer code redo entry");
+        assert_eq!(workbench.managed_source(), source_after);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_after);
+        assert!(workbench.can_undo());
+        assert!(!workbench.can_redo());
+        let redone_node = redone
+            .editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&geosolve_sketch_intent::IntentKey::new(REPORTED_ALIAS).unwrap())
+            .expect("managed dimension semantic alias after Redo");
+        assert_eq!(redone_node.id, node_id);
+        assert_eq!(
+            redone
+                .editor
+                .coordinator()
+                .intent()
+                .instance()
+                .values()
+                .get(&target_leaf),
+            Some(&IntentLiteral::Quantity {
+                value: 8.0,
+                unit: IntentUnit::Length,
+            })
+        );
+        let redone_accepted = redone
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("redone manifold authority");
+        assert!(redone_accepted.validation.hard_residuals_validated);
+        assert_eq!(
+            redone_accepted
+                .session
+                .design_document()
+                .scalar(target_scalar)
+                .unwrap()
+                .value
+                .to_bits(),
+            8.0_f64.to_bits(),
+        );
+
+        let mut undone = workbench
+            .step_history(true)
+            .expect("second managed dimension Undo")
+            .expect("redone outer code entry remains undoable");
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert!(!workbench.can_undo());
+        assert!(workbench.can_redo());
+
+        let diameter_alias = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap()
+            .declaration_provenance
+            .iter()
+            .find_map(|(alias, declaration)| {
+                (declaration.0 == "screwNwOuterDiameter").then(|| alias.clone())
+            })
+            .expect("direct managed diameter provenance");
+        let diameter_node = undone
+            .editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&diameter_alias)
+            .expect("direct managed diameter declaration");
+        assert_eq!(
+            diameter_node.kind,
+            IntentNodeKind::Dimension {
+                dimension: DimensionKind::Diameter,
+            }
+        );
+        let diameter_node_id = diameter_node.id;
+        let diameter_target_port = diameter_node
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Target,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(diameter_node_id);
+        let diameter_target_leaf = LeafRef {
+            node: diameter_node_id,
+            port: diameter_target_port.port,
+            field: LeafField::Value,
+        };
+        let IntentNativeBinding::Scalar(diameter_target_scalar) = undone
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .ownership
+            .port(diameter_target_port)
+            .unwrap()
+        else {
+            panic!("managed diameter target must own one native scalar")
+        };
+        assert!(
+            undone
+                .editor
+                .set_selected_declaration(Some(diameter_node_id))
+        );
+        let projection = undone.editor.workbench_projection();
+        let inspector = undone
+            .editor
+            .selected_inspector(&projection)
+            .expect("direct managed diameter Inspector");
+        let retained_checkpoint = workbench.accepted_editor_checkpoint().clone();
+        let retained_route = workbench
+            .apply_managed_dimension_inspector_edit(
+                &undone.editor,
+                &inspector,
+                &IntentInspectorEditTarget::Instance {
+                    leaf: diameter_target_leaf,
+                },
+                &IntentInspectorEditValue::Literal {
+                    literal: IntentLiteral::Quantity {
+                        value: 0.0,
+                        unit: IntentUnit::Length,
+                    },
+                },
+            )
+            .expect("invalid target remains a transactional code intent");
+        let CodeInspectorEditRoute::Claimed(CodeApplyOutcome::RetainedFailure {
+            receipt,
+            diagnostic,
+        }) = retained_route
+        else {
+            panic!("zero target must retain failure without replacing native authority")
+        };
+        assert_eq!(receipt.before.revision, revision_before + 4);
+        assert_eq!(receipt.after.revision, revision_before + 5);
+        assert!(!diagnostic.is_empty());
+        assert!(workbench.managed_source().contains(
+            "const screwNwOuterDiameter = $.dimension.diameter(\"screwNwOuterDiameter\", { curve: screwNwOuter.circle, target: mm(0) });"
+        ));
+        assert_eq!(workbench.accepted_editor_checkpoint(), &retained_checkpoint,);
+        let retained = workbench.restore_accepted_editor().unwrap();
+        let retained_accepted = retained
+            .coordinator()
+            .accepted_materialization()
+            .expect("retained-invalid edit preserves accepted authority");
+        assert!(retained_accepted.validation.hard_residuals_validated);
+        assert_eq!(
+            retained_accepted
+                .session
+                .design_document()
+                .scalar(diameter_target_scalar)
+                .unwrap()
+                .value
+                .to_bits(),
+            5.0_f64.to_bits(),
+        );
+        let rejected_again = workbench.apply_managed_dimension_inspector_edit(
+            &undone.editor,
+            &inspector,
+            &IntentInspectorEditTarget::Instance {
+                leaf: diameter_target_leaf,
+            },
+            &IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Quantity {
+                    value: 12.0,
+                    unit: IntentUnit::Length,
+                },
+            },
+        );
+        let Err(rejected_again) = rejected_again else {
+            panic!("an active retained failure must reject another Inspector rewrite")
+        };
+        assert!(rejected_again.contains("resolve or Undo the retained code failure"));
+        assert_eq!(workbench.accepted_editor_checkpoint(), &retained_checkpoint,);
+
+        let restored = workbench
+            .step_history(true)
+            .expect("retained-invalid diameter Undo")
+            .expect("retained-invalid diameter adds one outer history entry");
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &retained_checkpoint);
+        assert!(!workbench.can_undo());
+        assert!(workbench.can_redo());
+        assert_eq!(
+            restored
+                .editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .session
+                .design_document()
+                .scalar(diameter_target_scalar)
+                .unwrap()
+                .value
+                .to_bits(),
+            5.0_f64.to_bits(),
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one compact accepted-diameter fixture audits provenance, source, native target, history, and exact Undo together"
+    )]
+    fn m86_f001_direct_diameter_inspector_rewrites_managed_target_and_exact_undo() {
+        const SOURCE: &str = r#""use geosolve managed-v1";
+import { sketch, mm } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const screw = $.geometry.circle("screw", {
+    center: [10, 12],
+    radius: mm(2.5),
+  });
+  const screwDiameter = $.dimension.diameter("screwDiameter", {
+    curve: screw.circle,
+    target: mm(5),
+  });
+  return $.outputs({ screw, screwDiameter });
+});
+"#;
+        let project = CodeProject::managed_only(ProjectKey("m86-direct-diameter".into()), SOURCE)
+            .expect("direct diameter managed project");
+        let (mut workbench, mut editor) =
+            CodeProjectWorkbench::open_project(CodeProjectOrigin::Authored, project)
+                .expect("accepted direct diameter project");
+        let source_before = workbench.managed_source().to_owned();
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let alias = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap()
+            .declaration_provenance
+            .iter()
+            .find_map(|(alias, declaration)| {
+                (declaration.0 == "screwDiameter").then(|| alias.clone())
+            })
+            .expect("direct diameter provenance");
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&alias)
+            .expect("direct diameter declaration");
+        assert_eq!(
+            node.kind,
+            IntentNodeKind::Dimension {
+                dimension: DimensionKind::Diameter,
+            }
+        );
+        let node_id = node.id;
+        let target_port = node
+            .port_by_selector(IntentPortSelector::Node {
+                role: IntentPortRole::Target,
+                index: 0,
+            })
+            .unwrap()
+            .as_ref(node_id);
+        let target_leaf = LeafRef {
+            node: node_id,
+            port: target_port.port,
+            field: LeafField::Value,
+        };
+        let IntentNativeBinding::Scalar(target_scalar) = editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .ownership
+            .port(target_port)
+            .unwrap()
+        else {
+            panic!("managed diameter target must own one native scalar")
+        };
+        assert!(editor.set_selected_declaration(Some(node_id)));
+        let projection = editor.workbench_projection();
+        let inspector = editor
+            .selected_inspector(&projection)
+            .expect("selected direct diameter Inspector");
+        let route = workbench
+            .apply_managed_dimension_inspector_edit(
+                &editor,
+                &inspector,
+                &IntentInspectorEditTarget::Instance { leaf: target_leaf },
+                &IntentInspectorEditValue::Literal {
+                    literal: IntentLiteral::Quantity {
+                        value: 8.0,
+                        unit: IntentUnit::Length,
+                    },
+                },
+            )
+            .expect("valid direct diameter Inspector edit");
+        let CodeInspectorEditRoute::Claimed(CodeApplyOutcome::Accepted(publication)) = route else {
+            panic!("valid direct diameter Inspector edit must publish")
+        };
+        assert_eq!(
+            workbench.managed_source(),
+            source_before.replacen("target: mm(5)", "target: mm(8)", 1)
+        );
+        assert!(workbench.can_undo());
+        assert!(!workbench.can_redo());
+        assert_eq!(publication.editor.selected_declaration(), Some(node_id));
+        let accepted = publication
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted direct diameter authority");
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert_eq!(
+            accepted
+                .session
+                .design_document()
+                .scalar(target_scalar)
+                .unwrap()
+                .value
+                .to_bits(),
+            8.0_f64.to_bits(),
+        );
+
+        let undone = workbench
+            .step_history(true)
+            .expect("direct diameter Undo")
+            .expect("one direct diameter history entry");
+        assert_eq!(workbench.managed_source(), source_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert!(!workbench.can_undo());
+        assert!(workbench.can_redo());
+        assert_eq!(
+            undone
+                .editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .session
+                .design_document()
+                .scalar(target_scalar)
+                .unwrap()
+                .value
+                .to_bits(),
+            5.0_f64.to_bits(),
         );
     }
 
@@ -6463,6 +7245,22 @@ export default sketch(($) => {
             .unwrap()
             .expect("GUI reference dimension publishes once");
         editor = published_dimension.editor;
+        assert!(editor.set_selected_declaration(Some(dimension_node)));
+        let projection = editor.workbench_projection();
+        let inspector = editor
+            .selected_inspector(&projection)
+            .expect("ordinary GUI dimension Inspector");
+        assert!(matches!(
+            workbench
+                .apply_managed_dimension_inspector_edit(
+                    &editor,
+                    &inspector,
+                    &IntentInspectorEditTarget::Suppressed,
+                    &IntentInspectorEditValue::Suppressed { suppressed: true },
+                )
+                .unwrap(),
+            CodeInspectorEditRoute::NotClaimed,
+        ));
 
         let reference_value = |editor: &ProjectionalEditorSession| {
             let authority = editor

@@ -6455,7 +6455,7 @@ paths return HTTP 200 without redirects, with exact MIME, `Content-Length` and a
 repo-prefixed build and is not byte-identical to the frozen UAT snapshot; that snapshot remains
 historical evidence. Product source `5c265e2` is an ancestor of the approval head with only the
 eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0` and
-both former endpoints refuse connections. M1-M85 are complete; M86 may open separately as the next
+both former endpoints refuse connections. M1-M85 are complete; M86 is now active as the next
 bug-fix batch.
 
 Gate: a camera-only frame admits only lightweight retained camera/grid/HUD presentation; fixed
@@ -6463,6 +6463,52 @@ ordinary and visible-manifold scenes meet their real-browser budgets; both prese
 retain identical semantic/history/persistence authority; pointer terminals remain exact and
 independently validated; clean qualification, immutable nomination and explicit human UAT precede
 publication.
+
+### M86: focused bug fixes and UAT follow-up
+
+Status: **active and unaccepted; M86-F001 is implemented and focused-qualified; clean release
+qualification, immutable nomination and UAT are pending**. Accepted M85 Pages run `33128387637`
+remains public-byte authority.
+`docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the detailed contract
+and evidence.
+
+- [x] Reproduce M86-F001 on the PC Water Manifold through the ordinary Inspector route. Exact
+  selected alias
+  `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`
+  authenticates to managed declaration `topScrewRail3Length`, whose source target is `mm(16)`.
+  Editing it to `8` reports that changed leaves lack semantic GUI-draft provenance, leaves source
+  and accepted target at `16`, and creates no outer code-history entry.
+- [x] Route the finding to optional code-project/workbench composition. The generic Inspector path
+  mutates the nested Intent target, but generic code-owned checkpoint reconciliation currently
+  accepts only authenticated semantic point-placement overlays.
+- [x] Add the smallest owning-layer regression for the exact alias/declaration. Require a managed
+  `target: mm(16)` to `target: mm(8)` source rewrite, accepted native target `8`, finite geometry,
+  independently validated Hard residuals, immediate stable-alias reselection, exactly one outer
+  history entry and exact Undo/Redo of source/native/checkpoint authority. Undo/Redo also prove the
+  semantic alias remains available; they do not claim durable UI selection.
+- [x] Add one authenticated code-project Inspector route for direct `dimension.curveLength` and
+  `dimension.diameter` target leaves. Resolve accepted expansion provenance, verify the exact
+  target scalar, reuse managed scalar-lens rewriting and atomically install the rematerialized
+  delegated editor. Never decode an opaque `code.*` digest or mutate native authority directly.
+- [x] Keep ordinary GUI-owned dimensions on their existing Inspector path. Dirty source, stale or
+  foreign identity, retained failure, unsupported declarations, wrong leaves and non-finite values
+  reject before mutation. A representable but invalid target retains the exact prior accepted
+  authority while exposing the failed managed source for correction and Undo.
+- [x] Add a thin browser-Inspector adapter regression proving the exact control dispatch reaches
+  managed-source rewriting rather than generic code-owned checkpoint classification.
+- [x] Pass the focused owner, accepted-diameter, retained-invalid/Undo, thin adapter and GUI-owned
+  collateral regressions. Formatting, diff hygiene, warnings-denied affected-crate Clippy and the
+  relevant WASM target check also pass.
+- [ ] Pass the complete affected-crate/workspace tests, unchanged clean golden and proportional
+  clean release qualification.
+- [ ] Freeze the exact candidate without rebuild, exact-verify local/Tailscale bytes and complete
+  M86-U1 through M86-U5. Publish to Pages and close M86 only after explicit supervising-user UAT
+  approval.
+
+Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
+not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;
+ordinary GUI dimensions and every solver equation remain unchanged; focused regression,
+proportional clean qualification, immutable nomination and explicit UAT precede publication.
 
 ## Explicit non-goals
 

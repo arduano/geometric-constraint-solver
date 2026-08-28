@@ -5459,6 +5459,55 @@ remains historical evidence. Product source `5c265e2` is an ancestor of the appr
 the eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0`
 and both endpoints refuse connections. Pages is final M85 public-byte authority and M85 is closed.
 
+## M86 managed-dimension Inspector fixtures
+
+M86-F001 adds no residual equation and does not reinterpret or expand the milestone-neutral golden.
+Its focused optional code-project regressions and thin browser-Inspector adapter proof pass;
+complete clean qualification and unchanged-golden confirmation are still pending.
+`docs/M86_GOALS.md` is authoritative.
+
+### M86-C1 — Exact managed curve-length target rewrite
+
+Open the checked-in `pc-water-manifold` code project and resolve exact alias
+`code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`
+through accepted expansion provenance. It must name managed declaration `topScrewRail3Length`, a
+direct `dimension.curveLength` target whose source contains `target: mm(16)`. Do not infer any
+meaning from the opaque alias hash.
+
+Apply the Inspector-equivalent target `8` through authenticated code-project authority. Exactly
+one source token changes to `target: mm(8)`; ordinary parse/expansion/Intent materialization/native
+solve and independent validation run before installation. Accepted target is `8`, all accepted
+geometry is finite, normalized Hard residual is at most `1e-9`, immediate rematerialization
+reselects the stable semantic alias and exactly one outer code history entry is added. Undo restores
+exact source, target and checkpoint `16`; Redo restores `8` and proves the alias remains available.
+The Undo/Redo proof does not assert durable UI selection.
+
+### M86-C2 — Family and rejection boundaries
+
+The focused accepted-diameter fixture changes a direct managed `dimension.diameter` target from
+`mm(5)` to `mm(8)`, installs independently validated current authority, immediately reselects its
+alias and exactly Undo-restores source/checkpoint/native value `5`. A wrong port/field/index,
+unsupported or generated declaration, stale/foreign Inspector identity, dirty/retained-failed
+authority and non-finite input reject before source or delegated Intent mutation. An ordinary GUI-
+owned dimension continues through the existing generic Inspector path.
+
+A representable but invalid target preserves the complete prior accepted geometry/checkpoint while
+retaining failed managed source and a local corrective diagnostic under existing code-session
+semantics. The manifold regression freezes diameter `5 -> 0`, byte-exact accepted-checkpoint
+retention, one outer retained-failure row and exact Undo to source/native value `5`. While that
+failure remains active a further Inspector edit rejects until source correction or Undo. No partial
+accepted-editor/selection publication is allowed.
+
+### M86-C3 — Thin Inspector adapter parity
+
+Construct the exact projectional Inspector control for M86-C1 and dispatch it through the browser
+adapter. It must reach authenticated managed-source rewriting, not generic code-owned checkpoint
+classification, install the complete returned `WorkbenchDocumentAuthority` revision metadata,
+avoid a duplicate save-time outer row, and preserve byte-exact accepted authority on a retained-
+invalid edit. Owner assertions remain in C1/C2; this adapter test duplicates no solver equation or
+accepted-state oracle. Existing GUI-owned reference-dimension and generic Inspector Undo/Redo
+regressions remain collateral authority.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

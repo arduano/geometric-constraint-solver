@@ -3982,13 +3982,66 @@ paths return HTTP 200 with zero redirects, exact MIME, `Content-Length` and byte
 build is fresh and not byte-identical to the frozen UAT snapshot, which remains historical
 qualification evidence. Product source `5c265e2` is an ancestor of the approval head with only the
 eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0` and
-both former endpoints refuse connections. Every M85 acceptance gate passes; M86 may open
+both former endpoints refuse connections. Every M85 acceptance gate passes; M86 is now active
 separately as the next bug-fix batch.
 
 M85 changes no primitive, constraint, equation, residual, Jacobian, priority, tolerance, branch,
 Intent/code meaning, persistence schema or accepted-scene validation. SVG remains the demo
 renderer; Canvas/WebGL replacement, geometry LOD, stale predictive terminals and broad browser CI
 are outside scope.
+
+### M86: focused bug fixes and UAT follow-up
+
+Status: **active and unaccepted**. M86-F001 is implemented and focused-qualified against the M85
+baseline. Complete clean qualification, unchanged-golden confirmation, immutable nomination and
+M86-U1 through M86-U5 remain pending. Accepted M85 stays public-byte authority.
+
+M86-F001 is accepted only when all of the following pass:
+
+- Exact selected alias
+  `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`
+  authenticates through accepted expansion provenance to PC Water Manifold declaration
+  `topScrewRail3Length`, direct `dimension.curveLength`, and its exact scalar target leaf. No path
+  may derive meaning by decoding the opaque alias digest.
+- Inspector value `8` rewrites only that declaration's `target: mm(16)` token to `target: mm(8)`
+  through the existing managed scalar-lens route. It does not directly mutate native authority or
+  manufacture semantic point-overlay provenance.
+- The rewritten project parses, expands, materializes and independently validates through the
+  ordinary code/Intent/native pipeline before atomic installation. Accepted native target is
+  exactly `8`, every accepted coordinate/scalar is finite, and independently recomputed normalized
+  Hard residual is at most `1e-9`.
+- Immediate accepted rematerialization reselects the same stable semantic alias. A valid edit adds
+  exactly one outer code-history step and no visible nested Intent step; Undo and Redo restore exact
+  source, native value and accepted checkpoint, and prove that the same alias remains available.
+  Durable UI selection across Undo/Redo is not inferred from that authority proof.
+- The same authenticated route supports only the currently direct managed
+  `dimension.curveLength` and `dimension.diameter` target scalars. Direct tests cover both families;
+  unsupported, generated/computed, wrong-port, wrong-field and wrong-index targets reject before
+  mutation.
+- A representable but invalid managed value retains the failed source and useful local diagnostic
+  for correction while preserving the complete prior accepted delegated checkpoint, geometry,
+  semantic alias and history authority. Undo restores the exact prior source/value. Malformed or
+  non-finite input publishes nothing.
+- Dirty source, retained failure, stale/foreign Inspector identity, changed expansion provenance or
+  a GUI-owned dimension cannot acquire the code-owned route. Ordinary GUI dimensions continue
+  through their existing Inspector dispatcher without changed behavior.
+- One focused owning-layer regression freezes the exact manifold identity, source rewrite,
+  materialization, independent residual, immediate reselection and outer-history/Undo/Redo
+  contract. A separate accepted `dimension.diameter` fixture proves `5 -> 8`; the manifold fixture
+  proves retained-invalid diameter `5 -> 0` preserves accepted authority and is exactly Undoable.
+  One thin browser-adapter regression proves the rendered Inspector control dispatches to that
+  owner, while existing GUI-owned Inspector regressions remain passing.
+- No milestone-neutral golden row changes: this is an isolated optional code-composition defect,
+  not a new authoring family, solver equation, branch, transform or scene-authority state.
+- Focused owner/adapter tests, format, warnings-denied affected-crate Clippy, relevant native/WASM
+  checks, unchanged clean golden and proportional workspace/release qualification pass. Exact
+  candidate bytes are frozen without rebuild and verified locally and on retained Tailscale.
+- Supervising-user M86-U1 through M86-U5 approval is explicit before Pages publication, exact
+  hosted-byte verification, retained-service retirement and milestone closure.
+
+M86-F001 changes no primitive, constraint, dimension family, residual, Jacobian, solver priority,
+tolerance, branch rule, persistence schema, managed grammar or point-overlay semantics. General
+arbitrary Intent-leaf reconciliation and runtime TypeScript remain outside scope.
 
 ## Regression and oracle policy
 

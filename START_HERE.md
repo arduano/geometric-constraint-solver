@@ -487,6 +487,20 @@ user services are inactive/dead with `MainPID=0` and both former endpoints refus
 M85 is closed. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the
 accepted candidate and public-closeout ledger.
 
+M86 is the active focused bug-fix/UAT follow-up milestone. `M86-F001` is implemented and
+focused-qualified after independent reproduction on the PC Water Manifold: Inspector editing of
+direct code-owned dimension alias
+`code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`
+from its accepted `16` target to `8` first mutates nested Intent, then generic code-checkpoint
+classification rejects because only point-placement leaves have semantic GUI-draft provenance.
+Accepted expansion provenance authenticates the alias to managed declaration
+`topScrewRail3Length`. The implemented optional adapter now routes only direct managed curve-
+length/diameter targets through the existing source scalar lens and ordinary atomic
+rematerialization. Focused owner, accepted-diameter, retained-invalid/Undo, adapter and GUI-owned
+collateral tests pass; complete clean qualification, immutable nomination and UAT remain pending,
+so accepted M85 remains public authority. `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and
+`docs/M86_UAT.md` own the active contract, finding ledger and pending scorecard.
+
 ## Read first
 
 1. `AGENTS.md`
@@ -528,6 +542,9 @@ accepted candidate and public-closeout ledger.
 21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — completed retained
     camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
     clean-qualified frozen candidate, milestone-level approval and exact public closeout.
+22. `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` — active focused
+    bug-fix contract, implemented/focused-qualified managed-dimension Inspector repair and pending
+    clean candidate/scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -899,7 +916,7 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M85 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
+M1-M85 are complete and M86 is active. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84's optional code/GUI implementation, F001-F012 repairs,
 frozen F012 nomination, milestone-level acceptance and exact Pages publication also pass.
@@ -944,8 +961,17 @@ logged row-by-row replay. Approval head `e8dfec3467424a9051533658df34c5b406bf374
 `9669411681` and exact hosted-byte verification. The Pages artifact is a fresh repo-prefixed build,
 not byte-identical to the frozen snapshot; it is final M85 public-byte authority. Both M85 services
 are retired and their endpoints refuse connections. M85 adds no equation, constraint, solver
-priority, branch rule, persistence schema or managed-code meaning. M86 may next open as a separate
+priority, branch rule, persistence schema or managed-code meaning. M86 is now active as a separate
 bug-fix batch.
+M86-F001 was confirmed at M85 closeout source `4b69a57`. The exact manifold alias authenticates to
+managed declaration `topScrewRail3Length` and `target: mm(16)`, but generic Inspector dispatch
+changes the nested target before code-owned checkpoint reconciliation rejects it for lacking point-
+placement draft provenance. The implemented optional code-project adapter route claims only direct
+curve-length/diameter target scalars: it authenticates accepted provenance and the exact leaf,
+rewrites managed source, rematerializes atomically, reselects the stable alias on immediate accepted
+publication, retains one outer history and preserves prior accepted authority on invalid input.
+Focused implementation tests pass; no complete clean gate, immutable candidate, UAT acceptance or
+Pages authority is claimed.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1073,6 +1099,9 @@ Durable milestone and cleanup records:
   frozen-candidate evidence ledger)
 - `docs/M85_UAT.md` (accepted immutable-candidate navigation/interaction scorecard and exact
   public closeout)
+- `docs/M86_GOALS.md` (active focused bug-fix and managed-dimension edit contract)
+- `docs/M86_IMPLEMENTATION.md` (implemented M86-F001 design and focused qualification ledger)
+- `docs/M86_UAT.md` (pending clean-candidate managed-dimension Inspector scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
