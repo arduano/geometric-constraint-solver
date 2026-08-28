@@ -2,14 +2,15 @@
 
 # M85 implementation ledger — Responsive retained workbench presentation
 
-Status: **accepted at milestone level on 2026-08-28; public closeout remains pending**. Exact final
-source `5c265e2` passes the clean release gate; its no-rebuild immutable candidate passes local and
-Tailscale byte verification, the frozen-byte browser profile and native M85-U10 flat-adapter
-evidence. The supervising user's close decision accepts M85-U1 through M85-U12 without claiming a
-separately logged row-by-row replay. `docs/M85_GOALS.md` owns the contract. Accepted M84 remains
-public-byte authority until M85 Pages publication and hosted-byte verification pass.
+Status: **complete and closed on 2026-08-28**. Exact product source `5c265e2` passes the clean
+release gate; its no-rebuild immutable candidate passes local and Tailscale byte verification, the
+frozen-byte browser profile and native M85-U10 flat-adapter evidence. The supervising user's close
+decision accepts M85-U1 through M85-U12 without claiming a separately logged row-by-row replay.
+Approval head `e8dfec3` passes Pages publication and exact hosted-byte verification, the retained
+services are retired, and Pages is final M85 public-byte authority. `docs/M85_GOALS.md` owns the
+contract.
 
-## Exact nominated candidate
+## Exact accepted product candidate
 
 - Source: `5c265e211e20dabc8a27f6402d530f5d645ff15c`.
 - Tree: `b55d012443f4dbf7551e30041da2912e666de9db`.
@@ -19,21 +20,23 @@ public-byte authority until M85 Pages publication and hosted-byte verification p
   regular files, zero symlinks, ordered-manifest aggregate
   `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`.
 - Nomination evidence: `/tmp/geosolve-m85-freeze-evidence.uj9HviX1`.
-- Local endpoint: `http://127.0.0.1:18100/`, PID `2008536`, invocation
+- Historical local endpoint: `http://127.0.0.1:18100/`, PID `2008536`, invocation
   `d9fdcccfa9ce46deafcf46f7b6148e6e`.
-- Retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `2008538`, invocation
+- Historical retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `2008538`, invocation
   `2c70402e2b2a45a5810ea29722f25f95`.
-- Both services serve only the same immutable snapshot; their complete eight-path HTTP ledgers are
+- Both services served only the same immutable snapshot; their complete eight-path HTTP ledgers are
   byte-identical at SHA-256
   `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
-- GitHub Pages publication: **authorized by explicit supervising-user UAT approval; pending**.
+- Both services are stopped: `geosolve-m85-local-uat.service` and `geosolve-m85-uat.service` are
+  inactive/dead with `MainPID=0`, and both former endpoints return `000`/refuse connections.
+- GitHub Pages publication: **passed and exact-verified; final M85 public-byte authority**.
 
 ## Findings
 
 ### M85-F001 — Camera events rebuild the complete canvas
 
-Disposition: **confirmed DEFECT; repaired, clean-qualified and frozen-profile qualified; hands-on
-UAT remains pending**.
+Disposition: **confirmed DEFECT; repaired, clean-qualified, frozen-profile qualified and accepted
+under the milestone-level scorecard**.
 
 Reproduction authority is exact M84-F012 source `84dd7683cd082cc5f5cc8f0dd8231805cb2967a3`,
 tree `429ed56d2a5b3988d6604079d19e1002f9049d64` and immutable snapshot
@@ -284,7 +287,7 @@ Evidence is `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
 `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
 
-## Remaining qualification and release
+## Completed qualification and release
 
 - [x] Pass workspace tests, WASM parity/checks, unchanged 271-row clean golden, release performance,
   warnings-denied workspace Clippy/Rustdoc and the complete clean release gate from final committed
@@ -294,9 +297,33 @@ Evidence is `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-
 - [x] Record final-source native flat-adapter M85-U10 evidence and nominate the immutable candidate.
 - [x] Receive milestone-level supervising-user approval for M85-U1 through M85-U12 on 2026-08-28.
   This accepts the qualified candidate without claiming a separately logged row-by-row replay.
-- [ ] Only after approval, publish the accepted descendant to GitHub Pages, download and exact-
-  verify the separately rebuilt artifact and hosted paths, retire the retained service and close
-  M85.
+- [x] After approval, publish the accepted descendant to GitHub Pages, download and exact-verify
+  the separately rebuilt artifact and hosted paths, retire both retained services and close M85.
+
+## Public closeout
+
+Approval head `e8dfec3467424a9051533658df34c5b406bf3743` passes GitHub Pages run
+`33128387637`, assemble job `98711889276`, deploy job `98713212444`, deployment `6133200015` and
+deployment status `17437536547`. Artifact `9669411681` is final M85 public-byte authority. The
+downloaded 4,931,164-byte ZIP has SHA-256
+`22c8d1f0ec4fc660ed30574e822fa6cc435b40f4d6a3a731f441ad51f6b1e03f`; its inner
+15,144,960-byte `artifact.tar` has SHA-256
+`2ebb890c033edadfd46b7ac4a0c166fe40be65b32d790ebf39df6dc8d3fd4be4`. Extraction yields exactly
+seven regular files, zero symlinks and zero other non-regular entries. Their ordered-manifest
+aggregate is `8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`.
+
+Public `/` and all seven artifact paths return HTTP 200 with zero redirects, exact MIME,
+`Content-Length` and artifact bytes, no `Location` or `Content-Encoding`, and `/` is byte-identical
+to `index.html`. Evidence `/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
+`206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`.
+
+This Pages artifact is a fresh repo-prefixed build and is not byte-identical to the frozen UAT
+snapshot. The snapshot aggregate
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5` remains historical
+candidate evidence rather than public-byte authority. Product source `5c265e2` is an ancestor of
+approval head `e8dfec3`; only the eight M85 closeout documents differ. Both user services are now
+inactive/dead with `MainPID=0`, and both former endpoints refuse connections. M85 is complete and
+closed; M86 may open as a separate bug-fix milestone after this closeout commit.
 
 ## Semantic-preservation ledger
 

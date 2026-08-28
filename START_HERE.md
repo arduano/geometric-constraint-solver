@@ -464,7 +464,7 @@ eight-path hosted-byte verification. Former retained PID `2241323` is retired, i
 connections and the immutable F012 snapshot remains preserved. Pages is final M84 public-byte
 authority.
 
-M85 is the active semantic-neutral workbench-performance milestone. `M85-F001` independently
+M85 is the completed semantic-neutral workbench-performance milestone. `M85-F001` independently
 routed the exact M84-F012 PC Water Manifold's roughly 1 fps navigation to complete per-event
 projectional scene/SVG/viewport reconstruction. `M85-F002` then reproduced an ordinary-stack
 overflow in an unchanged-host code terminal that created and discarded an unnecessary nested
@@ -476,13 +476,16 @@ history, and large optional projectional Fillet/Offset preview state is privatel
 changing public incremental-code signatures. Exact source `5c265e2`, tree `b55d012`, now passes the
 complete clean release gate, no-rebuild seven-file freeze, byte-identical local/Tailscale HTTP
 verification, the final frozen-byte Chromium profile at 5/5 and final-source flat-adapter evidence
-at 19/19. Snapshot `/tmp/geosolve-m85-uat.QX8fU3Q6` is live at
+at 19/19. Snapshot `/tmp/geosolve-m85-uat.QX8fU3Q6` was served at
 `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` through acceptance. On 2026-08-28 the
 supervising user approved the milestone and requested closeout; this accepts M85-U1 through M85-U12
-without claiming a separately logged row-by-row replay. Pages publication, service retirement and
-closure remain pending. The accepted M84 solver, Intent/code meaning, history, persistence and
-Pages authority remain unchanged until that proof passes. `docs/M85_GOALS.md`,
-`docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the accepted candidate and closeout ledger.
+without claiming a separately logged row-by-row replay. Approval head `e8dfec3` passes Pages run
+`33128387637`, artifact `9669411681` and exact seven-path plus root hosted-byte verification; Pages
+is final M85 public-byte authority. The fresh repo-prefixed Pages build is not claimed
+byte-identical to the frozen UAT snapshot, whose aggregate remains historical evidence. Both M85
+user services are inactive/dead with `MainPID=0` and both former endpoints refuse connections.
+M85 is closed. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the
+accepted candidate and public-closeout ledger.
 
 ## Read first
 
@@ -522,9 +525,9 @@ Pages authority remain unchanged until that proof passes. `docs/M85_GOALS.md`,
     `docs/M84_IMPLEMENTATION.md` and `docs/M84_UAT.md` — accepted optional code/GUI architecture,
     implemented F005-F012 ledger, historical F011 nomination, verified immutable F012 replacement
     nomination, milestone-level human scorecard and exact public closeout.
-21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — active retained
+21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — completed retained
     camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
-    clean-qualified frozen candidate, milestone-level approval and pending public closeout.
+    clean-qualified frozen candidate, milestone-level approval and exact public closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -896,7 +899,7 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M84 are complete and M85 is active. M83's projectional implementation, F001-F010 repairs and post-F007
+M1-M85 are complete. M83's projectional implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84's optional code/GUI implementation, F001-F012 repairs,
 frozen F012 nomination, milestone-level acceptance and exact Pages publication also pass.
@@ -933,12 +936,16 @@ seven-file, zero-symlink no-rebuild output is frozen at `/tmp/geosolve-m85-uat.Q
 directory/file modes `0555`/`0444` and ordered-manifest aggregate
 `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Local and Tailscale HTTP
 ledgers are byte-identical, the exact frozen-byte profile passes 5/5, and final-source U10 direct
-compatibility/parity evidence passes 19/19. The same immutable bytes remain live at
+compatibility/parity evidence passes 19/19. The same immutable bytes were served at
 `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/`. M85-U1 through M85-U12 are accepted by
 the supervising user's 2026-08-28 milestone-level close decision without claiming a separately
-logged row-by-row replay. Pages publication, service retirement and closure are pending. M85 adds no equation, constraint,
-solver priority, branch rule, persistence schema or managed-code meaning, and accepted M84 remains
-public authority.
+logged row-by-row replay. Approval head `e8dfec3467424a9051533658df34c5b406bf3743` passes Pages run
+`33128387637`, assemble/deploy jobs `98711889276`/`98713212444`, deployment `6133200015`, artifact
+`9669411681` and exact hosted-byte verification. The Pages artifact is a fresh repo-prefixed build,
+not byte-identical to the frozen snapshot; it is final M85 public-byte authority. Both M85 services
+are retired and their endpoints refuse connections. M85 adds no equation, constraint, solver
+priority, branch rule, persistence schema or managed-code meaning. M86 may next open as a separate
+bug-fix batch.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1061,10 +1068,10 @@ Durable milestone and cleanup records:
 - `docs/M84_UAT.md` (accepted immutable F012 evidence, milestone-level U1-U16 scorecard and exact
   public closeout,
   including manifold plus annotation-aware PNG-export dogfood)
-- `docs/M85_GOALS.md` (active retained workbench-performance contract and fixed budgets)
+- `docs/M85_GOALS.md` (completed retained workbench-performance contract and fixed budgets)
 - `docs/M85_IMPLEMENTATION.md` (repaired M85-F001-F003 architecture and exact clean-qualified,
   frozen-candidate evidence ledger)
-- `docs/M85_UAT.md` (accepted immutable-candidate navigation/interaction scorecard and pending
+- `docs/M85_UAT.md` (accepted immutable-candidate navigation/interaction scorecard and exact
   public closeout)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

@@ -6358,11 +6358,11 @@ publication.
 
 ### M85: responsive retained workbench presentation
 
-Status: **accepted at milestone level on 2026-08-28; exact final candidate source `5c265e2`, tree
+Status: **complete and closed on 2026-08-28; exact product source `5c265e2`, tree
 `b55d012`, passes the complete clean release gate, immutable no-rebuild freeze, dual-endpoint byte
 verification, frozen-byte browser profile and final-source native flat-adapter audit; Pages
-publication and final closure remain pending**. Accepted M84 source `84dd768`, snapshot
-`/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain product/public authority.
+run `33128387637`, artifact `9669411681`, exact hosted-byte verification and retained-service
+retirement also pass**. Pages is final M85 public-byte authority.
 `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the detailed contract
 and evidence.
 
@@ -6410,8 +6410,8 @@ and evidence.
   browser integration was added to PR CI.
 - [x] Receive the supervising user's milestone-level acceptance of M85-U1 through M85-U12 against
   the exact retained candidate. This records approval without inventing a separate row-by-row replay.
-- [ ] After explicit supervising-user UAT approval only, publish the accepted descendant to Pages,
-  exact-verify hosted bytes, retire the retained service and close M85.
+- [x] After explicit supervising-user UAT approval only, publish the accepted descendant to Pages,
+  exact-verify hosted bytes, retire both retained services and close M85.
 
 Final mechanical nomination evidence (2026-08-28): exact source
 `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
@@ -6436,8 +6436,27 @@ preview/terminal values are respectively `5.4`/`87.23 ms`, `8.7`/`175.50 ms` and
 `6.6`/`184.93 ms`, with preview/terminal parity, one save and no delayed movement. Final-source
 native retained preview p95 is `3.667 ms` and exact terminal is `53.058 ms`. M85-U10 passes 19/19
 at `/tmp/geosolve-m85-u10-final.D1auvz5d`; `results.tsv` has SHA-256
-`5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`. These results nominate
-the candidate mechanically; they do not claim hands-on acceptance or authorize publication.
+`5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`. These results mechanically
+nominated the candidate; the separate milestone-level user approval authorized publication
+without inventing a row-by-row hands-on replay.
+
+Public closeout evidence (2026-08-28): approval head
+`e8dfec3467424a9051533658df34c5b406bf3743` passes Pages run `33128387637`, assemble/deploy jobs
+`98711889276`/`98713212444`, deployment `6133200015` with status `17437536547`, and artifact
+`9669411681`. The 4,931,164-byte ZIP SHA-256 is
+`22c8d1f0ec4fc660ed30574e822fa6cc435b40f4d6a3a731f441ad51f6b1e03f`; its 15,144,960-byte inner
+tar SHA-256 is `2ebb890c033edadfd46b7ac4a0c166fe40be65b32d790ebf39df6dc8d3fd4be4`. Extraction has exactly
+seven regular files, zero symlinks/non-regular entries and ordered-manifest aggregate
+`8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`. Public `/` plus all seven
+paths return HTTP 200 without redirects, with exact MIME, `Content-Length` and artifact bytes, no
+`Location`/`Content-Encoding`, and root equal to `index.html`. Hosted results
+`/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` have SHA-256
+`206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`. Pages is a fresh
+repo-prefixed build and is not byte-identical to the frozen UAT snapshot; that snapshot remains
+historical evidence. Product source `5c265e2` is an ancestor of the approval head with only the
+eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0` and
+both former endpoints refuse connections. M1-M85 are complete; M86 may open separately as the next
+bug-fix batch.
 
 Gate: a camera-only frame admits only lightweight retained camera/grid/HUD presentation; fixed
 ordinary and visible-manifold scenes meet their real-browser budgets; both presentation adapters

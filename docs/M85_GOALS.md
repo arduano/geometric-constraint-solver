@@ -2,13 +2,13 @@
 
 # M85 — Responsive retained workbench presentation
 
-Status: **accepted at milestone level on 2026-08-28; M85-F001 through M85-F003 are repaired, the
-exact final source passes the clean release gate, and its immutable local/Tailscale candidate passes
-the frozen-byte browser profile plus native flat-adapter evidence**. The supervising user's close
-decision accepts M85-U1 through M85-U12 without claiming a separately logged row-by-row replay.
-Pages publication and final closure remain pending. Accepted M84 product source `84dd768`, immutable snapshot
-`/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain product and public-byte
-authority until M85 passes every gate below.
+Status: **complete and closed on 2026-08-28**. M85-F001 through M85-F003 are repaired, exact
+product source `5c265e2` passes the clean release gate, and its immutable local/Tailscale candidate
+passes the frozen-byte browser profile plus native flat-adapter evidence. The supervising user's
+close decision accepts M85-U1 through M85-U12 without claiming a separately logged row-by-row
+replay. Approval head `e8dfec3` passes Pages run `33128387637`; the separately rebuilt and exactly
+verified Pages artifact is final M85 public-byte authority. The retained local and Tailscale
+services are retired. M86 may open as a separate bug-fix milestone after this closeout commit.
 
 ## Goal
 
@@ -126,7 +126,7 @@ WebGL or a production renderer; introduce semantic approximation, geometry LOD o
 validation; restore the retired broad browser E2E/CDP stack; or move camera/DOM policy into
 `geosolve-core`, `geosolve-sketch`, `geosolve-linkage` or `geosolve-constraint-editor`.
 
-## Current mechanically nominated candidate
+## Accepted product and publication authority
 
 Exact committed source `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
 `b55d012443f4dbf7551e30041da2912e666de9db`, implements retained camera/hover paths, actual
@@ -172,9 +172,30 @@ interaction, history/work-neutrality and v1-v6 normalization contracts. Evidence
 `/tmp/geosolve-m85-u10-final.D1auvz5d`; command/result/manifest SHA-256 values are
 `5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545`,
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79` and
-`ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`. Human UAT and approval now
-pass at milestone level; only post-approval Pages publication, hosted-byte verification and service
-retirement remain. `docs/M85_IMPLEMENTATION.md` owns the full evidence record.
+`ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`. Human UAT and approval pass
+at milestone level.
+
+Approval head `e8dfec3467424a9051533658df34c5b406bf3743` passes Pages run `33128387637`,
+assemble job `98711889276`, deploy job `98713212444`, deployment `6133200015` and deployment
+status `17437536547`; artifact `9669411681` is final M85 public-byte authority. The downloaded
+4,931,164-byte ZIP has SHA-256
+`22c8d1f0ec4fc660ed30574e822fa6cc435b40f4d6a3a731f441ad51f6b1e03f`; its 15,144,960-byte
+`artifact.tar` has SHA-256
+`2ebb890c033edadfd46b7ac4a0c166fe40be65b32d790ebf39df6dc8d3fd4be4`. It contains exactly seven
+regular files, zero symlinks and zero other non-regular entries, with ordered-manifest aggregate
+`8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`. Public `/` and all seven
+artifact paths return HTTP 200 with zero redirects, exact MIME, `Content-Length` and artifact bytes,
+no `Location` or `Content-Encoding`, and `/` equals `index.html`; hosted verification
+`/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
+`206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`.
+
+Pages is a fresh repo-prefixed build and is deliberately not claimed byte-identical to frozen UAT
+snapshot `/tmp/geosolve-m85-uat.QX8fU3Q6`; that snapshot's
+`dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5` aggregate remains historical
+qualification evidence. Product source `5c265e2` is an ancestor of the approval head, with only
+the eight M85 closeout documents changed. Both `geosolve-m85-local-uat.service` and
+`geosolve-m85-uat.service` are stopped at inactive/dead with `MainPID=0`, and both former endpoints
+refuse connections. `docs/M85_IMPLEMENTATION.md` owns the full evidence record.
 
 ## Release sequence
 
@@ -185,5 +206,5 @@ retirement remain. `docs/M85_IMPLEMENTATION.md` owns the full evidence record.
 4. Freeze the exact no-rebuild candidate, serve only those bytes on Tailscale, run the focused
    Chromium timing trace and complete the human scorecard plus native flat-adapter evidence. The
    flat retained-coordinator compatibility route has no ordinary persisted browser bootstrap.
-5. Only after explicit supervising-user UAT approval publish the accepted descendant to GitHub
-   Pages, exact-verify hosted bytes, retire the retained service and close M85.
+5. After explicit supervising-user UAT approval, publish the accepted descendant to GitHub Pages,
+   exact-verify hosted bytes, retire both retained services and close M85. **Complete.**

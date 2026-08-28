@@ -5395,7 +5395,7 @@ flat-adapter M85-U10 evidence. Persisted v1-v6 workspaces normalize into project
 the flat retained-coordinator adapter has no normal browser bootstrap; qualification therefore uses
 its direct compatibility/parity owners rather than an artificial UAT fixture. Only explicit
 supervising-user approval authorizes Pages publication, exact hosted-byte verification, service
-retirement and closure. Until then accepted M84 remains public authority.
+retirement and closure. Those post-approval gates now pass.
 
 Committed implementation checkpoint `fd2c560c5c61338a96f145ecb87106af49e93749`, tree
 `97591f3d8c268e36db2e3e728c52163dca87d055`, passes format/diff, affected-crate warnings-denied
@@ -5440,11 +5440,24 @@ result ledgers have SHA-256
 `5da8bf46936228d22034f4195e9e571f6f0227510db257f943ef27686dee6545` and
 `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`; the evidence manifest file
 has SHA-256 `ec2b205710bf6d79c09e696fb6023b01ebcac1f922bcae04c2e8486c80702189`.
-The same immutable candidate remains live at `http://127.0.0.1:18100/` and
+The same immutable candidate was served at `http://127.0.0.1:18100/` and
 `http://100.94.63.83:8080/`. On 2026-08-28 the supervising user approved M85 and requested closeout;
 that milestone-level decision accepts M85-U1 through M85-U12 without claiming a separately logged
-row-by-row replay. Pages publication, service retirement and milestone closure remain pending.
-Accepted M84 remains public authority until that proof passes.
+row-by-row replay. Approval head `e8dfec3467424a9051533658df34c5b406bf3743` then passes Pages
+run `33128387637`, assemble/deploy jobs `98711889276`/`98713212444`, deployment `6133200015` with
+status `17437536547`, and artifact `9669411681`. Its 4,931,164-byte ZIP has SHA-256
+`22c8d1f0ec4fc660ed30574e822fa6cc435b40f4d6a3a731f441ad51f6b1e03f`; its inner 15,144,960-byte
+tar has SHA-256 `2ebb890c033edadfd46b7ac4a0c166fe40be65b32d790ebf39df6dc8d3fd4be4`.
+The extracted artifact has exactly seven regular files, zero symlinks/non-regular entries and
+ordered-manifest aggregate `8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`.
+Public `/` and all seven paths return HTTP 200 with no redirects, exact MIME, `Content-Length` and
+artifact bytes, no `Location`/`Content-Encoding`, and root equal to `index.html`; hosted results
+`/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` have SHA-256
+`206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`. The Pages artifact is a
+fresh repo-prefixed build and is not byte-identical to the frozen UAT snapshot; that snapshot
+remains historical evidence. Product source `5c265e2` is an ancestor of the approval head with only
+the eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0`
+and both endpoints refuse connections. Pages is final M85 public-byte authority and M85 is closed.
 
 ## Frozen near-singular fixtures
 

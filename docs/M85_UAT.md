@@ -2,10 +2,10 @@
 
 # M85 focused UAT — Responsive retained workbench presentation
 
-Status: **accepted at milestone level on 2026-08-28; the exact clean-qualified immutable candidate
-is approved for public closeout**. Automated native M85-U10 passes. The supervising user's explicit
-"Looks good. Close off that milestone" decision accepts M85-U1 through M85-U12 without claiming a
-separately logged row-by-row replay. Pages publication and final closure remain pending.
+Status: **complete and closed on 2026-08-28**. Automated native M85-U10 passes. The supervising
+user's explicit "Looks good. Close off that milestone" decision accepts M85-U1 through M85-U12
+without claiming a separately logged row-by-row replay. Pages publication, exact hosted-byte
+verification and retained-service retirement pass.
 
 ## Candidate identity
 
@@ -19,11 +19,11 @@ separately logged row-by-row replay. Pages publication and final closure remain 
 - Ordered-manifest aggregate:
   `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`.
 - Complete freeze/nomination evidence: `/tmp/geosolve-m85-freeze-evidence.uj9HviX1`.
-- Local endpoint: `http://127.0.0.1:18100/`, PID `2008536`, invocation
+- Historical local endpoint: `http://127.0.0.1:18100/`, PID `2008536`, invocation
   `d9fdcccfa9ce46deafcf46f7b6148e6e`.
-- Retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `2008538`, invocation
+- Historical retained Tailscale endpoint: `http://100.94.63.83:8080/`, PID `2008538`, invocation
   `2c70402e2b2a45a5810ea29722f25f95`.
-- Both endpoints serve the same snapshot. Their complete eight-path HTTP ledgers are byte-identical
+- Both endpoints served the same snapshot. Their complete eight-path HTTP ledgers are byte-identical
   at SHA-256 `305eccfc8fa60786aabfae59edd612e695ce3c15b7224abbf3be0d0852ae0d27`.
 - Focused frozen-byte browser timing: 5/5 in `2.2m`; log SHA-256
   `d1174515c320e1f3a0e006bbaad47cc47ba0aeda52fe9bf05c956d91750951c7`; summary SHA-256
@@ -38,7 +38,7 @@ separately logged row-by-row replay. Pages publication and final closure remain 
 
 - Complete clean release gate and all M85 deterministic work-ledger, receipt, parity and ordinary-
   stack tests pass.
-- Exact build output is frozen without rebuild and served from an immutable snapshot on both a
+- Exact build output was frozen without rebuild and served from an immutable snapshot on both a
   temporary local listener and retained Tailscale endpoint.
 - Local and Tailscale manifests/HTTP ledgers are byte-identical; the focused Chromium trace passes
   the fixed ordinary and visible-annotation manifold budgets.
@@ -50,7 +50,7 @@ separately logged row-by-row replay. Pages publication and final closure remain 
 
 Test at approximately `1440x900` and `1024x720` on the exact retained candidate.
 
-## Pending scorecard
+## Accepted scorecard
 
 | ID | Human action / evidence | Pass condition | Status |
 |---|---|---|---|
@@ -117,12 +117,28 @@ pre-F003 ancestor evidence only and must not be cited as final-source or frozen-
 
 That provisional profile remains historical and does not own nomination. The exact clean gate,
 immutable freeze, local/Tailscale byte verification, final frozen-byte profile and final-source
-M85-U10 evidence recorded above do nominate the current UAT bytes. Hands-on M85-U1-U9/U11-U12,
-explicit supervising-user approval and Pages publication remain pending.
+M85-U10 evidence recorded above nominate the accepted UAT bytes. The supervising user's explicit
+milestone-level approval accepts M85-U1 through M85-U12 without claiming a separate row-by-row
+hands-on replay.
 
 ## Approval and publication
 
-Explicit supervising-user approval was received on 2026-08-28. Commit this scorecard, publish that
-accepted descendant through GitHub Pages, download and exact-verify the separately rebuilt Pages
-artifact and all hosted paths, then retire the retained Tailscale service. Until those steps pass,
-M84 remains final public-byte authority and M85 remains open.
+Explicit supervising-user approval was received on 2026-08-28. Approval head
+`e8dfec3467424a9051533658df34c5b406bf3743` passes Pages run `33128387637`, assemble job
+`98711889276`, deploy job `98713212444`, deployment `6133200015` and status `17437536547`.
+Artifact `9669411681` is final M85 public-byte authority. Its 4,931,164-byte ZIP SHA-256 is
+`22c8d1f0ec4fc660ed30574e822fa6cc435b40f4d6a3a731f441ad51f6b1e03f`; inner 15,144,960-byte
+`artifact.tar` SHA-256 is
+`2ebb890c033edadfd46b7ac4a0c166fe40be65b32d790ebf39df6dc8d3fd4be4`. The extracted artifact has
+exactly seven regular files, zero symlinks/non-regular entries and ordered-manifest aggregate
+`8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`.
+
+Public `/` and all seven paths return HTTP 200, zero redirects, exact MIME, `Content-Length` and
+artifact bytes, no `Location` or `Content-Encoding`, and `/` equals `index.html`. Hosted ledger
+`/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
+`206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`. Pages is a fresh
+repo-prefixed build and is not claimed byte-identical to frozen UAT snapshot
+`/tmp/geosolve-m85-uat.QX8fU3Q6`; the latter remains historical qualification evidence. Product
+source `5c265e2` is an ancestor of the approval head with only the eight M85 closeout documents
+changed. Both M85 user services are inactive/dead with `MainPID=0`; both former endpoints refuse
+connections. M85 is complete and closed.

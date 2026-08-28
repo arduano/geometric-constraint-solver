@@ -96,7 +96,7 @@ construction/NURBS UAT and certified all-family visual profiles.
   endpoint refuses connections and the F012 snapshot remains preserved; F011 PID `1485656` is
   retired and its snapshot remains historical rollback evidence. Pages is final M84 public-byte
   authority and M84 is closed.
-- **Active target:** M85 is a semantic-neutral retained-presentation optimization. M85-F001 routes
+- **Completed target:** M85 is a semantic-neutral retained-presentation optimization. M85-F001 routes
   the PC Water Manifold's approximately 1 fps navigation to `geosolve-demo-web`: raw camera events
   repeatedly reconstructed the projectional `EditorScene`, derived computed Fillet affordances,
   serialized complete SVG and replaced viewport children. Committed implementation checkpoint
@@ -130,14 +130,18 @@ construction/NURBS UAT and certified all-family visual profiles.
   `0555`/`0444`, aggregate
   `dc729ce5fa28929dba2aa086e49246aac7d5173a0583d3b0b64748ffbbb7fda5`. Byte-identical local and
   retained-Tailscale HTTP ledgers, the final frozen-byte Chromium profile at 5/5 and final-source
-  flat-adapter compatibility/parity evidence at 19/19 pass. The immutable candidate remains live at
+  flat-adapter compatibility/parity evidence at 19/19 pass. The immutable candidate was served at
   `http://127.0.0.1:18100/` and `http://100.94.63.83:8080/` through acceptance. The supervising
   user's 2026-08-28 close decision accepts M85-U1 through M85-U12 without claiming a separate
-  row-by-row replay; Pages publication, service retirement and closure remain pending. No solver equation, Intent/code
-  meaning, accepted-scene authority, persistence schema or picking semantics changes;
+  row-by-row replay. Approval head `e8dfec3` passes Pages run `33128387637`, artifact
+  `9669411681`, deployment `6133200015` and exact public-byte verification. The fresh
+  repo-prefixed Pages build is final M85 public-byte authority and is not claimed byte-identical to
+  the historical frozen UAT snapshot. Both M85 user services are inactive/dead with `MainPID=0`
+  and their endpoints refuse connections. No solver equation, Intent/code meaning, accepted-scene
+  authority, persistence schema or picking semantics changes;
   deterministic work-admission tests and focused candidate-only Chromium timing own the
-  performance proof, and M85 does not restore broad browser integration CI. Accepted M84 remains
-  public authority.
+  performance proof, and M85 does not restore broad browser integration CI. M85 is complete and
+  closed; M86 may open separately as the next bug-fix batch.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

@@ -3867,13 +3867,14 @@ feature or general topological-naming claim is accepted by M84.
 
 ### M85: responsive retained workbench presentation
 
-Status: **accepted at milestone level on 2026-08-28; public closeout remains pending**. Exact final candidate source
+Status: **complete and closed on 2026-08-28**. Exact product source
 `5c265e211e20dabc8a27f6402d530f5d645ff15c`, tree
 `b55d012443f4dbf7551e30041da2912e666de9db`, passes complete clean qualification, immutable
 no-rebuild nomination, dual-endpoint byte verification, the frozen-byte browser profile and final-
 source native flat-adapter M85-U10 evidence. The supervising user's close decision accepts M85-U1
-through M85-U12 without claiming a separately logged row-by-row replay. Pages publication remains
-pending. Accepted M84 stays product and Pages authority until that public proof passes.
+through M85-U12 without claiming a separately logged row-by-row replay. Approval head `e8dfec3`
+passes Pages run `33128387637`, exact hosted-byte verification and service retirement; Pages is
+final M85 public-byte authority.
 
 M85 is accepted only when all of the following pass:
 
@@ -3964,12 +3965,25 @@ Current gate disposition:
   `5efaa7d874d1c07189ab8ec7398863945abd1d15bb50933e55f47bac888f7f79`.
 - [x] Receive milestone-level supervising-user acceptance of M85-U1 through M85-U12 without
   claiming a separately logged row-by-row replay.
-- [ ] Only after that approval, publish the accepted descendant to Pages, exact-verify the hosted
-  artifact, retire the retained Tailscale service and close M85.
+- [x] Only after that approval, publish the accepted descendant to Pages, exact-verify the hosted
+  artifact, retire both retained services and close M85.
 
-This is a mechanically qualified immutable nomination, not milestone acceptance. M84 source
-`84dd768`, snapshot `/tmp/geosolve-m84-f012-uat.nMOymIIM` and Pages run `33068058169` remain public
-authority; no M85 Pages publication is claimed.
+Public closeout passes at approval head `e8dfec3467424a9051533658df34c5b406bf3743`: Pages run
+`33128387637`, assemble/deploy jobs `98711889276`/`98713212444`, deployment `6133200015` and status
+`17437536547`, artifact `9669411681`. The downloaded 4,931,164-byte ZIP SHA-256 is
+`22c8d1f0ec4fc660ed30574e822fa6cc435b40f4d6a3a731f441ad51f6b1e03f`; inner 15,144,960-byte tar
+SHA-256 is `2ebb890c033edadfd46b7ac4a0c166fe40be65b32d790ebf39df6dc8d3fd4be4`. It extracts as exactly
+seven regular files, zero symlinks/non-regular entries, aggregate
+`8b569bcb7a003d6f3613acdbf66d22b6847fa02bad645805221f161d268101ce`. Public `/` and all seven
+paths return HTTP 200 with zero redirects, exact MIME, `Content-Length` and bytes, no `Location` or
+`Content-Encoding`, and `/` equals `index.html`. Hosted ledger
+`/tmp/geosolve-m85-pages-verify.39FJNL/results.tsv` has SHA-256
+`206a99797aba73ae9df5acf4b1d690d7fc98498c21b008525895c07e9599e867`. The repo-prefixed Pages
+build is fresh and not byte-identical to the frozen UAT snapshot, which remains historical
+qualification evidence. Product source `5c265e2` is an ancestor of the approval head with only the
+eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0` and
+both former endpoints refuse connections. Every M85 acceptance gate passes; M86 may open
+separately as the next bug-fix batch.
 
 M85 changes no primitive, constraint, equation, residual, Jacobian, priority, tolerance, branch,
 Intent/code meaning, persistence schema or accepted-scene validation. SVG remains the demo
