@@ -510,8 +510,9 @@ unchanged-golden checks pass. Exact replacement source `dbe94da`, tree `77f86c0`
 complete clean gate and no-rebuild byte freeze. Its immutable snapshot is live locally and on
 retained Tailscale; focused F002 human UAT remains pending, so accepted M85 remains public
 authority.
-`docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the active contract,
-finding ledger and pending scorecard.
+`docs/M86_HANDOVER.md` is the concise resume point. `docs/M86_GOALS.md`,
+`docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the active contract, finding ledger and
+pending scorecard.
 
 ## Read first
 
@@ -554,9 +555,10 @@ finding ledger and pending scorecard.
 21. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — completed retained
     camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
     clean-qualified frozen candidate, milestone-level approval and exact public closeout.
-22. `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` — active focused
-    bug-fix contract, human-approved managed-dimension Inspector repair, clean-qualified/immutably
-    nominated Fillet source-corner replacement and pending focused human scorecard.
+22. `docs/M86_HANDOVER.md`, `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and
+    `docs/M86_UAT.md` — concise resume point, active focused bug-fix contract, human-approved
+    managed-dimension Inspector repair, clean-qualified/immutably nominated Fillet source-corner
+    replacement and pending focused human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
