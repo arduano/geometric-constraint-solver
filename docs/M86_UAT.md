@@ -2,8 +2,8 @@
 
 # M86 focused UAT — Managed dimensions, Fillet hit priority and Typed Panel terminals
 
-Status: **accepted at milestone level on 2026-08-29; the exact provisional trace-enabled candidate
-is approved for clean-source qualification and public closeout**. The supervising user's explicit
+Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**. The
+supervising user's explicit
 “looks good, let's close the milestone” decision accepts M86-U1 through M86-U8 without claiming a
 separately logged row-by-row replay. The former F002 candidate is withdrawn. Accepted M85 remains
 public authority until the approved M86 descendant passes clean qualification, Pages publication
@@ -78,8 +78,8 @@ received final approval:
   exact floating-point mismatch evidence. The post-UAT source descendant's demo-web tests pass
   316/316 and the unchanged golden `--check` passes.
 
-This approved snapshot is still provisional UAT evidence rather than clean-source nomination. The
-earlier combined candidate record follows for provenance:
+This snapshot was approved as provisional UAT evidence rather than clean-source nomination; the
+later clean nomination is recorded below. The earlier combined candidate follows for provenance:
 
 - Served-build identity: saved pre-gate 160,117-byte, 2,976-line binary patch over HEAD
   `4730e156e17cf3df88b9681a22961d41b686c2ff`, tree
@@ -128,8 +128,9 @@ remains intact as rollback evidence.
   doc-test targets. Full editor qualification passes 430 library tests plus all integration/doc
   targets.
 - The complete provisional workspace/release gate, no-rebuild freeze and exact temporary/local/
-  Tailscale byte verification pass. A clean committed-source gate remains required before Pages;
-  no publication occurs before explicit approval.
+  Tailscale byte verification pass. Accepted source `88d1b5e` / tree `09018e5` subsequently passes
+  the complete clean gate, no-rebuild freeze and isolated HTTP verification. No publication
+  occurred before explicit approval.
 
 The human scorecard was accepted against the live immutable trace-enabled replacement; browser
 cache and local storage could otherwise preserve an earlier candidate. The historical target
@@ -154,6 +155,24 @@ the replacement U6-U8 scope and the trace-enabled descendant.
 
 ## Approval and publication
 
-Explicit final supervising-user approval now passes and the accepted product source is committed.
-Clean qualification, Pages publication, downloaded-artifact/hosted-path verification and retained-
-service retirement remain the mechanical closeout steps.
+Explicit final supervising-user approval and clean committed-source qualification now pass. Pages
+publication, downloaded-artifact/hosted-path verification and retained-service retirement remain
+the mechanical closeout steps.
+
+## Clean nomination identity
+
+- Source: `88d1b5e06a7ce8ffe38931f792492f6f837a1d74`.
+- Tree: `09018e5aeb7e824396ae2ee2c70a3e30912414fa`.
+- Complete clean Nix gate: pipeline `0 0`, 2026-08-29 13:16:02–13:35:50 AEST, identical empty
+  pre/post status; 6,573-line, 438,432-byte log
+  `/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log`, SHA-256
+  `e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`.
+- Exact no-rebuild snapshot: `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files `0555`/`0444`,
+  seven top-level regular files, zero symlinks/nested entries, ordered-manifest aggregate
+  `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`.
+- Complete freeze/HTTP evidence: `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. Temporary
+  `127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verifies all
+  eight paths; results SHA-256
+  `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`.
+- The verifier is inactive/dead with `MainPID=0`, and curl returns exit `7`/HTTP `000`. The accepted
+  trace UAT services remain live until the Pages artifact and hosted-byte proof pass.

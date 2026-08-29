@@ -2,8 +2,8 @@
 
 # M86 — Focused bug fixes and UAT follow-up
 
-Status: **accepted at milestone level on 2026-08-29; clean-source qualification and public closeout
-remain pending**. M86-F001-F003 and the bounded interaction-trace diagnostic are approved by the
+Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**.
+M86-F001-F003 and the bounded interaction-trace diagnostic are approved by the
 supervising user's explicit close decision. M86-U1-U8 are accepted without claiming a separately
 logged row-by-row replay. Accepted M85 Pages remains public-byte authority until the approved M86
 descendant passes clean qualification, Pages publication and exact hosted-byte verification. The
@@ -23,7 +23,8 @@ without requiring the increasingly large complete reproduction payload.
 
 ## Confirmed baseline
 
-On current source `4b69a57`, open the `pc-water-manifold` project and select Inspector target
+On reproduction baseline `4b69a57` (the M85 closeout), open the `pc-water-manifold` project and
+select Inspector target
 
 `code.dimension.2cabcaba35f1866930e2549cbd95d899abeb2656e495bf047909f1d92176218b`.
 
@@ -198,7 +199,9 @@ M84 ID remains stable.
   unchanged golden `--check` pass.
 - The complete provisional dirty-worktree release gate, no-rebuild freeze and exact temporary,
   local and Tailscale served-byte verification pass. This authorizes human UAT of the exact frozen
-  patch identity; it does not substitute for a committed clean-source nomination before Pages.
+  patch identity. After approval and commit, accepted source `88d1b5e` / tree `09018e5` passes the
+  complete clean gate, no-rebuild freeze and isolated exact HTTP verification required before
+  Pages.
 
 ## Bounds and non-goals
 
@@ -218,9 +221,10 @@ authority. Additional M86 bug fixes require their own confirmed finding and expl
 3. Pass the fresh full demo-web/workspace/release gates with unchanged golden authority.
 4. Freeze the gate output without rebuild and exact-verify replacement local/Tailscale bytes before
    replacing any historical candidate service for UAT.
-5. Complete M86-U6 through M86-U8. The supervising user's 2026-08-29 close decision supplies
-   explicit approval; commit and clean-qualify the accepted descendant, publish it to Pages,
-   exact-verify hosted bytes, retire candidate services and close M86.
+5. Complete M86-U6 through M86-U8. The supervising user's 2026-08-29 close decision supplied
+   explicit approval; the accepted descendant is committed and clean-qualified. Publish the
+   approval descendant to Pages, exact-verify hosted bytes, retire candidate services and close
+   M86.
 
 F001 passed its mechanical prerequisites on source `9050424`, tree `65e0925`, and the supervising
 user reported that candidate looked good before opening F002. Historical F002 source `dbe94da`, tree
@@ -257,3 +261,18 @@ PIDs/invocations are `2433761`/`3f829abfff0a46eba586c07fed507d8e` and
 `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The supervising user's
 2026-08-29 close decision accepts this descendant and M86-U1-U8. It remains UAT rather than clean-
 source or Pages authority until the mechanical closeout completes.
+
+Final clean nomination (2026-08-29): accepted source
+`88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
+`09018e5aeb7e824396ae2ee2c70a3e30912414fa`, passes the complete clean Nix release gate from
+13:16:02 to 13:35:50 AEST with pipeline `0 0` and identical empty pre/post worktree status. The
+6,573-line, 438,432-byte log `/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
+`e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`. The exact no-rebuild
+seven-file output is frozen at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files
+`0555`/`0444`, zero symlinks/nested entries and ordered-manifest aggregate
+`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary HTTP
+PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` on `127.0.0.1:18104` exact-verifies
+all eight paths; results SHA-256 is
+`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, and evidence is
+`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The verifier is retired; Pages publication and
+hosted-byte verification remain outstanding.

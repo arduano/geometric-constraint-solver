@@ -6466,8 +6466,8 @@ publication.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **accepted at milestone level on 2026-08-29; clean-source qualification and public closeout
-remain pending**. M86-F001-F003 and the bounded interaction trace are approved by the supervising
+Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**.
+M86-F001-F003 and the bounded interaction trace are approved by the supervising
 user's explicit close decision, accepting M86-U1-U8 without claiming a separately logged row-by-row
 replay. The pre-expansion F002 nomination remains withdrawn. Accepted M85 Pages run `33128387637`
 remains public-byte authority until M86 publication and exact hosted-byte verification pass.
@@ -6540,7 +6540,7 @@ and evidence.
   nearer-opposite-parent and cross-Fillet arbitration. Parent-endpoint arbitration spans every
   broad Fillet surface under the pointer; an exact disconnected tie within or across owners retains
   the globally best Fillet. Native and WASM parity pass 18/18; provisional replacement
-  qualification passes in the final gate below, while clean-source nomination remains post-UAT.
+  qualification and the later clean-source nomination both pass in the records below.
 - [x] Independently reproduce M86-F003 as an M84-F010 scope recurrence in retained code-project
   terminal authority. In `typed-panel`, upper-left `[0,40] -> [3,38]` previews and releases, but
   publication reports `terminal code drag differs from its independently staged native authority
@@ -6565,7 +6565,9 @@ and evidence.
   build, browser smoke and unchanged golden `--check` pass.
 - [x] Receive the supervising user's 2026-08-29 milestone-level approval for M86-U6/U7/U8 and the
   trace-enabled descendant without claiming a separately logged row-by-row replay.
-- [ ] Clean-qualify the committed accepted descendant, publish it to Pages, exact-verify hosted
+- [x] Clean-qualify committed source `88d1b5e` / tree `09018e5`, freeze its exact no-rebuild
+  seven-file output and verify all eight paths through an isolated temporary HTTP service.
+- [ ] Publish the approval descendant to Pages, exact-verify its downloaded artifact and hosted
   bytes, retire both M86 services and close M86.
 
 Combined F002/F003 provisional UAT record (2026-08-28): the served build identity is the saved
@@ -6605,7 +6607,25 @@ ordered-manifest aggregate
 `2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` serve only that snapshot. `/` and all seven files match on
 both endpoints; evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
 `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The temporary `18103`
-listener is retired. This is accepted UAT evidence, not yet clean committed-source nomination.
+listener is retired. This was accepted UAT evidence rather than clean committed-source nomination;
+the final nomination follows.
+
+Clean-source nomination record (2026-08-29): accepted source
+`88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
+`09018e5aeb7e824396ae2ee2c70a3e30912414fa`, passed the complete clean Nix release gate from
+13:16:02 through 13:35:50 AEST with pipeline statuses `0 0` and identical empty pre/post status.
+The 6,573-line, 438,432-byte log
+`/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
+`e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`. Without rebuilding, its
+exact seven-file output is frozen at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files
+`0555`/`0444`, zero symlinks or nested entries, ordered-manifest aggregate
+`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary
+`127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verifies `/`
+plus all seven files; results SHA-256 is
+`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`. Evidence is
+`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The temporary service is inactive/dead with
+`MainPID=0`, curl exits `7`/HTTP `000`, and the two accepted UAT services remain live only until
+exact Pages verification passes.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
 not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;

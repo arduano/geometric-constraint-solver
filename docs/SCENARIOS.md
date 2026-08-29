@@ -5471,8 +5471,8 @@ golden. The pre-expansion F002 nomination is withdrawn. The exact saved combined
 complete provisional dirty-worktree gate and its trace-enabled descendant passes bounded trace,
 demo-web 316/316, WASM, release-build, golden and exact dual-endpoint byte checks. The supervising
 user's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged row-by-row
-replay. Accepted product source is committed; clean-source qualification and public closeout remain
-pending.
+replay. Accepted source `88d1b5e` / tree `09018e5` is clean-qualified and its exact no-rebuild
+output passes isolated HTTP verification; public closeout remains pending.
 `docs/M86_GOALS.md` is authoritative.
 
 ### M86-C1 — Exact managed curve-length target rewrite
@@ -5643,8 +5643,28 @@ Clippy, formatting, locked WASM check, release Trunk build, browser smoke and un
 `f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`; local/Tailscale `/` and
 every file match it. Evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
 `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The supervising user's
-final close decision accepts this descendant as UAT authority; clean committed-source nomination
-remains a separate release gate.
+final close decision accepts this descendant as UAT authority. The separate clean committed-source
+nomination below passes.
+
+### M86-C9 — Final clean nomination authority
+
+Accepted source `88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
+`09018e5aeb7e824396ae2ee2c70a3e30912414fa`, passes the complete clean Nix gate from 13:16:02 to
+13:35:50 AEST with pipeline `0 0`, identical empty pre/post status, unchanged 271-row golden,
+native/WASM F002 18/18, demo-web 316/316, TypeScript, licences, Rustdoc, package, benchmark,
+release-performance and final Trunk checks. The 6,573-line, 438,432-byte log at
+`/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
+`e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`.
+
+Without rebuilding, freeze the gate output at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`. It contains
+exactly seven top-level regular files, zero symlinks/nested entries, directory/files `0555`/`0444`
+and ordered-manifest aggregate
+`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary HTTP
+PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` at `127.0.0.1:18104` must return
+exact bytes for `/` and every file; results SHA-256 is
+`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, with evidence at
+`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The temporary verifier is retired and refuses
+connections. Pages and retained-service retirement remain separate closeout gates.
 
 ## Frozen near-singular fixtures
 

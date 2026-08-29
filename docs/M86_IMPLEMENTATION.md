@@ -2,11 +2,12 @@
 
 # M86 implementation ledger — Focused bug fixes and UAT follow-up
 
-Status: **accepted at milestone level on 2026-08-29; clean qualification and public closeout remain
-pending**. M86-F001-F003 and the bounded interaction trace are implemented and mechanically
+Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**.
+M86-F001-F003 and the bounded interaction trace are implemented and mechanically
 qualified. The supervising user's explicit “looks good, let's close the milestone” decision
-accepts M86-U1-U8 without claiming a separately logged row-by-row replay and authorizes committing
-and clean-qualifying the accepted descendant. The former F002 nomination remains withdrawn.
+accepts M86-U1-U8 without claiming a separately logged row-by-row replay. Accepted descendant
+`88d1b5e` / tree `09018e5` passes clean qualification and no-rebuild HTTP verification. The former
+F002 nomination remains withdrawn.
 `docs/M86_GOALS.md` owns the contract.
 
 ## Finding ledger
@@ -215,7 +216,8 @@ Owning tests:
 - [x] Pass the fresh complete demo-web suite: 307/307 library tests plus the binary, integration
   and doc-test targets.
 - [x] Pass the complete provisional workspace/release gate and serve immutable replacement bytes
-  for UAT. Clean committed-source nomination remains pending before Pages.
+  for UAT. At that provisional checkpoint, clean committed-source nomination remained pending; the
+  final record below completes it.
 
 ### I7 — Bounded interaction trace
 
@@ -450,8 +452,36 @@ file on both endpoints match it byte-for-byte; evidence
 `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
 `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The temporary diagnostic
 listener on `18103` is retired. The supervising user's 2026-08-29 close decision accepts this
-trace-enabled descendant and M86-U1-U8 without inventing a separate row-by-row replay. A clean
-committed-source gate remains mandatory before Pages publication.
+trace-enabled descendant and M86-U1-U8 without inventing a separate row-by-row replay.
+
+### Final clean committed-source nomination
+
+Accepted source `88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
+`09018e5aeb7e824396ae2ee2c70a3e30912414fa`, passes the complete clean Nix release gate from
+13:16:02 to 13:35:50 AEST with pipeline statuses `0 0` and identical empty pre/post worktree
+status. The 6,573-line, 438,432-byte log
+`/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
+`e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`. It passes workspace
+Clippy/tests/doc tests, unchanged 271-row golden, native/WASM parity including F002 18/18,
+demo-web 316/316, both TypeScript packages, Rustdoc, licences, package verification, benchmarks,
+release-performance sentinels and final Trunk assembly.
+
+Without rebuilding, the exact seven-file output is frozen at
+`/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files `0555`/`0444`, zero symlinks/nested entries
+and ordered-manifest aggregate
+`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. The JS/WASM/index/CSS
+SHA-256 values are respectively
+`1fb90f90f647d7313f0a8f01cef1bd1d71f81594a26526a4266a3f9e031895f9`,
+`5816ea743cfeeb696ff7ee0656994a7742f02d55aacdc8d3939230ce7ecc26a7`,
+`f4f59579d86518d51b2cc3f6ac43ef2e177d94f297792c081e6f3fb252ae38c2` and
+`92059496edc2cc939c436b3361d13729e314af15a94e2e677fd8a559a3e281d1`.
+
+Isolated temporary HTTP PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` at
+`127.0.0.1:18104` exact-verifies `/` and all seven files; results SHA-256 is
+`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, with complete evidence at
+`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. It is retired, inactive/dead and `MainPID=0`;
+curl exits `7` with HTTP `000`. The accepted UAT services are deliberately retained until the
+separately rebuilt Pages artifact and hosted paths pass exact verification.
 
 ## Semantic-preservation ledger
 

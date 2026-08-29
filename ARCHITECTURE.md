@@ -186,8 +186,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   reproduction authority. Its 128 KiB export and read-only copy surface do not change headless
   interaction semantics. The trace-enabled seven-file candidate passes exact local/Tailscale byte
   verification and the supervising user's 2026-08-29 close decision accepts M86-U1-U8 without
-  claiming a separately logged row-by-row replay. Clean-source nomination and publication remain
-  pending. `docs/M86_GOALS.md` owns the accepted contract.
+  claiming a separately logged row-by-row replay. Accepted source `88d1b5e` / tree `09018e5`
+  passes the complete clean release gate; its exact no-rebuild seven-file output is frozen and
+  isolated-HTTP verified. Pages publication and exact hosted-byte verification remain pending.
+  `docs/M86_GOALS.md` owns the accepted contract.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

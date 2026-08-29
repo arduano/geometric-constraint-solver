@@ -3992,8 +3992,8 @@ are outside scope.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **accepted at milestone level on 2026-08-29; clean-source qualification and public closeout
-remain pending**. M86-F001-F003 and the bounded interaction trace are approved by the supervising
+Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**.
+M86-F001-F003 and the bounded interaction trace are approved by the supervising
 user's explicit close decision, accepting M86-U1-U8 without claiming a separately logged row-by-row
 replay. The pre-expansion F002 nomination remains withdrawn. Accepted M85 stays public-byte
 authority until M86 Pages publication and exact hosted-byte verification pass.
@@ -4094,8 +4094,9 @@ M86 is accepted only when all of the following pass:
   snapshot and both retained endpoints match byte-for-byte.
 - Combined F002/F003 provisional qualification and trace-enabled immutable verification pass. The
   supervising user's 2026-08-29 close decision accepts M86-U6/U7/U8 and authorizes the accepted-
-  source commit. A clean committed-source gate remains the prerequisite to Pages publication,
-  hosted-byte verification, retained-service retirement and milestone closure.
+  source commit. Accepted source `88d1b5e` / tree `09018e5` then passes the complete clean gate,
+  unchanged golden, no-rebuild freeze and isolated exact HTTP verification. Pages publication,
+  hosted-byte verification and retained-service retirement remain prerequisites to closure.
 
 F001 mechanical qualification passes on source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`. The complete clean Nix gate exits `0`; unchanged
@@ -4143,8 +4144,29 @@ regular files, zero symlinks, directory/files `0555`/`0444` and ordered-manifest
 `2433761`/`3f829abfff0a46eba586c07fed507d8e` and Tailscale PID/invocation
 `2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` serve only that snapshot. `/` and all seven files match on
 both endpoints; evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
-`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. This is accepted UAT
-evidence, not yet clean-source nomination or public authority.
+`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. This was accepted UAT
+evidence rather than clean-source nomination or public authority; the final nomination follows.
+
+Final clean nomination (2026-08-29): source
+`88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
+`09018e5aeb7e824396ae2ee2c70a3e30912414fa`, passes the complete clean Nix release gate with
+pipeline statuses `0 0`, unchanged 271-row golden, native/WASM parity including F002 18/18,
+demo-web 316/316, TypeScript packages, licences, Rustdoc, package verification, release-performance
+sentinels and final Trunk assembly. The gate ran 13:16:02–13:35:50 AEST; its 6,573-line,
+438,432-byte log `/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
+`e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`, with identical empty
+pre/post status.
+
+The exact gate-produced seven-file `dist` was frozen without rebuild at
+`/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files `0555`/`0444`, zero symlinks/nested entries,
+ordered-manifest aggregate
+`d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Temporary isolated
+`127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, returns exact bytes
+for `/` plus all seven files; results SHA-256 is
+`cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, with complete evidence at
+`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. That verifier is retired, inactive/dead and
+`MainPID=0`; curl exits `7` with HTTP `000`. The accepted UAT services remain live pending exact
+Pages verification. This is clean committed-source nomination, not yet public-byte authority.
 
 M86 changes no primitive, constraint, dimension family, residual, Jacobian, solver priority,
 tolerance, branch rule, persistence schema, managed grammar or point-overlay semantics. General

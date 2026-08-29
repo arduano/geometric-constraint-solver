@@ -4,18 +4,18 @@
 
 Status: **M86 is accepted at milestone level on 2026-08-29; mechanical public closeout remains in
 progress**. M86-F001-F003 and the bounded interaction trace are approved by the supervising user's
-explicit close decision. The former F002 nomination remains withdrawn. Accepted source is
-committed; clean-source qualification, Pages verification and service retirement remain open. Do
-not reconstruct this state from chat history.
+explicit close decision. The former F002 nomination remains withdrawn. Accepted source `88d1b5e`
+is clean-qualified and its no-rebuild output is frozen and isolated-HTTP verified; Pages
+verification and service retirement remain open. Do not reconstruct this state from chat history.
 
 ## Resume point
 
 Read `AGENTS.md` and its required project documents, then `docs/M86_GOALS.md`,
 `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md`. Accepted product commits are `b1e7ea2`
-(expanded F002), `2cfee5b` (F003), and `49787f4` (bounded trace/UI/tests). This accepted-state
-documentation lands atomically over them; require a clean worktree before qualification. The
-supervising user's 2026-08-29 close decision authorizes clean qualification and publication.
-Accepted M85 Pages remains public-byte authority until the M86 hosted-byte proof passes.
+(expanded F002), `2cfee5b` (F003), and `49787f4` (bounded trace/UI/tests). Accepted-state commit
+`88d1b5e`, tree `09018e5`, passes the complete clean gate and owns the frozen nomination below.
+The supervising user's 2026-08-29 close decision authorizes publication. Accepted M85 Pages
+remains public-byte authority until the M86 hosted-byte proof passes.
 
 ## Delivered work
 
@@ -117,6 +117,24 @@ reproduction payloads. Its hard export bound is 128 KiB.
 The supervising user's “looks good, let's close the milestone” decision accepts M86-U1-U8 and this
 trace-enabled descendant without claiming a separately logged row-by-row replay.
 
+## Clean committed-source nomination
+
+- Source/tree: `88d1b5e06a7ce8ffe38931f792492f6f837a1d74` /
+  `09018e5aeb7e824396ae2ee2c70a3e30912414fa`.
+- Complete clean Nix release gate: pipeline `0 0`, 2026-08-29 13:16:02–13:35:50 AEST; identical
+  empty pre/post status. Log `/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` is 6,573
+  lines, 438,432 bytes, SHA-256
+  `e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`.
+- Exact no-rebuild snapshot: `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, exactly seven top-level regular
+  files, zero symlinks/nested entries, directory/files `0555`/`0444`, ordered-manifest aggregate
+  `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`.
+- Complete freeze/HTTP evidence: `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. Temporary
+  `127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verifies `/`
+  and all seven files; results SHA-256 is
+  `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`.
+- The isolated verifier is inactive/dead with `MainPID=0`; curl exits `7` with HTTP `000`. The
+  accepted trace UAT services remain untouched until exact Pages verification passes.
+
 ## Current checkpoint evidence
 
 - `m75_hover_pointer_parity` passes 18/18 on native and 18/18 on WASM.
@@ -131,13 +149,12 @@ trace-enabled descendant without claiming a separately logged row-by-row replay.
 - The pre-trace complete demo-web run passes 307/307 plus binary, integration and doc-test targets;
   the post-trace library run passes 316/316.
 - The complete workspace/release gate, no-rebuild freeze and served-byte verification pass for the
-  exact provisional patch identity above. A clean committed-source gate remains mandatory before
-  Pages publication.
+  exact provisional patch identity above. The later clean committed-source gate and isolated
+  no-rebuild verification also pass at `88d1b5e` / `09018e5`.
 
 ## Remaining work
 
-1. Commit the accepted product descendant and run the complete clean-source release gate.
-2. Publish the approved descendant through GitHub Pages, download and exact-verify its separately
+1. Publish the approved descendant through GitHub Pages, download and exact-verify its separately
    rebuilt artifact and hosted paths, then retire both M86 services.
-3. Record source/tree, gate, workflow/artifact/deployment, hosted-byte and service-retirement
+2. Record workflow/artifact/deployment, hosted-byte and service-retirement
    evidence consistently, commit the closeout record and mark M86 complete.

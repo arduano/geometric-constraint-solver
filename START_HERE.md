@@ -521,8 +521,10 @@ captures exact managed-gesture browser/native/parity/publication/rollback eviden
 source, history, persistence or reproduction authority; post-trace demo-web passes 316/316. The
 prior `dbe94da`/`77f86c0` candidate is withdrawn historical evidence. The trace-enabled seven-file
 snapshot passes byte-identical local/Tailscale verification. The supervising user's 2026-08-29
-close decision accepts M86-U1-U8 without claiming a separately logged row-by-row replay. Commit,
-clean-source nomination and publication remain open, so accepted M85 remains public authority.
+close decision accepts M86-U1-U8 without claiming a separately logged row-by-row replay. Accepted
+source `88d1b5e` passes the complete clean release gate and its exact no-rebuild seven-file output
+passes isolated HTTP verification. Publication remains open, so accepted M85 remains public
+authority.
 `docs/M86_HANDOVER.md` is the concise resume point. `docs/M86_GOALS.md`,
 `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the accepted contract, finding ledger and
 closeout scorecard.
@@ -1011,7 +1013,8 @@ native/WASM, sequential terminal and unchanged-golden checks pass. The earlier F
 nomination is withdrawn. The bounded memory-only managed-gesture trace and post-trace 316/316
 demo-web suite pass; its seven-file snapshot is byte-identical on both UAT endpoints. The
 supervising user's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged
-row-by-row replay. Accepted product source is committed; clean-source nomination and publication
+row-by-row replay. Accepted source `88d1b5e` / tree `09018e5` is clean-qualified; its no-rebuild
+seven-file snapshot passes isolated HTTP verification. Publication and hosted-byte verification
 remain open, so Pages authority is not yet claimed.
 M82 closes by explicit
 deferral rather than feature acceptance:
