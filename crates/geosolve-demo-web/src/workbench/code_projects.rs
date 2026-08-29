@@ -14,10 +14,10 @@ use std::fmt::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_constraint_editor::{
-    BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1, ComputedFeatureDefinition, ComputedFeatureDocument,
-    ComputedFeatureEvaluationState, ComputedFeatureSnapshot, IntentInspectorEditTarget,
-    IntentInspectorEditValue, IntentInspectorProjection, IntentNativeBinding,
-    ProjectionalEditorSession, SelectionItem,
+    BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1, ComputedEdgeGeometry, ComputedEdgeProvenance,
+    ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFeatureEvaluationState,
+    ComputedFeatureSnapshot, IntentInspectorEditTarget, IntentInspectorEditValue,
+    IntentInspectorProjection, IntentNativeBinding, ProjectionalEditorSession, SelectionItem,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
@@ -3633,32 +3633,220 @@ fn feature_documents_match_for_terminal_parity(
             })
 }
 
+fn terminal_derived_scalar_matches(first: f64, second: f64) -> bool {
+    // The staged overlay and accepted pointer terminal start from the same
+    // authenticated rectangle seeds, but redundant rectangle aliases can
+    // differ within the explicitly admitted terminal seed cell. Re-evaluated
+    // Fillet coordinates may therefore inherit only that bounded ULP/near-zero
+    // noise. Keep every discrete owner, branch, winding and topology field
+    // exact; this predicate applies only to recomputable finite scalars.
+    if !first.is_finite() || !second.is_finite() {
+        return false;
+    }
+    let first_bits = first.to_bits();
+    let second_bits = second.to_bits();
+    if first_bits == second_bits
+        || (first_bits & !F64_SIGN_MASK == 0 && second_bits & !F64_SIGN_MASK == 0)
+    {
+        return true;
+    }
+    (first_bits & F64_SIGN_MASK == second_bits & F64_SIGN_MASK
+        && first_bits.abs_diff(second_bits) <= TERMINAL_SEED_ROUNDOFF_ULPS)
+        || (first.abs() <= TERMINAL_SEED_ZERO_ROUNDOFF
+            && second.abs() <= TERMINAL_SEED_ZERO_ROUNDOFF)
+}
+
+fn terminal_derived_pair_matches(first: [f64; 2], second: [f64; 2]) -> bool {
+    first
+        .into_iter()
+        .zip(second)
+        .all(|(first, second)| terminal_derived_scalar_matches(first, second))
+}
+
+fn terminal_computed_edge_matches(
+    terminal: &geosolve_constraint_editor::ComputedEdge,
+    staged: &geosolve_constraint_editor::ComputedEdge,
+    roundoff_curves: &BTreeSet<geosolve_sketch::CurveId>,
+) -> bool {
+    if terminal.id.ordinal != staged.id.ordinal
+        || terminal.role != staged.role
+        || !terminal_computed_provenance_matches(&terminal.provenance, &staged.provenance)
+    {
+        return false;
+    }
+    let admits_roundoff = |geometry: &ComputedEdgeGeometry| match geometry {
+        ComputedEdgeGeometry::NativeSourceFragment { source, .. } => {
+            roundoff_curves.contains(&source.span.curve)
+        }
+        ComputedEdgeGeometry::CircularArc(arc) => arc
+            .contacts
+            .iter()
+            .any(|contact| roundoff_curves.contains(&contact.source.span.curve)),
+        _ => false,
+    };
+    if !admits_roundoff(&terminal.geometry) || !admits_roundoff(&staged.geometry) {
+        return terminal.geometry == staged.geometry && terminal.provenance == staged.provenance;
+    }
+    match (&terminal.geometry, &staged.geometry) {
+        (
+            ComputedEdgeGeometry::NativeSourceFragment {
+                source: terminal_source,
+                interval: terminal_interval,
+            },
+            ComputedEdgeGeometry::NativeSourceFragment {
+                source: staged_source,
+                interval: staged_interval,
+            },
+        ) => {
+            terminal_source == staged_source
+                && terminal_derived_scalar_matches(terminal_interval.start, staged_interval.start)
+                && terminal_derived_scalar_matches(terminal_interval.end, staged_interval.end)
+        }
+        (
+            ComputedEdgeGeometry::CircularArc(terminal),
+            ComputedEdgeGeometry::CircularArc(staged),
+        ) => {
+            terminal_derived_pair_matches(terminal.center, staged.center)
+                && terminal_derived_scalar_matches(terminal.radius, staged.radius)
+                && terminal_derived_scalar_matches(terminal.start_angle, staged.start_angle)
+                && terminal_derived_scalar_matches(terminal.end_angle, staged.end_angle)
+                && terminal.sweep == staged.sweep
+                && terminal.tangent_orientations == staged.tangent_orientations
+                && terminal.contacts.len() == staged.contacts.len()
+                && terminal
+                    .contacts
+                    .iter()
+                    .zip(staged.contacts)
+                    .all(|(terminal, staged)| {
+                        terminal.source == staged.source
+                            && terminal.winding == staged.winding
+                            && terminal_derived_scalar_matches(terminal.parameter, staged.parameter)
+                            && terminal_derived_scalar_matches(
+                                terminal.total_parameter,
+                                staged.total_parameter,
+                            )
+                            && terminal_derived_pair_matches(terminal.position, staged.position)
+                    })
+        }
+        _ => false,
+    }
+}
+
+fn terminal_computed_provenance_matches(
+    terminal: &ComputedEdgeProvenance,
+    staged: &ComputedEdgeProvenance,
+) -> bool {
+    match (terminal, staged) {
+        (
+            ComputedEdgeProvenance::SourceFragment {
+                source: terminal_source,
+                interval: terminal_interval,
+                start_claim: terminal_start,
+                end_claim: terminal_end,
+            },
+            ComputedEdgeProvenance::SourceFragment {
+                source: staged_source,
+                interval: staged_interval,
+                start_claim: staged_start,
+                end_claim: staged_end,
+            },
+        ) => {
+            terminal_source == staged_source
+                && terminal_start == staged_start
+                && terminal_end == staged_end
+                && terminal_derived_scalar_matches(terminal_interval.start, staged_interval.start)
+                && terminal_derived_scalar_matches(terminal_interval.end, staged_interval.end)
+        }
+        (
+            ComputedEdgeProvenance::FilletArc {
+                owner: terminal_owner,
+                sources: terminal_sources,
+            },
+            ComputedEdgeProvenance::FilletArc {
+                owner: staged_owner,
+                sources: staged_sources,
+            },
+        ) => terminal_owner == staged_owner && terminal_sources == staged_sources,
+        _ => false,
+    }
+}
+
+fn terminal_computed_fragment_matches(
+    terminal: &geosolve_constraint_editor::ComputedConstructionFragment,
+    staged: &geosolve_constraint_editor::ComputedConstructionFragment,
+    roundoff_curves: &BTreeSet<geosolve_sketch::CurveId>,
+) -> bool {
+    if !roundoff_curves.contains(&terminal.source.span.curve)
+        || !roundoff_curves.contains(&staged.source.span.curve)
+    {
+        return terminal.id.ordinal == staged.id.ordinal
+            && terminal.source == staged.source
+            && terminal.interval == staged.interval
+            && terminal.source_role == staged.source_role
+            && terminal.provenance == staged.provenance;
+    }
+    terminal.id.ordinal == staged.id.ordinal
+        && terminal.source == staged.source
+        && terminal.source_role == staged.source_role
+        && terminal.provenance.owner == staged.provenance.owner
+        && terminal.provenance.endpoint == staged.provenance.endpoint
+        && terminal_derived_scalar_matches(terminal.interval.start, staged.interval.start)
+        && terminal_derived_scalar_matches(terminal.interval.end, staged.interval.end)
+        && terminal_derived_scalar_matches(
+            terminal.provenance.base_interval.start,
+            staged.provenance.base_interval.start,
+        )
+        && terminal_derived_scalar_matches(
+            terminal.provenance.base_interval.end,
+            staged.provenance.base_interval.end,
+        )
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum TerminalComputedParityPolicy {
+    Exact,
+    RectangleAliasRoundoff {
+        curves: BTreeSet<geosolve_sketch::CurveId>,
+    },
+}
+
 fn computed_snapshots_match_for_terminal_parity(
     terminal: &ComputedFeatureSnapshot,
     staged: &ComputedFeatureSnapshot,
+    policy: &TerminalComputedParityPolicy,
 ) -> bool {
     terminal.edges().len() == staged.edges().len()
         && terminal
             .edges()
             .iter()
             .zip(staged.edges())
-            .all(|(terminal, staged)| {
-                terminal.id.ordinal == staged.id.ordinal
-                    && terminal.role == staged.role
-                    && terminal.geometry == staged.geometry
-                    && terminal.provenance == staged.provenance
+            .all(|(terminal, staged)| match policy {
+                TerminalComputedParityPolicy::Exact => {
+                    terminal.id.ordinal == staged.id.ordinal
+                        && terminal.role == staged.role
+                        && terminal.geometry == staged.geometry
+                        && terminal.provenance == staged.provenance
+                }
+                TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
+                    terminal_computed_edge_matches(terminal, staged, curves)
+                }
             })
         && terminal.construction_fragments().len() == staged.construction_fragments().len()
         && terminal
             .construction_fragments()
             .iter()
             .zip(staged.construction_fragments())
-            .all(|(terminal, staged)| {
-                terminal.id.ordinal == staged.id.ordinal
-                    && terminal.source == staged.source
-                    && terminal.interval == staged.interval
-                    && terminal.source_role == staged.source_role
-                    && terminal.provenance == staged.provenance
+            .all(|(terminal, staged)| match policy {
+                TerminalComputedParityPolicy::Exact => {
+                    terminal.id.ordinal == staged.id.ordinal
+                        && terminal.source == staged.source
+                        && terminal.interval == staged.interval
+                        && terminal.source_role == staged.source_role
+                        && terminal.provenance == staged.provenance
+                }
+                TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
+                    terminal_computed_fragment_matches(terminal, staged, curves)
+                }
             })
         && terminal.replaced_sources() == staged.replaced_sources()
         && terminal.feature_evaluations().len() == staged.feature_evaluations().len()
@@ -3703,6 +3891,103 @@ fn computed_snapshots_match_for_terminal_parity(
             })
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum TerminalDocumentParity {
+    Exact,
+    NormalizedRedundantRectangleAliases(BTreeSet<geosolve_sketch::DesignPointId>),
+    Mismatch,
+}
+
+impl TerminalDocumentParity {
+    const fn matches(&self) -> bool {
+        !matches!(self, Self::Mismatch)
+    }
+
+    fn normalized_redundant_rectangle_aliases(
+        &self,
+    ) -> Option<&BTreeSet<geosolve_sketch::DesignPointId>> {
+        match self {
+            Self::NormalizedRedundantRectangleAliases(points) => Some(points),
+            Self::Exact | Self::Mismatch => None,
+        }
+    }
+}
+
+fn terminal_computed_roundoff_points<'a>(
+    design: &'a TerminalDocumentParity,
+    accepted: &'a TerminalDocumentParity,
+) -> Option<&'a BTreeSet<geosolve_sketch::DesignPointId>> {
+    match (
+        design.normalized_redundant_rectangle_aliases(),
+        accepted.normalized_redundant_rectangle_aliases(),
+    ) {
+        (Some(design), Some(accepted)) if design == accepted && !accepted.is_empty() => {
+            Some(accepted)
+        }
+        _ => None,
+    }
+}
+
+fn curve_definition_references_any_point(
+    definition: &geosolve_sketch::CurveDefinition,
+    points: &BTreeSet<geosolve_sketch::DesignPointId>,
+) -> bool {
+    use geosolve_sketch::CurveDefinition;
+
+    match definition {
+        CurveDefinition::Line { start, end, .. }
+        | CurveDefinition::RationalQuadraticConic { start, end, .. } => {
+            points.contains(start) || points.contains(end)
+        }
+        CurveDefinition::Polyline {
+            points: controls, ..
+        }
+        | CurveDefinition::BSpline { controls, .. }
+        | CurveDefinition::Nurbs { controls, .. } => {
+            controls.iter().any(|point| points.contains(point))
+        }
+        CurveDefinition::Circle { center, .. } | CurveDefinition::CircularArc { center, .. } => {
+            points.contains(center)
+        }
+        CurveDefinition::QuadraticBezier { controls } => {
+            controls.iter().any(|point| points.contains(point))
+        }
+        CurveDefinition::CubicBezier { controls } => {
+            controls.iter().any(|point| points.contains(point))
+        }
+        CurveDefinition::Ellipse {
+            center,
+            major_axis_point,
+            ..
+        }
+        | CurveDefinition::EllipticalArc {
+            center,
+            major_axis_point,
+            ..
+        } => points.contains(center) || points.contains(major_axis_point),
+        CurveDefinition::ParabolaSegment { vertex, focus, .. } => {
+            points.contains(vertex) || points.contains(focus)
+        }
+        CurveDefinition::HyperbolaSegment {
+            center,
+            transverse_axis_point,
+            ..
+        } => points.contains(center) || points.contains(transverse_axis_point),
+    }
+}
+
+fn terminal_roundoff_curves(
+    document: &geosolve_sketch::SketchDocument,
+    points: &BTreeSet<geosolve_sketch::DesignPointId>,
+) -> BTreeSet<geosolve_sketch::CurveId> {
+    document
+        .curves()
+        .iter()
+        .filter(|curve| curve_definition_references_any_point(&curve.definition, points))
+        .map(|curve| curve.id)
+        .collect()
+}
+
 fn documents_match_for_terminal_parity(
     terminal_editor: &ProjectionalEditorSession,
     staged_editor: &ProjectionalEditorSession,
@@ -3710,9 +3995,9 @@ fn documents_match_for_terminal_parity(
     staged: &geosolve_sketch::SketchDocument,
     rectangle_projections: &[RectangleTerminalProjection],
     recomputable_line_branches: &BTreeSet<geosolve_sketch::CurveId>,
-) -> Result<bool, String> {
+) -> Result<TerminalDocumentParity, String> {
     if terminal.exact_except_recomputable_line_branches(staged, recomputable_line_branches) {
-        return Ok(true);
+        return Ok(TerminalDocumentParity::Exact);
     }
     let resolve = |editor: &ProjectionalEditorSession, handle: &ExpandedPort| {
         expanded_port_point(editor, handle)
@@ -3724,7 +4009,7 @@ fn documents_match_for_terminal_parity(
         for handle in &projection.anchors {
             let terminal_point = resolve(terminal_editor, handle)?;
             if terminal_point != resolve(staged_editor, handle)? {
-                return Ok(false);
+                return Ok(TerminalDocumentParity::Mismatch);
             }
             if !anchors.insert(terminal_point) {
                 return Err("rectangle parity repeats one anchor point".into());
@@ -3733,7 +4018,7 @@ fn documents_match_for_terminal_parity(
         for handle in &projection.redundant_aliases {
             let terminal_point = resolve(terminal_editor, handle)?;
             if terminal_point != resolve(staged_editor, handle)? {
-                return Ok(false);
+                return Ok(TerminalDocumentParity::Mismatch);
             }
             if !redundant.insert(terminal_point) {
                 return Err("rectangle parity repeats one redundant point".into());
@@ -3744,6 +4029,7 @@ fn documents_match_for_terminal_parity(
         return Err("rectangle parity anchor aliases a redundant point".into());
     }
     let mut normalized = terminal.clone();
+    let mut normalized_redundant_rectangle_aliases = BTreeSet::new();
     for point in anchors {
         let terminal_position = terminal
             .point(point)
@@ -3754,7 +4040,7 @@ fn documents_match_for_terminal_parity(
             .ok_or_else(|| "staged rectangle anchor disappeared".to_owned())?
             .position;
         if pair_bits(terminal_position) != pair_bits(staged_position) {
-            return Ok(false);
+            return Ok(TerminalDocumentParity::Mismatch);
         }
     }
     for point in redundant {
@@ -3770,13 +4056,23 @@ fn documents_match_for_terminal_parity(
             continue;
         }
         if !point_seed_roundoff_compatible(terminal_position, staged_position) {
-            return Ok(false);
+            return Ok(TerminalDocumentParity::Mismatch);
         }
         normalized
             .set_point_position(point, staged_position)
             .map_err(|error| format!("rectangle parity normalization failed: {error}"))?;
+        normalized_redundant_rectangle_aliases.insert(point);
     }
-    Ok(normalized.exact_except_recomputable_line_branches(staged, recomputable_line_branches))
+    if !normalized.exact_except_recomputable_line_branches(staged, recomputable_line_branches) {
+        return Ok(TerminalDocumentParity::Mismatch);
+    }
+    Ok(if normalized_redundant_rectangle_aliases.is_empty() {
+        TerminalDocumentParity::Exact
+    } else {
+        TerminalDocumentParity::NormalizedRedundantRectangleAliases(
+            normalized_redundant_rectangle_aliases,
+        )
+    })
 }
 
 fn validate_terminal_native_parity(
@@ -3805,14 +4101,15 @@ fn validate_terminal_native_parity(
         .accepted_state_for_current_input()
         .ok_or_else(|| "staged code drag has no current accepted document".to_owned())?
         .document();
-    let same_documents = documents_match_for_terminal_parity(
+    let design_document_parity = documents_match_for_terminal_parity(
         terminal,
         staged,
         terminal_authority.session.design_document(),
         staged_authority.session.design_document(),
         rectangle_projections,
         &recomputable,
-    )? && documents_match_for_terminal_parity(
+    )?;
+    let accepted_document_parity = documents_match_for_terminal_parity(
         terminal,
         staged,
         terminal_accepted,
@@ -3820,16 +4117,29 @@ fn validate_terminal_native_parity(
         rectangle_projections,
         &recomputable,
     )?;
-    let same_features = feature_documents_match_for_terminal_parity(
+    let same_documents = design_document_parity.matches() && accepted_document_parity.matches();
+    let same_feature_documents = feature_documents_match_for_terminal_parity(
         &terminal_authority.features,
         &staged_authority.features,
-    ) && computed_snapshots_match_for_terminal_parity(
+    );
+    let computed_policy =
+        terminal_computed_roundoff_points(&design_document_parity, &accepted_document_parity)
+            .map_or(TerminalComputedParityPolicy::Exact, |points| {
+                TerminalComputedParityPolicy::RectangleAliasRoundoff {
+                    curves: terminal_roundoff_curves(staged_accepted, points),
+                }
+            });
+    let same_computed_snapshots = computed_snapshots_match_for_terminal_parity(
         &terminal_authority.computed,
         &staged_authority.computed,
+        &computed_policy,
     );
+    let same_features = same_feature_documents && same_computed_snapshots;
     // Revision/digest stamps and Fillet pick seeds can refresh when staged
-    // source is canonically rematerialized. Durable branch cells, complete
-    // evaluated geometry, ownership rows and persistent IDs stay exact.
+    // source is canonically rematerialized. Discrete topology, durable branch
+    // cells, ownership rows and persistent IDs stay exact. Recomputed finite
+    // feature scalars receive the same bounded cell only after redundant
+    // rectangle aliases demonstrably needed that normalization above.
     let same_ownership = terminal_authority.ownership.nodes == staged_authority.ownership.nodes
         && terminal_authority.ownership.ports == staged_authority.ownership.ports
         && terminal_authority.ownership.reservations == staged_authority.ownership.reservations
@@ -4049,6 +4359,181 @@ mod tests {
             f64::INFINITY,
             f64::INFINITY,
         ));
+
+        assert!(terminal_derived_scalar_matches(seed, within));
+        assert!(!terminal_derived_scalar_matches(seed, outside));
+        assert!(terminal_derived_scalar_matches(0.0, -0.0));
+        assert!(terminal_derived_scalar_matches(
+            3.0 * f64::EPSILON,
+            -2.0 * f64::EPSILON,
+        ));
+        assert!(!terminal_derived_scalar_matches(
+            2.0 * TERMINAL_SEED_ZERO_ROUNDOFF,
+            0.0,
+        ));
+        assert!(!terminal_derived_scalar_matches(f64::NAN, f64::NAN));
+        assert!(!terminal_derived_scalar_matches(
+            f64::INFINITY,
+            f64::INFINITY,
+        ));
+    }
+
+    fn typed_panel_fillet_edge_and_sources() -> (
+        geosolve_constraint_editor::ComputedEdge,
+        BTreeSet<geosolve_sketch::CurveId>,
+    ) {
+        let (_workbench, editor) = open_boxed("typed-panel");
+        let edge = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("Typed Panel accepted materialization")
+            .computed
+            .edges()
+            .iter()
+            .find(|edge| matches!(edge.geometry, ComputedEdgeGeometry::CircularArc(_)))
+            .expect("Typed Panel computed Fillet arc")
+            .clone();
+        let ComputedEdgeGeometry::CircularArc(reference_arc) = &edge.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        let roundoff_curves = reference_arc
+            .contacts
+            .iter()
+            .map(|contact| contact.source.span.curve)
+            .collect::<BTreeSet<_>>();
+        (edge, roundoff_curves)
+    }
+
+    #[test]
+    fn rectangle_terminal_derived_roundoff_is_causal_and_bounded() {
+        let (edge, roundoff_curves) = typed_panel_fillet_edge_and_sources();
+        assert!(terminal_computed_edge_matches(
+            &edge,
+            &edge,
+            &roundoff_curves,
+        ));
+
+        let changed_center = |ulp_delta| {
+            let mut changed = edge.clone();
+            let ComputedEdgeGeometry::CircularArc(arc) = &mut changed.geometry else {
+                panic!("selected edge must remain a circular arc")
+            };
+            arc.center[0] = f64::from_bits(arc.center[0].to_bits() + ulp_delta);
+            changed
+        };
+        let within = changed_center(TERMINAL_SEED_ROUNDOFF_ULPS);
+        assert!(terminal_computed_edge_matches(
+            &edge,
+            &within,
+            &roundoff_curves,
+        ));
+        assert!(
+            !terminal_computed_edge_matches(&edge, &within, &BTreeSet::new()),
+            "an unrelated computed edge must remain bit-exact",
+        );
+        let outside = changed_center(TERMINAL_SEED_ROUNDOFF_ULPS + 1);
+        assert!(!terminal_computed_edge_matches(
+            &edge,
+            &outside,
+            &roundoff_curves,
+        ));
+    }
+
+    #[test]
+    fn rectangle_terminal_derived_roundoff_keeps_public_fillet_branch_state_exact() {
+        let (edge, roundoff_curves) = typed_panel_fillet_edge_and_sources();
+        let mut changed_branch = edge.clone();
+        let ComputedEdgeGeometry::CircularArc(arc) = &mut changed_branch.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        arc.sweep = match arc.sweep {
+            geosolve_sketch::DocumentArcSweep::Clockwise => {
+                geosolve_sketch::DocumentArcSweep::CounterClockwise
+            }
+            geosolve_sketch::DocumentArcSweep::CounterClockwise => {
+                geosolve_sketch::DocumentArcSweep::Clockwise
+            }
+        };
+        assert!(!terminal_computed_edge_matches(
+            &edge,
+            &changed_branch,
+            &roundoff_curves,
+        ));
+
+        let mut changed_tangent = edge.clone();
+        let ComputedEdgeGeometry::CircularArc(arc) = &mut changed_tangent.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        arc.tangent_orientations[0] = match arc.tangent_orientations[0] {
+            geosolve_sketch::TangentOrientation::Aligned => {
+                geosolve_sketch::TangentOrientation::Opposed
+            }
+            geosolve_sketch::TangentOrientation::Opposed => {
+                geosolve_sketch::TangentOrientation::Aligned
+            }
+        };
+        assert!(!terminal_computed_edge_matches(
+            &edge,
+            &changed_tangent,
+            &roundoff_curves,
+        ));
+
+        let mut changed_winding = edge.clone();
+        let ComputedEdgeGeometry::CircularArc(arc) = &mut changed_winding.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        arc.contacts[0].winding = arc.contacts[0]
+            .winding
+            .checked_add(1)
+            .expect("bounded fixture winding");
+        assert!(!terminal_computed_edge_matches(
+            &edge,
+            &changed_winding,
+            &roundoff_curves,
+        ));
+
+        let mut changed_provenance = edge.clone();
+        let ComputedEdgeProvenance::FilletArc { sources, .. } = &mut changed_provenance.provenance
+        else {
+            panic!("selected edge must retain Fillet provenance")
+        };
+        sources.swap(0, 1);
+        assert!(!terminal_computed_edge_matches(
+            &edge,
+            &changed_provenance,
+            &roundoff_curves,
+        ));
+    }
+
+    #[test]
+    fn computed_roundoff_requires_matching_design_and_accepted_alias_normalization() {
+        let (_workbench, editor) = open_boxed("typed-panel");
+        let points = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("Typed Panel accepted materialization")
+            .session
+            .design_document()
+            .points();
+        let first = points.first().expect("Typed Panel point").id;
+        let second = points.get(1).expect("second Typed Panel point").id;
+        let normalized =
+            TerminalDocumentParity::NormalizedRedundantRectangleAliases(BTreeSet::from([first]));
+        let other =
+            TerminalDocumentParity::NormalizedRedundantRectangleAliases(BTreeSet::from([second]));
+        assert_eq!(
+            terminal_computed_roundoff_points(&normalized, &normalized),
+            Some(&BTreeSet::from([first])),
+        );
+        assert!(
+            terminal_computed_roundoff_points(&TerminalDocumentParity::Exact, &normalized)
+                .is_none()
+        );
+        assert!(
+            terminal_computed_roundoff_points(&normalized, &TerminalDocumentParity::Exact)
+                .is_none()
+        );
+        assert!(terminal_computed_roundoff_points(&normalized, &other).is_none());
     }
 
     fn ordinary_rectangle_diagonal() -> ProjectionalEditorSession {
@@ -9357,6 +9842,194 @@ export default sketch(($) => {
             restored.accepted_editor_checkpoint(),
             workbench.accepted_editor_checkpoint(),
         );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact Typed Panel terminal regression keeps real pointer frames, keyed Fillet parity, persistence, and independent native validation together"
+    )]
+    fn typed_panel_upper_left_terminal_keeps_the_last_native_preview() {
+        use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
+
+        let (mut workbench, mut editor) = open_boxed("typed-panel");
+        let upper_left_lens = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("accepted Typed Panel expansion")
+            .writable_points
+            .iter()
+            .find(|point| {
+                !point.source.is_reference()
+                    && matches!(
+                        point.edit,
+                        CodePointEdit::RectangleCorner {
+                            corner: CodeRectangleCorner::UpperLeft,
+                            ..
+                        }
+                    )
+            })
+            .expect("unique direct upper-left rectangle lens")
+            .clone();
+        let position = |editor: &ProjectionalEditorSession, point| {
+            editor
+                .coordinator()
+                .accepted_materialization()
+                .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                .and_then(|accepted| accepted.document().point(point))
+                .map(|point| point.position)
+                .expect("accepted native point")
+        };
+        let mut expected_origin = [0.0, 40.0];
+        for (case_index, target) in [[3.0, 38.0], [5.0, 37.0], [-2.0, 36.0]]
+            .into_iter()
+            .enumerate()
+        {
+            let upper_left = expanded_port_point(&editor, &upper_left_lens.handle)
+                .expect("upper-left lens native point");
+            let origin = position(&editor, upper_left);
+            assert_eq!(
+                origin.map(f64::to_bits),
+                expected_origin.map(f64::to_bits),
+                "each repeated drag must start from the prior durable terminal",
+            );
+            let pointer_id = 8_603 + u64::try_from(case_index).expect("bounded target index");
+            let viewport = Viewport::new([1_440.0, 900.0], [40.0, 20.0], 10.0).unwrap();
+            let pointer = |model| PointerInput {
+                pointer_id,
+                position: viewport.model_to_screen(model),
+                modifiers: Modifiers::default(),
+            };
+
+            let scene = editor.scene(viewport, 0.5).expect("pointer-down scene");
+            editor
+                .pointer_down(&scene, pointer(origin))
+                .expect("upper-left pointer-down");
+            let route = editor
+                .editor()
+                .prepared_point_drag_route()
+                .expect("upper-left point route");
+            assert_eq!(route.point, upper_left);
+            assert!(
+                workbench
+                    .prepare_semantic_point_drag(&editor, pointer_id, upper_left, None)
+                    .expect("unique upper-left semantic route")
+                    .is_none(),
+            );
+            for sample in [[1.5, 39.0], target] {
+                let scene = editor.scene(viewport, 0.5).expect("pointer-move scene");
+                editor
+                    .pointer_move(&scene, pointer(sample))
+                    .expect("accepted upper-left preview");
+            }
+            let preview_position = editor
+                .coordinator()
+                .presentation_session()
+                .and_then(|session| session.accepted_state_for_current_input())
+                .and_then(|state| state.document().point(upper_left))
+                .map(|point| point.position)
+                .expect("accepted upper-left preview position");
+            assert_eq!(preview_position.map(f64::to_bits), target.map(f64::to_bits));
+            let scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
+            assert!(
+                editor
+                    .pointer_up(&scene, pointer(target))
+                    .expect("valid upper-left terminal")
+                    .transaction
+                    .is_some(),
+            );
+            let terminal_position = position(&editor, upper_left);
+            assert_eq!(
+                terminal_position.map(f64::to_bits),
+                preview_position.map(f64::to_bits),
+                "native release must retain the latest accepted preview",
+            );
+            let revision_before = workbench.session.identity().revision;
+
+            let publication = workbench
+                .publish_pointer_terminal_editor(pointer_id, &editor, "Move Typed Panel upper-left")
+                .expect("semantic terminal publication")
+                .expect("one outer history row");
+            let published_upper_left =
+                expanded_port_point(&publication.editor, &upper_left_lens.handle)
+                    .expect("published upper-left point");
+            assert_eq!(
+                position(&publication.editor, published_upper_left).map(f64::to_bits),
+                terminal_position.map(f64::to_bits),
+                "code publication must not restore the pre-drag corner",
+            );
+            assert_eq!(workbench.session.identity().revision, revision_before + 1);
+            assert_eq!(
+                workbench
+                    .session
+                    .snapshot()
+                    .interaction_overlay
+                    .drafts()
+                    .len(),
+                2,
+                "one rectangle terminal must publish its two canonical seed drafts",
+            );
+            let accepted = publication
+                .editor
+                .coordinator()
+                .accepted_materialization()
+                .expect("published accepted materialization");
+            assert!(accepted.validation.hard_residuals_validated);
+            assert!(accepted.validation.all_active_features_current);
+            assert!(
+                accepted
+                    .validation
+                    .maximum_normalized_hard_residual
+                    .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9),
+            );
+            assert_eq!(
+                accepted.computed.feature_evaluations().len(),
+                2,
+                "Typed Panel must retain exactly its two keyed Fillet corner evaluations",
+            );
+            assert!(
+                accepted
+                    .computed
+                    .feature_evaluations()
+                    .iter()
+                    .all(|evaluation| matches!(
+                        evaluation.state,
+                        ComputedFeatureEvaluationState::Current { .. }
+                    )),
+                "both keyed Fillet corners must remain Current",
+            );
+            assert!(
+                accepted
+                    .session
+                    .accepted_state_for_current_input()
+                    .expect("published current accepted state")
+                    .document()
+                    .points()
+                    .iter()
+                    .flat_map(|point| point.position)
+                    .all(f64::is_finite),
+            );
+
+            let persisted = workbench
+                .to_persistence_json()
+                .expect("persisted Typed Panel terminal");
+            let restored = CodeProjectWorkbench::from_persistence_json(&persisted)
+                .expect("restored Typed Panel");
+            let restored_editor = restore_editor_checkpoint(restored.accepted_editor_checkpoint())
+                .expect("restored editor");
+            let restored_upper_left =
+                expanded_port_point(&restored_editor, &upper_left_lens.handle)
+                    .expect("restored upper-left point");
+            assert_eq!(
+                position(&restored_editor, restored_upper_left).map(f64::to_bits),
+                terminal_position.map(f64::to_bits),
+                "persist/reload must retain the exact terminal corner",
+            );
+            expected_origin = target;
+            editor = publication.editor;
+        }
     }
 
     #[test]
