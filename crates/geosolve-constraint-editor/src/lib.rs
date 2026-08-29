@@ -1021,6 +1021,21 @@ impl SceneFilletHit {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum FilletParentEndpointPointHit {
+    Unambiguous(Hit),
+    Ambiguous { distance_pixels: f64 },
+}
+
+impl FilletParentEndpointPointHit {
+    const fn distance_pixels(self) -> f64 {
+        match self {
+            Self::Unambiguous(hit) => hit.distance_pixels,
+            Self::Ambiguous { distance_pixels } => distance_pixels,
+        }
+    }
+}
+
 /// Exact constructor-owned scene semantics that may participate in drafting
 /// inference publication.
 ///
@@ -2942,13 +2957,42 @@ impl EditorScene {
         best_policy_hit(hits, policy.scope)
     }
 
-    fn fillet_source_corner_point_hit_with_policy(
+    fn best_fillet_radius_grip_hit_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<(geosolve_sketch_features::ComputedCornerRef, f64)> {
+        self.fillet_affordances
+            .iter()
+            .filter(|affordances| {
+                self.computed_curves
+                    .iter()
+                    .find(|curve| curve.owner == affordances.owner)
+                    .is_some_and(|curve| curve.is_pickable(policy))
+            })
+            .filter_map(|affordances| {
+                let distance = position.distance(affordances.radius_rail.screen_grip);
+                (distance <= tolerance.point_pixels).then_some((affordances.owner, distance))
+            })
+            .min_by(|first, second| {
+                first
+                    .1
+                    .total_cmp(&second.1)
+                    .then_with(|| first.0.cmp(&second.0))
+            })
+    }
+
+    fn fillet_parent_endpoint_point_hit_with_policy(
         &self,
         owner: geosolve_sketch_features::ComputedCornerRef,
         position: ScreenPoint,
         tolerance: PickTolerance,
         policy: GeometryInteractionPolicy,
-    ) -> Option<Hit> {
+        representatives: &std::cell::OnceCell<
+            std::collections::BTreeMap<DesignPointId, DesignPointId>,
+        >,
+    ) -> Option<FilletParentEndpointPointHit> {
         let curve = self
             .computed_curves
             .iter()
@@ -2964,10 +3008,9 @@ impl EditorScene {
         let endpoint_ids = |endpoints: (DesignPointId, DesignPointId)| [endpoints.0, endpoints.1];
         let first_ids = endpoint_ids(first);
         let second_ids = endpoint_ids(second);
-        // Only a visible endpoint owned by one of these two parents can be
-        // their source corner. Besides keeping unrelated overlapping points
-        // below the radius surface, this bounds ordinary corner hit work to
-        // the at-most-four persistent source endpoints.
+        // Only a visible endpoint owned by one of these two parents may pass
+        // through the Fillet's broad radius surface. Besides keeping unrelated
+        // points below that surface, this bounds work to at most four points.
         let candidates = self
             .points
             .iter()
@@ -2987,14 +3030,15 @@ impl EditorScene {
             first_ids.contains(&point) && second_ids.contains(&point)
         });
         if let Some(hit) = best_policy_hit(exact, policy.scope) {
-            return Some(hit);
+            return Some(FilletParentEndpointPointHit::Unambiguous(hit));
         }
 
         // Coincident endpoint identities are one semantic Fillet corner even
         // when the two native parents retain distinct stored points. Compute
         // equivalence only after a point-sized hit exists so ordinary rail
         // hover stays independent of document-wide incidence work.
-        let representatives = self.accepted_document.point_coincidence_representatives();
+        let representatives = representatives
+            .get_or_init(|| self.accepted_document.point_coincidence_representatives());
         let representative = |point: DesignPointId| representatives.get(&point).copied();
         let shared_representatives = first_ids
             .into_iter()
@@ -3006,15 +3050,140 @@ impl EditorScene {
                     .any(|second| *first == second)
             })
             .collect::<std::collections::BTreeSet<_>>();
-        best_policy_hit(
-            candidates.into_iter().filter(|hit| {
+        if let Some(hit) = best_policy_hit(
+            candidates.iter().copied().filter(|hit| {
                 let SelectionItem::Point(point) = hit.item else {
                     return false;
                 };
                 representative(point).is_some_and(|value| shared_representatives.contains(&value))
             }),
             policy.scope,
-        )
+        ) {
+            return Some(FilletParentEndpointPointHit::Unambiguous(hit));
+        }
+
+        // Large Fillets can reach either remote endpoint. Prefer the nearer
+        // point core when crowded zoom puts both parents inside the point
+        // tolerance. An exact cross-parent distance tie remains below the
+        // Fillet because coordinate overlap supplies no topology.
+        let best_for_parent = |ids: [DesignPointId; 2]| {
+            best_policy_hit(
+                candidates.iter().copied().filter(
+                    |hit| matches!(hit.item, SelectionItem::Point(point) if ids.contains(&point)),
+                ),
+                policy.scope,
+            )
+        };
+        match (best_for_parent(first_ids), best_for_parent(second_ids)) {
+            (Some(first), Some(second)) => {
+                match first.distance_pixels.total_cmp(&second.distance_pixels) {
+                    std::cmp::Ordering::Less => {
+                        Some(FilletParentEndpointPointHit::Unambiguous(first))
+                    }
+                    std::cmp::Ordering::Greater => {
+                        Some(FilletParentEndpointPointHit::Unambiguous(second))
+                    }
+                    std::cmp::Ordering::Equal => Some(FilletParentEndpointPointHit::Ambiguous {
+                        distance_pixels: first.distance_pixels,
+                    }),
+                }
+            }
+            (Some(hit), None) | (None, Some(hit)) => {
+                Some(FilletParentEndpointPointHit::Unambiguous(hit))
+            }
+            (None, None) => None,
+        }
+    }
+
+    fn best_fillet_parent_endpoint_point_hit_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+        representatives: &std::cell::OnceCell<
+            std::collections::BTreeMap<DesignPointId, DesignPointId>,
+        >,
+    ) -> Option<Hit> {
+        // Resolve parent points across every broad Fillet surface under the
+        // pointer. Choosing one radius owner first would let an overlapping
+        // Fillet hide an endpoint belonging to a different visible Fillet.
+        let broad_owners = self
+            .fillet_affordances
+            .iter()
+            .filter(|affordances| {
+                self.computed_curves
+                    .iter()
+                    .find(|curve| curve.owner == affordances.owner)
+                    .is_some_and(|curve| curve.is_pickable(policy))
+            })
+            .filter(|affordances| {
+                self.fillet_radius_hit_distance(affordances, position, tolerance)
+                    .is_some()
+            })
+            .map(|affordances| affordances.owner)
+            .collect::<Vec<_>>();
+        if broad_owners.is_empty() {
+            return None;
+        }
+        let candidates = broad_owners
+            .into_iter()
+            .filter_map(|owner| {
+                self.fillet_parent_endpoint_point_hit_with_policy(
+                    owner,
+                    position,
+                    tolerance,
+                    policy,
+                    representatives,
+                )
+            })
+            .collect::<Vec<_>>();
+        let nearest_distance = candidates
+            .iter()
+            .copied()
+            .map(FilletParentEndpointPointHit::distance_pixels)
+            .min_by(f64::total_cmp)?;
+        if candidates.iter().copied().any(|candidate| {
+            matches!(candidate, FilletParentEndpointPointHit::Ambiguous { .. })
+                && candidate
+                    .distance_pixels()
+                    .total_cmp(&nearest_distance)
+                    .is_eq()
+        }) {
+            return None;
+        }
+        let nearest = candidates
+            .iter()
+            .copied()
+            .filter_map(|candidate| match candidate {
+                FilletParentEndpointPointHit::Unambiguous(hit)
+                    if hit.distance_pixels.total_cmp(&nearest_distance).is_eq() =>
+                {
+                    Some(hit)
+                }
+                FilletParentEndpointPointHit::Unambiguous(_)
+                | FilletParentEndpointPointHit::Ambiguous { .. } => None,
+            })
+            .collect::<Vec<_>>();
+
+        // The same stored point, or points joined by an active Coincident
+        // relation, remain one semantic endpoint even when several Fillets
+        // contribute the hit. An exact tie between disconnected points is
+        // ambiguous and therefore stays with the deterministic Fillet surface.
+        let representatives = representatives
+            .get_or_init(|| self.accepted_document.point_coincidence_representatives());
+        let semantic_points = nearest
+            .iter()
+            .filter_map(|hit| match hit.item {
+                SelectionItem::Point(point) => {
+                    Some(representatives.get(&point).copied().unwrap_or(point))
+                }
+                _ => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        if semantic_points.len() != 1 {
+            return None;
+        }
+        best_policy_hit(nearest, policy.scope)
     }
 
     fn geometry_hit_test_candidates(
@@ -6351,43 +6520,65 @@ impl ConstraintEditor {
         }
     }
 
-    fn resolve_select_pointer_target(
+    fn resolve_select_fillet_pointer_target(
         &self,
         scene: &EditorScene,
         position: ScreenPoint,
-        problem_items: &[SelectionItem],
     ) -> Option<ResolvedSelectPointerTarget> {
-        // This order is the single Select-mode pointer contract. A computed
-        // Fillet keeps its complete radius surface above unrelated native
-        // geometry, but cannot hide the persistent endpoint corner shared by
-        // its own two parents. Direct manipulation otherwise predicts the same
-        // click through visible leaders, while annotations still precede
-        // passive geometry and intrinsic datums.
-        if !position.is_finite() || !self.pick_tolerance.is_valid() {
-            return None;
-        }
-        if let Some(SceneFilletHit::Radius {
-            owner,
-            distance_pixels,
-        }) = scene.resolve_fillet_hit_with_policy(
+        if let Some((owner, distance_pixels)) = scene.best_fillet_radius_grip_hit_with_policy(
             position,
             self.pick_tolerance,
             self.geometry_policy,
         ) {
-            if let Some(hit) = scene.fillet_source_corner_point_hit_with_policy(
-                owner,
-                position,
-                self.pick_tolerance,
-                self.geometry_policy,
-            ) {
-                return Some(ResolvedSelectPointerTarget::Geometry(hit));
-            }
             return Some(ResolvedSelectPointerTarget::FilletRadius(Hit {
                 item: SelectionItem::FeatureCorner(owner),
                 distance_pixels,
                 curve_parameter: None,
                 geometry: None,
             }));
+        }
+        let SceneFilletHit::Radius {
+            owner,
+            distance_pixels,
+        } = scene.resolve_fillet_hit_with_policy(
+            position,
+            self.pick_tolerance,
+            self.geometry_policy,
+        )?
+        else {
+            return None;
+        };
+        if let Some(hit) = scene.best_fillet_parent_endpoint_point_hit_with_policy(
+            position,
+            self.pick_tolerance,
+            self.geometry_policy,
+            &std::cell::OnceCell::new(),
+        ) {
+            return Some(ResolvedSelectPointerTarget::Geometry(hit));
+        }
+        Some(ResolvedSelectPointerTarget::FilletRadius(Hit {
+            item: SelectionItem::FeatureCorner(owner),
+            distance_pixels,
+            curve_parameter: None,
+            geometry: None,
+        }))
+    }
+
+    fn resolve_select_pointer_target(
+        &self,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        problem_items: &[SelectionItem],
+    ) -> Option<ResolvedSelectPointerTarget> {
+        // This order is the single Select-mode pointer contract. The compact
+        // radius grip remains the explicit Fillet control. A broader arc,
+        // spoke, or rail stays above unrelated geometry but below an
+        // unambiguous persistent endpoint belonging to either parent.
+        if !position.is_finite() || !self.pick_tolerance.is_valid() {
+            return None;
+        }
+        if let Some(target) = self.resolve_select_fillet_pointer_target(scene, position) {
+            return Some(target);
         }
         if let [SelectionItem::Curve(selected)] = self.selection.as_slice()
             && let Some(hit) = scene.curve_control_hit_test_with_policy(
@@ -18519,6 +18710,47 @@ mod tests {
                 pointer_id: 62,
                 kind: ActivePointerGestureKind::FilletRadius,
             })
+        );
+    }
+
+    #[test]
+    fn broad_fillet_hover_defers_coincidence_work_until_an_endpoint_halo_is_hit() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let arc = &fixture.scene.computed_curves[0].screen_polyline;
+        let broad_arc_position = arc[arc.len() / 2];
+        let tolerance = PickTolerance::default();
+        let representatives = std::cell::OnceCell::new();
+
+        assert!(matches!(
+            fixture
+                .scene
+                .resolve_fillet_hit(broad_arc_position, tolerance),
+            Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
+        ));
+        assert!(
+            fixture
+                .scene
+                .points
+                .iter()
+                .all(|point| point.screen_position.distance(broad_arc_position)
+                    > tolerance.point_pixels),
+            "the broad arc sample must remain outside every persistent point halo",
+        );
+        assert_eq!(
+            fixture
+                .scene
+                .best_fillet_parent_endpoint_point_hit_with_policy(
+                    broad_arc_position,
+                    tolerance,
+                    GeometryInteractionPolicy::default(),
+                    &representatives,
+                ),
+            None,
+            "a broad Fillet-only hit must not invent an endpoint candidate",
+        );
+        assert!(
+            representatives.get().is_none(),
+            "ordinary broad-surface hover must not build document-wide Coincident representatives",
         );
     }
 

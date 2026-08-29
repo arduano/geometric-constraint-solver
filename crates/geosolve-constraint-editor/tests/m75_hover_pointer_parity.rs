@@ -3,11 +3,11 @@
 use geosolve_constraint_editor::{
     ActivePointerGesture, ActivePointerGestureKind, AuthoringOutcome, AuthoringState,
     AuthoringTool, ComputedSceneState, ConstraintEditor, ConstraintIntent, EditorEffect,
-    EditorHoverState, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringOutcome,
-    FeatureAuthoringPreview, FeatureAuthoringState, FeatureAuthoringTool, GeometryPickScope,
-    Modifiers, PickTolerance, PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry,
-    SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneFilletHit, SceneGlyphMarker,
-    ScreenPoint, SelectionItem, Viewport,
+    EditorHoverState, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringOptions,
+    FeatureAuthoringOutcome, FeatureAuthoringPreview, FeatureAuthoringState, FeatureAuthoringTool,
+    GeometryPickScope, Modifiers, PickTolerance, PointerInput, RetainedEditorCoordinator,
+    SceneAnnotationGeometry, SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneFilletHit,
+    SceneGlyphMarker, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentEdit, DocumentSolveRequest,
@@ -254,6 +254,366 @@ struct DistinctCornerPickFixture {
     second_corner: geosolve_sketch::DesignPointId,
     corner_position: ScreenPoint,
     owner: geosolve_constraint_editor::ComputedCornerRef,
+}
+
+struct RemoteParentEndpointPickFixture {
+    scene: EditorScene,
+    endpoints: [geosolve_sketch::DesignPointId; 2],
+    owner: geosolve_constraint_editor::ComputedCornerRef,
+}
+
+struct OverlappingFilletEndpointPickFixture {
+    scene: EditorScene,
+    endpoint: geosolve_sketch::DesignPointId,
+    disconnected_endpoint: geosolve_sketch::DesignPointId,
+    second_disconnected_endpoint: geosolve_sketch::DesignPointId,
+    endpoint_owner: geosolve_constraint_editor::ComputedCornerRef,
+    nearer_surface_owner: geosolve_constraint_editor::ComputedCornerRef,
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the crowded two-Fillet fixture must retain accepted grouped authoring and real parent incidence"
+)]
+fn overlapping_fillet_endpoint_pick_fixture() -> OverlappingFilletEndpointPickFixture {
+    let viewport = Viewport::new([800.0, 600.0], [1.0, 1.0], 100.0).expect("viewport");
+    let radius = 1.99;
+    let shadow_corner_x = radius * 0.5;
+    let shadow_corner_y = -radius * (1.0 - 3.0_f64.sqrt() * 0.5);
+    let mut document = SketchDocument::new(10.0).expect("document");
+
+    let endpoint = document
+        .add_point("exposed first endpoint", [0.0, 0.0])
+        .expect("first endpoint");
+    let first_corner = document
+        .add_point("first Fillet corner", [2.0, 0.0])
+        .expect("first corner");
+    let first_end = document
+        .add_point("first Fillet end", [2.0, 2.0])
+        .expect("first end");
+    let first_curve = document
+        .add_curve(
+            "first right-angle polyline",
+            CurveDefinition::Polyline {
+                points: vec![endpoint, first_corner, first_end],
+                closed: false,
+                branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+            },
+        )
+        .expect("first polyline");
+
+    // This translated right angle puts the -60-degree interior sample of its
+    // accepted radius-1.99 arc on the first Polyline's remote endpoint, while
+    // its compact radius grip and all three persistent points remain well
+    // outside the point halo there.
+    let shadow_start = document
+        .add_point(
+            "overlapping Fillet start",
+            [shadow_corner_x - 2.0, shadow_corner_y],
+        )
+        .expect("overlapping start");
+    let shadow_corner = document
+        .add_point(
+            "overlapping Fillet corner",
+            [shadow_corner_x, shadow_corner_y],
+        )
+        .expect("overlapping corner");
+    let shadow_end = document
+        .add_point(
+            "overlapping Fillet end",
+            [shadow_corner_x, shadow_corner_y + 2.0],
+        )
+        .expect("overlapping end");
+    let shadow_curve = document
+        .add_curve(
+            "overlapping right-angle polyline",
+            CurveDefinition::Polyline {
+                points: vec![shadow_start, shadow_corner, shadow_end],
+                closed: false,
+                branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+            },
+        )
+        .expect("overlapping polyline");
+
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("accepted session");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted state");
+    let base_scene = EditorScene::from_accepted_for_design(
+        accepted.identity().revision().get(),
+        accepted.design_identity(),
+        accepted.document(),
+        coordinator.session().design_document(),
+        viewport,
+        0.5,
+    )
+    .expect("base scene");
+    let snapshot = coordinator
+        .feature_authoring_snapshot()
+        .expect("feature-authoring snapshot");
+    let accepted_document = snapshot.sketch_document().clone();
+    let mut authoring = FeatureAuthoringState::default();
+    assert!(matches!(
+        authoring.activate(
+            &snapshot,
+            &accepted_document,
+            FeatureAuthoringTool::Fillet,
+            &[],
+        ),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ));
+    assert!(matches!(
+        authoring.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(radius),
+                ..FeatureAuthoringOptions::default()
+            },
+        ),
+        FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    let picks = [
+        ([1.0, 0.0], first_curve),
+        ([2.0, 1.0], first_curve),
+        ([shadow_corner_x - 1.0, shadow_corner_y], shadow_curve),
+        ([shadow_corner_x, shadow_corner_y + 1.0], shadow_curve),
+    ];
+    for (model_position, _curve) in picks {
+        coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &base_scene,
+                viewport.model_to_screen(model_position),
+                PickTolerance::default(),
+                "overlapping two-Fillet pointer parity",
+            )
+            .expect("grouped Fillet parent pick");
+    }
+    assert_eq!(authoring.completed_corner_count(), 2);
+    let preview = coordinator
+        .feature_authoring_preview()
+        .expect("held grouped Fillet preview");
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted source");
+    let mut scene = EditorScene::from_accepted_with_computed(
+        accepted.identity().revision().get(),
+        accepted.design_identity(),
+        accepted.document(),
+        coordinator.session().design_document(),
+        &coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input"),
+        &preview.metadata().input,
+        preview.snapshot(),
+        viewport,
+        0.5,
+    )
+    .expect("grouped computed scene");
+    let owner_for_curve = |curve| {
+        scene
+            .computed_curves
+            .iter()
+            .find(|computed| {
+                computed
+                    .contacts
+                    .iter()
+                    .all(|contact| contact.source.span.curve == curve)
+            })
+            .map(|computed| computed.owner)
+            .expect("computed owner for Polyline")
+    };
+    let endpoint_owner = owner_for_curve(first_curve);
+    let nearer_surface_owner = owner_for_curve(shadow_curve);
+    coordinator
+        .populate_computed_fillet_affordances(
+            &mut scene,
+            &[SelectionItem::Feature(endpoint_owner.feature)],
+            0.5,
+        )
+        .expect("grouped Fillet affordances");
+    assert_eq!(scene.fillet_affordances.len(), 2);
+    let endpoint_position = scene
+        .points
+        .iter()
+        .find(|point| point.id == endpoint)
+        .map(|point| point.screen_position)
+        .expect("visible first endpoint");
+    assert!(matches!(
+        scene.resolve_fillet_hit(endpoint_position, PickTolerance::default()),
+        Some(SceneFilletHit::Radius { owner, .. }) if owner == nearer_surface_owner
+    ));
+
+    OverlappingFilletEndpointPickFixture {
+        scene,
+        endpoint,
+        disconnected_endpoint: shadow_start,
+        second_disconnected_endpoint: shadow_end,
+        endpoint_owner,
+        nearer_surface_owner,
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the two-by-two near-radius-two UAT fixture must retain real Polyline authoring and computed-scene authority"
+)]
+fn remote_parent_endpoint_pick_fixture() -> RemoteParentEndpointPickFixture {
+    let viewport = Viewport::new([800.0, 600.0], [1.0, 1.0], 100.0).expect("viewport");
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let start = document.add_point("start", [0.0, 0.0]).expect("start");
+    let corner = document.add_point("corner", [2.0, 0.0]).expect("corner");
+    let end = document.add_point("end", [2.0, 2.0]).expect("end");
+    document
+        .add_curve(
+            "two-span right-angle polyline",
+            CurveDefinition::Polyline {
+                points: vec![start, corner, end],
+                closed: false,
+                branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+            },
+        )
+        .expect("right-angle polyline");
+
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("accepted session");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted state");
+    let accepted_revision = accepted.identity().revision().get();
+    let accepted_design_identity = accepted.design_identity();
+    let base_scene = EditorScene::from_accepted_for_design(
+        accepted_revision,
+        accepted_design_identity,
+        accepted.document(),
+        coordinator.session().design_document(),
+        viewport,
+        0.5,
+    )
+    .expect("base scene");
+    let snapshot = coordinator
+        .feature_authoring_snapshot()
+        .expect("feature-authoring snapshot");
+    let accepted_document = snapshot.sketch_document().clone();
+    let mut authoring = FeatureAuthoringState::default();
+    assert!(matches!(
+        authoring.activate(
+            &snapshot,
+            &accepted_document,
+            FeatureAuthoringTool::Fillet,
+            &[],
+        ),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ));
+    // Exact radius 2 is the evaluator's tangent-at-endpoint fold boundary.
+    // Radius 1.99 is a robust accepted near-boundary fixture at this
+    // 100 px/model scale and leaves both remote endpoints inside the same
+    // visible Fillet radius surface.
+    let accepted_radius = 1.99;
+    assert!(matches!(
+        authoring.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(accepted_radius),
+                ..FeatureAuthoringOptions::default()
+            },
+        ),
+        FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    for (index, model_position) in [[1.0, 0.0], [2.0, 1.0]].into_iter().enumerate() {
+        let outcome = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &base_scene,
+                viewport.model_to_screen(model_position),
+                PickTolerance::default(),
+                "two-by-two near-radius-two pointer parity Fillet",
+            )
+            .expect("Fillet parent pick");
+        assert!(
+            matches!(
+                (index, &outcome.outcome),
+                (0, FeatureAuthoringOutcome::Collecting { .. })
+                    | (1, FeatureAuthoringOutcome::PreviewRequested { .. })
+            ),
+            "unexpected parent-pick outcome at index {index}: {:?}",
+            outcome.outcome,
+        );
+    }
+    let applied = match authoring.apply() {
+        FeatureAuthoringOutcome::Apply(candidate) => candidate,
+        other => panic!("complete near-radius-two Fillet did not apply: {other:?}"),
+    };
+    let token = coordinator
+        .feature_authoring_preview()
+        .expect("held Fillet preview")
+        .metadata()
+        .token;
+    coordinator
+        .apply_feature_authoring_preview(token, &applied)
+        .expect("persistent near-radius-two Fillet publication");
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted persistent source");
+    let mut scene = match coordinator.computed_scene_state() {
+        ComputedSceneState::Current { expected, snapshot } => {
+            EditorScene::from_accepted_with_computed(
+                accepted.identity().revision().get(),
+                accepted.design_identity(),
+                accepted.document(),
+                coordinator.session().design_document(),
+                &coordinator
+                    .session()
+                    .accepted_prepared_input()
+                    .expect("accepted persistent input"),
+                expected,
+                snapshot,
+                viewport,
+                0.5,
+            )
+            .expect("persistent computed scene")
+        }
+        state => panic!("persistent near-radius-two Fillet scene is not Current: {state:?}"),
+    };
+    assert_eq!(
+        scene.computed_curves[0].radius.to_bits(),
+        accepted_radius.to_bits(),
+        "the applied fixture must retain the requested near-boundary radius",
+    );
+    let owner = scene
+        .computed_curves
+        .first()
+        .expect("computed Fillet arc")
+        .owner;
+    coordinator
+        .populate_computed_fillet_affordances(
+            &mut scene,
+            &[SelectionItem::FeatureCorner(owner)],
+            0.5,
+        )
+        .expect("Fillet radius affordance");
+
+    RemoteParentEndpointPickFixture {
+        scene,
+        endpoints: [start, end],
+        owner,
+    }
 }
 
 #[allow(
@@ -882,6 +1242,199 @@ fn m86_f002_fillet_source_corner_remains_selectable_through_its_radius_surface()
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
+fn m86_f002_fillet_parent_remote_endpoints_beat_its_radius_surface() {
+    let fixture = remote_parent_endpoint_pick_fixture();
+
+    for (index, endpoint) in fixture.endpoints.into_iter().enumerate() {
+        let pointer_id = 120 + u64::try_from(index).expect("bounded endpoint index");
+        let point_item = SelectionItem::Point(endpoint);
+        let endpoint_position = fixture
+            .scene
+            .points
+            .iter()
+            .find(|point| point.id == endpoint)
+            .map(|point| point.screen_position)
+            .expect("visible persistent Fillet-parent endpoint");
+        assert_eq!(
+            fixture
+                .scene
+                .hit_test(endpoint_position, PickTolerance::default())
+                .map(|hit| hit.item),
+            Some(point_item),
+            "ordinary geometry picking must expose remote parent endpoint {index}",
+        );
+        assert!(matches!(
+            fixture
+                .scene
+                .resolve_fillet_hit(endpoint_position, PickTolerance::default()),
+            Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
+        ));
+
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::FeatureCorner(fixture.owner)]);
+        assert_eq!(
+            editor.pointer_move(
+                &fixture.scene,
+                pointer(pointer_id, endpoint_position, Modifiers::default()),
+            ),
+            hover_change(
+                Some(EditorHoverTarget::Geometry(point_item)),
+                Some(point_item),
+            ),
+            "Select hover must prefer remote parent endpoint {index}",
+        );
+        assert_eq!(
+            editor.pointer_down(
+                &fixture.scene,
+                pointer(pointer_id, endpoint_position, Modifiers::default()),
+            ),
+            vec![EditorEffect::SelectionChanged(vec![point_item])],
+            "pointer-down must select remote parent endpoint {index}",
+        );
+        assert_eq!(editor.selection(), &[point_item]);
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id,
+                kind: ActivePointerGestureKind::Point,
+            }),
+            "remote parent endpoint {index} must begin a Point gesture",
+        );
+    }
+
+    let endpoint = fixture.endpoints[0];
+    let point_item = SelectionItem::Point(endpoint);
+    let endpoint_position = fixture
+        .scene
+        .points
+        .iter()
+        .find(|point| point.id == endpoint)
+        .map(|point| point.screen_position)
+        .expect("first visible parent endpoint");
+    let mut grip_overlap = fixture.scene.clone();
+    grip_overlap.fillet_affordances[0].radius_rail.screen_grip = endpoint_position;
+    let fillet_item = SelectionItem::FeatureCorner(fixture.owner);
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([point_item]);
+    assert_eq!(
+        editor.pointer_move(
+            &grip_overlap,
+            pointer(122, endpoint_position, Modifiers::default()),
+        ),
+        hover_change(
+            Some(EditorHoverTarget::Geometry(fillet_item)),
+            Some(fillet_item),
+        ),
+        "the compact Fillet grip remains more specific than a parent endpoint marker",
+    );
+    assert_eq!(
+        editor.pointer_down(
+            &grip_overlap,
+            pointer(122, endpoint_position, Modifiers::default()),
+        ),
+        vec![EditorEffect::SelectionChanged(vec![fillet_item])],
+    );
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 122,
+            kind: ActivePointerGestureKind::FilletRadius,
+        }),
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn m86_f002_parent_endpoint_arbitration_spans_every_overlapping_fillet() {
+    let fixture = overlapping_fillet_endpoint_pick_fixture();
+    assert_ne!(fixture.endpoint_owner, fixture.nearer_surface_owner);
+    let endpoint_position = fixture
+        .scene
+        .points
+        .iter()
+        .find(|point| point.id == fixture.endpoint)
+        .map(|point| point.screen_position)
+        .expect("visible first endpoint");
+    assert!(fixture.scene.fillet_affordances.iter().all(|affordances| {
+        screen_distance(affordances.radius_rail.screen_grip, endpoint_position)
+            > PickTolerance::default().point_pixels
+    }));
+
+    let point_item = SelectionItem::Point(fixture.endpoint);
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([SelectionItem::Feature(fixture.endpoint_owner.feature)]);
+    assert_eq!(
+        editor.pointer_move(
+            &fixture.scene,
+            pointer(124, endpoint_position, Modifiers::default()),
+        ),
+        hover_change(
+            Some(EditorHoverTarget::Geometry(point_item)),
+            Some(point_item),
+        ),
+        "a nearer overlapping Fillet surface must not hide another Fillet's parent endpoint",
+    );
+    assert_eq!(
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(124, endpoint_position, Modifiers::default()),
+        ),
+        vec![EditorEffect::SelectionChanged(vec![point_item])],
+    );
+    assert_eq!(editor.selection(), &[point_item]);
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 124,
+            kind: ActivePointerGestureKind::Point,
+        }),
+    );
+
+    let mut disconnected_tie = fixture.scene.clone();
+    disconnected_tie
+        .points
+        .iter_mut()
+        .find(|point| point.id == fixture.disconnected_endpoint)
+        .expect("second Fillet's disconnected endpoint")
+        .screen_position = endpoint_position;
+    disconnected_tie
+        .points
+        .iter_mut()
+        .find(|point| point.id == fixture.second_disconnected_endpoint)
+        .expect("second Fillet's opposite disconnected endpoint")
+        .screen_position = endpoint_position;
+    let fillet_item = SelectionItem::FeatureCorner(fixture.nearer_surface_owner);
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([SelectionItem::Feature(fixture.endpoint_owner.feature)]);
+    assert_eq!(
+        editor.pointer_move(
+            &disconnected_tie,
+            pointer(125, endpoint_position, Modifiers::default()),
+        ),
+        hover_change(
+            Some(EditorHoverTarget::Geometry(fillet_item)),
+            Some(fillet_item),
+        ),
+        "an exact tie between disconnected parent endpoints must retain the best broad Fillet",
+    );
+    assert_eq!(
+        editor.pointer_down(
+            &disconnected_tie,
+            pointer(125, endpoint_position, Modifiers::default()),
+        ),
+        vec![EditorEffect::SelectionChanged(vec![fillet_item])],
+    );
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 125,
+            kind: ActivePointerGestureKind::FilletRadius,
+        }),
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn m86_f002_active_coincident_source_endpoints_resolve_one_deterministic_corner_point() {
     let fixture = distinct_corner_pick_fixture(true);
     let expected_point = fixture.first_corner.min(fixture.second_corner);
@@ -949,6 +1502,53 @@ fn m86_f002_coordinate_overlap_without_coincident_does_not_claim_source_corner_p
         Some(ActivePointerGesture {
             pointer_id: 22,
             kind: ActivePointerGestureKind::FilletRadius,
+        }),
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn m86_f002_nearer_parent_endpoint_wins_when_both_point_halos_are_hit() {
+    let mut fixture = distinct_corner_pick_fixture(false);
+    let second = fixture
+        .scene
+        .points
+        .iter_mut()
+        .find(|point| point.id == fixture.second_corner)
+        .expect("second parent endpoint");
+    second.screen_position.x += PickTolerance::default().point_pixels * 0.5;
+    assert!(matches!(
+        fixture
+            .scene
+            .resolve_fillet_hit(fixture.corner_position, PickTolerance::default()),
+        Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
+    ));
+
+    let point_item = SelectionItem::Point(fixture.first_corner);
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([SelectionItem::FeatureCorner(fixture.owner)]);
+    assert_eq!(
+        editor.pointer_move(
+            &fixture.scene,
+            pointer(123, fixture.corner_position, Modifiers::default()),
+        ),
+        hover_change(
+            Some(EditorHoverTarget::Geometry(point_item)),
+            Some(point_item),
+        ),
+    );
+    assert_eq!(
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(123, fixture.corner_position, Modifiers::default()),
+        ),
+        vec![EditorEffect::SelectionChanged(vec![point_item])],
+    );
+    assert_eq!(
+        editor.active_pointer_gesture(),
+        Some(ActivePointerGesture {
+            pointer_id: 123,
+            kind: ActivePointerGestureKind::Point,
         }),
     );
 }
