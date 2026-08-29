@@ -1007,6 +1007,10 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   overflow-wrap: anywhere;
   user-select: text;
 }
+.wb-reproduction-overlay textarea[readonly] {
+  cursor: text;
+  background: #10191a;
+}
 .wb-reproduction-actions {
   display: flex;
   align-items: center;

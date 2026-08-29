@@ -13,6 +13,8 @@ mod geometry_palette;
 #[cfg(any(target_arch = "wasm32", test))]
 mod icons;
 #[cfg(any(target_arch = "wasm32", test))]
+mod interaction_trace;
+#[cfg(any(target_arch = "wasm32", test))]
 pub(crate) mod live_intent_rpc;
 #[cfg(any(target_arch = "wasm32", test))]
 mod panels;
@@ -2329,7 +2331,7 @@ fn projectional_code_checkpoint_for_save(
 /// complete live preview untouched while its authenticated pointer token is
 /// still pending. An owning terminal consumes that token before any later
 /// failure, so ordinary accepted-authority recovery remains safe afterward.
-#[cfg(any(target_arch = "wasm32", test))]
+#[cfg(test)]
 fn publish_projectional_code_checkpoint_for_save(
     code_project: &mut code_projects::CodeProjectWorkbench,
     authority: &mut WorkbenchDocumentAuthority,
@@ -2339,6 +2341,39 @@ fn publish_projectional_code_checkpoint_for_save(
     ProjectionalCodeSavePublication,
     geosolve_sketch_code::CodeWorkReceipt,
 ) {
+    publish_projectional_code_checkpoint_for_save_with_trace(
+        code_project,
+        authority,
+        notice,
+        terminal_pointer,
+        None,
+    )
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the adapter keeps code publication, exact rollback evidence and accepted-authority installation in one atomic seam"
+)]
+fn publish_projectional_code_checkpoint_for_save_with_trace(
+    code_project: &mut code_projects::CodeProjectWorkbench,
+    authority: &mut WorkbenchDocumentAuthority,
+    notice: &mut String,
+    terminal_pointer: Option<u64>,
+    mut trace: Option<&mut interaction_trace::InteractionTrace>,
+) -> (
+    ProjectionalCodeSavePublication,
+    geosolve_sketch_code::CodeWorkReceipt,
+) {
+    if let Some(trace) = trace.as_deref_mut() {
+        trace.record(
+            "code.publication.begin",
+            format!(
+                "terminal_pointer={terminal_pointer:?} {}",
+                code_project.interaction_trace_context()
+            ),
+        );
+    }
     if code_project.has_any_pending_semantic_point_drag()
         && !terminal_pointer
             .is_some_and(|pointer_id| code_project.has_pending_semantic_point_drag(pointer_id))
@@ -2346,6 +2381,12 @@ fn publish_projectional_code_checkpoint_for_save(
         // This guard deliberately precedes checkpoint encoding. A generic or
         // foreign save is neither a cancellation nor a terminal and therefore
         // may not touch preview/editor, token, notice, history or persistence.
+        if let Some(trace) = trace.as_deref_mut() {
+            trace.record(
+                "code.publication.abort",
+                "reason=generic-or-foreign-save-with-pending-semantic-route",
+            );
+        }
         return (
             ProjectionalCodeSavePublication::Abort,
             geosolve_sketch_code::CodeWorkReceipt::default(),
@@ -2354,16 +2395,30 @@ fn publish_projectional_code_checkpoint_for_save(
     let (publication, code_work) = if let Some(pointer_id) = terminal_pointer {
         let Some(editor) = authority.projectional_ref() else {
             *notice = "Code projects require projectional editor authority".into();
+            if let Some(trace) = trace.as_deref_mut() {
+                trace.record(
+                    "code.publication.abort",
+                    "reason=projectional-editor-authority-unavailable",
+                );
+            }
             return (
                 ProjectionalCodeSavePublication::Abort,
                 geosolve_sketch_code::CodeWorkReceipt::default(),
             );
         };
-        let audited = code_project.publish_pointer_terminal_editor_audited(
-            pointer_id,
-            editor,
-            "Direct GUI sketch edit",
-        );
+        let audited = match trace.as_deref_mut() {
+            Some(trace) => code_project.publish_pointer_terminal_editor_audited_with_trace(
+                pointer_id,
+                editor,
+                "Direct GUI sketch edit",
+                trace,
+            ),
+            None => code_project.publish_pointer_terminal_editor_audited(
+                pointer_id,
+                editor,
+                "Direct GUI sketch edit",
+            ),
+        };
         (audited.outcome, audited.work)
     } else {
         let checkpoint = match projectional_code_checkpoint_for_save(authority) {
@@ -2372,6 +2427,9 @@ fn publish_projectional_code_checkpoint_for_save(
                 *notice = format!(
                     "Code-project workspace could not stage its native checkpoint: {error}"
                 );
+                if let Some(trace) = trace.as_deref_mut() {
+                    trace.record("code.publication.abort", "reason=checkpoint-encoding");
+                }
                 return (
                     ProjectionalCodeSavePublication::Abort,
                     geosolve_sketch_code::CodeWorkReceipt::default(),
@@ -2386,22 +2444,49 @@ fn publish_projectional_code_checkpoint_for_save(
     match publication {
         Ok(Some(publication)) => {
             match WorkbenchDocumentAuthority::from_projectional_editor(*publication.editor) {
-                Ok(accepted) => *authority = accepted,
+                Ok(accepted) => {
+                    *authority = accepted;
+                    if let Some(trace) = trace.as_deref_mut() {
+                        trace.record(
+                            "code.publication.install",
+                            format!(
+                                "outcome=accepted work={code_work:?} {}",
+                                code_project.interaction_trace_context()
+                            ),
+                        );
+                    }
+                }
                 Err(error) => {
                     *notice = format!(
                         "Accepted code-owned edit could not install its validated native authority: {error}"
                     );
+                    if let Some(trace) = trace.as_deref_mut() {
+                        trace.record(
+                            "code.publication.abort",
+                            "reason=accepted-authority-install",
+                        );
+                    }
                     return (ProjectionalCodeSavePublication::Abort, code_work);
                 }
             }
         }
-        Ok(None) => {}
+        Ok(None) => {
+            if let Some(trace) = trace.as_deref_mut() {
+                trace.record("code.publication.noop", format!("work={code_work:?}"));
+            }
+        }
         Err(error) => {
             if code_project.has_any_pending_semantic_point_drag() {
                 // This is a defensive adapter boundary. Every known
                 // non-pointer mutation cancels before dispatch, but an
                 // unexpected generic/foreign save must leave the live
                 // gesture, token, notice and persistence untouched.
+                if let Some(trace) = trace.as_deref_mut() {
+                    trace.record(
+                        "code.publication.abort",
+                        format!("reason=pending-route-preserved work={code_work:?}"),
+                    );
+                }
                 return (ProjectionalCodeSavePublication::Abort, code_work);
             }
             let restored = code_project
@@ -2410,14 +2495,37 @@ fn publish_projectional_code_checkpoint_for_save(
             *notice = match restored {
                 Ok(accepted) => {
                     *authority = accepted;
+                    if let Some(trace) = trace.as_deref_mut() {
+                        trace.record(
+                            "code.publication.restore",
+                            format!(
+                                "outcome=accepted-authority-restored work={code_work:?} {}",
+                                code_project.interaction_trace_context()
+                            ),
+                        );
+                    }
                     format!("Code-owned edit was not applied: {error}")
                 }
-                Err(restore_error) => format!(
-                    "Code-owned edit was rejected ({error}); accepted authority could not be restored: {restore_error}"
-                ),
+                Err(restore_error) => {
+                    if let Some(trace) = trace.as_deref_mut() {
+                        trace.record(
+                            "code.publication.restore",
+                            format!("outcome=restore-failed work={code_work:?}"),
+                        );
+                    }
+                    format!(
+                        "Code-owned edit was rejected ({error}); accepted authority could not be restored: {restore_error}"
+                    )
+                }
             };
             return (ProjectionalCodeSavePublication::Abort, code_work);
         }
+    }
+    if let Some(trace) = trace {
+        trace.record(
+            "code.publication.end",
+            format!("disposition=continue-persistence work={code_work:?}"),
+        );
     }
     (
         ProjectionalCodeSavePublication::ContinuePersistence,
@@ -3923,8 +4031,24 @@ const fn reproduction_overlay_presentation(open: bool) -> (&'static str, bool) {
 
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ReproductionOverlayMode {
+    #[default]
+    Payload,
+    Trace,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl ReproductionOverlayMode {
+    const fn is_trace(self) -> bool {
+        matches!(self, Self::Trace)
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum ReproductionFocusReturn {
     Copy,
+    Trace,
     #[default]
     Load,
 }
@@ -3934,6 +4058,7 @@ impl ReproductionFocusReturn {
     const fn element_id(self) -> &'static str {
         match self {
             Self::Copy => "wb-reproduction-copy-trigger",
+            Self::Trace => "wb-interaction-trace-copy-trigger",
             Self::Load => "wb-reproduction-load-trigger",
         }
     }
@@ -4385,7 +4510,9 @@ pub(crate) mod wasm {
         outline_drag: Option<super::ProjectionalOutlineDrag>,
         geometry_palette: super::geometry_palette::GeometryPaletteState,
         option_overlay: super::OptionOverlayState,
+        interaction_trace: super::interaction_trace::InteractionTrace,
         reproduction_overlay_open: bool,
+        reproduction_overlay_mode: super::ReproductionOverlayMode,
         reproduction_focus_return: super::ReproductionFocusReturn,
         reproduction_copy_request: u64,
         construction_preview: Option<ConstructionPreview>,
@@ -4567,7 +4694,9 @@ pub(crate) mod wasm {
             outline_drag: None,
             geometry_palette: super::geometry_palette::GeometryPaletteState::default(),
             option_overlay: super::OptionOverlayState::default(),
+            interaction_trace: super::interaction_trace::InteractionTrace::default(),
             reproduction_overlay_open: false,
+            reproduction_overlay_mode: super::ReproductionOverlayMode::default(),
             reproduction_focus_return: super::ReproductionFocusReturn::default(),
             reproduction_copy_request: 0,
             construction_preview: None,
@@ -4786,6 +4915,7 @@ pub(crate) mod wasm {
 
         wb.authority = authority;
         wb.code_project = None;
+        wb.interaction_trace = super::interaction_trace::InteractionTrace::default();
         wb.authoring.deactivate();
         clear_projectional_feature_authoring(wb);
         clear_projectional_offset_authoring(wb);
@@ -4813,6 +4943,7 @@ pub(crate) mod wasm {
         let coordinator = wb.samples.open_key(key)?;
         wb.authority = super::WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)?;
         wb.code_project = None;
+        wb.interaction_trace = super::interaction_trace::InteractionTrace::default();
         wb.authoring.deactivate();
         wb.feature_authoring.deactivate();
         let _ = wb.offset_authoring.cancel();
@@ -4867,6 +4998,7 @@ pub(crate) mod wasm {
         let authority = super::WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
         wb.authority = authority;
         wb.code_project = Some(code_project);
+        wb.interaction_trace = super::interaction_trace::InteractionTrace::default();
         wb.authoring.deactivate();
         wb.feature_authoring.deactivate();
         let _ = wb.offset_authoring.cancel();
@@ -4897,6 +5029,7 @@ pub(crate) mod wasm {
 
         wb.authority = authority;
         wb.code_project = Some(code_project);
+        wb.interaction_trace = super::interaction_trace::InteractionTrace::default();
         wb.authoring.deactivate();
         wb.feature_authoring.deactivate();
         let _ = wb.offset_authoring.cancel();
@@ -4944,6 +5077,7 @@ pub(crate) mod wasm {
         let request = {
             let mut wb = workbench.borrow_mut();
             wb.reproduction_overlay_open = true;
+            wb.reproduction_overlay_mode = super::ReproductionOverlayMode::Payload;
             wb.reproduction_focus_return = super::ReproductionFocusReturn::Copy;
             wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
             wb.notice =
@@ -4999,6 +5133,111 @@ pub(crate) mod wasm {
                 } else {
                     format!(
                         "Clipboard access was blocked; all {payload_size} are selected for manual copy"
+                    )
+                };
+            }
+            let _ = render_projectional(&completion_document, &completion_workbench);
+            if !copied {
+                let _ = focus_and_select_reproduction_payload(&completion_document);
+            }
+        });
+    }
+
+    /// Exposes only the bounded, memory-only evidence for the latest
+    /// code-project pointer gesture. This transport deliberately reuses the
+    /// reproduction dialog's clipboard fallback without encoding source,
+    /// workspace authority, history or persistence.
+    fn copy_projectional_interaction_trace(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+    ) {
+        let (trace, was_empty) = {
+            let wb = workbench.borrow();
+            if wb.code_project.is_none() {
+                drop(wb);
+                workbench.borrow_mut().notice =
+                    "Interaction traces are available only for managed code projects".into();
+                let _ = render_projectional(document, workbench);
+                return;
+            }
+            let context = projectional_trace_authority_detail(&wb, "export=current");
+            (
+                wb.interaction_trace
+                    .export(&context, "bounded latest-gesture evidence"),
+                wb.interaction_trace.is_empty(),
+            )
+        };
+        let trace_size = super::reproduction_payload_size_label(trace.len());
+        close_sample_selector(document);
+        let request = {
+            let mut wb = workbench.borrow_mut();
+            wb.reproduction_overlay_open = true;
+            wb.reproduction_overlay_mode = super::ReproductionOverlayMode::Trace;
+            wb.reproduction_focus_return = super::ReproductionFocusReturn::Trace;
+            wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+            wb.notice = if was_empty {
+                format!(
+                    "Interaction trace has no pointer gesture yet · {trace_size}; requesting clipboard access"
+                )
+            } else {
+                format!("Interaction trace ready · {trace_size}; requesting clipboard access")
+            };
+            wb.reproduction_copy_request
+        };
+        if render_projectional(document, workbench).is_err() {
+            workbench.borrow_mut().notice =
+                "Interaction trace is ready, but its copy surface could not be shown".into();
+            return;
+        }
+        let Ok(textarea) = reproduction_payload_textarea(document) else {
+            workbench.borrow_mut().notice =
+                "Interaction trace is ready, but its copy surface is unavailable".into();
+            let _ = render_projectional(document, workbench);
+            return;
+        };
+        // Populate and select before requesting clipboard access. The UAT
+        // endpoint is intentionally HTTP, so manual Ctrl/Cmd+C is the normal
+        // and fully usable fallback rather than an error path.
+        textarea.set_value(&trace);
+        let _ = focus_and_select_reproduction_payload(document);
+
+        let Ok(window) = super::platform::window() else {
+            workbench.borrow_mut().notice = format!(
+                "Clipboard access is unavailable; all {trace_size} are selected for manual copy"
+            );
+            let _ = render_projectional(document, workbench);
+            return;
+        };
+        if !window.is_secure_context() {
+            workbench.borrow_mut().notice = format!(
+                "Clipboard access requires a secure page; all {trace_size} are selected for manual copy"
+            );
+            let _ = render_projectional(document, workbench);
+            return;
+        }
+        let promise = window.navigator().clipboard().write_text(&trace);
+        let completion_document = document.clone();
+        let completion_workbench = Rc::clone(workbench);
+        let copied_trace = trace;
+        spawn_local(async move {
+            let copied = JsFuture::from(promise).await.is_ok();
+            if reproduction_payload_textarea(&completion_document)
+                .is_ok_and(|textarea| textarea.value() != copied_trace)
+            {
+                return;
+            }
+            {
+                let mut wb = completion_workbench.borrow_mut();
+                if wb.reproduction_copy_request != request
+                    || !wb.reproduction_overlay_mode.is_trace()
+                {
+                    return;
+                }
+                wb.notice = if copied {
+                    format!("Interaction trace copied · {trace_size}")
+                } else {
+                    format!(
+                        "Clipboard access was blocked; all {trace_size} are selected for manual copy"
                     )
                 };
             }
@@ -5067,6 +5306,7 @@ pub(crate) mod wasm {
 
         wb.authority = authority;
         wb.code_project = code_project;
+        wb.interaction_trace = super::interaction_trace::InteractionTrace::default();
         wb.authoring = AuthoringState::default();
         wb.feature_authoring = FeatureAuthoringState::default();
         wb.offset_authoring = OffsetAuthoringState::default();
@@ -5633,6 +5873,10 @@ pub(crate) mod wasm {
             set_hidden(&code_tab, false)?;
             code_panel.set_inner_html(&surface.panel_markup());
         }
+        set_disabled(
+            &required(document, "wb-interaction-trace-copy-trigger")?,
+            wb.code_project.is_none(),
+        )?;
         let history = wb.editor().coordinator().intent().history_projection();
         let history_availability = wb.code_project.as_ref().map_or(
             (history.applied.is_empty(), history.redoable.is_empty()),
@@ -5723,7 +5967,12 @@ pub(crate) mod wasm {
             wb.camera.pixels_per_model_unit,
         )));
         render_projectional_authoring_status(document, &wb)?;
-        render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
+        render_reproduction_overlay(
+            document,
+            wb.reproduction_overlay_open,
+            wb.reproduction_overlay_mode,
+            &wb.notice,
+        )?;
         render_projectional_tool_options_overlay(document, &wb)?;
         let root = required(document, "workbench-root")?;
         root.set_attribute("data-editor-adapter", "projectional-intent")?;
@@ -5927,25 +6176,39 @@ pub(crate) mod wasm {
         wb: &mut ProjectionalWorkbench,
         terminal_pointer: Option<u64>,
     ) {
+        record_projectional_authority_trace(
+            wb,
+            "save.begin",
+            &format!("terminal_pointer={terminal_pointer:?}"),
+        );
         if wb.code_project.is_some() {
             let (publication, code_work) = {
                 let ProjectionalWorkbench {
                     authority,
                     code_project,
+                    interaction_trace,
                     notice,
                     ..
                 } = wb;
-                super::publish_projectional_code_checkpoint_for_save(
+                let trace = if interaction_trace.is_empty() {
+                    None
+                } else {
+                    Some(interaction_trace)
+                };
+                super::publish_projectional_code_checkpoint_for_save_with_trace(
                     code_project
                         .as_mut()
                         .expect("code-project presence was checked"),
                     authority,
                     notice,
                     terminal_pointer,
+                    trace,
                 )
             };
             super::record_code_work(&wb.work_ledger, code_work);
             if publication == super::ProjectionalCodeSavePublication::Abort {
+                let trace_detail = format!("reason=code-publication work={code_work:?}");
+                record_projectional_authority_trace(wb, "save.abort", &trace_detail);
                 return;
             }
         }
@@ -5954,26 +6217,64 @@ pub(crate) mod wasm {
                 Ok(json) => json,
                 Err(error) => {
                     wb.notice = format!("Code-project workspace could not be saved: {error}");
+                    record_projectional_authority_trace(
+                        wb,
+                        "persistence.skipped",
+                        "reason=code-project-encoding",
+                    );
                     return;
                 }
             }
         } else {
             let Ok(snapshot) = wb.authority.snapshot() else {
+                record_projectional_trace(
+                    wb,
+                    "persistence.skipped",
+                    "reason=workspace-snapshot-unavailable",
+                );
                 return;
             };
             let Ok(json) = snapshot.encode() else {
+                record_projectional_trace(
+                    wb,
+                    "persistence.skipped",
+                    "reason=workspace-encoding-failed",
+                );
                 return;
             };
             json
         };
         let Ok(window) = super::platform::window() else {
+            record_projectional_trace(wb, "persistence.skipped", "reason=window-unavailable");
             return;
         };
-        if let Ok(Some(storage)) = window.local_storage() {
-            if storage.set_item(STORAGE_KEY, &json).is_ok() {
-                wb.work_ledger
-                    .record(super::performance::PresentationWork::PersistenceWrite);
+        match window.local_storage() {
+            Ok(Some(storage)) => {
+                let result = storage.set_item(STORAGE_KEY, &json);
+                record_projectional_authority_trace(
+                    wb,
+                    "persistence.write",
+                    &format!(
+                        "bytes={} outcome={}",
+                        json.len(),
+                        if result.is_ok() { "stored" } else { "rejected" },
+                    ),
+                );
+                if result.is_ok() {
+                    wb.work_ledger
+                        .record(super::performance::PresentationWork::PersistenceWrite);
+                }
             }
+            Ok(None) => record_projectional_trace(
+                wb,
+                "persistence.skipped",
+                "reason=local-storage-unavailable",
+            ),
+            Err(_) => record_projectional_trace(
+                wb,
+                "persistence.skipped",
+                "reason=local-storage-query-rejected",
+            ),
         }
     }
 
@@ -6048,6 +6349,20 @@ pub(crate) mod wasm {
                     }
                 },
             )?;
+        }
+        if result.is_ok() {
+            let detail = {
+                let wb = workbench.borrow();
+                format!(
+                    "presentation={event:?} work_delta={}",
+                    wb.work_ledger.snapshot().delta_since(work_before).compact(),
+                )
+            };
+            record_projectional_authority_trace(
+                &mut workbench.borrow_mut(),
+                "presentation.end",
+                &detail,
+            );
         }
         result
     }
@@ -6791,6 +7106,13 @@ pub(crate) mod wasm {
         if !super::projectional_terminal_owns_capture(wb.captured_pointer, pointer_id) {
             return false;
         }
+        record_projectional_authority_trace(
+            wb,
+            "gesture.cancel.begin",
+            &format!(
+                "pointer={pointer_id:?} release_platform_capture={release_platform_capture} reason={notice}"
+            ),
+        );
         let retired_frame = wb.pointer_moves.borrow_mut().invalidate();
         let had_capture = wb.captured_pointer.is_some();
         let effects = if wb.editor().feature_authoring_radius_drag_active() {
@@ -6834,6 +7156,13 @@ pub(crate) mod wasm {
         let changed = retired_frame || had_capture || effect_count != 0 || restored_semantic_drag;
         if changed {
             wb.notice = notice.into();
+            record_projectional_authority_trace(
+                wb,
+                "gesture.cancel.end",
+                &format!(
+                    "retired_frame={retired_frame} had_capture={had_capture} effects={effect_count} restored_semantic_drag={restored_semantic_drag}"
+                ),
+            );
         }
         changed
     }
@@ -7675,6 +8004,15 @@ pub(crate) mod wasm {
                 {
                     return;
                 }
+                if wb.code_project.as_ref().is_some_and(|code_project| {
+                    code_project.has_pending_semantic_point_drag(sample.input.pointer_id)
+                }) {
+                    let trace_detail = format!(
+                        "generation={generation} {}",
+                        projectional_input_trace_detail(sample.input, wb.camera.viewport()),
+                    );
+                    record_projectional_trace(&mut wb, "pointermove.frame.begin", trace_detail);
+                }
                 if let Some((previous, result)) =
                     apply_projectional_plain_hover(&mut wb, sample.input)
                 {
@@ -7809,6 +8147,16 @@ pub(crate) mod wasm {
                         }
                     }
                 }
+                if wb.code_project.as_ref().is_some_and(|code_project| {
+                    code_project.has_pending_semantic_point_drag(sample.input.pointer_id)
+                }) {
+                    let trace_detail = format!("work={interaction_work:?}");
+                    record_projectional_authority_trace(
+                        &mut wb,
+                        "pointermove.frame.end",
+                        &trace_detail,
+                    );
+                }
             }
             let _ = present_projectional_pointer_event_with_work(
                 &frame_document,
@@ -7861,6 +8209,17 @@ pub(crate) mod wasm {
                 return;
             };
             event.prevent_default();
+            if let Some(code_project) = wb.code_project.as_mut() {
+                code_project.reset_interaction_trace_gesture();
+                let detail = projectional_pointer_trace_detail(&event, input, scene.viewport);
+                wb.interaction_trace
+                    .begin_gesture("browser.pointerdown", detail);
+                record_projectional_authority_trace(
+                    &mut wb,
+                    "authority.pointerdown.before",
+                    "route=unclassified",
+                );
+            }
             wb.pointer_moves.borrow_mut().invalidate();
             if projectional_feature_authoring_active(&wb) {
                 let symbol = match projectional_feature_symbol(&wb) {
@@ -8270,6 +8629,12 @@ pub(crate) mod wasm {
                     super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
                 }
             };
+            let trace_detail = format!("active={active:?} presentation={presentation:?}");
+            record_projectional_authority_trace(
+                &mut wb,
+                "gesture.pointerdown.route",
+                &trace_detail,
+            );
             drop(wb);
             let _ =
                 present_projectional_pointer_event(&down_document, &down_workbench, presentation);
@@ -8282,7 +8647,7 @@ pub(crate) mod wasm {
         let move_viewport = viewport.clone();
         let move_pointer_moves = Rc::clone(&pointer_moves);
         let pointer_move = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
-            let input = {
+            let (input, model_viewport) = {
                 let wb = move_workbench.borrow();
                 if wb.pan_gesture.is_some() {
                     return;
@@ -8293,16 +8658,37 @@ pub(crate) mod wasm {
                 {
                     return;
                 }
-                if wb.captured_pointer == Some(event.pointer_id()) {
+                let model_viewport = wb.camera.viewport();
+                let input = if wb.captured_pointer == Some(event.pointer_id()) {
                     captured_pointer_input(&move_viewport, wb.camera.viewport(), &event)
                 } else {
                     pointer_input(&move_viewport, wb.camera.viewport(), &event)
-                }
+                };
+                (input, model_viewport)
             };
             let Some(input) = input else {
                 return;
             };
-            let Some(generation) = move_pointer_moves.borrow_mut().push(input) else {
+            let generation = move_pointer_moves.borrow_mut().push(input);
+            {
+                let mut wb = move_workbench.borrow_mut();
+                if wb.captured_pointer == Some(event.pointer_id())
+                    || wb.code_project.as_ref().is_some_and(|code_project| {
+                        code_project.has_pending_semantic_point_drag(input.pointer_id)
+                    })
+                {
+                    let detail = format!(
+                        "{} queue={}",
+                        projectional_pointer_trace_detail(&event, input, model_viewport),
+                        generation.map_or_else(
+                            || "coalesced".into(),
+                            |generation| format!("scheduled:{generation}"),
+                        ),
+                    );
+                    wb.interaction_trace.record("browser.pointermove", detail);
+                }
+            }
+            let Some(generation) = generation else {
                 return;
             };
             schedule_projectional_pointer_move_frame(
@@ -8368,6 +8754,24 @@ pub(crate) mod wasm {
             let pending = pending
                 .filter(|sample| sample.input.pointer_id == input.pointer_id)
                 .map(|sample| sample.input);
+            if wb.code_project.as_ref().is_some_and(|code_project| {
+                code_project.has_pending_semantic_point_drag(input.pointer_id)
+            }) {
+                let pending_detail = pending.map_or_else(
+                    || "none".into(),
+                    |pending| projectional_input_trace_detail(pending, wb.camera.viewport()),
+                );
+                let trace_detail = format!(
+                    "{} queued_terminal={pending_detail}",
+                    projectional_pointer_trace_detail(&event, input, wb.camera.viewport()),
+                );
+                record_projectional_trace(&mut wb, "browser.pointerup", trace_detail);
+                record_projectional_authority_trace(
+                    &mut wb,
+                    "authority.pointerup.before_replay",
+                    "terminal=authenticated",
+                );
+            }
             let mut interaction_work =
                 geosolve_constraint_editor::InteractionWorkReceipt::default();
             let result = super::replay_projectional_terminal_samples(pending, input, |sample| {
@@ -8430,6 +8834,15 @@ pub(crate) mod wasm {
                     interaction_work,
                 );
                 return;
+            }
+            if wb.code_project.as_ref().is_some_and(|code_project| {
+                code_project.has_pending_semantic_point_drag(input.pointer_id)
+            }) {
+                record_projectional_authority_trace(
+                    &mut wb,
+                    "terminal.replay.accepted",
+                    &format!("work={interaction_work:?}"),
+                );
             }
             if feature_authoring_drag || offset_authoring_drag {
                 let outcome = projectional_scene(&wb)
@@ -8514,6 +8927,15 @@ pub(crate) mod wasm {
             } else {
                 Err("the exact terminal preview scene is unavailable".to_owned())
             };
+            if wb.code_project.as_ref().is_some_and(|code_project| {
+                code_project.has_pending_semantic_point_drag(input.pointer_id)
+            }) {
+                record_projectional_authority_trace(
+                    &mut wb,
+                    "native.pointerup.outcome",
+                    &format!("outcome={outcome:?} work={interaction_work:?}"),
+                );
+            }
             let event = match outcome {
                 Ok(outcome) => {
                     release_projectional_pointer_capture(
@@ -8563,6 +8985,12 @@ pub(crate) mod wasm {
                     super::WorkbenchPresentationEvent::InteractionCancellation
                 }
             };
+            let trace_detail = format!("presentation={event:?}");
+            record_projectional_authority_trace(
+                &mut wb,
+                "native.pointerup.presentation",
+                &trace_detail,
+            );
             drop(wb);
             let _ = present_projectional_pointer_event_with_work(
                 &up_document,
@@ -9522,6 +9950,10 @@ pub(crate) mod wasm {
                 copy_projectional_reproduction_payload(&click_document, &click_workbench);
                 return;
             }
+            if action.as_deref() == Some("interaction-trace-copy") {
+                copy_projectional_interaction_trace(&click_document, &click_workbench);
+                return;
+            }
             if action.as_deref() == Some("export-png") {
                 if let Err(error) = super::png_export::export_viewport_png(&click_document) {
                     let message = error
@@ -9767,16 +10199,27 @@ pub(crate) mod wasm {
                 }
                 Some("reproduction-open") => {
                     close_sample_selector(&click_document);
+                    let was_trace = wb.reproduction_overlay_mode.is_trace();
                     wb.reproduction_overlay_open = true;
+                    wb.reproduction_overlay_mode = super::ReproductionOverlayMode::Payload;
                     wb.reproduction_focus_return = super::ReproductionFocusReturn::Load;
                     wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
                     wb.notice = "Paste a reproduction payload, then load it atomically".into();
+                    if was_trace
+                        && let Ok(textarea) = reproduction_payload_textarea(&click_document)
+                    {
+                        textarea.set_value("");
+                    }
                     focus_reproduction_text = true;
                 }
                 Some("reproduction-select") => {
                     wb.reproduction_overlay_open = true;
                     wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
-                    wb.notice = "Reproduction payload selected; press Ctrl/Cmd+C to copy".into();
+                    wb.notice = if wb.reproduction_overlay_mode.is_trace() {
+                        "Interaction trace selected; press Ctrl/Cmd+C to copy".into()
+                    } else {
+                        "Reproduction payload selected; press Ctrl/Cmd+C to copy".into()
+                    };
                     focus_reproduction_text = true;
                 }
                 Some("reproduction-close") => {
@@ -9785,9 +10228,15 @@ pub(crate) mod wasm {
                 }
                 Some("reproduction-load") => {
                     wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
-                    match load_projectional_reproduction_payload(&click_document, &mut wb) {
-                        Ok(()) => durable = true,
-                        Err(error) => wb.notice = error,
+                    if wb.reproduction_overlay_mode.is_trace() {
+                        wb.notice =
+                            "Interaction traces are read-only diagnostic evidence and cannot be loaded"
+                                .into();
+                    } else {
+                        match load_projectional_reproduction_payload(&click_document, &mut wb) {
+                            Ok(()) => durable = true,
+                            Err(error) => wb.notice = error,
+                        }
                     }
                 }
                 Some("zoom-in" | "zoom-out" | "zoom-fit" | "zoom-origin") => {
@@ -16193,7 +16642,12 @@ pub(crate) mod wasm {
         )?;
         render_feature_options(document, &wb.feature_authoring)?;
         render_offset_options(document, coordinator, &wb.offset_authoring)?;
-        render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
+        render_reproduction_overlay(
+            document,
+            wb.reproduction_overlay_open,
+            super::ReproductionOverlayMode::Payload,
+            &wb.notice,
+        )?;
         render_tool_options_overlay(document, &wb)?;
         render_dimension_target_editor(document, coordinator)?;
         render_curve_control_inspector(document, coordinator)?;
@@ -16771,15 +17225,54 @@ pub(crate) mod wasm {
     fn render_reproduction_overlay(
         document: &Document,
         open: bool,
+        mode: super::ReproductionOverlayMode,
         status: &str,
     ) -> Result<(), JsValue> {
         let (expanded, hidden) = super::reproduction_overlay_presentation(open);
-        for id in [
-            "wb-reproduction-copy-trigger",
-            "wb-reproduction-load-trigger",
+        for (id, owns_mode) in [
+            ("wb-reproduction-copy-trigger", !mode.is_trace()),
+            ("wb-reproduction-load-trigger", !mode.is_trace()),
+            ("wb-interaction-trace-copy-trigger", mode.is_trace()),
         ] {
-            required(document, id)?.set_attribute("aria-expanded", expanded)?;
+            required(document, id)?
+                .set_attribute("aria-expanded", if owns_mode { expanded } else { "false" })?;
         }
+        let (title, subtitle, help, label, placeholder, close_label) = if mode.is_trace() {
+            (
+                "Interaction trace",
+                "Latest managed pointer gesture",
+                "Copy this bounded, memory-only trace immediately after the snap-back. It records pointer routing, exact coordinates, native release, code parity, publication, accepted-authority restore and persistence decisions; it does not contain managed source or a reproduction payload.",
+                "GeoSolve interaction trace",
+                "No managed pointer gesture has been recorded yet",
+                "Close interaction trace",
+            )
+        } else {
+            (
+                "Reproduction payload",
+                "Complete retained workspace",
+                "Paste a GeoSolve reproduction payload and load it atomically. Copy repro replaces this text with the current retained design, accepted geometry, computed features, and lifecycle identity.",
+                "GeoSolve reproduction payload",
+                "Paste a GEOSOLVE_REPRO_V1 payload here",
+                "Close reproduction payload",
+            )
+        };
+        required(document, "wb-reproduction-title")?.set_text_content(Some(title));
+        required(document, "wb-reproduction-subtitle")?.set_text_content(Some(subtitle));
+        required(document, "wb-reproduction-help")?.set_text_content(Some(help));
+        required(document, "wb-reproduction-close-action")?
+            .set_attribute("aria-label", close_label)?;
+        let textarea = reproduction_payload_textarea(document)?;
+        textarea.set_read_only(mode.is_trace());
+        textarea.set_attribute("aria-label", label)?;
+        textarea.set_attribute("placeholder", placeholder)?;
+        set_hidden(
+            &required(document, "wb-reproduction-load-action")?,
+            mode.is_trace(),
+        )?;
+        required(document, "wb-reproduction-overlay")?.set_attribute(
+            "data-content",
+            if mode.is_trace() { "trace" } else { "payload" },
+        )?;
         required(document, "wb-reproduction-status")?.set_text_content(Some(status));
         set_hidden(&required(document, "wb-reproduction-overlay")?, hidden)
     }
@@ -16791,6 +17284,12 @@ pub(crate) mod wasm {
         feature_authoring: &FeatureAuthoringState,
         offset_authoring: &OffsetAuthoringState,
     ) -> Result<(), JsValue> {
+        // The flat compatibility adapter has no managed-code publication
+        // boundary and therefore never owns interaction-trace evidence.
+        set_disabled(
+            &required(document, "wb-interaction-trace-copy-trigger")?,
+            true,
+        )?;
         for key in ["new", "finish", "cancel", "clear-selection"] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
                 set_disabled(
@@ -17410,6 +17909,100 @@ pub(crate) mod wasm {
         })
     }
 
+    fn projectional_pointer_trace_detail(
+        event: &PointerEvent,
+        input: PointerInput,
+        viewport: geosolve_constraint_editor::Viewport,
+    ) -> String {
+        let model = viewport.screen_to_model(input.position);
+        format!(
+            "pointer={} type={} primary={} button={} buttons={} client=[{},{}] screen=[{:.17e},{:.17e}] model=[{:.17e}/0x{:016x},{:.17e}/0x{:016x}] modifiers=[shift:{},control:{},command:{}] browser_time={:.6}",
+            input.pointer_id,
+            event.pointer_type(),
+            event.is_primary(),
+            event.button(),
+            event.buttons(),
+            event.client_x(),
+            event.client_y(),
+            input.position.x,
+            input.position.y,
+            model[0],
+            model[0].to_bits(),
+            model[1],
+            model[1].to_bits(),
+            input.modifiers.shift,
+            input.modifiers.control,
+            input.modifiers.command,
+            event.time_stamp(),
+        )
+    }
+
+    fn projectional_input_trace_detail(
+        input: PointerInput,
+        viewport: geosolve_constraint_editor::Viewport,
+    ) -> String {
+        let model = viewport.screen_to_model(input.position);
+        format!(
+            "pointer={} screen=[{:.17e},{:.17e}] model=[{:.17e}/0x{:016x},{:.17e}/0x{:016x}] modifiers=[shift:{},control:{},command:{}]",
+            input.pointer_id,
+            input.position.x,
+            input.position.y,
+            model[0],
+            model[0].to_bits(),
+            model[1],
+            model[1].to_bits(),
+            input.modifiers.shift,
+            input.modifiers.control,
+            input.modifiers.command,
+        )
+    }
+
+    fn projectional_trace_authority_detail(wb: &ProjectionalWorkbench, extra: &str) -> String {
+        let Some(code_project) = wb.code_project.as_ref() else {
+            return format!("code_project=none {extra}");
+        };
+        let accepted = wb
+            .editor()
+            .coordinator()
+            .presentation_session()
+            .and_then(|session| session.accepted_state_for_current_input())
+            .map(|accepted| format!("{:?}", accepted.identity()))
+            .unwrap_or_else(|| "none".into());
+        let intent = wb.editor().coordinator().intent().identity();
+        format!(
+            "{} {} capture={:?} accepted={} intent_session={:?} intent_revision={:?} intent_digest={} {}",
+            extra,
+            code_project.interaction_trace_pending_point(wb.editor()),
+            wb.captured_pointer,
+            accepted,
+            intent.session,
+            intent.revision,
+            intent.digest,
+            code_project.interaction_trace_context(),
+        )
+    }
+
+    fn record_projectional_trace(
+        wb: &mut ProjectionalWorkbench,
+        stage: &str,
+        detail: impl AsRef<str>,
+    ) {
+        if wb.code_project.is_some() && !wb.interaction_trace.is_empty() {
+            wb.interaction_trace.record(stage, detail);
+        }
+    }
+
+    fn record_projectional_authority_trace(
+        wb: &mut ProjectionalWorkbench,
+        stage: &str,
+        extra: &str,
+    ) {
+        if wb.code_project.is_some() && !wb.interaction_trace.is_empty() {
+            let detail = projectional_trace_authority_detail(wb, extra);
+            wb.interaction_trace.record(stage, detail);
+        }
+    }
+
     fn client_screen_point(
         viewport: &Element,
         model_viewport: geosolve_constraint_editor::Viewport,
@@ -17844,31 +18437,31 @@ mod tests {
         HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
         ProjectionalConstructionDispatch, ProjectionalInspectorControl,
         ProjectionalInspectorDispatch, ProjectionalInspectorStamp, ProjectionalInspectorSubmission,
-        ProjectionalPointerMoveQueue, ReproductionFocusReturn, RetainedCameraQueue,
-        WorkbenchDocumentAuthority, WorkbenchPresentationCounters, WorkbenchPresentationEvent,
-        WorkbenchRenderScope, annotation_family_name, annotation_inspector_presentation,
-        apply_native_fillet_profile, apply_projectional_scene_display,
-        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
-        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
-        compose_editor_scene, coordinate_hud, current_problem_items,
-        curve_control_inspector_detail, curve_control_inspector_markup,
-        decode_projectional_inspector_control, dispatch_projectional_authoring_application,
-        dispatch_projectional_construction_effects, dispatch_projectional_inspector_control,
-        draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
-        foreground_overlay_escape_owner, geometry_sweep_flip_available,
-        geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
-        observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
-        offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
-        owns_authoring_pick, projectional_cell_drop_before, projectional_cell_move_patch,
-        projectional_design_markup, projectional_direct_gesture_is_capturable,
-        projectional_outline_drop_before, projectional_outline_move_patch,
-        projectional_terminal_owns_capture, rational_conic_construction_copy,
-        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
-        reproduction_overlay_presentation, reproduction_payload_size_label,
-        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
-        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
-        route_canvas_primary_pointer_down, route_projectional_terminal_capture,
-        should_route_stationary_draft_inference,
+        ProjectionalPointerMoveQueue, ReproductionFocusReturn, ReproductionOverlayMode,
+        RetainedCameraQueue, WorkbenchDocumentAuthority, WorkbenchPresentationCounters,
+        WorkbenchPresentationEvent, WorkbenchRenderScope, annotation_family_name,
+        annotation_inspector_presentation, apply_native_fillet_profile,
+        apply_projectional_scene_display, apply_validated_reproduction, canvas_cursor_key,
+        canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
+        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
+        coordinate_hud, current_problem_items, curve_control_inspector_detail,
+        curve_control_inspector_markup, decode_projectional_inspector_control,
+        dispatch_projectional_authoring_application, dispatch_projectional_construction_effects,
+        dispatch_projectional_inspector_control, draft_inference_preference_is_stale,
+        feature_apply_returns_focus_to_select, foreground_overlay_escape_owner,
+        geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
+        native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
+        offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
+        offset_target_for_selection, owns_authoring_pick, projectional_cell_drop_before,
+        projectional_cell_move_patch, projectional_design_markup,
+        projectional_direct_gesture_is_capturable, projectional_outline_drop_before,
+        projectional_outline_move_patch, projectional_terminal_owns_capture,
+        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
+        reproduction_focus_target_after_action, reproduction_overlay_presentation,
+        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
+        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
+        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
+        route_projectional_terminal_capture, should_route_stationary_draft_inference,
     };
 
     #[test]
@@ -18897,9 +19490,11 @@ mod tests {
                         .next()
                 })
                 .expect("projectional persistence wrapper");
-            assert!(save_wrapper.contains(
-                "if publication == super::ProjectionalCodeSavePublication::Abort {\n                return;"
-            ));
+            assert!(
+                save_wrapper
+                    .contains("publication == super::ProjectionalCodeSavePublication::Abort")
+            );
+            assert!(save_wrapper.contains("record_projectional_authority_trace("));
             assert!(
                 save_wrapper.find("return;").unwrap()
                     < save_wrapper.find("window.local_storage()").unwrap(),
@@ -18932,6 +19527,7 @@ mod tests {
             .expect("projectional event implementation");
         for route in [
             "copy_projectional_reproduction_payload(&click_document, &click_workbench)",
+            "copy_projectional_interaction_trace(&click_document, &click_workbench)",
             "Some(\"reproduction-open\")",
             "Some(\"reproduction-select\")",
             "Some(\"reproduction-close\")",
@@ -18969,6 +19565,44 @@ mod tests {
             render.contains("render_reproduction_overlay("),
             "the projectional durable render must own the shared payload dialog",
         );
+        assert!(render.contains("wb-interaction-trace-copy-trigger"));
+        assert!(render.contains("wb.code_project.is_none()"));
+
+        let trace_copy = source
+            .split("fn copy_projectional_interaction_trace(")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("fn load_projectional_reproduction_payload(")
+                    .next()
+            })
+            .expect("projectional interaction trace copy transport");
+        for required in [
+            ".export(&context, \"bounded latest-gesture evidence\")",
+            "ReproductionOverlayMode::Trace",
+            "ReproductionFocusReturn::Trace",
+            "textarea.set_value(&trace)",
+            "focus_and_select_reproduction_payload(document)",
+            "if !window.is_secure_context()",
+        ] {
+            assert!(
+                trace_copy.contains(required),
+                "interaction trace copy path is missing `{required}`"
+            );
+        }
+        for forbidden in [
+            "to_persistence_json",
+            "reproduction_payload_from_snapshot",
+            "encode_workspace",
+            "local_storage",
+            "set_item",
+            "&wb.notice",
+        ] {
+            assert!(
+                !trace_copy.contains(forbidden),
+                "memory-only trace copy path unexpectedly contains `{forbidden}`"
+            );
+        }
     }
 
     #[test]
@@ -22187,6 +22821,15 @@ mod tests {
         );
         assert_eq!(
             reproduction_focus_target_after_action(
+                "reproduction-close",
+                false,
+                ReproductionFocusReturn::Trace,
+            ),
+            Some("wb-interaction-trace-copy-trigger"),
+            "closing copied trace evidence must restore its own invoker",
+        );
+        assert_eq!(
+            reproduction_focus_target_after_action(
                 "reproduction-load",
                 false,
                 ReproductionFocusReturn::Load,
@@ -22210,12 +22853,22 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one static UI ownership test covers payload and trace modes on their shared overlay"
+    )]
     fn reproduction_controls_use_one_non_layout_shifting_canvas_overlay() {
         assert_eq!(reproduction_overlay_presentation(false), ("false", true));
         assert_eq!(reproduction_overlay_presentation(true), ("true", false));
+        assert!(!ReproductionOverlayMode::Payload.is_trace());
+        assert!(ReproductionOverlayMode::Trace.is_trace());
         assert_eq!(
             ReproductionFocusReturn::Copy.element_id(),
             "wb-reproduction-copy-trigger"
+        );
+        assert_eq!(
+            ReproductionFocusReturn::Trace.element_id(),
+            "wb-interaction-trace-copy-trigger"
         );
         assert_eq!(
             ReproductionFocusReturn::Load.element_id(),
@@ -22225,10 +22878,13 @@ mod tests {
         let html = include_str!("../../index.html");
         for id in [
             "wb-reproduction-copy-trigger",
+            "wb-interaction-trace-copy-trigger",
             "wb-reproduction-load-trigger",
             "wb-reproduction-overlay",
+            "wb-reproduction-subtitle",
             "wb-reproduction-payload",
             "wb-reproduction-status",
+            "wb-reproduction-load-action",
         ] {
             assert_eq!(
                 html.matches(&format!("id=\"{id}\"")).count(),
@@ -22237,6 +22893,10 @@ mod tests {
             );
         }
         assert!(html.contains("data-wb-action=\"reproduction-copy\""));
+        assert!(html.contains("data-wb-action=\"interaction-trace-copy\""));
+        assert!(html.contains(
+            "id=\"wb-interaction-trace-copy-trigger\" type=\"button\" data-wb-action=\"interaction-trace-copy\" aria-controls=\"wb-reproduction-overlay\" aria-expanded=\"false\" disabled"
+        ));
         assert!(html.contains("data-wb-action=\"reproduction-load\""));
         assert!(html.contains("data-wb-action=\"reproduction-select\""));
         assert!(html.contains("role=\"dialog\""));
@@ -22272,7 +22932,40 @@ mod tests {
             );
         }
         assert!(css.contains(".wb-reproduction-overlay textarea {"));
+        assert!(css.contains(".wb-reproduction-overlay textarea[readonly] {"));
         assert!(css.contains("user-select: text;"));
+
+        let source = include_str!("mod.rs");
+        let overlay_render = source
+            .split("fn render_reproduction_overlay(")
+            .nth(1)
+            .and_then(|source| source.split("fn render_action_availability(").next())
+            .expect("shared payload/trace overlay renderer");
+        for required_route in [
+            "textarea.set_read_only(mode.is_trace())",
+            "wb-reproduction-load-action",
+            "mode.is_trace(),",
+            "data-content",
+        ] {
+            assert!(
+                overlay_render.contains(required_route),
+                "trace overlay is missing `{required_route}`"
+            );
+        }
+        let projectional_render = source
+            .split("fn render_projectional(")
+            .nth(1)
+            .and_then(|source| source.split("fn render_projectional_canvas(").next())
+            .expect("projectional renderer");
+        assert!(projectional_render.contains("wb-interaction-trace-copy-trigger"));
+        assert!(projectional_render.contains("wb.code_project.is_none()"));
+        let flat_availability = source
+            .split("fn render_action_availability(")
+            .nth(1)
+            .and_then(|source| source.split("fn render_geometry_controls(").next())
+            .expect("flat action availability");
+        assert!(flat_availability.contains("wb-interaction-trace-copy-trigger"));
+        assert!(flat_availability.contains("true,"));
     }
 
     #[test]

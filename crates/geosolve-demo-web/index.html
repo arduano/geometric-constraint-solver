@@ -20,8 +20,9 @@
           <button type="button" data-wb-action="undo" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl/Cmd+Z)">Undo</button>
           <button type="button" data-wb-action="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">Redo</button>
         </div>
-        <div class="wb-command-group wb-reproduction-commands" aria-label="Reproduction payload commands">
+        <div class="wb-command-group wb-reproduction-commands" aria-label="Reproduction and diagnostic commands">
           <button id="wb-reproduction-copy-trigger" type="button" data-wb-action="reproduction-copy" aria-controls="wb-reproduction-overlay" aria-expanded="false">Copy repro</button>
+          <button id="wb-interaction-trace-copy-trigger" type="button" data-wb-action="interaction-trace-copy" aria-controls="wb-reproduction-overlay" aria-expanded="false" disabled>Copy trace</button>
           <button id="wb-reproduction-load-trigger" type="button" data-wb-action="reproduction-open" aria-controls="wb-reproduction-overlay" aria-expanded="false">Load repro</button>
           <button id="wb-export-png-trigger" type="button" data-wb-action="export-png" title="Export the accepted sketch view as a 2000 × 1400 PNG">Export PNG</button>
         </div>
@@ -139,16 +140,16 @@
         <svg id="wb-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable sketch canvas" draggable="false"></svg>
         <section id="wb-reproduction-overlay" class="wb-reproduction-overlay" role="dialog" aria-labelledby="wb-reproduction-title" aria-describedby="wb-reproduction-help" hidden>
           <div class="wb-reproduction-title">
-            <div><strong id="wb-reproduction-title">Reproduction payload</strong><span>Complete retained workspace</span></div>
-            <button type="button" data-wb-action="reproduction-close" aria-label="Close reproduction payload">×</button>
+            <div><strong id="wb-reproduction-title">Reproduction payload</strong><span id="wb-reproduction-subtitle">Complete retained workspace</span></div>
+            <button id="wb-reproduction-close-action" type="button" data-wb-action="reproduction-close" aria-label="Close reproduction payload">×</button>
           </div>
           <p id="wb-reproduction-help">Paste a GeoSolve reproduction payload and load it atomically. Copy repro replaces this text with the current retained design, accepted geometry, computed features, and lifecycle identity.</p>
           <p id="wb-reproduction-status" class="wb-reproduction-status" role="status" aria-live="polite">Ready for a reproduction payload.</p>
           <textarea id="wb-reproduction-payload" rows="12" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="GeoSolve reproduction payload" placeholder="Paste a GEOSOLVE_REPRO_V1 payload here"></textarea>
           <div class="wb-reproduction-actions">
-            <button type="button" data-wb-action="reproduction-load">Load payload</button>
-            <button type="button" data-wb-action="reproduction-select">Select text</button>
-            <span>If clipboard access is blocked, use Select text and press Ctrl/Cmd+C.</span>
+            <button id="wb-reproduction-load-action" type="button" data-wb-action="reproduction-load">Load payload</button>
+            <button id="wb-reproduction-select-action" type="button" data-wb-action="reproduction-select">Select text</button>
+            <span id="wb-reproduction-copy-fallback">If clipboard access is blocked, use Select text and press Ctrl/Cmd+C.</span>
           </div>
         </section>
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>

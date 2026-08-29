@@ -15,9 +15,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_constraint_editor::{
     BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1, ComputedEdgeGeometry, ComputedEdgeProvenance,
-    ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFeatureEvaluationState,
-    ComputedFeatureSnapshot, IntentInspectorEditTarget, IntentInspectorEditValue,
-    IntentInspectorProjection, IntentNativeBinding, ProjectionalEditorSession, SelectionItem,
+    ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFeatureEvaluation,
+    ComputedFeatureEvaluationState, ComputedFeatureSnapshot, IntentInspectorEditTarget,
+    IntentInspectorEditValue, IntentInspectorProjection, IntentNativeBinding,
+    ProjectionalEditorSession, SelectionItem,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
@@ -378,6 +379,11 @@ pub(crate) struct CodeProjectWorkbench {
     // continuation starts. This is disposable gesture state and is never
     // serialized or entered into history unless the terminal sample commits.
     pending_semantic_point_drag: Option<PendingSemanticPointDrag>,
+    // Last authenticated semantic lens retained solely for the memory-only
+    // interaction trace. Publication consumes the pending token before a
+    // later parity rejection can restore accepted authority, so diagnostics
+    // need this non-authoritative handle to report the post-restore point.
+    trace_semantic_point: Option<(u64, ExpandedWritablePoint)>,
 }
 
 /// Presentation provenance for one genuine code project. Bundled projects
@@ -470,7 +476,76 @@ fn restore_code_project_origin(
     }
 }
 
+fn trace_pair(position: [f64; 2]) -> String {
+    format!(
+        "[{:.17e}/0x{:016x},{:.17e}/0x{:016x}]",
+        position[0],
+        position[0].to_bits(),
+        position[1],
+        position[1].to_bits(),
+    )
+}
+
 impl CodeProjectWorkbench {
+    /// Clears the prior gesture's diagnostic-only semantic lens before one
+    /// new browser pointer-down starts a fresh interaction trace.
+    pub(crate) fn reset_interaction_trace_gesture(&mut self) {
+        self.trace_semantic_point = None;
+    }
+
+    /// Compact current authority identity for the memory-only interaction
+    /// trace. This deliberately excludes managed source and editor snapshots.
+    pub(crate) fn interaction_trace_context(&self) -> String {
+        let identity = self.session.identity();
+        let pending = self.pending_semantic_point_drag.as_ref();
+        format!(
+            "project={:?} origin={} session={} revision={} digest={} pending_pointer={} pending_alias={} pending_selector={:?}",
+            self.session.snapshot().project,
+            self.origin.demo_key().unwrap_or("non-bundled"),
+            identity.session,
+            identity.revision,
+            identity.digest,
+            pending.map_or_else(|| "none".into(), |pending| pending.pointer_id.to_string(),),
+            pending.map_or("none", |pending| pending.point.handle.alias.as_str()),
+            pending.map(|pending| &pending.point.handle.selector),
+        )
+    }
+
+    /// Exact current native point owned by the pending semantic route, for
+    /// before/preview/terminal/publication trace checkpoints.
+    pub(crate) fn interaction_trace_pending_point(
+        &self,
+        editor: &ProjectionalEditorSession,
+    ) -> String {
+        let semantic_point = self
+            .pending_semantic_point_drag
+            .as_ref()
+            .map(|pending| (pending.pointer_id, &pending.point, "pending"))
+            .or_else(|| {
+                self.trace_semantic_point
+                    .as_ref()
+                    .map(|(pointer, point)| (*pointer, point, "consumed"))
+            });
+        let Some((pointer_id, point, token)) = semantic_point else {
+            return "pending=none".into();
+        };
+        let native = expanded_port_point(editor, &point.handle);
+        let position = native.and_then(|point| {
+            editor
+                .coordinator()
+                .presentation_session()
+                .and_then(|session| session.accepted_state_for_current_input())
+                .and_then(|accepted| accepted.document().point(point))
+                .map(|point| point.position)
+        });
+        format!(
+            "token={token} pointer={pointer_id} alias={} selector={:?} native={native:?} position={}",
+            point.handle.alias,
+            point.handle.selector,
+            position.map_or_else(|| "none".into(), trace_pair),
+        )
+    }
+
     /// Starts one standalone code-authored sketch without first manufacturing
     /// an ordinary GUI scene. The starter is intentionally artifact-free and
     /// uses lexical typed feature references, then enters the same cold-
@@ -541,6 +616,7 @@ impl CodeProjectWorkbench {
                 last_receipt: None,
                 materialized: Some(materialized),
                 pending_semantic_point_drag: None,
+                trace_semantic_point: None,
             },
             delegated_editor,
         ))
@@ -668,6 +744,7 @@ impl CodeProjectWorkbench {
             last_receipt: None,
             materialized: Some(materialized),
             pending_semantic_point_drag: None,
+            trace_semantic_point: None,
         };
         value.select_file(&wire.selected_file)?;
         Ok(value)
@@ -715,6 +792,7 @@ impl CodeProjectWorkbench {
     /// authenticated at pointer-down. A generic save, another pointer, or a
     /// route prepared against an older code-session identity cannot consume
     /// the token or turn a transient preview into durable authority.
+    #[cfg(test)]
     pub(crate) fn publish_pointer_terminal_checkpoint(
         &mut self,
         pointer_id: u64,
@@ -733,6 +811,7 @@ impl CodeProjectWorkbench {
     /// same semantic delta would duplicate authority work. The terminal still
     /// rematerializes the staged overlay through the ordinary code/Intent/
     /// solver path and persists one independently restorable checkpoint.
+    #[cfg(test)]
     pub(crate) fn publish_pointer_terminal_editor(
         &mut self,
         pointer_id: u64,
@@ -755,6 +834,25 @@ impl CodeProjectWorkbench {
             candidate_editor,
             label,
             &mut work,
+            None,
+        );
+        AuditedCodeWork { outcome, work }
+    }
+
+    pub(crate) fn publish_pointer_terminal_editor_audited_with_trace(
+        &mut self,
+        pointer_id: u64,
+        candidate_editor: &ProjectionalEditorSession,
+        label: &str,
+        trace: &mut super::interaction_trace::InteractionTrace,
+    ) -> AuditedCodeWork<Result<Option<AcceptedCodePublication>, String>> {
+        let mut work = CodeWorkReceipt::default();
+        let outcome = self.publish_pointer_terminal_editor_with_work(
+            pointer_id,
+            candidate_editor,
+            label,
+            &mut work,
+            Some(trace),
         );
         AuditedCodeWork { outcome, work }
     }
@@ -765,7 +863,17 @@ impl CodeProjectWorkbench {
         candidate_editor: &ProjectionalEditorSession,
         label: &str,
         work: &mut CodeWorkReceipt,
+        mut trace: Option<&mut super::interaction_trace::InteractionTrace>,
     ) -> Result<Option<AcceptedCodePublication>, String> {
+        if let Some(trace) = trace.as_deref_mut() {
+            trace.record(
+                "code.semantic-route.authenticate",
+                format!(
+                    "pointer={pointer_id} label={label} {}",
+                    self.interaction_trace_context()
+                ),
+            );
+        }
         let pending = self.pending_semantic_point_drag.as_ref().ok_or_else(|| {
             "semantic point terminal has no pending authenticated route".to_owned()
         })?;
@@ -811,12 +919,36 @@ impl CodeProjectWorkbench {
         };
         let bundle =
             self.canonical_terminal_point_bundle(&pending.point, placements, candidate_editor)?;
+        if let Some(trace) = trace.as_deref_mut() {
+            let placements = bundle
+                .placements
+                .iter()
+                .map(|(point, position)| {
+                    format!(
+                        "{}:{:?}={}",
+                        point.handle.alias,
+                        point.handle.selector,
+                        trace_pair(*position),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(";");
+            trace.record(
+                "code.semantic-route.bundle",
+                format!(
+                    "placements={} rectangle_projections={} values={placements}",
+                    bundle.placements.len(),
+                    bundle.rectangle_projections.len(),
+                ),
+            );
+        }
         self.publish_semantic_point_overlay_with_work(
             &bundle.placements,
             candidate_editor,
             &bundle.rectangle_projections,
             label,
             work,
+            trace,
         )
     }
 
@@ -1046,9 +1178,14 @@ impl CodeProjectWorkbench {
             rectangle_projections,
             label,
             &mut CodeWorkReceipt::default(),
+            None,
         )
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "terminal publication keeps semantic staging, independent parity, trace checkpoints, history and receipt authority adjacent"
+    )]
     fn publish_semantic_point_overlay_with_work(
         &mut self,
         placements: &[(ExpandedWritablePoint, [f64; 2])],
@@ -1056,6 +1193,7 @@ impl CodeProjectWorkbench {
         rectangle_projections: &[RectangleTerminalProjection],
         label: &str,
         work: &mut CodeWorkReceipt,
+        mut trace: Option<&mut super::interaction_trace::InteractionTrace>,
     ) -> Result<Option<AcceptedCodePublication>, String> {
         if self.is_dirty() {
             return Err(
@@ -1087,6 +1225,16 @@ impl CodeProjectWorkbench {
                     .map(|(point, position)| (point, *position)),
             )
             .map_err(|error| error.to_string())?;
+        if let Some(trace) = trace.as_deref_mut() {
+            trace.record(
+                "code.overlay.staged",
+                format!(
+                    "placements={} overlay_drafts={} label={label}",
+                    placements.len(),
+                    overlay.drafts().len(),
+                ),
+            );
+        }
         self.ensure_materialized_cache()?;
         let audited = materialize_code_project_incremental_with_overlay_audited(
             self.materialized
@@ -1103,17 +1251,33 @@ impl CodeProjectWorkbench {
                 .ok_or_else(|| "staged code point has no Cartesian instance seed".to_owned())?;
             let terminal_position = expanded_port_position(candidate_editor, &point.handle)
                 .ok_or_else(|| "terminal code point has no Cartesian instance seed".to_owned())?;
+            if let Some(trace) = trace.as_deref_mut() {
+                trace.record(
+                    "code.seed-parity",
+                    format!(
+                        "alias={} selector={:?} requested={} staged={} terminal={} match={}",
+                        point.handle.alias,
+                        point.handle.selector,
+                        trace_pair(*position),
+                        trace_pair(staged_position),
+                        trace_pair(terminal_position),
+                        pair_bits(staged_position) == pair_bits(terminal_position)
+                            && pair_bits(terminal_position) == pair_bits(*position),
+                    ),
+                );
+            }
             if pair_bits(staged_position) != pair_bits(terminal_position)
                 || pair_bits(terminal_position) != pair_bits(*position)
             {
                 return Err("semantic point draft failed exact terminal/native seed parity".into());
             }
         }
-        validate_terminal_native_parity(
+        validate_terminal_native_parity_with_trace(
             candidate_editor,
             &materialized.editor,
             &materialized.expansion,
             rectangle_projections,
+            trace.as_deref_mut(),
         )?;
         let expansion = materialized.expansion.clone();
         let checkpoint = encode_editor_checkpoint(&materialized.editor)?;
@@ -1136,6 +1300,15 @@ impl CodeProjectWorkbench {
         let audited = self.session.apply_prepared_audited(prepared);
         work.merge(audited.work);
         let receipt = audited.outcome.map_err(|error| error.to_string())?;
+        if let Some(trace) = trace {
+            trace.record(
+                "code.overlay.published",
+                format!(
+                    "before={:?} after={:?} retained_failure={} work={work:?}",
+                    receipt.before, receipt.after, receipt.retained_failure,
+                ),
+            );
+        }
         self.materialized = Some(Box::new(materialized));
         self.last_receipt = Some(receipt.clone());
         Ok(Some(AcceptedCodePublication {
@@ -1245,6 +1418,7 @@ impl CodeProjectWorkbench {
         else {
             return Ok(None);
         };
+        self.trace_semantic_point = Some((pointer_id, point.clone()));
         if candidates.len() == 1 || !point.source.is_reference() {
             self.pending_semantic_point_drag = Some(PendingSemanticPointDrag {
                 pointer_id,
@@ -3779,11 +3953,7 @@ fn terminal_computed_fragment_matches(
     if !roundoff_curves.contains(&terminal.source.span.curve)
         || !roundoff_curves.contains(&staged.source.span.curve)
     {
-        return terminal.id.ordinal == staged.id.ordinal
-            && terminal.source == staged.source
-            && terminal.interval == staged.interval
-            && terminal.source_role == staged.source_role
-            && terminal.provenance == staged.provenance;
+        return terminal_computed_fragment_exact_matches(terminal, staged);
     }
     terminal.id.ordinal == staged.id.ordinal
         && terminal.source == staged.source
@@ -3800,6 +3970,53 @@ fn terminal_computed_fragment_matches(
             terminal.provenance.base_interval.end,
             staged.provenance.base_interval.end,
         )
+}
+
+fn terminal_computed_fragment_exact_matches(
+    terminal: &geosolve_constraint_editor::ComputedConstructionFragment,
+    staged: &geosolve_constraint_editor::ComputedConstructionFragment,
+) -> bool {
+    terminal.id.ordinal == staged.id.ordinal
+        && terminal.source == staged.source
+        && terminal.interval == staged.interval
+        && terminal.source_role == staged.source_role
+        && terminal.provenance == staged.provenance
+}
+
+fn terminal_feature_evaluation_matches(
+    terminal: &ComputedFeatureEvaluation,
+    staged: &ComputedFeatureEvaluation,
+) -> bool {
+    if terminal.feature != staged.feature {
+        return false;
+    }
+    match (&terminal.state, &staged.state) {
+        (
+            ComputedFeatureEvaluationState::Current {
+                corner_edges: terminal,
+            },
+            ComputedFeatureEvaluationState::Current {
+                corner_edges: staged,
+            },
+        ) => {
+            terminal.len() == staged.len()
+                && terminal.iter().zip(staged).all(
+                    |((terminal_corner, terminal_edge), (staged_corner, staged_edge))| {
+                        terminal_corner == staged_corner
+                            && terminal_edge.ordinal == staged_edge.ordinal
+                    },
+                )
+        }
+        (
+            ComputedFeatureEvaluationState::Failed { failure: terminal },
+            ComputedFeatureEvaluationState::Failed { failure: staged },
+        ) => terminal == staged,
+        (
+            ComputedFeatureEvaluationState::Suppressed,
+            ComputedFeatureEvaluationState::Suppressed,
+        ) => true,
+        _ => false,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3838,11 +4055,7 @@ fn computed_snapshots_match_for_terminal_parity(
             .zip(staged.construction_fragments())
             .all(|(terminal, staged)| match policy {
                 TerminalComputedParityPolicy::Exact => {
-                    terminal.id.ordinal == staged.id.ordinal
-                        && terminal.source == staged.source
-                        && terminal.interval == staged.interval
-                        && terminal.source_role == staged.source_role
-                        && terminal.provenance == staged.provenance
+                    terminal_computed_fragment_exact_matches(terminal, staged)
                 }
                 TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
                     terminal_computed_fragment_matches(terminal, staged, curves)
@@ -3854,41 +4067,442 @@ fn computed_snapshots_match_for_terminal_parity(
             .feature_evaluations()
             .iter()
             .zip(staged.feature_evaluations())
-            .all(|(terminal, staged)| {
-                if terminal.feature != staged.feature {
-                    return false;
-                }
-                match (&terminal.state, &staged.state) {
-                    (
-                        ComputedFeatureEvaluationState::Current {
-                            corner_edges: terminal,
-                        },
-                        ComputedFeatureEvaluationState::Current {
-                            corner_edges: staged,
-                        },
-                    ) => {
-                        terminal.len() == staged.len()
-                            && terminal.iter().zip(staged).all(
-                                |(
-                                    (terminal_corner, terminal_edge),
-                                    (staged_corner, staged_edge),
-                                )| {
-                                    terminal_corner == staged_corner
-                                        && terminal_edge.ordinal == staged_edge.ordinal
-                                },
-                            )
-                    }
-                    (
-                        ComputedFeatureEvaluationState::Failed { failure: terminal },
-                        ComputedFeatureEvaluationState::Failed { failure: staged },
-                    ) => terminal == staged,
-                    (
-                        ComputedFeatureEvaluationState::Suppressed,
-                        ComputedFeatureEvaluationState::Suppressed,
-                    ) => true,
-                    _ => false,
-                }
+            .all(|(terminal, staged)| terminal_feature_evaluation_matches(terminal, staged))
+}
+
+fn terminal_scalar_mismatch_trace(path: &str, terminal: f64, staged: f64) -> String {
+    format!(
+        "path={path} terminal={:.17e}/0x{:016x} staged={:.17e}/0x{:016x} ulp_diff={} allowed_ulps={} zero_cell={} terminal_finite={} staged_finite={}",
+        terminal,
+        terminal.to_bits(),
+        staged,
+        staged.to_bits(),
+        terminal.to_bits().abs_diff(staged.to_bits()),
+        TERMINAL_SEED_ROUNDOFF_ULPS,
+        TERMINAL_SEED_ZERO_ROUNDOFF,
+        terminal.is_finite(),
+        staged.is_finite(),
+    )
+}
+
+fn terminal_pair_mismatch_trace(
+    path: &str,
+    terminal: [f64; 2],
+    staged: [f64; 2],
+    policy: &TerminalComputedParityPolicy,
+) -> Option<String> {
+    ["x", "y"]
+        .into_iter()
+        .zip(terminal.into_iter().zip(staged))
+        .find_map(|(axis, (terminal, staged))| {
+            (!terminal_scalar_matches_trace_policy(terminal, staged, policy)).then(|| {
+                terminal_scalar_mismatch_trace(&format!("{path}.{axis}"), terminal, staged)
             })
+        })
+}
+
+fn terminal_scalar_matches_trace_policy(
+    terminal: f64,
+    staged: f64,
+    policy: &TerminalComputedParityPolicy,
+) -> bool {
+    match policy {
+        TerminalComputedParityPolicy::Exact => terminal.to_bits() == staged.to_bits(),
+        TerminalComputedParityPolicy::RectangleAliasRoundoff { .. } => {
+            terminal_derived_scalar_matches(terminal, staged)
+        }
+    }
+}
+
+fn first_terminal_computed_provenance_mismatch(
+    prefix: &str,
+    terminal: &ComputedEdgeProvenance,
+    staged: &ComputedEdgeProvenance,
+    policy: &TerminalComputedParityPolicy,
+) -> String {
+    match (terminal, staged) {
+        (
+            ComputedEdgeProvenance::SourceFragment {
+                source: terminal_source,
+                interval: terminal_interval,
+                start_claim: terminal_start,
+                end_claim: terminal_end,
+            },
+            ComputedEdgeProvenance::SourceFragment {
+                source: staged_source,
+                interval: staged_interval,
+                start_claim: staged_start,
+                end_claim: staged_end,
+            },
+        ) => {
+            for (path, terminal, staged) in [
+                (
+                    "source",
+                    format!("{terminal_source:?}"),
+                    format!("{staged_source:?}"),
+                ),
+                (
+                    "start_claim",
+                    format!("{terminal_start:?}"),
+                    format!("{staged_start:?}"),
+                ),
+                (
+                    "end_claim",
+                    format!("{terminal_end:?}"),
+                    format!("{staged_end:?}"),
+                ),
+            ] {
+                if terminal != staged {
+                    return format!(
+                        "path={prefix}.provenance.{path} terminal={terminal} staged={staged}"
+                    );
+                }
+            }
+            for (path, terminal, staged) in [
+                (
+                    "interval.start",
+                    terminal_interval.start,
+                    staged_interval.start,
+                ),
+                ("interval.end", terminal_interval.end, staged_interval.end),
+            ] {
+                if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
+                    return terminal_scalar_mismatch_trace(
+                        &format!("{prefix}.provenance.{path}"),
+                        terminal,
+                        staged,
+                    );
+                }
+            }
+            format!("path={prefix}.provenance.source_fragment unknown_mismatch")
+        }
+        (
+            ComputedEdgeProvenance::FilletArc {
+                owner: terminal_owner,
+                sources: terminal_sources,
+            },
+            ComputedEdgeProvenance::FilletArc {
+                owner: staged_owner,
+                sources: staged_sources,
+            },
+        ) => {
+            if terminal_owner != staged_owner {
+                return format!(
+                    "path={prefix}.provenance.owner terminal={terminal_owner:?} staged={staged_owner:?}"
+                );
+            }
+            if terminal_sources != staged_sources {
+                return format!(
+                    "path={prefix}.provenance.sources terminal={terminal_sources:?} staged={staged_sources:?}"
+                );
+            }
+            format!("path={prefix}.provenance.fillet_arc unknown_mismatch")
+        }
+        _ => format!("path={prefix}.provenance.variant terminal={terminal:?} staged={staged:?}"),
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the diagnostic enumerates every exact computed-edge field in causal comparison order"
+)]
+fn first_terminal_computed_edge_mismatch(
+    index: usize,
+    terminal: &geosolve_constraint_editor::ComputedEdge,
+    staged: &geosolve_constraint_editor::ComputedEdge,
+    policy: &TerminalComputedParityPolicy,
+) -> String {
+    let prefix = format!("edge[{index}]");
+    if terminal.id.ordinal != staged.id.ordinal {
+        return format!(
+            "path={prefix}.id.ordinal terminal={} staged={}",
+            terminal.id.ordinal, staged.id.ordinal
+        );
+    }
+    if terminal.role != staged.role {
+        return format!(
+            "path={prefix}.role terminal={:?} staged={:?}",
+            terminal.role, staged.role
+        );
+    }
+    let provenance_matches = match policy {
+        TerminalComputedParityPolicy::Exact => terminal.provenance == staged.provenance,
+        TerminalComputedParityPolicy::RectangleAliasRoundoff { .. } => {
+            terminal_computed_provenance_matches(&terminal.provenance, &staged.provenance)
+        }
+    };
+    if !provenance_matches {
+        return first_terminal_computed_provenance_mismatch(
+            &prefix,
+            &terminal.provenance,
+            &staged.provenance,
+            policy,
+        );
+    }
+    match (&terminal.geometry, &staged.geometry) {
+        (
+            ComputedEdgeGeometry::NativeSourceFragment {
+                source: terminal_source,
+                interval: terminal_interval,
+            },
+            ComputedEdgeGeometry::NativeSourceFragment {
+                source: staged_source,
+                interval: staged_interval,
+            },
+        ) => {
+            if terminal_source != staged_source {
+                return format!(
+                    "path={prefix}.native_source terminal={terminal_source:?} staged={staged_source:?}"
+                );
+            }
+            for (field, terminal, staged) in [
+                (
+                    "interval.start",
+                    terminal_interval.start,
+                    staged_interval.start,
+                ),
+                ("interval.end", terminal_interval.end, staged_interval.end),
+            ] {
+                if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
+                    return terminal_scalar_mismatch_trace(
+                        &format!("{prefix}.{field}"),
+                        terminal,
+                        staged,
+                    );
+                }
+            }
+            format!("path={prefix}.native_fragment unknown_mismatch")
+        }
+        (
+            ComputedEdgeGeometry::CircularArc(terminal),
+            ComputedEdgeGeometry::CircularArc(staged),
+        ) => {
+            if let Some(mismatch) = terminal_pair_mismatch_trace(
+                &format!("{prefix}.arc.center"),
+                terminal.center,
+                staged.center,
+                policy,
+            ) {
+                return mismatch;
+            }
+            for (field, terminal, staged) in [
+                ("radius", terminal.radius, staged.radius),
+                ("start_angle", terminal.start_angle, staged.start_angle),
+                ("end_angle", terminal.end_angle, staged.end_angle),
+            ] {
+                if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
+                    return terminal_scalar_mismatch_trace(
+                        &format!("{prefix}.arc.{field}"),
+                        terminal,
+                        staged,
+                    );
+                }
+            }
+            if terminal.sweep != staged.sweep {
+                return format!(
+                    "path={prefix}.arc.sweep terminal={:?} staged={:?}",
+                    terminal.sweep, staged.sweep
+                );
+            }
+            if terminal.tangent_orientations != staged.tangent_orientations {
+                return format!(
+                    "path={prefix}.arc.tangent_orientations terminal={:?} staged={:?}",
+                    terminal.tangent_orientations, staged.tangent_orientations
+                );
+            }
+            if terminal.contacts.len() != staged.contacts.len() {
+                return format!(
+                    "path={prefix}.arc.contacts.length terminal={} staged={}",
+                    terminal.contacts.len(),
+                    staged.contacts.len()
+                );
+            }
+            for (contact_index, (terminal, staged)) in
+                terminal.contacts.iter().zip(&staged.contacts).enumerate()
+            {
+                let contact = format!("{prefix}.arc.contacts[{contact_index}]");
+                if terminal.source != staged.source {
+                    return format!(
+                        "path={contact}.source terminal={:?} staged={:?}",
+                        terminal.source, staged.source
+                    );
+                }
+                if terminal.winding != staged.winding {
+                    return format!(
+                        "path={contact}.winding terminal={} staged={}",
+                        terminal.winding, staged.winding
+                    );
+                }
+                for (field, terminal, staged) in [
+                    ("parameter", terminal.parameter, staged.parameter),
+                    (
+                        "total_parameter",
+                        terminal.total_parameter,
+                        staged.total_parameter,
+                    ),
+                ] {
+                    if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
+                        return terminal_scalar_mismatch_trace(
+                            &format!("{contact}.{field}"),
+                            terminal,
+                            staged,
+                        );
+                    }
+                }
+                if let Some(mismatch) = terminal_pair_mismatch_trace(
+                    &format!("{contact}.position"),
+                    terminal.position,
+                    staged.position,
+                    policy,
+                ) {
+                    return mismatch;
+                }
+            }
+            format!("path={prefix}.arc unknown_mismatch")
+        }
+        _ => format!(
+            "path={prefix}.geometry.variant terminal={:?} staged={:?}",
+            terminal.geometry, staged.geometry
+        ),
+    }
+}
+
+fn first_terminal_feature_evaluation_mismatch(
+    index: usize,
+    terminal: &ComputedFeatureEvaluation,
+    staged: &ComputedFeatureEvaluation,
+) -> String {
+    let prefix = format!("feature_evaluations[{index}]");
+    if terminal.feature != staged.feature {
+        return format!(
+            "path={prefix}.feature terminal={:?} staged={:?}",
+            terminal.feature, staged.feature
+        );
+    }
+    match (&terminal.state, &staged.state) {
+        (
+            ComputedFeatureEvaluationState::Current {
+                corner_edges: terminal,
+            },
+            ComputedFeatureEvaluationState::Current {
+                corner_edges: staged,
+            },
+        ) => {
+            if terminal.len() != staged.len() {
+                return format!(
+                    "path={prefix}.current.corner_edges.length terminal={} staged={}",
+                    terminal.len(),
+                    staged.len()
+                );
+            }
+            for (edge_index, ((terminal_corner, terminal_edge), (staged_corner, staged_edge))) in
+                terminal.iter().zip(staged).enumerate()
+            {
+                let edge = format!("{prefix}.current.corner_edges[{edge_index}]");
+                if terminal_corner != staged_corner {
+                    return format!(
+                        "path={edge}.corner terminal={terminal_corner:?} staged={staged_corner:?}"
+                    );
+                }
+                if terminal_edge.ordinal != staged_edge.ordinal {
+                    return format!(
+                        "path={edge}.edge.ordinal terminal={} staged={}",
+                        terminal_edge.ordinal, staged_edge.ordinal
+                    );
+                }
+            }
+            format!("path={prefix}.current unknown_mismatch")
+        }
+        (
+            ComputedFeatureEvaluationState::Failed { failure: terminal },
+            ComputedFeatureEvaluationState::Failed { failure: staged },
+        ) => format!("path={prefix}.failed terminal={terminal:?} staged={staged:?}"),
+        (terminal, staged) => {
+            format!("path={prefix}.state terminal={terminal:?} staged={staged:?}")
+        }
+    }
+}
+
+fn first_terminal_computed_snapshot_mismatch(
+    terminal: &ComputedFeatureSnapshot,
+    staged: &ComputedFeatureSnapshot,
+    policy: &TerminalComputedParityPolicy,
+) -> String {
+    if terminal.edges().len() != staged.edges().len() {
+        return format!(
+            "path=edges.length terminal={} staged={}",
+            terminal.edges().len(),
+            staged.edges().len()
+        );
+    }
+    for (index, (terminal, staged)) in terminal.edges().iter().zip(staged.edges()).enumerate() {
+        let matches = match policy {
+            TerminalComputedParityPolicy::Exact => {
+                terminal.id.ordinal == staged.id.ordinal
+                    && terminal.role == staged.role
+                    && terminal.geometry == staged.geometry
+                    && terminal.provenance == staged.provenance
+            }
+            TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
+                terminal_computed_edge_matches(terminal, staged, curves)
+            }
+        };
+        if !matches {
+            return first_terminal_computed_edge_mismatch(index, terminal, staged, policy);
+        }
+    }
+    if terminal.construction_fragments().len() != staged.construction_fragments().len() {
+        return format!(
+            "path=construction_fragments.length terminal={} staged={}",
+            terminal.construction_fragments().len(),
+            staged.construction_fragments().len()
+        );
+    }
+    for (index, (terminal, staged)) in terminal
+        .construction_fragments()
+        .iter()
+        .zip(staged.construction_fragments())
+        .enumerate()
+    {
+        let matches = match policy {
+            TerminalComputedParityPolicy::Exact => {
+                terminal_computed_fragment_exact_matches(terminal, staged)
+            }
+            TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
+                terminal_computed_fragment_matches(terminal, staged, curves)
+            }
+        };
+        if !matches {
+            return format!(
+                "path=construction_fragments[{index}] terminal={terminal:?} staged={staged:?}"
+            );
+        }
+    }
+    if terminal.replaced_sources() != staged.replaced_sources() {
+        return format!(
+            "path=replaced_sources terminal={:?} staged={:?}",
+            terminal.replaced_sources(),
+            staged.replaced_sources()
+        );
+    }
+    if terminal.feature_evaluations().len() != staged.feature_evaluations().len() {
+        return format!(
+            "path=feature_evaluations.length terminal={} staged={}",
+            terminal.feature_evaluations().len(),
+            staged.feature_evaluations().len()
+        );
+    }
+    for (index, (terminal, staged)) in terminal
+        .feature_evaluations()
+        .iter()
+        .zip(staged.feature_evaluations())
+        .enumerate()
+    {
+        if !terminal_feature_evaluation_matches(terminal, staged) {
+            return first_terminal_feature_evaluation_mismatch(index, terminal, staged);
+        }
+    }
+    "path=computed_snapshot unknown_mismatch".into()
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4075,11 +4689,32 @@ fn documents_match_for_terminal_parity(
     })
 }
 
+#[cfg(test)]
 fn validate_terminal_native_parity(
     terminal: &ProjectionalEditorSession,
     staged: &ProjectionalEditorSession,
     expansion: &ExpandedCodeProject,
     rectangle_projections: &[RectangleTerminalProjection],
+) -> Result<(), String> {
+    validate_terminal_native_parity_with_trace(
+        terminal,
+        staged,
+        expansion,
+        rectangle_projections,
+        None,
+    )
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one parity gate records every accepted-authority domain before issuing a single rejection"
+)]
+fn validate_terminal_native_parity_with_trace(
+    terminal: &ProjectionalEditorSession,
+    staged: &ProjectionalEditorSession,
+    expansion: &ExpandedCodeProject,
+    rectangle_projections: &[RectangleTerminalProjection],
+    mut trace: Option<&mut super::interaction_trace::InteractionTrace>,
 ) -> Result<(), String> {
     let terminal_authority = terminal
         .coordinator()
@@ -4135,6 +4770,33 @@ fn validate_terminal_native_parity(
         &computed_policy,
     );
     let same_features = same_feature_documents && same_computed_snapshots;
+    if let Some(trace) = trace.as_deref_mut() {
+        trace.record(
+            "parity.documents",
+            format!(
+                "design={design_document_parity:?} accepted={accepted_document_parity:?} recomputable_line_branches={recomputable:?}"
+            ),
+        );
+        trace.record("parity.computed.policy", format!("{computed_policy:?}"));
+        trace.record(
+            "parity.features",
+            format!(
+                "feature_documents={same_feature_documents} computed_snapshot={same_computed_snapshots} terminal_features={:?} staged_features={:?}",
+                terminal_authority.features.identity(),
+                staged_authority.features.identity(),
+            ),
+        );
+        if !same_computed_snapshots {
+            trace.record(
+                "parity.computed.first-mismatch",
+                first_terminal_computed_snapshot_mismatch(
+                    &terminal_authority.computed,
+                    &staged_authority.computed,
+                    &computed_policy,
+                ),
+            );
+        }
+    }
     // Revision/digest stamps and Fillet pick seeds can refresh when staged
     // source is canonically rematerialized. Discrete topology, durable branch
     // cells, ownership rows and persistent IDs stay exact. Recomputed finite
@@ -4146,6 +4808,31 @@ fn validate_terminal_native_parity(
         && terminal_authority.ownership.writable_leaves
             == staged_authority.ownership.writable_leaves
         && terminal_authority.ownership.aggregates == staged_authority.ownership.aggregates;
+    if let Some(trace) = trace.as_deref_mut() {
+        trace.record(
+            "parity.ownership",
+            format!(
+                "nodes={} ports={} reservations={} writable_leaves={} aggregates={}",
+                terminal_authority.ownership.nodes == staged_authority.ownership.nodes,
+                terminal_authority.ownership.ports == staged_authority.ownership.ports,
+                terminal_authority.ownership.reservations
+                    == staged_authority.ownership.reservations,
+                terminal_authority.ownership.writable_leaves
+                    == staged_authority.ownership.writable_leaves,
+                terminal_authority.ownership.aggregates == staged_authority.ownership.aggregates,
+            ),
+        );
+        trace.record(
+            "parity.allocators",
+            format!(
+                "feature_terminal={:?} feature_staged={:?} sketch_terminal={:?} sketch_staged={:?}",
+                terminal_authority.feature_lifecycle_high_water.allocator,
+                staged_authority.feature_lifecycle_high_water.allocator,
+                terminal_authority.session.persistent_identity_high_water(),
+                staged_authority.session.persistent_identity_high_water(),
+            ),
+        );
+    }
     let mut differences = Vec::new();
     if !same_documents {
         differences.push("sketch documents");
@@ -4167,10 +4854,17 @@ fn validate_terminal_native_parity(
         differences.push("sketch allocator");
     }
     if !differences.is_empty() {
-        return Err(format!(
+        let error = format!(
             "terminal code drag differs from its independently staged native authority in {}",
             differences.join(", ")
-        ));
+        );
+        if let Some(trace) = trace.as_deref_mut() {
+            trace.record("parity.reject", &error);
+        }
+        return Err(error);
+    }
+    if let Some(trace) = trace {
+        trace.record("parity.accept", "all terminal authority domains match");
     }
     Ok(())
 }
@@ -4437,6 +5131,162 @@ mod tests {
             &outside,
             &roundoff_curves,
         ));
+    }
+
+    #[test]
+    fn terminal_computed_mismatch_trace_names_the_first_out_of_cell_scalar() {
+        let (terminal, roundoff_curves) = typed_panel_fillet_edge_and_sources();
+        let mut staged = terminal.clone();
+        let ComputedEdgeGeometry::CircularArc(staged_arc) = &mut staged.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        staged_arc.center[0] =
+            f64::from_bits(staged_arc.center[0].to_bits() + TERMINAL_SEED_ROUNDOFF_ULPS + 1);
+        let policy = TerminalComputedParityPolicy::RectangleAliasRoundoff {
+            curves: roundoff_curves.clone(),
+        };
+        assert!(
+            !terminal_computed_edge_matches(&terminal, &staged, &roundoff_curves),
+            "one scalar beyond the admitted ULP cell must reject computed parity",
+        );
+
+        let edge_index = usize::try_from(terminal.id.ordinal).expect("bounded computed edge");
+        let expected_path = format!("edge[{edge_index}].arc.center.x");
+        let mismatch =
+            first_terminal_computed_edge_mismatch(edge_index, &terminal, &staged, &policy);
+        assert!(mismatch.starts_with(&format!("path={expected_path} ")));
+
+        let mut trace = super::super::interaction_trace::InteractionTrace::default();
+        trace.begin_gesture("test.pointerdown", "project=typed-panel");
+        trace.record("parity.computed.first-mismatch", &mismatch);
+        trace.record(
+            "parity.reject",
+            "terminal code drag differs from its independently staged native authority in computed features",
+        );
+        let exported = trace.export("project=typed-panel", "accepted authority retained");
+        let mismatch_row = exported
+            .find("\tparity.computed.first-mismatch\t")
+            .expect("exported first-mismatch row");
+        let rejection_row = exported
+            .find("\tparity.reject\t")
+            .expect("exported rejection row");
+        assert!(mismatch_row < rejection_row);
+        assert!(exported.contains(&format!("path={expected_path}")));
+        assert!(exported.contains("ulp_diff=9"));
+        assert!(exported.contains(&format!("allowed_ulps={TERMINAL_SEED_ROUNDOFF_ULPS}")));
+    }
+
+    #[test]
+    fn terminal_evaluation_mismatch_trace_ignores_refreshable_edge_revisions() {
+        let (_workbench, editor) = open_boxed("typed-panel");
+        let evaluation = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("Typed Panel accepted materialization")
+            .computed
+            .feature_evaluations()
+            .first()
+            .expect("Typed Panel computed feature evaluation")
+            .clone();
+        let mut refreshed = evaluation.clone();
+        {
+            let ComputedFeatureEvaluationState::Current { corner_edges } = &mut refreshed.state
+            else {
+                panic!("Typed Panel evaluation must remain Current")
+            };
+            let (_, edge) = corner_edges
+                .first_mut()
+                .expect("Typed Panel Current evaluation edge");
+            edge.evaluation = geosolve_constraint_editor::ComputedEvaluationRevision::from_raw(
+                edge.evaluation.raw().saturating_add(1),
+            );
+        }
+        assert_ne!(evaluation, refreshed);
+        assert!(
+            terminal_feature_evaluation_matches(&evaluation, &refreshed),
+            "evaluation-local edge revisions are deliberately outside terminal parity",
+        );
+
+        let ComputedFeatureEvaluationState::Current { corner_edges } = &mut refreshed.state else {
+            panic!("Typed Panel evaluation must remain Current")
+        };
+        let (_, edge) = corner_edges
+            .first_mut()
+            .expect("Typed Panel Current evaluation edge");
+        edge.ordinal = edge.ordinal.saturating_add(1);
+        assert!(!terminal_feature_evaluation_matches(
+            &evaluation,
+            &refreshed,
+        ));
+        assert!(
+            first_terminal_feature_evaluation_mismatch(0, &evaluation, &refreshed)
+                .contains(".edge.ordinal "),
+        );
+    }
+
+    #[test]
+    fn validate_terminal_native_parity_trace_rejects_a_computed_scalar_mismatch() {
+        let (workbench, mut terminal) = open_boxed("typed-panel");
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .clone()
+            .expect("accepted Typed Panel expansion");
+        let staged = terminal
+            .fork_accepted_authority()
+            .expect("independent staged Typed Panel authority");
+        let (feature, radius) = {
+            let accepted = terminal
+                .coordinator()
+                .accepted_materialization()
+                .expect("Typed Panel accepted materialization");
+            let feature = accepted
+                .features
+                .features()
+                .first()
+                .expect("Typed Panel computed Fillet feature");
+            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+            (feature.id, fillet.radius)
+        };
+        let changed_radius = f64::from_bits(radius.to_bits() + TERMINAL_SEED_ROUNDOFF_ULPS + 1);
+        terminal
+            .edit_computed_fillet_radius(feature, changed_radius)
+            .expect("finite nearby radius remains an accepted native authority");
+
+        let mut trace = super::super::interaction_trace::InteractionTrace::default();
+        trace.begin_gesture(
+            "test.pointerdown",
+            "project=typed-panel scalar=fillet.radius",
+        );
+        let error = validate_terminal_native_parity_with_trace(
+            &terminal,
+            &staged,
+            &expansion,
+            &[],
+            Some(&mut trace),
+        )
+        .expect_err("changed computed radius must reject terminal/native parity");
+        assert!(error.contains("computed features"));
+
+        let exported = trace.export("project=typed-panel", "accepted authority retained");
+        let mismatch_row = exported
+            .lines()
+            .find(|line| line.contains("\tparity.computed.first-mismatch\t"))
+            .unwrap_or_else(|| panic!("trace must name its first computed mismatch: {exported}"));
+        assert!(mismatch_row.contains("path=edge["));
+        assert!(mismatch_row.contains(".arc."));
+        assert!(!mismatch_row.contains("unknown_mismatch"));
+        assert!(mismatch_row.contains("ulp_diff="));
+        assert!(mismatch_row.contains(&format!("allowed_ulps={TERMINAL_SEED_ROUNDOFF_ULPS}")));
+        assert!(
+            exported
+                .find("\tparity.computed.first-mismatch\t")
+                .expect("first-mismatch stage")
+                < exported
+                    .find("\tparity.reject\t")
+                    .expect("terminal parity rejection stage"),
+        );
     }
 
     #[test]
@@ -9883,10 +10733,17 @@ export default sketch(($) => {
                 .expect("accepted native point")
         };
         let mut expected_origin = [0.0, 40.0];
+        let mut trace = super::super::interaction_trace::InteractionTrace::default();
         for (case_index, target) in [[3.0, 38.0], [5.0, 37.0], [-2.0, 36.0]]
             .into_iter()
             .enumerate()
         {
+            workbench.reset_interaction_trace_gesture();
+            assert_eq!(
+                workbench.interaction_trace_pending_point(&editor),
+                "pending=none",
+                "a new gesture must not inherit the prior trace-only semantic lens",
+            );
             let upper_left = expanded_port_point(&editor, &upper_left_lens.handle)
                 .expect("upper-left lens native point");
             let origin = position(&editor, upper_left);
@@ -9902,6 +10759,10 @@ export default sketch(($) => {
                 position: viewport.model_to_screen(model),
                 modifiers: Modifiers::default(),
             };
+            trace.begin_gesture(
+                "test.pointerdown",
+                format!("case={case_index} pointer={pointer_id}"),
+            );
 
             let scene = editor.scene(viewport, 0.5).expect("pointer-down scene");
             editor
@@ -9946,12 +10807,62 @@ export default sketch(($) => {
                 preview_position.map(f64::to_bits),
                 "native release must retain the latest accepted preview",
             );
-            let revision_before = workbench.session.identity().revision;
+            let identity_before = workbench.session.identity().clone();
+            let revision_before = identity_before.revision;
 
-            let publication = workbench
-                .publish_pointer_terminal_editor(pointer_id, &editor, "Move Typed Panel upper-left")
+            let audited = workbench.publish_pointer_terminal_editor_audited_with_trace(
+                pointer_id,
+                &editor,
+                "Move Typed Panel upper-left",
+                &mut trace,
+            );
+            let publication_work = audited.work;
+            let publication = audited
+                .outcome
                 .expect("semantic terminal publication")
                 .expect("one outer history row");
+            assert_eq!(publication_work.managed_parse_attempts(), 0);
+            assert_eq!(publication_work.expansion_attempts(), 1);
+            assert_eq!(publication_work.accepted_publications(), 1);
+            assert_eq!(publication.receipt.before, identity_before);
+            assert_eq!(&publication.receipt.after, workbench.session.identity());
+            assert!(!publication.receipt.retained_failure);
+            let exported_trace = trace.export(
+                &workbench.interaction_trace_context(),
+                "Typed Panel terminal accepted",
+            );
+            let expected_stages = [
+                "code.semantic-route.authenticate",
+                "code.semantic-route.bundle",
+                "code.overlay.staged",
+                "code.seed-parity",
+                "parity.documents",
+                "parity.computed.policy",
+                "parity.features",
+                "parity.ownership",
+                "parity.allocators",
+                "parity.accept",
+                "code.overlay.published",
+            ];
+            let stage_offsets = expected_stages.map(|stage| {
+                exported_trace
+                    .find(&format!("\t{stage}\t"))
+                    .unwrap_or_else(|| panic!("trace must contain `{stage}`: {exported_trace}"))
+            });
+            assert!(
+                stage_offsets.windows(2).all(|pair| pair[0] < pair[1]),
+                "terminal trace stages must preserve causal order: {exported_trace}",
+            );
+            assert_eq!(
+                exported_trace.matches("\tcode.seed-parity\t").count(),
+                2,
+                "both canonical rectangle seeds need parity evidence",
+            );
+            assert!(!exported_trace.contains("\tparity.reject\t"));
+            assert!(exported_trace.contains(&format!(
+                "before={:?} after={:?} retained_failure=false work={publication_work:?}",
+                publication.receipt.before, publication.receipt.after,
+            )));
             let published_upper_left =
                 expanded_port_point(&publication.editor, &upper_left_lens.handle)
                     .expect("published upper-left point");
