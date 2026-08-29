@@ -6466,11 +6466,11 @@ publication.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**.
+Status: **complete, approved and publicly verified on 2026-08-29**.
 M86-F001-F003 and the bounded interaction trace are approved by the supervising
 user's explicit close decision, accepting M86-U1-U8 without claiming a separately logged row-by-row
-replay. The pre-expansion F002 nomination remains withdrawn. Accepted M85 Pages run `33128387637`
-remains public-byte authority until M86 publication and exact hosted-byte verification pass.
+replay. The pre-expansion F002 nomination remains withdrawn. Accepted source `88d1b5e` passes clean
+qualification and approval head `ccf791f` is final M86 public-byte authority.
 `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the detailed contract
 and evidence.
 
@@ -6567,8 +6567,8 @@ and evidence.
   trace-enabled descendant without claiming a separately logged row-by-row replay.
 - [x] Clean-qualify committed source `88d1b5e` / tree `09018e5`, freeze its exact no-rebuild
   seven-file output and verify all eight paths through an isolated temporary HTTP service.
-- [ ] Publish the approval descendant to Pages, exact-verify its downloaded artifact and hosted
-  bytes, retire both M86 services and close M86.
+- [x] Publish approval descendant `ccf791f`, exact-verify its downloaded Pages artifact and every
+  hosted path, retire both M86 services and close M86.
 
 Combined F002/F003 provisional UAT record (2026-08-28): the served build identity is the saved
 pre-gate 160,117-byte, 2,976-line binary patch over HEAD
@@ -6604,7 +6604,7 @@ Accepted trace-enabled UAT record (2026-08-29): the seven-file snapshot
 ordered-manifest aggregate
 `f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`. Local PID/invocation
 `2433761`/`3f829abfff0a46eba586c07fed507d8e` and Tailscale PID/invocation
-`2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` serve only that snapshot. `/` and all seven files match on
+`2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` served only that snapshot. `/` and all seven files matched on
 both endpoints; evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
 `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The temporary `18103`
 listener is retired. This was accepted UAT evidence rather than clean committed-source nomination;
@@ -6620,12 +6620,34 @@ The 6,573-line, 438,432-byte log
 exact seven-file output is frozen at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files
 `0555`/`0444`, zero symlinks or nested entries, ordered-manifest aggregate
 `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary
-`127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verifies `/`
-plus all seven files; results SHA-256 is
+`127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verified `/`
+plus all seven files; results SHA-256 was
 `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`. Evidence is
 `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The temporary service is inactive/dead with
-`MainPID=0`, curl exits `7`/HTTP `000`, and the two accepted UAT services remain live only until
-exact Pages verification passes.
+`MainPID=0`, curl exits `7`/HTTP `000`, and the two accepted UAT services remained live only until
+exact Pages verification passed; the public closeout record below owns their retirement.
+
+Public closeout record (2026-08-29): approval head
+`ccf791f131ba8de07a0d32df6938719cf4bcab12`, tree
+`be39d05c8a5dc2f76db91f6be3270f0b95dd8c5e`, passes Pages run `33232073614`; assemble/deploy jobs
+`99046509230`/`99047255428`, deployment `6152066188` and status `17489139435` all succeed for that
+exact SHA. Artifact `9708871725` downloads as a 4,975,804-byte ZIP with SHA-256
+`182080c59b54815a11fa799de4068ed2d92cd4b3e716baae81f0c91e25d56ae7`; its sole 15,267,840-byte
+`artifact.tar` has SHA-256
+`6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`. Extraction contains
+exactly seven top-level regular files, zero symlinks or other entries, ordered-manifest aggregate
+`ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`.
+
+Public `/` and all seven artifact paths return HTTP 200 with zero redirects, exact MIME,
+`Content-Length` and artifact bytes, no `Location`/`Content-Encoding`, and `/` equals
+`index.html`. Hosted evidence `/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` has SHA-256
+`9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`. Pages is a fresh
+repository-prefixed build and is final public-byte authority; the clean no-prefix snapshot remains
+qualification evidence. Product source `88d1b5e` is an ancestor of the approval head with only the
+nine M86 closeout documents changed. `geosolve-m86-local-uat.service` and
+`geosolve-m86-uat.service` are inactive/dead with `MainPID=0`; both endpoints refuse connections
+with curl exit `7`/HTTP `000`, recorded at `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
+M1-M86 are complete.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
 not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;

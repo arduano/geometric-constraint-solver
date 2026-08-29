@@ -2,12 +2,12 @@
 
 # M86 — Focused bug fixes and UAT follow-up
 
-Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**.
+Status: **complete, approved and publicly verified on 2026-08-29**.
 M86-F001-F003 and the bounded interaction-trace diagnostic are approved by the
 supervising user's explicit close decision. M86-U1-U8 are accepted without claiming a separately
-logged row-by-row replay. Accepted M85 Pages remains public-byte authority until the approved M86
-descendant passes clean qualification, Pages publication and exact hosted-byte verification. The
-former F002 snapshot remains withdrawn historical evidence.
+logged row-by-row replay. Accepted source `88d1b5e` passes clean qualification; approval head
+`ccf791f` passes Pages publication and exact hosted-byte verification and is final public-byte
+authority. The former F002 snapshot remains withdrawn historical evidence.
 
 ## Goal
 
@@ -222,9 +222,8 @@ authority. Additional M86 bug fixes require their own confirmed finding and expl
 4. Freeze the gate output without rebuild and exact-verify replacement local/Tailscale bytes before
    replacing any historical candidate service for UAT.
 5. Complete M86-U6 through M86-U8. The supervising user's 2026-08-29 close decision supplied
-   explicit approval; the accepted descendant is committed and clean-qualified. Publish the
-   approval descendant to Pages, exact-verify hosted bytes, retire candidate services and close
-   M86.
+   explicit approval; the accepted descendant was committed, clean-qualified, published and
+   exact-verified, then both candidate services were retired. M86 is closed.
 
 F001 passed its mechanical prerequisites on source `9050424`, tree `65e0925`, and the supervising
 user reported that candidate looked good before opening F002. Historical F002 source `dbe94da`, tree
@@ -255,12 +254,12 @@ nomination.
 The accepted trace-enabled descendant is frozen at `/tmp/geosolve-m86-trace-uat.U1C0QPSf`, with
 exactly seven regular files, zero symlinks, directory/files `0555`/`0444` and ordered-manifest
 aggregate `f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`. Local and Tailscale
-PIDs/invocations are `2433761`/`3f829abfff0a46eba586c07fed507d8e` and
-`2433763`/`5f2c7c3eddac43119f380ec2e87b47c8`. `/` and all seven files match on both endpoints; evidence
+PIDs/invocations were `2433761`/`3f829abfff0a46eba586c07fed507d8e` and
+`2433763`/`5f2c7c3eddac43119f380ec2e87b47c8`. `/` and all seven files matched on both endpoints; evidence
 `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
 `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The supervising user's
-2026-08-29 close decision accepts this descendant and M86-U1-U8. It remains UAT rather than clean-
-source or Pages authority until the mechanical closeout completes.
+2026-08-29 close decision accepts this descendant and M86-U1-U8. It was UAT rather than clean-
+source or Pages authority before the final nomination and public closeout below.
 
 Final clean nomination (2026-08-29): accepted source
 `88d1b5e06a7ce8ffe38931f792492f6f837a1d74`, tree
@@ -271,8 +270,24 @@ Final clean nomination (2026-08-29): accepted source
 seven-file output is frozen at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`, directory/files
 `0555`/`0444`, zero symlinks/nested entries and ordered-manifest aggregate
 `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary HTTP
-PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` on `127.0.0.1:18104` exact-verifies
-all eight paths; results SHA-256 is
+PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` on `127.0.0.1:18104` exact-verified
+all eight paths; results SHA-256 was
 `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, and evidence is
-`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The verifier is retired; Pages publication and
-hosted-byte verification remain outstanding.
+`/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The verifier is retired.
+
+Final public closeout (2026-08-29): approval head
+`ccf791f131ba8de07a0d32df6938719cf4bcab12`, tree
+`be39d05c8a5dc2f76db91f6be3270f0b95dd8c5e`, passes Pages run `33232073614`, jobs
+`99046509230`/`99047255428`, deployment `6152066188` with successful status `17489139435`, and
+artifact `9708871725`. The 4,975,804-byte ZIP has SHA-256
+`182080c59b54815a11fa799de4068ed2d92cd4b3e716baae81f0c91e25d56ae7`; its sole 15,267,840-byte
+tar has SHA-256 `6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`. Exactly seven regular
+files, zero symlinks/non-regular entries extract with aggregate
+`ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`.
+
+Every hosted path plus `/` byte-matches that artifact with exact MIME and length; results
+`/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
+`9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`. The fresh
+repository-prefixed artifact is final public authority. Both M86 services are inactive/dead with
+`MainPID=0`, and both endpoints refuse with curl exit `7`/HTTP `000`; retirement evidence is
+`/tmp/geosolve-m86-service-retirement.tLQ4hcSG`. M86 is complete.

@@ -2,7 +2,7 @@
 
 # M86 implementation ledger — Focused bug fixes and UAT follow-up
 
-Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**.
+Status: **complete, approved and publicly verified on 2026-08-29**.
 M86-F001-F003 and the bounded interaction trace are implemented and mechanically
 qualified. The supervising user's explicit “looks good, let's close the milestone” decision
 accepts M86-U1-U8 without claiming a separately logged row-by-row replay. Accepted descendant
@@ -445,10 +445,10 @@ and WASM SHA-256 values are
 `3bb6b395a6f053e5172063474a974dbd98a10163b45963bb736381ead6a02837` and
 `1626b3a9163f265dcaf7db0f2f0260930c9fe0ac3b9695ac749ed559e5fc435b`.
 
-Local PID/invocation `2433761`/`3f829abfff0a46eba586c07fed507d8e` serves `127.0.0.1:18101`;
-Tailscale PID/invocation `2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` serves
-`100.94.63.83:8080`. Both report the frozen snapshot as their working directory. `/` plus every
-file on both endpoints match it byte-for-byte; evidence
+Local PID/invocation `2433761`/`3f829abfff0a46eba586c07fed507d8e` served `127.0.0.1:18101`;
+Tailscale PID/invocation `2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` served
+`100.94.63.83:8080`. Both reported the frozen snapshot as their working directory. `/` plus every
+file on both endpoints matched it byte-for-byte; evidence
 `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
 `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The temporary diagnostic
 listener on `18103` is retired. The supervising user's 2026-08-29 close decision accepts this
@@ -477,11 +477,34 @@ SHA-256 values are respectively
 `92059496edc2cc939c436b3361d13729e314af15a94e2e677fd8a559a3e281d1`.
 
 Isolated temporary HTTP PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` at
-`127.0.0.1:18104` exact-verifies `/` and all seven files; results SHA-256 is
+`127.0.0.1:18104` exact-verified `/` and all seven files; results SHA-256 was
 `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, with complete evidence at
 `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. It is retired, inactive/dead and `MainPID=0`;
-curl exits `7` with HTTP `000`. The accepted UAT services are deliberately retained until the
-separately rebuilt Pages artifact and hosted paths pass exact verification.
+curl exits `7` with HTTP `000`. The accepted UAT services were deliberately retained until the
+separately rebuilt Pages artifact and hosted paths passed exact verification.
+
+### Final public closeout
+
+Approval head `ccf791f131ba8de07a0d32df6938719cf4bcab12`, tree
+`be39d05c8a5dc2f76db91f6be3270f0b95dd8c5e`, passes exact Pages run `33232073614`, assemble job
+`99046509230`, deploy job `99047255428`, deployment `6152066188`, successful status `17489139435`
+and artifact `9708871725`. Qualified product source `88d1b5e` is an ancestor; the only intervening
+changes are the nine M86 closeout documents.
+
+The downloaded 4,975,804-byte artifact ZIP has SHA-256
+`182080c59b54815a11fa799de4068ed2d92cd4b3e716baae81f0c91e25d56ae7`. Its only member is a
+15,267,840-byte `artifact.tar`, SHA-256
+`6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`, containing exactly seven
+top-level regular files, zero symlinks/non-regular entries and ordered-manifest aggregate
+`ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`. Every public path and `/`
+returns HTTP 200, zero redirects, exact MIME, `Content-Length` and artifact bytes, no `Location` or
+`Content-Encoding`, and root equals `index.html`. Results
+`/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
+`9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`.
+
+Pages is a fresh repository-prefixed build and final public-byte authority. Both retained M86
+services are inactive/dead with `MainPID=0`; their exact addresses have no listener and curl exits
+`7`/HTTP `000`. Retirement evidence is `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
 
 ## Semantic-preservation ledger
 

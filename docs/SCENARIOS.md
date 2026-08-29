@@ -5472,7 +5472,8 @@ complete provisional dirty-worktree gate and its trace-enabled descendant passes
 demo-web 316/316, WASM, release-build, golden and exact dual-endpoint byte checks. The supervising
 user's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged row-by-row
 replay. Accepted source `88d1b5e` / tree `09018e5` is clean-qualified and its exact no-rebuild
-output passes isolated HTTP verification; public closeout remains pending.
+output passes isolated HTTP verification. Approval head `ccf791f` passes exact Pages publication;
+both M86 services are retired and M86 is complete.
 `docs/M86_GOALS.md` is authoritative.
 
 ### M86-C1 — Exact managed curve-length target rewrite
@@ -5527,8 +5528,8 @@ unchanged 271-case golden. Its exact seven-file Trunk output is frozen without r
 retained Tailscale processes served only that snapshot; all eight paths were exact and their
 byte-identical ledgers have SHA-256
 `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This is historical F001
-evidence, not public authority; Pages remains M85 until M86 publication and exact hosted-byte
-verification.
+evidence, not public authority; Pages remained M85 until M86 publication and exact hosted-byte
+verification later passed.
 
 ### M86-C5 — Fillet source-corner Select priority
 
@@ -5656,15 +5657,35 @@ release-performance and final Trunk checks. The 6,573-line, 438,432-byte log at
 `/tmp/geosolve-m86-clean-gate.w0UKa8fu/release-gate.log` has SHA-256
 `e3adef1b33f1b840d9bc44ea7e30a5c76248766187d705eb1bdeb682cfc3bad0`.
 
-Without rebuilding, freeze the gate output at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`. It contains
+Without rebuilding, the gate output was frozen at `/tmp/geosolve-m86-clean-uat.d7DF9hcM`. It contains
 exactly seven top-level regular files, zero symlinks/nested entries, directory/files `0555`/`0444`
 and ordered-manifest aggregate
 `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`. Isolated temporary HTTP
-PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` at `127.0.0.1:18104` must return
-exact bytes for `/` and every file; results SHA-256 is
+PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1` at `127.0.0.1:18104` returned
+exact bytes for `/` and every file; results SHA-256 was
 `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`, with evidence at
 `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. The temporary verifier is retired and refuses
-connections. Pages and retained-service retirement remain separate closeout gates.
+connections. Pages and retained-service retirement then pass in M86-C10.
+
+### M86-C10 — Exact public authority and service retirement
+
+Approval head `ccf791f131ba8de07a0d32df6938719cf4bcab12`, tree
+`be39d05c8a5dc2f76db91f6be3270f0b95dd8c5e`, passes Pages run `33232073614`, assemble/deploy jobs
+`99046509230`/`99047255428`, deployment/status `6152066188`/`17489139435` and artifact
+`9708871725`. Its 4,975,804-byte ZIP SHA-256 is
+`182080c59b54815a11fa799de4068ed2d92cd4b3e716baae81f0c91e25d56ae7`; the sole 15,267,840-byte
+tar SHA-256 is `6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`. Validate exactly seven
+regular files, zero symlinks/non-regular entries and manifest aggregate
+`ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2` before trusting extraction.
+
+At `https://arduano.github.io/geometric-constraint-solver/`, `/` plus all seven artifact paths
+must return HTTP 200, zero redirects, exact MIME, `Content-Length` and artifact bytes, no
+`Location`/`Content-Encoding`, and root equal to artifact `index.html`. Results
+`/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` have SHA-256
+`9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`. The Pages artifact is a
+fresh repository-prefixed build and final public authority. Both M86 user services are
+inactive/dead with `MainPID=0`, no exact listener remains, and both endpoints refuse with curl exit
+`7`/HTTP `000`; evidence is `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`. M86 is closed.
 
 ## Frozen near-singular fixtures
 

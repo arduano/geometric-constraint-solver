@@ -487,8 +487,7 @@ user services are inactive/dead with `MainPID=0` and both former endpoints refus
 M85 is closed. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the
 accepted candidate and public-closeout ledger.
 
-M86 is the accepted focused bug-fix/UAT follow-up milestone, with mechanical public closeout in
-progress. `M86-F001` is implemented,
+M86 is the completed focused bug-fix/UAT follow-up milestone. `M86-F001` is implemented,
 clean-qualified, immutably nominated and accepted by the supervising user's scoped “Looks good”
 assessment after independent reproduction on the PC Water Manifold:
 Inspector editing of
@@ -523,8 +522,8 @@ prior `dbe94da`/`77f86c0` candidate is withdrawn historical evidence. The trace-
 snapshot passes byte-identical local/Tailscale verification. The supervising user's 2026-08-29
 close decision accepts M86-U1-U8 without claiming a separately logged row-by-row replay. Accepted
 source `88d1b5e` passes the complete clean release gate and its exact no-rebuild seven-file output
-passes isolated HTTP verification. Publication remains open, so accepted M85 remains public
-authority.
+passes isolated HTTP verification. Approval head `ccf791f` passes exact Pages publication and
+hosted-byte verification; both M86 services are retired. M86 is complete.
 `docs/M86_HANDOVER.md` is the concise resume point. `docs/M86_GOALS.md`,
 `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the accepted contract, finding ledger and
 closeout scorecard.
@@ -571,9 +570,8 @@ closeout scorecard.
     camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
     clean-qualified frozen candidate, milestone-level approval and exact public closeout.
 22. `docs/M86_HANDOVER.md`, `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and
-    `docs/M86_UAT.md` — concise resume point, accepted focused bug-fix contract, human-approved
-    managed-dimension Inspector repair, accepted Fillet/Typed Panel and bounded-trace UAT
-    descendant, and pending clean-source/public closeout.
+    `docs/M86_UAT.md` — completed, approved and publicly verified managed-dimension Inspector,
+    Fillet priority, Typed Panel terminal and bounded-trace milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -945,7 +943,7 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M85 are complete and M86 is accepted with public closeout in progress. M83's projectional
+M1-M86 are complete. M83's projectional
 implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84's optional code/GUI implementation, F001-F012 repairs,
@@ -1014,8 +1012,10 @@ nomination is withdrawn. The bounded memory-only managed-gesture trace and post-
 demo-web suite pass; its seven-file snapshot is byte-identical on both UAT endpoints. The
 supervising user's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged
 row-by-row replay. Accepted source `88d1b5e` / tree `09018e5` is clean-qualified; its no-rebuild
-seven-file snapshot passes isolated HTTP verification. Publication and hosted-byte verification
-remain open, so Pages authority is not yet claimed.
+seven-file snapshot passes isolated HTTP verification. Approval head `ccf791f` passes Pages run
+`33232073614`, artifact `9708871725`, exact hosted-byte verification and deployment
+`6152066188`. Both M86 services are retired and their endpoints refuse connections. M86 is
+complete and Pages is final public-byte authority.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1146,7 +1146,7 @@ Durable milestone and cleanup records:
 - `docs/M86_GOALS.md` (accepted focused managed-dimension, Fillet, Typed Panel and trace contract)
 - `docs/M86_IMPLEMENTATION.md` (implemented M86-F001-F003 design and accepted UAT evidence
   ledger)
-- `docs/M86_UAT.md` (accepted M86-U1-U8 scorecard and pending mechanical public closeout)
+- `docs/M86_UAT.md` (accepted M86-U1-U8 scorecard and exact public closeout)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

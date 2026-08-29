@@ -2,11 +2,11 @@
 
 # M86 closeout handover
 
-Status: **M86 is accepted at milestone level on 2026-08-29; mechanical public closeout remains in
-progress**. M86-F001-F003 and the bounded interaction trace are approved by the supervising user's
-explicit close decision. The former F002 nomination remains withdrawn. Accepted source `88d1b5e`
-is clean-qualified and its no-rebuild output is frozen and isolated-HTTP verified; Pages
-verification and service retirement remain open. Do not reconstruct this state from chat history.
+Status: **M86 is complete, approved and publicly verified on 2026-08-29**. M86-F001-F003 and the
+bounded interaction trace are approved by the supervising user's explicit close decision. The
+former F002 nomination remains withdrawn. Accepted source `88d1b5e` is clean-qualified; approval
+head `ccf791f` is exact-published; both UAT services are retired. Do not reconstruct this state from
+chat history.
 
 ## Resume point
 
@@ -14,8 +14,8 @@ Read `AGENTS.md` and its required project documents, then `docs/M86_GOALS.md`,
 `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md`. Accepted product commits are `b1e7ea2`
 (expanded F002), `2cfee5b` (F003), and `49787f4` (bounded trace/UI/tests). Accepted-state commit
 `88d1b5e`, tree `09018e5`, passes the complete clean gate and owns the frozen nomination below.
-The supervising user's 2026-08-29 close decision authorizes publication. Accepted M85 Pages
-remains public-byte authority until the M86 hosted-byte proof passes.
+The supervising user's 2026-08-29 close decision authorized publication. Approval head `ccf791f`
+passes exact Pages verification and is final M86 public-byte authority.
 
 ## Delivered work
 
@@ -61,8 +61,8 @@ semantics, persistence formats or public APIs.
   `e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`.
 
 The snapshot predates remote-parent-endpoint behavior and F003. It is withdrawn from current UAT
-and remains immutable historical defect evidence. The current services below no longer serve it;
-the snapshot remains intact as rollback evidence.
+and remains immutable historical defect evidence. The replacement services below did not serve it
+and are themselves retired; the snapshot remains intact as rollback evidence.
 
 ## Historical provisional combined candidate
 
@@ -105,10 +105,10 @@ reproduction payloads. Its hard export bound is 128 KiB.
 - Frozen snapshot: `/tmp/geosolve-m86-trace-uat.U1C0QPSf`, exactly seven regular files, zero
   symlinks, directory/files `0555`/`0444`, ordered-manifest aggregate
   `f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`.
-- Local service PID/invocation: `2433761`/`3f829abfff0a46eba586c07fed507d8e` on
-  `127.0.0.1:18101`; Tailscale service PID/invocation:
+- Former accepted local PID/invocation: `2433761`/`3f829abfff0a46eba586c07fed507d8e` on
+  `127.0.0.1:18101`; former Tailscale PID/invocation:
   `2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` on `100.94.63.83:8080`.
-- `/` and all seven files match the snapshot on both endpoints. Evidence
+- `/` and all seven files matched the snapshot on both endpoints. Evidence
   `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
   `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`.
 - Post-trace full demo-web passes 316/316; focused trace, Clippy, formatting, WASM, release build,
@@ -129,11 +129,31 @@ trace-enabled descendant without claiming a separately logged row-by-row replay.
   files, zero symlinks/nested entries, directory/files `0555`/`0444`, ordered-manifest aggregate
   `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`.
 - Complete freeze/HTTP evidence: `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. Temporary
-  `127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verifies `/`
-  and all seven files; results SHA-256 is
+  `127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verified `/`
+  and all seven files; results SHA-256 was
   `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`.
 - The isolated verifier is inactive/dead with `MainPID=0`; curl exits `7` with HTTP `000`. The
-  accepted trace UAT services remain untouched until exact Pages verification passes.
+  accepted trace UAT services remained untouched until exact Pages verification passed.
+
+## Public closeout
+
+- Approval head/tree: `ccf791f131ba8de07a0d32df6938719cf4bcab12` /
+  `be39d05c8a5dc2f76db91f6be3270f0b95dd8c5e`. Qualified source `88d1b5e` is its ancestor; only the
+  nine M86 closeout documents differ.
+- Pages run/jobs: `33232073614`; assemble `99046509230`, deploy `99047255428`, all successful.
+  Deployment/status: `6152066188`/`17489139435`; artifact `9708871725`.
+- Downloaded ZIP: 4,975,804 bytes, SHA-256
+  `182080c59b54815a11fa799de4068ed2d92cd4b3e716baae81f0c91e25d56ae7`. Sole inner tar:
+  15,267,840 bytes, SHA-256
+  `6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`.
+- Extracted artifact: seven regular files, zero symlinks/non-regular entries, aggregate
+  `ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`.
+- Hosted `/` plus all seven paths match exact artifact bytes/MIME/length with no redirect,
+  `Location` or `Content-Encoding`; `/` equals `index.html`. Evidence
+  `/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv` has SHA-256
+  `9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`.
+- Both M86 user services are inactive/dead with `MainPID=0`; both endpoints refuse with curl exit
+  `7`/HTTP `000`. Evidence: `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
 
 ## Current checkpoint evidence
 
@@ -154,7 +174,5 @@ trace-enabled descendant without claiming a separately logged row-by-row replay.
 
 ## Remaining work
 
-1. Publish the approved descendant through GitHub Pages, download and exact-verify its separately
-   rebuilt artifact and hosted paths, then retire both M86 services.
-2. Record workflow/artifact/deployment, hosted-byte and service-retirement
-   evidence consistently, commit the closeout record and mark M86 complete.
+None for M86. Preserve the frozen snapshots and evidence as historical records; do not restart the
+retired services for this milestone.

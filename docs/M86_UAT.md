@@ -2,12 +2,12 @@
 
 # M86 focused UAT — Managed dimensions, Fillet hit priority and Typed Panel terminals
 
-Status: **accepted and clean-qualified on 2026-08-29; public closeout remains pending**. The
+Status: **complete, approved and publicly verified on 2026-08-29**. The
 supervising user's explicit
 “looks good, let's close the milestone” decision accepts M86-U1 through M86-U8 without claiming a
-separately logged row-by-row replay. The former F002 candidate is withdrawn. Accepted M85 remains
-public authority until the approved M86 descendant passes clean qualification, Pages publication
-and exact hosted-byte verification.
+separately logged row-by-row replay. The former F002 candidate is withdrawn. Accepted source
+`88d1b5e` passes clean qualification; approval head `ccf791f` passes Pages publication and exact
+hosted-byte verification and is final public authority.
 
 ## Superseded F001 candidate identity
 
@@ -67,10 +67,10 @@ received final approval:
   `b5a36925ee1edd8af7dbbe9d4127b129184be131f84414af8e4ceac128e2111c`,
   `3bb6b395a6f053e5172063474a974dbd98a10163b45963bb736381ead6a02837` and
   `1626b3a9163f265dcaf7db0f2f0260930c9fe0ac3b9695ac749ed559e5fc435b`.
-- Local and Tailscale services use PIDs `2433761`/`2433763`, invocations
-  `3f829abfff0a46eba586c07fed507d8e`/`5f2c7c3eddac43119f380ec2e87b47c8`, and both report
+- The accepted local and Tailscale services used PIDs `2433761`/`2433763`, invocations
+  `3f829abfff0a46eba586c07fed507d8e`/`5f2c7c3eddac43119f380ec2e87b47c8`, and both reported
   `WorkingDirectory=/tmp/geosolve-m86-trace-uat.U1C0QPSf`.
-- `/` plus all seven files on both endpoints match the frozen snapshot byte-for-byte. Verification
+- `/` plus all seven files on both endpoints matched the frozen snapshot byte-for-byte. Verification
   evidence is `/tmp/geosolve-m86-trace-http-verify.fXS06h`; its results SHA-256 is
   `b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`.
 - The trace export is capped at 128 KiB, excludes managed source/reproduction/history/persistence,
@@ -155,9 +155,8 @@ the replacement U6-U8 scope and the trace-enabled descendant.
 
 ## Approval and publication
 
-Explicit final supervising-user approval and clean committed-source qualification now pass. Pages
-publication, downloaded-artifact/hosted-path verification and retained-service retirement remain
-the mechanical closeout steps.
+Explicit final supervising-user approval, clean committed-source qualification, Pages publication,
+downloaded-artifact/hosted-path verification and retained-service retirement all pass.
 
 ## Clean nomination identity
 
@@ -171,8 +170,27 @@ the mechanical closeout steps.
   seven top-level regular files, zero symlinks/nested entries, ordered-manifest aggregate
   `d9d88bfb8ac4acd3f8d45f2cbbc965694297d76b61192be12c4fe65b9deb557e`.
 - Complete freeze/HTTP evidence: `/tmp/geosolve-m86-clean-freeze-evidence.MDl33z2L`. Temporary
-  `127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verifies all
-  eight paths; results SHA-256
+  `127.0.0.1:18104`, PID/invocation `3502269`/`c3a6eeec322d454ab97b246fbd67e8e1`, exact-verified all
+  eight paths; results SHA-256 was
   `cda649921ad08469b50642f23afda334c3fff821848a8365718e0713ca9f909b`.
 - The verifier is inactive/dead with `MainPID=0`, and curl returns exit `7`/HTTP `000`. The accepted
-  trace UAT services remain live until the Pages artifact and hosted-byte proof pass.
+  trace UAT services remained live until the Pages artifact and hosted-byte proof passed.
+
+## Public closeout identity
+
+- Approval head/tree: `ccf791f131ba8de07a0d32df6938719cf4bcab12` /
+  `be39d05c8a5dc2f76db91f6be3270f0b95dd8c5e`; qualified source `88d1b5e` is an ancestor with only
+  the nine M86 closeout documents changed.
+- Pages run `33232073614`; successful assemble/deploy jobs `99046509230`/`99047255428`;
+  deployment/status `6152066188`/`17489139435`; artifact `9708871725`.
+- Downloaded ZIP: 4,975,804 bytes, SHA-256
+  `182080c59b54815a11fa799de4068ed2d92cd4b3e716baae81f0c91e25d56ae7`. Sole inner tar:
+  15,267,840 bytes, SHA-256
+  `6459745421cfa3a80038400d80d50c25cef7b46935fb37638b7ca3e7d39a80d8`.
+- Extracted artifact: exactly seven top-level regular files, zero symlinks/non-regular entries,
+  aggregate `ecf6a5550c54fe8fecc1f635500c3a2b208638beacb38ee98da379e8dcd7a7d2`.
+- Hosted `/` plus every artifact path matches exact bytes, MIME and length with no redirect,
+  `Location` or `Content-Encoding`; evidence `/tmp/geosolve-m86-pages-verify.NfnpNi/results.tsv`
+  has SHA-256 `9a6c0df627cfde7a9a4deef3b38946b219addf67dd4b9084be279570fc01623f`.
+- Both M86 services are inactive/dead with `MainPID=0`; both endpoints refuse with curl exit
+  `7`/HTTP `000`. Evidence: `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
