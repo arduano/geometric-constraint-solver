@@ -3982,8 +3982,8 @@ paths return HTTP 200 with zero redirects, exact MIME, `Content-Length` and byte
 build is fresh and not byte-identical to the frozen UAT snapshot, which remains historical
 qualification evidence. Product source `5c265e2` is an ancestor of the approval head with only the
 eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0` and
-both former endpoints refuse connections. Every M85 acceptance gate passes; M86 is now active
-separately as the next bug-fix batch.
+both former endpoints refuse connections. Every M85 acceptance gate passes; M86 opened at that
+checkpoint as the next bug-fix batch.
 
 M85 changes no primitive, constraint, equation, residual, Jacobian, priority, tolerance, branch,
 Intent/code meaning, persistence schema or accepted-scene validation. SVG remains the demo
@@ -3992,10 +3992,11 @@ are outside scope.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted**. M86-F001 is implemented, clean-qualified, immutably nominated
-and accepted by the supervising user's scoped “Looks good” assessment. M86-F002 is implemented,
-clean-qualified and immutably nominated with M86-U6/U7 pending. Accepted M85 stays public-byte
-authority.
+Status: **accepted at milestone level on 2026-08-29; clean-source qualification and public closeout
+remain pending**. M86-F001-F003 and the bounded interaction trace are approved by the supervising
+user's explicit close decision, accepting M86-U1-U8 without claiming a separately logged row-by-row
+replay. The pre-expansion F002 nomination remains withdrawn. Accepted M85 stays public-byte
+authority until M86 Pages publication and exact hosted-byte verification pass.
 
 M86 is accepted only when all of the following pass:
 
@@ -4039,22 +4040,62 @@ M86 is accepted only when all of the following pass:
   candidate bytes are frozen without rebuild and verified locally and on retained Tailscale.
 - The F001 scorecard is accepted by the supervising user's scoped “Looks good” assessment without
   claiming a separately logged M86-U1 through M86-U5 row-by-row replay.
-- M86-F002 reproduces at the public headless Select boundary: one persistent endpoint shared by
-  both computed Fillet parents is simultaneously inside ordinary native-point picking and the
-  Fillet radius surface, yet pre-repair hover/down resolve FeatureCorner rather than Point.
-- At that exact source corner, native identity or active explicit Coincident topology makes the
-  point win Select hover and down. The click selects the persistent Point and begins an ordinary
-  Point gesture. Solved coordinate proximity alone never qualifies.
-- The exception is source-specific and Select-only. An unrelated point over the computed arc,
-  radius grip/spoke/rail away from the source corner, passive native curves, active Fillet authoring
-  and painted-radius reconciliation preserve their established M75 precedence.
-- Exact native/WASM tests cover shared identity, distinct explicitly Coincident identities,
-  coordinate-only non-topology and a persistent post-Apply Fillet. The existing unrelated-point,
-  radius-affordance and native-authoring-contact owners remain passing unchanged; the broad golden
-  stays byte-identical because no systemic family or authority state was added.
-- F002 complete clean qualification, replacement immutable byte verification and supervising-user
-  M86-U6/U7 approval are explicit before Pages publication, exact hosted-byte verification,
-  retained-service retirement and milestone closure.
+- M86-F002's expanded exact report is one open two-span right-angle Polyline with two length-`2`
+  legs and requested Fillet radius `2`. Exact `2` is the evaluator's tangent-at-endpoint fold
+  boundary; accepted radius `1.99` robustly reproduces the same visible Fillet surface covering
+  both remote endpoints. Ordinary scene picking sees each persistent Point, yet pre-repair Select
+  hover/down resolve the FeatureCorner and make both endpoints unclickable.
+- Select priority is compact Fillet radius grip, then an unambiguous visible persistent endpoint
+  belonging to either current parent, then the broad Fillet arc/spoke/rail surface, then ordinary
+  geometry. Shared persistent identity or active explicit Coincident topology remains
+  deterministic. If distinct opposite-parent point halos both hit, the nearer point wins and an
+  exact distance tie remains with the Fillet. Solved coordinate proximity and unrelated points do
+  not acquire priority. With several overlapping Fillets, endpoint arbitration spans every broad
+  surface under the pointer before falling back to the globally best Fillet; a nearer surface owned
+  by another corner cannot hide the endpoint, and exact disconnected ties still retain the Fillet.
+- Hover and down use that same resolver. A winning endpoint paints Point hover, selects the Point
+  and begins an ordinary Point gesture. Active Fillet authoring, painted-radius reconciliation,
+  passive native curves and unrelated geometry retain their established M75 ownership.
+- Coincident representatives are computed through one request-local lazy `OnceCell` shared across
+  all overlapping Fillet owners. A broad-surface-only hit never initializes it, while endpoint
+  arbitration performs at most one topology traversal. The focused
+  `broad_fillet_hover_defers_coincidence_work_until_an_endpoint_halo_is_hit` regression proves the
+  broad arc sample is outside every point halo and leaves the cell uninitialized.
+- Exact native/WASM tests cover the shared corner, distinct explicitly Coincident identities,
+  coordinate-only non-topology, persistent post-Apply authority, both applied near-boundary remote
+  endpoints, compact-grip precedence and nearer-opposite-parent arbitration. The unchanged broad
+  tests also cover cross-Fillet overlap and exact disconnected fallback. The unchanged broad golden
+  remains appropriate because no systemic authoring family or scene-authority state is new.
+- M86-F003 reproduces in the Typed Panel retained code-project terminal publisher, not solver
+  snapping or inference. Upper-left `[0,40] -> [3,38]` previews and releases successfully, but the
+  old publisher rejects `computed features` parity and restores the prior durable position. This is
+  an M84-F010 scope recurrence: bounded redundant rectangle-alias normalization existed for design
+  and accepted documents while recomputed Fillet DTOs still compared bit-exactly.
+- F003 may compare bounded derived scalars only when both design and accepted parity normalized the
+  same non-empty alias set, and only on computed edges/fragments sourced from curves incident to
+  those aliases. Unrelated computed geometry remains bit-exact. Public feature identity, edge kind,
+  topology, provenance, sweep, tangent orientation, contact source/winding, ownership, feature
+  allocator and persistent sketch allocator remain exact; non-finite and more-than-8-ULP differences
+  reject. Evaluation revision stamps and private continuation cells are not claimed as adapter-
+  compared authority.
+- One sequential regression publishes `[3,38]`, `[5,37]` and `[-2,36]` in the same Typed Panel
+  session. Each exact native terminal, outer publication and reload must agree; each release adds
+  one revision while the canonical overlay remains two seed drafts, all keyed Fillets stay Current,
+  every coordinate is finite and normalized Hard residual is at most `1e-9`. Negative tests reject
+  unrelated-edge roundoff, unequal normalization sets, more than 8 ULP, sweep, tangent, winding and
+  provenance changes.
+- Managed code projects expose a bounded memory-only trace for the latest pointer gesture. The
+  trace captures exact browser/native/parity/publication/rollback evidence, is capped at 128 KiB,
+  preserves opening and newest terminal/rejection/rollback rows under overflow, and never enters
+  source, history, persistence, local storage or reproduction payloads. Flat/non-code workspaces
+  keep `Copy trace` disabled; the read-only overlay supplies selected-text clipboard fallback.
+- Focused trace tests, full demo-web 316/316, warnings-denied Clippy, formatting, locked WASM check,
+  release Trunk build, browser smoke and unchanged golden `--check` pass. The trace-enabled frozen
+  snapshot and both retained endpoints match byte-for-byte.
+- Combined F002/F003 provisional qualification and trace-enabled immutable verification pass. The
+  supervising user's 2026-08-29 close decision accepts M86-U6/U7/U8 and authorizes the accepted-
+  source commit. A clean committed-source gate remains the prerequisite to Pages publication,
+  hosted-byte verification, retained-service retirement and milestone closure.
 
 F001 mechanical qualification passes on source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`. The complete clean Nix gate exits `0`; unchanged
@@ -4065,7 +4106,7 @@ eight-path HTTP ledgers are byte-identical at SHA-256
 `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This satisfies F001's
 mechanical prerequisites and is retained as historical evidence.
 
-F002 replacement mechanical qualification passes on source
+The now-withdrawn pre-expansion F002 mechanical qualification passed on source
 `dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
 `77f86c0a198af12e10537dc4d6d7d90066ba48e8`. The complete clean Nix gate exits `0`; its
 6,570-line, 440,856-byte log has SHA-256
@@ -4074,12 +4115,42 @@ seven-file output is frozen at `/tmp/geosolve-m86-f002-uat.CPfe9QD8`, aggregate
 `e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`; temporary-local,
 local and Tailscale verification all produce the identical eight-path ledger SHA-256
 `e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`. Final F002 human
-acceptance and post-approval publication remain open.
+acceptance was subsequently supplied against the replacement descendant. Those bytes do not
+contain the remote-parent endpoint expansion or F003 and are historical evidence only.
+
+The served combined F002/F003 build identity is the saved pre-gate 160,117-byte, 2,976-line binary
+patch over HEAD `4730e156e17cf3df88b9681a22961d41b686c2ff`, tree
+`23a76c3b7141f10064d899113b97135932d23033`, with SHA-256
+`feafcc2a717a9c1bf9ff7a708b705903b2e18c6ef67327f533d66819a8784a57` and saved status SHA-256
+`945ef3534016a5735c42c6fedaf72e66be2acc41ce9dc764db6e5896c3636b5a`. Its saved pre/post-gate
+patch and status files are byte-identical. Subsequent documentation-only worktree edits are outside
+that served-build patch and do not alter the frozen seven-file candidate. The complete provisional
+dirty-worktree gate exits `0`; its 6,582-line, 441,920-byte log has SHA-256
+`93b645c2a2f1850f589b406943f3618da4fc833a42ff6066884602ec3e31ddb6`. The no-rebuild snapshot at
+`/tmp/geosolve-m86-f002-f003-uat.yGY3Nvly` has aggregate
+`8f5a4ffcd96819b986ba81a9467d0c83a64365b2d21338cd134e164fa4444ce4`; temporary, local and
+Tailscale ledgers are byte-identical at
+`dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`. Temporary PID/invocation
+`965128`/`a06c89f580744568b0d39677ee776da1` passed on `127.0.0.1:18102` and is stopped. Local
+PID/invocation `969297`/`c1681e5beb234ce487dbf9b639cbd9dd` and Tailscale PID/invocation
+`973390`/`c77a5b3abbe94752b864af9bda53c355` subsequently served only that snapshot before the
+trace-enabled services below replaced them. This remains provisional UAT evidence, never a clean-
+source nomination.
+
+The accepted trace-enabled snapshot `/tmp/geosolve-m86-trace-uat.U1C0QPSf` contains exactly seven
+regular files, zero symlinks, directory/files `0555`/`0444` and ordered-manifest aggregate
+`f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`. Local PID/invocation
+`2433761`/`3f829abfff0a46eba586c07fed507d8e` and Tailscale PID/invocation
+`2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` serve only that snapshot. `/` and all seven files match on
+both endpoints; evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
+`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. This is accepted UAT
+evidence, not yet clean-source nomination or public authority.
 
 M86 changes no primitive, constraint, dimension family, residual, Jacobian, solver priority,
 tolerance, branch rule, persistence schema, managed grammar or point-overlay semantics. General
-arbitrary Intent-leaf reconciliation, runtime TypeScript and a global native-over-computed picking
-inversion remain outside scope.
+arbitrary Intent-leaf reconciliation, runtime TypeScript, a global native-over-computed picking
+inversion, a general weakening of computed snapshot parity and diagnostic state becoming retained
+project authority remain outside scope.
 
 ## Regression and oracle policy
 

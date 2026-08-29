@@ -6455,8 +6455,8 @@ paths return HTTP 200 without redirects, with exact MIME, `Content-Length` and a
 repo-prefixed build and is not byte-identical to the frozen UAT snapshot; that snapshot remains
 historical evidence. Product source `5c265e2` is an ancestor of the approval head with only the
 eight closeout documents changed. Both M85 user services are inactive/dead with `MainPID=0` and
-both former endpoints refuse connections. M1-M85 are complete; M86 is now active as the next
-bug-fix batch.
+both former endpoints refuse connections. M1-M85 are complete; M86 opened at that checkpoint as
+the next bug-fix batch.
 
 Gate: a camera-only frame admits only lightweight retained camera/grid/HUD presentation; fixed
 ordinary and visible-manifold scenes meet their real-browser budgets; both presentation adapters
@@ -6466,9 +6466,11 @@ publication.
 
 ### M86: focused bug fixes and UAT follow-up
 
-Status: **active and unaccepted; M86-F001 is accepted by the supervising user's scoped “Looks
-good” assessment, and M86-F002 is clean-qualified and immutably nominated with focused UAT
-pending**. Accepted M85 Pages run `33128387637` remains public-byte authority.
+Status: **accepted at milestone level on 2026-08-29; clean-source qualification and public closeout
+remain pending**. M86-F001-F003 and the bounded interaction trace are approved by the supervising
+user's explicit close decision, accepting M86-U1-U8 without claiming a separately logged row-by-row
+replay. The pre-expansion F002 nomination remains withdrawn. Accepted M85 Pages run `33128387637`
+remains public-byte authority until M86 publication and exact hosted-byte verification pass.
 `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the detailed contract
 and evidence.
 
@@ -6519,18 +6521,99 @@ and evidence.
   points; no public API, browser incidence rule, computed-feature branch or solver equation changes.
 - [x] Pass focused native/WASM parity, all editor tests/doc tests, warnings-denied affected Clippy,
   formatting, diff hygiene and unchanged 271-case golden authority.
-- [x] Pass the complete clean gate on source `dbe94da`, tree `77f86c0`; freeze the exact seven-file
-  output without rebuild at `/tmp/geosolve-m86-f002-uat.CPfe9QD8` (aggregate `e3f9581`), and
-  exact-verify the replacement local/Tailscale services. Both eight-path ledgers are identical at
-  SHA-256 `e5513ab`.
-- [ ] Complete M86-U6/U7. Publish to Pages and close M86 only after explicit final supervising-user
-  approval.
+- [x] Historically pass the pre-expansion F002 clean gate on source `dbe94da`, tree `77f86c0`,
+  freeze `/tmp/geosolve-m86-f002-uat.CPfe9QD8` and exact-verify it locally and over Tailscale. The
+  later remote-parent-endpoint UAT escape withdraws those bytes from current nomination while
+  preserving them as immutable historical evidence.
+- [x] Expand M86-F002 with the exact supplied two-span right-angle Polyline: both legs are length
+  `2`, and requested radius `2` reaches the evaluator's tangent-at-endpoint fold boundary. Applied
+  radius `1.99` is the robust accepted equivalent whose visible Fillet surface covers both remote
+  endpoints. Pre-repair, that broad surface makes both persistent endpoints unclickable.
+- [x] Implement one Select resolver hierarchy: compact Fillet radius grip; then an unambiguous
+  visible persistent endpoint belonging to either parent; then the broad arc/spoke/rail surface;
+  then ordinary geometry. Shared identity and active Coincident equivalence remain deterministic.
+  When distinct opposite-parent point halos both hit, the nearer point wins and an exact distance
+  tie remains with the Fillet. Unrelated points remain below it. Coincident representatives are
+  request-local and lazy: a broad Fillet-only hover performs no document-wide topology traversal,
+  while overlapping owners share at most one traversal after an endpoint halo actually hits.
+- [x] Add native/WASM rows for both remote endpoints, applied near-boundary radius, explicit grip,
+  nearer-opposite-parent and cross-Fillet arbitration. Parent-endpoint arbitration spans every
+  broad Fillet surface under the pointer; an exact disconnected tie within or across owners retains
+  the globally best Fillet. Native and WASM parity pass 18/18; provisional replacement
+  qualification passes in the final gate below, while clean-source nomination remains post-UAT.
+- [x] Independently reproduce M86-F003 as an M84-F010 scope recurrence in retained code-project
+  terminal authority. In `typed-panel`, upper-left `[0,40] -> [3,38]` previews and releases, but
+  publication reports `terminal code drag differs from its independently staged native authority
+  in computed features` and restores the pre-drag durable position.
+- [x] Repair F003 without changing solver snapping or inference. Computed scalar roundoff is
+  admitted only when both design and accepted document parity normalize the same non-empty set of
+  redundant rectangle aliases, and only for computed edges/fragments on curves incident to those
+  aliases. Public identity, topology, provenance, sweep, tangent orientation, winding, ownership,
+  feature allocator and persistent sketch allocator stay exact; non-finite, unrelated, more-than-
+  8-ULP and branch differences reject.
+- [x] Regress three Typed Panel diagonal targets `[3,38]`, `[5,37]` and `[-2,36]`. Require exact
+  terminal/published/reloaded coordinates, two canonical drafts, one revision, finite Current keyed
+  Fillets and independently validated Hard residual `<= 1e-9`; add causal, bound and public branch-
+  state negative tests.
+- [x] Complete a full provisional dirty-worktree release gate, no-rebuild seven-file freeze and
+  exact temporary/local/Tailscale verification for the combined F002/F003 UAT repair. Preserve the
+  exact pre-gate patch as product identity; this is not a clean-source nomination.
+- [x] Add a bounded, memory-only managed-gesture trace after the full reproduction payload became
+  impractical to paste. Capture exact browser/native/parity/publication/rollback evidence, cap
+  export at 128 KiB, exclude source/history/persistence/repro authority, and provide read-only
+  selected-text fallback. Focused trace tests, demo-web 316/316, Clippy, formatting, WASM, release
+  build, browser smoke and unchanged golden `--check` pass.
+- [x] Receive the supervising user's 2026-08-29 milestone-level approval for M86-U6/U7/U8 and the
+  trace-enabled descendant without claiming a separately logged row-by-row replay.
+- [ ] Clean-qualify the committed accepted descendant, publish it to Pages, exact-verify hosted
+  bytes, retire both M86 services and close M86.
+
+Combined F002/F003 provisional UAT record (2026-08-28): the served build identity is the saved
+pre-gate 160,117-byte, 2,976-line binary patch over HEAD
+`4730e156e17cf3df88b9681a22961d41b686c2ff`, base tree
+`23a76c3b7141f10064d899113b97135932d23033`, with SHA-256
+`feafcc2a717a9c1bf9ff7a708b705903b2e18c6ef67327f533d66819a8784a57` and saved status SHA-256
+`945ef3534016a5735c42c6fedaf72e66be2acc41ce9dc764db6e5896c3636b5a`. Saved pre/post-gate patch
+and status bytes compare exactly. Subsequent documentation-only worktree edits are outside that
+served-build patch and do not alter the frozen seven-file candidate. The complete provisional gate
+ran from 18:44:26 through 19:10:14 AEST with `GEOSOLVE_ALLOW_DIRTY=1`; both pipeline statuses are
+`0`. Its 6,582-line, 441,920-byte log at
+`/tmp/geosolve-m86-f002-f003-gate.yDrJlI8n/release-gate.log` has SHA-256
+`93b645c2a2f1850f589b406943f3618da4fc833a42ff6066884602ec3e31ddb6`. Pre/post status and patch
+bytes compare exactly. The gate passes workspace Clippy/tests/doc tests, unchanged 271-row golden,
+native/WASM parity including F002 18/18, demo-web 307/307, both TypeScript packages, Rustdoc,
+bench/release-performance sentinels, licences, package verification and final Trunk assembly.
+
+Without rebuilding, the exact seven-file output is frozen at
+`/tmp/geosolve-m86-f002-f003-uat.yGY3Nvly`, directory/files `0555`/`0444`, zero symlinks or nested
+entries, ordered-manifest aggregate
+`8f5a4ffcd96819b986ba81a9467d0c83a64365b2d21338cd134e164fa4444ce4`; complete evidence is
+`/tmp/geosolve-m86-f002-f003-freeze-evidence.EsMzxE2v`. Temporary `127.0.0.1:18102`, PID/invocation
+`965128`/`a06c89f580744568b0d39677ee776da1`, final local `127.0.0.1:18101` and Tailscale
+`100.94.63.83:8080` eight-path ledgers are byte-identical at SHA-256
+`dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`. The temporary service is
+retired. Local PID/invocation `969297`/`c1681e5beb234ce487dbf9b639cbd9dd` and Tailscale
+PID/invocation `973390`/`c77a5b3abbe94752b864af9bda53c355` subsequently served only that
+snapshot and were replaced by the trace-enabled services below. The withdrawn
+`/tmp/geosolve-m86-f002-uat.CPfe9QD8` snapshot remains unchanged as rollback evidence.
+
+Accepted trace-enabled UAT record (2026-08-29): the seven-file snapshot
+`/tmp/geosolve-m86-trace-uat.U1C0QPSf` is frozen at directory/files `0555`/`0444`, zero symlinks,
+ordered-manifest aggregate
+`f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`. Local PID/invocation
+`2433761`/`3f829abfff0a46eba586c07fed507d8e` and Tailscale PID/invocation
+`2433763`/`5f2c7c3eddac43119f380ec2e87b47c8` serve only that snapshot. `/` and all seven files match on
+both endpoints; evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
+`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The temporary `18103`
+listener is retired. This is accepted UAT evidence, not yet clean committed-source nomination.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
-not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority; a
-Fillet cannot hide its own persistent source corner but retains radius ownership everywhere else;
-ordinary GUI dimensions and every solver equation remain unchanged; focused regression,
-proportional clean qualification, immutable nomination and explicit UAT precede publication.
+not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;
+the compact Fillet grip remains most specific, an unambiguous parent endpoint beats only the broad
+Fillet surface, and unrelated geometry does not invert globally; derived terminal roundoff is
+causal, conditional and bounded while public discrete feature authority remains exact; ordinary
+GUI dimensions and every solver equation remain unchanged; focused regression, proportional clean
+qualification, immutable nomination and explicit UAT precede publication.
 
 ## Explicit non-goals
 

@@ -142,7 +142,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   deterministic work-admission tests and focused candidate-only Chromium timing own the
   performance proof, and M85 does not restore broad browser integration CI. M85 is complete and
   closed.
-- **Active target:** M86 is a focused bug-fix/UAT batch over the accepted M85 product. Confirmed
+- **Accepted target; closeout in progress:** M86 is a focused bug-fix/UAT batch over the accepted
+  M85 product. Confirmed
   M86-F001 belongs to the optional code-project/workbench adapter: generic Inspector dispatch had
   mutated a nested Intent target and then failed code-checkpoint classification because that path
   recognizes only point-placement draft provenance. Implemented `CodeInspectorEditRoute` gives the
@@ -158,15 +159,35 @@ construction/NURBS UAT and certified all-family visual profiles.
   the supervising user's scoped “Looks good” assessment accepts F001 without claiming a separate
   row-by-row replay. Confirmed M86-F002 belongs to `geosolve-constraint-editor`'s headless Select
   resolver. The public Fillet-aware surface deliberately continues to merge grip, spoke, rail and
-  arc for authoring and painted-radius parity. A private Select-only source-corner query reuses the
-  feature-authoring owner's line/polyline endpoint semantics and active explicit Coincident
-  representatives: only a persistent point shared by that Fillet's two parents may preempt the
-  radius hit. Coordinate equality, unrelated overlapping points and passive native curves do not.
-  Hover and down therefore retain one owner without adding browser incidence logic, computed-
-  feature state or solver equations. Focused native/WASM, post-Apply and unchanged-golden checks
-  pass. Exact replacement source `dbe94da`, tree `77f86c0`, also passes the complete clean gate,
-  no-rebuild immutable freeze and exact local/Tailscale byte verification; only focused F002 UAT
-  remains pending. `docs/M86_GOALS.md` owns the active contract.
+  arc for authoring and painted-radius parity. Select privately refines that surface into compact
+  radius grip, an unambiguous visible persistent endpoint of either line/polyline parent, then the
+  broad arc/spoke/rail surface. Active explicit Coincident representatives retain deterministic
+  shared-corner ownership; nearer opposite-parent halos win, while an exact disconnected distance
+  tie, coordinate-only overlap and unrelated points stay with/below the Fillet. Endpoint
+  arbitration enumerates every overlapping broad Fillet before falling back to the globally best
+  Fillet surface, so one corner's arc cannot hide another corner's parent point. Hover and down use
+  the same resolver. One request-local lazy Coincident `OnceCell` is shared across all overlapping
+  Fillet owners and remains uninitialized for broad-surface-only hover, so the refined order does
+  not add document-wide topology work to ordinary Fillet motion. This adds no browser incidence
+  logic, computed-feature state or solver equations.
+  M86-F003 belongs to `geosolve-demo-web` retained code-terminal authority and is an M84-F010 scope
+  recurrence, not snapping or inference: document parity already normalized redundant rectangle
+  aliases within a bounded cell, but derived Fillet DTOs compared bit-exactly and rejected a valid
+  Typed Panel release. Derived scalar parity now relaxes only when design and accepted documents
+  normalize the same non-empty alias set and only on edges/fragments sourced from curves incident
+  to those aliases. Unrelated computed geometry and all public topology/provenance/sweep/tangent/
+  winding/ownership/allocator authority remain exact; evaluation stamps and private continuation
+  cells are deliberately not claimed as adapter-compared state. F002 native/WASM 18/18, the lazy-
+  Coincident regression, sequential F003 and unchanged golden pass. The previous
+  `dbe94da`/`77f86c0` candidate is withdrawn historical evidence. The exact saved patch passes the
+  complete provisional dirty-worktree gate. A separate browser-only diagnostic layer owns one
+  bounded, memory-only trace of the latest managed pointer gesture: it observes browser/native/
+  parity/publication/rollback stages without joining source, history, persistence, local storage or
+  reproduction authority. Its 128 KiB export and read-only copy surface do not change headless
+  interaction semantics. The trace-enabled seven-file candidate passes exact local/Tailscale byte
+  verification and the supervising user's 2026-08-29 close decision accepts M86-U1-U8 without
+  claiming a separately logged row-by-row replay. Clean-source nomination and publication remain
+  pending. `docs/M86_GOALS.md` owns the accepted contract.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human

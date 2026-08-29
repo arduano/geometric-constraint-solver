@@ -487,7 +487,8 @@ user services are inactive/dead with `MainPID=0` and both former endpoints refus
 M85 is closed. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` own the
 accepted candidate and public-closeout ledger.
 
-M86 is the active focused bug-fix/UAT follow-up milestone. `M86-F001` is implemented,
+M86 is the accepted focused bug-fix/UAT follow-up milestone, with mechanical public closeout in
+progress. `M86-F001` is implemented,
 clean-qualified, immutably nominated and accepted by the supervising user's scoped “Looks good”
 assessment after independent reproduction on the PC Water Manifold:
 Inspector editing of
@@ -500,19 +501,31 @@ Accepted expansion provenance authenticates the alias to managed declaration
 length/diameter targets through the existing source scalar lens and ordinary atomic
 rematerialization. Focused owner, accepted-diameter, retained-invalid/Undo, adapter and GUI-owned
 collateral tests pass, as do the complete clean gate, unchanged golden and exact no-rebuild
-local/Tailscale freeze. `M86-F002` then independently reproduces a headless Select-priority defect:
-the blended Fillet grip/spoke/rail/arc surface hides the persistent shared endpoint of its own two
-native parents. The implemented Select-only exception recognizes exact or explicitly Coincident
-line/polyline endpoints, but not coordinate proximity; native point hover/click/drag wins only at
-that source corner while unrelated point overlaps and ordinary Fillet radius behavior remain
-unchanged. Focused native/WASM, Coincident/non-topology, post-Apply, editor-suite, Clippy and
-unchanged-golden checks pass. Exact replacement source `dbe94da`, tree `77f86c0`, also passes the
-complete clean gate and no-rebuild byte freeze. Its immutable snapshot is live locally and on
-retained Tailscale; focused F002 human UAT remains pending, so accepted M85 remains public
-authority.
+local/Tailscale freeze. `M86-F002` then independently reproduced a headless Select-priority defect.
+The first repair made the exact shared parent corner reachable, but UAT expanded the scope with a
+two-span right-angle Polyline whose length-`2` legs and near-fold radius cover both remote parent
+endpoints. Select now orders compact Fillet grip, unambiguous visible endpoint of either parent,
+broad arc/spoke/rail surface, then ordinary geometry. Active Coincident topology is deterministic;
+the nearer opposite-parent halo wins, an exact disconnected tie stays with the Fillet, and
+arbitration spans every overlapping Fillet rather than only the nearest broad owner; unrelated
+points never gain priority. One request-local lazy Coincident cell is shared across those owners
+and remains uninitialized for a broad-surface-only hit, avoiding document-wide topology work on
+ordinary Fillet hover. `M86-F003` independently reproduces Typed Panel release snap-
+back as retained terminal-publication parity, not solver snapping: redundant rectangle aliases
+normalize within M84-F010's bound while derived Fillet DTOs differed by only roundoff. The repair
+requires the same normalized aliases in design and accepted authority and admits bounded scalars
+only on incident computed sources; unrelated geometry and public discrete feature state stay exact.
+Focused native/WASM 18/18, sequential three-target Typed Panel, causal/bound/branch, editor-suite,
+Clippy and unchanged 271-case golden checks pass. A bounded memory-only `Copy trace` diagnostic
+captures exact managed-gesture browser/native/parity/publication/rollback evidence without joining
+source, history, persistence or reproduction authority; post-trace demo-web passes 316/316. The
+prior `dbe94da`/`77f86c0` candidate is withdrawn historical evidence. The trace-enabled seven-file
+snapshot passes byte-identical local/Tailscale verification. The supervising user's 2026-08-29
+close decision accepts M86-U1-U8 without claiming a separately logged row-by-row replay. Commit,
+clean-source nomination and publication remain open, so accepted M85 remains public authority.
 `docs/M86_HANDOVER.md` is the concise resume point. `docs/M86_GOALS.md`,
-`docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the active contract, finding ledger and
-pending scorecard.
+`docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the accepted contract, finding ledger and
+closeout scorecard.
 
 ## Read first
 
@@ -556,9 +569,9 @@ pending scorecard.
     camera/interaction performance contract, repaired M85-F001-F003 implementation, exact
     clean-qualified frozen candidate, milestone-level approval and exact public closeout.
 22. `docs/M86_HANDOVER.md`, `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and
-    `docs/M86_UAT.md` — concise resume point, active focused bug-fix contract, human-approved
-    managed-dimension Inspector repair, clean-qualified/immutably nominated Fillet source-corner
-    replacement and pending focused human scorecard.
+    `docs/M86_UAT.md` — concise resume point, accepted focused bug-fix contract, human-approved
+    managed-dimension Inspector repair, accepted Fillet/Typed Panel and bounded-trace UAT
+    descendant, and pending clean-source/public closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -930,7 +943,8 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M85 are complete and M86 is active. M83's projectional implementation, F001-F010 repairs and post-F007
+M1-M85 are complete and M86 is accepted with public closeout in progress. M83's projectional
+implementation, F001-F010 repairs and post-F007
 architecture hardening pass clean qualification, immutable Tailscale nomination, supervising-user
 acceptance and exact Pages publication. M84's optional code/GUI implementation, F001-F012 repairs,
 frozen F012 nomination, milestone-level acceptance and exact Pages publication also pass.
@@ -975,8 +989,8 @@ logged row-by-row replay. Approval head `e8dfec3467424a9051533658df34c5b406bf374
 `9669411681` and exact hosted-byte verification. The Pages artifact is a fresh repo-prefixed build,
 not byte-identical to the frozen snapshot; it is final M85 public-byte authority. Both M85 services
 are retired and their endpoints refuse connections. M85 adds no equation, constraint, solver
-priority, branch rule, persistence schema or managed-code meaning. M86 is now active as a separate
-bug-fix batch.
+priority, branch rule, persistence schema or managed-code meaning. M86 opened at that checkpoint as
+a separate bug-fix batch.
 M86-F001 was confirmed at M85 closeout source `4b69a57`. The exact manifold alias authenticates to
 managed declaration `topScrewRail3Length` and `target: mm(16)`, but generic Inspector dispatch
 changes the nested target before code-owned checkpoint reconciliation rejects it for lacking point-
@@ -986,12 +1000,19 @@ rewrites managed source, rematerializes atomically, reselects the stable alias o
 publication, retains one outer history and preserves prior accepted authority on invalid input.
 Focused and complete clean qualification, unchanged golden and exact immutable local/Tailscale
 nomination pass. The supervising user accepted F001 with a scoped “Looks good” assessment without a
-separately logged row-by-row replay. M86-F002 subsequently makes only the exact persistent
-line/polyline endpoint shared by a Fillet's parents outrank that Fillet's radius surface in the
-shared Select hover/down resolver. Exact identity and active Coincident topology qualify; coordinate
-proximity, unrelated overlying points, passive curves, painted radius reconciliation and authoring
-do not. Focused native/WASM, unchanged-golden and replacement clean nomination pass; focused F002
-UAT remains open. Pages authority is not yet claimed.
+separately logged row-by-row replay. Expanded M86-F002 orders the compact radius grip above any
+parent point, then lets an unambiguous visible endpoint of either line/polyline parent outrank the
+broad Fillet arc/spoke/rail surface. Exact identity and active Coincident topology remain
+deterministic; nearer opposite-parent halos win while a disconnected distance tie and unrelated
+points remain with/below the Fillet. M86-F003 fixes the Typed Panel's apparent release snap-back at
+retained code terminal publication: only matching design-and-accepted redundant rectangle
+normalization can admit bounded derived roundoff, and only on incident computed sources. Focused
+native/WASM, sequential terminal and unchanged-golden checks pass. The earlier F002 clean
+nomination is withdrawn. The bounded memory-only managed-gesture trace and post-trace 316/316
+demo-web suite pass; its seven-file snapshot is byte-identical on both UAT endpoints. The
+supervising user's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged
+row-by-row replay. Accepted product source is committed; clean-source nomination and publication
+remain open, so Pages authority is not yet claimed.
 M82 closes by explicit
 deferral rather than feature acceptance:
 `fa54f30` restores the exact M81 product tree and the complete discarded prototype is archived at
@@ -1119,10 +1140,10 @@ Durable milestone and cleanup records:
   frozen-candidate evidence ledger)
 - `docs/M85_UAT.md` (accepted immutable-candidate navigation/interaction scorecard and exact
   public closeout)
-- `docs/M86_GOALS.md` (active focused managed-dimension and Fillet source-corner contract)
-- `docs/M86_IMPLEMENTATION.md` (implemented M86-F001/F002 design, qualification and nomination
+- `docs/M86_GOALS.md` (accepted focused managed-dimension, Fillet, Typed Panel and trace contract)
+- `docs/M86_IMPLEMENTATION.md` (implemented M86-F001-F003 design and accepted UAT evidence
   ledger)
-- `docs/M86_UAT.md` (accepted scoped F001 scorecard and pending F002 replacement recheck)
+- `docs/M86_UAT.md` (accepted M86-U1-U8 scorecard and pending mechanical public closeout)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

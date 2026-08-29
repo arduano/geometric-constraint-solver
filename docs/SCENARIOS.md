@@ -5465,8 +5465,14 @@ M86-F001 adds no residual equation and does not reinterpret or expand the milest
 Its focused optional code-project regressions and thin browser-Inspector adapter proof pass;
 complete clean qualification, unchanged-golden confirmation and exact no-rebuild local/Tailscale
 nomination also pass. The supervising user's scoped “Looks good” assessment accepts F001 without
-claiming a separately logged row-by-row replay. M86-F002 adds only focused headless picking rows;
-its clean replacement is immutably nominated and M86-U6/U7 remain pending.
+claiming a separately logged row-by-row replay. Expanded M86-F002 adds only focused headless
+picking rows, and M86-F003 adds a focused retained code-terminal regression; neither broadens the
+golden. The pre-expansion F002 nomination is withdrawn. The exact saved combined patch passes the
+complete provisional dirty-worktree gate and its trace-enabled descendant passes bounded trace,
+demo-web 316/316, WASM, release-build, golden and exact dual-endpoint byte checks. The supervising
+user's 2026-08-29 close decision accepts M86-U1-U8 without claiming a separately logged row-by-row
+replay. Accepted product source is committed; clean-source qualification and public closeout remain
+pending.
 `docs/M86_GOALS.md` is authoritative.
 
 ### M86-C1 — Exact managed curve-length target rewrite
@@ -5511,7 +5517,7 @@ invalid edit. Owner assertions remain in C1/C2; this adapter test duplicates no 
 accepted-state oracle. Existing GUI-owned reference-dimension and generic Inspector Undo/Redo
 regressions remain collateral authority.
 
-### M86-C4 — Immutable candidate authority
+### M86-C4 — Historical F001 candidate authority
 
 Source `90504245e19858f986d5f506f6e42d237e9665b5`, tree
 `65e092540dab82618d1129229b566a2e791aa40c`, passes the complete clean Nix release gate and
@@ -5521,7 +5527,8 @@ unchanged 271-case golden. Its exact seven-file Trunk output is frozen without r
 retained Tailscale processes served only that snapshot; all eight paths were exact and their
 byte-identical ledgers have SHA-256
 `b5ad691e14198791fa801281724fc3186161b2d2aae7358affea402e9a5f0acd`. This is historical F001
-evidence, not public authority; Pages remains M85 until explicit final M86 approval.
+evidence, not public authority; Pages remains M85 until M86 publication and exact hosted-byte
+verification.
 
 ### M86-C5 — Fillet source-corner Select priority
 
@@ -5538,20 +5545,106 @@ leaving the two solved coordinates identical: the Fillet retains radius ownershi
 coordinate proximity is not topology. Finally Apply the computed Fillet and repeat against the
 Current persistent scene.
 
+Then reproduce the exact UAT scope expansion with one open two-span right-angle Polyline whose legs
+are length `2`. Requested radius `2` is the evaluator's tangent-at-endpoint fold boundary; apply
+radius `1.99` as the robust accepted equivalent and assert the resulting visible radius surface
+contains both remote endpoints. Each endpoint must independently win hover/down, selection and an
+ordinary Point gesture. A compact radius grip placed over a point remains the more specific Fillet
+control. If distinct endpoints from the two parents both lie inside the point tolerance, the nearer
+one wins; an exact disconnected distance tie stays with the Fillet rather than inventing topology.
+Repeat with two accepted Fillet affordances whose broad surfaces overlap the first Fillet's remote
+endpoint, arranging the other Fillet as the nearer broad hit while keeping both compact grips away.
+The parent endpoint still wins hover/down and begins a Point gesture. If disconnected endpoints are
+made an exact point-distance tie, the globally best broad Fillet retains ownership.
+
+All overlapping Fillet owners share one request-local lazy Coincident `OnceCell`. Endpoint
+arbitration may initialize it at most once; broad arc/spoke/rail hover outside every point halo must
+leave it uninitialized. The focused
+`broad_fillet_hover_defers_coincidence_work_until_an_endpoint_halo_is_hit` regression proves this
+with a real broad arc sample, rather than a synthetic early-return path.
+
 The existing unrelated draggable point at a computed Fillet contact must still resolve to
 FeatureCorner/FilletRadius for every modifier; removing it still leaves the passive native parent
 below the computed radius surface. Direct radius grip/rail gestures, native authoring at a computed
 contact and painted-radius reconciliation remain unchanged. Native and WASM results must match
 exactly. No new golden row, residual/Jacobian test or browser-specific hit rule is warranted.
 
-Replacement source `dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
+Historical source `dbe94daf152515169b78a310cf2286f9ea04c80b`, tree
 `77f86c0a198af12e10537dc4d6d7d90066ba48e8`, passes the complete clean gate from 13:46:55 through
 14:20:45 AEST. Its exact seven-file output is frozen without rebuild at
 `/tmp/geosolve-m86-f002-uat.CPfe9QD8`, aggregate
 `e3f9581a05a8cbf5731b33625fa63f2b35e62f4ebcfdacb6d75a4486f80fc850`. Temporary-local, final
 local and Tailscale eight-path verification are identical at SHA-256
-`e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`; the replacement owns
-`http://127.0.0.1:18101/` and `http://100.94.63.83:8080/` for M86-U6/U7.
+`e5513ab3e36262f2ccedf175006f1283d5504180c8d0be46e1e90dded999a3df`. The remote-endpoint escape
+withdraws that pre-expansion nomination; preserve its snapshot and evidence without presenting its
+post-reboot listeners as current candidate identity.
+
+### M86-C6 — Typed Panel terminal-derived roundoff
+
+Open the genuine `typed-panel` code project and sequentially drag its upper-left rectangle corner
+from `[0,40]` to `[3,38]`, then `[5,37]`, then `[-2,36]`. For each gesture, use at least two native
+preview frames and require pointer release to retain the latest exact preview. Dedicated terminal
+publication must add exactly one outer revision, keep the canonical rectangle overlay at two seed
+drafts, and publish the exact released coordinate. Persist/reload after every release and require
+the same exact coordinate, finite accepted geometry, all keyed Fillets Current and independently
+validated normalized Hard residual at most `1e-9`.
+
+This is retained code-terminal authority, not a snapping/inference or core-solver scenario.
+M84-F010 already permits tightly bounded normalization for two redundant rectangle aliases. Derived
+computed scalars may use that same finite 8-ULP/near-zero cell only when both design and accepted
+document parity normalize the same non-empty point set, and only for edges/construction fragments
+sourced from curves incident to those points. Unrelated computed geometry remains bit-exact. Public
+edge kind/topology, provenance, sweep, tangent orientation, contact source/winding, ownership,
+feature allocator and persistent sketch allocator remain exact. Negative rows change an unrelated
+edge, exceed 8 ULP, provide unequal normalization sets, flip sweep/tangent/winding or alter
+provenance; every row must reject. Evaluation-local stamps and private continuation cells are not
+claimed as fields compared by this adapter.
+
+### M86-C7 — Historical provisional combined UAT authority
+
+The served F002/F003 build identity is the saved pre-gate 160,117-byte, 2,976-line binary patch
+over HEAD `4730e156e17cf3df88b9681a22961d41b686c2ff`, tree
+`23a76c3b7141f10064d899113b97135932d23033`, with SHA-256
+`feafcc2a717a9c1bf9ff7a708b705903b2e18c6ef67327f533d66819a8784a57` and saved status SHA-256
+`945ef3534016a5735c42c6fedaf72e66be2acc41ce9dc764db6e5896c3636b5a`. Saved pre/post-gate patch
+and status files are byte-identical. Subsequent documentation-only worktree edits are outside that
+served-build patch and do not alter the frozen seven-file candidate.
+
+The complete provisional dirty-worktree gate exits `0`; its 6,582-line, 441,920-byte log has
+SHA-256 `93b645c2a2f1850f589b406943f3618da4fc833a42ff6066884602ec3e31ddb6`. The exact no-rebuild
+snapshot `/tmp/geosolve-m86-f002-f003-uat.yGY3Nvly` has ordered-manifest aggregate
+`8f5a4ffcd96819b986ba81a9467d0c83a64365b2d21338cd134e164fa4444ce4`. Temporary, local and
+Tailscale eight-path ledgers are byte-identical at SHA-256
+`dca3e6eeba66e12c873ba4b5ba9b6cadd489060f0e4c7d5ce1070ed3344ec96f`. Temporary PID/invocation
+`965128`/`a06c89f580744568b0d39677ee776da1` passed on `127.0.0.1:18102` and is stopped. Local
+PID/invocation `969297`/`c1681e5beb234ce487dbf9b639cbd9dd` and Tailscale PID/invocation
+`973390`/`c77a5b3abbe94752b864af9bda53c355` subsequently served only that snapshot before the
+trace-enabled services below replaced them. This is provisional dirty-worktree UAT evidence,
+never clean-source nomination or public authority.
+
+### M86-C8 — Bounded managed gesture trace
+
+On managed code-project pointer-down, reset one memory-only trace and record exact raw/coalesced/
+animation-frame input, native terminal position, authenticated semantic route, staged publication,
+first computed mismatch with bits and ULP bounds, parity result, rollback/restore, persistence and
+presentation work. The trace is capped at 128 KiB and preserves its opening row plus newest
+terminal/rejection/rollback evidence under overflow. It never enters managed source, retained
+documents, history, local storage or reproduction payloads.
+
+`Copy trace` is enabled only for managed code projects. It reuses the reproduction overlay in
+read-only mode, hides Load, selects text before insecure-context clipboard access and restores
+focus to the trace command. An empty trace remains empty until a real pointer gesture; flat/non-code
+workspaces keep the command disabled.
+
+Focused bound/sanitization/overflow tests, forced 9-ULP mismatch and full traced rejection tests,
+the real three-release Typed Panel causal stage regression, full demo-web 316/316, warnings-denied
+Clippy, formatting, locked WASM check, release Trunk build, browser smoke and unchanged golden
+`--check` pass. The exact seven-file snapshot `/tmp/geosolve-m86-trace-uat.U1C0QPSf` has aggregate
+`f5f429f70e42e3b39a8f22696c19ff81f358cfb10c43f7910baf386c9d82fd44`; local/Tailscale `/` and
+every file match it. Evidence `/tmp/geosolve-m86-trace-http-verify.fXS06h` has results SHA-256
+`b2de59e63fc30a2dcbef108e671b1038103983bb95fea53d7410bb5799d080f3`. The supervising user's
+final close decision accepts this descendant as UAT authority; clean committed-source nomination
+remains a separate release gate.
 
 ## Frozen near-singular fixtures
 
