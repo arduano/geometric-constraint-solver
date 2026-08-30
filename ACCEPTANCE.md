@@ -4195,15 +4195,14 @@ project authority remain outside scope.
 
 ### M87: cohesive managed parameters and browser-free design loop
 
-Status: **OPEN**. The managed-control, browser-free authoring, twelve-project dogfood, shared-
-renderer, graphics-hardening and full-detail retained-camera work is retained, and all experimental
-adaptive-detail/LOD work remains deleted. The supervising user's earlier scoped disposition remains
-historical acceptance of M87-U1 through M87-U8 without claiming a separate row-by-row replay.
-Post-M87-F003 proportional mechanical qualification passes; M87-U9/M87-U10 remain pending, and no
-milestone closure is inferred. The dirty shared worktree is not a clean source/tree, immutable
-nomination or public authority; clean nomination, freeze, publication and service retirement have
-not been performed. The mutable Tailscale listener remains development infrastructure, and M88 is
-not active.
+Status: **COMPLETE and accepted on 2026-08-31**. The managed-control, browser-free authoring,
+twelve-project dogfood, shared-renderer, graphics-hardening and full-detail retained-camera work is
+retained, and all experimental adaptive-detail/LOD work remains deleted. The supervising user's
+explicit milestone-close decision accepts M87-U9/M87-U10 without claiming a separately logged
+row-by-row visual replay. Exact source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. No immutable
+freeze, public deployment or service retirement is inferred; the mutable Tailscale listener
+remains development infrastructure. M88 is active below.
 
 The implemented M87 behavioral contract is:
 
@@ -4339,7 +4338,8 @@ The implemented M87 behavioral contract is:
   changes no equation, residual, Jacobian, branch rule or solver policy.
 - Post-F003 evidence passes the manufacturing owner suite 3/3, native composition 13/13, the exact
   reviewed-ledger check 1/1 and all-demo headless/deterministic products 10/10. Fresh mutable
-  U9/U10 bundles exist; human review remains pending.
+  U9/U10 bundles exist; the user's milestone-level close decision accepts both rows without
+  claiming a separately replayed visual session.
 - The coupon and Gridfinity entries are design/profile sketches within 2D/2.5D manufacturing-
   intent authority. They add no CAM, toolpath, automatic cutter compensation, boolean, solid,
   print-fit, machinability or production-manufacturing validation claim.
@@ -4361,33 +4361,98 @@ The implemented M87 behavioral contract is:
 - The separate reviewed code-project ledger contains twelve rows, appending CNC and then Gridfinity
   after the routing-board row while preserving the first ten reviewed rows. The milestone-neutral
   271-row authoring/scene golden remains unchanged because these dogfoods compose existing owners
-  rather than introducing a new systemic authoring axis. Focused owner, native/headless inventory,
-  cold-materialization and deterministic-product checks retain their dirty-worktree evidence
-  boundary.
+  rather than introducing a new systemic authoring axis.
 - The pre-F003 dirty-worktree release gate passed at exit `0` on 2026-08-30 with
   `TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell
   shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'`. The
   current reviewed twelve-row code-project ledger has SHA-256
   `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`, but that historical gate
   does not qualify the revised rows. The gate result is dirty
-  mechanical evidence only. An ordinary release nomination would additionally require a clean
-  exact source and tree and a clean no-rebuild gate/freeze. That clean path, immutable output,
-  public deployment and service retirement have not been performed.
+  mechanical evidence only.
+- Exact committed source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
+  `38f7175f93c87d11422f5de00e78208f8cf315bb`, subsequently passes the complete clean gate with
+  `NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. This clean-qualifies the
+  complete post-F003 product source and current reviewed ledger. No immutable no-rebuild freeze,
+  public deployment or service retirement was requested or performed.
 
 Historical scoped-disposition record: focused owner tests, current WASM, frozen renderer bytes,
 headless checks and the no-LOD retained-scene resize/recovery browser check passed for their
 recorded U1-U8 slice. The manufacturing amendment adds focused owner, all-twelve-demo cold-
 materialization, deterministic-render and reviewed twelve-row-ledger mechanical evidence. M87-F002
 freezes finite transactional camera mutation and bounded grid work at `geosolve-sketch-render`.
-None of this accepts U9/U10 or converts dirty-worktree evidence into a clean release nomination.
+This historical evidence did not itself accept U9/U10 or convert dirty-worktree evidence into a
+clean release nomination. The later explicit 2026-08-31 milestone-close decision accepts U9/U10 at
+milestone level, and the separate exact-source clean gate qualifies the complete post-F003 source.
 The mutable bundles at `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` predate F003 and are
-historical only. Fresh post-F003 renders awaiting the two human visual rows are at
+historical only. Fresh post-F003 review renders are at
 `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`.
 
 M87 adds no primitive, constraint, dimension, equation, residual, Jacobian, solver priority,
 tolerance, implicit branch inference, arbitrary expression inverter, custom-TypeScript runtime,
 linkage renderer, stateful agent service or solved-value source write-back path. Performance work
-is deferred to a follow-up milestone and does not activate M88.
+is carried into active M88's explicit stability prerequisite.
+
+### M88: workflow-led authoring workbench redesign
+
+Status: **ACTIVE; audit and acceptance contract defined, implementation pending**. M88 changes the
+desktop presentation and workflow hierarchy while retaining all M87 domain, managed-source,
+headless and no-LOD authority boundaries.
+
+- At `1440 x 900`, Split mode exposes at least `520 x 500` CSS px of editable source while retaining
+  a useful canvas. At `1024 x 720`, Code mode exposes at least `720 x 500` CSS px of usable editor and
+  never disappears at a breakpoint. Editable source text is at least 12 CSS px.
+- Design, Split and Code are first-class workspace modes. Switching modes or resizing any pane
+  preserves the selected source file, dirty draft bytes, cursor, selection range, editor scroll,
+  canvas selection, camera and applicable Inspector tab.
+- A pane resize or presentation-mode change performs zero native solve, code expansion, accepted-
+  scene publication, semantic history publication and canonical workspace save. Presentation state
+  cannot authenticate or mutate domain, Intent, code-session or feature authority.
+- The primary app bar contains project/file entry, Undo/Redo, truthful document/lifecycle status,
+  Design/Split/Code, Export and overflow. Reproduction, trace and low-frequency diagnostics live
+  under Diagnostics/Advanced and remain keyboard reachable.
+- The always-visible rail contains Select plus primary Sketch, Constraint, Dimension and Modify
+  entry points and the last-used variant. Every advanced geometry/relation/feature variant remains
+  reachable through click, keyboard and search without a hover-only dependency.
+- Explorer consolidates Objects and Outline. Intent IR and detailed History remain available under
+  Advanced. The right side exposes Inspector, Parameters and Problems as distinct tabs rather than
+  vertically competing with the code editor. Parameters and Problems each have one logical state
+  model rehosted into Code mode, not independently stateful duplicate views.
+- The code workspace fills its central surface, keeps Apply/Revert and dirty/accepted/error status
+  visible, and separates Source, Parameters, Problems, Generated and Artifacts. Durable scene or
+  selection rendering must not replace the live editor DOM or lose its transient editing state.
+- “Open in code” resolves the exact authenticated managed source owner, selects the correct file and
+  source range, and focuses it. A route that cannot identify one exact owner reports a typed reason
+  instead of selecting the first invocation or a copied generated identity.
+- Invalid source preserves the prior independently accepted canvas and creates exactly one durable,
+  source-positioned problem for the current attempt. Correcting or reverting the source clears that
+  problem only after ordinary parse/materialize/independent-validation acceptance.
+- The start/open surface provides New sketch, Start from code, all 37 current bundled samples,
+  canonical project import, repro import and recent workspaces. Every sample is text-searchable and
+  keyboard-openable without nested hover flyouts.
+- A frozen pre-redesign manifest names every command and variant. The redesigned pointer and
+  keyboard inventory matches it one for one; no advanced command requires hover or silently
+  disappears.
+- Browser-exported canonical `project.json` plus `sketch.ts` round-trips through
+  `geosolve-headless`; the browser and native host report the same managed controls, accepted scene
+  and independently validated Hard residual/Current-feature authority. A dirty or invalid draft
+  returns a typed canonical-export refusal; raw draft download is a separate non-canonical action.
+  M88 requires no AI chat or stateful agent service.
+- Before broad UI implementation, release-mode Gridfinity open/edit UAT must pass under an explicit
+  browser/WASM stack contract. A separate one-MiB native proxy failure receives an owning-layer
+  regression and shared-path stack-use correction; neither stack result proves the other. Duplicate
+  checkpoint restore/validation and no-op post-open encoding are removed.
+- A full-row-rank redundancy fast path is admissible only when numerical rank equals every Hard row.
+  It must retain independent residual, domain, branch, rank and finite-state validation, and gets a
+  focused owner regression before implementation.
+- On the exact recorded reference machine, five fresh optimized Gridfinity cold-opens have median/
+  maximum at most 2.0/2.5 s, and five `baseBottomWidth: 35.6 -> 20` edits have median/maximum at most
+  1.25/1.75 s. The actual browser/WASM stack contract and a separate one-MiB native proxy regression
+  both pass; neither is accepted as proof of the other.
+- M88 retains complete full-detail painting. No adaptive-detail, reduced-paint or LOD policy is
+  reintroduced. Resize/maximize must not strand the accepted viewport or suppress later frames.
+- Focused native/WASM/layout/accessibility tests, the unchanged applicable golden, format, warnings-
+  denied Clippy, all-feature workspace tests, release Trunk build and the scorecard in
+  `docs/M88_UAT.md` pass before M88 closure.
 
 ## Regression and oracle policy
 

@@ -5689,14 +5689,15 @@ inactive/dead with `MainPID=0`, no exact listener remains, and both endpoints re
 
 ## M87 managed-control and browser-free authoring fixtures
 
-Status: **OPEN**. These fixtures retain M87's focused owner and crossover evidence for managed
-controls, browser-free authoring, the twelve-project catalog, shared rendering and full-detail
-retained-camera recovery; the entire adaptive-detail/LOD prototype remains deleted. The supervising
-user's earlier scoped disposition remains historical acceptance of M87-U1 through M87-U8 without a
-separate row-by-row replay. M87-U9/U10 and milestone closure remain pending. No clean nomination,
-immutable candidate, public deployment or service-retirement result is claimed; the mutable
-Tailscale listener remains development infrastructure. M87 adds no milestone-neutral golden row and
-M88 is not active.
+Status: **COMPLETE and accepted on 2026-08-31**. These fixtures retain M87's focused owner and
+crossover evidence for managed controls, browser-free authoring, the twelve-project catalog, shared
+rendering and full-detail retained-camera recovery; the entire adaptive-detail/LOD prototype remains
+deleted. The supervising user's close decision accepts M87-U9/U10 at milestone level without a
+separate row-by-row replay.
+Exact source `32c7289`, tree `38f7175`, passes the complete clean release gate. No immutable
+candidate, public deployment or service-retirement result is claimed; the mutable Tailscale
+listener remains development infrastructure. M87 adds no milestone-neutral golden row. M88 is
+active below.
 
 ### M87-C1 — One shared Typed Panel radius, complete fan-out
 
@@ -5872,11 +5873,14 @@ rebuild freeze, nomination or publication result.
 
 The supervising user's earlier 2026-08-30 scoped disposition remains historical acceptance of
 U1-U8 without a separate row-by-row replay after complete LOD removal and the graphics audit. The
-later CNC/Gridfinity amendment adds automated evidence but not human visual acceptance. The bundles
-under `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` predate F003 and are historical only. Fresh
-post-F003 renders at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}` await U9/U10; no mutable
-bundle is a stable, immutable or accepted candidate. `docs/M87_UAT.md` records the pending visual
-boundary.
+later CNC/Gridfinity amendment adds automated evidence. Exact source
+`32c72892772ee09f8b904153484b02fd9923dc25` and tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb` passed the clean release gate. The supervising user's
+2026-08-31 milestone-level close decision accepts U9/U10 without claiming a separate row-by-row
+visual replay. The bundles under `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` and
+`/tmp/geosolve-m87-post-f003.FPHP3b/` remain mutable historical evidence, not an immutable freeze or
+published candidate. No clean nomination, publication or service retirement is inferred from the
+close decision. `docs/M87_UAT.md` records that accepted boundary.
 
 ### M87-C10 — Retained frame recovery with complete scene paint
 
@@ -6024,15 +6028,68 @@ CAM, toolpath, machinability or manufacturing-validation authority.
 The original C12/C13 focused owner qualification, all-twelve cold materialization and complete
 dirty-worktree gate are retained pre-F003 mechanical evidence only. For the revised sources, the
 separately reviewed twelve-row ledger, focused owner suite, native composition and all-demo
-headless/deterministic products pass, and fresh mutable visual bundles exist. Stop at the pending
-U9/U10 human visual rows; do not infer a
-clean exact source/tree, immutable freeze, publication, service retirement or milestone closure.
-The mutable Tailscale listener remains development infrastructure. Observed performance work
-remains deferred to a follow-up milestone; M88 is not activated.
+headless/deterministic products pass. Exact source `32c7289`, tree `38f7175`, then passes the
+complete clean release gate. The user's milestone-level close decision accepts U9/U10 without
+inventing a separately replayed visual session. No immutable freeze, publication or service
+retirement is inferred; the mutable Tailscale listener remains development infrastructure.
 
-Current post-F003 progress: the focused manufacturing owner suite passes 3/3, native composition
+Final post-F003 qualification: the focused manufacturing owner suite passes 3/3, native composition
 passes 13/13, the exact reviewed-ledger check passes 1/1 and all-demo headless/deterministic
-products pass 10/10. Fresh mutable CNC/Gridfinity bundles await U9/U10 human review.
+products pass 10/10. Fresh mutable CNC/Gridfinity review bundles remain preserved.
+
+## M88 workflow-led workbench fixtures
+
+Status: **ACTIVE; contract defined and implementation pending**. These presentation scenarios do
+not add solver equations or replace the owning-layer regressions required for the carried
+Gridfinity stack/performance defect.
+
+### M88-C1 — Presentation-only Design/Split/Code layout
+
+Open one ordinary sketch and one managed-code project at `1440 x 900`, then switch through Design,
+Split and Code and drag each splitter through multiple frames. Split mode must provide at least
+`520 x 500` CSS px of editable source; at `1024 x 720`, Code mode must keep at least `720 x 500` CSS
+px of usable editor. No mode or pane change may solve, expand code, publish accepted scene/history
+or save canonical workspace state. Canvas camera, selection and applicable right-side tab remain
+stable. Parameters and Problems retain one logical state while rehosting between layout modes.
+
+### M88-C2 — Durable source editor continuity
+
+Open `sketch.ts`, place a multi-line selection in an uncommitted edit, scroll away from the cursor,
+then select geometry, resize panes, switch right-side tabs and round-trip Split/Code. The same file,
+exact draft bytes, cursor, selection and scroll must remain. Editable text is at least 12 CSS px.
+Apply performs exactly one ordinary outer code transaction; Revert restores the accepted source.
+Durable scene rendering must not replace the live editor element.
+
+### M88-C3 — Search, tools and exact source ownership
+
+Freeze the complete pre-redesign command/variant manifest, then reach every entry by pointer and
+keyboard with one-for-one inventory parity. From the start/open surface, find and open each of the
+25 ordinary and 12 code samples using only keyboard and text search; no hover-only flyout is
+required. Semantically exercise one common and one advanced variant from each Sketch, Constraint,
+Dimension and Modify group. Selecting a generated Fillet and invoking **Open in code** must select
+the exact authenticated owner file/range. Ambiguous or encoded values show a typed reason and never
+route to the first invocation.
+
+### M88-C4 — Invalid source and browser/headless handoff
+
+Introduce one source-positioned managed-code error. The prior independently accepted canvas stays
+visible and usable, exactly one persistent current-attempt Problem appears, and no accepted history
+is published. Correct or Revert the source and require ordinary independent acceptance before the
+Problem clears. While either a valid dirty draft or invalid draft exists, canonical export must
+return a typed refusal; raw draft-source download is separate. After Apply/Revert, export canonical
+`project.json` plus `sketch.ts`; inspect and render it with `geosolve-headless`, requiring the same
+controls, Current features, finite accepted scene and Hard residual at most `1e-9`.
+
+### M88-C5 — Gridfinity stability prerequisite
+
+Run the Gridfinity open and `baseBottomWidth: 35.6 -> 20` edit in the release UAT configuration and
+under the explicitly supported browser/WASM stack contract. Separately retain a one-MiB native
+proxy regression until shared-path stack use is reduced enough to pass; neither result proves the
+other. On the recorded machine, five fresh release cold-opens have median/max at most 2.0/2.5 s and
+five edits have median/max at most 1.25/1.75 s. Instrument cold open to prove a checkpoint is not
+restored/validated twice and no no-op post-open encode/save occurs. Any full-row-rank redundancy
+shortcut is tested first at `geosolve-core` and must preserve finite state plus independent
+residual, domain, branch, rank and DOF validation.
 
 ## Frozen near-singular fixtures
 

@@ -6647,7 +6647,7 @@ qualification evidence. Product source `88d1b5e` is an ancestor of the approval 
 nine M86 closeout documents changed. `geosolve-m86-local-uat.service` and
 `geosolve-m86-uat.service` are inactive/dead with `MainPID=0`; both endpoints refuse connections
 with curl exit `7`/HTTP `000`, recorded at `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
-M1-M86 are complete; M87 remains open at its focused visual-UAT boundary.
+M1-M87 are complete; M88 is active in its audit/contract phase.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
 not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;
@@ -6659,14 +6659,15 @@ qualification, immutable nomination and explicit UAT precede publication.
 
 ### M87: cohesive managed parameters and browser-free design loop
 
-Status: **open. M87-F003 sample-authority repair is proportionally mechanically qualified;
-M87-U9/U10 focused human visual UAT and milestone closure remain pending**. The sound managed-
-control, browser-free authoring, twelve-project dogfood, shared-
-renderer, graphics-hardening and full-detail retained-camera work is retained; all experimental
-adaptive-detail/LOD code remains deleted. The supervising user's earlier scoped disposition remains
-historical acceptance of U1-U8 without claiming a separate row-by-row replay. The shared dirty
-worktree is not a clean nominated source/tree; no immutable artifact, public deployment or service-
-retirement result is claimed. M88 is not activated.
+Status: **complete and accepted on 2026-08-31**. The sound managed-control, browser-free authoring,
+twelve-project dogfood, shared-renderer, graphics-hardening and full-detail retained-camera work is
+retained; all experimental adaptive-detail/LOD code remains deleted. The supervising user's
+explicit “Close off this milestone” decision accepts M87-U9/U10 at milestone level without
+claiming a separately logged row-by-row visual replay. Exact source
+`32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. No immutable
+freeze, public deployment or service retirement is inferred; the Tailscale listener remains
+mutable development infrastructure. M88 is activated below.
 
 `docs/M87_AUDIT.md`, `docs/M87_GOALS.md`, and ADR 0042 own the audited scope. M87 edits
 code-defined non-DoF parameters and constraint state; existing solver-instance point drafts remain
@@ -6754,16 +6755,16 @@ outside code.
   without inventing separately replayed rows; it does not accept the later manufacturing rows.
 - [x] Record clean nomination/freeze/publication as deliberately unclaimed rather than weakening
   those release concepts. The mutable Tailscale server remains development infrastructure.
-- [x] Record that no clean exact source/tree, clean release gate, immutable no-rebuild freeze,
-  publication or service retirement has been performed or inferred from dirty mechanical evidence.
+- [x] Preserve the pre-closure record that dirty mechanical evidence did not imply a clean source,
+  freeze, publication or service retirement; later qualify the exact committed source separately.
 - [x] Complete proportional post-F003 mechanical qualification. Focused manufacturing passes 3/3,
   native composition 13/13, the exact reviewed-ledger check 1/1 and all-demo headless/deterministic
   products 10/10; fresh mutable visual bundles exist without implying human acceptance or a full
   release gate.
-- [ ] Complete M87-U9/M87-U10 focused human visual UAT against the fresh mutable CNC/Gridfinity
-  bundles and record the supervising user's exact disposition.
-- [ ] Only after U9/U10 disposition, consider clean nomination, publication or M87 closure. Do not
-  activate M88.
+- [x] Record M87-U9/M87-U10 as accepted by the supervising user's explicit milestone-level close
+  decision without inventing a separately replayed row-by-row visual session.
+- [x] Clean-qualify exact committed source `32c7289` / tree `38f7175`, close M87, retain the two
+  manufacturing samples, leave freeze/publication/service retirement unclaimed and activate M88.
 
 Historical pre-F003 focused additive and dirty-gate qualification record (2026-08-30):
 `m87_manufacturing_sketches` passes 3/3, `m87_headless` passes 10/10,
@@ -6775,11 +6776,23 @@ TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=tru
 ```
 
 Those passes cover the exact pre-F003 sources and do not qualify the relational-authority repair.
-The current reviewed twelve-row code-project ledger has SHA-256
+The reviewed twelve-row code-project ledger has SHA-256
 `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`. The gate result is dirty
 historical evidence, not a clean source/tree, immutable artifact or publication claim. Mutable
 visual bundles at `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` predate F003. Fresh post-F003
-bundles awaiting U9/U10 are at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`.
+review bundles are at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`.
+
+Clean closeout record (2026-08-31): exact committed source
+`32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passed
+`NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` at exit `0` from an empty
+pre-gate worktree, with an empty post-gate worktree. Formatting, warnings-denied workspace Clippy,
+all-feature workspace tests, the reviewed 271-row golden, native/WASM parity, both TypeScript
+packages, Rustdoc, benchmark and release-performance checks, licences, all package lists, packaged
+`geosolve-sketch-code` verification and release Trunk assembly pass. In particular, the current
+manufacturing owner suite passes 3/3, native composition 13/13, the exact reviewed-ledger check 1/1
+and `geosolve-headless` 10/10. This qualifies source; it does not create an immutable no-rebuild
+artifact or publication authority.
 
 Gate: every enabled managed parameter has one authenticated source route; shared values disclose and
 update their complete bounded fan-out; DoF drafts never leak solved values into code; and the native
@@ -6790,11 +6803,67 @@ terminal, and exposes useful full-detail visual evidence. The CNC coupon additio
 12-circle/10-Fillet fan-out, localized keyed generations and one-point relational placement; the
 Gridfinity entry preserves one datum-governed symmetric 26-point profile and four independently
 controlled Fillets. Both are fully constrained with zero numerical/structural nullity and DOF. The
-earlier 2026-08-30
-scoped disposition remains historical U1-U8 evidence without a separate row-by-row replay. U9/U10
-and M87 closure remain pending. Clean nomination, freeze, publication and service retirement were
-not performed and remain unclaimed. Performance work is deferred to a follow-up milestone and M88
-is not activated.
+earlier 2026-08-30 scoped disposition remains historical U1-U8 evidence without a separate
+row-by-row replay. The 2026-08-31 close decision similarly accepts U9/U10 at milestone level without
+inventing unrecorded observations. Freeze, publication and service retirement were not performed
+and remain unclaimed. The diagnosed Gridfinity debug-WASM/stack and duplicate-open work moves into
+M88 as an explicit stability prerequisite.
+
+### M88: workflow-led authoring workbench redesign
+
+Status: **active — audit and contract complete; implementation not started**. M88 restructures the
+desktop workbench around the actual Design, Split and Code workflows accumulated through M87. It
+keeps deep geometry, constraint, source, diagnostic and headless capability, but moves secondary
+choices behind keyboard-accessible menus and makes code a first-class central workspace rather
+than a narrow document-column tab. `docs/M88_AUDIT.md`, `docs/M88_GOALS.md`,
+`docs/M88_IMPLEMENTATION.md`, `docs/M88_UAT.md` and `docs/M88_HANDOVER.md` own the active scope.
+
+- [x] Audit the current command hierarchy, tool inventory, sample discovery, Explorer, Inspector,
+  code surface, editor DOM lifecycle and 1920/1440/1280/1024 px layout behavior.
+- [x] Trace the primary create/open, canvas-design, code-authoring, cross-owner navigation,
+  invalid-source recovery and browser/headless AI handoff workflows.
+- [x] Define one compact app bar, a narrow primary tool rail, one collapsible Explorer, central
+  Design/Split/Code modes, right-side Inspector/Parameters/Problems tabs and an Advanced area for
+  Intent IR, detailed History, reproduction and trace diagnostics.
+- [x] Set measurable code-space and continuity contracts: at least `520 x 500` CSS px of editable
+  source in Split mode at `1440 x 900`, at least `720 x 500` CSS px of editor in Code mode at
+  `1024 x 720`,
+  at least 12 px source text, and no cursor/selection/scroll/draft/file loss during durable renders,
+  selection changes, mode switches or pane resizing.
+- [ ] Complete M88's stability prerequisite before broad layout implementation: qualify release-
+  mode UAT, freeze the actual browser/WASM stack contract, separately reproduce and regress the
+  one-MiB native Gridfinity proxy failure, and reduce shared-path stack use without weakening
+  validation or treating either result as proof of the other.
+- [ ] Remove duplicate cold checkpoint restore/validation and no-op post-open save/encoding work;
+  prove open/layout work does not publish semantic history or repeat accepted-authority work.
+- [ ] At `geosolve-core`, add the separately regression-owned full-row-rank redundancy shortcut
+  only after proving that numerical rank equals every Hard row; preserve independent residual,
+  domain and branch validation unchanged.
+- [ ] Implement the presentation-only workspace shell and resizable modes without adding solver,
+  editor, managed-source or history authority to the browser layout layer.
+- [ ] Build the first-class source workspace with stable editor DOM/state, source tabs, sticky
+  Apply/Revert/status, one rehosted state model each for Parameters and Problems, and separate
+  Generated and Artifacts surfaces.
+- [ ] Replace hover-only sample flyouts with one searchable keyboard-operable start/open surface
+  covering New sketch, Start from code, all 37 samples, project/repro import and recent workspaces.
+- [ ] Freeze the complete pre-redesign command/variant manifest and prove one-for-one pointer and
+  keyboard reachability after the hierarchy change; no deep customization may disappear.
+- [ ] Make every selection-to-source route focus the exact managed owner; invalid source must retain
+  the accepted canvas and publish one persistent source-positioned problem.
+- [ ] Preserve the canonical `project.json`/`sketch.ts` browser-to-headless round trip for AI-driven
+  code authoring; canonical export returns a typed refusal while a draft is dirty, and M88 adds no
+  required AI chat or stateful agent service.
+- [ ] Prove pane resize and mode changes perform zero solve, expansion, history publication or
+  semantic workspace save, keep the complete no-LOD scene, and pass the focused native/WASM,
+  accessibility, layout, clean release and human UAT gates in `docs/M88_UAT.md`.
+- [ ] On the recorded reference machine, meet five-run Gridfinity release budgets: cold-open
+  median/max at most 2.0/2.5 s and the 35.6-to-20 edit median/max at most 1.25/1.75 s. Pass the
+  actual browser/WASM stack contract and separate one-MiB native proxy regression.
+
+Gate: the common workflows are obvious and spacious while specialist capability remains reachable;
+layout and editor presentation never acquire semantic authority; accepted geometry remains finite
+and independently validated; invalid code retains the previous accepted canvas; and the same
+canonical project can be inspected, edited and rendered through browser and headless hosts.
 
 ## Explicit non-goals
 

@@ -2,14 +2,13 @@
 
 # M87 UX, code and headless-authoring audit
 
-Status: **audit complete; M87 remains OPEN pending M87-U9/U10 focused human visual UAT**. The
-pre-dogfood, routing-board and original manufacturing dirty-
-worktree gates remain historical evidence for their exact pre-F003 sources. M87-F003 revises the
-CNC/Gridfinity sample authority and separately reviewed ledger; it is not covered by those earlier
-gate runs. The supervising user's earlier scoped
-disposition remains historical acceptance of U1-U8 without claiming a separate row replay. No clean
-exact-source/tree nomination, immutable freeze, public deployment, service retirement or milestone
-closure is claimed.
+Status: **audit complete; M87 accepted and closed on 2026-08-31**. The pre-dogfood, routing-board
+and original manufacturing dirty-worktree gates remain historical evidence for their exact pre-F003
+sources. M87-F003 revises the CNC/Gridfinity sample authority and separately reviewed ledger. Exact
+post-F003 source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. The user's
+milestone-level close decision accepts U9/U10 without claiming a separate row replay. No immutable
+freeze, public deployment or service retirement is claimed.
 
 ## Finding
 
@@ -41,7 +40,7 @@ stages. Both accepted documents must report numerical and structural left/right 
 equality/bidirectional bounded DOF zero. Literal point coordinates remain seeds, not authority.
 The post-F003 manufacturing owner suite passes 3/3, native composition passes 13/13, the exact
 reviewed-ledger check passes 1/1 and all-demo headless/deterministic products pass 10/10. Fresh
-mutable visual bundles exist; U9/U10 human review remains pending.
+mutable review bundles exist; U9/U10 are accepted by milestone-level close disposition.
 
 ## Product decision
 
@@ -176,12 +175,12 @@ toolpaths, booleans, solids, print fit or machinability. Focused owner, twelve-d
 inventory, deterministic render and reviewed-ledger qualification remain historical pre-F003
 dirty mechanical evidence. The complete dirty-worktree release gate also passed at exit `0` on
 2026-08-30 before F003; its exact command is recorded in `docs/M87_IMPLEMENTATION.md` and does not
-qualify the revised sources. The current reviewed twelve-row code-project ledger has SHA-256
+qualify the revised sources. The reviewed twelve-row code-project ledger has SHA-256
 `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`. The bundles under
 `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` are historical pre-F003 evidence and must be replaced
-before U9/U10. Neither row is accepted.
-Reported performance concerns are explicitly deferred to a follow-up milestone, and M88 remains
-inactive.
+for current source review. Exact post-F003 source `32c7289` passes the complete clean gate, and the
+user's milestone-level decision accepts both rows without a separate replay. Diagnosed Gridfinity
+performance/stack work is carried into active M88's stability prerequisite.
 
 ## Prior scoped-disposition graphics audit and M87-F002
 

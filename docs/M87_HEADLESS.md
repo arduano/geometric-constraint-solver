@@ -7,17 +7,17 @@ scene fitting, SVG composition and PNG rasterization without a browser, web serv
 Node or TypeScript runtime. It is suitable for an AI agent or native host that needs exact semantic
 controls and visual evidence from the same accepted design authority.
 
-M87 remains open pending M87-U9/U10 focused human visual UAT. The supervising user's earlier
-2026-08-30 scoped disposition remains historical acceptance of U1-U8 without a separate row replay;
-it does not accept the later manufacturing visual rows. This workflow, all twelve bundled demos and
-the deterministic manufacturing-sketch products are retained. The recorded dirty-worktree gate is
-mechanical evidence only: no clean source/tree is nominated, no immutable artifact is frozen, no
-release is published and the mutable Tailscale development listener is not retired.
+M87 is accepted and closed. The supervising user's 2026-08-31 milestone-level close decision accepts
+U9/U10 without a separate row replay; the earlier U1-U8 disposition remains historical. This
+workflow, all twelve bundled demos and the deterministic manufacturing-sketch products are
+retained. Exact source `32c7289`, tree `38f7175`, passes the complete clean release gate. No
+immutable artifact is frozen, no release is published and the mutable Tailscale development
+listener is not retired.
 
 After M87-F003, the focused manufacturing owner suite passes 3/3, native composition passes 13/13,
 the reviewed-ledger check passes 1/1 and the all-demo headless/deterministic-product suite passes
-10/10. Fresh manufacturing renders are available for human review; the pre-F003 products below
-remain historical only.
+10/10. Fresh manufacturing review renders remain available; the pre-F003 products below remain
+historical only.
 
 ## Inputs
 
@@ -173,5 +173,5 @@ The prior bundles below were generated from the pre-F003 sources and are histori
 Regenerate into new non-existing directories if these mutable `/tmp` products are unavailable.
 
 These outputs are 2D/2.5D design evidence. They do not create CAM, toolpath, cutter-compensation,
-boolean, solid, printer-fit or manufacturing authority. Performance diagnosis and optimization are
-deferred to a follow-up milestone; M88 is not active.
+boolean, solid, printer-fit or manufacturing authority. Diagnosed performance/stack work is carried
+into active M88's ordered stability prerequisite.

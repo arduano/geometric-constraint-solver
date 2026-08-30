@@ -2,15 +2,15 @@
 
 # M87 — Cohesive managed parameters and browser-free design loop
 
-Status: **OPEN. M87-F003 sample-authority repair is proportionally mechanically qualified;
-M87-U9/U10 focused human visual UAT and milestone closure remain pending**. The sound managed-
-control, headless-authoring, routing-board, twelve-demo CNC/Gridfinity,
-full-detail retained-camera and graphics-audit work is retained; the experimental adaptive-detail/
-LOD prototype remains deleted. The supervising user's earlier scoped disposition remains historical
-acceptance of U1-U8 without claiming a separate row-by-row replay. No clean exact-source/tree
-nomination, immutable freeze, public deployment or service retirement is claimed; the mutable
-Tailscale listener remains development infrastructure. `docs/M87_AUDIT.md` owns the audited boundary
-and ADR 0042 owns the architecture decision.
+Status: **COMPLETE and accepted on 2026-08-31**. The sound managed-control, headless-authoring,
+routing-board, twelve-demo CNC/Gridfinity, full-detail retained-camera and graphics-audit work is
+retained; the experimental adaptive-detail/LOD prototype remains deleted. The supervising user's
+milestone-level close decision accepts U9/U10 without claiming a separate row-by-row replay. Exact
+source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. No immutable
+freeze, public deployment or service retirement is claimed; the mutable Tailscale listener remains
+development infrastructure. `docs/M87_AUDIT.md` owns the audited boundary and ADR 0042 owns the
+architecture decision.
 
 ## Required behavior
 
@@ -78,7 +78,7 @@ twelve-row ledger check. The then-current dirty-worktree release gate passed at 
 TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
 ```
 
-Those runs predate M87-F003 and do not qualify the revised sample sources. The current reviewed
+Those runs predate M87-F003 and do not qualify the revised sample sources. The reviewed
 twelve-row code-project ledger has SHA-256
 `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`. All gate results remain dirty
 mechanical evidence, not a clean exact-source/tree nomination, immutable release candidate or
@@ -86,7 +86,9 @@ publication result. `docs/M87_IMPLEMENTATION.md` owns the detailed command and o
 
 Post-F003 focused evidence passes the manufacturing owner suite 3/3, native composition 13/13, the
 exact reviewed-ledger check 1/1 and all-demo headless/deterministic products 10/10. Fresh mutable
-bundles exist; U9/U10 human review remains pending and no complete current gate is claimed.
+review bundles exist. Exact committed source `32c7289`, tree `38f7175`, subsequently passes the
+complete clean release gate. U9/U10 are accepted by the user's milestone-level close decision
+without a separately replayed session.
 
 - Typed Panel, Mounting Plate, Adaptive Lanterns, and all three PC Water Manifold invocations prove
   shared/transitive routing, exact source rewrite, stable identity, Undo/Redo/reload, and invalid
@@ -125,20 +127,19 @@ bundles exist; U9/U10 human review remains pending and no complete current gate 
 - CNC and Gridfinity are appended after the routing-board row in the reviewed twelve-project ledger
   without changing the first ten rows. Repeated headless products for both additions are
   deterministic for the pinned build.
-- The dirty-worktree gates retain their formatting, warnings-denied Clippy, workspace test, Rustdoc,
-  WASM, TypeScript, licence, Trunk and unchanged-golden evidence. The standard clean nomination/
-  freeze/publication path has not been performed and is not inferred from those results.
+- The dirty-worktree gates retain their historical formatting, warnings-denied Clippy, workspace
+  test, Rustdoc, WASM, TypeScript, licence, Trunk and unchanged-golden evidence. Exact committed
+  source `32c7289` subsequently passes the complete clean gate; freeze/publication remain unclaimed.
 
 Historical scoped-disposition record (2026-08-30): the supervising user explicitly stopped the
 risky LOD expansion, required complete LOD removal, requested a graphics audit and retained the sound
 changes. Focused renderer/headless/retained-camera tests, current WASM, frozen composer bytes and a
 live resize/failure-recovery browser check pass. That record accepts U1-U8 without claiming a
-separate row replay. The later CNC/Gridfinity amendment remains inside open M87. The mutable
+separate row replay. The later CNC/Gridfinity amendment remains inside M87. The mutable
 bundles at `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` predate F003 and are historical only;
-fresh post-F003 renders at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}` await U9/U10 human
-visual review. Clean
-nomination, immutable freeze, public deployment, service retirement and milestone closure remain
-pending.
+fresh post-F003 renders are at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. The later
+2026-08-31 close decision accepts U9/U10 and closes M87 after the clean source gate. Immutable
+freeze, public deployment and service retirement remain unclaimed.
 
 ## Non-goals
 
@@ -146,5 +147,5 @@ No new primitive/constraint/dimension, equation, Jacobian, residual, priority, t
 inference, general expression inversion, custom-TypeScript runtime, point-source write-back,
 browser/server dependency, linkage renderer, stateful agent service, route solver, route-specific
 renderer, CAM, toolpath, automatic cutter compensation, boolean/solid authority, or PNG
-mathematical oracle. The observed performance work is deferred to a follow-up milestone; this
-amendment does not activate M88.
+mathematical oracle. The diagnosed performance/stack work is not retroactively part of M87; it is
+an ordered prerequisite in active M88.

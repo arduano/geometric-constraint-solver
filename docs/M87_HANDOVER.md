@@ -1,29 +1,28 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M87 pause handover — focused manufacturing visual-UAT boundary
+# M87 closeout handover — historical pause and final disposition
 
-Status: **M87 is OPEN at M87-U9/U10 focused human visual UAT; proportional post-M87-F003
-mechanical qualification is complete**.
-The complete dirty-worktree mechanical gate below is historical pre-F003 evidence. The supervising user's earlier scoped disposition is
-historical acceptance of M87-U1 through M87-U8 only; it does not accept the later CNC/Gridfinity
-visual rows or close M87. No clean source/tree, immutable candidate, publication or service
-retirement is claimed. M88 is inactive. Do not reconstruct this state from chat history.
+Status: **M87 accepted and closed on 2026-08-31; this former pause handover is superseded by
+`docs/M88_HANDOVER.md`**. Exact product source
+`32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. The user's
+milestone-level close decision accepts M87-U9/U10 without claiming a separately logged row-by-row
+visual replay. No immutable candidate, publication or service retirement is claimed. M88 is active.
+The remaining dirty-tree material below is retained only as historical pre-close provenance.
 
 ## Brief supervising-user consolidation — 2026-08-30
 
 The additional agent session was accidental and does not authorize a separate milestone or broad
-cleanup. Its two useful sample additions are explicitly retained inside open M87:
+cleanup. Its two useful sample additions were explicitly retained inside then-open M87:
 
 - **CNC joinery fit coupon · keyed corner reliefs**, including its `cornerReliefs` patch/artifact,
   package mirrors, managed fixture, catalog/ledger integration and focused manufacturing coverage;
 - **Gridfinity 1×1×3U section · keyed standard profile**, including its notice, managed fixture,
   catalog/ledger integration and focused manufacturing coverage.
 
-Preserve those sample sources, fixtures, tests and integration changes when working in this dirty
-tree. The supervising user confirmed that this handover's repository summary is accurate, but that
-is not final M87-U9/U10 acceptance: sample revisions are expected before milestone closure. Do not
-perform the larger documentation/worktree cleanup until the supervising user explicitly asks to
-close M87.
+Preserve those sample sources, fixtures, tests and integration changes. The supervising user
+confirmed that this handover's repository summary was accurate at that checkpoint. The later
+requested revisions and final closeout are recorded above.
 
 The expected sample revision is now **M87-F003**: CNC replaces seven unrelated component
 `FixedPoint` locks with one absolute point plus seven relational construction datums; Gridfinity
@@ -32,7 +31,7 @@ relations and ten dimensioned orthogonal projection spans. Nominal geometry, top
 Fillets and manufacturing meaning remain unchanged. Both sketches must independently prove zero
 numerical/structural nullity and zero equality/bidirectional bounded DOF.
 
-## Exact resume point
+## Historical pre-close resume point
 
 - Repository/worktree: `/home/arduano/programming/geometric-constraint-solver`.
 - Branch: `main`.
@@ -43,8 +42,9 @@ numerical/structural nullity and zero equality/bidirectional bounded DOF.
   this handover. The 33 other untracked paths are implementation, tests, fixtures, licences and M87
   authority documents—not disposable build output.
 - No paths are staged.
-- No commit, reset, clean, stash, checkout, push, publication, service change or M88 activation is
-  authorized by this handover. Preserve every existing dirty path.
+- At this historical checkpoint no commit, reset, clean, stash, checkout, push, publication,
+  service change or M88 activation was authorized. The later M87 implementation commit and closeout
+  supersede that pause instruction.
 
 Before M87-F003, after this file and its `START_HERE.md` link were added, the exact handover
 signatures were:
@@ -59,7 +59,7 @@ The verification commands and expected counts are retained below as a historical
 must differ after the authorized F003 sample/test/ledger/documentation edits and are no longer a
 current-tree oracle.
 
-## Mandatory read and restart order
+## Historical pause procedure — superseded
 
 1. `cd /home/arduano/programming/geometric-constraint-solver`.
 2. Read `AGENTS.md` completely, then its required `START_HERE.md`, `ARCHITECTURE.md`, `PLAN.md`,
@@ -74,10 +74,10 @@ current-tree oracle.
    the `/tmp` products are unavailable, render both revised demos into new, non-existing child
    directories under a new `mktemp -d` parent; never overwrite an earlier generation or call the
    replacement immutable or accepted.
-7. Resume with M87-U9 and M87-U10 when the supervising user is available for visual review.
-   Do not replace human visual disposition with automated or agent visual inspection.
-8. Record the user's exact pass/fail findings in the M87 authority documents. Do not infer milestone
-   closure, clean nomination, publication, service retirement or M88 activation from a pass.
+7. At the pause, resume with M87-U9 and M87-U10 when the supervising user is available for visual
+   review.
+8. This procedure is now historical: the later milestone-level close decision and clean gate own
+   final disposition. Resume active work from `docs/M88_HANDOVER.md`.
 
 ## Authority boundary to preserve
 
@@ -91,7 +91,7 @@ current-tree oracle.
 - `geosolve-sketch-render` consumes independently accepted scene authority. It owns no solver,
   persistence, managed-control, selection or hit-ranking state.
 - The entire experimental adaptive-detail/LOD prototype remains deleted. Camera navigation always
-  retains the complete scene paint. Do not restore LOD or activate M88 work.
+  retains the complete scene paint. Active M88 must not restore LOD.
 - The CNC and Gridfinity entries are 2D/2.5D design sketches only. They claim no CAM, toolpath,
   automatic cutter compensation, boolean, solid, print-fit, machinability or production-
   manufacturing authority.
@@ -150,16 +150,18 @@ performance checks and final Trunk assembly. This terminal run was not retained 
 file; `docs/M87_IMPLEMENTATION.md` records its outcome. The gate explicitly allowed a dirty
 worktree and is mechanical evidence only.
 
-The current post-F003 reviewed twelve-row ledger is
+The post-F003 reviewed twelve-row ledger is
 `crates/geosolve-sketch-code/tests/golden/m84_code_project_ledger.tsv`, SHA-256
 `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`. The old gate predates this
 ledger revision. The separate post-F003 focused checks below proportionally qualify the revised
 samples without converting that historical gate into current full-workspace qualification.
 
-Post-F003 progress: `m87_manufacturing_sketches` passes 3/3, including zero nullity/DOF and minimal
+Final post-F003 qualification: `m87_manufacturing_sketches` passes 3/3, including zero nullity/DOF and minimal
 datum assertions; native composition passes 13/13, the exact reviewed-ledger check passes 1/1 and
 all-demo headless/deterministic products pass 10/10. Fresh visual bundles are under
-`/tmp/geosolve-m87-post-f003.FPHP3b`; U9/U10 human review remains pending.
+`/tmp/geosolve-m87-post-f003.FPHP3b`. Exact source `32c7289`, tree `38f7175`, passes the complete
+clean release gate; the user's milestone-level close decision accepts U9/U10 without a separate
+replay.
 
 ## Historical pre-F003 mutable UAT evidence
 
@@ -187,7 +189,7 @@ cargo run --locked -p geosolve-headless -- \
 
 Record any new paths as mutable dirty-UAT evidence only.
 
-## Pending focused human work
+## Historical focused human rows — resolved by milestone disposition
 
 - **M87-U9:** open **CNC joinery fit coupon · keyed corner reliefs**, fit the complete scene, compare
   against the fresh SVG/PNG, inspect shared cutter/handling controls and visually distinguish loose,
@@ -197,12 +199,11 @@ Record any new paths as mutable dirty-UAT evidence only.
   condition in `docs/M87_UAT.md`.
 
 The post-F003 focused rank/DOF, inventory, ledger and headless qualification is complete and fresh
-mutable review bundles exist. If either human row fails, diagnose and repair only the owning modular
-boundary, add focused regression evidence and keep M87 open. If both pass, record
-the user's exact disposition and ask before any materially different clean-nomination, publication,
-service-retirement or next-milestone action.
+mutable review bundles exist. The 2026-08-31 supervising-user close decision accepts both rows at
+milestone level without claiming a separately executed visual replay. M87 is closed; use
+`docs/M88_HANDOVER.md` for active work.
 
-## Dirty-tree verification
+## Historical dirty-tree verification
 
 Run from the exact repository root:
 
@@ -247,13 +248,8 @@ publication authority; verify its current PID/argv/bytes before using it and do 
 its existence. A separate `code` process listened on `127.0.0.1:8080`; do not confuse it with the
 Tailscale listener. This handover authorizes no listener replacement or retirement.
 
-## Required next report
+## Active handoff
 
-The next agent should report:
-
-1. exact repository/HEAD/signature verification;
-2. whether the mutable evidence and listener still exist or were regenerated/reverified;
-3. post-F003 rank/DOF, inventory, ledger and fresh-render qualification;
-4. the supervising user's exact M87-U9 and M87-U10 findings;
-5. any focused repair and exact commands/outcomes;
-6. the remaining authority boundary, with M87/M88 status stated explicitly.
+M87 requires no further implementation or UAT work. Preserve its source, samples, clean-gate
+evidence, no-LOD contract and mutable development listener. Resume M88 from
+`docs/M88_HANDOVER.md`.

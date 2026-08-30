@@ -2,16 +2,17 @@
 
 # M87 implementation ledger — Cohesive managed parameters and browser-free design loop
 
-Status: **OPEN. M87-F003 sample-authority repair is proportionally mechanically qualified;
-M87-U9/U10 focused human visual UAT and milestone closure remain pending**. This ledger records a dirty-worktree implementation over baseline `1ea4940`; it is not a
-clean source/tree, immutable nomination or public authority. The sound managed-control, headless,
-routing-board, twelve-demo CNC/Gridfinity, shared-renderer, graphics-audit and retained-camera
-recovery work remains, and the complete experimental adaptive-detail/LOD prototype remains deleted.
-The supervising user's earlier scoped disposition remains historical acceptance of U1-U8 without a
-separate row replay. No commit is assigned to M87 here, and no clean nomination, immutable freeze,
-public deployment or service retirement is inferred.
+Status: **COMPLETE and accepted on 2026-08-31**. This ledger retains the historical dirty-worktree
+implementation record over baseline `1ea4940`; exact product source
+`32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, now passes the complete clean release gate. The sound
+managed-control, headless, routing-board, twelve-demo CNC/Gridfinity, shared-renderer,
+graphics-audit and retained-camera recovery work remains, and the complete experimental adaptive-
+detail/LOD prototype remains deleted. The supervising user's milestone-level close decision accepts
+U9/U10 without a separate row replay. No immutable freeze, public deployment or service retirement
+is inferred.
 
-`docs/M87_AUDIT.md` owns the findings, `docs/M87_GOALS.md` and the open M87 sections in
+`docs/M87_AUDIT.md` owns the findings, `docs/M87_GOALS.md` and the completed M87 sections in
 `ACCEPTANCE.md`/`docs/SCENARIOS.md` own the behavioral gate, ADR 0042 owns the architecture, and
 `docs/M87_HEADLESS.md` documents the stateless native workflow.
 
@@ -32,7 +33,8 @@ public deployment or service retirement is inferred.
   or implicit branch rule and adds no TypeScript runtime to Rust/WASM/headless execution.
 - The CNC and Gridfinity additions are 2D/2.5D design sketches only. They add no CAM, toolpath,
   cutter-compensation, boolean, solid, print-fit or manufacturing-validation authority.
-- Performance diagnosis and optimization are deferred to a follow-up milestone; M88 is not active.
+- Diagnosed performance/stack work is not retroactive M87 scope; it is an ordered prerequisite in
+  active M88.
 
 ## Component ledger
 
@@ -286,9 +288,9 @@ and the milestone-neutral 271-row authoring/scene golden are not reclassified.
 
 ### I8 — Additive CNC and Gridfinity manufacturing-sketch dogfood
 
-Implementation status: **M87-F003 relational-authority repair mechanically qualified; M87-U9/U10
-human visual UAT pending**. The earlier dirty-gate evidence still predates this repair and no clean
-candidate is nominated.
+Implementation status: **M87-F003 relational-authority repair clean-qualified and accepted**. The
+earlier dirty-gate evidence still predates this repair; exact source `32c7289`, tree `38f7175`,
+passes the later clean gate. No immutable candidate is nominated.
 
 - [x] Add **CNC joinery fit coupon · keyed corner reliefs** as the eleventh bundled project. It
   contains one constrained 120 x 140 mm female blank, three 70 mm-wide mortises with
@@ -495,7 +497,8 @@ publication evidence.
   residuals and Current features; the maximum normalized Hard residuals are respectively
   `7.105427357601002e-15` and `2.886579864025407e-15`.
 
-No full post-F003 release gate, clean nomination, publication or human UAT is claimed.
+At this historical checkpoint no full post-F003 release gate, clean nomination, publication or
+human UAT was claimed. The clean closeout record below supersedes only that current-status claim.
 
 The complete provisional gate was run as:
 
@@ -519,7 +522,7 @@ publication result or M87 closure.
 The routing-board amendment is mechanically qualified in the current dirty shared worktree. This
 record is additive to the pre-dogfood qualification above; it did not itself establish a clean exact
 source/tree, nominate or freeze an immutable candidate, record human UAT, authorize publication or
-satisfy the pending M87 visual-UAT boundary.
+satisfy the then-pending M87 visual-UAT boundary.
 
 - Code-owned point release is history-free below the outer code owner. The delegated editor consumes
   the exact accepted preview into one linear `DelegatedPointDragProposal` without an inner Intent
@@ -607,12 +610,31 @@ mechanical qualification only.
   composition 13/13, all-demo headless/deterministic products 10/10, exact reviewed-ledger 1/1,
   package checks, formatting, diff hygiene and warnings-denied focused Clippy. Generate fresh CNC
   and Gridfinity visual bundles without claiming human acceptance or a complete release gate.
-- [x] Record that no clean exact source/tree, clean release gate, immutable no-rebuild freeze or
-  exact-served publication was established; those release concepts remain deliberately unclaimed.
-- [ ] Complete and record M87-U9 focused human visual UAT against the mutable CNC bundle.
-- [ ] Complete and record M87-U10 focused human visual UAT against the mutable Gridfinity bundle.
-- [ ] After U9/U10, record the supervising user's exact milestone disposition. Do not infer clean
-  nomination, freeze, publication or service retirement, and do not activate M88.
+- [x] Preserve the pre-close record that dirty evidence did not establish clean source, freeze or
+  publication; qualify exact committed source separately without weakening those distinctions.
+- [x] Record M87-U9/U10 as accepted by the supervising user's explicit milestone-level close
+  decision without inventing a separately replayed visual session.
+- [x] Run the complete clean gate on source `32c7289` / tree `38f7175`, close M87, leave immutable
+  freeze/publication/service retirement unclaimed and activate M88.
+
+### Clean closeout qualification — 2026-08-31
+
+Exact committed source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passed:
+
+```bash
+NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The command exited `0` from an empty pre-gate worktree and left an empty post-gate worktree.
+Formatting, diff hygiene, warnings-denied workspace Clippy, all-feature workspace tests, the clean
+271-row golden, native/WASM parity, both TypeScript packages, Rustdoc, benchmark compilation,
+release performance, licences, all package lists, packaged `geosolve-sketch-code` verification and
+release Trunk assembly pass. Current focused results include manufacturing 3/3, native composition
+13/13, exact reviewed ledger 1/1, headless 10/10 and browser library 344/344. The 256-moving-body
+release crossover passes in 158.21 seconds. Existing manifest/dead-code/package metadata warnings
+remain nonfatal. This qualifies source only; no immutable no-rebuild freeze or publication is
+claimed.
 
 A complete dirty-worktree release-gate rerun was initially attempted after the graphics repair.
 While it was running, a separate concurrent workspace session added `CncJoineryFitCoupon` and
@@ -630,7 +652,7 @@ F003 twelve-project dirty-worktree release gate was rerun on 2026-08-30 with the
 TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
 ```
 
-It exited `0` for those pre-F003 sources. The current post-F003 reviewed twelve-row code-project
+It exited `0` for those pre-F003 sources. The post-F003 reviewed twelve-row code-project
 ledger has SHA-256
 `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`; the historical gate does not
 qualify it. This is explicitly dirty mechanical evidence: it does not nominate a clean source/tree,
@@ -642,7 +664,7 @@ The following mutable review bundles predate F003 and cannot review the revised 
 - M87-U9: `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/cnc`;
 - M87-U10: `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/gridfinity`.
 
-Neither bundle is current, immutable or accepted. Generate fresh post-F003 bundles only after the
-focused checks pass. Current fresh mutable replacements are at
-`/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. M87 remains open at the focused visual-UAT
-boundary, and M88 remains inactive.
+Neither historical bundle is current, immutable or accepted. Fresh post-F003 mutable replacements
+are at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. The user's 2026-08-31 milestone-level
+close decision accepts U9/U10 without a separate replay; exact source `32c7289` passes the complete
+clean gate. M87 is closed, and M88 is active.

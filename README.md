@@ -134,33 +134,31 @@ authority while the separately built Tailscale snapshot remains accepted UAT evi
 complete; `6874aa1` remains qualified product authority.
 M80 completes the accepted native topology-preserving Profile Offset and native line-line Fillet
 publication cut; M81 completes the accepted behavior-preserving core consolidation. M82 is closed
-as a deferred, fully rolled-back computed Offset exploration. M83 is active and not yet accepted:
-ADR 0040's projectional Design Intent Graph, M83-F001 through M83-F010 and a subsequent
-architecture-hardening pass are implemented over the unchanged M81 solver authority. The
-hardening pass introduces SHA-256 canonical graph/session wire v2 with strict legacy-v1 migration,
-cached ordinary identity reads with independent validation hashing, complete nested-checkpoint/
-evidence/ownership validation, exact prepared Fillet/Offset publication, central declaration
-descriptors, compact data-only read projections and a strict typed RPC/TypeScript client whose
-mutations return bounded receipts while explicit Snapshot performs the full read. The legacy
-FNV-1a-derived v1 digest is validated for deterministic migration only; it is not cryptographically
-secure. RPC and workspace host surfaces now share explicit 16/64 MiB receipt/response and 64 MiB
-workspace bounds, with disposable annotation JSON capped at 4 MiB. F008 restores complete
-workspace-v8 projectional Copy/Load repro transport; F009 keeps suppressed Fillet parents visible
-and makes scene-composition failure a truthful frame-local canvas status. F010 gives Structured
-Source and Inspector one bounded semantic object/array path contract while retaining canonical
-storage coordinates as exact persistence and mutation authority. Prior M83 nominations through
-F008/F009 source `b0de5af` are historical. F010 source `ee18dbd`, tree `889f730`, passes the fresh
-clean gate and exact no-rebuild Tailscale nomination at immutable aggregate
-`e01d642438ae8337e9abe1ddeadb7b176375ae40f8b411785edae717e30b5d54`. Focused human UAT remains
-pending; public GitHub Pages continues to serve accepted M81.
+as a deferred, fully rolled-back computed Offset exploration. M83 completes accepted ADR 0040
+projectional design intent and F001-F010 hardening; M84 completes optional hybrid code/GUI
+authoring; M85 completes retained-presentation performance hardening; and M86 completes managed
+dimensions, Fillet hit priority, terminal parity and bounded traces. M87 completes ADR 0042's
+authenticated managed controls, shared native/browser rendering, browser-free inspect/edit/render
+loop and twelve bundled code projects, including the retained CNC and fully constrained Gridfinity
+samples. Exact M87 product source `32c7289`, tree `38f7175`, passes the complete clean release gate;
+the user's milestone-level close decision accepts U1-U10 without claiming a separate row replay.
+No M87 immutable freeze, public deployment or service retirement is inferred.
+
+M88 is active as the workflow-led authoring workbench redesign. It makes Design, Split and Code
+first-class central modes, gives code materially usable space, preserves live editor state, moves
+specialist tools and diagnostics behind keyboard-accessible menus, and unifies sample discovery,
+Explorer, Inspector, Parameters and Problems around the main workflows. Canonical
+`project.json`/`sketch.ts` remains the browser/headless AI-authoring seam. The diagnosed Gridfinity
+WASM stack and duplicate-open work is an ordered stability prerequisite; full-detail no-LOD paint
+and independent accepted-state validation remain mandatory.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with the M83 F010 replacement clean-qualified and immutably
-   nominated while focused UAT remains pending over the accepted M81 baseline.
+3. `PLAN.md` — authoritative roadmap, with M87 complete and M88 active in its workflow audit and
+   implementation-contract phase.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -179,9 +177,19 @@ Physics, collision and a production rendering system remain out of scope.
     publicly verified geometry-family/variant contract, implementation ledger and scorecard.
 15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
-16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — implemented
-    projectional Design Intent Graph contract, F001-F010 finding/nomination ledger, post-F007
-    architecture hardening, replacement qualification and pending scorecard.
+16. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md`, `docs/M83_UAT.md` and ADR 0040 — completed
+    projectional Design Intent Graph contract and public closeout.
+17. `docs/M84_GOALS.md`, `docs/M84_IMPLEMENTATION.md`, `docs/M84_UAT.md` and ADR 0041 — completed
+    optional code/GUI authoring contract and public closeout.
+18. `docs/M85_GOALS.md`, `docs/M85_IMPLEMENTATION.md` and `docs/M85_UAT.md` — completed retained
+    workbench-performance milestone.
+19. `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` — completed managed
+    dimensions, Fillet priority, terminal parity and diagnostic trace milestone.
+20. `docs/M87_GOALS.md`, `docs/M87_IMPLEMENTATION.md`, `docs/M87_HEADLESS.md` and
+    `docs/M87_UAT.md` — completed, clean-qualified managed-controls and browser-free authoring
+    milestone with twelve preserved code projects.
+21. `docs/M88_AUDIT.md`, `docs/M88_GOALS.md`, `docs/M88_IMPLEMENTATION.md`, `docs/M88_UAT.md` and
+    `docs/M88_HANDOVER.md` — active workflow-led workbench redesign and ordered stability contract.
 
 ## Workspace
 

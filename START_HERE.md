@@ -528,13 +528,12 @@ hosted-byte verification; both M86 services are retired. M86 is complete.
 `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the accepted contract, finding ledger and
 closeout scorecard.
 
-M87 is open. Its ADR 0042 implementation replaces property-specific code/GUI adapters with
-authenticated managed controls for code-defined non-DoF parameters and constraint state, makes
-shared generated inputs explicit, and adds a browser-free native inspect/edit/render path for
-AI-assisted authoring. Existing solver-instance point drafts stay outside code. The reported Typed
-Panel Fillet-radius Inspector path is reproduced as M87-F001 at the code expansion owner.
-`docs/M87_HANDOVER.md` is the canonical resume point for the exact dirty worktree and pending
-M87-U9/U10 visual boundary; do not reconstruct the checkpoint from chat history.
+M87 is complete and accepted. Its ADR 0042 implementation replaces property-specific code/GUI
+adapters with authenticated managed controls for code-defined non-DoF parameters and constraint
+state, makes shared generated inputs explicit, and adds a browser-free native inspect/edit/render
+path for AI-assisted authoring. Existing solver-instance point drafts stay outside code. M87-F001
+through M87-F003 are repaired at their owning boundaries, and the complete adaptive-detail/LOD
+prototype remains deleted.
 
 The additive M87 robotic cable-harness routing-board dogfood is now the tenth bundled project. It
 composes eight keyed open routes with 80 generated clip circles and 64 generated Fillets, one pair
@@ -555,19 +554,33 @@ plain Gridfinity 1 x 1 x 3U bin, including its 41.5 mm outer width, 35.6 mm base
 Fillets. These are design sketches only: neither introduces CAM, toolpath, cutter-compensation,
 boolean, solid-model or manufacturing-validation authority.
 
-The retained mechanical evidence includes focused CNC/Gridfinity owner qualification, cold
-materialization of all twelve bundled demos, the separately reviewed twelve-row ledger,
-renderer/headless/browser checks and the full dirty-worktree release gate at exit `0`. The
-supervising user's earlier scoped disposition remains historical acceptance of U1-U8 without a
-separate row-by-row replay; it does not accept the later manufacturing visual rows, and M87 remains
-open.
-Fresh mutable CNC/Gridfinity render bundles exist only for pending M87-U9/U10 visual review. The
-shared dirty worktree is not a clean nominated source/tree: no immutable candidate freeze, public
-deployment or service-retirement result was performed or is claimed, and the mutable Tailscale
-listener remains development infrastructure. Performance investigation is deferred to a follow-up
-milestone and M88 is not active. `docs/M87_AUDIT.md`, `docs/M87_GOALS.md`,
-`docs/M87_IMPLEMENTATION.md`, `docs/M87_HEADLESS.md`, `docs/M87_UAT.md` and ADR 0042 own the open
-boundary and evidence.
+Exact M87 source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
+`38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate, including the
+focused CNC/Gridfinity owners, all twelve bundled demos, the reviewed twelve-row ledger, unchanged
+271-row golden, native/WASM parity, package checks, release performance and release Trunk build.
+The user's explicit close decision accepts U9/U10 at milestone level without claiming a separately
+logged row-by-row replay. No immutable freeze, public deployment or service retirement is inferred;
+the Tailscale listener remains mutable development infrastructure. `docs/M87_HANDOVER.md` is now a
+historical closeout handover, while `docs/M87_AUDIT.md`, `docs/M87_GOALS.md`,
+`docs/M87_IMPLEMENTATION.md`, `docs/M87_HEADLESS.md`, `docs/M87_UAT.md` and ADR 0042 own the closed
+contract and evidence.
+
+M88 is active in its audit/contract phase as the workflow-led authoring workbench redesign. The
+current UI gives approximately 33 tools permanent priority, hides all 37 samples behind nested
+flyouts, places diagnostics beside everyday project actions, and constrains code to roughly 240 px
+at `1440 x 900` with 9.3 px editor text. M88 replaces that hierarchy with a compact app bar,
+primary tool rail, searchable start/open surface, collapsible Explorer, central Design/Split/Code
+modes and right-side Inspector/Parameters/Problems tabs. Code becomes a full central workspace
+whose draft, file, cursor, selection and scroll survive durable renders and pane changes. The
+browser/headless `project.json`/`sketch.ts` contract remains the AI-authoring seam; no chat service
+is required.
+
+Before broad layout work, M88 owns the diagnosed Gridfinity stability prerequisite: release-mode
+UAT, an explicit WASM stack contract, a one-MiB edit regression and stack reduction, removal of
+duplicate checkpoint restoration/no-op post-open encoding, and only then a separately proven full-
+row-rank redundancy shortcut. Independent residual/domain/branch validation remains unchanged.
+`docs/M88_AUDIT.md`, `docs/M88_GOALS.md`, `docs/M88_IMPLEMENTATION.md`, `docs/M88_UAT.md` and
+`docs/M88_HANDOVER.md` are the active resume set.
 
 ## Read first
 
@@ -615,10 +628,12 @@ boundary and evidence.
     Fillet priority, Typed Panel terminal and bounded-trace milestone.
 23. `docs/M87_HANDOVER.md`, `docs/adr/0042-managed-controls-and-headless-authoring.md`,
     `docs/M87_AUDIT.md`, `docs/M87_GOALS.md`, `docs/M87_IMPLEMENTATION.md`,
-    `docs/M87_HEADLESS.md` and `docs/M87_UAT.md` — exact dirty-worktree resume point, open
-    managed-control/headless architecture, audited findings,
-    twelve-project dogfood, retained dirty-worktree evidence, native workflow and pending focused
-    visual-UAT record.
+    `docs/M87_HEADLESS.md` and `docs/M87_UAT.md` — completed, clean-qualified managed-control/
+    headless architecture, audited findings, twelve-project dogfood, native workflow and accepted
+    closeout record.
+24. `docs/M88_HANDOVER.md`, `docs/M88_AUDIT.md`, `docs/M88_GOALS.md`,
+    `docs/M88_IMPLEMENTATION.md` and `docs/M88_UAT.md` — active workflow-led workbench redesign,
+    ordered stability prerequisites, implementation ledger and pending scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -1196,13 +1211,19 @@ Durable milestone and cleanup records:
 - `docs/M86_UAT.md` (accepted M86-U1-U8 scorecard and exact public closeout)
 - `docs/adr/0042-managed-controls-and-headless-authoring.md` (accepted managed-control,
   grouped-preview, shared-renderer and browser-free-authoring architecture decision)
-- `docs/M87_HANDOVER.md` (canonical dirty-worktree resume point and pending U9/U10 boundary)
+- `docs/M87_HANDOVER.md` (historical M87 closeout and M88 transition handover)
 - `docs/M87_AUDIT.md` (completed managed-property, UX, native-render and AI-authoring audit)
-- `docs/M87_GOALS.md` (open cohesive source-backed editing, native rendering and dogfood contract)
-- `docs/M87_IMPLEMENTATION.md` (implemented component ledger, retained dirty-worktree evidence and
-  mechanically qualified two-sketch amendment record)
+- `docs/M87_GOALS.md` (completed cohesive source-backed editing, native rendering and dogfood
+  contract)
+- `docs/M87_IMPLEMENTATION.md` (implemented component ledger, clean qualification and accepted
+  two-sketch amendment record)
 - `docs/M87_HEADLESS.md` (stateless native inspect/edit/render workflow and output contract)
-- `docs/M87_UAT.md` (historical U1-U8 scoped acceptance and pending U9/U10 visual scorecard)
+- `docs/M87_UAT.md` (accepted M87-U1-U10 milestone-level scorecard and closeout)
+- `docs/M88_HANDOVER.md` (active redesign resume point and ordered stability prerequisites)
+- `docs/M88_AUDIT.md` (quantified workflow, hierarchy and code-workspace audit)
+- `docs/M88_GOALS.md` (active workflow-led UI redesign contract)
+- `docs/M88_IMPLEMENTATION.md` (pending ordered implementation ledger)
+- `docs/M88_UAT.md` (pending ten-row workflow and layout scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
