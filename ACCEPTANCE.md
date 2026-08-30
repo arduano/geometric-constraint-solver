@@ -4193,6 +4193,202 @@ arbitrary Intent-leaf reconciliation, runtime TypeScript, a global native-over-c
 inversion, a general weakening of computed snapshot parity and diagnostic state becoming retained
 project authority remain outside scope.
 
+### M87: cohesive managed parameters and browser-free design loop
+
+Status: **OPEN**. The managed-control, browser-free authoring, twelve-project dogfood, shared-
+renderer, graphics-hardening and full-detail retained-camera work is retained, and all experimental
+adaptive-detail/LOD work remains deleted. The supervising user's earlier scoped disposition remains
+historical acceptance of M87-U1 through M87-U8 without claiming a separate row-by-row replay.
+Post-M87-F003 proportional mechanical qualification passes; M87-U9/M87-U10 remain pending, and no
+milestone closure is inferred. The dirty shared worktree is not a clean source/tree, immutable
+nomination or public authority; clean nomination, freeze, publication and service retirement have
+not been performed. The mutable Tailscale listener remains development infrastructure, and M88 is
+not active.
+
+The implemented M87 behavioral contract is:
+
+- Every explicit code-defined non-DoF definition value that has a supported semantic schema is
+  represented by one transient managed control. Concrete declaration-backed coverage includes
+  finite unit/numeric values, integer values, booleans, closed choices, constraint/dimension state,
+  explicit branch/orientation choices and computed-feature parameters. The closed schema/
+  replacement helper also validates Natural and Text values, but no current declaration catalog
+  entry or managed-only fixture owns either schema; M87 therefore makes no real Natural/Text
+  control-fixture claim and must not invent an owner to do so. A supported editable value cannot
+  depend on the presence of an artifact `EditLens`.
+- Point coordinates and every other solver-instance/DoF value remain on the existing draft and
+  semantic-overlay routes and receive no source-edit capability. References, identities, member
+  keys, ordering, explicit `null` values and unsupported inverse transforms remain typed read-only
+  or navigate to their actual source owner. An absent member owns no parser span and therefore
+  produces no fabricated manifest row; an explicit `null` owns its parser span and produces one
+  read-only `Null` row without an editable token. No solved coordinate or fabricated structure is
+  written to managed source.
+- The managed-control manifest is deterministically derived from the exact project, managed source,
+  expansion generation, declaration schema and direct/generated consumer provenance. Control and
+  consumer-edge limits are independent and fail closed. Manifest derivation is transient and does
+  not change project, expansion, session, persistence or reproduction bytes or digests.
+- Editable tokens authenticate project and source authority, control identity, exact expected
+  typed value and applicable generated-owner generation. Exact CAS includes IEEE floating bits and
+  distinguishes signed zero. Stale, dirty, foreign, mixed-generation, wrong-unit, wrong-schema,
+  duplicate, overlapping, non-finite and over-bound batches reject before any source rewrite.
+- One admitted batch validates every replacement and source span before performing one lossless
+  rewrite. The complete candidate then reparses, expands, reconciles, materializes and passes
+  independent native/feature validation before accepted publication. A representable invalid
+  candidate retains its attempted source and diagnostic over the prior accepted scene; a rejected
+  batch changes neither source nor accepted authority.
+- A shared literal remains one source token with one disclosed, complete bounded fan-out. Editing
+  Typed Panel's `cornerFillets.radius: mm(4)` to `mm(2)` changes exactly that token, updates both
+  generated Fillets to radius `2`, preserves their stable semantic identities, adds exactly one
+  outer `SketchCodeSession` history row and survives exact Undo, Redo and reload. No generated
+  consumer receives a private copied value.
+- Repeated artifact invocations are invocation-local. Mounting Plate, Adaptive Lanterns and all
+  three PC Water Manifold `waterChannel` uses route a control only to consumers authenticated for
+  that exact invocation while still exposing the complete transitive fan-out for a genuinely
+  shared input.
+- The robotic routing board is the tenth bundled project and composes existing owners rather than
+  adding a route-specific engine. Eight keyed open Polylines contain ten vertices each and 72
+  native spans; their eight `harnessRoute` invocations generate exactly 80 clip circles and 64
+  existing host Fillets. Board, bore, connector-centre and route-endpoint authority is fixed while
+  interior route points remain solver-instance movable. The custom TypeScript, pinned artifact and
+  all mirrored package fixtures remain byte-identical.
+- `sharedClipRadius` and `sharedBendRadius` begin as one source control each with complete 80-clip
+  and 64-Fillet fan-out. Localizing only `serviceHarness` partitions clip consumers 70 shared/10
+  local and Fillet consumers 56 shared/8 local; exact-CAS shared and local edits update only those
+  partitions and stale tokens reject. Control derivation is independent of point overlays,
+  structural reconciliation and rendering.
+- Inserting keyed vertex `inspectionClip` into `serviceRoute` creates exactly four new logical
+  identities: one point, one segment, one generated clip and one generated Fillet. Removal retires
+  those owners, reinsertion advances only their generations, and unrelated route/native/host
+  identities remain unchanged. Moving `serviceRoute.serviceLoop` uses the semantic overlay without
+  rewriting source; its audited incremental parse/expand/publish work is `0/1/0`, all 64 host
+  identities stay Current and warm authority remains history-neutral.
+- Aggregate open-chain validation derives exact endpoint connectivity from shared point identity
+  and active Coincident constraints. Deliberate clip/route intersections cannot make visual-profile
+  arrangement truncate an unrelated route. Offset operands continue to use complete visual-profile
+  authority. Noninteractive code composition translates all exact Fillet candidates and publishes
+  them in one atomic host patch; interactive preview behavior is unchanged.
+- The Code panel is derived from the full managed-control manifest and exposes every enabled value,
+  including values without a selected canvas property. The ordinary Inspector maps an exact
+  selected definition/output path to the same control, displays fan-out before a shared edit and
+  reselects the stable semantic alias after accepted publication. GUI-owned Inspector fields keep
+  their existing dispatcher and behavior.
+- A selected generated Fillet radius grip authenticates the generated child and its one managed
+  source owner before delegation. Pointer frames preview one bounded group containing every
+  disclosed Fillet consumer without reparsing source or publishing history. Release returns one
+  proposal to the outer code owner, which performs the same exact-CAS source transaction; it does
+  not commit a nested Intent transaction. Cancellation, stale/failure retention, M86 hover/picking
+  priority and ordinary non-code Fillet-radius gestures remain unchanged.
+- Code-mode mutation has exactly one history owner. A strict code-control RPC exposes bounded
+  inspect, managed edit, outer Undo and outer Redo requests with authenticated expected session
+  identities and stable typed success/failure envelopes. The mutating Intent RPC rejects while a
+  code project owns authority instead of creating a bypass history; read-only Intent inspection
+  and plain projectional workspaces retain their established behavior. Rust/WASM and the
+  `@geosolve/sketch-code` TypeScript client agree on the complete admitted wire contract.
+- `geosolve-sketch-render` owns target-neutral camera fitting, browser/shared SVG composition,
+  standalone SVG and native-only pure-Rust PNG rasterization. The extracted browser composer bytes
+  match the frozen M87 fixture. Native rendering uses only pinned code and the bundled font, rejects
+  external/system resources and produces a `2000 x 1400` PNG with non-background semantic pixels.
+- Static output uses a logical `1000 x 700` canvas, a 64 px fit margin, a finite 2--2000 px/model-
+  unit scale clamp and 0.25 px chord tolerance. It includes the authoritative accepted geometry,
+  grid, datums and annotations but excludes transient hover, selection, drafts, inference, action
+  affordances and error overlays. Repeated report and SVG bytes are identical; PNG is visual
+  evidence and is not promoted to a mathematical or cross-platform byte oracle.
+- Retained browser camera admission is two-phase: desired camera state is consumed only after its
+  DOM/HUD paint succeeds. A missing retained presentation group triggers exact transient
+  reprojection and cannot strand future frames. Camera navigation always retains and paints the
+  complete SVG and semantic/hit authority. M87 contains no adaptive or reduced-detail policy.
+- `geosolve-headless` admits exactly managed-only source plus a project key, a canonical complete
+  digest-pinned `CodeProject`, or one of the twelve bundled demos. Its public Rust APIs and CLI
+  expose `inspect`, exact-CAS `edit` and `render`, use deterministic digest-derived identities and
+  never require or start a browser, DOM, web server, network, Node process or TypeScript runtime.
+- Every success-like headless result has finite current accepted geometry, independently validated
+  normalized Hard residual `<= 1e-9` (or a validated empty hard set), and Current active computed
+  features. Qualification must cold-materialize all twelve demos. Reports and control manifests
+  describe the exact accepted project/source authority used for the scene rather than trusting a
+  solver or feature status alone.
+- Two cold renders of the routing board produce byte-identical encoded report, control manifest,
+  logical scene, standalone SVG and pinned-build PNG products. Its reviewed native inventory is
+  104 points, 176 curves, 41 constraints, two dimensions, 64 features and 136 computed edges. This
+  exact PNG equality is a deterministic pinned-build regression, not promotion of raster bytes to
+  a cross-platform solver oracle.
+- The eleventh bundled project is a CNC joinery fit coupon: one 120 x 140 mm female blank, three
+  70 mm-wide mortises whose loose/nominal/press heights are respectively 18.4/18.0/17.6 mm,
+  and three 95 x 18 mm tabs. One shared 3.175 mm cutter radius owns exactly twelve explicit conservative
+  dogbone-style corner-relief circles; one shared 6 mm handling radius owns exactly ten existing
+  Fillets, comprising four blank corners and two per tab. These reliefs are authored overcuts, not
+  inferred cutter compensation.
+- The coupon is fully constrained from exactly one `FixedPoint`, zero `FixedCoordinate` rows and
+  seven horizontal/vertical length-governed construction datums. Its accepted document contains
+  29 points, 47 curves, 36 constraints and 33 dimensions while preserving the nominal geometry.
+- Localizing only the press-station relief radius partitions its consumers as eight shared/four
+  local circles; localizing only the press-tab handling radius partitions its consumers as eight
+  shared/two local Fillets. A fit-station edit changes only that station. Removing
+  and reinserting one keyed relief changes only that circle, preserves every unrelated identity
+  and advances only the reused relief generation; a token issued for the retired owner stays stale.
+- The twelfth bundled project is one symmetric closed 26-point Gridfinity 1 x 1 x 3U central
+  material contour. It preserves 41.5 mm outer width, 35.6 mm base-bottom width, a staged base
+  totalling 4.75 mm and rising to the 7 mm cavity floor, a 21 mm 3U body, 0.95 mm walls and a
+  nominal 4.4 mm lip rise. Its two 2.8 mm floor Fillets and two 0.6 mm lip Fillets remain separate
+  two-consumer fan-outs: editing either radius changes only its own pair.
+- The Gridfinity contour is fully constrained from zero `FixedPoint` rows, one Y
+  `FixedCoordinate`, thirteen `symmetricAboutDatumAxis` relations and ten dimensioned orthogonal
+  construction spans for five diagonal stages. Its accepted document contains 31 points, 36
+  curves, 31 constraints and 18 dimensions while preserving the nominal profile.
+- Both M87-F003 repairs report numerical and structural left/right nullity zero, equality DOF zero
+  and bidirectional bounded DOF zero. Literal point coordinates remain solver seeds, never design
+  authority; focused displaced-seed cases cold-solve back to the same accepted geometry. M87-F003
+  changes no equation, residual, Jacobian, branch rule or solver policy.
+- Post-F003 evidence passes the manufacturing owner suite 3/3, native composition 13/13, the exact
+  reviewed-ledger check 1/1 and all-demo headless/deterministic products 10/10. Fresh mutable
+  U9/U10 bundles exist; human review remains pending.
+- The coupon and Gridfinity entries are design/profile sketches within 2D/2.5D manufacturing-
+  intent authority. They add no CAM, toolpath, automatic cutter compensation, boolean, solid,
+  print-fit, machinability or production-manufacturing validation claim.
+- On Linux, Android, Apple platforms and Redox, a successful render/edit publishes a complete new
+  generation with an atomic no-replace directory rename and never overwrites an existing
+  destination. Other targets fail closed as unsupported. A successful generation contains
+  canonical `project.json`, accepted `sketch.ts`, deterministic `report.json` and `controls.json`,
+  `scene.svg` and `scene.png`. Invalid input, stale CAS, failed solve/feature validation, output
+  collision or publication failure leaves no partial destination.
+- Historical focused native owner, optional workbench, WASM and TypeScript tests pass for the
+  managed-control, routing-board, renderer and headless slice, including Typed Panel Inspector/
+  grip, outer history, GUI fallback, DoF/overlay non-regression, every current
+  declaration-backed literal/read-only class, helper-level Natural/Text schema validation,
+  resource bounds, renderer parity, every input form and actual CLI subprocess behavior. The
+  unchanged milestone-neutral authoring/scene golden remains appropriate unless a separately
+  reviewed systemic missing dimension is discovered. The additive focused evidence recorded below
+  extends this exact pre-F003 slice record without converting it into current qualification or a
+  clean release qualification.
+- The separate reviewed code-project ledger contains twelve rows, appending CNC and then Gridfinity
+  after the routing-board row while preserving the first ten reviewed rows. The milestone-neutral
+  271-row authoring/scene golden remains unchanged because these dogfoods compose existing owners
+  rather than introducing a new systemic authoring axis. Focused owner, native/headless inventory,
+  cold-materialization and deterministic-product checks retain their dirty-worktree evidence
+  boundary.
+- The pre-F003 dirty-worktree release gate passed at exit `0` on 2026-08-30 with
+  `TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell
+  shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'`. The
+  current reviewed twelve-row code-project ledger has SHA-256
+  `f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`, but that historical gate
+  does not qualify the revised rows. The gate result is dirty
+  mechanical evidence only. An ordinary release nomination would additionally require a clean
+  exact source and tree and a clean no-rebuild gate/freeze. That clean path, immutable output,
+  public deployment and service retirement have not been performed.
+
+Historical scoped-disposition record: focused owner tests, current WASM, frozen renderer bytes,
+headless checks and the no-LOD retained-scene resize/recovery browser check passed for their
+recorded U1-U8 slice. The manufacturing amendment adds focused owner, all-twelve-demo cold-
+materialization, deterministic-render and reviewed twelve-row-ledger mechanical evidence. M87-F002
+freezes finite transactional camera mutation and bounded grid work at `geosolve-sketch-render`.
+None of this accepts U9/U10 or converts dirty-worktree evidence into a clean release nomination.
+The mutable bundles at `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` predate F003 and are
+historical only. Fresh post-F003 renders awaiting the two human visual rows are at
+`/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`.
+
+M87 adds no primitive, constraint, dimension, equation, residual, Jacobian, solver priority,
+tolerance, implicit branch inference, arbitrary expression inverter, custom-TypeScript runtime,
+linkage renderer, stateful agent service or solved-value source write-back path. Performance work
+is deferred to a follow-up milestone and does not activate M88.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.

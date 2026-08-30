@@ -99,6 +99,36 @@ pub struct ProjectionalPointDragPreview {
     pub accepted_position: [f64; 2],
 }
 
+/// One linear, independently accepted native point terminal delegated to an
+/// outer semantic owner.
+///
+/// The proposal proves the exact pointer/request/Intent route and retains the
+/// accepted native preview, but it grants no Intent publication authority by
+/// itself. Consuming it never scans writable leaves, plans an Intent patch, or
+/// appends nested history.
+#[derive(Debug)]
+pub struct DelegatedPointDragProposal {
+    /// Exact Intent authority against which the native route was prepared.
+    pub intent: IntentSessionIdentity,
+    /// Pointer which exclusively owns this terminal.
+    pub pointer_id: u64,
+    /// Latest accepted pointer-frame request.
+    pub request_id: u64,
+    /// Exact native point authenticated at pointer-down.
+    pub point: DesignPointId,
+    /// Accepted native position witnessed by `terminal_session`.
+    pub accepted_position: [f64; 2],
+    terminal_session: Box<RetainedSketchDocumentSession>,
+}
+
+impl DelegatedPointDragProposal {
+    /// Exact independently accepted native preview witnessed at pointer-up.
+    #[must_use]
+    pub fn terminal_session(&self) -> &RetainedSketchDocumentSession {
+        &self.terminal_session
+    }
+}
+
 /// Latest independently accepted selected-curve control preview.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ProjectionalCurveControlPreview {
@@ -123,6 +153,15 @@ struct ProjectionalPointDrag {
     origin_position: [f64; 2],
     latest_request_id: Option<u64>,
     latest: Option<AcceptedPointDragSample>,
+}
+
+#[derive(Debug)]
+struct ValidatedPointDragTerminal {
+    intent: IntentSessionIdentity,
+    point: DesignPointId,
+    origin: Box<RetainedSketchDocumentSession>,
+    preview: ProjectionalPointDragPreview,
+    session: Box<RetainedSketchDocumentSession>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -454,6 +493,22 @@ impl ProjectionalIntentCoordinator {
         self.commit_delegated_planned_with_work(planned, &mut work)
     }
 
+    /// Applies one delegated source patch while carrying an independently
+    /// accepted numerical continuation into the candidate's exact native
+    /// certification. The continuation supplies no Intent operation, history
+    /// row, or temporary drag request.
+    pub(crate) fn apply_delegated_patch_with_accepted_continuation(
+        &mut self,
+        patch: IntentPatch,
+        accepted_continuation: &geosolve_sketch::SketchDocument,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        self.cancel_interaction();
+        let mut work = InteractionWorkReceipt::default();
+        let planned =
+            self.plan_patch_with_work_mode(patch, &mut work, true, Some(accepted_continuation))?;
+        self.commit_delegated_planned_with_work(planned, &mut work)
+    }
+
     /// Plans and independently cold-materializes one typed patch without
     /// publishing its intent plan, accepted authority, or history entry.
     ///
@@ -547,7 +602,7 @@ impl ProjectionalIntentCoordinator {
         patch: IntentPatch,
         work: &mut InteractionWorkReceipt,
     ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
-        self.plan_patch_with_work_mode(patch, work, false)
+        self.plan_patch_with_work_mode(patch, work, false, None)
     }
 
     fn plan_delegated_patch_with_work(
@@ -555,7 +610,7 @@ impl ProjectionalIntentCoordinator {
         patch: IntentPatch,
         work: &mut InteractionWorkReceipt,
     ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
-        self.plan_patch_with_work_mode(patch, work, true)
+        self.plan_patch_with_work_mode(patch, work, true, None)
     }
 
     fn plan_patch_with_work_mode(
@@ -563,14 +618,23 @@ impl ProjectionalIntentCoordinator {
         patch: IntentPatch,
         work: &mut InteractionWorkReceipt,
         delegated: bool,
+        accepted_continuation: Option<&geosolve_sketch::SketchDocument>,
     ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
         #[cfg(test)]
         PLAN_PATCH_CALLS.with(|calls| calls.set(calls.get() + 1));
         let mut captured = None;
         let evaluate = |candidate: &geosolve_sketch_intent::IntentCandidate| {
-            let (evaluation, materialized, materialization_work) = self
-                .materializer
-                .evaluate_with_materialization_audited(candidate);
+            let (evaluation, materialized, materialization_work) =
+                if let Some(accepted_continuation) = accepted_continuation {
+                    self.materializer
+                        .evaluate_with_materialization_from_accepted_continuation_audited(
+                            candidate,
+                            accepted_continuation,
+                        )
+                } else {
+                    self.materializer
+                        .evaluate_with_materialization_audited(candidate)
+                };
             work.merge(materialization_work);
             captured = materialized;
             evaluation
@@ -913,6 +977,78 @@ impl ProjectionalIntentCoordinator {
         request_id: u64,
         work: &mut InteractionWorkReceipt,
     ) -> Result<ProjectionalPatchOutcome, ProjectionalCoordinatorError> {
+        let terminal = self.take_validated_point_drag_terminal(pointer_id, request_id)?;
+        let ownership = &self
+            .accepted
+            .as_ref()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
+            .ownership;
+        let origin_document = terminal
+            .origin
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
+            .document();
+        let preview_document = terminal
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedDragSample)?
+            .document();
+        let operations =
+            point_drag_intent_operations(ownership, origin_document, preview_document)?;
+        if operations.is_empty() {
+            return Err(ProjectionalCoordinatorError::DragDidNotMove);
+        }
+        let patch = IntentPatch::new(
+            self.intent.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            operations,
+        );
+        let prepared = self.plan_patch_with_work(patch, work)?.into_accepted()?;
+        let materialized = prepared.materialization();
+        let preview_document = terminal
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedDragSample)?
+            .document();
+        let cold_document = materialized
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?
+            .document();
+        if !direct_manipulation_preview_matches_cold(
+            &self.intent,
+            ownership,
+            preview_document,
+            cold_document,
+        ) {
+            return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
+        }
+        self.commit_planned_with_work(PlannedProjectionalTransaction::Accepted(prepared), work)
+    }
+
+    /// Consumes the exact latest native preview for an authenticated outer
+    /// semantic owner without manufacturing a generic Intent transaction.
+    pub(crate) fn finish_point_drag_delegated(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+    ) -> Result<DelegatedPointDragProposal, ProjectionalCoordinatorError> {
+        let terminal = self.take_validated_point_drag_terminal(pointer_id, request_id)?;
+        Ok(DelegatedPointDragProposal {
+            intent: terminal.intent,
+            pointer_id,
+            request_id,
+            point: terminal.point,
+            accepted_position: terminal.preview.accepted_position,
+            terminal_session: terminal.session,
+        })
+    }
+
+    fn take_validated_point_drag_terminal(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+    ) -> Result<ValidatedPointDragTerminal, ProjectionalCoordinatorError> {
         let drag = self
             .point_drag
             .take()
@@ -939,52 +1075,13 @@ impl ProjectionalIntentCoordinator {
         if pair_bits(latest.preview.accepted_position) == pair_bits(drag.origin_position) {
             return Err(ProjectionalCoordinatorError::DragDidNotMove);
         }
-        let ownership = &self
-            .accepted
-            .as_ref()
-            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
-            .ownership;
-        let origin_document = drag
-            .origin
-            .accepted_state_for_current_input()
-            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
-            .document();
-        let preview_document = latest
-            .session
-            .accepted_state_for_current_input()
-            .ok_or(ProjectionalCoordinatorError::NoAcceptedDragSample)?
-            .document();
-        let operations =
-            point_drag_intent_operations(ownership, origin_document, preview_document)?;
-        if operations.is_empty() {
-            return Err(ProjectionalCoordinatorError::DragDidNotMove);
-        }
-        let patch = IntentPatch::new(
-            self.intent.identity(),
-            IntentPatchPolicy::RequireAccepted,
-            operations,
-        );
-        let prepared = self.plan_patch_with_work(patch, work)?.into_accepted()?;
-        let materialized = prepared.materialization();
-        let preview_document = latest
-            .session
-            .accepted_state_for_current_input()
-            .ok_or(ProjectionalCoordinatorError::NoAcceptedDragSample)?
-            .document();
-        let cold_document = materialized
-            .session
-            .accepted_state_for_current_input()
-            .ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?
-            .document();
-        if !direct_manipulation_preview_matches_cold(
-            &self.intent,
-            ownership,
-            preview_document,
-            cold_document,
-        ) {
-            return Err(ProjectionalCoordinatorError::PreviewColdMismatch);
-        }
-        self.commit_planned_with_work(PlannedProjectionalTransaction::Accepted(prepared), work)
+        Ok(ValidatedPointDragTerminal {
+            intent: drag.intent,
+            point: drag.point,
+            origin: drag.origin,
+            preview: latest.preview,
+            session: latest.session,
+        })
     }
 
     /// Cancels any active gesture without changing intent, accepted authority,

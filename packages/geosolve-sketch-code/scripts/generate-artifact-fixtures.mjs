@@ -9,6 +9,8 @@ import { crossBrace } from "../dist/examples/braced-frame.patch.js";
 import { adaptiveLanterns } from "../dist/examples/adaptive-lanterns.patch.js";
 import { bridgeCables } from "../dist/examples/bridge-cables.patch.js";
 import { compassCore } from "../dist/examples/compass-core.patch.js";
+import { cornerReliefs } from "../dist/examples/corner-reliefs.patch.js";
+import { harnessRoute } from "../dist/examples/harness-route.patch.js";
 import { mountingPlate } from "../dist/examples/mounting-plate.patch.js";
 import { roundEveryCorner } from "../dist/examples/rounded-polyline.patch.js";
 import { fillets } from "../dist/examples/typed-panel.patch.js";
@@ -38,6 +40,22 @@ const fixtures = [
     moduleSpecifier: "./patches/compass-core.patch.ts",
     exportName: "compassCore",
     patch: compassCore,
+  },
+  {
+    source: "examples/corner-reliefs.patch.ts",
+    fixture: "test/fixtures/corner-reliefs.artifact.json",
+    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/corner-reliefs.artifact.json",
+    moduleSpecifier: "./patches/corner-reliefs.patch.ts",
+    exportName: "cornerReliefs",
+    patch: cornerReliefs,
+  },
+  {
+    source: "examples/harness-route.patch.ts",
+    fixture: "test/fixtures/harness-route.artifact.json",
+    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/harness-route.artifact.json",
+    moduleSpecifier: "./patches/harness-route.patch.ts",
+    exportName: "harnessRoute",
+    patch: harnessRoute,
   },
   {
     source: "examples/rounded-polyline.patch.ts",

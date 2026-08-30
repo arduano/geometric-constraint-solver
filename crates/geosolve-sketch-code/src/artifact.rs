@@ -791,6 +791,23 @@ fn validate_family_schema(template: &PatchTemplateNode) -> Result<(), ArtifactVa
             }
             Ok(())
         }
+        "dimension.radius" => {
+            require_exact_schema(
+                template,
+                "inputs",
+                &inputs,
+                &[
+                    ("curve", FeatureKind::Curve),
+                    ("target", FeatureKind::Scalar),
+                ],
+            )?;
+            require_exact_schema(
+                template,
+                "outputs",
+                &template.outputs,
+                &[("dimension", FeatureKind::Dimension)],
+            )
+        }
         "computed.fillet" => {
             require_exact_schema(
                 template,
@@ -1009,6 +1026,51 @@ mod tests {
         assert!(matches!(
             PatchModuleArtifact::from_canonical_json(&with_raw_id),
             Err(ArtifactValidationError::InvalidJson(_))
+        ));
+    }
+
+    #[test]
+    fn radius_dimension_template_requires_exact_curve_target_and_dimension_schema() {
+        let mut template = PatchTemplateNode {
+            path: vec!["radius".into()],
+            result_output: None,
+            declaration_family: "dimension.radius".into(),
+            inputs: BTreeMap::from([
+                (
+                    "curve".into(),
+                    TemplateBinding::TemplateOutput {
+                        template: vec!["circle".into()],
+                        output: "circle".into(),
+                        expected_kind: FeatureKind::Curve,
+                    },
+                ),
+                (
+                    "target".into(),
+                    TemplateBinding::Input {
+                        name: "radius".into(),
+                        path: SemanticOutputPath::default(),
+                        expected_kind: FeatureKind::Scalar,
+                    },
+                ),
+            ]),
+            fields: BTreeMap::new(),
+            outputs: BTreeMap::from([("dimension".into(), FeatureKind::Dimension)]),
+        };
+
+        assert!(supported_declaration_family("dimension.radius"));
+        validate_family_schema(&template).unwrap();
+
+        template.inputs.insert(
+            "target".into(),
+            TemplateBinding::Input {
+                name: "radius".into(),
+                path: SemanticOutputPath::default(),
+                expected_kind: FeatureKind::Point,
+            },
+        );
+        assert!(matches!(
+            validate_family_schema(&template),
+            Err(ArtifactValidationError::InvalidFamilySchema { .. })
         ));
     }
 

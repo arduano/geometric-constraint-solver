@@ -116,12 +116,13 @@ pub use intent_bootstrap::{
     normalize_flat_sketch_intent, normalize_flat_sketch_intent_with_accepted_materialization,
 };
 pub use intent_coordinator::{
-    ProjectionalCoordinatorError, ProjectionalCurveControlPreview, ProjectionalIntentCoordinator,
-    ProjectionalPatchOutcome, ProjectionalPointDragPreview,
+    DelegatedPointDragProposal, ProjectionalCoordinatorError, ProjectionalCurveControlPreview,
+    ProjectionalIntentCoordinator, ProjectionalPatchOutcome, ProjectionalPointDragPreview,
 };
 pub use intent_editor::{
-    ProjectionalEditorConstructionOutcome, ProjectionalEditorError,
-    ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
+    DelegatedComputedFilletRadiusProposal, MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES,
+    ProjectionalDelegatedPointPointerOutcome, ProjectionalEditorConstructionOutcome,
+    ProjectionalEditorError, ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
 };
 pub use intent_feature_authoring::{
     ProjectionalFilletAuthoringError, ProjectionalFilletPatch, projectional_fillet_patch,

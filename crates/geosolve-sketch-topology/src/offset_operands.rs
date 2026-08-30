@@ -447,6 +447,108 @@ struct EndpointSeed {
     point: Option<DesignPointId>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EndpointTopologySpanCatalog {
+    pub(crate) span: CurveSpan,
+    pub(crate) periodic: bool,
+    pub(crate) endpoints: Vec<OffsetEndpointCandidate>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EndpointTopologyCatalog {
+    pub(crate) spans: Vec<EndpointTopologySpanCatalog>,
+    pub(crate) adjacencies: Vec<OffsetEndpointAdjacency>,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "internal limits mirror the explicit public request fields"
+)]
+pub(crate) struct EndpointTopologyBuildLimits {
+    pub(crate) max_spans: usize,
+    pub(crate) max_adjacencies: usize,
+    pub(crate) max_connection_attempts: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum EndpointTopologyBuildError {
+    ResourceLimit {
+        resource: &'static str,
+        actual: usize,
+        limit: usize,
+    },
+}
+
+/// Builds the one exact native endpoint-ownership catalog shared by the
+/// lightweight endpoint query and complete offset-operand projection.
+pub(crate) fn build_endpoint_topology_catalog(
+    document: &SketchDocument,
+    limits: Option<EndpointTopologyBuildLimits>,
+) -> Result<EndpointTopologyCatalog, EndpointTopologyBuildError> {
+    let activity = document.effective_activity();
+    let mut spans = Vec::new();
+    let mut endpoint_seeds = Vec::new();
+    for curve in document.curves() {
+        if !activity.is_active(curve.id) {
+            continue;
+        }
+        let Ok(curve_spans) = document.curve_spans(curve.id) else {
+            continue;
+        };
+        let periodic = curve_family(&curve.definition) == OffsetOperandCurveFamily::Circle;
+        for span in curve_spans {
+            if let Some(limits) = limits
+                && spans.len() >= limits.max_spans
+            {
+                return Err(EndpointTopologyBuildError::ResourceLimit {
+                    resource: "endpoint topology spans",
+                    actual: spans.len().saturating_add(1),
+                    limit: limits.max_spans,
+                });
+            }
+            let seeds = supported_endpoint_seeds(document, span, &curve.definition);
+            endpoint_seeds.extend(seeds.iter().copied());
+            spans.push(EndpointTopologySpanCatalog {
+                span,
+                periodic,
+                endpoints: seeds
+                    .iter()
+                    .map(|seed| OffsetEndpointCandidate {
+                        endpoint: seed.endpoint,
+                        position: seed.position,
+                        eligibility: OffsetEndpointEligibility::Terminal,
+                    })
+                    .collect(),
+            });
+        }
+    }
+    spans.sort_by_key(|candidate| candidate.span);
+    endpoint_seeds.sort_by_key(|candidate| candidate.endpoint);
+
+    let adjacencies = build_endpoint_adjacencies(document, &activity, &endpoint_seeds, limits)?;
+    let mut endpoint_degree = BTreeMap::<OffsetEndpointRef, usize>::new();
+    for adjacency in &adjacencies {
+        for endpoint in adjacency.endpoints {
+            *endpoint_degree.entry(endpoint).or_default() += 1;
+        }
+    }
+    for span in &mut spans {
+        for endpoint in &mut span.endpoints {
+            endpoint.eligibility = match endpoint_degree
+                .get(&endpoint.endpoint)
+                .copied()
+                .unwrap_or_default()
+            {
+                0 => OffsetEndpointEligibility::Terminal,
+                1 => OffsetEndpointEligibility::Joined,
+                adjacent => OffsetEndpointEligibility::Branched { adjacent },
+            };
+        }
+    }
+    Ok(EndpointTopologyCatalog { spans, adjacencies })
+}
+
 #[allow(clippy::too_many_lines)]
 fn build_operand_index(
     input: &PreparedSketchInput,
@@ -455,13 +557,19 @@ fn build_operand_index(
     analysis: &VisualProfileAnalysis,
 ) -> OffsetOperandIndex {
     let activity = document.effective_activity();
+    let endpoint_topology = build_endpoint_topology_catalog(&document, None)
+        .expect("unlimited accepted endpoint-topology projection is infallible");
+    let endpoint_span_by_id = endpoint_topology
+        .spans
+        .iter()
+        .map(|candidate| (candidate.span, candidate))
+        .collect::<BTreeMap<_, _>>();
     let arrangement_spans = analysis
         .intersections
         .iter()
         .flat_map(|intersection| [intersection.first_span, intersection.second_span])
         .collect::<BTreeSet<_>>();
     let mut spans = Vec::new();
-    let mut endpoint_seeds = Vec::new();
     for curve in document.curves() {
         if !activity.is_active(curve.id) {
             continue;
@@ -487,48 +595,20 @@ fn build_operand_index(
             if arrangement_spans.contains(&span) {
                 reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
             }
-            let periodic = family == OffsetOperandCurveFamily::Circle;
-            let seeds = supported_endpoint_seeds(&document, span, &curve.definition);
-            endpoint_seeds.extend(seeds.iter().copied());
+            let endpoint_span = endpoint_span_by_id
+                .get(&span)
+                .expect("active accepted span has exact endpoint topology");
             spans.push(OffsetSpanCandidate {
                 span,
                 family,
                 eligibility: OffsetOperandEligibility::from_reasons(reasons),
-                periodic,
-                endpoints: seeds
-                    .iter()
-                    .map(|seed| OffsetEndpointCandidate {
-                        endpoint: seed.endpoint,
-                        position: seed.position,
-                        eligibility: OffsetEndpointEligibility::Terminal,
-                    })
-                    .collect(),
+                periodic: endpoint_span.periodic,
+                endpoints: endpoint_span.endpoints.clone(),
             });
         }
     }
     spans.sort_by_key(|candidate| candidate.span);
-    endpoint_seeds.sort_by_key(|candidate| candidate.endpoint);
-
-    let adjacencies = build_endpoint_adjacencies(&document, &activity, &endpoint_seeds);
-    let mut endpoint_degree = BTreeMap::<OffsetEndpointRef, usize>::new();
-    for adjacency in &adjacencies {
-        for endpoint in adjacency.endpoints {
-            *endpoint_degree.entry(endpoint).or_default() += 1;
-        }
-    }
-    for span in &mut spans {
-        for endpoint in &mut span.endpoints {
-            endpoint.eligibility = match endpoint_degree
-                .get(&endpoint.endpoint)
-                .copied()
-                .unwrap_or_default()
-            {
-                0 => OffsetEndpointEligibility::Terminal,
-                1 => OffsetEndpointEligibility::Joined,
-                adjacent => OffsetEndpointEligibility::Branched { adjacent },
-            };
-        }
-    }
+    let adjacencies = endpoint_topology.adjacencies;
     let span_by_id = spans
         .iter()
         .map(|candidate| (candidate.span, candidate))
@@ -649,8 +729,14 @@ fn build_endpoint_adjacencies(
     document: &SketchDocument,
     activity: &EffectiveActivity,
     seeds: &[EndpointSeed],
-) -> Vec<OffsetEndpointAdjacency> {
+    limits: Option<EndpointTopologyBuildLimits>,
+) -> Result<Vec<OffsetEndpointAdjacency>, EndpointTopologyBuildError> {
     let mut links = BTreeMap::<[OffsetEndpointRef; 2], BTreeSet<OffsetJoinOwner>>::new();
+    let mut connection_attempts = 0_usize;
+    let available_endpoints = seeds
+        .iter()
+        .map(|seed| seed.endpoint)
+        .collect::<BTreeSet<_>>();
     let mut by_point = BTreeMap::<DesignPointId, Vec<OffsetEndpointRef>>::new();
     for seed in seeds {
         if let Some(point) = seed.point {
@@ -667,12 +753,15 @@ fn build_endpoint_adjacencies(
                     endpoints[first],
                     endpoints[second],
                     OffsetJoinOwner::SharedPoint(*point),
-                );
+                    limits,
+                    &mut connection_attempts,
+                )?;
             }
         }
     }
 
-    let point_endpoints = |point: DesignPointId| by_point.get(&point).cloned().unwrap_or_default();
+    let point_endpoints =
+        |point: DesignPointId| by_point.get(&point).map_or([].as_slice(), Vec::as_slice);
     for constraint in document.constraints() {
         if !activity.is_active(constraint.id) {
             continue;
@@ -680,16 +769,32 @@ fn build_endpoint_adjacencies(
         let owner = OffsetJoinOwner::Constraint(constraint.id);
         match constraint.definition {
             DocumentConstraintDefinition::Coincident { first, second } => {
-                for first_endpoint in point_endpoints(first) {
-                    for second_endpoint in point_endpoints(second) {
-                        add_endpoint_link(&mut links, first_endpoint, second_endpoint, owner);
+                for &first_endpoint in point_endpoints(first) {
+                    for &second_endpoint in point_endpoints(second) {
+                        add_endpoint_link(
+                            &mut links,
+                            first_endpoint,
+                            second_endpoint,
+                            owner,
+                            limits,
+                            &mut connection_attempts,
+                        )?;
                     }
                 }
             }
             DocumentConstraintDefinition::PointOnCurve { point, contact } => {
-                if let Some(curve_endpoint) = endpoint_for_contact(document, seeds, contact) {
-                    for point_endpoint in point_endpoints(point) {
-                        add_endpoint_link(&mut links, point_endpoint, curve_endpoint, owner);
+                if let Some(curve_endpoint) =
+                    endpoint_for_contact(document, &available_endpoints, contact)
+                {
+                    for &point_endpoint in point_endpoints(point) {
+                        add_endpoint_link(
+                            &mut links,
+                            point_endpoint,
+                            curve_endpoint,
+                            owner,
+                            limits,
+                            &mut connection_attempts,
+                        )?;
                     }
                 }
             }
@@ -705,11 +810,18 @@ fn build_endpoint_adjacencies(
                         FeatureEndpoint::End => OffsetEndpointRole::End,
                     },
                 };
-                if seeds.iter().any(|seed| seed.endpoint == line_endpoint)
+                if available_endpoints.contains(&line_endpoint)
                     && let Some(curve_endpoint) =
-                        endpoint_for_contact(document, seeds, curve_contact)
+                        endpoint_for_contact(document, &available_endpoints, curve_contact)
                 {
-                    add_endpoint_link(&mut links, line_endpoint, curve_endpoint, owner);
+                    add_endpoint_link(
+                        &mut links,
+                        line_endpoint,
+                        curve_endpoint,
+                        owner,
+                        limits,
+                        &mut connection_attempts,
+                    )?;
                 }
             }
             DocumentConstraintDefinition::LineCircleTangency {
@@ -736,22 +848,29 @@ fn build_endpoint_adjacencies(
                 ..
             } => {
                 if let (Some(first), Some(second)) = (
-                    endpoint_for_contact(document, seeds, line_contact),
-                    endpoint_for_contact(document, seeds, circle_contact),
+                    endpoint_for_contact(document, &available_endpoints, line_contact),
+                    endpoint_for_contact(document, &available_endpoints, circle_contact),
                 ) {
-                    add_endpoint_link(&mut links, first, second, owner);
+                    add_endpoint_link(
+                        &mut links,
+                        first,
+                        second,
+                        owner,
+                        limits,
+                        &mut connection_attempts,
+                    )?;
                 }
             }
             _ => {}
         }
     }
-    links
+    Ok(links
         .into_iter()
         .map(|(endpoints, owners)| OffsetEndpointAdjacency {
             endpoints,
             owners: owners.into_iter().collect(),
         })
-        .collect()
+        .collect())
 }
 
 fn add_endpoint_link(
@@ -759,21 +878,46 @@ fn add_endpoint_link(
     first: OffsetEndpointRef,
     second: OffsetEndpointRef,
     owner: OffsetJoinOwner,
-) {
+    limits: Option<EndpointTopologyBuildLimits>,
+    connection_attempts: &mut usize,
+) -> Result<(), EndpointTopologyBuildError> {
+    if let Some(limits) = limits
+        && *connection_attempts >= limits.max_connection_attempts
+    {
+        return Err(EndpointTopologyBuildError::ResourceLimit {
+            resource: "endpoint topology connection attempts",
+            actual: connection_attempts.saturating_add(1),
+            limit: limits.max_connection_attempts,
+        });
+    }
+    *connection_attempts = connection_attempts.saturating_add(1);
     if first == second {
-        return;
+        return Ok(());
     }
     let endpoints = if first < second {
         [first, second]
     } else {
         [second, first]
     };
+    if !links.contains_key(&endpoints)
+        && limits.is_some_and(|limits| links.len() >= limits.max_adjacencies)
+    {
+        let limit = limits
+            .expect("checked limited adjacency catalog")
+            .max_adjacencies;
+        return Err(EndpointTopologyBuildError::ResourceLimit {
+            resource: "endpoint topology adjacencies",
+            actual: links.len().saturating_add(1),
+            limit,
+        });
+    }
     links.entry(endpoints).or_default().insert(owner);
+    Ok(())
 }
 
 fn endpoint_for_contact(
     document: &SketchDocument,
-    seeds: &[EndpointSeed],
+    available_endpoints: &BTreeSet<OffsetEndpointRef>,
     contact_id: geosolve_sketch::ContactId,
 ) -> Option<OffsetEndpointRef> {
     let contact = document.contact(contact_id)?;
@@ -798,9 +942,8 @@ fn endpoint_for_contact(
         span: contact.curve,
         endpoint,
     };
-    seeds
-        .iter()
-        .any(|seed| seed.endpoint == reference)
+    available_endpoints
+        .contains(&reference)
         .then_some(reference)
 }
 

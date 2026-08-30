@@ -2,7 +2,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use geosolve_constraint_editor::{ComputedCornerRef, IntentNativeBinding};
+use geosolve_constraint_editor::{
+    ComputedCornerRef, ComputedFeatureEvaluationState, IntentNativeBinding,
+};
 use geosolve_sketch::{
     CurveDefinition, DocumentConstraintDefinition, DocumentDimensionDefinition,
     DocumentDimensionMode, DocumentId, GeometryRole, PersistentId,
@@ -11,9 +13,9 @@ use geosolve_sketch_code::{
     CodeCompositionError, CodeHostRequest, CodeInteractionOverlay, CodePointSeedSource,
     CodeProject, CodeProjectDemo, CodeProjectDemoId, ExpandedCodeProject, ExpandedSemanticTarget,
     FeatureKind, GeneratedMemberAddress, KeyedReconcileState, ManagedValue,
-    MaterializedCodeProject, SemanticSymbol, bundled_code_project_demos,
-    materialize_code_project_cold, materialize_code_project_incremental,
-    materialize_code_project_incremental_with_overlay,
+    MaterializedCodeProject, SemanticSymbol, bundled_code_project_demos, expand_code_project,
+    materialize_code_project_cold, materialize_code_project_cold_with_overlay,
+    materialize_code_project_incremental, materialize_code_project_incremental_with_overlay,
     materialize_code_project_incremental_with_overlay_audited, parse_managed_source,
     rehydrate_materialized_code_project, required_generated_members,
     rounded_polyline_member_addresses,
@@ -22,7 +24,7 @@ use geosolve_sketch_intent::{
     AggregateKind, DimensionKind, InputRole, InputSlot, IntentFieldKey, IntentKey, IntentLiteral,
     IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
     IntentPlanDisposition, IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector,
-    IntentReservation, IntentSessionId, NodeId, PatchPortRef, PortId, ReservationId,
+    IntentReservation, IntentSession, IntentSessionId, NodeId, PatchPortRef, PortId, ReservationId,
     intent_content_digest,
 };
 
@@ -119,6 +121,9 @@ fn expected_demo_inventory(demo: CodeProjectDemoId) -> DemoInventory {
         CodeProjectDemoId::CompassRose => (9, 12, 14, 5, 12, 4, 0, 0, 0),
         CodeProjectDemoId::NeonManifold => (9, 4, 9, 5, 4, 4, 0, 1, 6),
         CodeProjectDemoId::PcWaterManifold => (138, 82, 20, 53, 58, 58, 6, 6, 15),
+        CodeProjectDemoId::RoboticRoutingBoard => (76, 317, 25, 104, 176, 41, 64, 64, 136),
+        CodeProjectDemoId::CncJoineryFitCoupon => (62, 69, 14, 29, 47, 36, 10, 10, 23),
+        CodeProjectDemoId::GridfinityBinSection => (62, 66, 3, 31, 36, 31, 4, 4, 11),
     }
 }
 
@@ -355,6 +360,46 @@ fn all_bundled_code_projects_materialize_through_native_authority() {
                 "each adaptive channel corner owns one current native Fillet"
             );
         }
+        if demo.id == CodeProjectDemoId::RoboticRoutingBoard {
+            let fixed_points = document
+                .constraints()
+                .iter()
+                .filter(|constraint| {
+                    matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::FixedPoint { .. }
+                    )
+                })
+                .count();
+            let fixed_coordinates = document
+                .constraints()
+                .iter()
+                .filter(|constraint| {
+                    matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::FixedCoordinate { .. }
+                    )
+                })
+                .count();
+            assert_eq!(
+                fixed_points, 37,
+                "board, bores, connector banks, and all route endpoints are anchored",
+            );
+            assert_eq!(
+                fixed_coordinates, 0,
+                "interior harness vertices retain ordinary solver-instance mobility",
+            );
+            assert_eq!(
+                accepted.computed.feature_evaluations().len(),
+                64,
+                "eight ten-vertex open routes own eight interior Fillets each",
+            );
+            assert_eq!(
+                accepted.computed.edges().len(),
+                136,
+                "64 Fillet arcs plus 72 retained route fragments stay current",
+            );
+        }
         if demo.id == CodeProjectDemoId::MountingPlate {
             assert_eq!(materialized.host_outputs.values().next().unwrap().len(), 4);
         }
@@ -367,6 +412,142 @@ fn all_bundled_code_projects_materialize_through_native_authority() {
             );
         }
     }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one transaction regression keeps batched creation, suppression, and history-neutral reuse evidence adjacent"
+)]
+fn routing_board_batches_sixty_four_fillets_and_suppression_before_history_neutral_reuse() {
+    let project = bundled_code_project_demos()
+        .into_iter()
+        .find(|demo| demo.id == CodeProjectDemoId::RoboticRoutingBoard)
+        .unwrap()
+        .project();
+    let generated = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let expansion_intent = IntentSession::with_id(IntentSessionId::from_raw(0x87_2100)).unwrap();
+    let expansion = expand_code_project(&project, &generated, expansion_intent.identity()).unwrap();
+    assert_eq!(expansion.generated_children.len(), 64);
+
+    let suppressed_children = expansion
+        .generated_children
+        .iter()
+        .step_by(8)
+        .map(|child| child.address.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(suppressed_children.len(), 8);
+    let mut overlay = CodeInteractionOverlay::empty();
+    for address in &suppressed_children {
+        overlay
+            .set_generated_child_suppressed(address.clone(), true)
+            .unwrap();
+    }
+
+    let before = materialize_code_project_cold_with_overlay(
+        &project,
+        &generated,
+        &overlay,
+        IntentSessionId::from_raw(0x87_2101),
+        DocumentId(PersistentId::from_u128(0x87_2101)),
+        1.0,
+    )
+    .unwrap();
+    let intent = before.editor.coordinator().intent();
+    assert_eq!(
+        intent.identity().revision.raw(),
+        before.base_outcome.identity.revision.raw() + 2,
+        "64 host creations and eight suppressions must consume one accepted generation each",
+    );
+    assert_eq!(
+        intent.undo_len(),
+        3,
+        "base, batched host creation, and batched suppression are the only cold history rows",
+    );
+    assert_eq!(intent.redo_len(), 0);
+    assert_eq!(before.host_outputs.len(), 64);
+    assert!(
+        before
+            .host_outputs
+            .values()
+            .all(|outputs| outputs.len() == 1),
+    );
+    assert_eq!(
+        before
+            .expansion
+            .generated_children
+            .iter()
+            .filter(|child| child.suppressed)
+            .count(),
+        8,
+    );
+    let accepted = before
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    assert_eq!(accepted.features.features().len(), 64);
+    assert_eq!(
+        accepted
+            .features
+            .features()
+            .iter()
+            .filter(|feature| feature.suppressed)
+            .count(),
+        8,
+    );
+    assert_eq!(
+        accepted
+            .computed
+            .feature_evaluations()
+            .iter()
+            .filter(|evaluation| matches!(
+                &evaluation.state,
+                ComputedFeatureEvaluationState::Current { .. }
+            ))
+            .count(),
+        56,
+    );
+    assert_eq!(
+        accepted
+            .computed
+            .feature_evaluations()
+            .iter()
+            .filter(|evaluation| matches!(
+                &evaluation.state,
+                ComputedFeatureEvaluationState::Suppressed
+            ))
+            .count(),
+        8,
+    );
+    assert_valid_native_authority(&before, 64);
+
+    let identity_before = intent.identity();
+    let semantic_identity_before = intent.semantic_identity();
+    let hosts_before = host_native_identities(&before);
+    assert_eq!(hosts_before.len(), 64);
+    let audited = materialize_code_project_incremental_with_overlay_audited(
+        &before, &project, &generated, &overlay,
+    );
+    assert_eq!(audited.work.managed_parse_attempts(), 0);
+    assert_eq!(audited.work.expansion_attempts(), 1);
+    assert_eq!(audited.work.accepted_publications(), 0);
+    let after = audited.outcome.unwrap();
+    let intent_after = after.editor.coordinator().intent();
+    assert_eq!(intent_after.identity().session, identity_before.session);
+    assert_eq!(intent_after.identity().revision, identity_before.revision);
+    assert_eq!(intent_after.semantic_identity(), semantic_identity_before);
+    assert_eq!(host_native_identities(&after), hosts_before);
+    assert_eq!(after.editor.coordinator().intent().undo_len(), 0);
+    assert_eq!(after.editor.coordinator().intent().redo_len(), 0);
+    assert_eq!(after.base_outcome.identity, intent_after.identity());
+    assert_valid_native_authority(&after, 64);
 }
 
 #[test]

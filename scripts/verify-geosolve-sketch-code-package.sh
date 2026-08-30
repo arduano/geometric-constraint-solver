@@ -12,11 +12,20 @@ package_id="$(cargo pkgid -p "$package_name")"
 package_version="${package_id##*#}"
 package_version="${package_version##*@}"
 archive="$repo_root/target/package/$package_name-$package_version.crate"
-staging_dir="$(mktemp -d /tmp/geosolve-sketch-code-package.XXXXXX)"
+staging_parent="${TMPDIR:-/tmp}"
+case "$staging_parent" in
+  /*) ;;
+  *)
+    echo "TMPDIR must be an absolute path: $staging_parent" >&2
+    exit 1
+    ;;
+esac
+staging_parent="$(cd "$staging_parent" && pwd -P)"
+staging_dir="$(mktemp -d "$staging_parent/geosolve-sketch-code-package.XXXXXX")"
 
 cleanup() {
   case "$staging_dir" in
-    /tmp/geosolve-sketch-code-package.*) rm -rf -- "$staging_dir" ;;
+    "$staging_parent"/geosolve-sketch-code-package.*) rm -rf -- "$staging_dir" ;;
     *) return 1 ;;
   esac
 }
@@ -27,16 +36,24 @@ for required in \
   assets/artifacts/adaptive-lanterns.artifact.json \
   assets/artifacts/bridge-cables.artifact.json \
   assets/artifacts/compass-core.artifact.json \
+  assets/artifacts/corner-reliefs.artifact.json \
   assets/artifacts/cross-brace.artifact.json \
   assets/artifacts/fillet-record.artifact.json \
+  assets/artifacts/harness-route.artifact.json \
   assets/artifacts/mounting-plate.artifact.json \
   assets/artifacts/round-every-corner.artifact.json \
   assets/artifacts/water-channel.artifact.json \
+  assets/demos/cnc-joinery-fit-coupon.sketch.ts \
+  assets/demos/gridfinity-1x1x3-section.NOTICE.md \
+  assets/demos/gridfinity-1x1x3-section.sketch.ts \
   assets/demos/pc-water-manifold.sketch.ts \
+  assets/demos/robotic-routing-board.sketch.ts \
   assets/patches/adaptive-lanterns.patch.ts \
   assets/patches/braced-frame.patch.ts \
   assets/patches/bridge-cables.patch.ts \
   assets/patches/compass-core.patch.ts \
+  assets/patches/corner-reliefs.patch.ts \
+  assets/patches/harness-route.patch.ts \
   assets/patches/mounting-plate.patch.ts \
   assets/patches/rounded-polyline.patch.ts \
   assets/patches/typed-panel.patch.ts \

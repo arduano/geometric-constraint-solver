@@ -9,6 +9,8 @@ wildcards = "allow"
 allow = [
     "0BSD",
     "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
     "GPL-3.0-or-later",
     "MIT",
     "Unicode-3.0",

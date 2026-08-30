@@ -8,8 +8,8 @@ use thiserror::Error;
 use crate::{
     AuthoringDeclaration, AuthoringProgram, ManagedDiagnostic, ManagedDiagnosticCode,
     ManagedDocument, ManagedImport, ManagedOrganization, ManagedOutput, ManagedOwnedSpan,
-    ManagedOwnedSpanKind, ManagedPathSegment, ManagedSpan, ManagedValue, ManagedValueOwnedSpan,
-    PatchInvocation, SemanticOutputPath, SemanticSymbol, UnitLiteral,
+    ManagedOwnedSpanKind, ManagedPathSegment, ManagedScalarBinding, ManagedSpan, ManagedValue,
+    ManagedValueOwnedSpan, PatchInvocation, SemanticOutputPath, SemanticSymbol, UnitLiteral,
 };
 
 /// Maximum admitted byte length of the GUI-managed TypeScript file.
@@ -263,7 +263,9 @@ struct Parser<'a> {
     imports: Vec<ManagedImport>,
     imported_bindings: BTreeSet<String>,
     declarations: Vec<AuthoringDeclaration>,
+    scalar_binding_definitions: Vec<ManagedScalarBinding>,
     declared: BTreeMap<String, SemanticSymbol>,
+    scalar_bindings: BTreeSet<SemanticSymbol>,
     symbols: BTreeSet<SemanticSymbol>,
     organizations: Vec<ManagedOrganization>,
     outputs: Vec<ManagedOutput>,
@@ -286,7 +288,9 @@ impl<'a> Parser<'a> {
             imports: Vec::new(),
             imported_bindings: BTreeSet::new(),
             declarations: Vec::new(),
+            scalar_binding_definitions: Vec::new(),
             declared: BTreeMap::new(),
+            scalar_bindings: BTreeSet::new(),
             symbols: BTreeSet::new(),
             organizations: Vec::new(),
             outputs: Vec::new(),
@@ -415,6 +419,7 @@ impl<'a> Parser<'a> {
             source_digest: digest,
             imports: self.imports,
             program: AuthoringProgram {
+                scalar_bindings: self.scalar_binding_definitions,
                 declarations: self.declarations,
                 organizations: self.organizations,
                 outputs: self.outputs,
@@ -474,7 +479,10 @@ impl<'a> Parser<'a> {
     fn parse_declaration(&mut self) -> Result<(), ManagedParseError> {
         let statement_start = self.position;
         self.expect_keyword("const", ManagedDiagnosticCode::UnexpectedToken)?;
+        self.skip_trivia()?;
+        let variable_start = self.position;
         let variable = self.parse_identifier(ManagedDiagnosticCode::UnexpectedToken)?;
+        let variable_span = ManagedSpan::new(variable_start, self.position);
         if self.declared.contains_key(&variable) {
             return self.fail(
                 ManagedDiagnosticCode::DuplicateSymbol,
@@ -483,6 +491,10 @@ impl<'a> Parser<'a> {
             );
         }
         self.expect_punct('=', ManagedDiagnosticCode::UnexpectedToken)?;
+        self.skip_trivia()?;
+        if !self.remaining().starts_with('$') {
+            return self.parse_scalar_binding(statement_start, variable, variable_span);
+        }
         self.expect_punct('$', ManagedDiagnosticCode::UnexpectedToken)?;
         self.expect_punct('.', ManagedDiagnosticCode::UnexpectedToken)?;
         let mut builder_path = vec![self.parse_identifier(ManagedDiagnosticCode::UnexpectedToken)?];
@@ -543,6 +555,52 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    /// Parses the one expression-free lexical sharing form admitted by
+    /// managed-v1. The right-hand side is deliberately a finite numeric or
+    /// unit literal, never a reference or general TypeScript expression, so
+    /// Rust can authenticate its single source span without evaluating code.
+    fn parse_scalar_binding(
+        &mut self,
+        statement_start: usize,
+        variable: String,
+        variable_span: ManagedSpan,
+    ) -> Result<(), ManagedParseError> {
+        let symbol = SemanticSymbol(variable.clone());
+        if !self.symbols.insert(symbol.clone()) {
+            return self.fail(
+                ManagedDiagnosticCode::DuplicateSymbol,
+                format!("duplicate stable semantic symbol `{}`", symbol.0),
+                variable_span,
+            );
+        }
+        let (arguments, arguments_span) = self.parse_value(&symbol)?;
+        if !matches!(arguments, ManagedValue::Number(_) | ManagedValue::Unit(_)) {
+            return self.fail(
+                ManagedDiagnosticCode::UnsupportedSyntax,
+                "lexical managed bindings accept only one finite numeric or unit literal",
+                arguments_span,
+            );
+        }
+        self.expect_punct(';', ManagedDiagnosticCode::UnexpectedToken)?;
+        let statement_span = ManagedSpan::new(statement_start, self.position);
+        self.owned.extend([
+            (ManagedOwnedSpanKind::Declaration, statement_span),
+            (ManagedOwnedSpanKind::Symbol, variable_span),
+            (ManagedOwnedSpanKind::Arguments, arguments_span),
+        ]);
+        self.declared.insert(variable.clone(), symbol.clone());
+        self.scalar_bindings.insert(symbol.clone());
+        self.scalar_binding_definitions.push(ManagedScalarBinding {
+            variable,
+            symbol,
+            value: arguments,
+            statement_span,
+            symbol_span: variable_span,
+            value_span: arguments_span,
+        });
+        Ok(())
+    }
+
     fn parse_organization(&mut self) -> Result<(), ManagedParseError> {
         let start = self.position;
         self.expect_exact("$.organize", ManagedDiagnosticCode::UnexpectedToken)?;
@@ -564,6 +622,11 @@ impl<'a> Parser<'a> {
                     self.point_span(),
                 );
             };
+            if self.scalar_bindings.contains(symbol) {
+                return self.unsupported(
+                    "lexical managed bindings cannot be placed in sketch organizations",
+                );
+            }
             declarations.push(symbol.clone());
             if self.consume_punct(',')? {
                 continue;
@@ -615,6 +678,10 @@ impl<'a> Parser<'a> {
                 };
                 (symbol.clone(), SemanticOutputPath::default())
             };
+            if self.scalar_bindings.contains(&declaration) {
+                return self
+                    .unsupported("lexical managed bindings cannot be published as sketch outputs");
+            }
             self.outputs.push(ManagedOutput {
                 name,
                 declaration,
@@ -859,6 +926,9 @@ impl<'a> Parser<'a> {
             } else {
                 break;
             }
+        }
+        if self.scalar_bindings.contains(&symbol) && !path.is_empty() {
+            return self.unsupported("lexical managed scalar references cannot have a child path");
         }
         Ok((symbol, SemanticOutputPath(path)))
     }
@@ -1230,6 +1300,96 @@ export default sketch(($) => {
             ]
         );
         assert!(document.owned_spans.len() > 12);
+    }
+
+    #[test]
+    fn lexical_numeric_binding_owns_one_literal_and_only_feeds_later_arguments() {
+        let source = r#""use geosolve managed-v1";
+import { sketch, mm } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const sharedRadius = mm(5);
+  const circle = $.geometry.circle("circle", {
+    center: [0, 0],
+    radius: sharedRadius,
+  });
+  return $.outputs({ circle });
+});
+"#;
+        let document = parse_managed_source(source).unwrap();
+        let [binding] = document.program.scalar_bindings.as_slice() else {
+            panic!("one lexical binding expected")
+        };
+        let [circle] = document.program.declarations.as_slice() else {
+            panic!("one native declaration expected")
+        };
+        assert_eq!(binding.variable, "sharedRadius");
+        assert_eq!(binding.symbol.0, "sharedRadius");
+        assert_eq!(
+            &document.source[binding.symbol_span.start..binding.symbol_span.end],
+            "sharedRadius"
+        );
+        assert_eq!(
+            &document.source[binding.value_span.start..binding.value_span.end],
+            "mm(5)"
+        );
+        assert!(matches!(
+            &circle.arguments,
+            ManagedValue::Object(arguments)
+                if matches!(
+                    arguments.get("radius"),
+                    Some(ManagedValue::Reference { declaration, path })
+                        if declaration == &binding.symbol && path.0.is_empty()
+                )
+        ));
+        let binding_values = document
+            .value_owned_spans
+            .iter()
+            .filter(|owned| owned.declaration == binding.symbol)
+            .collect::<Vec<_>>();
+        assert_eq!(binding_values.len(), 1);
+        assert!(binding_values[0].path.0.is_empty());
+        assert_eq!(
+            &document.source[binding_values[0].span.start..binding_values[0].span.end],
+            "mm(5)"
+        );
+    }
+
+    #[test]
+    fn lexical_binding_rejects_expressions_aliases_paths_and_publication() {
+        let source = |binding: &str, use_site: &str, output: &str| {
+            format!(
+                concat!(
+                    "\"use geosolve managed-v1\";\n",
+                    "import {{ sketch, mm }} from \"@geosolve/sketch-code\";\n",
+                    "export default sketch(($) => {{\n",
+                    "  {}\n",
+                    "  const circle = $.geometry.circle(\"circle\", ",
+                    "{{ center: [0, 0], radius: {} }});\n",
+                    "  return $.outputs({{ {} }});\n",
+                    "}});\n"
+                ),
+                binding, use_site, output,
+            )
+        };
+        for candidate in [
+            source("const radius = true;", "radius", "circle"),
+            source(
+                "const base = mm(5);\n  const radius = base;",
+                "radius",
+                "circle",
+            ),
+            source("const radius = mm(5);", "radius.value", "circle"),
+            source("const radius = mm(5);", "radius", "radius"),
+        ] {
+            assert_eq!(
+                parse_managed_source(&candidate)
+                    .unwrap_err()
+                    .diagnostic
+                    .code,
+                ManagedDiagnosticCode::UnsupportedSyntax
+            );
+        }
     }
 
     #[test]

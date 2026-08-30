@@ -515,6 +515,15 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-code-lenses > header { display: grid; gap: 0.08rem; }
 .wb-code-lenses > header strong { color: #d0d8d5; font-size: 0.6rem; }
 .wb-code-lenses > header span { color: #707b79; font-size: 0.49rem; }
+.wb-code-control-group {
+  display: grid;
+  gap: 0.22rem;
+}
+.wb-code-control-group > strong {
+  padding: 0.18rem 0.05rem 0;
+  color: #8e9a96;
+  font: 0.5rem ui-monospace, monospace;
+}
 .wb-code-lens {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -527,14 +536,17 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-code-lens > div { display: grid; min-width: 0; gap: 0.08rem; }
 .wb-code-lens strong { color: #c4b184; font: 0.57rem ui-monospace, monospace; }
+.wb-code-lens .wb-code-control-authority { color: #8fc3a2; font-size: 0.47rem; font-weight: 700; }
 .wb-code-lens small { overflow: hidden; color: #6e7977; font-size: 0.46rem; text-overflow: ellipsis; white-space: nowrap; }
+.wb-code-lens small code { color: #97a5a1; font: inherit; }
 .wb-code-lens button { min-height: 1.55rem; padding: 0.2rem 0.35rem; font-size: 0.5rem; }
 .wb-code-lens-control {
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
-.wb-code-lens-control input {
+.wb-code-lens-control input:not([type="checkbox"]),
+.wb-code-lens-control select {
   width: 4.6rem;
   min-height: 1.55rem;
   padding: 0.2rem 0.3rem;
@@ -544,7 +556,14 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   background: #181c1d;
   font: 0.55rem ui-monospace, monospace;
 }
-.wb-code-lens-control input:focus-visible {
+.wb-code-lens-control input[type="checkbox"] {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0;
+  accent-color: #c4a965;
+}
+.wb-code-lens-control input:focus-visible,
+.wb-code-lens-control select:focus-visible {
   outline: 2px solid #c4a965;
   outline-offset: 1px;
 }
@@ -829,6 +848,36 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-intent-inspector .wb-intent-array-item > legend { color: #94a19f; }
 .wb-intent-inspector label { display: grid; min-width: 0; gap: 0.22rem; color: #8f9b99; font-size: 0.61rem; line-height: 1.25; }
 .wb-intent-inspector label > :is(input, select) { min-width: 0; }
+.wb-intent-parameter { display: grid; min-width: 0; gap: 0.28rem; }
+.wb-intent-parameter-authority {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.28rem 0.36rem;
+  border-left: 2px solid #657171;
+  color: #96a19f;
+  background: rgb(41 48 48 / 62%);
+  font-size: 0.57rem;
+  line-height: 1.3;
+}
+.wb-intent-parameter-authority strong { color: #cad4d1; font-size: 0.59rem; }
+.wb-intent-parameter-authority small { color: #899694; overflow-wrap: anywhere; }
+.wb-intent-parameter-authority code { color: #b8cac6; font: inherit; }
+.wb-intent-parameter-authority[data-intent-parameter-authority="modifiable-source"] {
+  border-left-color: #6da584;
+}
+.wb-intent-parameter-authority[data-intent-parameter-authority="modifiable-source"] strong {
+  color: #a8d5b8;
+}
+.wb-intent-parameter-authority[data-intent-parameter-authority="modifiable-instance"] {
+  border-left-color: #6b94a2;
+}
+.wb-intent-parameter-authority[data-intent-parameter-authority="encoded"] {
+  border-left-color: #8c7861;
+}
+.wb-intent-parameter-authority[data-intent-parameter-authority="blocked"] {
+  border-left-color: #9a6b62;
+}
+.wb-intent-parameter :is([data-intent-encoded="true"], [data-intent-blocked="true"]) { opacity: 0.72; }
 .wb-intent-input { display: grid; min-width: 0; gap: 0.15rem; padding: 0.25rem 0.3rem; border-radius: 3px; background: #202526; }
 .wb-intent-input span { color: #99a5a3; font-size: 0.6rem; }
 .wb-intent-input code { overflow: hidden; color: #cfb77f; font-size: 0.58rem; text-overflow: ellipsis; white-space: nowrap; }

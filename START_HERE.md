@@ -528,6 +528,47 @@ hosted-byte verification; both M86 services are retired. M86 is complete.
 `docs/M86_IMPLEMENTATION.md` and `docs/M86_UAT.md` own the accepted contract, finding ledger and
 closeout scorecard.
 
+M87 is open. Its ADR 0042 implementation replaces property-specific code/GUI adapters with
+authenticated managed controls for code-defined non-DoF parameters and constraint state, makes
+shared generated inputs explicit, and adds a browser-free native inspect/edit/render path for
+AI-assisted authoring. Existing solver-instance point drafts stay outside code. The reported Typed
+Panel Fillet-radius Inspector path is reproduced as M87-F001 at the code expansion owner.
+`docs/M87_HANDOVER.md` is the canonical resume point for the exact dirty worktree and pending
+M87-U9/U10 visual boundary; do not reconstruct the checkpoint from chat history.
+
+The additive M87 robotic cable-harness routing-board dogfood is now the tenth bundled project. It
+composes eight keyed open routes with 80 generated clip circles and 64 generated Fillets, one pair
+of genuinely shared source controls, invocation-local overrides, solver-instance route movement
+and keyed structural insertion. Exact endpoint connectivity stays below visual-profile
+arrangement, noninteractive Fillets publish as one batched host patch, and headless rendering
+freezes deterministic report/control/scene/SVG/PNG products. Those seams remain independently
+composable; route movement does not rewrite source and control or topology work does not enter the
+renderer.
+
+A second additive dogfood amendment expands the checked-in catalog from ten to twelve projects.
+The eleventh is a 2.5D CNC-adjacent joinery fit coupon: one 120 x 140 mm female blank, three 70 mm-
+wide loose/nominal/press mortises with respective heights 18.4/18.0/17.6 mm, three 95 x 18 mm tabs,
+twelve shared-radius corner-relief circles and ten selected handling Fillets. The twelfth is a keyed
+26-point symmetric cross-section through a
+plain Gridfinity 1 x 1 x 3U bin, including its 41.5 mm outer width, 35.6 mm base bottom, staged
+4.75/7 mm base, 21 mm body, 0.95 mm walls, 4.4 mm nominal stacking lip and two floor plus two lip
+Fillets. These are design sketches only: neither introduces CAM, toolpath, cutter-compensation,
+boolean, solid-model or manufacturing-validation authority.
+
+The retained mechanical evidence includes focused CNC/Gridfinity owner qualification, cold
+materialization of all twelve bundled demos, the separately reviewed twelve-row ledger,
+renderer/headless/browser checks and the full dirty-worktree release gate at exit `0`. The
+supervising user's earlier scoped disposition remains historical acceptance of U1-U8 without a
+separate row-by-row replay; it does not accept the later manufacturing visual rows, and M87 remains
+open.
+Fresh mutable CNC/Gridfinity render bundles exist only for pending M87-U9/U10 visual review. The
+shared dirty worktree is not a clean nominated source/tree: no immutable candidate freeze, public
+deployment or service-retirement result was performed or is claimed, and the mutable Tailscale
+listener remains development infrastructure. Performance investigation is deferred to a follow-up
+milestone and M88 is not active. `docs/M87_AUDIT.md`, `docs/M87_GOALS.md`,
+`docs/M87_IMPLEMENTATION.md`, `docs/M87_HEADLESS.md`, `docs/M87_UAT.md` and ADR 0042 own the open
+boundary and evidence.
+
 ## Read first
 
 1. `AGENTS.md`
@@ -572,6 +613,12 @@ closeout scorecard.
 22. `docs/M86_HANDOVER.md`, `docs/M86_GOALS.md`, `docs/M86_IMPLEMENTATION.md` and
     `docs/M86_UAT.md` — completed, approved and publicly verified managed-dimension Inspector,
     Fillet priority, Typed Panel terminal and bounded-trace milestone.
+23. `docs/M87_HANDOVER.md`, `docs/adr/0042-managed-controls-and-headless-authoring.md`,
+    `docs/M87_AUDIT.md`, `docs/M87_GOALS.md`, `docs/M87_IMPLEMENTATION.md`,
+    `docs/M87_HEADLESS.md` and `docs/M87_UAT.md` — exact dirty-worktree resume point, open
+    managed-control/headless architecture, audited findings,
+    twelve-project dogfood, retained dirty-worktree evidence, native workflow and pending focused
+    visual-UAT record.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -1147,6 +1194,15 @@ Durable milestone and cleanup records:
 - `docs/M86_IMPLEMENTATION.md` (implemented M86-F001-F003 design and accepted UAT evidence
   ledger)
 - `docs/M86_UAT.md` (accepted M86-U1-U8 scorecard and exact public closeout)
+- `docs/adr/0042-managed-controls-and-headless-authoring.md` (accepted managed-control,
+  grouped-preview, shared-renderer and browser-free-authoring architecture decision)
+- `docs/M87_HANDOVER.md` (canonical dirty-worktree resume point and pending U9/U10 boundary)
+- `docs/M87_AUDIT.md` (completed managed-property, UX, native-render and AI-authoring audit)
+- `docs/M87_GOALS.md` (open cohesive source-backed editing, native rendering and dogfood contract)
+- `docs/M87_IMPLEMENTATION.md` (implemented component ledger, retained dirty-worktree evidence and
+  mechanically qualified two-sketch amendment record)
+- `docs/M87_HEADLESS.md` (stateless native inspect/edit/render workflow and output contract)
+- `docs/M87_UAT.md` (historical U1-U8 scoped acceptance and pending U9/U10 visual scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -9,9 +9,9 @@ use geosolve_constraint_editor::{
     ComputedCornerRef, ComputedFeatureDefinition, FeatureAuthoringCandidate,
     FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
     IntentNativeBinding, ProjectionalEditorError, ProjectionalEditorSession,
-    ProjectionalPatchOutcome, SelectionItem,
+    ProjectionalPatchOutcome, SelectionItem, projectional_fillet_patch,
 };
-use geosolve_sketch::DocumentId;
+use geosolve_sketch::{DocumentId, SketchDocument};
 use geosolve_sketch_intent::{
     DeletePolicy, InputRole, InputSlot, IntentAliasMap, IntentKey, IntentKeyError, IntentNode,
     IntentNodeDraft, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition,
@@ -48,10 +48,22 @@ struct HostMemberRequest {
     suffix: Option<String>,
 }
 
+struct PreparedHostFillet {
+    member: HostMemberRequest,
+    symbol: IntentKey,
+    candidate: FeatureAuthoringCandidate,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum OutsideDependentPolicy {
     Reject,
     CascadeInOracle,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IncrementalPatchMode {
+    Native,
+    Delegated,
 }
 
 /// A cold code project composed through the unchanged projectional editor.
@@ -524,6 +536,7 @@ pub fn materialize_code_project_incremental_for_structural_edit(
         project,
         reconciliation,
         &retained,
+        None,
         &mut CodeWorkReceipt::default(),
     )?;
     Ok((materialized, retained))
@@ -549,6 +562,7 @@ pub fn materialize_code_project_incremental_with_overlay(
         project,
         reconciliation,
         overlay,
+        None,
         &mut CodeWorkReceipt::default(),
     )
 }
@@ -571,9 +585,61 @@ pub fn materialize_code_project_incremental_with_overlay_audited(
         project,
         reconciliation,
         overlay,
+        None,
         &mut work,
     );
     AuditedCodeWork::new(outcome, work)
+}
+
+/// Incrementally materializes one semantic overlay while certifying the exact
+/// accepted numerical continuation produced by its authenticated native
+/// preview. Only the overlay contributes source edits; the continuation is a
+/// topology-checked, independently validated solve seed with no drag request.
+///
+/// # Errors
+///
+/// Returns the ordinary expansion/composition error, or rejects a foreign,
+/// topologically incompatible, or invalid accepted continuation.
+pub fn materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited(
+    previous: &MaterializedCodeProject,
+    project: &CodeProject,
+    reconciliation: &KeyedReconcileState,
+    overlay: &CodeInteractionOverlay,
+    accepted_continuation: &SketchDocument,
+) -> AuditedCodeWork<Result<MaterializedCodeProject, CodeCompositionError>> {
+    let mut work = CodeWorkReceipt::default();
+    let outcome = materialize_code_project_incremental_with_overlay_and_work(
+        previous,
+        project,
+        reconciliation,
+        overlay,
+        Some(accepted_continuation),
+        &mut work,
+    );
+    AuditedCodeWork::new(outcome, work)
+}
+
+fn apply_incremental_project_patch(
+    editor: &mut ProjectionalEditorSession,
+    patch: IntentPatch,
+    accepted_continuation: Option<&SketchDocument>,
+    mode: IncrementalPatchMode,
+) -> Result<ProjectionalPatchOutcome, CodeCompositionError> {
+    if patch.operations().is_empty() {
+        return Ok(ProjectionalPatchOutcome {
+            identity: editor.coordinator().intent().identity(),
+            disposition: IntentPlanDisposition::Accepted,
+            aliases: IntentAliasMap::default(),
+        });
+    }
+    let outcome = match (accepted_continuation, mode) {
+        (Some(continuation), _) => {
+            editor.apply_delegated_patch_with_accepted_continuation(patch, continuation)
+        }
+        (None, IncrementalPatchMode::Delegated) => editor.apply_delegated_patch(patch),
+        (None, IncrementalPatchMode::Native) => editor.apply_patch(patch),
+    };
+    outcome.map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))
 }
 
 fn materialize_code_project_incremental_with_overlay_and_work(
@@ -581,6 +647,7 @@ fn materialize_code_project_incremental_with_overlay_and_work(
     project: &CodeProject,
     reconciliation: &KeyedReconcileState,
     overlay: &CodeInteractionOverlay,
+    accepted_continuation: Option<&SketchDocument>,
     work: &mut CodeWorkReceipt,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
     validate_native_authority(&previous.editor)?;
@@ -597,7 +664,11 @@ fn materialize_code_project_incremental_with_overlay_and_work(
     let expansion =
         expand_code_project_with_overlay(project, reconciliation, overlay, cold_intent.identity())?;
     if expansion.host_requests == previous.expansion.host_requests {
-        return materialize_unchanged_host_project_incremental(previous, expansion);
+        return materialize_unchanged_host_project_incremental(
+            previous,
+            expansion,
+            accepted_continuation,
+        );
     }
 
     let desired = materialize_expanded_code_project_cold(
@@ -642,17 +713,12 @@ fn materialize_code_project_incremental_with_overlay_and_work(
         document.id(),
         document.model_scale(),
     )?;
-    let mut base_outcome = if patch.operations().is_empty() {
-        ProjectionalPatchOutcome {
-            identity: editor.coordinator().intent().identity(),
-            disposition: IntentPlanDisposition::Accepted,
-            aliases: IntentAliasMap::default(),
-        }
-    } else {
-        editor
-            .apply_patch(patch)
-            .map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))?
-    };
+    let mut base_outcome = apply_incremental_project_patch(
+        &mut editor,
+        patch,
+        accepted_continuation,
+        IncrementalPatchMode::Native,
+    )?;
     if base_outcome.disposition != IntentPlanDisposition::Accepted {
         return Err(CodeCompositionError::BaseNotAccepted);
     }
@@ -701,6 +767,7 @@ fn materialize_code_project_incremental_with_overlay_and_work(
 fn materialize_unchanged_host_project_incremental(
     previous: &MaterializedCodeProject,
     expansion: ExpandedCodeProject,
+    accepted_continuation: Option<&SketchDocument>,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
     let replacement_slots = detached_reference_replacement_slots(&previous.expansion, &expansion);
     let previous_symbols = materialized_project_symbols(previous)?;
@@ -718,17 +785,12 @@ fn materialize_unchanged_host_project_incremental(
         OutsideDependentPolicy::Reject,
     )?;
 
-    let mut base_outcome = if patch.operations().is_empty() {
-        ProjectionalPatchOutcome {
-            identity: editor.coordinator().intent().identity(),
-            disposition: IntentPlanDisposition::Accepted,
-            aliases: IntentAliasMap::default(),
-        }
-    } else {
-        editor
-            .apply_delegated_patch(patch)
-            .map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))?
-    };
+    let mut base_outcome = apply_incremental_project_patch(
+        &mut editor,
+        patch,
+        accepted_continuation,
+        IncrementalPatchMode::Delegated,
+    )?;
     if base_outcome.disposition != IntentPlanDisposition::Accepted {
         return Err(CodeCompositionError::BaseNotAccepted);
     }
@@ -1324,45 +1386,174 @@ fn materialize_host_requests(
     aliases: &IntentAliasMap,
     requests: &[CodeHostRequest],
 ) -> Result<BTreeMap<GeneratedMemberAddress, Vec<MaterializedFilletOutput>>, CodeCompositionError> {
-    let mut host_outputs = BTreeMap::new();
-    for request in requests {
-        match request {
-            CodeHostRequest::FilletAtCorner(request) => {
-                let output = materialize_fillet_request(editor, aliases, request, None)?;
-                insert_host_output(&mut host_outputs, &request.output, vec![output])?;
-            }
-            CodeHostRequest::RoundedRectangleProfile {
-                output,
-                identity,
-                radius,
-                corners,
-                suppressed_children,
-                ..
-            } => {
-                let mut outputs = Vec::with_capacity(corners.len());
-                for (key, corner) in corners {
-                    let request = KeyedFilletHostRequest {
-                        invocation: crate::SemanticSymbol(format!("{}.{}", output.invocation, key)),
-                        member_key: vec![key.clone()],
-                        output: output.clone(),
-                        identity: *identity,
-                        radius: radius.clone(),
-                        corner: corner.clone(),
-                        artifact_digest: String::new(),
-                        suppressed: suppressed_children.contains(key),
-                    };
-                    outputs.push(materialize_fillet_request(
-                        editor,
-                        aliases,
-                        &request,
-                        Some(key),
-                    )?);
-                }
-                insert_host_output(&mut host_outputs, output, outputs)?;
-            }
-        }
+    let members = expand_host_members(requests)?;
+    if members.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+
+    let candidates = prepare_host_fillet_candidates(editor, aliases, &members)?;
+    let publication = publish_host_fillet_batch(editor, &candidates)?;
+    suppress_host_fillet_batch(editor, &candidates, &publication.aliases)?;
+    collect_materialized_host_outputs(editor, &candidates)
+}
+
+fn prepare_host_fillet_candidates(
+    editor: &ProjectionalEditorSession,
+    aliases: &IntentAliasMap,
+    members: &BTreeMap<HostMemberKey, HostMemberRequest>,
+) -> Result<Vec<PreparedHostFillet>, CodeCompositionError> {
+    let mut candidates = Vec::with_capacity(members.len());
+    for member in members.values() {
+        let symbol = host_symbol(
+            &member.key.address,
+            member.request.identity,
+            member.suffix.as_deref(),
+        )?;
+        let candidate = prepare_fillet_candidate(editor, aliases, &member.request)?;
+        candidates.push(PreparedHostFillet {
+            member: member.clone(),
+            symbol,
+            candidate,
+        });
+    }
+    Ok(candidates)
+}
+
+fn publish_host_fillet_batch(
+    editor: &mut ProjectionalEditorSession,
+    candidates: &[PreparedHostFillet],
+) -> Result<ProjectionalPatchOutcome, CodeCompositionError> {
+    // Candidate construction remains the ordinary exact native Fillet owner,
+    // but a non-interactive code project has no reason to materialize and then
+    // discard one history-free preview per corner. Every candidate is stamped
+    // against this same accepted base before one unordered atomic patch asks
+    // the native solver to validate the complete host set once.
+    let expected = editor.coordinator().intent().identity();
+    let accepted = editor
+        .coordinator()
+        .accepted_materialization()
+        .ok_or(CodeCompositionError::BaseNotAccepted)?;
+    let accepted_state = accepted
+        .session
+        .accepted_state_for_current_input()
+        .ok_or(CodeCompositionError::BaseNotAccepted)?;
+    let accepted_input = accepted
+        .session
+        .accepted_prepared_input()
+        .ok_or(CodeCompositionError::BaseNotAccepted)?;
+    let mut operations = Vec::with_capacity(candidates.len());
+    for (ordinal, prepared) in candidates.iter().enumerate() {
+        let translated = projectional_fillet_patch(
+            expected,
+            editor.coordinator().intent(),
+            &accepted.ownership,
+            accepted_input,
+            accepted_state.identity(),
+            prepared.symbol.clone(),
+            &prepared.candidate,
+        )
+        .map_err(|error| CodeCompositionError::HostEditor {
+            member: prepared.member.key.address.display_path(),
+            diagnostic: error.to_string(),
+        })?;
+        let [operation] = translated.patch.operations() else {
+            return Err(CodeCompositionError::HostOwnershipMismatch {
+                member: prepared.member.key.address.display_path(),
+            });
+        };
+        let mut operation = operation.clone();
+        let IntentPatchOperation::CreateNode { alias, .. } = &mut operation else {
+            return Err(CodeCompositionError::HostOwnershipMismatch {
+                member: prepared.member.key.address.display_path(),
+            });
+        };
+        *alias = host_fillet_batch_alias(ordinal)?;
+        operations.push(operation);
+    }
+    let outcome = editor
+        .apply_patch(IntentPatch::new(
+            expected,
+            IntentPatchPolicy::RequireAccepted,
+            operations,
+        ))
+        .map_err(|error| CodeCompositionError::HostEditor {
+            member: "batched generated Fillets".into(),
+            diagnostic: error.to_string(),
+        })?;
+    if outcome.disposition != IntentPlanDisposition::Accepted {
+        return Err(CodeCompositionError::HostOwnershipMismatch {
+            member: "batched generated Fillets".into(),
+        });
+    }
+    Ok(outcome)
+}
+
+fn suppress_host_fillet_batch(
+    editor: &mut ProjectionalEditorSession,
+    candidates: &[PreparedHostFillet],
+    publication_aliases: &IntentAliasMap,
+) -> Result<(), CodeCompositionError> {
+    let operations = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, prepared)| prepared.member.request.suppressed)
+        .map(|(ordinal, _)| {
+            let alias = host_fillet_batch_alias(ordinal)?;
+            publication_aliases
+                .node(&alias)
+                .map(|node| IntentPatchOperation::SetSuppressed {
+                    node,
+                    suppressed: true,
+                })
+                .ok_or_else(|| CodeCompositionError::HostOwnershipMismatch {
+                    member: alias.to_string(),
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if operations.is_empty() {
+        return Ok(());
+    }
+    let suppression = editor
+        .apply_patch(IntentPatch::new(
+            editor.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            operations,
+        ))
+        .map_err(|error| CodeCompositionError::HostEditor {
+            member: "batched generated Fillet suppression".into(),
+            diagnostic: error.to_string(),
+        })?;
+    if suppression.disposition != IntentPlanDisposition::Accepted {
+        return Err(CodeCompositionError::HostOwnershipMismatch {
+            member: "batched generated Fillet suppression".into(),
+        });
+    }
+    Ok(())
+}
+
+fn collect_materialized_host_outputs(
+    editor: &ProjectionalEditorSession,
+    candidates: &[PreparedHostFillet],
+) -> Result<BTreeMap<GeneratedMemberAddress, Vec<MaterializedFilletOutput>>, CodeCompositionError> {
+    let mut host_outputs = BTreeMap::<GeneratedMemberAddress, Vec<MaterializedFilletOutput>>::new();
+    for prepared in candidates {
+        host_outputs
+            .entry(prepared.member.key.address.clone())
+            .or_default()
+            .push(materialized_fillet_output(
+                editor,
+                &prepared.symbol,
+                &prepared.member.request,
+            )?);
+    }
+    for outputs in host_outputs.values_mut() {
+        outputs.sort_by(|left, right| left.member_key.cmp(&right.member_key));
     }
     Ok(host_outputs)
+}
+
+fn host_fillet_batch_alias(ordinal: usize) -> Result<IntentKey, IntentKeyError> {
+    IntentKey::new(format!("code-host-fillet-batch-{ordinal:04x}"))
 }
 
 fn draft_from_materialized_node(
@@ -1661,85 +1852,44 @@ fn validate_native_authority(
     Ok(())
 }
 
-fn materialize_fillet_request(
-    editor: &mut ProjectionalEditorSession,
-    aliases: &IntentAliasMap,
-    request: &KeyedFilletHostRequest,
-    suffix: Option<&str>,
-) -> Result<MaterializedFilletOutput, CodeCompositionError> {
-    let symbol = host_symbol(&request.output, request.identity, suffix)?;
-    let label = request.output.display_path();
-    let (mut state, _) = prepare_fillet_candidate(editor, aliases, request, symbol.clone())?;
-    let outcome = editor
-        .apply_computed_fillet_preview(&mut state, symbol.clone())
-        .map_err(|error| CodeCompositionError::HostEditor {
-            member: label.clone(),
-            diagnostic: error.to_string(),
-        })?;
-    if outcome.disposition != IntentPlanDisposition::Accepted {
-        return Err(CodeCompositionError::HostOwnershipMismatch { member: label });
-    }
-    if request.suppressed {
-        let node = editor
-            .coordinator()
-            .intent()
-            .graph()
-            .node_by_symbol(&symbol)
-            .ok_or_else(|| CodeCompositionError::HostOwnershipMismatch {
-                member: request.output.display_path(),
-            })?
-            .id;
-        let suppression = IntentPatch::new(
-            editor.coordinator().intent().identity(),
-            IntentPatchPolicy::RequireAccepted,
-            vec![IntentPatchOperation::SetSuppressed {
-                node,
-                suppressed: true,
-            }],
-        );
-        let outcome =
-            editor
-                .apply_patch(suppression)
-                .map_err(|error| CodeCompositionError::HostEditor {
-                    member: request.output.display_path(),
-                    diagnostic: error.to_string(),
-                })?;
-        if outcome.disposition != IntentPlanDisposition::Accepted {
-            return Err(CodeCompositionError::HostOwnershipMismatch {
-                member: request.output.display_path(),
-            });
-        }
-    }
-    materialized_fillet_output(editor, &symbol, request)
-}
-
 fn prepare_fillet_candidate(
-    editor: &mut ProjectionalEditorSession,
+    editor: &ProjectionalEditorSession,
     aliases: &IntentAliasMap,
     request: &KeyedFilletHostRequest,
-    preview_symbol: IntentKey,
-) -> Result<(FeatureAuthoringState, FeatureAuthoringCandidate), CodeCompositionError> {
+) -> Result<FeatureAuthoringCandidate, CodeCompositionError> {
     let (_, incoming, outgoing) = resolve_corner(editor, aliases, &request.corner)?;
     let label = request.output.display_path();
+    let snapshot =
+        editor
+            .feature_authoring_snapshot()
+            .map_err(|error| CodeCompositionError::HostEditor {
+                member: label.clone(),
+                diagnostic: error.to_string(),
+            })?;
+    let document = snapshot.sketch_document().clone();
     let mut state = FeatureAuthoringState::default();
-    let outcome = editor
-        .activate_feature_authoring(
-            &mut state,
-            FeatureAuthoringTool::Fillet,
-            FeatureAuthoringOptions {
-                fillet_radius: Some(request.radius.value),
-                ..FeatureAuthoringOptions::default()
-            },
-            &[
-                (SelectionItem::Curve(incoming), None),
-                (SelectionItem::Curve(outgoing), None),
-            ],
-            preview_symbol,
-        )
-        .map_err(|error| CodeCompositionError::HostEditor {
-            member: label.clone(),
-            diagnostic: error.to_string(),
-        })?;
+    let _ = state.activate(&snapshot, &document, FeatureAuthoringTool::Fillet, &[]);
+    let options = state.set_options(
+        &snapshot,
+        FeatureAuthoringOptions {
+            fillet_radius: Some(request.radius.value),
+            ..FeatureAuthoringOptions::default()
+        },
+    );
+    if matches!(options, FeatureAuthoringOutcome::Warning(_)) {
+        return Err(CodeCompositionError::HostPreviewIncomplete {
+            member: label,
+            outcome: format!("{options:?}"),
+        });
+    }
+    let outcome = state.pick_items(
+        &snapshot,
+        &document,
+        &[
+            (SelectionItem::Curve(incoming), None),
+            (SelectionItem::Curve(outgoing), None),
+        ],
+    );
     let candidate = match outcome {
         FeatureAuthoringOutcome::PreviewRequested { candidate, .. }
         | FeatureAuthoringOutcome::Apply(candidate) => candidate,
@@ -1758,7 +1908,7 @@ fn prepare_fillet_candidate(
     if actual != BTreeSet::from([incoming, outgoing]) {
         return Err(CodeCompositionError::HostParentMismatch { member: label });
     }
-    Ok((state, candidate))
+    Ok(candidate)
 }
 
 fn materialized_fillet_output(
@@ -1923,19 +2073,6 @@ fn host_symbol(
         "code.host.{}",
         intent_content_digest(&bytes)
     ))?)
-}
-
-fn insert_host_output(
-    outputs: &mut BTreeMap<GeneratedMemberAddress, Vec<MaterializedFilletOutput>>,
-    address: &GeneratedMemberAddress,
-    value: Vec<MaterializedFilletOutput>,
-) -> Result<(), CodeCompositionError> {
-    if outputs.insert(address.clone(), value).is_some() {
-        return Err(CodeCompositionError::DuplicateHostOutput(
-            address.display_path(),
-        ));
-    }
-    Ok(())
 }
 
 #[allow(

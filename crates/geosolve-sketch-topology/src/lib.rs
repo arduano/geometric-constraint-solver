@@ -20,7 +20,13 @@ use geosolve_sketch::{
 };
 use thiserror::Error;
 
+mod endpoint_topology;
 mod offset_operands;
+
+pub use endpoint_topology::{
+    EndpointTopologyConsumptionError, EndpointTopologyError, EndpointTopologyIndex,
+    EndpointTopologyRequest, EndpointTopologySpan, PreparedEndpointTopologyQuery,
+};
 
 pub use offset_operands::{
     OffsetContourKey, OffsetDirectedSpan, OffsetEndpointAdjacency, OffsetEndpointCandidate,

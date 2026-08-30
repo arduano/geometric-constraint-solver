@@ -4,12 +4,14 @@ members = [
     "crates/geosolve-core",
     "crates/geosolve-demo-web",
     "crates/geosolve-geometry",
+    "crates/geosolve-headless",
     "crates/geosolve-linkage",
     "crates/geosolve-sketch",
     "crates/geosolve-sketch-code",
     "crates/geosolve-sketch-features",
     "crates/geosolve-sketch-intent",
     "crates/geosolve-sketch-ops",
+    "crates/geosolve-sketch-render",
     "crates/geosolve-sketch-topology",
 ]
 resolver = "3"

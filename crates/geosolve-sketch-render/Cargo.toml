@@ -1,0 +1,22 @@
+[package]
+name = "geosolve-sketch-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Target-neutral SVG and native raster presentation for GeoSolve sketches"
+
+[dependencies]
+geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+base64.workspace = true
+resvg = { version = "=0.47.0", default-features = false, features = ["text"] }
+
+[lints]
+workspace = true

@@ -1015,6 +1015,23 @@ test("client rejects malformed, unknown-field, method-confused, and cross-sessio
     await client.snapshot();
   };
 
+  const codeOwned = new IntentClient(owner, {
+    apply: () => JSON.stringify({
+      outcome: "failure",
+      failure: {
+        code: "code_authority_required",
+        message: "use code controls",
+        identity: null,
+      },
+    }),
+  });
+  const codeOwnedResponse = await codeOwned.snapshot();
+  assert.equal(codeOwnedResponse.outcome, "failure");
+  assert.equal(
+    codeOwnedResponse.outcome === "failure" && codeOwnedResponse.failure.code,
+    "code_authority_required",
+  );
+
   await assert.rejects(() => invoke("not json"), IntentRpcProtocolError);
   await assert.rejects(
     () => invoke(JSON.stringify({

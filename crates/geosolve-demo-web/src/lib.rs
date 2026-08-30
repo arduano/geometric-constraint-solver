@@ -109,6 +109,13 @@ mod wasm {
         crate::workbench::live_intent_rpc::apply_installed(request)
     }
 
+    /// Applies one bounded managed-control or outer-history request to the
+    /// code project installed in this browser document.
+    #[wasm_bindgen]
+    pub fn apply_workbench_code_control_rpc(request: &str) -> String {
+        crate::workbench::code_control_rpc::apply_installed(request)
+    }
+
     #[cfg_attr(not(test), wasm_bindgen(start))]
     pub fn start() -> Result<(), JsValue> {
         console_error_panic_hook::set_once();
@@ -136,7 +143,9 @@ mod wasm {
         };
         use wasm_bindgen_test::wasm_bindgen_test;
 
-        use super::{IntentRpcHandle, apply_workbench_intent_rpc};
+        use super::{
+            IntentRpcHandle, apply_workbench_code_control_rpc, apply_workbench_intent_rpc,
+        };
 
         fn point_patch(session: &IntentRpcSession) -> IntentRpcRequest {
             let selector = IntentPortSelector::Node {
@@ -451,6 +460,95 @@ mod wasm {
                 } if snapshot.identity == after
             ));
             assert_eq!(editor.borrow().coordinator().intent().undo_len(), 1);
+        }
+
+        #[wasm_bindgen_test]
+        fn actual_wasm_code_control_export_uses_the_registered_outer_session() {
+            use geosolve_sketch_code::{
+                ManagedControlAccess, ManagedControlEdit, ManagedControlEditBatch,
+                ManagedPathSegment, ManagedValue, UnitLiteral,
+            };
+
+            const SOURCE: &str = r#""use geosolve managed-v1";
+import { sketch, mm } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const circle = $.geometry.circle("circle", {
+    center: [0, 0],
+    radius: mm(4),
+  });
+  return $.outputs({ circle });
+});
+"#;
+            let (code, _editor) =
+                crate::workbench::code_projects::CodeProjectWorkbench::open_managed_test_source(
+                    "wasm-code-control",
+                    SOURCE,
+                )
+                .unwrap();
+            let code = Rc::new(RefCell::new(Box::new(code)));
+            let installed = Rc::clone(&code);
+            crate::workbench::code_control_rpc::install(move |request| {
+                crate::workbench::code_control_rpc::apply_to_code_project(
+                    &mut installed.borrow_mut(),
+                    request,
+                )
+                .response
+            });
+
+            let inspected: crate::workbench::code_control_rpc::CodeControlRpcOutcome =
+                serde_json::from_str(&apply_workbench_code_control_rpc(
+                    r#"{"method":"inspect_managed_controls"}"#,
+                ))
+                .unwrap();
+            let crate::workbench::code_control_rpc::CodeControlRpcOutcome::Success {
+                value:
+                    crate::workbench::code_control_rpc::CodeControlRpcSuccess::ManagedControls {
+                        snapshot,
+                    },
+            } = inspected
+            else {
+                panic!("code-control export must inspect the installed code project")
+            };
+            let token = snapshot
+                .manifest
+                .controls
+                .iter()
+                .find(|control| {
+                    control.source.declaration.0 == "circle"
+                        && control.source.path.0 == [ManagedPathSegment::Field("radius".into())]
+                })
+                .and_then(|control| match &control.access {
+                    ManagedControlAccess::Editable { token } => Some(token.clone()),
+                    ManagedControlAccess::ReadOnly { .. } => None,
+                })
+                .expect("Typed Panel radius control");
+            let request = serde_json::to_string(
+                &crate::workbench::code_control_rpc::CodeControlRpcRequest::EditManagedControls {
+                    expected: Box::new(snapshot.identity.clone()),
+                    batch: Box::new(ManagedControlEditBatch::new([ManagedControlEdit {
+                        token,
+                        value: ManagedValue::Unit(UnitLiteral {
+                            unit: "mm".into(),
+                            value: 2.0,
+                        }),
+                    }])),
+                },
+            )
+            .unwrap();
+            let edited: crate::workbench::code_control_rpc::CodeControlRpcOutcome =
+                serde_json::from_str(&apply_workbench_code_control_rpc(&request)).unwrap();
+            assert!(matches!(
+                edited,
+                crate::workbench::code_control_rpc::CodeControlRpcOutcome::Success {
+                    value:
+                        crate::workbench::code_control_rpc::CodeControlRpcSuccess::ManagedControlEdit {
+                            receipt,
+                        },
+                } if receipt.receipt.before == snapshot.identity
+                    && receipt.receipt.after == *code.borrow().code_session_identity()
+            ));
+            assert!(code.borrow().managed_source().contains("radius: mm(2)"));
         }
     }
 }

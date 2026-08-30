@@ -5687,6 +5687,353 @@ fresh repository-prefixed build and final public authority. Both M86 user servic
 inactive/dead with `MainPID=0`, no exact listener remains, and both endpoints refuse with curl exit
 `7`/HTTP `000`; evidence is `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`. M86 is closed.
 
+## M87 managed-control and browser-free authoring fixtures
+
+Status: **OPEN**. These fixtures retain M87's focused owner and crossover evidence for managed
+controls, browser-free authoring, the twelve-project catalog, shared rendering and full-detail
+retained-camera recovery; the entire adaptive-detail/LOD prototype remains deleted. The supervising
+user's earlier scoped disposition remains historical acceptance of M87-U1 through M87-U8 without a
+separate row-by-row replay. M87-U9/U10 and milestone closure remain pending. No clean nomination,
+immutable candidate, public deployment or service-retirement result is claimed; the mutable
+Tailscale listener remains development infrastructure. M87 adds no milestone-neutral golden row and
+M88 is not active.
+
+### M87-C1 — One shared Typed Panel radius, complete fan-out
+
+Load the checked-in **Typed Panel · keyed Fillets** project, expand its accepted artifact and derive
+the managed-control manifest. Resolve `cornerFillets.radius: mm(4)` without consulting an
+`EditLens`. Exactly one editable source control must cover the exact `mm(4)` span and disclose both
+generated Fillet-radius consumers, including each invocation/template/member/output identity and
+current owner generation. Neither generated Fillet receives a second source control.
+
+Apply an exact-CAS replacement `mm(2)`. Exactly one source token changes; both accepted generated
+Fillets have radius `2`; their stable semantic aliases and logical/native ownership remain valid;
+all geometry is finite, every active computed feature is Current and the independently recomputed
+normalized Hard residual is at most `1e-9`. The live outer owner adds exactly one history row. Undo,
+Redo, cold reload and manifest reinspection restore the exact source/value/fan-out sequence, while
+the old token becomes stale after the first edit.
+
+Negative rows alter source bytes, project identity, expected IEEE bits, generated generation,
+unit, schema or one authenticated consumer. Each rejects atomically without rewriting source or
+accepted authority. `+0.0` and `-0.0` are distinct expected values.
+
+### M87-C2 — Direct literal matrix and deliberate read-only leaves
+
+Construct bounded managed-only projects whose direct declarations expose every current
+declaration-backed scalar class: real unit and unitless numbers, integer values, booleans, closed
+choices, constraint/dimension suppression or driving state, explicit branch/orientation state and
+computed-feature parameters. Every independently editable leaf has one authoritative schema with
+finite/domain bounds and round-trips through one exact typed source rewrite.
+
+Separately validate the closed schema/replacement helper for bounded Natural values and escaped
+Text formatting. No current real declaration or managed-only fixture owns either Natural or Text,
+so this helper-level coverage does not claim a manifest control fixture and must not manufacture a
+synthetic owner.
+
+In the same sources inspect point/solver-instance coordinates, references, structural identities,
+object/array containers, member keys/order, explicit `null` and a value behind an unproven or
+incompatible inverse. Each parser-owned read-only leaf publishes the applicable typed reason and,
+for a reference, the actual owner navigation path; it never receives an editable token. An absent
+member owns no parser span and therefore produces no fabricated manifest or read-only row. An
+explicit `null` owns its parser span and produces one read-only `Null` row without an editable
+token. Every bundled definition leaf must be either schema-backed or deliberately classified.
+Deriving the manifest changes no project, expansion or session serialization byte or digest.
+
+Reject an empty batch, duplicate control, overlapping span, wrong representation, non-finite value,
+out-of-domain integer/unit value, incompatible shared schemas and independent control/consumer
+resource-limit cases before any partial rewrite. An unordered valid multi-edit batch rewrites and
+reparses only its complete candidate.
+
+### M87-C3 — One code-control RPC and one outer history
+
+Install the genuine code workbench and send strict bounded `inspect_managed_controls`,
+`edit_managed_controls`, `undo` and `redo` requests through the dedicated code-control RPC. Inspect
+returns the exact current `CodeSessionIdentity`, manifest and outer history availability. Each
+mutation authenticates the expected identity; an accepted Typed Panel radius edit returns the
+receipt for its one new outer identity, and Undo/Redo move only that outer cursor while installing
+the matching delegated editor checkpoint.
+
+Unknown fields/methods, an oversized request or response, malformed/non-finite data, unsafe integer
+identity, foreign/stale expected identity and stale control token return the fixed typed failure
+envelope and do not move authority. A representable source candidate which fails native acceptance
+returns a retained-failure receipt and diagnostic while leaving the prior accepted editor scene in
+place. Rust JSON and the `@geosolve/sketch-code` `CodeControlClient` must accept and reject the same
+wire values.
+
+While code owns the workbench, every mutating Intent RPC method rejects with the dedicated code-
+authority failure before touching nested history. Read-only Intent inspection and every mutation in
+a plain non-code projectional workspace retain their existing behavior.
+
+### M87-C4 — Inspector and grouped Fillet grip share the source owner
+
+Select either generated Typed Panel Fillet and edit its Inspector radius from `4` to `2`. Resolve
+the selected alias and exact Inspector output/definition path through accepted expansion provenance
+to the C1 control; never decode an opaque alias or guess from a property name. Show that the control
+has two consumers, change one source token, update both Fillets, immediately reselect the stable
+alias and add one outer history row with exact Undo/Redo/source/native parity. Editing an ordinary
+GUI-owned Fillet property continues through the existing Inspector route unchanged.
+
+Repeat through the selected Fillet radius grip. At pointer-down authenticate the generated child,
+control token and complete two-feature group. Multiple pointer frames prepare one grouped preview
+per frame and display the same proposed radius on both Fillets without parsing/expanding source or
+moving history. Release returns one delegated proposal and no nested Intent transaction, then the
+outer owner applies the same control edit once. Stale/mixed/duplicate/over-bound groups, cancellation,
+camera interruption and retained publication failure restore the prior accepted scene. M86 compact-
+grip/endpoint/broad-surface picking priority and ordinary non-code Fillet gestures remain unchanged.
+
+### M87-C5 — Invocation-local custom-patch controls
+
+For Mounting Plate and Adaptive Lanterns, inspect every shared or transitive custom-artifact input
+and compare its disclosed consumers to the exact accepted generated provenance. Insert, remove and
+reorder keyed members; unchanged keys retain identity, removed keys tombstone and reused keys gain a
+new generation. A token from the prior generation cannot edit the new owner.
+
+For PC Water Manifold inspect all three `waterChannel` invocations. A route-specific input edits
+only its exact invocation even when every module use has the same artifact/template paths. A value
+intentionally shared above those calls discloses and updates all applicable consumers atomically.
+No route falls back to the first invocation, ordinal position, native ID or copied coordinate.
+Custom patch TypeScript and its pinned data-only artifact remain byte-identical; Rust, WASM and the
+headless path never execute TypeScript.
+
+### M87-C6 — Shared renderer bytes and deterministic native raster
+
+Decode the frozen M87 browser scene fixture and compose it with the extracted
+`geosolve-sketch-render` API. The browser adapter and shared composer produce exactly the frozen SVG
+markup bytes, including icons, annotations, computed geometry and interaction-state classes. The
+standalone static composer uses the same target-neutral camera math while deliberately omitting
+hover, selection, drafts, inference, action affordances and error overlays.
+
+Fit empty, point-only, degenerate-axis, off-origin and extreme finite bounds. Empty/invalid bounds
+use the canonical finite fallback; valid bounds remain inside the logical `1000 x 700` canvas with
+64 px margins and a scale clamped to 2--2000 px/model-unit. Static curve tessellation uses 0.25 px
+chord tolerance.
+
+M87-F002 additionally submits finite pan inputs whose screen delta overflows and invalid grid work
+with negative, zero, NaN, infinite-extent or non-advancing tiny spacing. Camera rejection is
+transactional; bounded grid construction returns no path after at most 4,096 total line attempts.
+Normal composer bytes remain frozen. These are focused renderer-owner regressions, not golden rows.
+
+Rasterize the self-contained standalone SVG through the native pure-Rust path. The result is exactly
+`2000 x 1400`, contains non-background geometry and bundled-font text pixels, and uses no system
+font, file/network resource or browser canvas. Oversized dimensions, external image/font resources
+and mismatched standalone dimensions reject. SVG bytes are deterministic authority; PNG pixels are
+visual evidence, not a solver or cross-platform byte oracle.
+
+### M87-C7 — Stateless browser-free inspect/edit/render loop
+
+Exercise `geosolve-headless` through each admitted input form: artifact-free managed source plus an
+explicit project key, canonical digest-pinned `CodeProject` JSON and every bundled demo key.
+`inspect` returns the deterministic report and exact transient control manifest. Copy C1's complete
+token into an `edit` batch, publish a fresh generation and inspect its emitted `project.json` to
+obtain the next token. `render` over that project publishes the same accepted scene.
+
+Every success-like report proves finite current accepted geometry, independently validated Hard
+residual at most `1e-9` or a validated empty hard set, and Current active computed features. Cold-
+materialize all twelve bundled demos. Repeating inspect/render with identical input produces
+identical report, controls and SVG bytes and the fixed semantic PNG properties from C6.
+
+Run the actual CLI subprocess for `demos`, `inspect`, `edit` and `render` with browser/server/DOM/
+network/Node facilities absent. A successful output directory is new and contains exactly the
+canonical project/source, report/control JSON and SVG/PNG products. Reusing a destination, supplying
+a stale token, invalid project/source, failed acceptance or forcing publication failure never
+overwrites an existing generation and leaves no partial new directory.
+
+### M87-C8 — DoF drafts, persistence and plain-workspace non-regression
+
+In Typed Panel drag the upper-left point through the existing semantic overlay and repeat M86's
+three exact terminals. The managed manifest exposes the coordinate leaves as solver-instance
+read-only values; pointer frames and release still use the existing draft/overlay transaction and
+never rewrite solved coordinates into `sketch.ts`. Undo/Redo/reload/reproduction preserve the same
+overlay precedence, stable aliases, finite accepted geometry, Current Fillets and exact terminal
+authority.
+
+Derive controls, perform a shared scalar edit and save/reload. The transient manifest/token bytes do
+not enter `CodeProject`, `ExpandedCodeProject`, `SketchCodeSession`, workspace or reproduction wire
+authority. Plain Intent workspaces, direct solver hosts and GUI-owned point/Fillet/dimension edits
+remain usable without `geosolve-sketch-code`, `geosolve-sketch-render` or `geosolve-headless`.
+
+### M87-C9 — Qualification and UAT authority
+
+The pre-dogfood provisional dirty-worktree gate, routing-board gate and original manufacturing gate
+passed for their exact historical pre-F003 slices. The then-current dirty-worktree release gate
+passed at exit `0` on 2026-08-30 with:
+
+```bash
+TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
+```
+
+The current post-F003 reviewed twelve-row code-project ledger has SHA-256
+`f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`; the historical gate does not
+qualify its revised CNC/Gridfinity rows.
+Formatting, warnings-denied workspace Clippy, all-feature workspace tests, Rustdoc, locked WASM,
+both TypeScript packages, licence checks, release Trunk assembly and unchanged golden checks passed
+inside that explicitly dirty mechanical gate. The gate is not a clean source/tree, immutable no-
+rebuild freeze, nomination or publication result.
+
+The supervising user's earlier 2026-08-30 scoped disposition remains historical acceptance of
+U1-U8 without a separate row-by-row replay after complete LOD removal and the graphics audit. The
+later CNC/Gridfinity amendment adds automated evidence but not human visual acceptance. The bundles
+under `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` predate F003 and are historical only. Fresh
+post-F003 renders at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}` await U9/U10; no mutable
+bundle is a stable, immutable or accepted candidate. `docs/M87_UAT.md` records the pending visual
+boundary.
+
+### M87-C10 — Retained frame recovery with complete scene paint
+
+Build a dense accepted scene and exercise pan, wheel and toolbar camera changes. Every retained
+camera frame keeps the complete accepted SVG DOM and paint together with semantic/hit authority,
+solver state, persistence, exports and headless products. There is no adaptive-detail policy,
+scene-complexity threshold, reduced-paint DOM state or display control.
+
+Between camera admission and animation-frame presentation, remove the retained
+`.wb-accepted-scene` group. The failed paint records no camera presentation and retains its desired
+camera. Both projectional and flat adapters attempt exact transient reprojection, recreate current
+accepted presentation when the viewport remains available. A later camera input must still admit
+exactly one `camera-only` frame; no solver, materialization,
+persistence or durable-panel work may cross that callback.
+
+Focused queue and static-presentation regressions cover this without adding a golden authoring row.
+Browser UAT repeats maximize/restore/resizing on the user's dense multi-model reproduction because
+presentation feel and platform scheduling remain human/browser evidence, not a mathematical oracle.
+
+### M87-C11 — Robotic cable-harness routing-board dogfood
+
+Load **Robotic cable-harness routing board** as the tenth checked-in code project. Cold expansion
+must accept one finite 360 x 220 mm fixture board, four mounting bores, two banks of eight connector
+centres and eight keyed open route Polylines with ten vertices each. Exactly 72 native route spans,
+80 generated clip circles and 64 generated host Fillets must be present. Board corners, bore and
+connector centres and both endpoints of every route are fixed; interior vertices, including
+`serviceRoute.vertices.byKey.serviceLoop`, remain ordinary solver-instance points. Every active
+feature is Current and independent Hard-residual validation passes.
+
+The separately compiled `harnessRoute` artifact maps each invocation's keyed vertex collection to
+clip circles and its open-chain `filletableCorners` collection to existing host Fillets. Derive one
+editable `sharedClipRadius = mm(2.4)` control with 80 circle consumers and one editable
+`sharedBendRadius = mm(5)` control with 64 Fillet consumers. Replace only `serviceHarness` inputs
+with direct local literals. The resulting manifests partition exactly 70/10 clip and 56/8 Fillet
+consumers; shared and local exact-CAS edits affect only their own partition, and an earlier shared
+token becomes stale. No invocation may route through the first harness, a copied coordinate or a
+native ordinal. All three TypeScript patch copies and both artifact copies stay byte-identical.
+
+Insert keyed `inspectionClip` between `strainReliefB` and `sink` on `serviceRoute`. Exactly one new
+point, one segment, one clip and one Fillet identity appear. Remove it, then reinsert it. Every
+unrelated generated and native identity remains unchanged, the four retired owners advance
+generation on reuse, and the previously issued control token cannot cross that generation. Cold
+materialization of the localized and structural candidates remains independently valid.
+
+Drag `serviceRoute.serviceLoop` through its generated-address point lens, accept two terminals,
+Undo twice, Redo twice and reload persistence. The overlay moves accepted route/clip/Fillet
+authority without rewriting `sketch.ts`; the direct Polyline provenance is `GeneratedOverride`.
+Exactly audited incremental work is parse/expand/publish `0/1/0`, all 64 host identities remain
+stable and Current, and warm materialization contributes no nested history. The browser locator is
+the exact generated address: invocation `serviceRoute`, template `polyline/vertex`, member key
+`serviceLoop`, output `point`; it never decodes an opaque alias or uses coordinate proximity.
+
+Finally render the unchanged bundled project twice through `geosolve-headless`. Pretty-encoded
+report and control bytes, logical scene markup, standalone SVG and pinned-build PNG bytes must be
+equal. The report inventory is 104 points, 176 curves, 41 constraints, two dimensions, 64 features
+and 136 computed edges. Append the exact routing-board row to the separate ten-project ledger after
+PC Water Manifold without altering the manifold row. This scenario adds no equation, route-specific
+renderer, milestone-neutral authoring-golden row or TypeScript runtime.
+
+### M87-F003 — Manufacturing samples use relational authority
+
+Reproduce the pre-repair samples through cold materialization. The Gridfinity contour owns 26
+literal-seeded points but zero native constraints, so its apparent standard profile is not fully
+constrained. CNC locates seven otherwise constrained components using seven unrelated
+`FixedPoint` locks. Classify this as a sample-authority/rank-DOF defect, not convergence or an
+equation failure. C12 and C13 freeze the repaired minimal-datum designs, independent residuals,
+zero numerical/structural nullity and zero equality/bidirectional bounded DOF. Nominal coordinates,
+topology, Fillets and 2D/2.5D manufacturing semantics remain unchanged.
+
+### M87-C12 — CNC joinery fit-coupon dogfood
+
+Load **CNC joinery fit coupon · keyed corner reliefs** as the eleventh checked-in code project.
+Cold expansion must accept one finite 120 x 140 mm female blank, three 70 mm-wide mortises and
+three 95 x 18 mm tabs. The keyed loose, nominal and press mortises have respective heights of 18.4,
+18.0 and 17.6 mm. Blank and tab geometry remains ordinary constrained sketch authority; no coupon-
+specific solver, editor, renderer or runtime is admitted.
+
+M87-F003 requires exactly one absolute `FixedPoint`, zero `FixedCoordinate` rows and seven
+relational construction datums. Each datum is a horizontal or vertical construction span with an
+explicit length dimension, locating the shared mortise X station, three mortise Y stations, the
+nominal mortise-to-tab station width and the two remaining tab Y stations. The accepted inventory
+is 62 declarations, 69 generated members, 14 outputs, 29 points, 47 curves, 36 constraints, 33
+dimensions, 10 host outputs, 10 Current features and 23 computed edges. Require numerical and
+structural left/right nullity zero plus equality and bidirectional bounded DOF zero.
+
+One shared `3.175 mm` cutter-radius input must own exactly twelve keyed corner-relief circles, four
+for each fit station. The circles are explicit conservative dogbone-style overcuts authored into
+the profile; they are not inferred toolpaths or automatic cutter compensation. One shared `6 mm`
+handling-radius input must own exactly ten existing host Fillets: four on the female blank and two
+on each of the three tabs. Both controls disclose their complete bounded fan-out and every active
+Fillet remains Current.
+
+Replace only the press-station relief input with a direct local radius. The circle manifests must
+partition exactly 8 shared/4 local. Replace only the press-tab handling input with a direct local
+radius; the Fillet manifests must partition exactly 8 shared/2 local. Exact-CAS edits to any of
+these controls affect only the authenticated partition, and a token from before localization is
+stale. Editing one fit-station definition changes only that station and leaves the
+other two station definitions, geometry and semantic identities unchanged.
+
+Remove one keyed relief and reinsert the same key. Removal changes only that circle owner;
+reinsertion restores only that logical relief, advances only its reused generation and leaves every
+other relief, host Fillet and native profile identity unchanged. A token issued for the retired
+generation cannot edit the reinserted owner. The localized, edited and structural candidates must
+all cold-materialize with finite accepted geometry, independently validated Hard residual at most
+`1e-9` (or a validated empty hard set) and Current active computed features.
+
+Render the unchanged bundled project twice through `geosolve-headless`. Pretty-encoded report and
+control bytes, logical scene markup, standalone SVG and pinned-build PNG bytes must be identical.
+Append its exact reviewed row after the historical routing-board row without changing any of the
+first ten ledger rows. The resulting view is a 2D/2.5D fit-design drawing only: it claims no CAM,
+toolpath, cutter compensation, machinability or production-manufacturing validation.
+
+### M87-C13 — Gridfinity 1 x 1 x 3U central cross-section dogfood
+
+Load **Gridfinity 1×1×3U section · keyed standard profile** as the twelfth checked-in code project.
+Cold expansion must accept exactly one symmetric closed 26-point material contour representing a
+vertical central section. Its reference geometry preserves a 41.5 mm outer width, 35.6 mm base-
+bottom width, staged base totalling 4.75 mm and rising to a 7 mm cavity floor, 21 mm 3U body,
+0.95 mm walls and nominal 4.4 mm lip rise. The single contour must visibly retain the complete
+base, cavity floor, both walls and both top-lip profiles; it is not a collection of inferred solids
+or boolean results.
+
+M87-F003 requires zero `FixedPoint` rows and exactly one Y `FixedCoordinate` at the base. Thirteen
+`symmetricAboutDatumAxis(... axis: "y")` relations govern every left/right contour pair. Five
+diagonal standard stages are each governed by horizontal and vertical construction projections,
+for ten construction spans and ten component dimensions; the remaining right-side standards use
+explicit length plus horizontal/vertical authority. The accepted inventory is 62 declarations, 66
+generated members, three outputs, 31 points, 36 curves, 31 constraints, 18 dimensions, four host
+outputs, four Current features and 11 computed edges. Require numerical and structural left/right
+nullity zero plus equality and bidirectional bounded DOF zero.
+
+One `2.8 mm` floor-radius control owns exactly the two floor Fillets and one independent `0.6 mm`
+lip-radius control owns exactly the two lip Fillets. Each manifest therefore has a complete 2/2
+fan-out. Exact-CAS editing either source changes only its own pair, preserves the other radius and
+pair, and retains stable contour and unrelated Fillet identities. All four active Fillets remain
+Current, geometry stays finite and independent Hard-residual validation is at most `1e-9` (or a
+validated empty hard set) after cold materialization.
+
+Render the unchanged bundled project twice through `geosolve-headless`. Pretty-encoded report and
+control bytes, logical scene markup, standalone SVG and pinned-build PNG bytes must be identical.
+Append its exact reviewed row after the CNC row, yielding twelve rows while leaving the first ten
+unchanged. This is strictly a 2D/2.5D design/profile sketch: it claims no solid, boolean, print-fit,
+CAM, toolpath, machinability or manufacturing-validation authority.
+
+The original C12/C13 focused owner qualification, all-twelve cold materialization and complete
+dirty-worktree gate are retained pre-F003 mechanical evidence only. For the revised sources, the
+separately reviewed twelve-row ledger, focused owner suite, native composition and all-demo
+headless/deterministic products pass, and fresh mutable visual bundles exist. Stop at the pending
+U9/U10 human visual rows; do not infer a
+clean exact source/tree, immutable freeze, publication, service retirement or milestone closure.
+The mutable Tailscale listener remains development infrastructure. Observed performance work
+remains deferred to a follow-up milestone; M88 is not activated.
+
+Current post-F003 progress: the focused manufacturing owner suite passes 3/3, native composition
+passes 13/13, the exact reviewed-ledger check passes 1/1 and all-demo headless/deterministic
+products pass 10/10. Fresh mutable CNC/Gridfinity bundles await U9/U10 human review.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

@@ -2,7 +2,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use geosolve_sketch::{DocumentConstraintDefinition, DocumentId, PersistentId};
+use geosolve_sketch::{
+    CurveDefinition, DocumentConstraintDefinition, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentId, PersistentId,
+};
 use geosolve_sketch_code::{
     CodeProject, KeyedReconcileState, ProjectKey, materialize_code_project_cold,
     parse_managed_source, required_generated_members,
@@ -96,4 +99,79 @@ export default sketch(($) => {
     assert_eq!(graph_constraints.len(), 2);
     assert!(graph_constraints.contains(&(ConstraintKind::Horizontal, false)));
     assert!(graph_constraints.contains(&(ConstraintKind::Vertical, true)));
+}
+
+#[test]
+fn direct_datum_symmetry_and_radius_dimension_lower_to_existing_native_relations() {
+    let project = project(
+        r#""use geosolve managed-v1";
+import { sketch, mm } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const pair = $.geometry.line("pair", { start: [-2, 1], end: [2, 1] });
+  const mirror = $.constraint.symmetricAboutDatumAxis("mirror", {
+    first: pair.start,
+    second: pair.end,
+    axis: "y",
+  });
+  const hole = $.geometry.circle("hole", { center: pair.start, radius: mm(1) });
+  const holeRadius = $.dimension.radius("holeRadius", {
+    curve: hole.circle,
+    target: mm(3),
+    mode: "driving",
+  });
+  return $.outputs({ pair, mirror, hole, holeRadius });
+});
+"#,
+    );
+    let generated = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let materialized = materialize_code_project_cold(
+        &project,
+        &generated,
+        IntentSessionId::from_raw(0x87_f003_c001),
+        DocumentId(PersistentId::from_u128(0x87_f003_c001)),
+        1.0,
+    )
+    .unwrap();
+    let accepted = materialized
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(accepted.validation.all_active_features_current);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+    );
+
+    let document = accepted
+        .session
+        .accepted_state_for_current_input()
+        .expect("direct managed relations own accepted state")
+        .document();
+    assert_eq!(document.constraints().len(), 1);
+    assert!(matches!(
+        document.constraints()[0].definition,
+        DocumentConstraintDefinition::SymmetricAboutDatumAxis { .. }
+    ));
+    assert_eq!(document.dimensions().len(), 1);
+    let dimension = &document.dimensions()[0];
+    assert_eq!(dimension.mode, DocumentDimensionMode::Driving);
+    let DocumentDimensionDefinition::Radius { curve, target } = &dimension.definition else {
+        panic!("managed radius must lower to one native radius dimension")
+    };
+    assert!((document.scalar(*target).unwrap().value - 3.0).abs() <= f64::EPSILON);
+    let CurveDefinition::Circle { radius, .. } = &document.curve(*curve).unwrap().definition else {
+        panic!("radius dimension must target the managed circle")
+    };
+    assert!((document.scalar(*radius).unwrap().value - 3.0).abs() <= 1.0e-9);
 }

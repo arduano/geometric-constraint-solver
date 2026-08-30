@@ -1,0 +1,27 @@
+[package]
+name = "geosolve-headless"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Browser-free managed-code solve, inspection, and static rendering for GeoSolve"
+
+[dependencies]
+geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+geosolve-sketch-code = { version = "0.2.0", path = "../geosolve-sketch-code" }
+geosolve-sketch-intent = { version = "0.2.0", path = "../geosolve-sketch-intent" }
+geosolve-sketch-render = { version = "0.2.0", path = "../geosolve-sketch-render" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple", target_os = "redox"))'.dependencies]
+rustix = { version = "1.1.4", features = ["fs"] }
+
+[lints]
+workspace = true

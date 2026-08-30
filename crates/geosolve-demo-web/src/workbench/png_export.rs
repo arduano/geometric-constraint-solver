@@ -6,63 +6,9 @@
 //! not inspect the sketch document, recreate geometry, or participate in
 //! accepted-scene authority.
 
-pub(crate) const PNG_EXPORT_WIDTH: u32 = 2_000;
-pub(crate) const PNG_EXPORT_HEIGHT: u32 = 1_400;
-
-const EXPORT_STYLE: &str = r#"
-.wb-grid { pointer-events: none; }
-.wb-grid path { fill: none; vector-effect: non-scaling-stroke; }
-.wb-grid-minor { stroke: #1b2223; stroke-width: .75; }
-.wb-grid-major { stroke: #263031; stroke-width: 1; }
-.wb-datum-hit,.wb-computed-hit,.wb-fillet-action,.wb-fillet-action-hit,
-.wb-fillet-radius-rail,.wb-fillet-radius-spoke,.wb-fillet-radius-grip,
-.wb-fillet-alternative-ghost,.wb-curve-control-guides,.wb-curve-control-cage,
-.wb-annotation-hit,.wb-annotation-path-hit,.wb-annotation-label-hit,
-.wb-annotation-move-hit,.wb-error-overlay,.wb-offset-chain-cues,
-.wb-draft,.wb-inference-guides,.wb-inference-candidates,
-.authoring-pending,.offset-provisional { display: none; }
-.wb-datum-line { fill: none; stroke: #6f7b7b; stroke-width: 1.25; vector-effect: non-scaling-stroke; }
-.wb-datum-x-axis .wb-datum-line { stroke: #8c5b55; }
-.wb-datum-y-axis .wb-datum-line { stroke: #4f8273; }
-.wb-datum-label { fill: #879390; font: 700 11px ui-monospace,monospace; paint-order: stroke; stroke: #121617; stroke-width: 3px; }
-.wb-datum-x-axis .wb-datum-label { fill: #ba7770; }
-.wb-datum-y-axis .wb-datum-label { fill: #72ad9c; }
-.wb-curve { fill: none; stroke: #e5e8df; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.2; vector-effect: non-scaling-stroke; }
-.wb-computed-fillet { stroke: #8ed5ca; stroke-width: 2.6; }
-.wb-curve[data-role="construction"] { stroke: #86a0a2; stroke-dasharray: 9 3 2 3; }
-.wb-curve[data-construction-origin="implicit"] { stroke: #70888b; stroke-dasharray: 4 5; opacity: .72; }
-.wb-point { fill: #131718; stroke: #8fd2ca; stroke-width: 2; }
-.wb-constraint-symbol { fill: none; stroke: #d7a654; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
-.wb-right-angle { fill: none; stroke: #d7a654; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
-.wb-annotation-leader { fill: none; stroke: #8d774f; stroke-dasharray: 2 2; stroke-width: 1; vector-effect: non-scaling-stroke; }
-.wb-dimension { color: #79bfc4; fill: #79bfc4; font: 500 12px ui-monospace,monospace; }
-.wb-dimension text { text-anchor: middle; }
-.wb-dimension-label-mask { fill: #121617; stroke: none; }
-.wb-dimension-line,.wb-dimension-witness,.wb-angle-arc { fill: none; stroke: #79bfc4; stroke-linecap: round; stroke-width: 1.25; vector-effect: non-scaling-stroke; }
-.wb-dimension-witness { opacity: .62; }
-.wb-dimension-arrow { fill: inherit; stroke: none; }
-.wb-dimension.reference .wb-dimension-line,.wb-dimension.reference .wb-angle-arc { stroke-dasharray: 4 3; }
-.wb-dimension.reference :is(.wb-dimension-line,.wb-angle-arc,.wb-dimension-arrow,text) { opacity: .72; }
-.wb-dimension.reference .wb-dimension-witness { opacity: .45; }
-.wb-annotation.suppressed :is(.wb-constraint-symbol,.wb-right-angle,.wb-annotation-leader,.wb-dimension-line,.wb-dimension-witness,.wb-angle-arc,.wb-dimension-arrow,text) { opacity: .48; }
-"#;
-
-/// Produces a self-contained, deterministic SVG rasterization source.
-///
-/// The fitted workbench viewport is already authoritative presentation. The
-/// wrapper supplies only background and paint rules so browser rasterization
-/// never depends on the page stylesheet or exports invisible hit targets.
-#[must_use]
-pub(crate) fn standalone_export_svg(scene_markup: &str) -> String {
-    format!(
-        concat!(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" ",
-            "viewBox=\"0 0 1000 700\" preserveAspectRatio=\"xMidYMid meet\">",
-            "<style>{}</style><rect width=\"1000\" height=\"700\" fill=\"#121617\"/>{}</svg>"
-        ),
-        PNG_EXPORT_WIDTH, PNG_EXPORT_HEIGHT, EXPORT_STYLE, scene_markup
-    )
-}
+pub(crate) use geosolve_sketch_render::standalone_export_svg;
+#[cfg(target_arch = "wasm32")]
+use geosolve_sketch_render::{PNG_EXPORT_HEIGHT, PNG_EXPORT_WIDTH};
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn export_viewport_png(

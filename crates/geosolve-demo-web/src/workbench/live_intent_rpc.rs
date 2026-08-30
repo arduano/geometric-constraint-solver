@@ -93,13 +93,34 @@ pub(super) fn request_may_change_identity(request: &str) -> bool {
     if request.len() > MAX_INTENT_RPC_REQUEST_BYTES {
         return false;
     }
-    matches!(
-        serde_json::from_str::<IntentRpcRequest>(request),
-        Ok(IntentRpcRequest::ApplyPatch { .. }
-            | IntentRpcRequest::Undo
-            | IntentRpcRequest::Redo
-            | IntentRpcRequest::EditSourceToken { .. })
-    )
+    let Ok(decoded) = serde_json::from_str::<IntentRpcRequest>(request) else {
+        return false;
+    };
+    let expected_fields: &[&str] = match decoded {
+        IntentRpcRequest::ApplyPatch { .. } => &["method", "patch"],
+        IntentRpcRequest::Undo | IntentRpcRequest::Redo => &["method"],
+        IntentRpcRequest::EditSourceToken { .. } => &["method", "expected", "token", "replacement"],
+        IntentRpcRequest::Snapshot | IntentRpcRequest::Inspector { .. } => return false,
+    };
+    let Ok(serde_json::Value::Object(object)) = serde_json::from_str(request) else {
+        return false;
+    };
+    object.len() == expected_fields.len()
+        && expected_fields
+            .iter()
+            .all(|field| object.contains_key(*field))
+}
+
+/// Rejects nested Intent mutations while an outer code project owns the
+/// delegated editor. Read-only Snapshot and Inspector requests remain valid;
+/// malformed requests still flow to the ordinary strict Intent decoder.
+pub(super) fn code_authority_rejection(code_project_active: bool, request: &str) -> Option<String> {
+    (code_project_active && request_may_change_identity(request)).then(|| {
+        failure_response(
+            "code_authority_required",
+            "mutating a code-owned workbench requires the managed code-control RPC",
+        )
+    })
 }
 
 pub(super) fn failure_response(code: &str, message: &str) -> String {
@@ -120,7 +141,10 @@ mod tests {
     };
     use geosolve_sketch_intent::{IntentPatch, IntentPatchPolicy};
 
-    use super::{LiveIntentRpcPresentationPolicy, apply_installed, request_may_change_identity};
+    use super::{
+        LiveIntentRpcPresentationPolicy, apply_installed, code_authority_rejection,
+        request_may_change_identity,
+    };
 
     #[test]
     fn only_strict_bounded_mutation_requests_can_cancel_transient_work() {
@@ -147,6 +171,13 @@ mod tests {
             source_edit.as_str(),
         ] {
             assert!(request_may_change_identity(request), "{request}");
+            let rejection: IntentRpcOutcome =
+                serde_json::from_str(&code_authority_rejection(true, request).unwrap()).unwrap();
+            assert!(matches!(
+                rejection,
+                IntentRpcOutcome::Failure { failure }
+                    if failure.code == "code_authority_required"
+            ));
         }
         for request in [
             r#"{"method":"snapshot"}"#,
@@ -184,6 +215,32 @@ mod tests {
                 save_workspace: true,
             }
         );
+    }
+
+    #[test]
+    fn code_authority_rejects_only_strict_nested_intent_mutations() {
+        for request in [r#"{"method":"undo"}"#, r#"{"method":"redo"}"#] {
+            let response: IntentRpcOutcome =
+                serde_json::from_str(&code_authority_rejection(true, request).unwrap()).unwrap();
+            assert!(matches!(
+                response,
+                IntentRpcOutcome::Failure { failure }
+                    if failure.code == "code_authority_required"
+                        && failure.identity.is_none()
+            ));
+            assert!(code_authority_rejection(false, request).is_none());
+        }
+        for request in [
+            r#"{"method":"snapshot"}"#,
+            r#"{"method":"inspector","node":"0000000000000001"}"#,
+            r#"{"method":"undo","extra":true}"#,
+            "not json",
+        ] {
+            assert!(
+                code_authority_rejection(true, request).is_none(),
+                "{request}"
+            );
+        }
     }
 
     #[test]

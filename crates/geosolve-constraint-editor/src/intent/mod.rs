@@ -55,8 +55,9 @@ use geosolve_sketch_ops::{
     SketchOperationSnapshot, SketchProfileOffsetOperand, SplitRetainedPiece, TrimRetainedSide,
 };
 use geosolve_sketch_topology::{
-    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetOperandIndex,
-    OffsetOperandRequest, OffsetTraversal, PreparedOffsetOperandQuery,
+    EndpointTopologyIndex, EndpointTopologyRequest, OffsetDirectedSpan, OffsetEndpointRef,
+    OffsetEndpointRole, OffsetOperandIndex, OffsetOperandRequest, OffsetTraversal,
+    PreparedEndpointTopologyQuery, PreparedOffsetOperandQuery,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1305,7 +1306,14 @@ impl ColdIntentMaterializer {
         {
             return Err(IntentMaterializationError::AcceptedAuthorityEvidenceMismatch);
         }
-        let output = self.materialize_source(authority)?;
+        let continuation_json = std::str::from_utf8(&authority.evidence.materialization)
+            .map_err(|_| IntentMaterializationError::AcceptedAuthorityEvidenceMismatch)?;
+        let continuation = geosolve_sketch::SketchDocument::from_draft_v5_json(continuation_json)?;
+        let output = self.materialize_source_with_accepted_continuation_and_work(
+            authority,
+            Some(&continuation),
+            &mut crate::InteractionWorkReceipt::default(),
+        )?;
         if output.evidence != authority.evidence {
             return Err(IntentMaterializationError::AcceptedAuthorityEvidenceMismatch);
         }
@@ -1330,6 +1338,19 @@ impl ColdIntentMaterializer {
     fn materialize_source_with_work(
         &self,
         candidate: &dyn IntentMaterializationSource,
+        work: &mut crate::InteractionWorkReceipt,
+    ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
+        self.materialize_source_with_accepted_continuation_and_work(candidate, None, work)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one auditable cold transaction retains validation, exact continuation certification, work evidence and evidence publication in one scope"
+    )]
+    fn materialize_source_with_accepted_continuation_and_work(
+        &self,
+        candidate: &dyn IntentMaterializationSource,
+        accepted_continuation: Option<&geosolve_sketch::SketchDocument>,
         work: &mut crate::InteractionWorkReceipt,
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         candidate.graph().validate()?;
@@ -1385,7 +1406,7 @@ impl ColdIntentMaterializer {
                     && matches!(node.kind, IntentNodeKind::Operation { .. })
             })
         });
-        let (session, state) = if contains_operation {
+        let (mut session, state) = if contains_operation {
             self.lower_operation_graph(
                 candidate,
                 document,
@@ -1408,6 +1429,14 @@ impl ColdIntentMaterializer {
                 &desired_snapshots,
             )?
         };
+        if let Some(accepted_continuation) = accepted_continuation {
+            work.record_native_preview_attempt();
+            let expected = session.prepared_input();
+            let accepted = session
+                .design_document()
+                .project_accepted_numerical_continuation(accepted_continuation)?;
+            session.replace_current_accepted_materialization(expected, accepted)?;
+        }
         state.validate_declared_consumption(candidate)?;
         let accepted = session
             .accepted_state_for_current_input()
@@ -1702,9 +1731,45 @@ impl ColdIntentMaterializer {
         Option<ColdIntentMaterialization>,
         crate::InteractionWorkReceipt,
     ) {
+        self.evaluate_with_materialization_and_accepted_continuation_audited(candidate, None)
+    }
+
+    /// Evaluates one delegated semantic candidate while certifying a complete
+    /// independently accepted numerical continuation under the candidate's
+    /// newly retained source design. The continuation contributes no source
+    /// declarations or temporary drag request; it can only replace the
+    /// candidate's accepted coordinates after exact native certification.
+    pub(crate) fn evaluate_with_materialization_from_accepted_continuation_audited(
+        &self,
+        candidate: &IntentCandidate,
+        accepted_continuation: &geosolve_sketch::SketchDocument,
+    ) -> (
+        IntentEvaluation,
+        Option<ColdIntentMaterialization>,
+        crate::InteractionWorkReceipt,
+    ) {
+        self.evaluate_with_materialization_and_accepted_continuation_audited(
+            candidate,
+            Some(accepted_continuation),
+        )
+    }
+
+    fn evaluate_with_materialization_and_accepted_continuation_audited(
+        &self,
+        candidate: &IntentCandidate,
+        accepted_continuation: Option<&geosolve_sketch::SketchDocument>,
+    ) -> (
+        IntentEvaluation,
+        Option<ColdIntentMaterialization>,
+        crate::InteractionWorkReceipt,
+    ) {
         let mut work = crate::InteractionWorkReceipt::default();
         work.record_intent_materialization_attempt();
-        match self.materialize_source_with_work(candidate, &mut work) {
+        match self.materialize_source_with_accepted_continuation_and_work(
+            candidate,
+            accepted_continuation,
+            &mut work,
+        ) {
             Ok(materialized) => {
                 let evaluation = IntentEvaluation::Accepted {
                     evidence: materialized.evidence.clone(),
@@ -2569,64 +2634,31 @@ impl LoweringState {
         if self.topology_aggregate_nodes.is_empty() {
             return Ok(());
         }
-        let query = PreparedOffsetOperandQuery::capture(session, OffsetOperandRequest::default())
-            .map_err(|_| IntentMaterializationError::InvalidAggregate {
-            node: *self
-                .topology_aggregate_nodes
-                .values()
-                .next()
-                .expect("nonempty topology aggregate map"),
-            reason: "accepted topology snapshot is unavailable",
-        })?;
-        let outcome = query.execute(OperationControl::unlimited()).map_err(|_| {
-            IntentMaterializationError::InvalidAggregate {
-                node: *self
-                    .topology_aggregate_nodes
-                    .values()
-                    .next()
-                    .expect("nonempty topology aggregate map"),
-                reason: "accepted topology analysis failed",
-            }
-        })?;
-        let result = match outcome {
-            OperationOutcome::Completed { value, .. } => value,
-            OperationOutcome::Cancelled { .. } | OperationOutcome::WorkExhausted { .. } => {
-                return Err(IntentMaterializationError::InvalidAggregate {
+        let index =
+            PreparedEndpointTopologyQuery::capture(session, EndpointTopologyRequest::default())
+                .map_err(|_| IntentMaterializationError::InvalidAggregate {
                     node: *self
                         .topology_aggregate_nodes
                         .values()
                         .next()
                         .expect("nonempty topology aggregate map"),
-                    reason: "accepted topology analysis did not complete",
-                });
-            }
-            _ => {
-                return Err(IntentMaterializationError::InvalidAggregate {
+                    reason: "accepted topology snapshot is unavailable",
+                })?
+                .execute()
+                .map_err(|_| IntentMaterializationError::InvalidAggregate {
                     node: *self
                         .topology_aggregate_nodes
                         .values()
                         .next()
                         .expect("nonempty topology aggregate map"),
-                    reason: "accepted topology analysis returned an unknown outcome",
-                });
-            }
-        };
-        let index = result.operand_index.as_ref().ok_or_else(|| {
-            IntentMaterializationError::InvalidAggregate {
-                node: *self
-                    .topology_aggregate_nodes
-                    .values()
-                    .next()
-                    .expect("nonempty topology aggregate map"),
-                reason: "accepted topology analysis is incomplete",
-            }
-        })?;
+                    reason: "accepted endpoint topology exceeds deterministic limits",
+                })?;
         for (port, node) in &self.topology_aggregate_nodes {
             let aggregate = self
                 .aggregate_bindings
                 .get(port)
                 .expect("topology aggregate has an equation-free binding");
-            validate_aggregate_topology(*node, aggregate, index)?;
+            validate_aggregate_topology(*node, aggregate, &index)?;
         }
         Ok(())
     }
@@ -4419,17 +4451,63 @@ fn lower_aggregate(
     Ok(())
 }
 
-fn endpoint_pair(
+trait AggregateEndpointTopology {
+    fn span_is_periodic(&self, span: CurveSpan) -> Option<bool>;
+    fn contains_endpoint(&self, endpoint: OffsetEndpointRef) -> bool;
+    fn endpoints_are_adjacent(&self, first: OffsetEndpointRef, second: OffsetEndpointRef) -> bool;
+}
+
+impl AggregateEndpointTopology for EndpointTopologyIndex {
+    fn span_is_periodic(&self, span: CurveSpan) -> Option<bool> {
+        self.span(span).map(|candidate| candidate.periodic)
+    }
+
+    fn contains_endpoint(&self, endpoint: OffsetEndpointRef) -> bool {
+        self.span(endpoint.span).is_some_and(|candidate| {
+            candidate
+                .endpoints
+                .iter()
+                .any(|candidate| candidate.endpoint == endpoint)
+        })
+    }
+
+    fn endpoints_are_adjacent(&self, first: OffsetEndpointRef, second: OffsetEndpointRef) -> bool {
+        self.adjacent_endpoints(first)
+            .any(|candidate| candidate == second)
+    }
+}
+
+impl AggregateEndpointTopology for OffsetOperandIndex {
+    fn span_is_periodic(&self, span: CurveSpan) -> Option<bool> {
+        self.span(span).map(|candidate| candidate.periodic)
+    }
+
+    fn contains_endpoint(&self, endpoint: OffsetEndpointRef) -> bool {
+        self.span(endpoint.span).is_some_and(|candidate| {
+            candidate
+                .endpoints
+                .iter()
+                .any(|candidate| candidate.endpoint == endpoint)
+        })
+    }
+
+    fn endpoints_are_adjacent(&self, first: OffsetEndpointRef, second: OffsetEndpointRef) -> bool {
+        self.adjacent_endpoints(first)
+            .any(|candidate| candidate == second)
+    }
+}
+
+fn endpoint_pair<I: AggregateEndpointTopology>(
     node: NodeId,
     span: CurveSpan,
-    index: &OffsetOperandIndex,
+    index: &I,
 ) -> Result<[OffsetEndpointRef; 2], IntentMaterializationError> {
-    let candidate = index
-        .span(span)
-        .ok_or(IntentMaterializationError::InvalidAggregate {
+    if index.span_is_periodic(span).is_none() {
+        return Err(IntentMaterializationError::InvalidAggregate {
             node,
             reason: "aggregate span is absent from accepted topology",
-        })?;
+        });
+    }
     let start = OffsetEndpointRef {
         span,
         endpoint: OffsetEndpointRole::Start,
@@ -4438,15 +4516,7 @@ fn endpoint_pair(
         span,
         endpoint: OffsetEndpointRole::End,
     };
-    if !candidate
-        .endpoints
-        .iter()
-        .any(|endpoint| endpoint.endpoint == start)
-        || !candidate
-            .endpoints
-            .iter()
-            .any(|endpoint| endpoint.endpoint == end)
-    {
+    if !index.contains_endpoint(start) || !index.contains_endpoint(end) {
         return Err(IntentMaterializationError::InvalidAggregate {
             node,
             reason: "aggregate span lacks topology-owned bounded endpoints",
@@ -4455,21 +4525,18 @@ fn endpoint_pair(
     Ok([start, end])
 }
 
-fn endpoints_connected(
-    index: &OffsetOperandIndex,
+fn endpoints_connected<I: AggregateEndpointTopology>(
+    index: &I,
     first: OffsetEndpointRef,
     second: OffsetEndpointRef,
 ) -> bool {
-    first == second
-        || index
-            .adjacent_endpoints(first)
-            .any(|candidate| candidate == second)
+    first == second || index.endpoints_are_adjacent(first, second)
 }
 
-fn validate_aggregate_topology(
+fn validate_aggregate_topology<I: AggregateEndpointTopology>(
     node: NodeId,
     aggregate: &IntentAggregateMaterialization,
-    index: &OffsetOperandIndex,
+    index: &I,
 ) -> Result<(), IntentMaterializationError> {
     if aggregate.spans.is_empty() {
         return Err(IntentMaterializationError::InvalidAggregate {
@@ -4487,11 +4554,7 @@ fn validate_aggregate_topology(
     let periodic = aggregate
         .spans
         .iter()
-        .filter(|span| {
-            index
-                .span(**span)
-                .is_some_and(|candidate| candidate.periodic)
-        })
+        .filter(|span| index.span_is_periodic(**span) == Some(true))
         .count();
     if periodic > 0 {
         if aggregate.closed && aggregate.spans.len() == 1 && periodic == 1 {

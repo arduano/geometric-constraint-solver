@@ -370,6 +370,21 @@ export default sketch(($) => {
     }
 
     #[test]
+    fn project_json_rejects_unknown_top_level_authority() {
+        let project =
+            CodeProject::managed_only(ProjectKey("strict-project-json".into()), CODE_ONLY_SOURCE)
+                .unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_str(&project.to_canonical_json().unwrap()).unwrap();
+        value["unexpectedAuthority"] = serde_json::json!(true);
+        let error = CodeProject::from_json(&serde_json::to_string(&value).unwrap()).unwrap_err();
+        assert!(
+            matches!(error, CodeProjectError::InvalidJson(ref message) if message.contains("unknown field")),
+            "unknown project authority must reject at the strict JSON boundary: {error}",
+        );
+    }
+
+    #[test]
     fn lock_and_patch_paths_are_exact_closed_authority() {
         let mut extra_lock = bundled_code_project_demos().remove(0).project();
         extra_lock.lock["unexpected"] = serde_json::json!(true);

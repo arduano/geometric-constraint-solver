@@ -4171,6 +4171,100 @@ impl SketchDocument {
         normalized == *other
     }
 
+    /// Projects only accepted continuous solver values from an independently
+    /// validated continuation onto this document's durable design authority.
+    ///
+    /// Point positions and scalar values come from `continuation`. Every
+    /// persistent identity, label, topology row, constraint, parameter,
+    /// activation choice, source-order entry, and allocator cursor must remain
+    /// exact. Host-only semantic source reservations and line/polyline branch
+    /// vectors remain owned by `self`; the
+    /// continuation may differ only within each curve's same positive branch
+    /// cell. This is the narrow source-owner seam used to retain an exact
+    /// visible solution without importing a transient drag request or promoting
+    /// solver-moved companions into design edits.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a foreign or structurally different continuation, a branch-cell
+    /// change, non-finite/out-of-domain continuous values, or invalid projected
+    /// geometry.
+    pub fn project_accepted_numerical_continuation(
+        &self,
+        continuation: &Self,
+    ) -> Result<Self, DocumentError> {
+        if self.points.len() != continuation.points.len()
+            || self.scalars.len() != continuation.scalars.len()
+        {
+            return invalid(
+                "accepted numerical continuation",
+                "point or scalar topology differs from the retained design",
+            );
+        }
+        let mut projected = self.clone();
+        for (target, source) in projected.points.iter_mut().zip(&continuation.points) {
+            if target.id != source.id {
+                return invalid(
+                    "accepted numerical continuation",
+                    "point identity or ordering differs from the retained design",
+                );
+            }
+            target.position = source.position;
+        }
+        for (target, source) in projected.scalars.iter_mut().zip(&continuation.scalars) {
+            if target.id != source.id {
+                return invalid(
+                    "accepted numerical continuation",
+                    "scalar identity or ordering differs from the retained design",
+                );
+            }
+            target.value = source.value;
+        }
+        projected.validate()?;
+        let recomputable = self
+            .curves
+            .iter()
+            .filter_map(|curve| {
+                matches!(
+                    &curve.definition,
+                    CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
+                )
+                .then_some(curve.id)
+            })
+            .collect::<BTreeSet<_>>();
+        let mut normalized_continuation = continuation.clone();
+        // Semantic source reservations are host-side ownership guards omitted
+        // from draft-v5 accepted materialization evidence. They remain wholly
+        // owned by the retained design and never come from numerical state.
+        normalized_continuation
+            .semantic_source_reservations
+            .clone_from(&self.semantic_source_reservations);
+        if !normalized_continuation
+            .exact_except_recomputable_line_branches(&projected, &recomputable)
+            || !normalized_continuation
+                .points
+                .iter()
+                .zip(&projected.points)
+                .all(|(source, target)| {
+                    source.id == target.id
+                        && source.position.map(f64::to_bits) == target.position.map(f64::to_bits)
+                })
+            || !normalized_continuation
+                .scalars
+                .iter()
+                .zip(&projected.scalars)
+                .all(|(source, target)| {
+                    source.id == target.id && source.value.to_bits() == target.value.to_bits()
+                })
+        {
+            return invalid(
+                "accepted numerical continuation",
+                "durable design fields or branch cells differ from the retained design",
+            );
+        }
+        Ok(projected)
+    }
+
     /// Returns one curve's persistent profile/construction role.
     #[must_use]
     pub fn geometry_role(&self, curve: CurveId) -> Option<GeometryRole> {
@@ -14576,6 +14670,7 @@ mod projectional_branch_audit_tests {
         line_end: DesignPointId,
         polyline: CurveId,
         unrelated_point: DesignPointId,
+        scalar: DesignScalarId,
     }
 
     fn branch_audit_fixture() -> BranchAuditFixture {
@@ -14592,6 +14687,14 @@ mod projectional_branch_audit_tests {
             .add_point("polyline end", [3.0, 5.0])
             .expect("point");
         let unrelated_point = document.add_point("unrelated", [8.0, 8.0]).expect("point");
+        let scalar = document
+            .add_scalar(
+                "continuation scalar",
+                3.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("scalar");
         let line = document
             .add_curve(
                 "segment-style line",
@@ -14618,6 +14721,7 @@ mod projectional_branch_audit_tests {
             line_end,
             polyline,
             unrelated_point,
+            scalar,
         }
     }
 
@@ -14785,6 +14889,82 @@ mod projectional_branch_audit_tests {
                 &cold,
                 &BTreeSet::from([fixture.polyline]),
             )
+        );
+    }
+
+    #[test]
+    fn accepted_numerical_continuation_imports_only_continuous_values() {
+        let fixture = branch_audit_fixture();
+        let mut continuation = fixture.document.clone();
+        continuation
+            .set_point_position(fixture.line_end, [4.0, 0.75])
+            .expect("finite continuation point");
+        continuation
+            .set_scalar_value(fixture.scalar, 5.0)
+            .expect("valid continuation scalar");
+        let (sine, cosine) = 0.2_f64.sin_cos();
+        replace_branch_without_geometry(
+            &mut continuation,
+            CurveSpan::line(fixture.line),
+            [cosine, sine],
+        );
+
+        let projected = fixture
+            .document
+            .project_accepted_numerical_continuation(&continuation)
+            .expect("same-schema numerical continuation");
+        assert_eq!(
+            projected
+                .point(fixture.line_end)
+                .expect("projected point")
+                .position
+                .map(f64::to_bits),
+            [4.0, 0.75].map(f64::to_bits),
+        );
+        assert_eq!(
+            projected
+                .scalar(fixture.scalar)
+                .expect("projected scalar")
+                .value
+                .to_bits(),
+            5.0_f64.to_bits(),
+        );
+        assert_eq!(
+            projected
+                .curve(fixture.line)
+                .expect("projected line")
+                .definition,
+            fixture
+                .document
+                .curve(fixture.line)
+                .expect("retained line")
+                .definition,
+            "durable branch state remains source-owned",
+        );
+    }
+
+    #[test]
+    fn accepted_numerical_continuation_rejects_durable_changes_and_branch_flips() {
+        let fixture = branch_audit_fixture();
+        let mut renamed = fixture.document.clone();
+        renamed
+            .point_mut(fixture.unrelated_point)
+            .expect("unrelated point")
+            .label = "foreign label".into();
+        assert!(
+            fixture
+                .document
+                .project_accepted_numerical_continuation(&renamed)
+                .is_err(),
+        );
+
+        let mut flipped = fixture.document.clone();
+        replace_branch_without_geometry(&mut flipped, CurveSpan::line(fixture.line), [-1.0, 0.0]);
+        assert!(
+            fixture
+                .document
+                .project_accepted_numerical_continuation(&flipped)
+                .is_err(),
         );
     }
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import {
+  CodeControlClient,
   createProject,
   definePatch,
   fillets,
@@ -13,6 +14,7 @@ import {
   t,
 } from "../src/index.js";
 import type {
+  CodeControlSnapshot,
   CurveSpanRef,
   FeatureRecord,
   KeyedFeatureCollection,
@@ -21,6 +23,7 @@ import type {
   NativeCurveSpanRef,
   OutputRef,
   RectangleFeature,
+  ManagedControlToken,
 } from "../src/index.js";
 
 const alpha = createProject("alpha");
@@ -244,8 +247,22 @@ const managedFilletSet = sketch(($) => {
     curve: second.span,
     suppressed: false,
   });
+  const symmetric = $.constraint.symmetricAboutDatumAxis("symmetric", {
+    first: first.start,
+    second: first.end,
+    axis: "y",
+  });
+  const hole = $.geometry.circle("hole", { center: first.start, radius: mm(2) });
+  const holeRadius = $.dimension.radius("holeRadius", {
+    curve: hole.circle,
+    target: mm(2),
+  });
   const typedVertical: OutputRef<ManagedSketchProject, "constraint"> = vertical;
   typedVertical;
+  const typedSymmetric: OutputRef<ManagedSketchProject, "constraint"> = symmetric;
+  typedSymmetric;
+  const typedRadius: OutputRef<ManagedSketchProject, "dimension"> = holeRadius;
+  typedRadius;
 
   const parent = {
     span: first.span,
@@ -281,7 +298,41 @@ const managedFilletSet = sketch(($) => {
   $.constraint.vertical("rawVertical", { curve: "second.span" });
   // @ts-expect-error Managed Vertical rejects native spans from another project.
   $.constraint.vertical("foreignVertical", { curve: segment.span });
+  // @ts-expect-error Datum symmetry has a closed axis choice.
+  $.constraint.symmetricAboutDatumAxis("badAxis", { first: first.start, second: first.end, axis: "z" });
+  // @ts-expect-error Radius dimensions require a curve rather than a curve span.
+  $.dimension.radius("spanRadius", { curve: first.span, target: mm(2) });
+  // @ts-expect-error Radius dimensions reject angular units.
+  $.dimension.radius("angleRadius", { curve: hole.circle, target: { unit: "deg", value: 2 } });
 
-  return $.outputs({ first, second, round, horizontal, vertical });
+  return $.outputs({ first, second, round, horizontal, vertical, symmetric, hole, holeRadius });
 });
 managedFilletSet;
+
+async function managedCodeControlTypes(
+  client: CodeControlClient,
+  snapshot: CodeControlSnapshot,
+  token: ManagedControlToken,
+): Promise<void> {
+  const inspected = await client.inspect();
+  if (inspected.outcome === "success") {
+    inspected.value.snapshot.manifest.controls[0]?.consumers;
+  }
+  await client.edit(snapshot, {
+    edits: [{
+      token,
+      value: { kind: "unit", value: { unit: "mm", value: 2 } },
+    }],
+  });
+  await client.undo(snapshot.identity);
+  await client.redo(snapshot.identity);
+
+  await client.edit(snapshot, {
+    edits: [{
+      token,
+      // @ts-expect-error Managed-control replacements use the closed Rust tagged-value DTO.
+      value: { kind: "quantity", value: 2 },
+    }],
+  });
+}
+managedCodeControlTypes;

@@ -164,6 +164,19 @@ pub struct AuthoringDeclaration {
     pub arguments_span: ManagedSpan,
 }
 
+/// One expression-free lexical managed-v1 numeric binding. It owns one
+/// parser-authenticated literal and may be referenced only by later
+/// declaration arguments; it is not a native declaration or sketch output.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ManagedScalarBinding {
+    pub variable: String,
+    pub symbol: SemanticSymbol,
+    pub value: ManagedValue,
+    pub statement_span: ManagedSpan,
+    pub symbol_span: ManagedSpan,
+    pub value_span: ManagedSpan,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ManagedOrganization {
     pub name: String,
@@ -180,6 +193,8 @@ pub struct ManagedOutput {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AuthoringProgram {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scalar_bindings: Vec<ManagedScalarBinding>,
     pub declarations: Vec<AuthoringDeclaration>,
     pub organizations: Vec<ManagedOrganization>,
     pub outputs: Vec<ManagedOutput>,
@@ -236,6 +251,7 @@ pub struct CodeProjectFile {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CodeProject {
     pub project: ProjectKey,
     pub managed: ManagedDocument,

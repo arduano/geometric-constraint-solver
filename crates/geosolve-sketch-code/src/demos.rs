@@ -23,6 +23,9 @@ pub enum CodeProjectDemoId {
     CompassRose,
     NeonManifold,
     PcWaterManifold,
+    RoboticRoutingBoard,
+    CncJoineryFitCoupon,
+    GridfinityBinSection,
 }
 
 impl CodeProjectDemoId {
@@ -38,6 +41,9 @@ impl CodeProjectDemoId {
             Self::CompassRose => "compass-rose",
             Self::NeonManifold => "neon-manifold",
             Self::PcWaterManifold => "pc-water-manifold",
+            Self::RoboticRoutingBoard => "robotic-routing-board",
+            Self::CncJoineryFitCoupon => "cnc-joinery-fit-coupon",
+            Self::GridfinityBinSection => "gridfinity-1x1x3-section",
         }
     }
 
@@ -73,11 +79,20 @@ impl CodeProjectDemoId {
             Self::PcWaterManifold => {
                 "A fully constrained acrylic distro plate combines managed mechanical dimensions with adaptive AI-authored water-channel patches."
             }
+            Self::RoboticRoutingBoard => {
+                "Eight keyed cable routes dogfood shared/local source controls, adaptive clips and Fillets, dense rendering, and one movable service loop."
+            }
+            Self::CncJoineryFitCoupon => {
+                "Loose, nominal and press-fit router coupons compose constrained mortises, shared cutter reliefs and selected handling Fillets."
+            }
+            Self::GridfinityBinSection => {
+                "One keyed closed material contour captures a standards-informed 1×1×3U base, cavity, walls and stacking lips."
+            }
         }
     }
 }
 
-/// Complete offline fixture for one M84 structural-authoring demonstration.
+/// Complete offline fixture for one bundled structural-authoring demonstration.
 #[derive(Clone, Debug)]
 pub struct CodeProjectDemo {
     pub id: CodeProjectDemoId,
@@ -200,6 +215,9 @@ pub fn bundled_code_project_demos() -> Vec<CodeProjectDemo> {
         compass_rose_demo(),
         neon_manifold_demo(),
         pc_water_manifold_demo(),
+        robotic_routing_board_demo(),
+        cnc_joinery_fit_coupon_demo(),
+        gridfinity_bin_section_demo(),
     ]
 }
 
@@ -619,6 +637,109 @@ fn pc_water_manifold_demo() -> CodeProjectDemo {
     demo
 }
 
+fn robotic_routing_board_demo() -> CodeProjectDemo {
+    const PATCH: &str = include_str!("../assets/patches/harness-route.patch.ts");
+    const SOURCE: &str = include_str!("../assets/demos/robotic-routing-board.sketch.ts");
+    let mut demo = CodeProjectDemo {
+        id: CodeProjectDemoId::RoboticRoutingBoard,
+        title: "Robotic cable-harness routing board · adaptive dogfood",
+        managed_source: SOURCE,
+        custom_files: BTreeMap::from([("patches/harness-route.patch.ts", PATCH)]),
+        artifacts: vec![harness_route_artifact(PATCH)],
+        output_kinds: BTreeMap::from([
+            ("board", FeatureKind::Feature),
+            ("powerRoute", FeatureKind::Feature),
+            ("powerClips", FeatureKind::Collection),
+            ("powerFillets", FeatureKind::Collection),
+            ("servoARoute", FeatureKind::Feature),
+            ("servoAClips", FeatureKind::Collection),
+            ("servoAFillets", FeatureKind::Collection),
+            ("servoBRoute", FeatureKind::Feature),
+            ("servoBClips", FeatureKind::Collection),
+            ("servoBFillets", FeatureKind::Collection),
+            ("sensorARoute", FeatureKind::Feature),
+            ("sensorAClips", FeatureKind::Collection),
+            ("sensorAFillets", FeatureKind::Collection),
+            ("sensorBRoute", FeatureKind::Feature),
+            ("sensorBClips", FeatureKind::Collection),
+            ("sensorBFillets", FeatureKind::Collection),
+            ("gripperRoute", FeatureKind::Feature),
+            ("gripperClips", FeatureKind::Collection),
+            ("gripperFillets", FeatureKind::Collection),
+            ("visionRoute", FeatureKind::Feature),
+            ("visionClips", FeatureKind::Collection),
+            ("visionFillets", FeatureKind::Collection),
+            ("serviceRoute", FeatureKind::Feature),
+            ("serviceClips", FeatureKind::Collection),
+            ("serviceFillets", FeatureKind::Collection),
+        ]),
+        generated_members: Vec::new(),
+    };
+    demo.generated_members = crate::required_generated_members(&demo.project())
+        .expect("bundled routing-board generated-member inventory is valid");
+    demo
+}
+
+fn cnc_joinery_fit_coupon_demo() -> CodeProjectDemo {
+    const RELIEF_PATCH: &str = include_str!("../assets/patches/corner-reliefs.patch.ts");
+    const FILLET_PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
+    const SOURCE: &str = include_str!("../assets/demos/cnc-joinery-fit-coupon.sketch.ts");
+    let mut demo = CodeProjectDemo {
+        id: CodeProjectDemoId::CncJoineryFitCoupon,
+        title: "CNC joinery fit coupon · keyed corner reliefs",
+        managed_source: SOURCE,
+        custom_files: BTreeMap::from([
+            ("patches/corner-reliefs.patch.ts", RELIEF_PATCH),
+            ("patches/fillet-record.patch.ts", FILLET_PATCH),
+        ]),
+        artifacts: vec![
+            corner_reliefs_artifact(RELIEF_PATCH),
+            fillet_record_artifact(FILLET_PATCH),
+        ],
+        output_kinds: BTreeMap::from([
+            ("femaleBlank", FeatureKind::Feature),
+            ("looseMortise", FeatureKind::Feature),
+            ("nominalMortise", FeatureKind::Feature),
+            ("pressMortise", FeatureKind::Feature),
+            ("looseReliefs", FeatureKind::Collection),
+            ("nominalReliefs", FeatureKind::Collection),
+            ("pressReliefs", FeatureKind::Collection),
+            ("looseTab", FeatureKind::Feature),
+            ("nominalTab", FeatureKind::Feature),
+            ("pressTab", FeatureKind::Feature),
+            ("blankHandling", FeatureKind::Collection),
+            ("looseTabHandling", FeatureKind::Collection),
+            ("nominalTabHandling", FeatureKind::Collection),
+            ("pressTabHandling", FeatureKind::Collection),
+        ]),
+        generated_members: Vec::new(),
+    };
+    demo.generated_members = crate::required_generated_members(&demo.project())
+        .expect("bundled CNC joinery coupon generated-member inventory is valid");
+    demo
+}
+
+fn gridfinity_bin_section_demo() -> CodeProjectDemo {
+    const PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
+    const SOURCE: &str = include_str!("../assets/demos/gridfinity-1x1x3-section.sketch.ts");
+    let mut demo = CodeProjectDemo {
+        id: CodeProjectDemoId::GridfinityBinSection,
+        title: "Gridfinity 1×1×3U section · keyed standard profile",
+        managed_source: SOURCE,
+        custom_files: BTreeMap::from([("patches/fillet-record.patch.ts", PATCH)]),
+        artifacts: vec![fillet_record_artifact(PATCH)],
+        output_kinds: BTreeMap::from([
+            ("section", FeatureKind::Feature),
+            ("floorFillets", FeatureKind::Collection),
+            ("lipFillets", FeatureKind::Collection),
+        ]),
+        generated_members: Vec::new(),
+    };
+    demo.generated_members = crate::required_generated_members(&demo.project())
+        .expect("bundled Gridfinity section generated-member inventory is valid");
+    demo
+}
+
 fn typed_panel_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
     const SOURCE: &str = r#""use geosolve managed-v1";
@@ -798,6 +919,20 @@ fn water_channel_artifact(source: &str) -> PatchModuleArtifact {
     )
 }
 
+fn harness_route_artifact(source: &str) -> PatchModuleArtifact {
+    compiled_typescript_artifact(
+        source,
+        include_str!("../assets/artifacts/harness-route.artifact.json"),
+    )
+}
+
+fn corner_reliefs_artifact(source: &str) -> PatchModuleArtifact {
+    compiled_typescript_artifact(
+        source,
+        include_str!("../assets/artifacts/corner-reliefs.artifact.json"),
+    )
+}
+
 fn compiled_typescript_artifact(source: &str, canonical_json: &str) -> PatchModuleArtifact {
     let canonical_json = canonical_json.trim_end_matches(['\r', '\n']);
     let validated = PatchModuleArtifact::from_canonical_json(canonical_json)
@@ -820,7 +955,7 @@ mod tests {
     #[test]
     fn all_bundled_projects_are_offline_parseable_and_artifact_valid() {
         let demos = bundled_code_project_demos();
-        assert_eq!(demos.len(), 9);
+        assert_eq!(demos.len(), 12);
         for demo in demos {
             let project = demo.project();
             assert_eq!(project.managed.source, demo.managed_source);

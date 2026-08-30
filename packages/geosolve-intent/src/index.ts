@@ -984,7 +984,8 @@ export type IntentRpcFailureCode =
   | "editor_rejected"
   | "workbench_unavailable"
   | "workbench_busy"
-  | "workbench_surface_unavailable";
+  | "workbench_surface_unavailable"
+  | "code_authority_required";
 
 export interface IntentRpcFailure<S extends string> {
   readonly code: IntentRpcFailureCode;
@@ -3666,6 +3667,7 @@ const RPC_FAILURE_CODES = [
   "workbench_unavailable",
   "workbench_busy",
   "workbench_surface_unavailable",
+  "code_authority_required",
 ] as const satisfies readonly IntentRpcFailureCode[];
 
 const INPUT_ROLES: readonly InputRole[] = [

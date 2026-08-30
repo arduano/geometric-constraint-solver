@@ -81,7 +81,9 @@ for package in \
   geosolve-sketch-ops \
   geosolve-sketch-topology \
   geosolve-constraint-editor \
-  geosolve-sketch-code
+  geosolve-sketch-code \
+  geosolve-sketch-render \
+  geosolve-headless
 do
   contents="$(cargo package --locked --allow-dirty --list -p "$package")"
   grep -qx 'LICENSE' <<<"$contents"

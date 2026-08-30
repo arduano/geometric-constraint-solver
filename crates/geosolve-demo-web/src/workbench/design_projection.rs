@@ -11,19 +11,114 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use geosolve_constraint_editor::{
-    IntentGraphNodeKind, IntentInspectorField, IntentInspectorProjection, IntentOutlineDeclaration,
-    IntentSourceToken, IntentSourceTokenTarget, IntentWorkbenchProjection,
+    IntentGraphNodeKind, IntentInspectorEditTarget, IntentInspectorField,
+    IntentInspectorProjection, IntentOutlineDeclaration, IntentSourceToken,
+    IntentSourceTokenTarget, IntentWorkbenchProjection,
 };
 use geosolve_sketch_intent::{
-    IntentFieldChoices, IntentFieldDefault, IntentKey, IntentLiteral, IntentLiteralSchema,
+    IntentDefinitionFieldDescriptor, IntentFieldChoices, IntentFieldDefault, IntentFieldKey,
+    IntentKey, IntentLiteral, IntentLiteralSchema, IntentOutputDescriptor,
     IntentPatchOperationKind, IntentPlanDisposition, IntentProjectionPath,
-    IntentProjectionPathSegment, IntentSessionIdentity, IntentUnit, LeafField, NodeId,
+    IntentProjectionPathSegment, IntentSessionIdentity, IntentUnit, LeafField, LeafRef, NodeId,
     OperationKind,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct DesignProjectionSelection {
     pub node: NodeId,
+}
+
+/// Explicit authority shown beside a code-owned Inspector parameter. These
+/// rows are presentation metadata only: the mutation adapter independently
+/// re-resolves the same target against a fresh managed-control manifest.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum InspectorParameterAuthority {
+    ModifiableSource {
+        source_path: String,
+        source_text: String,
+        consumer_count: usize,
+        generated_consumer_count: usize,
+    },
+    ModifiableInstance,
+    Encoded {
+        reason: String,
+    },
+    Blocked {
+        reason: String,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct InspectorParameterPresentation {
+    pub target: IntentInspectorEditTarget,
+    pub authority: InspectorParameterAuthority,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct InspectorPresentation<'a> {
+    pub parameters: &'a [InspectorParameterPresentation],
+    pub name_authority: Option<&'a InspectorParameterAuthority>,
+}
+
+/// One bounded target-to-schema index shared by managed-parameter authority
+/// derivation and Inspector markup. The central descriptor remains the source
+/// of truth; this view only prevents repeated linear scans of it for every
+/// projected field.
+pub(crate) struct InspectorDescriptorIndex<'a> {
+    definitions: BTreeMap<IntentFieldKey, &'a IntentDefinitionFieldDescriptor>,
+    instances: BTreeMap<LeafRef, (&'a IntentOutputDescriptor, IntentProjectionPath)>,
+}
+
+impl<'a> InspectorDescriptorIndex<'a> {
+    pub(crate) fn new(inspector: &'a IntentInspectorProjection) -> Self {
+        let mut definitions = BTreeMap::new();
+        for descriptor in &inspector.descriptor.fields {
+            let replaced = definitions.insert(descriptor.schema.field.clone(), descriptor);
+            assert!(
+                replaced.is_none(),
+                "central Inspector definition descriptors must be unique"
+            );
+        }
+
+        let mut instances = BTreeMap::new();
+        for output in &inspector.descriptor.outputs {
+            for field in &output.writable {
+                let leaf = LeafRef {
+                    node: output.port.node,
+                    port: output.port.port,
+                    field: *field,
+                };
+                let path = output
+                    .path_for_leaf(leaf)
+                    .expect("descriptor output owns its declared writable leaf");
+                let replaced = instances.insert(leaf, (output, path));
+                assert!(
+                    replaced.is_none(),
+                    "central Inspector writable-leaf descriptors must be unique"
+                );
+            }
+        }
+        Self {
+            definitions,
+            instances,
+        }
+    }
+
+    pub(crate) fn definition(
+        &self,
+        field: &IntentFieldKey,
+    ) -> Option<&'a IntentDefinitionFieldDescriptor> {
+        self.definitions.get(field).copied()
+    }
+
+    pub(crate) fn instance(
+        &self,
+        leaf: LeafRef,
+    ) -> Option<(&'a IntentOutputDescriptor, &IntentProjectionPath)> {
+        self.instances
+            .get(&leaf)
+            .map(|(output, path)| (*output, path))
+    }
 }
 
 pub(crate) fn declaration_count(projection: &IntentWorkbenchProjection) -> usize {
@@ -214,16 +309,39 @@ pub(crate) fn structured_source_markup(
 ) -> String {
     let source = &projection.structured_source;
     let grouped_helpers = grouped_outline_helper_nodes(projection);
+    let mut node_cells = BTreeMap::new();
+    for cell in &projection.outline {
+        for declaration in &cell.declarations {
+            node_cells.entry(declaration.node).or_insert(cell.cell);
+        }
+    }
+    debug_assert!(
+        source
+            .tokens
+            .windows(2)
+            .all(|tokens| tokens[0].end <= tokens[1].start),
+        "editor-owned structured source tokens must remain ordered and non-overlapping"
+    );
     let mut markup = String::new();
     let mut line_start = 0;
+    let mut token_cursor = 0;
     for (line_number, inclusive) in source.text.split_inclusive('\n').enumerate() {
         let line = inclusive.strip_suffix('\n').unwrap_or(inclusive);
         let line_end = line_start + line.len();
-        let line_tokens = source
+        let line_token_start = token_cursor;
+        while source
             .tokens
-            .iter()
-            .filter(|token| token.start >= line_start && token.end <= line_end)
-            .collect::<Vec<_>>();
+            .get(token_cursor)
+            .is_some_and(|token| token.start <= line_end)
+        {
+            token_cursor += 1;
+        }
+        let line_tokens = &source.tokens[line_token_start..token_cursor];
+        debug_assert!(
+            line_tokens
+                .iter()
+                .all(|token| token.start >= line_start && token.end <= line_end)
+        );
         let selected = line_tokens.iter().any(|token| {
             let node = token_node(&token.target);
             !grouped_helpers.contains(&node) && selection.is_some_and(|value| value.node == node)
@@ -232,17 +350,8 @@ pub(crate) fn structured_source_markup(
             .iter()
             .map(|token| token_node(&token.target))
             .find(|node| !grouped_helpers.contains(node));
-        let organization = node.and_then(|node| {
-            projection
-                .outline
-                .iter()
-                .find(|cell| {
-                    cell.declarations
-                        .iter()
-                        .any(|declaration| declaration.node == node)
-                })
-                .map(|cell| (node, cell.cell))
-        });
+        let organization =
+            node.and_then(|node| node_cells.get(&node).copied().map(|cell| (node, cell)));
         let _ = write!(
             markup,
             "<div class=\"wb-intent-source-line{}\"{}><span>{}</span><code>",
@@ -262,13 +371,14 @@ pub(crate) fn structured_source_markup(
             &mut markup,
             line,
             line_start,
-            &line_tokens,
+            line_tokens,
             &grouped_helpers,
             source.identity,
         );
         markup.push_str("</code></div>");
         line_start += inclusive.len();
     }
+    debug_assert_eq!(token_cursor, source.tokens.len());
     markup
 }
 
@@ -276,7 +386,7 @@ fn push_source_line(
     markup: &mut String,
     line: &str,
     line_start: usize,
-    tokens: &[&IntentSourceToken],
+    tokens: &[IntentSourceToken],
     non_interactive_nodes: &BTreeSet<NodeId>,
     identity: IntentSessionIdentity,
 ) {
@@ -375,21 +485,97 @@ fn push_history_row(
 }
 
 pub(crate) fn inspector_markup(inspector: Option<&IntentInspectorProjection>) -> String {
+    inspector_markup_with_presentation(
+        inspector,
+        InspectorPresentation {
+            parameters: &[],
+            name_authority: None,
+        },
+    )
+}
+
+pub(crate) fn inspector_markup_with_parameters(
+    inspector: Option<&IntentInspectorProjection>,
+    parameters: &[InspectorParameterPresentation],
+) -> String {
+    let name_authority = inspector_name_authority(parameters);
+    inspector_markup_with_presentation(
+        inspector,
+        InspectorPresentation {
+            parameters,
+            name_authority: name_authority.as_ref(),
+        },
+    )
+}
+
+pub(crate) fn inspector_name_authority(
+    parameters: &[InspectorParameterPresentation],
+) -> Option<InspectorParameterAuthority> {
+    if parameters.is_empty() {
+        return None;
+    }
+    if let Some(reason) = parameters.iter().find_map(|parameter| {
+        if let InspectorParameterAuthority::Blocked { reason } = &parameter.authority {
+            Some(reason.clone())
+        } else {
+            None
+        }
+    }) {
+        return Some(InspectorParameterAuthority::Blocked { reason });
+    }
+    Some(InspectorParameterAuthority::Encoded {
+        reason: "Code-owned identity · not declared as an editable sketch.ts value".into(),
+    })
+}
+
+pub(crate) fn inspector_markup_with_presentation(
+    inspector: Option<&IntentInspectorProjection>,
+    presentation: InspectorPresentation<'_>,
+) -> String {
     let Some(inspector) = inspector else {
         return String::new();
     };
+    let descriptors = InspectorDescriptorIndex::new(inspector);
+    inspector_markup_with_presentation_and_descriptors(inspector, presentation, &descriptors)
+}
+
+pub(crate) fn inspector_markup_with_presentation_and_descriptors(
+    inspector: &IntentInspectorProjection,
+    presentation: InspectorPresentation<'_>,
+    descriptors: &InspectorDescriptorIndex<'_>,
+) -> String {
+    let parameter_index = InspectorParameterIndex::new(presentation.parameters);
     let identity = inspector.identity;
+    let (name_interaction, name_metadata) = match presentation.name_authority {
+        Some(InspectorParameterAuthority::Encoded { reason }) => (
+            "data-intent-encoded=\"true\" disabled aria-readonly=\"true\"".to_owned(),
+            format!(
+                "<small class=\"wb-intent-parameter-authority\" data-intent-name-authority=\"encoded\"><strong>Encoded</strong><span>{}</span></small>",
+                escape_html(reason),
+            ),
+        ),
+        Some(InspectorParameterAuthority::Blocked { reason }) => (
+            "data-intent-blocked=\"true\" disabled aria-readonly=\"true\"".to_owned(),
+            format!(
+                "<small class=\"wb-intent-parameter-authority\" data-intent-name-authority=\"blocked\"><strong>Blocked</strong><span>{}</span></small>",
+                escape_html(reason),
+            ),
+        ),
+        Some(
+            InspectorParameterAuthority::ModifiableSource { .. }
+            | InspectorParameterAuthority::ModifiableInstance,
+        )
+        | None => ("data-intent-edit=\"name\"".to_owned(), String::new()),
+    };
     let mut markup = format!(
         concat!(
             "<section class=\"wb-intent-inspector\" data-intent-inspector-node=\"{}\" ",
             "data-intent-session=\"{}\" data-intent-revision=\"{}\" ",
             "data-intent-digest=\"{}\" ",
             "data-intent-state=\"{}\"><h3>{}</h3><p>{}</p>",
-            "<label>Display name<input type=\"text\" data-intent-edit=\"name\" ",
-            "data-intent-node=\"{}\" value=\"{}\"></label>",
-            "<label class=\"wb-option-check\"><input type=\"checkbox\" ",
-            "data-intent-edit=\"suppressed\" data-intent-node=\"{}\" ",
-            "data-intent-schema=\"boolean\"{}> Suppressed</label>"
+            "<label>Display name<input type=\"text\" {} ",
+            "data-intent-node=\"{}\" value=\"{}\">{}</label>",
+            "{}"
         ),
         inspector.node,
         identity.session,
@@ -402,14 +588,95 @@ pub(crate) fn inspector_markup(inspector: Option<&IntentInspectorProjection>) ->
         },
         escape_html(inspector.name.as_str()),
         escape_html(&humanize_debug(&inspector.kind)),
+        name_interaction,
         inspector.node,
         escape_attribute(inspector.name.as_str()),
+        name_metadata,
+        suppression_control(
+            inspector,
+            parameter_index.get(&IntentInspectorEditTarget::Suppressed)
+        ),
+    );
+    push_inspector_inputs(&mut markup, inspector);
+    push_inspector_fields(&mut markup, inspector, &parameter_index, descriptors);
+    markup.push_str("</section>");
+    markup
+}
+
+struct InspectorParameterIndex<'a> {
+    suppressed: Option<&'a InspectorParameterPresentation>,
+    definitions: BTreeMap<&'a IntentFieldKey, &'a InspectorParameterPresentation>,
+    instances: BTreeMap<LeafRef, &'a InspectorParameterPresentation>,
+}
+
+impl<'a> InspectorParameterIndex<'a> {
+    fn new(parameters: &'a [InspectorParameterPresentation]) -> Self {
+        let mut index = Self {
+            suppressed: None,
+            definitions: BTreeMap::new(),
+            instances: BTreeMap::new(),
+        };
+        for parameter in parameters {
+            let replaced = match &parameter.target {
+                IntentInspectorEditTarget::Suppressed => index.suppressed.replace(parameter),
+                IntentInspectorEditTarget::Definition { field } => {
+                    index.definitions.insert(field, parameter)
+                }
+                IntentInspectorEditTarget::Instance { leaf } => {
+                    index.instances.insert(*leaf, parameter)
+                }
+            };
+            assert!(
+                replaced.is_none(),
+                "Inspector parameter targets must be unique"
+            );
+        }
+        index
+    }
+
+    fn get(
+        &self,
+        target: &IntentInspectorEditTarget,
+    ) -> Option<&'a InspectorParameterPresentation> {
+        match target {
+            IntentInspectorEditTarget::Suppressed => self.suppressed,
+            IntentInspectorEditTarget::Definition { field } => self.definitions.get(field).copied(),
+            IntentInspectorEditTarget::Instance { leaf } => self.instances.get(leaf).copied(),
+        }
+    }
+}
+
+fn suppression_control(
+    inspector: &IntentInspectorProjection,
+    parameter: Option<&InspectorParameterPresentation>,
+) -> String {
+    let mut markup = String::new();
+    if parameter.is_some() {
+        markup.push_str("<div class=\"wb-intent-parameter\">");
+    }
+    let edit = match parameter.map(|parameter| &parameter.authority) {
+        Some(InspectorParameterAuthority::Encoded { .. }) => {
+            "data-intent-encoded=\"true\" disabled aria-readonly=\"true\""
+        }
+        Some(InspectorParameterAuthority::Blocked { .. }) => {
+            "data-intent-blocked=\"true\" disabled aria-readonly=\"true\""
+        }
+        Some(
+            InspectorParameterAuthority::ModifiableSource { .. }
+            | InspectorParameterAuthority::ModifiableInstance,
+        )
+        | None => "data-intent-edit=\"suppressed\"",
+    };
+    let _ = write!(
+        markup,
+        "<label class=\"wb-option-check\"><input type=\"checkbox\" {edit} data-intent-node=\"{}\" data-intent-schema=\"boolean\"{}> Suppressed</label>",
         inspector.node,
         if inspector.suppressed { " checked" } else { "" },
     );
-    push_inspector_inputs(&mut markup, inspector);
-    push_inspector_fields(&mut markup, inspector);
-    markup.push_str("</section>");
+    if let Some(parameter) = parameter {
+        push_parameter_authority(&mut markup, &parameter.authority);
+        markup.push_str("</div>");
+    }
     markup
 }
 
@@ -447,14 +714,19 @@ fn push_inspector_inputs(markup: &mut String, inspector: &IntentInspectorProject
     markup.push_str("</fieldset>");
 }
 
-fn push_inspector_fields(markup: &mut String, inspector: &IntentInspectorProjection) {
+fn push_inspector_fields(
+    markup: &mut String,
+    inspector: &IntentInspectorProjection,
+    parameters: &InspectorParameterIndex<'_>,
+    descriptors: &InspectorDescriptorIndex<'_>,
+) {
     let mut definitions = InspectorMarkupTree::object();
     let mut instances = InspectorMarkupTree::object();
     for field in &inspector.fields {
         match field {
             IntentInspectorField::Definition { definition, value } => {
-                let descriptor = inspector
-                    .definition_descriptor(definition)
+                let descriptor = descriptors
+                    .definition(definition)
                     .expect("projected Inspector field has central descriptor");
                 let schema = &descriptor.schema;
                 let identity = format!(
@@ -472,17 +744,17 @@ fn push_inspector_fields(markup: &mut String, inspector: &IntentInspectorProject
                     Some(&descriptor.choices),
                     Some(&descriptor.default),
                     value.as_ref(),
+                    parameters.get(&IntentInspectorEditTarget::Definition {
+                        field: definition.clone(),
+                    }),
                 );
                 definitions.insert(&descriptor.path, control);
             }
             IntentInspectorField::Instance { leaf, value } => {
-                let output = inspector
-                    .output_descriptor(*leaf)
+                let (output, path) = descriptors
+                    .instance(*leaf)
                     .expect("projected Inspector leaf has central output descriptor");
                 let port_kind = output.kind;
-                let path = output
-                    .path_for_leaf(*leaf)
-                    .expect("projected Inspector leaf is owned by its descriptor output");
                 let identity = format!(
                     concat!(
                         "data-intent-node=\"{}\" data-intent-port=\"{}\" ",
@@ -496,15 +768,16 @@ fn push_inspector_fields(markup: &mut String, inspector: &IntentInspectorProject
                 let mut control = String::new();
                 push_optional_literal_editor(
                     &mut control,
-                    &projection_path_leaf_label(&path),
+                    &projection_path_leaf_label(path),
                     "instance",
                     &identity,
                     literal_schema_for_instance(leaf.field, value.as_ref()),
                     None,
                     None,
                     value.as_ref(),
+                    parameters.get(&IntentInspectorEditTarget::Instance { leaf: *leaf }),
                 );
-                instances.insert(&path, control);
+                instances.insert(path, control);
             }
         }
     }
@@ -513,18 +786,26 @@ fn push_inspector_fields(markup: &mut String, inspector: &IntentInspectorProject
 }
 
 enum InspectorMarkupTree {
-    Object(Vec<(IntentKey, Self)>),
+    Object(InspectorMarkupObject),
     Array(BTreeMap<u16, Self>),
     Leaf(String),
 }
 
+struct InspectorMarkupObject {
+    values: Vec<(IntentKey, InspectorMarkupTree)>,
+    positions: BTreeMap<IntentKey, usize>,
+}
+
 impl InspectorMarkupTree {
     fn object() -> Self {
-        Self::Object(Vec::new())
+        Self::Object(InspectorMarkupObject {
+            values: Vec::new(),
+            positions: BTreeMap::new(),
+        })
     }
 
     fn is_empty(&self) -> bool {
-        matches!(self, Self::Object(values) if values.is_empty())
+        matches!(self, Self::Object(object) if object.values.is_empty())
     }
 
     fn insert(&mut self, path: &IntentProjectionPath, markup: String) {
@@ -536,20 +817,26 @@ impl InspectorMarkupTree {
             .split_first()
             .expect("validated Inspector path is non-empty");
         match (self, head) {
-            (Self::Object(values), IntentProjectionPathSegment::Field(field)) => {
-                let position = values.iter().position(|(candidate, _)| candidate == field);
+            (Self::Object(object), IntentProjectionPathSegment::Field(field)) => {
+                let position = object.positions.get(field).copied();
                 if tail.is_empty() {
                     assert!(position.is_none(), "Inspector paths must be unique");
-                    values.push((field.clone(), Self::Leaf(markup)));
+                    let position = object.values.len();
+                    object.values.push((field.clone(), Self::Leaf(markup)));
+                    let replaced = object.positions.insert(field.clone(), position);
+                    debug_assert!(replaced.is_none());
                 } else if let Some(position) = position {
-                    values[position].1.insert_segments(tail, markup);
+                    object.values[position].1.insert_segments(tail, markup);
                 } else {
                     let mut next = match tail[0] {
                         IntentProjectionPathSegment::Field(_) => Self::object(),
                         IntentProjectionPathSegment::Index(_) => Self::Array(BTreeMap::new()),
                     };
                     next.insert_segments(tail, markup);
-                    values.push((field.clone(), next));
+                    let position = object.values.len();
+                    object.values.push((field.clone(), next));
+                    let replaced = object.positions.insert(field.clone(), position);
+                    debug_assert!(replaced.is_none());
                 }
             }
             (Self::Array(values), IntentProjectionPathSegment::Index(index)) => {
@@ -596,8 +883,8 @@ fn push_inspector_tree(
 ) {
     match tree {
         InspectorMarkupTree::Leaf(control) => markup.push_str(control),
-        InspectorMarkupTree::Object(values) => {
-            for (field, value) in values {
+        InspectorMarkupTree::Object(object) => {
+            for (field, value) in &object.values {
                 path.push(IntentProjectionPathSegment::Field(field.clone()));
                 if matches!(value, InspectorMarkupTree::Leaf(_)) {
                     push_inspector_tree(markup, value, path, None);
@@ -657,7 +944,24 @@ fn push_optional_literal_editor(
     choices: Option<&IntentFieldChoices>,
     default: Option<&IntentFieldDefault>,
     literal: Option<&IntentLiteral>,
+    parameter: Option<&InspectorParameterPresentation>,
 ) {
+    if parameter.is_some() {
+        markup.push_str("<div class=\"wb-intent-parameter\">");
+    }
+    let interaction = match parameter.map(|parameter| &parameter.authority) {
+        Some(InspectorParameterAuthority::Encoded { .. }) => {
+            "data-intent-encoded=\"true\" disabled aria-readonly=\"true\"".to_owned()
+        }
+        Some(InspectorParameterAuthority::Blocked { .. }) => {
+            "data-intent-blocked=\"true\" disabled aria-readonly=\"true\"".to_owned()
+        }
+        Some(
+            InspectorParameterAuthority::ModifiableSource { .. }
+            | InspectorParameterAuthority::ModifiableInstance,
+        )
+        | None => format!("data-intent-edit=\"{}\"", escape_attribute(owner)),
+    };
     let schema_key = literal_schema_key(schema);
     match schema {
         IntentLiteralSchema::Quantity(unit) => {
@@ -667,9 +971,9 @@ fn push_optional_literal_editor(
             };
             let _ = write!(
                 markup,
-                "<label>{}<input type=\"number\" step=\"any\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" data-intent-unit=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
+                "<label>{}<input type=\"number\" step=\"any\" {} {} data-intent-schema=\"{}\" data-intent-unit=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
                 escape_html(label),
-                owner,
+                interaction,
                 identity,
                 schema_key,
                 intent_unit_key(unit),
@@ -680,8 +984,8 @@ fn push_optional_literal_editor(
             let checked = matches!(literal, Some(IntentLiteral::Boolean(true)));
             let _ = write!(
                 markup,
-                "<label class=\"wb-option-check\"><input type=\"checkbox\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\"{}> {}</label>",
-                owner,
+                "<label class=\"wb-option-check\"><input type=\"checkbox\" {} {} data-intent-schema=\"{}\"{}> {}</label>",
+                interaction,
                 identity,
                 schema_key,
                 if checked { " checked" } else { "" },
@@ -707,9 +1011,9 @@ fn push_optional_literal_editor(
                 };
                 let _ = write!(
                     markup,
-                    "<label>{}<select data-intent-edit=\"{}\" {} data-intent-schema=\"{}\">",
+                    "<label>{}<select {} {} data-intent-schema=\"{}\">",
                     escape_html(label),
-                    owner,
+                    interaction,
                     identity,
                     schema_key,
                 );
@@ -736,9 +1040,9 @@ fn push_optional_literal_editor(
             } else {
                 let _ = write!(
                     markup,
-                    "<label>{}<input type=\"text\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
+                    "<label>{}<input type=\"text\" {} {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
                     escape_html(label),
-                    owner,
+                    interaction,
                     identity,
                     schema_key,
                     escape_attribute(value),
@@ -752,9 +1056,9 @@ fn push_optional_literal_editor(
             };
             let _ = write!(
                 markup,
-                "<label>{}<input type=\"text\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
+                "<label>{}<input type=\"text\" {} {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
                 escape_html(label),
-                owner,
+                interaction,
                 identity,
                 schema_key,
                 escape_attribute(value),
@@ -765,14 +1069,14 @@ fn push_optional_literal_editor(
                 Some(IntentLiteral::Integer(value)) => value.to_string(),
                 _ => String::new(),
             };
-            push_integer_editor(markup, owner, identity, label, &schema_key, &value);
+            push_integer_editor(markup, &interaction, identity, label, &schema_key, &value);
         }
         IntentLiteralSchema::Natural => {
             let value = match literal {
                 Some(IntentLiteral::Natural(value)) => value.to_string(),
                 _ => String::new(),
             };
-            push_integer_editor(markup, owner, identity, label, &schema_key, &value);
+            push_integer_editor(markup, &interaction, identity, label, &schema_key, &value);
         }
         IntentLiteralSchema::Point => {
             let [x, y] = match literal {
@@ -783,29 +1087,33 @@ fn push_optional_literal_editor(
                 markup,
                 concat!(
                     "<fieldset><legend>{}</legend><input type=\"number\" step=\"any\" ",
-                    "data-intent-edit=\"{}\" data-intent-component=\"x\" {} ",
+                    "{} data-intent-component=\"x\" {} ",
                     "data-intent-schema=\"{}\" value=\"{}\" placeholder=\"x\">",
-                    "<input type=\"number\" step=\"any\" data-intent-edit=\"{}\" ",
+                    "<input type=\"number\" step=\"any\" {} ",
                     "data-intent-component=\"y\" {} data-intent-schema=\"{}\" ",
                     "value=\"{}\" placeholder=\"y\"></fieldset>"
                 ),
                 escape_html(label),
-                owner,
+                interaction,
                 identity,
                 schema_key,
                 x,
-                owner,
+                interaction,
                 identity,
                 schema_key,
                 y,
             );
         }
     }
+    if let Some(parameter) = parameter {
+        push_parameter_authority(markup, &parameter.authority);
+        markup.push_str("</div>");
+    }
 }
 
 fn push_integer_editor(
     markup: &mut String,
-    owner: &str,
+    interaction: &str,
     identity: &str,
     label: &str,
     schema_key: &str,
@@ -813,13 +1121,87 @@ fn push_integer_editor(
 ) {
     let _ = write!(
         markup,
-        "<label>{}<input type=\"number\" step=\"1\" data-intent-edit=\"{}\" {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
+        "<label>{}<input type=\"number\" step=\"1\" {} {} data-intent-schema=\"{}\" value=\"{}\" placeholder=\"Not set\"></label>",
         escape_html(label),
-        owner,
+        interaction,
         identity,
         schema_key,
         value,
     );
+}
+
+fn push_parameter_authority(markup: &mut String, authority: &InspectorParameterAuthority) {
+    match authority {
+        InspectorParameterAuthority::ModifiableSource {
+            source_path,
+            source_text,
+            consumer_count,
+            generated_consumer_count,
+        } => {
+            let direct_consumer_count = consumer_count.saturating_sub(*generated_consumer_count);
+            let fan_out = match (*generated_consumer_count, direct_consumer_count) {
+                (generated, 0) => format!(
+                    "{} by {generated} generated consumer{}",
+                    if generated > 1 { "shared" } else { "used" },
+                    if generated == 1 { "" } else { "s" },
+                ),
+                (0, direct) => format!(
+                    "{} by {direct} direct declaration{}",
+                    if direct > 1 { "shared" } else { "used" },
+                    if direct == 1 { "" } else { "s" },
+                ),
+                (generated, direct) => format!(
+                    "shared by {consumer_count} consumers · {generated} generated · {direct} direct"
+                ),
+            };
+            let _ = write!(
+                markup,
+                concat!(
+                    "<aside class=\"wb-intent-parameter-authority\" ",
+                    "data-intent-parameter-authority=\"modifiable-source\" ",
+                    "data-intent-source-path=\"{}\" data-intent-source-consumers=\"{}\" ",
+                    "data-intent-source-generated-consumers=\"{}\">",
+                    "<strong>Modifiable in sketch.ts</strong>",
+                    "<small><code>{}</code> · <code>{}</code> · {}</small>",
+                    "</aside>"
+                ),
+                escape_attribute(source_path),
+                consumer_count,
+                generated_consumer_count,
+                escape_html(source_path),
+                escape_html(source_text),
+                escape_html(&fan_out),
+            );
+        }
+        InspectorParameterAuthority::ModifiableInstance => markup.push_str(concat!(
+            "<aside class=\"wb-intent-parameter-authority\" ",
+            "data-intent-parameter-authority=\"modifiable-instance\">",
+            "<strong>Modifiable instance</strong>",
+            "<small>Solver draft/overlay · does not rewrite sketch.ts</small></aside>"
+        )),
+        InspectorParameterAuthority::Encoded { reason } => {
+            let _ = write!(
+                markup,
+                concat!(
+                    "<aside class=\"wb-intent-parameter-authority\" ",
+                    "data-intent-parameter-authority=\"encoded\">",
+                    "<strong>Encoded</strong><small>{}</small></aside>"
+                ),
+                escape_html(reason),
+            );
+        }
+        InspectorParameterAuthority::Blocked { reason } => {
+            let _ = write!(
+                markup,
+                concat!(
+                    "<aside class=\"wb-intent-parameter-authority\" ",
+                    "data-intent-parameter-authority=\"blocked\">",
+                    "<strong>Blocked</strong><small>{}</small></aside>"
+                ),
+                escape_html(reason),
+            );
+        }
+    }
 }
 
 pub(crate) const fn intent_unit_key(unit: IntentUnit) -> &'static str {
@@ -1021,9 +1403,9 @@ fn escape_html(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        IntentGraphNodeKind, IntentInspectorField, IntentInspectorInput, IntentOutlineDeclaration,
-        IntentProjectedPortReference, IntentSourceToken, IntentSourceTokenId,
-        IntentSourceTokenTarget, IntentWorkbenchProjection,
+        IntentGraphNodeKind, IntentInspectorEditTarget, IntentInspectorField, IntentInspectorInput,
+        IntentOutlineDeclaration, IntentProjectedPortReference, IntentSourceToken,
+        IntentSourceTokenId, IntentSourceTokenTarget, IntentWorkbenchProjection,
     };
     use geosolve_sketch_intent::{
         AggregateKind, ComputedFeatureKind, GeometryRecipeKind, InputRole, InputSlot,
@@ -1035,12 +1417,23 @@ mod tests {
     };
 
     use super::{
-        DesignProjectionSelection, declaration_count, history_markup, inspector_markup,
+        DesignProjectionSelection, InspectorParameterAuthority, InspectorParameterPresentation,
+        declaration_count, history_markup, inspector_markup, inspector_markup_with_parameters,
         outline_markup, structured_source_markup,
     };
 
     fn key(value: &str) -> IntentKey {
         IntentKey::new(value).unwrap()
+    }
+
+    fn display_name_control(markup: &str) -> &str {
+        markup
+            .split_once("Display name")
+            .expect("display-name control")
+            .1
+            .split_once("</label>")
+            .expect("bounded display-name label")
+            .0
     }
 
     fn fixture() -> (
@@ -1152,6 +1545,50 @@ mod tests {
         assert!(inspector.contains("<option value=\"profile\">Profile</option>"));
         assert!(inspector.contains("<option value=\"construction\">Construction</option>"));
         assert!(!inspector.contains("onclick="));
+    }
+
+    #[test]
+    fn parameter_markup_applies_code_owned_name_authority_without_affecting_gui_names() {
+        let (session, projection, node) = fixture();
+        let inspector = projection
+            .inspector(&session, node)
+            .expect("fixture Inspector");
+
+        let gui_markup = inspector_markup(Some(&inspector));
+        let gui_name = display_name_control(&gui_markup);
+        assert!(gui_name.contains("data-intent-edit=\"name\""));
+        assert!(!gui_name.contains("data-intent-name-authority="));
+        assert!(!gui_name.contains(" disabled"));
+
+        let source_backed = [InspectorParameterPresentation {
+            target: IntentInspectorEditTarget::Suppressed,
+            authority: InspectorParameterAuthority::ModifiableSource {
+                source_path: "point.enabled".into(),
+                source_text: "true".into(),
+                consumer_count: 1,
+                generated_consumer_count: 0,
+            },
+        }];
+        let source_markup = inspector_markup_with_parameters(Some(&inspector), &source_backed);
+        let source_name = display_name_control(&source_markup);
+        assert!(source_name.contains("data-intent-name-authority=\"encoded\""));
+        assert!(source_name.contains("data-intent-encoded=\"true\""));
+        assert!(source_name.contains(" disabled"));
+        assert!(!source_name.contains("data-intent-edit=\"name\""));
+
+        let blocked = [InspectorParameterPresentation {
+            target: IntentInspectorEditTarget::Suppressed,
+            authority: InspectorParameterAuthority::Blocked {
+                reason: "Apply or Revert the source draft".into(),
+            },
+        }];
+        let blocked_markup = inspector_markup_with_parameters(Some(&inspector), &blocked);
+        let blocked_name = display_name_control(&blocked_markup);
+        assert!(blocked_name.contains("data-intent-name-authority=\"blocked\""));
+        assert!(blocked_name.contains("data-intent-blocked=\"true\""));
+        assert!(blocked_name.contains("Apply or Revert the source draft"));
+        assert!(blocked_name.contains(" disabled"));
+        assert!(!blocked_name.contains("data-intent-edit=\"name\""));
     }
 
     #[test]
@@ -1292,6 +1729,43 @@ mod tests {
         assert!(first.contains("draggable=\"true\""));
         assert!(!first.contains("eval("));
         assert!(!first.contains("new Function"));
+    }
+
+    #[test]
+    fn source_markup_preserves_ordered_tokens_and_cell_bindings() {
+        let (_, projection, node) = fixture();
+        let cell = projection.outline[0].cell;
+        let markup =
+            structured_source_markup(&projection, Some(DesignProjectionSelection { node }));
+
+        let mut previous_position = None;
+        for token in &projection.structured_source.tokens {
+            let coordinate = format!("data-intent-source-token=\"{}\"", token.id.0);
+            assert_eq!(markup.matches(&coordinate).count(), 1);
+            let position = markup
+                .find(&coordinate)
+                .expect("every ordered source token is rendered");
+            if let Some(previous_position) = previous_position {
+                assert!(previous_position < position);
+            }
+            previous_position = Some(position);
+        }
+        assert_eq!(
+            markup.matches("class=\"wb-intent-source-token\"").count(),
+            projection.structured_source.tokens.len()
+        );
+
+        let selected_rows = markup
+            .split("</div>")
+            .filter(|row| row.contains("class=\"wb-intent-source-line selected\""))
+            .collect::<Vec<_>>();
+        assert!(!selected_rows.is_empty());
+        for row in selected_rows {
+            assert!(row.contains(&format!("data-intent-node=\"{node}\"")));
+            assert!(row.contains(&format!("data-intent-cell=\"{cell}\"")));
+            assert!(row.contains(&format!("data-intent-drop-before=\"{node}\"")));
+            assert!(row.contains("draggable=\"true\""));
+        }
     }
 
     #[test]

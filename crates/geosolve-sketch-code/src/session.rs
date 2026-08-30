@@ -20,10 +20,11 @@ use crate::{
 };
 
 const MAX_HISTORY: usize = 256;
-/// Persisted session identities are caller-controlled input. Keep the upper
-/// half of the allocator space as runtime headroom so one hostile restore
-/// cannot place the process-wide allocator next to exhaustion.
-const MAX_IMPORTED_SESSION: u64 = u64::MAX / 2;
+/// Largest session or revision admitted by the Rust/WASM/TypeScript wire.
+///
+/// JavaScript represents these fields as numbers, so accepting a larger
+/// integer would silently destroy exact-CAS identity at the browser boundary.
+pub const MAX_CODE_SESSION_WIRE_INTEGER: u64 = 9_007_199_254_740_991;
 const SESSION_WIRE_VERSION: &str = "geosolve-sketch-code-session-v2";
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 
@@ -918,11 +919,7 @@ impl SketchCodeSession {
                 "prepared edit forgets generated allocator authority".into(),
             ));
         }
-        let revision = self
-            .identity
-            .revision
-            .checked_add(1)
-            .ok_or(CodeSessionError::RevisionExhausted)?;
+        let revision = next_revision(self.identity.revision)?;
         let before = self.identity.clone();
         let mut undo = self.undo.clone();
         push_bounded(
@@ -971,11 +968,7 @@ impl SketchCodeSession {
         let Some(entry) = self.undo.last().cloned() else {
             return Ok(None);
         };
-        let revision = self
-            .identity
-            .revision
-            .checked_add(1)
-            .ok_or(CodeSessionError::RevisionExhausted)?;
+        let revision = next_revision(self.identity.revision)?;
         let before = self.identity.clone();
         let current = self.snapshot.clone();
         let restored = restore_snapshot(&current, entry.snapshot)?;
@@ -1020,11 +1013,7 @@ impl SketchCodeSession {
         let Some(entry) = self.redo.last().cloned() else {
             return Ok(None);
         };
-        let revision = self
-            .identity
-            .revision
-            .checked_add(1)
-            .ok_or(CodeSessionError::RevisionExhausted)?;
+        let revision = next_revision(self.identity.revision)?;
         let before = self.identity.clone();
         let current = self.snapshot.clone();
         let restored = restore_snapshot(&current, entry.snapshot)?;
@@ -1121,7 +1110,7 @@ impl SketchCodeSession {
                 "unsupported code-session version".into(),
             ));
         }
-        validate_imported_session(wire.identity.session)?;
+        validate_imported_identity(&wire.identity)?;
         if wire.structural_expansions > wire.identity.revision {
             return Err(CodeSessionError::InvalidPersistence(
                 "structural expansion count exceeds session revision".into(),
@@ -1334,15 +1323,28 @@ fn identity(
 fn allocate_session() -> Result<u64, CodeSessionError> {
     NEXT_SESSION
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
-            next.checked_add(1)
+            (next <= MAX_CODE_SESSION_WIRE_INTEGER)
+                .then(|| next.checked_add(1))
+                .flatten()
         })
         .map_err(|_| CodeSessionError::SessionIdentityExhausted)
 }
 
-fn validate_imported_session(session: u64) -> Result<(), CodeSessionError> {
-    if session == 0 || session > MAX_IMPORTED_SESSION {
+fn next_revision(revision: u64) -> Result<u64, CodeSessionError> {
+    revision
+        .checked_add(1)
+        .filter(|next| *next <= MAX_CODE_SESSION_WIRE_INTEGER)
+        .ok_or(CodeSessionError::RevisionExhausted)
+}
+
+fn validate_imported_identity(identity: &CodeSessionIdentity) -> Result<(), CodeSessionError> {
+    if identity.session == 0 || identity.session > MAX_CODE_SESSION_WIRE_INTEGER {
         Err(CodeSessionError::InvalidPersistence(
             "invalid code-session allocation".into(),
+        ))
+    } else if identity.revision > MAX_CODE_SESSION_WIRE_INTEGER {
+        Err(CodeSessionError::InvalidPersistence(
+            "invalid code-session revision".into(),
         ))
     } else {
         Ok(())
@@ -1985,7 +1987,11 @@ export default sketch(($) => {
         .unwrap();
         let mut wire: SessionWire =
             serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
-        for hostile in [MAX_IMPORTED_SESSION + 1, u64::MAX - 2, u64::MAX - 1] {
+        for hostile in [
+            MAX_CODE_SESSION_WIRE_INTEGER + 1,
+            u64::MAX - 2,
+            u64::MAX - 1,
+        ] {
             wire.identity.session = hostile;
             wire.identity = identity(
                 wire.identity.session,
@@ -2002,12 +2008,40 @@ export default sketch(($) => {
                     if message == "invalid code-session allocation"
             ));
         }
-        assert_eq!(validate_imported_session(MAX_IMPORTED_SESSION), Ok(()));
+        assert_eq!(
+            validate_imported_identity(&CodeSessionIdentity {
+                session: MAX_CODE_SESSION_WIRE_INTEGER,
+                revision: MAX_CODE_SESSION_WIRE_INTEGER,
+                digest: String::new(),
+            }),
+            Ok(())
+        );
         assert!(matches!(
-            validate_imported_session(0),
+            validate_imported_identity(&CodeSessionIdentity {
+                session: 0,
+                revision: 0,
+                digest: String::new(),
+            }),
             Err(CodeSessionError::InvalidPersistence(message))
                 if message == "invalid code-session allocation"
         ));
+        assert!(matches!(
+            validate_imported_identity(&CodeSessionIdentity {
+                session: 1,
+                revision: MAX_CODE_SESSION_WIRE_INTEGER + 1,
+                digest: String::new(),
+            }),
+            Err(CodeSessionError::InvalidPersistence(message))
+                if message == "invalid code-session revision"
+        ));
+        assert_eq!(
+            next_revision(MAX_CODE_SESSION_WIRE_INTEGER - 1),
+            Ok(MAX_CODE_SESSION_WIRE_INTEGER),
+        );
+        assert_eq!(
+            next_revision(MAX_CODE_SESSION_WIRE_INTEGER),
+            Err(CodeSessionError::RevisionExhausted),
+        );
         SketchCodeSession::new(
             ProjectKey("allocator-survives".to_owned()),
             SOURCE,

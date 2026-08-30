@@ -270,9 +270,10 @@ export default sketch(($) => {
 
   // One AI-authored structural rule rounds every current water-channel corner.
   // O-ring groove centerlines stay simple closed loops for cheap deterministic replay.
-  const upperChannelBends = $.use("upperChannelBends", waterChannel, { corners: upperCenterline.filletableCorners, bendRadius: mm(5) });
-  const middleChannelBends = $.use("middleChannelBends", waterChannel, { corners: middleCenterline.filletableCorners, bendRadius: mm(5) });
-  const lowerChannelBends = $.use("lowerChannelBends", waterChannel, { corners: lowerCenterline.filletableCorners, bendRadius: mm(5) });
+  const channelBendRadius = mm(5);
+  const upperChannelBends = $.use("upperChannelBends", waterChannel, { corners: upperCenterline.filletableCorners, bendRadius: channelBendRadius });
+  const middleChannelBends = $.use("middleChannelBends", waterChannel, { corners: middleCenterline.filletableCorners, bendRadius: channelBendRadius });
+  const lowerChannelBends = $.use("lowerChannelBends", waterChannel, { corners: lowerCenterline.filletableCorners, bendRadius: channelBendRadius });
 
   // Dimensioned construction rails carry eight referenced 5 mm screw centers.
   const topScrewInset = $.geometry.line("topScrewInset", {

@@ -50,6 +50,13 @@ export const DECLARATION_RESULT_CATALOG = {
       "kind": "constraint"
     }
   },
+  "constraint.symmetricAboutDatumAxis": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "constraint"
+    }
+  },
   "constraint.vertical": {
     "feature_kind": "constraint",
     "outputs": {
@@ -65,6 +72,13 @@ export const DECLARATION_RESULT_CATALOG = {
     }
   },
   "dimension.diameter": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "leaf",
+      "kind": "dimension"
+    }
+  },
+  "dimension.radius": {
     "feature_kind": "dimension",
     "outputs": {
       "shape": "leaf",

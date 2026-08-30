@@ -11,6 +11,7 @@ mod composition;
 mod declaration_catalog;
 mod demos;
 mod expansion;
+mod managed_control;
 mod managed_edit;
 mod model;
 mod overlay;
@@ -32,6 +33,7 @@ pub use composition::{
     materialize_code_project_cold, materialize_code_project_cold_with_overlay,
     materialize_code_project_incremental, materialize_code_project_incremental_for_structural_edit,
     materialize_code_project_incremental_with_overlay,
+    materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited,
     materialize_code_project_incremental_with_overlay_audited, rehydrate_materialized_code_project,
 };
 pub use declaration_catalog::{
@@ -52,15 +54,24 @@ pub use expansion::{
     expand_code_project_for_structural_edit, expand_code_project_with_overlay,
     required_generated_members, stage_point_drags,
 };
+pub use managed_control::{
+    MANAGED_CONTROL_CONSUMER_LIMIT, MANAGED_CONTROL_LIMIT, ManagedControl, ManagedControlAccess,
+    ManagedControlAuthority, ManagedControlBound, ManagedControlConsumer,
+    ManagedControlConsumerTarget, ManagedControlEdit, ManagedControlEditBatch, ManagedControlError,
+    ManagedControlId, ManagedControlManifest, ManagedControlNavigation, ManagedControlNumberKind,
+    ManagedControlReadOnlyReason, ManagedControlSchema, ManagedControlSource, ManagedControlToken,
+    apply_managed_control_batch, apply_managed_control_manifest_batch, managed_control_authority,
+    managed_control_manifest,
+};
 pub use managed_edit::{
     ManagedEdit, ManagedEditError, ManagedEditPlan, apply_managed_edit, plan_managed_edit,
 };
 pub use model::{
     AuthoringDeclaration, AuthoringProgram, CodeProject, CodeProjectFile, FeatureKind, FeatureRef,
     ManagedDiagnostic, ManagedDiagnosticCode, ManagedDocument, ManagedImport, ManagedOrganization,
-    ManagedOutput, ManagedOwnedSpan, ManagedOwnedSpanKind, ManagedPathSegment, ManagedSpan,
-    ManagedValue, ManagedValueOwnedSpan, OutputRef, PatchInvocation, ProjectKey,
-    SemanticOutputPath, SemanticSymbol, UnitLiteral,
+    ManagedOutput, ManagedOwnedSpan, ManagedOwnedSpanKind, ManagedPathSegment,
+    ManagedScalarBinding, ManagedSpan, ManagedValue, ManagedValueOwnedSpan, OutputRef,
+    PatchInvocation, ProjectKey, SemanticOutputPath, SemanticSymbol, UnitLiteral,
 };
 pub use overlay::{
     CodeDraft, CodeDraftProvenance, CodeDraftValue, CodeGeneratedChildAddress,
@@ -79,7 +90,7 @@ pub use reconcile::{
 };
 pub use session::{
     CodeSessionError, CodeSessionFailure, CodeSessionIdentity, CodeSessionReceipt,
-    CodeSessionSnapshot, PreparedCodeEdit, SketchCodeSession,
+    CodeSessionSnapshot, MAX_CODE_SESSION_WIRE_INTEGER, PreparedCodeEdit, SketchCodeSession,
 };
 pub use work_receipt::{AuditedCodeWork, CodeWorkReceipt};
 

@@ -1417,6 +1417,9 @@ fn prepare(
     let artifacts = pinned_artifacts(project)?;
     let mut builder = ExpansionBuilder::new(project.project.clone());
 
+    for binding in &project.managed.program.scalar_bindings {
+        lower_scalar_binding(&mut builder, binding)?;
+    }
     for declaration in &project.managed.program.declarations {
         if declaration.patch.is_none()
             && declaration.builder_path.first().map(String::as_str) == Some("geometry")
@@ -1442,6 +1445,33 @@ fn prepare(
         });
     }
     Ok((builder, plans))
+}
+
+fn lower_scalar_binding(
+    builder: &mut ExpansionBuilder,
+    binding: &crate::ManagedScalarBinding,
+) -> Result<(), CodeExpansionError> {
+    let value = match &binding.value {
+        ManagedValue::Number(value) if value.is_finite() => UnitLiteral {
+            unit: "model".into(),
+            value: *value,
+        },
+        ManagedValue::Unit(value) if value.value.is_finite() => value.clone(),
+        _ => {
+            return Err(CodeExpansionError::InvalidDeclaration {
+                declaration: binding.symbol.0.clone(),
+                message: "lexical managed binding must own one finite numeric or unit literal"
+                    .into(),
+            });
+        }
+    };
+    builder.insert_declaration(
+        binding.symbol.clone(),
+        SemanticDeclaration {
+            root: SemanticValue::ScalarLiteral(value),
+            paths: BTreeMap::new(),
+        },
+    )
 }
 
 fn pinned_artifacts(project: &CodeProject) -> Result<Vec<PinnedArtifact>, CodeExpansionError> {
@@ -3249,6 +3279,9 @@ fn lower_template_family(
         Some(TemplateDeclarationLowering::Circle) => {
             lower_generated_circle(builder, plan, outputs, bindings, overlay)
         }
+        Some(TemplateDeclarationLowering::Dimension(dimension)) => {
+            lower_generated_dimension(builder, plan, dimension, outputs, bindings)
+        }
         Some(TemplateDeclarationLowering::Rectangle) => {
             lower_generated_rectangle(builder, plan, outputs, overlay)
         }
@@ -3269,6 +3302,66 @@ fn lower_template_family(
             template.declaration_family,
         ))),
     }
+}
+
+fn lower_generated_dimension(
+    builder: &mut ExpansionBuilder,
+    plan: &InvocationPlan,
+    dimension: DimensionKind,
+    outputs: &[(String, GeneratedMemberAddress, GeneratedMemberIdentity)],
+    bindings: &BTreeMap<String, SemanticValue>,
+) -> Result<BTreeMap<String, SemanticValue>, CodeExpansionError> {
+    if dimension != DimensionKind::Radius {
+        return Err(CodeExpansionError::Unsupported(format!(
+            "generated dimension family `{dimension:?}`"
+        )));
+    }
+    let curve = bindings
+        .get("curve")
+        .ok_or_else(|| CodeExpansionError::UnresolvedReference {
+            reference: format!("{}.radius.curve", plan.declaration.symbol.0),
+        })?
+        .as_port(IntentPortKind::Curve, "generated radius curve")?;
+    let target = bindings
+        .get("target")
+        .or_else(|| bindings.get("radius"))
+        .and_then(|value| match value {
+            SemanticValue::ScalarLiteral(value) => Some(value.clone()),
+            _ => None,
+        })
+        .map_or_else(|| invocation_unit(plan, &["radius"]), Ok)?;
+    if !target.value.is_finite() || target.value <= 0.0 {
+        return Err(CodeExpansionError::InvalidDeclaration {
+            declaration: plan.declaration.symbol.0.clone(),
+            message: "generated radius target must be finite and positive".into(),
+        });
+    }
+    let (_, address, identity) = outputs.first().ok_or_else(|| {
+        CodeExpansionError::Unsupported("radius dimension template has no output".into())
+    })?;
+    let alias = generated_alias(address, *identity)?;
+    let draft = IntentNodeDraft::new(IntentNodeKind::Dimension { dimension }, alias.clone())
+        .with_input(InputSlot::new(InputRole::Curve, 0), curve.patch_ref())
+        .with_instance_leaf(
+            node_selector(IntentPortRole::Target, 0),
+            LeafField::Value,
+            length(target.value),
+        )
+        .with_field(field_key("mode")?, enum_value("driving")?);
+    builder.push_node(&plan.declaration.symbol, alias.clone(), draft)?;
+    Ok(outputs
+        .iter()
+        .map(|(name, _, _)| {
+            (
+                name.clone(),
+                SemanticValue::Port(port(
+                    &alias,
+                    node_selector(IntentPortRole::Dimension, 0),
+                    IntentPortKind::Dimension,
+                )),
+            )
+        })
+        .collect())
 }
 
 #[allow(
@@ -4030,6 +4123,35 @@ fn lower_constraints(
                         .with_input(InputSlot::new(InputRole::Point, 0), first.patch_ref())
                         .with_input(InputSlot::new(InputRole::Point, 1), second.patch_ref())
                     }
+                    ConstraintKind::SymmetricAboutDatumAxis => {
+                        let first = resolve_direct_point_operand(
+                            builder,
+                            required(arguments, "first", &declaration.symbol.0)?,
+                            &format!("{}.first", declaration.symbol.0),
+                        )?;
+                        let second = resolve_direct_point_operand(
+                            builder,
+                            required(arguments, "second", &declaration.symbol.0)?,
+                            &format!("{}.second", declaration.symbol.0),
+                        )?;
+                        let axis = string(
+                            required(arguments, "axis", &declaration.symbol.0)?,
+                            "symmetricAboutDatumAxis axis",
+                        )?;
+                        if !matches!(axis, "x" | "y") {
+                            return invalid_declaration(
+                                declaration,
+                                "symmetricAboutDatumAxis axis must be `x` or `y`".into(),
+                            );
+                        }
+                        IntentNodeDraft::new(
+                            IntentNodeKind::Constraint { constraint },
+                            alias.clone(),
+                        )
+                        .with_input(InputSlot::new(InputRole::Point, 0), first.patch_ref())
+                        .with_input(InputSlot::new(InputRole::Point, 1), second.patch_ref())
+                        .with_field(field_key("axis")?, enum_value(axis)?)
+                    }
                     ConstraintKind::Horizontal | ConstraintKind::Vertical => {
                         let relation_name = if constraint == ConstraintKind::Horizontal {
                             "horizontal"
@@ -4157,7 +4279,7 @@ fn lower_dimensions(
         };
         if !matches!(
             dimension,
-            DimensionKind::CurveLength | DimensionKind::Diameter
+            DimensionKind::CurveLength | DimensionKind::Radius | DimensionKind::Diameter
         ) {
             return Err(CodeExpansionError::Unsupported(format!(
                 "managed dimension family `{family}`"
@@ -4207,12 +4329,16 @@ fn lower_dimensions(
                 )?;
                 draft.with_input(InputSlot::new(InputRole::Span, 0), span.patch_ref())
             }
-            DimensionKind::Diameter => {
+            DimensionKind::Radius | DimensionKind::Diameter => {
                 let curve = resolve_direct_curve_operand(
                     builder,
                     curve_value,
                     &format!("{}.curve", declaration.symbol.0),
-                    "diameter",
+                    if dimension == DimensionKind::Radius {
+                        "radius"
+                    } else {
+                        "diameter"
+                    },
                 )?;
                 draft.with_input(InputSlot::new(InputRole::Curve, 0), curve.patch_ref())
             }

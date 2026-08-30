@@ -17,7 +17,8 @@ use geosolve_sketch::{
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedFeatureAuthoringSnapshot, ComputedFeatureDefinition,
-    ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
+    ComputedFeatureEvaluationInput, ComputedFeatureEvaluationPolicy,
+    ComputedFeatureEvaluationSnapshot, ComputedFeatureId,
 };
 use geosolve_sketch_intent::{
     IntentFieldKey, IntentKey, IntentLiteral, IntentNodeKind, IntentPatch, IntentPatchOperation,
@@ -35,21 +36,22 @@ use crate::intent_bootstrap::{
 use crate::intent_coordinator::PreparedProjectionalTransaction;
 use crate::{
     AuditedInteraction, AuthoringApplication, AuthoringState, ColdIntentMaterialization,
-    ColdIntentMaterializer, ConstraintEditor, EditorEffect, EditorError, EditorScene,
-    FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-    FeatureAuthoringState, FeatureAuthoringTool, GeometryRoleSelectionState, IntentBootstrapError,
-    IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,
-    IntentInspectorProjection, IntentNativeBinding, IntentSourceEditError, IntentSourceTokenId,
-    IntentValidationEvidence, IntentWorkbenchProjection, InteractionWorkReceipt, Modifiers,
-    OffsetAuthoringCandidate, OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance,
-    PointerInput, ProfileOffsetDirectionState, ProjectionalAuthoringError,
-    ProjectionalCoordinatorError, ProjectionalFilletAuthoringError, ProjectionalIntentCoordinator,
-    ProjectionalPatchOutcome, ProjectionalProfileOffsetError, SelectionItem, Viewport,
-    decode_flat_intent_bootstrap, flat_intent_bootstrap_materialization_map,
-    projectional_application_patch, projectional_construction_patch, projectional_fillet_patch,
-    projectional_fillet_radius_patch, projectional_profile_offset_delete_node_patch,
-    projectional_profile_offset_delete_patch, projectional_profile_offset_direction_patch,
-    projectional_profile_offset_distance_patch, projectional_profile_offset_patch,
+    ColdIntentMaterializer, ConstraintEditor, DelegatedPointDragProposal, EditorEffect,
+    EditorError, EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions,
+    FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
+    GeometryRoleSelectionState, IntentBootstrapError, IntentInspectorEditError,
+    IntentInspectorEditTarget, IntentInspectorEditValue, IntentInspectorProjection,
+    IntentNativeBinding, IntentSourceEditError, IntentSourceTokenId, IntentValidationEvidence,
+    IntentWorkbenchProjection, InteractionWorkReceipt, Modifiers, OffsetAuthoringCandidate,
+    OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance, PointerInput,
+    ProfileOffsetDirectionState, ProjectionalAuthoringError, ProjectionalCoordinatorError,
+    ProjectionalFilletAuthoringError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
+    ProjectionalProfileOffsetError, SelectionItem, Viewport, decode_flat_intent_bootstrap,
+    flat_intent_bootstrap_materialization_map, projectional_application_patch,
+    projectional_construction_patch, projectional_fillet_patch, projectional_fillet_radius_patch,
+    projectional_profile_offset_delete_node_patch, projectional_profile_offset_delete_patch,
+    projectional_profile_offset_direction_patch, projectional_profile_offset_distance_patch,
+    projectional_profile_offset_patch,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -73,8 +75,10 @@ struct ActiveCurveControlDrag {
 struct ActiveFilletRadiusDrag {
     pointer_id: u64,
     intent: IntentSessionIdentity,
-    expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
-    feature: geosolve_sketch_features::ComputedFeatureId,
+    expected: ComputedFeatureEvaluationInput,
+    feature: ComputedFeatureId,
+    origin_radius: f64,
+    delegated_features: Option<Arc<[ComputedFeatureId]>>,
     latest_radius: Option<f64>,
     latest: Option<PreparedProjectionalTransaction>,
 }
@@ -151,6 +155,46 @@ pub struct ProjectionalEditorPointerOutcome {
     pub effects: Vec<EditorEffect>,
     /// The sole durable transaction, present only for an accepted moved drag.
     pub transaction: Option<ProjectionalPatchOutcome>,
+    /// Authenticated code/source-owned Fillet-radius proposal. This is present
+    /// only when an outer owner explicitly delegated the active grouped drag;
+    /// the projectional session appends no Intent history for that release.
+    pub delegated_computed_fillet_radius: Option<DelegatedComputedFilletRadiusProposal>,
+}
+
+/// Terminal result for one point gesture whose durable publication was
+/// explicitly delegated to an outer semantic owner.
+#[derive(Debug)]
+pub struct ProjectionalDelegatedPointPointerOutcome {
+    /// Presentation-only effects already reflected in the embedded editor.
+    pub effects: Vec<EditorEffect>,
+    /// One linear accepted native witness for a moved gesture. A click or a
+    /// terminal without an accepted frame returns no proposal.
+    pub proposal: Option<DelegatedPointDragProposal>,
+}
+
+/// Maximum computed-Fillet consumers accepted by one delegated radius drag.
+///
+/// This matches M87's independently bounded managed-control fan-out while
+/// keeping the presentation-independent editor free of code-layer concepts.
+pub const MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES: usize = 65_536;
+
+/// Exact terminal proposal from one explicitly delegated computed-Fillet
+/// radius gesture.
+///
+/// The outer owner authenticates `intent`, `expected`, the initiating feature,
+/// and the complete canonical consumer set before converting the proposed
+/// radius into its own source transaction. This value grants no Intent history
+/// authority by itself.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DelegatedComputedFilletRadiusProposal {
+    pub intent: IntentSessionIdentity,
+    pub expected: ComputedFeatureEvaluationInput,
+    pub initiating_feature: ComputedFeatureId,
+    /// Sorted unique computed features previewed by the atomic pointer-frame
+    /// patch. The initiating feature is always present.
+    pub features: Vec<ComputedFeatureId>,
+    pub origin_radius: f64,
+    pub proposed_radius: f64,
 }
 
 /// Result of one authenticated terminal geometry-authoring publication.
@@ -1812,6 +1856,32 @@ impl ProjectionalEditorSession {
         Ok(outcome)
     }
 
+    /// Applies one delegated semantic-source patch and independently certifies
+    /// the supplied accepted numerical continuation under that new source
+    /// design. This is reserved for adjacent semantic owners completing an
+    /// authenticated native preview without creating nested Intent history.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary projectional planning/materialization error, or
+    /// rejects a foreign, topologically incompatible, or invalid continuation.
+    pub fn apply_delegated_patch_with_accepted_continuation(
+        &mut self,
+        patch: IntentPatch,
+        accepted_continuation: &geosolve_sketch::SketchDocument,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        self.cancel_interaction();
+        self.clear_authoring_previews();
+        let outcome = self
+            .coordinator
+            .apply_delegated_patch_with_accepted_continuation(patch, accepted_continuation)?;
+        if outcome.disposition == IntentPlanDisposition::Accepted {
+            self.clear_transient_selection();
+        }
+        self.reconcile_declaration_selection();
+        Ok(outcome)
+    }
+
     fn apply_prepared_patch(
         &mut self,
         prepared: PreparedProjectionalTransaction,
@@ -2704,6 +2774,8 @@ impl ProjectionalEditorSession {
                     intent: self.coordinator.intent().identity(),
                     expected: route.expected,
                     feature: route.feature,
+                    origin_radius: route.origin_radius,
+                    delegated_features: None,
                     latest_radius: None,
                     latest: None,
                 }));
@@ -2764,6 +2836,121 @@ impl ProjectionalEditorSession {
             self.cancel_direct_manipulation();
         }
         Ok(effects)
+    }
+
+    /// Delegates the active computed-Fillet radius gesture to an outer source
+    /// owner and authenticates its complete shared consumer group.
+    ///
+    /// Call this immediately after an ordinary successful [`Self::pointer_down`]
+    /// on a Fillet radius grip. Subsequent pointer frames prepare one atomic
+    /// multi-feature Intent patch for presentation only. A matching pointer-up
+    /// returns [`DelegatedComputedFilletRadiusProposal`] and appends no nested
+    /// Intent history; the outer owner remains responsible for its exact-CAS
+    /// source transaction.
+    ///
+    /// Feature IDs are canonicalized into sorted order. Every member must be a
+    /// current, uniquely owned computed `FilletSet` at the exact initiating
+    /// radius, and the initiating hit feature must be present. Invalid, stale,
+    /// mixed, duplicate, late, or over-limit groups cancel the transient
+    /// gesture while preserving accepted Intent/native authority.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed group or route failure without publishing Intent,
+    /// native accepted state, computed-feature state, or history.
+    pub fn delegate_computed_fillet_radius_drag(
+        &mut self,
+        features: &[ComputedFeatureId],
+    ) -> Result<(), ProjectionalEditorError> {
+        let result = self.authenticate_delegated_computed_fillet_radius_group(features);
+        if result.is_err() {
+            self.cancel_fillet_radius_drag();
+            let _ = self.editor.cancel();
+        }
+        result
+    }
+
+    fn authenticate_delegated_computed_fillet_radius_group(
+        &mut self,
+        features: &[ComputedFeatureId],
+    ) -> Result<(), ProjectionalEditorError> {
+        let active = self
+            .fillet_radius_drag
+            .as_ref()
+            .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?;
+        if active.intent != self.coordinator.intent().identity() {
+            return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+        }
+        if active.latest.is_some() || active.latest_radius.is_some() {
+            return Err(ProjectionalEditorError::DelegatedFilletRadiusGroupTooLate);
+        }
+        if features.is_empty() {
+            return Err(ProjectionalEditorError::EmptyDelegatedFilletRadiusGroup);
+        }
+        if features.len() > MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES {
+            return Err(
+                ProjectionalEditorError::DelegatedFilletRadiusGroupCardinalityExceeded {
+                    count: features.len(),
+                    limit: MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES,
+                },
+            );
+        }
+        let mut canonical = features.to_vec();
+        canonical.sort_unstable();
+        if let Some(duplicate) = canonical
+            .windows(2)
+            .find_map(|pair| (pair[0] == pair[1]).then_some(pair[0]))
+        {
+            return Err(ProjectionalEditorError::DuplicateDelegatedFilletRadiusFeature(duplicate));
+        }
+        if canonical.binary_search(&active.feature).is_err() {
+            return Err(
+                ProjectionalEditorError::DelegatedFilletRadiusGroupMissingInitiatingFeature(
+                    active.feature,
+                ),
+            );
+        }
+        if let Some(bound) = active.delegated_features.as_ref() {
+            if bound.as_ref() == canonical.as_slice() {
+                return Ok(());
+            }
+            return Err(ProjectionalEditorError::DelegatedFilletRadiusGroupAlreadyBound);
+        }
+
+        let accepted = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        if accepted.computed.input() != active.expected {
+            return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+        }
+        for feature in canonical.iter().copied() {
+            let definition = accepted.features.feature(feature).ok_or(
+                ProjectionalEditorError::StaleDelegatedFilletRadiusFeature(feature),
+            )?;
+            let ComputedFeatureDefinition::FilletSet(fillet) = &definition.definition;
+            if fillet.radius.to_bits() != active.origin_radius.to_bits() {
+                return Err(ProjectionalEditorError::MixedDelegatedFilletRadiusFeature {
+                    feature,
+                    expected: active.origin_radius,
+                    actual: fillet.radius,
+                });
+            }
+        }
+        // Prove every feature has one distinct current logical owner before
+        // admitting any pointer-frame work.
+        let _ = projectional_fillet_radius_group_patch(
+            self.coordinator.intent(),
+            &accepted.ownership,
+            &canonical,
+            active.origin_radius,
+        )?;
+
+        self.fillet_radius_drag
+            .as_mut()
+            .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?
+            .delegated_features = Some(Arc::from(canonical));
+        Ok(())
     }
 
     /// Starts a point drag for an exact native point selected by an
@@ -2862,6 +3049,100 @@ impl ProjectionalEditorSession {
         AuditedInteraction::new(outcome, work)
     }
 
+    /// Finishes one exact point gesture for an authenticated outer semantic
+    /// owner without first publishing a generic projectional Intent patch.
+    ///
+    /// The same pointer, scene, request and accepted-preview checks as the
+    /// ordinary terminal are enforced. Only the returned linear proposal may
+    /// be consumed by the outer owner; this method appends no Intent history.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed stale-scene, route, pointer, request, or preview-parity
+    /// error without publishing Intent or native history.
+    pub fn pointer_up_delegated_point_audited(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> AuditedInteraction<Result<ProjectionalDelegatedPointPointerOutcome, ProjectionalEditorError>>
+    {
+        let work = InteractionWorkReceipt::default();
+        let outcome = self.pointer_up_delegated_point(scene, input);
+        AuditedInteraction::new(outcome, work)
+    }
+
+    /// See [`Self::pointer_up_delegated_point_audited`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same typed terminal-authentication failures as the audited
+    /// variant.
+    pub fn pointer_up_delegated_point(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Result<ProjectionalDelegatedPointPointerOutcome, ProjectionalEditorError> {
+        if !input.position.x.is_finite() || !input.position.y.is_finite() {
+            let effects = self.cancel_interaction();
+            return Ok(ProjectionalDelegatedPointPointerOutcome {
+                effects,
+                proposal: None,
+            });
+        }
+        let effects = self.editor.pointer_up(scene, scene.design_identity, input);
+        let mut presentation = Vec::new();
+        let mut proposal = None;
+        for effect in effects {
+            match effect {
+                EditorEffect::CommitPointMove {
+                    point,
+                    model_position,
+                    ..
+                } => {
+                    let Some(drag) = self.point_drag.take() else {
+                        self.coordinator.cancel_point_drag();
+                        return Err(ProjectionalEditorError::MissingPointDragRoute);
+                    };
+                    if drag.pointer_id != input.pointer_id || drag.point != point {
+                        self.coordinator.cancel_point_drag();
+                        return Err(ProjectionalEditorError::PointDragRouteMismatch);
+                    }
+                    let Some(request_id) = drag.latest_request_id else {
+                        self.coordinator.cancel_point_drag();
+                        return Err(ProjectionalEditorError::MissingAcceptedPointSample);
+                    };
+                    let Some(accepted_position) = drag.latest_position else {
+                        self.coordinator.cancel_point_drag();
+                        return Err(ProjectionalEditorError::MissingAcceptedPointSample);
+                    };
+                    if accepted_position.map(f64::to_bits) != model_position.map(f64::to_bits) {
+                        self.coordinator.cancel_point_drag();
+                        return Err(ProjectionalEditorError::PointPreviewMismatch);
+                    }
+                    if proposal.is_some() {
+                        self.coordinator.cancel_point_drag();
+                        return Err(ProjectionalEditorError::AmbiguousDirectManipulationRoute);
+                    }
+                    proposal = Some(
+                        self.coordinator
+                            .finish_point_drag_delegated(input.pointer_id, request_id)?,
+                    );
+                }
+                EditorEffect::ClearPointPreview => {
+                    presentation.push(EditorEffect::ClearPointPreview);
+                }
+                effect => presentation.push(effect),
+            }
+        }
+        if proposal.is_none() {
+            self.cancel_point_drag();
+        }
+        Ok(ProjectionalDelegatedPointPointerOutcome {
+            effects: presentation,
+            proposal,
+        })
+    }
+
     /// Finishes a pointer gesture and publishes at most one intent transaction.
     ///
     /// # Errors
@@ -2909,11 +3190,13 @@ impl ProjectionalEditorSession {
                 return Ok(ProjectionalEditorPointerOutcome {
                     effects: self.editor.cancel(),
                     transaction: None,
+                    delegated_computed_fillet_radius: None,
                 });
             }
             return Ok(ProjectionalEditorPointerOutcome {
                 effects: Vec::new(),
                 transaction: None,
+                delegated_computed_fillet_radius: None,
             });
         }
         let expected = self
@@ -2922,6 +3205,7 @@ impl ProjectionalEditorSession {
         let effects = self.editor.pointer_up(scene, expected, input);
         let mut presentation = Vec::new();
         let mut transaction = None;
+        let mut delegated_computed_fillet_radius = None;
         for effect in effects {
             match effect {
                 EditorEffect::CommitPointMove {
@@ -3016,10 +3300,26 @@ impl ProjectionalEditorSession {
                     {
                         return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
                     }
-                    let prepared = drag
-                        .latest
-                        .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?;
-                    transaction = Some(self.apply_prepared_patch_with_work(prepared, work)?);
+                    if let Some(features) = drag.delegated_features {
+                        // The prepared transaction authenticated one atomic
+                        // accepted preview for this exact group and radius. It
+                        // is deliberately not committed: the outer source
+                        // owner is the sole durable authority.
+                        delegated_computed_fillet_radius =
+                            Some(DelegatedComputedFilletRadiusProposal {
+                                intent: drag.intent,
+                                expected: drag.expected,
+                                initiating_feature: drag.feature,
+                                features: features.as_ref().to_vec(),
+                                origin_radius: drag.origin_radius,
+                                proposed_radius: radius,
+                            });
+                    } else {
+                        let prepared = drag
+                            .latest
+                            .ok_or(ProjectionalEditorError::MissingFilletRadiusDragRoute)?;
+                        transaction = Some(self.apply_prepared_patch_with_work(prepared, work)?);
+                    }
                 }
                 EditorEffect::ClearComputedFeaturePreview => {
                     self.cancel_fillet_radius_drag();
@@ -3066,6 +3366,7 @@ impl ProjectionalEditorSession {
         Ok(ProjectionalEditorPointerOutcome {
             effects: presentation,
             transaction,
+            delegated_computed_fillet_radius,
         })
     }
 
@@ -3163,17 +3464,30 @@ impl ProjectionalEditorSession {
                     radius,
                 } => {
                     self.authenticate_fillet_radius_drag(&expected, feature)?;
+                    let delegated_features = self
+                        .fillet_radius_drag
+                        .as_ref()
+                        .and_then(|drag| drag.delegated_features.clone());
                     let patch = {
                         let accepted = self
                             .coordinator
                             .accepted_materialization()
                             .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
-                        projectional_fillet_radius_patch(
-                            self.coordinator.intent(),
-                            &accepted.ownership,
-                            feature,
-                            radius,
-                        )?
+                        if let Some(features) = delegated_features.as_ref() {
+                            projectional_fillet_radius_group_patch(
+                                self.coordinator.intent(),
+                                &accepted.ownership,
+                                features,
+                                radius,
+                            )?
+                        } else {
+                            projectional_fillet_radius_patch(
+                                self.coordinator.intent(),
+                                &accepted.ownership,
+                                feature,
+                                radius,
+                            )?
+                        }
                     };
                     let audited = self.coordinator.prepare_patch_transaction_audited(patch);
                     work.merge(audited.work);
@@ -3443,6 +3757,39 @@ impl ProjectionalEditorSession {
     }
 }
 
+fn projectional_fillet_radius_group_patch(
+    intent: &IntentSession,
+    ownership: &crate::IntentMaterializationMap,
+    features: &[ComputedFeatureId],
+    radius: f64,
+) -> Result<IntentPatch, ProjectionalEditorError> {
+    if features.is_empty() {
+        return Err(ProjectionalEditorError::EmptyDelegatedFilletRadiusGroup);
+    }
+    let mut owners = std::collections::BTreeSet::new();
+    let mut operations = Vec::with_capacity(features.len());
+    for feature in features.iter().copied() {
+        let patch = projectional_fillet_radius_patch(intent, ownership, feature, radius)?;
+        let [operation] = patch.operations() else {
+            return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+        };
+        let IntentPatchOperation::SetDefinitionField { node, .. } = operation else {
+            return Err(ProjectionalEditorError::FilletRadiusDragRouteMismatch);
+        };
+        if !owners.insert(*node) {
+            return Err(
+                ProjectionalEditorError::DuplicateDelegatedFilletRadiusDefinitionOwner(feature),
+            );
+        }
+        operations.push(operation.clone());
+    }
+    Ok(IntentPatch::new(
+        intent.identity(),
+        IntentPatchPolicy::RetainFailedIntent,
+        operations,
+    ))
+}
+
 fn native_binding_selects_item(binding: IntentNativeBinding, item: SelectionItem) -> bool {
     match (binding, item) {
         (IntentNativeBinding::Point(candidate), SelectionItem::Point(point)) => candidate == point,
@@ -3709,6 +4056,32 @@ pub enum ProjectionalEditorError {
     FilletRadiusDragRouteMismatch,
     #[error("the independently accepted Fillet-radius sample does not match editor state")]
     FilletRadiusPreviewMismatch,
+    #[error("the delegated Fillet-radius consumer group is empty")]
+    EmptyDelegatedFilletRadiusGroup,
+    #[error(
+        "the delegated Fillet-radius consumer group has {count} features, exceeding the limit of {limit}"
+    )]
+    DelegatedFilletRadiusGroupCardinalityExceeded { count: usize, limit: usize },
+    #[error("the delegated Fillet-radius consumer group repeats feature {0:?}")]
+    DuplicateDelegatedFilletRadiusFeature(ComputedFeatureId),
+    #[error("the delegated Fillet-radius consumer group omits hit feature {0:?}")]
+    DelegatedFilletRadiusGroupMissingInitiatingFeature(ComputedFeatureId),
+    #[error("the delegated Fillet-radius consumer group is already bound to another exact set")]
+    DelegatedFilletRadiusGroupAlreadyBound,
+    #[error("the delegated Fillet-radius consumer group was supplied after pointer-frame work")]
+    DelegatedFilletRadiusGroupTooLate,
+    #[error("delegated Fillet-radius feature {0:?} is stale or absent")]
+    StaleDelegatedFilletRadiusFeature(ComputedFeatureId),
+    #[error(
+        "delegated Fillet-radius feature {feature:?} has radius {actual:?}, not the hit radius {expected:?}"
+    )]
+    MixedDelegatedFilletRadiusFeature {
+        feature: ComputedFeatureId,
+        expected: f64,
+        actual: f64,
+    },
+    #[error("delegated Fillet-radius feature {0:?} repeats another logical definition owner")]
+    DuplicateDelegatedFilletRadiusDefinitionOwner(ComputedFeatureId),
     #[error("the terminal Profile Offset sample has no prepared projectional route")]
     MissingProfileOffsetDistanceDragRoute,
     #[error("the Profile Offset sample does not match its prepared projectional route")]

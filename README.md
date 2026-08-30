@@ -195,12 +195,21 @@ Physics, collision and a production rendering system remain out of scope.
   instance state, non-semantic organization, exact-CAS patches, tombstones, canonical persistence
   and one bounded composite history; central declaration descriptors and SHA-256 wire v2; no
   sketch equations or solver dependency.
+- `geosolve-sketch-code` — optional managed `sketch.ts`, pinned data-only patch artifacts,
+  authenticated source controls, keyed generated identities and one outer code/history authority;
+  no TypeScript execution or solver equations in Rust/WASM.
 - `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking,
   selection, gestures, exact geometry-family recipes, selected-curve control cages/properties,
   constraint/dimension and computed-feature authoring, deterministic projectional materialization,
   strict logical/native ownership, compact data-only graph/source projections, typed RPC receipts
   and exact prepared-transaction publication over public sketch/feature APIs; no renderer, DOM,
   storage or equations.
+- `geosolve-sketch-render` — target-neutral fitted camera and deterministic SVG composition shared
+  by native and WASM, plus a native-only pure-Rust PNG path with a pinned bundled font and no
+  external resources.
+- `geosolve-headless` — browser-free inspect, exact-CAS edit, cold solve, independent validation
+  and static screenshot orchestration for managed source, canonical code projects and bundled
+  demonstrations.
 - `geosolve-linkage` — persistent planar and spatial rigid bodies/features/sources, deterministic JSON/runtime remapping, gauge-separated mobility, common joints/mates, drivers, explicit assembly modes, independently published natural/pseudo-arclength continuation, typed hysteretic branch events/mode changes and multi-driver body/feature velocity fields with optional physical motion bases.
 - `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
   document semantics; M50 removed its old playground, M51 consolidated the one directly tested
@@ -248,6 +257,21 @@ Planar and spatial kinematics:
 cargo run --locked -p geosolve-linkage --example planar_linkage
 cargo run --locked -p geosolve-linkage --example spatial_assembly
 ```
+
+Browser-free managed-code inspection and rendering:
+
+```bash
+cargo run --locked -p geosolve-headless -- demos
+cargo run --locked -p geosolve-headless -- inspect --demo typed-panel
+cargo run --locked -p geosolve-headless -- render --demo typed-panel --out /tmp/geosolve-typed-panel-new
+cargo run --locked -p geosolve-headless -- render --demo robotic-routing-board --out /tmp/geosolve-routing-board-new
+cargo run --locked -p geosolve-headless -- render --demo cnc-joinery-fit-coupon --out /tmp/geosolve-cnc-coupon-new
+cargo run --locked -p geosolve-headless -- render --demo gridfinity-1x1x3-section --out /tmp/geosolve-gridfinity-section-new
+```
+
+The output directory must not already exist. See
+[`docs/M87_HEADLESS.md`](docs/M87_HEADLESS.md) for the stateless inspect/edit/render loop and exact
+managed-control batch format.
 
 Each session constructor publishes only finite, independently validated accepted
 geometry. Rejected edits/imports retain the previous accepted revision. Persist

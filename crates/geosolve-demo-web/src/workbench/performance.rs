@@ -173,6 +173,25 @@ impl PresentationWorkSnapshot {
             && self.count(PresentationWork::HoverPresentation) == 0
     }
 
+    /// Presentation admitted after an outer code/source transaction has
+    /// already published. Persistence and one durable rebuild are required;
+    /// a nested native-history or delegated code-checkpoint publication at
+    /// this boundary is specifically forbidden.
+    #[must_use]
+    pub(crate) fn is_code_source_terminal_presentation(self) -> bool {
+        self.count(PresentationWork::PersistenceWrite) == 1
+            && self.count(PresentationWork::DurablePanelRebuild) == 1
+            && self.count(PresentationWork::NativeHistoryPublication) == 0
+            && self.count(PresentationWork::CodePublication) == 0
+            && self.count(PresentationWork::CodeParse) == 0
+            && self.count(PresentationWork::CodeExpansion) == 0
+            && self.count(PresentationWork::SceneComposition) >= 1
+            && self.count(PresentationWork::SvgSerialization) >= 1
+            && self.count(PresentationWork::ViewportReplacement) >= 1
+            && self.count(PresentationWork::CameraPresentation) == 0
+            && self.count(PresentationWork::HoverPresentation) == 0
+    }
+
     pub(crate) const fn count(self, work: PresentationWork) -> u64 {
         self.counts[work as usize]
     }
@@ -391,5 +410,53 @@ mod tests {
                 .delta_since(before)
                 .is_single_terminal_publication()
         );
+    }
+
+    #[test]
+    fn code_source_terminal_persists_without_a_second_checkpoint_publication() {
+        let ledger = PresentationWorkLedger::default();
+        let before = ledger.snapshot();
+        for work in [
+            PresentationWork::PersistenceWrite,
+            PresentationWork::DurablePanelRebuild,
+            PresentationWork::SceneComposition,
+            PresentationWork::SvgSerialization,
+            PresentationWork::ViewportReplacement,
+        ] {
+            ledger.record(work);
+        }
+        assert!(
+            ledger
+                .snapshot()
+                .delta_since(before)
+                .is_code_source_terminal_presentation()
+        );
+
+        for forbidden in [
+            PresentationWork::NativeHistoryPublication,
+            PresentationWork::CodeParse,
+            PresentationWork::CodeExpansion,
+            PresentationWork::CodePublication,
+        ] {
+            let ledger = PresentationWorkLedger::default();
+            let before = ledger.snapshot();
+            for work in [
+                PresentationWork::PersistenceWrite,
+                PresentationWork::DurablePanelRebuild,
+                PresentationWork::SceneComposition,
+                PresentationWork::SvgSerialization,
+                PresentationWork::ViewportReplacement,
+                forbidden,
+            ] {
+                ledger.record(work);
+            }
+            assert!(
+                !ledger
+                    .snapshot()
+                    .delta_since(before)
+                    .is_code_source_terminal_presentation(),
+                "duplicate source-terminal work: {forbidden:?}",
+            );
+        }
     }
 }

@@ -169,6 +169,150 @@ fn complete_fillet_authoring(
     assert!(session.feature_authoring_preview_matches(state));
 }
 
+fn add_fillet(
+    session: &mut ProjectionalEditorSession,
+    viewport: Viewport,
+    symbol: &str,
+    radius: f64,
+    first: [f64; 2],
+    second: [f64; 2],
+) -> ComputedFeatureId {
+    let mut state = FeatureAuthoringState::default();
+    assert!(matches!(
+        session
+            .activate_feature_authoring(
+                &mut state,
+                FeatureAuthoringTool::Fillet,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(radius),
+                    ..FeatureAuthoringOptions::default()
+                },
+                &[],
+                key(symbol),
+            )
+            .expect("activate grouped Fillet fixture"),
+        FeatureAuthoringOutcome::ModeEntered(_) | FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    let scene = session.scene(viewport, 0.5).expect("accepted source scene");
+    assert!(matches!(
+        session
+            .transact_feature_authoring_pick_at(
+                &mut state,
+                &scene,
+                viewport.model_to_screen(first),
+                PickTolerance::default(),
+                key(symbol),
+            )
+            .expect("first grouped Fillet parent"),
+        FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    let scene = session.scene(viewport, 0.5).expect("first-parent scene");
+    assert!(matches!(
+        session
+            .transact_feature_authoring_pick_at(
+                &mut state,
+                &scene,
+                viewport.model_to_screen(second),
+                PickTolerance::default(),
+                key(symbol),
+            )
+            .expect("second grouped Fillet parent"),
+        FeatureAuthoringOutcome::PreviewRequested { .. }
+    ));
+    session
+        .apply_computed_fillet_preview(&mut state, key(symbol))
+        .expect("publish grouped Fillet fixture");
+    let node = session
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&key(symbol))
+        .expect("Fillet declaration symbol")
+        .id;
+    let accepted = session
+        .coordinator()
+        .accepted_materialization()
+        .expect("accepted Fillet fixture");
+    let features = accepted
+        .ownership
+        .nodes
+        .iter()
+        .find(|owner| owner.node == node)
+        .expect("Fillet logical owner")
+        .owned
+        .iter()
+        .filter_map(|binding| match binding {
+            IntentNativeBinding::ComputedFeature(feature) => Some(*feature),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let [feature] = features.as_slice() else {
+        panic!("one computed feature expected for {symbol}")
+    };
+    *feature
+}
+
+fn two_fillet_fixture(
+    raw: u128,
+    radii: [f64; 2],
+) -> (ProjectionalEditorSession, Viewport, [ComputedFeatureId; 2]) {
+    let (mut session, viewport) = fixture(raw, 10.0);
+    let first = add_fillet(
+        &mut session,
+        viewport,
+        "shared radius first",
+        radii[0],
+        [3.0, 0.0],
+        [4.0, 1.0],
+    );
+    let second = add_fillet(
+        &mut session,
+        viewport,
+        "shared radius second",
+        radii[1],
+        [1.0, 3.0],
+        [0.0, 2.0],
+    );
+    (session, viewport, [first, second])
+}
+
+fn radius_drag_target(
+    session: &mut ProjectionalEditorSession,
+    viewport: Viewport,
+    feature: ComputedFeatureId,
+    pointer_id: u64,
+    delta: f64,
+) -> (EditorScene, ScreenPoint) {
+    let scene = session.scene(viewport, 0.5).expect("two-Fillet scene");
+    let rail = scene
+        .fillet_affordances
+        .iter()
+        .find(|affordance| affordance.owner.feature == feature)
+        .expect("initiating feature radius rail")
+        .radius_rail;
+    session
+        .pointer_down(&scene, pointer(pointer_id, rail.screen_grip))
+        .expect("start grouped radius drag");
+    let target = viewport.model_to_screen([
+        delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+        delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+    ]);
+    (scene, target)
+}
+
+fn accepted_fillet_radius(session: &ProjectionalEditorSession, feature: ComputedFeatureId) -> f64 {
+    let accepted = session
+        .coordinator()
+        .accepted_materialization()
+        .expect("accepted Fillet authority");
+    let definition = accepted
+        .features
+        .feature(feature)
+        .expect("accepted Fillet feature");
+    let ComputedFeatureDefinition::FilletSet(fillet) = &definition.definition;
+    fillet.radius
+}
+
 fn offset_state(session: &mut ProjectionalEditorSession) -> OffsetAuthoringState {
     let mut state = OffsetAuthoringState::default();
     assert!(matches!(
@@ -290,6 +434,111 @@ fn assert_one_preview_plan_and_no_terminal_replan(before_terminal: usize) {
     );
 }
 
+fn fixture_point(session: &ProjectionalEditorSession, symbol: &str) -> DesignPointId {
+    let node = session
+        .coordinator()
+        .intent()
+        .graph()
+        .node_by_symbol(&key(symbol))
+        .expect("fixture point declaration");
+    let port = node
+        .port_by_selector(selector(IntentPortRole::Primary, 0))
+        .expect("fixture point output");
+    let IntentNativeBinding::Point(point) = session
+        .coordinator()
+        .accepted_materialization()
+        .expect("fixture accepted authority")
+        .ownership
+        .port(port.as_ref(node.id))
+        .expect("fixture point binding")
+    else {
+        panic!("fixture point output must bind one native point")
+    };
+    point
+}
+
+#[test]
+fn delegated_point_terminal_consumes_preview_without_implicit_publication() {
+    let pointer_id = 87_301;
+    let target = [0.5, 0.25];
+    let (mut delegated, viewport) = fixture(0x8300_8731, 1.0);
+    let point = fixture_point(&delegated, "point.a");
+    let before = delegated.coordinator().intent().identity();
+    let undo_before = delegated.coordinator().intent().undo_len();
+    let scene = delegated.scene(viewport, 0.5).expect("delegated scene");
+    delegated
+        .pointer_down_exact_point(
+            &scene,
+            pointer(pointer_id, viewport.model_to_screen([0.0, 0.0])),
+            point,
+        )
+        .expect("delegated point route");
+    delegated
+        .pointer_move(
+            &scene,
+            pointer(pointer_id, viewport.model_to_screen(target)),
+        )
+        .expect("delegated accepted preview");
+    let preview_scene = delegated
+        .scene(viewport, 0.5)
+        .expect("delegated preview scene");
+    let terminal = delegated.pointer_up_delegated_point_audited(
+        &preview_scene,
+        pointer(pointer_id, viewport.model_to_screen(target)),
+    );
+    assert_eq!(terminal.work.native_preview_attempts(), 0);
+    assert_eq!(terminal.work.intent_materialization_attempts(), 0);
+    assert_eq!(terminal.work.computed_evaluation_attempts(), 0);
+    assert_eq!(terminal.work.history_publications(), 0);
+    let proposal = terminal
+        .outcome
+        .expect("delegated terminal")
+        .proposal
+        .expect("moved delegated proposal");
+    assert_eq!(proposal.intent, before);
+    assert_eq!(proposal.pointer_id, pointer_id);
+    assert_eq!(proposal.point, point);
+    assert_eq!(
+        proposal.accepted_position.map(f64::to_bits),
+        target.map(f64::to_bits)
+    );
+    assert_eq!(delegated.coordinator().intent().identity(), before);
+    assert_eq!(delegated.coordinator().intent().undo_len(), undo_before);
+
+    let (mut ordinary, viewport) = fixture(0x8300_8732, 1.0);
+    let point = fixture_point(&ordinary, "point.a");
+    let scene = ordinary.scene(viewport, 0.5).expect("ordinary scene");
+    ordinary
+        .pointer_down_exact_point(
+            &scene,
+            pointer(pointer_id, viewport.model_to_screen([0.0, 0.0])),
+            point,
+        )
+        .expect("ordinary point route");
+    ordinary
+        .pointer_move(
+            &scene,
+            pointer(pointer_id, viewport.model_to_screen(target)),
+        )
+        .expect("ordinary accepted preview");
+    let preview_scene = ordinary
+        .scene(viewport, 0.5)
+        .expect("ordinary preview scene");
+    let terminal = ordinary.pointer_up_audited(
+        &preview_scene,
+        pointer(pointer_id, viewport.model_to_screen(target)),
+    );
+    assert_eq!(terminal.work.intent_materialization_attempts(), 1);
+    assert_eq!(terminal.work.history_publications(), 1);
+    assert!(
+        terminal
+            .outcome
+            .expect("ordinary terminal")
+            .transaction
+            .is_some()
+    );
+}
+
 #[test]
 fn fillet_authoring_apply_consumes_its_exact_prepared_transaction() {
     let (mut session, viewport) = fixture(0x8300_8301, 10.0);
@@ -355,6 +604,8 @@ fn accepted_fillet_radius_drop_consumes_its_exact_prepared_transaction() {
         0.25f64.mul_add(rail.model_derivative[0], origin[0]),
         0.25f64.mul_add(rail.model_derivative[1], origin[1]),
     ]);
+    let intent_before = session.coordinator().intent().identity();
+    let undo_before = session.coordinator().intent().undo_len();
 
     reset_plan_patch_calls();
     assert!(
@@ -366,14 +617,374 @@ fn accepted_fillet_radius_drop_consumes_its_exact_prepared_transaction() {
     );
     let before_drop = plan_patch_calls();
     let preview_scene = session.scene(viewport, 0.5).expect("radius preview scene");
-    let outcome = session
+    let terminal = session
         .pointer_up(&preview_scene, pointer(8303, target))
-        .expect("publish prepared radius")
-        .transaction
-        .expect("accepted radius transaction");
+        .expect("publish prepared radius");
+    assert!(terminal.delegated_computed_fillet_radius.is_none());
+    let outcome = terminal.transaction.expect("accepted radius transaction");
 
     assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(
+        session.coordinator().intent().identity().revision.raw(),
+        intent_before.revision.raw() + 1,
+    );
+    assert_eq!(session.coordinator().intent().undo_len(), undo_before + 1);
     assert_one_preview_plan_and_no_terminal_replan(before_drop);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the grouped-delegation regression keeps every consumer preview and the no-inner-transaction terminal contract in one owning-layer case"
+)]
+fn delegated_grouped_fillet_radius_previews_every_consumer_and_returns_no_inner_transaction() {
+    let (mut session, viewport, features) = two_fillet_fixture(0x8700_0001, [0.5, 0.5]);
+    let pointer_id = 87_001;
+    let (scene, target) =
+        radius_drag_target(&mut session, viewport, features[0], pointer_id, 0.125);
+    session
+        .delegate_computed_fillet_radius_drag(&[features[1], features[0]])
+        .expect("authenticate shared radius consumer group");
+    let intent_before = session.coordinator().intent().identity();
+    let undo_before = session.coordinator().intent().undo_len();
+
+    reset_plan_patch_calls();
+    let intermediate = ScreenPoint {
+        x: 0.5 * (scene.fillet_affordances[0].radius_rail.screen_grip.x + target.x),
+        y: 0.5 * (scene.fillet_affordances[0].radius_rail.screen_grip.y + target.y),
+    };
+    let mut proposed_radius = None;
+    for (frame, sample) in [intermediate, target].into_iter().enumerate() {
+        let effects = session
+            .pointer_move(&scene, pointer(pointer_id, sample))
+            .expect("prepare grouped radius preview frame");
+        proposed_radius = effects.iter().find_map(|effect| match effect {
+            EditorEffect::PreviewComputedFeatureRadius {
+                feature, radius, ..
+            } if *feature == features[0] => Some(*radius),
+            _ => None,
+        });
+        assert!(
+            proposed_radius.is_some(),
+            "preview frame {frame} must acknowledge the initiating feature",
+        );
+        let preview_scene = session
+            .scene(viewport, 0.5)
+            .expect("grouped radius preview scene");
+        let proposed_radius = proposed_radius.expect("checked above");
+        for feature in features {
+            let radii = preview_scene
+                .computed_curves
+                .iter()
+                .filter(|curve| curve.owner.feature == feature)
+                .map(|curve| curve.radius)
+                .collect::<Vec<_>>();
+            assert!(!radii.is_empty(), "feature {feature:?} must remain visible");
+            assert!(radii.iter().all(|radius| {
+                radius.is_finite() && radius.to_bits() == proposed_radius.to_bits()
+            }));
+        }
+        assert_eq!(
+            plan_patch_calls(),
+            frame + 1,
+            "each pointer frame plans the complete group exactly once",
+        );
+    }
+    let proposed_radius = proposed_radius.expect("terminal preview radius");
+    let preview_scene = session
+        .scene(viewport, 0.5)
+        .expect("grouped radius preview scene");
+    for feature in features {
+        let radii = preview_scene
+            .computed_curves
+            .iter()
+            .filter(|curve| curve.owner.feature == feature)
+            .map(|curve| curve.radius)
+            .collect::<Vec<_>>();
+        assert!(!radii.is_empty(), "feature {feature:?} must remain visible");
+        assert!(
+            radii.iter().all(|radius| {
+                radius.is_finite() && radius.to_bits() == proposed_radius.to_bits()
+            })
+        );
+    }
+
+    let plans_before_release = plan_patch_calls();
+    let terminal = session
+        .pointer_up(&preview_scene, pointer(pointer_id, target))
+        .expect("delegate grouped radius release");
+    assert!(terminal.transaction.is_none());
+    let proposal = terminal
+        .delegated_computed_fillet_radius
+        .expect("authenticated outer-owner proposal");
+    assert_eq!(proposal.intent, intent_before);
+    assert_eq!(proposal.initiating_feature, features[0]);
+    assert_eq!(proposal.features, features);
+    assert_eq!(proposal.origin_radius.to_bits(), 0.5_f64.to_bits());
+    assert_eq!(
+        proposal.proposed_radius.to_bits(),
+        proposed_radius.to_bits()
+    );
+    assert_eq!(plan_patch_calls(), plans_before_release);
+    assert_eq!(session.coordinator().intent().identity(), intent_before);
+    assert_eq!(session.coordinator().intent().undo_len(), undo_before);
+    for feature in features {
+        assert_eq!(
+            accepted_fillet_radius(&session, feature).to_bits(),
+            0.5_f64.to_bits(),
+            "delegated release must not publish nested feature intent",
+        );
+    }
+    let restored = session
+        .scene(viewport, 0.5)
+        .expect("accepted scene after delegated release");
+    assert!(restored.computed_curves.iter().all(|curve| {
+        curve.center.into_iter().all(f64::is_finite) && curve.radius.to_bits() == 0.5_f64.to_bits()
+    }));
+}
+
+#[test]
+fn delegated_grouped_fillet_radius_cancel_restores_every_consumer_without_history() {
+    let (mut session, viewport, features) = two_fillet_fixture(0x8700_0004, [0.5, 0.5]);
+    let pointer_id = 87_004;
+    let (scene, target) =
+        radius_drag_target(&mut session, viewport, features[0], pointer_id, 0.125);
+    session
+        .delegate_computed_fillet_radius_drag(&features)
+        .expect("authenticate cancellable shared radius group");
+    let intent_before = session.coordinator().intent().identity();
+    let undo_before = session.coordinator().intent().undo_len();
+
+    session
+        .pointer_move(&scene, pointer(pointer_id, target))
+        .expect("preview cancellable grouped radius");
+    let preview = session
+        .scene(viewport, 0.5)
+        .expect("grouped preview before cancellation");
+    assert!(
+        preview.computed_curves.iter().all(|curve| {
+            curve.radius.is_finite() && curve.radius.to_bits() != 0.5_f64.to_bits()
+        })
+    );
+
+    session.cancel_interaction();
+    assert!(session.editor().active_pointer_gesture().is_none());
+    assert_eq!(session.coordinator().intent().identity(), intent_before);
+    assert_eq!(session.coordinator().intent().undo_len(), undo_before);
+    for feature in features {
+        assert_eq!(
+            accepted_fillet_radius(&session, feature).to_bits(),
+            0.5_f64.to_bits(),
+        );
+    }
+    let restored = session
+        .scene(viewport, 0.5)
+        .expect("accepted grouped scene after cancellation");
+    assert!(restored.computed_curves.iter().all(|curve| {
+        curve.center.into_iter().all(f64::is_finite) && curve.radius.to_bits() == 0.5_f64.to_bits()
+    }));
+}
+
+#[test]
+fn stale_delegated_fillet_radius_group_rejects_and_retains_accepted_authority() {
+    let (mut session, viewport, features) = two_fillet_fixture(0x8700_0002, [0.5, 0.5]);
+    let pointer_id = 87_002;
+    let (_scene, _target) =
+        radius_drag_target(&mut session, viewport, features[0], pointer_id, 0.125);
+    let intent_before = session.coordinator().intent().identity();
+    let undo_before = session.coordinator().intent().undo_len();
+    let stale = ComputedFeatureId::from_raw(u64::MAX);
+
+    assert!(matches!(
+        session.delegate_computed_fillet_radius_drag(&[features[0], stale]),
+        Err(ProjectionalEditorError::StaleDelegatedFilletRadiusFeature(feature))
+            if feature == stale
+    ));
+    assert!(session.editor().active_pointer_gesture().is_none());
+    assert_eq!(session.coordinator().intent().identity(), intent_before);
+    assert_eq!(session.coordinator().intent().undo_len(), undo_before);
+    for feature in features {
+        assert_eq!(
+            accepted_fillet_radius(&session, feature).to_bits(),
+            0.5_f64.to_bits()
+        );
+    }
+}
+
+#[test]
+fn mixed_delegated_fillet_radius_group_rejects_and_retains_accepted_authority() {
+    let (mut session, viewport, features) = two_fillet_fixture(0x8700_0003, [0.5, 0.75]);
+    let pointer_id = 87_003;
+    let (_scene, _target) =
+        radius_drag_target(&mut session, viewport, features[0], pointer_id, 0.125);
+    let intent_before = session.coordinator().intent().identity();
+    let undo_before = session.coordinator().intent().undo_len();
+
+    assert!(matches!(
+        session.delegate_computed_fillet_radius_drag(&features),
+        Err(ProjectionalEditorError::MixedDelegatedFilletRadiusFeature {
+            feature,
+            expected,
+            actual,
+        }) if feature == features[1]
+            && expected.to_bits() == 0.5_f64.to_bits()
+            && actual.to_bits() == 0.75_f64.to_bits()
+    ));
+    assert!(session.editor().active_pointer_gesture().is_none());
+    assert_eq!(session.coordinator().intent().identity(), intent_before);
+    assert_eq!(session.coordinator().intent().undo_len(), undo_before);
+    assert_eq!(
+        accepted_fillet_radius(&session, features[0]).to_bits(),
+        0.5_f64.to_bits()
+    );
+    assert_eq!(
+        accepted_fillet_radius(&session, features[1]).to_bits(),
+        0.75_f64.to_bits()
+    );
+}
+
+#[test]
+fn malformed_delegated_fillet_radius_groups_fail_closed_before_pointer_work() {
+    let assert_retained = |session: &ProjectionalEditorSession,
+                           features: [ComputedFeatureId; 2],
+                           identity: IntentSessionIdentity,
+                           undo_len: usize| {
+        assert!(session.editor().active_pointer_gesture().is_none());
+        assert_eq!(session.coordinator().intent().identity(), identity);
+        assert_eq!(session.coordinator().intent().undo_len(), undo_len);
+        for feature in features {
+            assert_eq!(
+                accepted_fillet_radius(session, feature).to_bits(),
+                0.5_f64.to_bits(),
+            );
+        }
+    };
+
+    let cases = ["empty", "duplicate", "missing", "over_limit"];
+    for (index, case) in cases.into_iter().enumerate() {
+        let raw = 0x8700_0100 + index as u128;
+        let (mut session, viewport, features) = two_fillet_fixture(raw, [0.5, 0.5]);
+        let pointer_id = 87_100 + index as u64;
+        let (_scene, _target) =
+            radius_drag_target(&mut session, viewport, features[0], pointer_id, 0.125);
+        let identity = session.coordinator().intent().identity();
+        let undo_len = session.coordinator().intent().undo_len();
+
+        let error = match case {
+            "empty" => session
+                .delegate_computed_fillet_radius_drag(&[])
+                .expect_err("empty groups must reject"),
+            "duplicate" => session
+                .delegate_computed_fillet_radius_drag(&[features[0], features[1], features[1]])
+                .expect_err("duplicate features must reject"),
+            "missing" => session
+                .delegate_computed_fillet_radius_drag(&[features[1]])
+                .expect_err("the initiating feature is mandatory"),
+            "over_limit" => {
+                let oversized =
+                    vec![features[0]; MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES + 1];
+                session
+                    .delegate_computed_fillet_radius_drag(&oversized)
+                    .expect_err("over-limit groups must reject before canonicalization")
+            }
+            _ => unreachable!(),
+        };
+        match case {
+            "empty" => assert!(matches!(
+                error,
+                ProjectionalEditorError::EmptyDelegatedFilletRadiusGroup
+            )),
+            "duplicate" => assert!(matches!(
+                error,
+                ProjectionalEditorError::DuplicateDelegatedFilletRadiusFeature(feature)
+                    if feature == features[1]
+            )),
+            "missing" => assert!(matches!(
+                error,
+                ProjectionalEditorError::DelegatedFilletRadiusGroupMissingInitiatingFeature(feature)
+                    if feature == features[0]
+            )),
+            "over_limit" => assert!(matches!(
+                error,
+                ProjectionalEditorError::DelegatedFilletRadiusGroupCardinalityExceeded {
+                    count,
+                    limit: MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES,
+                } if count == MAX_DELEGATED_COMPUTED_FILLET_RADIUS_FEATURES + 1
+            )),
+            _ => unreachable!(),
+        }
+        assert_retained(&session, features, identity, undo_len);
+    }
+}
+
+#[test]
+fn delegated_fillet_radius_group_rejects_late_or_conflicting_rebinding() {
+    let (mut late, viewport, features) = two_fillet_fixture(0x8700_0200, [0.5, 0.5]);
+    let (scene, target) = radius_drag_target(&mut late, viewport, features[0], 87_200, 0.125);
+    late.pointer_move(&scene, pointer(87_200, target))
+        .expect("ordinary pointer work before late delegation");
+    assert!(matches!(
+        late.delegate_computed_fillet_radius_drag(&features),
+        Err(ProjectionalEditorError::DelegatedFilletRadiusGroupTooLate)
+    ));
+    assert!(late.editor().active_pointer_gesture().is_none());
+
+    let (mut rebound, viewport, features) = two_fillet_fixture(0x8700_0201, [0.5, 0.5]);
+    let (_scene, _target) = radius_drag_target(&mut rebound, viewport, features[0], 87_201, 0.125);
+    rebound
+        .delegate_computed_fillet_radius_drag(&features)
+        .expect("first exact group binding");
+    rebound
+        .delegate_computed_fillet_radius_drag(&features)
+        .expect("idempotent exact group rebinding");
+    assert!(matches!(
+        rebound.delegate_computed_fillet_radius_drag(&[features[0]]),
+        Err(ProjectionalEditorError::DelegatedFilletRadiusGroupAlreadyBound)
+    ));
+    assert!(rebound.editor().active_pointer_gesture().is_none());
+}
+
+#[test]
+fn grouped_fillet_radius_patch_rejects_repeated_logical_definition_owners() {
+    let (session, _viewport, features) = two_fillet_fixture(0x8700_0202, [0.5, 0.5]);
+    let accepted = session
+        .coordinator()
+        .accepted_materialization()
+        .expect("accepted two-Fillet authority");
+    let mut ownership = accepted.ownership.clone();
+    let first_owner = ownership
+        .exact_owner(IntentNativeBinding::ComputedFeature(features[0]))
+        .expect("first feature owner");
+    let second_owner = ownership
+        .exact_owner(IntentNativeBinding::ComputedFeature(features[1]))
+        .expect("second feature owner");
+    ownership
+        .nodes
+        .iter_mut()
+        .find(|node| node.node == second_owner)
+        .expect("second owner materialization")
+        .owned
+        .retain(|binding| *binding != IntentNativeBinding::ComputedFeature(features[1]));
+    let first = ownership
+        .nodes
+        .iter_mut()
+        .find(|node| node.node == first_owner)
+        .expect("first owner materialization");
+    first
+        .owned
+        .push(IntentNativeBinding::ComputedFeature(features[1]));
+    first.owned.sort_unstable();
+
+    assert!(matches!(
+        projectional_fillet_radius_group_patch(
+            session.coordinator().intent(),
+            &ownership,
+            &features,
+            0.5,
+        ),
+        Err(ProjectionalEditorError::DuplicateDelegatedFilletRadiusDefinitionOwner(feature))
+            if feature == features[1]
+    ));
 }
 
 #[test]

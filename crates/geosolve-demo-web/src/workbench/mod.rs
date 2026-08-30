@@ -3,7 +3,9 @@
 #[cfg(any(target_arch = "wasm32", test))]
 mod action_surface;
 #[cfg(any(target_arch = "wasm32", test))]
-mod code_projects;
+pub(crate) mod code_control_rpc;
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) mod code_projects;
 #[cfg(any(target_arch = "wasm32", test))]
 mod design_projection;
 #[cfg(any(target_arch = "wasm32", test))]
@@ -102,6 +104,11 @@ enum WorkbenchPresentationEvent {
     PointerMoveFrame,
     PointerRelease,
     AuthenticatedPointerRelease(u64),
+    /// The outer code/source transaction has already published both source
+    /// history and its accepted checkpoint. Presentation may persist those
+    /// exact authorities, but must not attempt a second delegated checkpoint
+    /// publication while saving the terminal frame.
+    CodeSourcePointerRelease,
     PointerReleaseWithoutTransaction,
     InteractionCancellation,
 }
@@ -114,12 +121,12 @@ impl WorkbenchPresentationEvent {
                 render_scope: WorkbenchRenderScope::Transient,
                 saves_workspace: false,
             },
-            Self::PointerRelease | Self::AuthenticatedPointerRelease(_) => {
-                WorkbenchPresentationPolicy {
-                    render_scope: WorkbenchRenderScope::Durable,
-                    saves_workspace: true,
-                }
-            }
+            Self::PointerRelease
+            | Self::AuthenticatedPointerRelease(_)
+            | Self::CodeSourcePointerRelease => WorkbenchPresentationPolicy {
+                render_scope: WorkbenchRenderScope::Durable,
+                saves_workspace: true,
+            },
             Self::PointerReleaseWithoutTransaction | Self::InteractionCancellation => {
                 WorkbenchPresentationPolicy {
                     render_scope: WorkbenchRenderScope::Durable,
@@ -127,6 +134,10 @@ impl WorkbenchPresentationEvent {
                 }
             }
         }
+    }
+
+    const fn code_source_already_published(self) -> bool {
+        matches!(self, Self::CodeSourcePointerRelease)
     }
 }
 
@@ -332,6 +343,7 @@ struct RetainedCameraQueue {
     pending_camera: Option<scene::CanvasCamera>,
     next_frame_generation: u64,
     scheduled_frame_generation: Option<u64>,
+    admitted_frame_generation: Option<u64>,
     next_idle_generation: u64,
     scheduled_idle_generation: Option<u64>,
     exact_reconciliation_needed: bool,
@@ -344,20 +356,23 @@ struct RetainedCameraQueue {
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct AdmittedCameraFrame {
+    generation: u64,
+    target_camera: scene::CanvasCamera,
     transform: scene::RetainedCameraTransform,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
 impl AdmittedCameraFrame {
     fn take(queue: &mut RetainedCameraQueue, generation: u64) -> Option<Self> {
-        queue
-            .take_frame(generation)
-            .map(|transform| Self { transform })
+        queue.take_frame(generation)
     }
 
-    fn complete(self, ledger: &performance::PresentationWorkLedger) {
-        let _ = self.transform;
-        ledger.record(performance::PresentationWork::CameraPresentation);
+    fn complete(self, queue: &mut RetainedCameraQueue) -> bool {
+        queue.complete_frame(self)
+    }
+
+    fn retain_after_failure(self, queue: &mut RetainedCameraQueue) {
+        queue.retain_failed_frame(self);
     }
 }
 
@@ -425,15 +440,46 @@ impl RetainedCameraQueue {
         Some(self.next_frame_generation)
     }
 
-    /// Consumes only the currently authenticated RAF; stale callbacks are
-    /// inert and the latest camera wins over every raw event it coalesced.
-    fn take_frame(&mut self, generation: u64) -> Option<scene::RetainedCameraTransform> {
+    /// Admits only the currently authenticated RAF; stale callbacks are inert
+    /// and the latest camera wins over every raw event it coalesced. The
+    /// desired camera remains pending until presentation completes, so a DOM
+    /// failure cannot consume the only retryable copy.
+    fn take_frame(&mut self, generation: u64) -> Option<AdmittedCameraFrame> {
         if self.scheduled_frame_generation != Some(generation) {
             return None;
         }
         self.scheduled_frame_generation = None;
-        let camera = self.pending_camera.take()?;
-        scene::RetainedCameraTransform::between(self.exact_camera, camera)
+        let target_camera = self.pending_camera?;
+        let transform = scene::RetainedCameraTransform::between(self.exact_camera, target_camera)?;
+        self.admitted_frame_generation = Some(generation);
+        Some(AdmittedCameraFrame {
+            generation,
+            target_camera,
+            transform,
+        })
+    }
+
+    /// Commits an admitted frame only after every retained DOM mutation has
+    /// succeeded. A newer desired camera, if one was coalesced meanwhile, is
+    /// deliberately retained for its own frame.
+    fn complete_frame(&mut self, frame: AdmittedCameraFrame) -> bool {
+        if self.admitted_frame_generation != Some(frame.generation) {
+            return false;
+        }
+        self.admitted_frame_generation = None;
+        if self.pending_camera == Some(frame.target_camera) {
+            self.pending_camera = None;
+        }
+        true
+    }
+
+    /// Retires the failed admission while preserving the desired camera. The
+    /// adapter first attempts an exact presentation-only reprojection; if the
+    /// DOM is still unavailable, the next input can schedule this camera again.
+    fn retain_failed_frame(&mut self, frame: AdmittedCameraFrame) {
+        if self.admitted_frame_generation == Some(frame.generation) {
+            self.admitted_frame_generation = None;
+        }
     }
 
     #[cfg_attr(test, allow(dead_code))]
@@ -495,6 +541,7 @@ impl RetainedCameraQueue {
         self.exact_camera = camera;
         self.pending_camera = None;
         self.scheduled_frame_generation = None;
+        self.admitted_frame_generation = None;
         self.scheduled_idle_generation = None;
         self.exact_reconciliation_needed = false;
     }
@@ -841,19 +888,52 @@ struct ProjectionalDesignMarkup {
 #[cfg(any(target_arch = "wasm32", test))]
 fn projectional_design_markup(
     projectional: &geosolve_constraint_editor::ProjectionalEditorSession,
-) -> ProjectionalDesignMarkup {
+    code_project: Option<&code_projects::CodeProjectWorkbench>,
+    managed_controls: Option<Result<&geosolve_sketch_code::ManagedControlManifest, &str>>,
+) -> Result<ProjectionalDesignMarkup, String> {
     let projection = projectional.workbench_projection();
     let selection = projectional
         .selected_declaration()
         .map(|node| design_projection::DesignProjectionSelection { node });
     let inspector = projectional.selected_inspector(&projection);
-    ProjectionalDesignMarkup {
+    let descriptor_index = inspector
+        .as_ref()
+        .map(design_projection::InspectorDescriptorIndex::new);
+    let parameters = match (code_project, inspector.as_ref(), managed_controls) {
+        (Some(code_project), Some(inspector), Some(manifest)) => code_project
+            .inspector_parameter_presentations_with_manifest(
+                projectional,
+                &projection,
+                inspector,
+                descriptor_index
+                    .as_ref()
+                    .expect("selected Inspector has one descriptor index"),
+                manifest,
+            )?,
+        (Some(code_project), Some(inspector), None) => {
+            code_project.inspector_parameter_presentations(projectional, inspector)?
+        }
+        (Some(_), None, _) | (None, _, _) => Vec::new(),
+    };
+    let name_authority = design_projection::inspector_name_authority(&parameters);
+    Ok(ProjectionalDesignMarkup {
         declaration_count: design_projection::declaration_count(&projection),
         outline: design_projection::outline_markup(&projection, selection),
         source: design_projection::structured_source_markup(&projection, selection),
         history: design_projection::history_markup(&projection),
-        inspector: design_projection::inspector_markup(inspector.as_ref()),
-    }
+        inspector: inspector.as_ref().map_or_else(String::new, |inspector| {
+            design_projection::inspector_markup_with_presentation_and_descriptors(
+                inspector,
+                design_projection::InspectorPresentation {
+                    parameters: &parameters,
+                    name_authority: name_authority.as_ref(),
+                },
+                descriptor_index
+                    .as_ref()
+                    .expect("selected Inspector has one descriptor index"),
+            )
+        }),
+    })
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1098,6 +1178,128 @@ enum ProjectionalInspectorDispatch {
     Rejected(String),
 }
 
+/// Outcome of publishing one source-owned grouped Fillet-radius gesture.
+///
+/// The projectional editor has already authenticated the terminal preview at
+/// this boundary, but deliberately has not appended nested Intent history.
+/// Only the code-project owner may convert that proposal into durable source
+/// authority and, on success, replace the accepted native editor.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ProjectionalDelegatedFilletPublication {
+    Accepted { revision: u64 },
+    RetainedFailure { revision: u64, diagnostic: String },
+}
+
+/// Authenticates and delegates a selected source-owned Fillet radius before
+/// the first pointer frame. `false` leaves ordinary GUI-owned Fillets on their
+/// existing direct-manipulation route.
+#[cfg(any(target_arch = "wasm32", test))]
+fn delegate_projectional_code_fillet_radius_drag(
+    authority: &mut WorkbenchDocumentAuthority,
+    code_project: &code_projects::CodeProjectWorkbench,
+) -> Result<bool, String> {
+    let features = {
+        let editor = authority.projectional_ref().ok_or_else(|| {
+            "the grouped Fillet-radius gesture requires projectional authority".to_owned()
+        })?;
+        code_project.delegated_computed_fillet_radius_group(editor)?
+    };
+    let Some(features) = features else {
+        return Ok(false);
+    };
+    authority
+        .projectional_mut()
+        .expect("projectional authority was authenticated above")
+        .delegate_computed_fillet_radius_drag(&features)
+        .map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+/// Re-derives the current manifest/control/complete consumer group and
+/// publishes one exact outer source transaction for a delegated terminal.
+/// The nested editor's prepared preview never becomes a checkpoint or an
+/// Intent-history row.
+#[cfg(any(target_arch = "wasm32", test))]
+fn publish_projectional_code_fillet_radius(
+    authority: &mut WorkbenchDocumentAuthority,
+    code_project: &mut code_projects::CodeProjectWorkbench,
+    proposal: &geosolve_constraint_editor::DelegatedComputedFilletRadiusProposal,
+) -> Result<ProjectionalDelegatedFilletPublication, String> {
+    let outcome = {
+        let editor = authority.projectional_ref().ok_or_else(|| {
+            "the grouped Fillet-radius release requires projectional authority".to_owned()
+        })?;
+        code_project.apply_delegated_computed_fillet_radius(editor, proposal)?
+    };
+    match outcome {
+        code_projects::CodeApplyOutcome::Accepted(publication) => {
+            let revision = publication.receipt.after.revision;
+            *authority = WorkbenchDocumentAuthority::from_projectional_editor(*publication.editor)?;
+            Ok(ProjectionalDelegatedFilletPublication::Accepted { revision })
+        }
+        code_projects::CodeApplyOutcome::RetainedFailure {
+            receipt,
+            diagnostic,
+        } => Ok(ProjectionalDelegatedFilletPublication::RetainedFailure {
+            revision: receipt.after.revision,
+            diagnostic,
+        }),
+    }
+}
+
+/// Publishes one linear accepted point-preview witness through the code
+/// owner's authenticated semantic lens. The nested projectional session has
+/// not committed a generic Intent transaction at this boundary.
+#[cfg(any(target_arch = "wasm32", test))]
+fn publish_projectional_code_point_terminal(
+    authority: &mut WorkbenchDocumentAuthority,
+    code_project: &mut code_projects::CodeProjectWorkbench,
+    pointer_id: u64,
+    proposal: geosolve_constraint_editor::DelegatedPointDragProposal,
+    trace: Option<&mut interaction_trace::InteractionTrace>,
+) -> (Result<u64, String>, geosolve_sketch_code::CodeWorkReceipt) {
+    let audited = {
+        let Some(editor) = authority.projectional_ref() else {
+            return (
+                Err("the delegated point release requires projectional authority".into()),
+                geosolve_sketch_code::CodeWorkReceipt::default(),
+            );
+        };
+        match trace {
+            Some(trace) => code_project.publish_delegated_point_terminal_audited_with_trace(
+                pointer_id,
+                editor,
+                proposal,
+                "Direct GUI sketch edit",
+                trace,
+            ),
+            None => code_project.publish_delegated_point_terminal_audited(
+                pointer_id,
+                editor,
+                proposal,
+                "Direct GUI sketch edit",
+            ),
+        }
+    };
+    let work = audited.work;
+    let outcome = audited.outcome.and_then(|publication| {
+        let publication = publication.ok_or_else(|| {
+            "the moved delegated point terminal produced no outer publication".to_owned()
+        })?;
+        let revision = publication.receipt.after.revision;
+        *authority = WorkbenchDocumentAuthority::from_projectional_editor(*publication.editor)?;
+        Ok(revision)
+    });
+    if outcome.is_err()
+        && let Ok(editor) = code_project.restore_accepted_editor()
+        && let Ok(restored) = WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+    {
+        *authority = restored;
+    }
+    (outcome, work)
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 impl ProjectionalInspectorDispatch {
     const fn saves_workspace(&self) -> bool {
@@ -1136,8 +1338,7 @@ fn dispatch_projectional_inspector_control(
     };
 
     if let Some(code_project) = code_project {
-        let route = code_project
-            .apply_managed_dimension_inspector_edit(editor, &inspector, &target, &value);
+        let route = code_project.apply_managed_inspector_edit(editor, &inspector, &target, &value);
         match route {
             Ok(code_projects::CodeInspectorEditRoute::NotClaimed) => {}
             Ok(code_projects::CodeInspectorEditRoute::Claimed(
@@ -4553,6 +4754,7 @@ pub(crate) mod wasm {
 
     pub(crate) fn install(document: &Document) -> Result<(), JsValue> {
         super::live_intent_rpc::clear();
+        super::code_control_rpc::clear();
         let storage = super::platform::window()?.local_storage().ok().flatten();
         let snapshot = storage.as_ref().and_then(|storage| {
             storage
@@ -4716,6 +4918,7 @@ pub(crate) mod wasm {
         render_projectional(document, &workbench)?;
         install_projectional_events(document, &workbench)?;
         install_projectional_live_intent_rpc(document, &workbench);
+        install_projectional_live_code_control_rpc(document, &workbench);
         Ok(())
     }
 
@@ -4742,6 +4945,11 @@ pub(crate) mod wasm {
                 "the projectional workbench is handling another synchronous interaction",
             );
         };
+        if let Some(response) =
+            super::live_intent_rpc::code_authority_rejection(wb.code_project.is_some(), request)
+        {
+            return response;
+        }
         let before = wb.editor().coordinator().intent().identity();
         if may_change_identity {
             cancel_projectional_before_durable_mutation(
@@ -4758,6 +4966,95 @@ pub(crate) mod wasm {
         }
         if identity_changed {
             wb.notice = "Design intent updated from code".into();
+        }
+        let policy = super::live_intent_rpc::LiveIntentRpcPresentationPolicy::after_request(
+            identity_changed,
+            may_change_identity,
+        );
+        drop(wb);
+
+        if policy.save_workspace {
+            save_projectional(&mut workbench.borrow_mut());
+        }
+        if policy.render_durable {
+            let _ = render_projectional(document, workbench);
+        } else if policy.render_transient {
+            let _ = reproject_projectional_canvas(document, &mut workbench.borrow_mut());
+            let _ = render_projectional_tool_options_overlay(document, &workbench.borrow());
+        }
+        response
+    }
+
+    fn install_projectional_live_code_control_rpc(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+    ) {
+        let rpc_document = document.clone();
+        let rpc_workbench = Rc::clone(workbench);
+        super::code_control_rpc::install(move |request| {
+            apply_projectional_live_code_control_rpc(&rpc_document, &rpc_workbench, request)
+        });
+    }
+
+    fn apply_projectional_live_code_control_rpc(
+        document: &Document,
+        workbench: &Rc<RefCell<ProjectionalWorkbench>>,
+        request: &str,
+    ) -> String {
+        let may_change_identity = super::code_control_rpc::request_may_change_identity(request);
+        let Ok(mut wb) = workbench.try_borrow_mut() else {
+            return super::code_control_rpc::encode_failure(
+                "code_workbench_busy",
+                "the projectional workbench is handling another synchronous interaction",
+                None,
+            );
+        };
+        if wb.code_project.is_none() {
+            return super::code_control_rpc::encode_failure(
+                "code_workbench_unavailable",
+                "the installed projectional workbench has no active code project",
+                None,
+            );
+        }
+        if may_change_identity {
+            cancel_projectional_before_durable_mutation(
+                document,
+                &mut wb,
+                "applying a managed code-control edit",
+            );
+        }
+        let application = super::code_control_rpc::apply_to_code_project(
+            wb.code_project
+                .as_mut()
+                .expect("code-project presence was checked"),
+            request,
+        );
+        let super::code_control_rpc::CodeControlRpcApplication {
+            response,
+            editor,
+            identity_changed,
+        } = application;
+        if let Some(editor) = editor {
+            match super::WorkbenchDocumentAuthority::from_projectional_editor(*editor) {
+                Ok(authority) => wb.authority = authority,
+                Err(error) => {
+                    let identity = wb
+                        .code_project
+                        .as_ref()
+                        .map(|code_project| code_project.code_session_identity().clone());
+                    return super::code_control_rpc::encode_failure(
+                        "editor_publication_rejected",
+                        &error,
+                        identity,
+                    );
+                }
+            }
+        }
+        if may_change_identity {
+            reconcile_projectional_authoring(&mut wb);
+        }
+        if identity_changed {
+            wb.notice = "Managed code controls updated".into();
         }
         let policy = super::live_intent_rpc::LiveIntentRpcPresentationPolicy::after_request(
             identity_changed,
@@ -5850,7 +6147,19 @@ pub(crate) mod wasm {
         let source = wb.editor().coordinator().presentation_session();
         let selection = wb.editor().editor().selection();
 
-        let design_markup = super::projectional_design_markup(wb.editor());
+        let managed_controls = wb
+            .code_project
+            .as_ref()
+            .map(super::code_projects::CodeProjectWorkbench::managed_controls_cached);
+        let managed_control_refs = managed_controls
+            .as_ref()
+            .map(|manifest| manifest.as_ref().map(Rc::as_ref).map_err(String::as_str));
+        let design_markup = super::projectional_design_markup(
+            wb.editor(),
+            wb.code_project.as_ref(),
+            managed_control_refs,
+        )
+        .map_err(|error| JsValue::from_str(&error))?;
         required(document, "wb-design-count")?.set_text_content(Some(&format!(
             "{} declaration{}",
             design_markup.declaration_count,
@@ -5867,7 +6176,9 @@ pub(crate) mod wasm {
         let code_panel = required(document, "wb-design-code")?;
         if let Some(code_project) = &wb.code_project {
             set_hidden(&code_tab, false)?;
-            code_panel.set_inner_html(&code_project.panel_markup());
+            let manifest =
+                managed_control_refs.expect("code project render derives one managed manifest");
+            code_panel.set_inner_html(&code_project.panel_markup_with_managed_controls(manifest));
         } else {
             let surface = super::code_projects::OrdinaryCodeSurface::from_editor(wb.editor());
             set_hidden(&code_tab, false)?;
@@ -5964,7 +6275,7 @@ pub(crate) mod wasm {
         }
         required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
             "{:.1} px / unit",
-            wb.camera.pixels_per_model_unit,
+            wb.camera.pixels_per_model_unit(),
         )));
         render_projectional_authoring_status(document, &wb)?;
         render_reproduction_overlay(
@@ -6176,12 +6487,26 @@ pub(crate) mod wasm {
         wb: &mut ProjectionalWorkbench,
         terminal_pointer: Option<u64>,
     ) {
+        save_projectional_with_code_publication_policy(wb, terminal_pointer, false);
+    }
+
+    fn save_projectional_after_code_source_publication(wb: &mut ProjectionalWorkbench) {
+        save_projectional_with_code_publication_policy(wb, None, true);
+    }
+
+    fn save_projectional_with_code_publication_policy(
+        wb: &mut ProjectionalWorkbench,
+        terminal_pointer: Option<u64>,
+        code_source_already_published: bool,
+    ) {
         record_projectional_authority_trace(
             wb,
             "save.begin",
-            &format!("terminal_pointer={terminal_pointer:?}"),
+            &format!(
+                "terminal_pointer={terminal_pointer:?} code_source_already_published={code_source_already_published}"
+            ),
         );
-        if wb.code_project.is_some() {
+        if wb.code_project.is_some() && !code_source_already_published {
             let (publication, code_work) = {
                 let ProjectionalWorkbench {
                     authority,
@@ -6304,13 +6629,20 @@ pub(crate) mod wasm {
         }
         let policy = event.policy();
         if policy.saves_workspace {
-            let terminal_pointer = match event {
-                super::WorkbenchPresentationEvent::AuthenticatedPointerRelease(pointer_id) => {
-                    Some(pointer_id)
-                }
-                _ => None,
-            };
-            save_projectional_with_terminal_pointer(&mut workbench.borrow_mut(), terminal_pointer);
+            if event.code_source_already_published() {
+                save_projectional_after_code_source_publication(&mut workbench.borrow_mut());
+            } else {
+                let terminal_pointer = match event {
+                    super::WorkbenchPresentationEvent::AuthenticatedPointerRelease(pointer_id) => {
+                        Some(pointer_id)
+                    }
+                    _ => None,
+                };
+                save_projectional_with_terminal_pointer(
+                    &mut workbench.borrow_mut(),
+                    terminal_pointer,
+                );
+            }
         }
         let result = match policy.render_scope {
             super::WorkbenchRenderScope::Transient => render_projectional_canvas(
@@ -6339,6 +6671,13 @@ pub(crate) mod wasm {
                     | super::WorkbenchPresentationEvent::AuthenticatedPointerRelease(_) => {
                         if delta.is_single_terminal_publication() {
                             "single-terminal"
+                        } else {
+                            "forbidden-work"
+                        }
+                    }
+                    super::WorkbenchPresentationEvent::CodeSourcePointerRelease => {
+                        if delta.is_code_source_terminal_presentation() {
+                            "code-source-terminal"
                         } else {
                             "forbidden-work"
                         }
@@ -7339,33 +7678,54 @@ pub(crate) mod wasm {
             return Ok(());
         };
         let desired_viewport = workbench.borrow().camera.viewport();
-        apply_retained_camera_transform(document, frame.transform, desired_viewport)?;
-        let wb = workbench.borrow();
-        required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
-            "{:.1} px / unit",
-            wb.camera.pixels_per_model_unit,
-        )));
-        let coordinate = super::coordinate_hud(
-            wb.camera.viewport(),
-            wb.pointer_moves.borrow().last_input(),
-            None,
-        );
-        let coordinate_element = required(document, "wb-pointer-coordinate")?;
-        coordinate_element.set_text_content(Some(&coordinate.text));
-        coordinate_element.set_attribute("title", &coordinate.title)?;
-        coordinate_element.set_attribute("data-inference-adjusted", "false")?;
-        frame.complete(&wb.work_ledger);
+        let presentation = (|| -> Result<(), JsValue> {
+            apply_retained_camera_transform(document, frame.transform, desired_viewport)?;
+            let wb = workbench.borrow();
+            required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
+                "{:.1} px / unit",
+                wb.camera.pixels_per_model_unit(),
+            )));
+            let coordinate = super::coordinate_hud(
+                wb.camera.viewport(),
+                wb.pointer_moves.borrow().last_input(),
+                None,
+            );
+            let coordinate_element = required(document, "wb-pointer-coordinate")?;
+            coordinate_element.set_text_content(Some(&coordinate.text));
+            coordinate_element.set_attribute("title", &coordinate.title)?;
+            coordinate_element.set_attribute("data-inference-adjusted", "false")?;
+            Ok(())
+        })();
+        if let Err(error) = presentation {
+            frame.retain_after_failure(&mut workbench.borrow_mut().camera_frames);
+            return Err(error);
+        }
+        let root = match required(document, "workbench-root") {
+            Ok(root) => root,
+            Err(error) => {
+                frame.retain_after_failure(&mut workbench.borrow_mut().camera_frames);
+                return Err(error);
+            }
+        };
+        let mut wb = workbench.borrow_mut();
+        if !frame.complete(&mut wb.camera_frames) {
+            return Ok(());
+        }
+        wb.work_ledger
+            .record(super::performance::PresentationWork::CameraPresentation);
         let work = wb.work_ledger.snapshot().delta_since(work_before);
-        let root = required(document, "workbench-root")?;
-        root.set_attribute("data-presentation-work-delta", &work.compact())?;
-        root.set_attribute(
+        // These attributes expose browser-test diagnostics only. The retained
+        // camera and its ledger entry are already committed, so a diagnostic
+        // write failure must not misreport the successful paint as retryable.
+        let _ = root.set_attribute("data-presentation-work-delta", &work.compact());
+        let _ = root.set_attribute(
             "data-camera-work-admitted",
             if work.is_camera_frame_only() {
                 "camera-only"
             } else {
                 "forbidden-work"
             },
-        )?;
+        );
         Ok(())
     }
 
@@ -7377,8 +7737,14 @@ pub(crate) mod wasm {
         let frame_document = document.clone();
         let frame_workbench = Rc::clone(workbench);
         let frame = Closure::once_into_js(move || {
-            let _ =
-                present_projectional_camera_frame(&frame_document, &frame_workbench, generation);
+            if present_projectional_camera_frame(&frame_document, &frame_workbench, generation)
+                .is_err()
+            {
+                let _ = reproject_projectional_canvas(
+                    &frame_document,
+                    &mut frame_workbench.borrow_mut(),
+                );
+            }
         });
         let scheduled = super::platform::window()
             .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
@@ -7827,7 +8193,7 @@ pub(crate) mod wasm {
                         wb.pan_gesture = Some(super::CanvasPanGesture {
                             pointer_id: event.pointer_id(),
                             origin,
-                            origin_center: wb.camera.model_center,
+                            origin_center: wb.camera.model_center(),
                         });
                         wb.notice = "Panning canvas".into();
                     }
@@ -7951,7 +8317,7 @@ pub(crate) mod wasm {
             if camera_changed {
                 wb.notice = format!(
                     "Canvas zoom {:.1} px / unit",
-                    wb.camera.pixels_per_model_unit
+                    wb.camera.pixels_per_model_unit()
                 );
                 let camera = wb.camera;
                 frame_generation = wb.camera_frames.request_frame(camera);
@@ -8453,24 +8819,14 @@ pub(crate) mod wasm {
                 );
                 return;
             }
-            let preferred_code_declaration = match wb
+            // Preserve the pre-click semantic point disambiguator, but do not
+            // demand point-writable provenance for another gesture family.
+            // Generated `code.host.*` Fillets intentionally resolve through
+            // generated-child provenance only after their radius grip wins.
+            let preferred_code_declaration = wb
                 .code_project
                 .as_ref()
-                .map(|code_project| code_project.selected_managed_declaration(wb.editor()))
-            {
-                Some(Ok(declaration)) => declaration,
-                Some(Err(error)) => {
-                    wb.notice = format!("Code-owned point gesture is unavailable: {error}");
-                    drop(wb);
-                    let _ = present_projectional_pointer_event(
-                        &down_document,
-                        &down_workbench,
-                        super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
-                    );
-                    return;
-                }
-                None => None,
-            };
+                .map(|code_project| code_project.selected_managed_declaration(wb.editor()));
             let mut effects = match wb.editor_mut().pointer_down(&scene, input) {
                 Ok(effects) => effects,
                 Err(error) => {
@@ -8485,6 +8841,21 @@ pub(crate) mod wasm {
                 }
             };
             if let Some(route) = wb.editor().editor().prepared_point_drag_route() {
+                let preferred_code_declaration = match preferred_code_declaration {
+                    Some(Ok(declaration)) => declaration,
+                    Some(Err(error)) => {
+                        wb.editor_mut().cancel_interaction();
+                        wb.notice = format!("Code-owned point gesture is unavailable: {error}");
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &down_document,
+                            &down_workbench,
+                            super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                        );
+                        return;
+                    }
+                    None => None,
+                };
                 let preparation = {
                     let ProjectionalWorkbench {
                         authority,
@@ -8551,28 +8922,65 @@ pub(crate) mod wasm {
                 }
             }
             let active = wb.editor().editor().active_pointer_gesture();
-            if active.is_some_and(|active| {
+            let delegated_code_fillet = if active.is_some_and(|active| {
+                active.kind == geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
+            }) && wb.code_project.is_some()
+            {
+                let delegation = {
+                    let ProjectionalWorkbench {
+                        authority,
+                        code_project,
+                        ..
+                    } = &mut *wb;
+                    super::delegate_projectional_code_fillet_radius_drag(
+                        authority,
+                        code_project
+                            .as_ref()
+                            .expect("code-project presence was checked"),
+                    )
+                };
+                match delegation {
+                    Ok(delegated) => delegated,
+                    Err(error) => {
+                        wb.editor_mut().cancel_interaction();
+                        wb.notice =
+                            format!("Code-owned Fillet-radius gesture is unavailable: {error}");
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &down_document,
+                            &down_workbench,
+                            super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                        );
+                        return;
+                    }
+                }
+            } else {
+                false
+            };
+            let code_property_gesture = active.is_some_and(|active| {
                 matches!(
                     active.kind,
                     geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
                         | geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
                         | geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance
                 )
-            }) && wb.code_project.is_some()
-                && let Err(error) =
+            });
+            if !delegated_code_fillet && code_property_gesture && wb.code_project.is_some() {
+                if let Err(error) =
                     super::code_projects::CodeProjectWorkbench::selected_code_geometry_mutation_permission(
                         wb.editor(),
                     )
-            {
-                wb.editor_mut().cancel_interaction();
-                wb.notice = format!("Code-owned property gesture is unavailable: {error}");
-                drop(wb);
-                let _ = present_projectional_pointer_event(
-                    &down_document,
-                    &down_workbench,
-                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
-                );
-                return;
+                {
+                    wb.editor_mut().cancel_interaction();
+                    wb.notice = format!("Code-owned property gesture is unavailable: {error}");
+                    drop(wb);
+                    let _ = present_projectional_pointer_event(
+                        &down_document,
+                        &down_workbench,
+                        super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction,
+                    );
+                    return;
+                }
             }
             let presentation = match active {
                 Some(active)
@@ -8920,6 +9328,99 @@ pub(crate) mod wasm {
                 );
                 return;
             }
+            if wb.code_project.as_ref().is_some_and(|code_project| {
+                code_project.has_pending_semantic_point_drag(input.pointer_id)
+            }) {
+                let outcome = if let Some(scene) = projectional_scene(&wb) {
+                    let audited = wb
+                        .editor_mut()
+                        .pointer_up_delegated_point_audited(&scene, input);
+                    interaction_work.merge(audited.work);
+                    audited.outcome.map_err(|error| error.to_string())
+                } else {
+                    Err("the exact delegated point preview scene is unavailable".to_owned())
+                };
+                let presentation = match outcome {
+                    Ok(outcome) => {
+                        release_projectional_pointer_capture(
+                            &up_viewport,
+                            &mut wb,
+                            Some(event.pointer_id()),
+                            true,
+                        );
+                        if let Some(proposal) = outcome.proposal {
+                            let (publication, code_work) = {
+                                let ProjectionalWorkbench {
+                                    authority,
+                                    code_project,
+                                    interaction_trace,
+                                    ..
+                                } = &mut *wb;
+                                let trace = if interaction_trace.is_empty() {
+                                    None
+                                } else {
+                                    Some(interaction_trace)
+                                };
+                                super::publish_projectional_code_point_terminal(
+                                    authority,
+                                    code_project
+                                        .as_mut()
+                                        .expect("the authenticated code point owner was present"),
+                                    input.pointer_id,
+                                    proposal,
+                                    trace,
+                                )
+                            };
+                            super::record_code_work(&wb.work_ledger, code_work);
+                            match publication {
+                                Ok(revision) => {
+                                    reconcile_projectional_authoring(&mut wb);
+                                    wb.notice = format!(
+                                        "Code-owned point updated through its semantic lens · revision {revision}"
+                                    );
+                                    super::WorkbenchPresentationEvent::CodeSourcePointerRelease
+                                }
+                                Err(error) => {
+                                    wb.notice = format!(
+                                        "Code-owned point release was rejected; accepted source and scene are unchanged: {error}"
+                                    );
+                                    super::WorkbenchPresentationEvent::InteractionCancellation
+                                }
+                            }
+                        } else {
+                            let _ = restore_pending_semantic_point_drag(
+                                &mut wb,
+                                Some(input.pointer_id),
+                            );
+                            wb.notice = "Code-owned point gesture was unchanged".into();
+                            super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+                        }
+                    }
+                    Err(error) => {
+                        cancel_projectional_interaction(
+                            &up_viewport,
+                            &mut wb,
+                            Some(event.pointer_id()),
+                            true,
+                            &format!("Code-owned point gesture canceled: {error}"),
+                        );
+                        super::WorkbenchPresentationEvent::InteractionCancellation
+                    }
+                };
+                record_projectional_authority_trace(
+                    &mut wb,
+                    "delegated.pointerup.presentation",
+                    &format!("presentation={presentation:?} work={interaction_work:?}"),
+                );
+                drop(wb);
+                let _ = present_projectional_pointer_event_with_work(
+                    &up_document,
+                    &up_workbench,
+                    presentation,
+                    interaction_work,
+                );
+                return;
+            }
             let outcome = if let Some(scene) = projectional_scene(&wb) {
                 let audited = wb.editor_mut().pointer_up_audited(&scene, input);
                 interaction_work.merge(audited.work);
@@ -8937,14 +9438,65 @@ pub(crate) mod wasm {
                 );
             }
             let event = match outcome {
-                Ok(outcome) => {
+                Ok(mut outcome) => {
                     release_projectional_pointer_capture(
                         &up_viewport,
                         &mut wb,
                         Some(event.pointer_id()),
                         true,
                     );
-                    if outcome.transaction.is_some() {
+                    if let Some(proposal) = outcome.delegated_computed_fillet_radius.take() {
+                        let consumer_count = proposal.features.len();
+                        let publication = {
+                            let ProjectionalWorkbench {
+                                authority,
+                                code_project,
+                                ..
+                            } = &mut *wb;
+                            code_project.as_mut().map_or_else(
+                                || {
+                                    Err("the delegated Fillet-radius owner is no longer available"
+                                        .to_owned())
+                                },
+                                |code_project| {
+                                    super::publish_projectional_code_fillet_radius(
+                                        authority,
+                                        code_project,
+                                        &proposal,
+                                    )
+                                },
+                            )
+                        };
+                        match publication {
+                            Ok(super::ProjectionalDelegatedFilletPublication::Accepted {
+                                revision,
+                            }) => {
+                                reconcile_projectional_authoring(&mut wb);
+                                wb.notice = format!(
+                                    "Managed Fillet radius updated across {consumer_count} consumer{} · revision {revision}",
+                                    if consumer_count == 1 { "" } else { "s" },
+                                );
+                                super::WorkbenchPresentationEvent::CodeSourcePointerRelease
+                            }
+                            Ok(
+                                super::ProjectionalDelegatedFilletPublication::RetainedFailure {
+                                    revision,
+                                    diagnostic,
+                                },
+                            ) => {
+                                wb.notice = format!(
+                                    "Managed Fillet radius retained at revision {revision}; accepted scene unchanged: {diagnostic}"
+                                );
+                                super::WorkbenchPresentationEvent::CodeSourcePointerRelease
+                            }
+                            Err(error) => {
+                                wb.notice = format!(
+                                    "Managed Fillet-radius release was rejected; accepted source and scene are unchanged: {error}"
+                                );
+                                super::WorkbenchPresentationEvent::InteractionCancellation
+                            }
+                        }
+                    } else if outcome.transaction.is_some() {
                         wb.notice = "Projectional direct movement accepted".into();
                         if wb.code_project.as_ref().is_some_and(|code_project| {
                             code_project.has_pending_semantic_point_drag(input.pointer_id)
@@ -10579,51 +11131,73 @@ pub(crate) mod wasm {
             else {
                 return;
             };
-            if let (Some(declaration), Some(path), Some(input)) = (
-                target.get_attribute("data-code-lens-declaration"),
-                target.get_attribute("data-code-lens-path"),
-                target.dyn_ref::<HtmlInputElement>(),
-            ) {
-                let result = input
-                    .value()
-                    .parse::<f64>()
-                    .map_err(|_| "edit-lens value must be a finite number".to_owned())
-                    .and_then(|value| {
-                        let mut wb = change_workbench.borrow_mut();
-                        cancel_projectional_before_durable_mutation(
-                            &change_document,
-                            &mut wb,
-                            "applying a code edit lens",
-                        );
-                        let outcome = wb
-                            .code_project
-                            .as_mut()
-                            .ok_or_else(|| "no code project is open".to_owned())?
-                            .apply_scalar_lens(&declaration, &path, value)?;
-                        match outcome {
-                            super::code_projects::CodeApplyOutcome::Accepted(publication) => {
-                                let revision = publication.receipt.after.revision;
-                                wb.authority =
-                                    super::WorkbenchDocumentAuthority::from_projectional_editor(
-                                        *publication.editor,
-                                    )?;
-                                wb.notice = format!(
-                                    "Edit lens applied to managed source and native scene · revision {revision}"
-                                );
-                            }
-                            super::code_projects::CodeApplyOutcome::RetainedFailure {
-                                receipt,
-                                diagnostic,
-                            } => {
-                                wb.notice = format!(
-                                    "Edit-lens intent retained at revision {}; accepted scene unchanged: {diagnostic}",
-                                    receipt.after.revision,
-                                );
-                            }
+            if let Some(control_id) = target.get_attribute("data-code-control-id") {
+                let submission = if let Some(input) = target.dyn_ref::<HtmlInputElement>() {
+                    match input.type_().as_str() {
+                        "checkbox" => Ok(super::code_projects::ManagedControlSubmission::Boolean(
+                            input.checked(),
+                        )),
+                        "number" => input
+                            .value()
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|value| value.is_finite())
+                            .map(super::code_projects::ManagedControlSubmission::Number)
+                            .ok_or_else(|| {
+                                "managed numeric control must be a finite number".to_owned()
+                            }),
+                        _ => Ok(super::code_projects::ManagedControlSubmission::String(
+                            input.value(),
+                        )),
+                    }
+                } else if let Some(select) = target.dyn_ref::<HtmlSelectElement>() {
+                    Ok(super::code_projects::ManagedControlSubmission::String(
+                        select.value(),
+                    ))
+                } else {
+                    Err("managed control has an unsupported browser input".to_owned())
+                };
+                let result = submission.and_then(|submission| {
+                    let mut wb = change_workbench.borrow_mut();
+                    cancel_projectional_before_durable_mutation(
+                        &change_document,
+                        &mut wb,
+                        "applying a managed code control",
+                    );
+                    let outcome = wb
+                        .code_project
+                        .as_mut()
+                        .ok_or_else(|| "no code project is open".to_owned())?
+                        .apply_managed_control_submission(&control_id, submission)?;
+                    match outcome {
+                        None => {
+                            wb.notice = "Managed control is unchanged".into();
                         }
-                        save_projectional(&mut wb);
-                        Ok(())
-                    });
+                        Some(super::code_projects::CodeApplyOutcome::Accepted(publication)) => {
+                            let revision = publication.receipt.after.revision;
+                            wb.authority =
+                                super::WorkbenchDocumentAuthority::from_projectional_editor(
+                                    *publication.editor,
+                                )?;
+                            reconcile_projectional_authoring(&mut wb);
+                            wb.notice = format!(
+                                "Managed control applied to source and native scene · revision {revision}"
+                            );
+                            save_projectional_after_code_source_publication(&mut wb);
+                        }
+                        Some(super::code_projects::CodeApplyOutcome::RetainedFailure {
+                            receipt,
+                            diagnostic,
+                        }) => {
+                            wb.notice = format!(
+                                "Managed control retained at revision {}; accepted scene unchanged: {diagnostic}",
+                                receipt.after.revision,
+                            );
+                            save_projectional_after_code_source_publication(&mut wb);
+                        }
+                    }
+                    Ok(())
+                });
                 if let Err(error) = result {
                     change_workbench.borrow_mut().notice = error;
                 }
@@ -13044,7 +13618,7 @@ pub(crate) mod wasm {
                         wb.pan_gesture = Some(super::CanvasPanGesture {
                             pointer_id: event.pointer_id(),
                             origin,
-                            origin_center: wb.camera.model_center,
+                            origin_center: wb.camera.model_center(),
                         });
                         wb.notice = "Panning canvas".into();
                     }
@@ -13156,7 +13730,7 @@ pub(crate) mod wasm {
             if camera_changed {
                 wb.notice = format!(
                     "Canvas zoom {:.1} px / unit",
-                    wb.camera.pixels_per_model_unit
+                    wb.camera.pixels_per_model_unit()
                 );
                 let camera = wb.camera;
                 frame_generation = wb.camera_frames.request_frame(camera);
@@ -16091,33 +16665,54 @@ pub(crate) mod wasm {
             return Ok(());
         };
         let desired_viewport = workbench.borrow().camera.viewport();
-        apply_retained_camera_transform(document, frame.transform, desired_viewport)?;
-        let wb = workbench.borrow();
-        required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
-            "{:.1} px / unit",
-            wb.camera.pixels_per_model_unit,
-        )));
-        let coordinate = super::coordinate_hud(
-            wb.camera.viewport(),
-            wb.pointer_moves.borrow().last_input,
-            None,
-        );
-        let coordinate_element = required(document, "wb-pointer-coordinate")?;
-        coordinate_element.set_text_content(Some(&coordinate.text));
-        coordinate_element.set_attribute("title", &coordinate.title)?;
-        coordinate_element.set_attribute("data-inference-adjusted", "false")?;
-        frame.complete(&wb.work_ledger);
+        let presentation = (|| -> Result<(), JsValue> {
+            apply_retained_camera_transform(document, frame.transform, desired_viewport)?;
+            let wb = workbench.borrow();
+            required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
+                "{:.1} px / unit",
+                wb.camera.pixels_per_model_unit(),
+            )));
+            let coordinate = super::coordinate_hud(
+                wb.camera.viewport(),
+                wb.pointer_moves.borrow().last_input,
+                None,
+            );
+            let coordinate_element = required(document, "wb-pointer-coordinate")?;
+            coordinate_element.set_text_content(Some(&coordinate.text));
+            coordinate_element.set_attribute("title", &coordinate.title)?;
+            coordinate_element.set_attribute("data-inference-adjusted", "false")?;
+            Ok(())
+        })();
+        if let Err(error) = presentation {
+            frame.retain_after_failure(&mut workbench.borrow_mut().camera_frames);
+            return Err(error);
+        }
+        let root = match required(document, "workbench-root") {
+            Ok(root) => root,
+            Err(error) => {
+                frame.retain_after_failure(&mut workbench.borrow_mut().camera_frames);
+                return Err(error);
+            }
+        };
+        let mut wb = workbench.borrow_mut();
+        if !frame.complete(&mut wb.camera_frames) {
+            return Ok(());
+        }
+        wb.work_ledger
+            .record(super::performance::PresentationWork::CameraPresentation);
         let work = wb.work_ledger.snapshot().delta_since(work_before);
-        let root = required(document, "workbench-root")?;
-        root.set_attribute("data-presentation-work-delta", &work.compact())?;
-        root.set_attribute(
+        // These attributes expose browser-test diagnostics only. The retained
+        // camera and its ledger entry are already committed, so a diagnostic
+        // write failure must not misreport the successful paint as retryable.
+        let _ = root.set_attribute("data-presentation-work-delta", &work.compact());
+        let _ = root.set_attribute(
             "data-camera-work-admitted",
             if work.is_camera_frame_only() {
                 "camera-only"
             } else {
                 "forbidden-work"
             },
-        )?;
+        );
         Ok(())
     }
 
@@ -16129,7 +16724,9 @@ pub(crate) mod wasm {
         let frame_document = document.clone();
         let frame_workbench = Rc::clone(workbench);
         let frame = Closure::once_into_js(move || {
-            let _ = present_flat_camera_frame(&frame_document, &frame_workbench, generation);
+            if present_flat_camera_frame(&frame_document, &frame_workbench, generation).is_err() {
+                let _ = reproject_flat_canvas(&frame_document, &frame_workbench);
+            }
         });
         let scheduled = super::platform::window()
             .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
@@ -16243,6 +16840,13 @@ pub(crate) mod wasm {
                             "forbidden-work"
                         }
                     }
+                    super::WorkbenchPresentationEvent::CodeSourcePointerRelease => {
+                        if delta.is_code_source_terminal_presentation() {
+                            "code-source-terminal"
+                        } else {
+                            "forbidden-work"
+                        }
+                    }
                     super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
                     | super::WorkbenchPresentationEvent::InteractionCancellation => {
                         "non-mutating-terminal"
@@ -16273,8 +16877,9 @@ pub(crate) mod wasm {
         let mut wb = workbench.borrow_mut();
         let camera = wb.camera;
         wb.camera_frames.exact_reconciled(camera);
-        required(document, "workbench-root")?.set_attribute("data-camera-presentation", "exact")?;
-        required(document, "workbench-root")?.remove_attribute("data-camera-retained-scale")?;
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-camera-presentation", "exact")?;
+        root.remove_attribute("data-camera-retained-scale")?;
         Ok(())
     }
 
@@ -16310,8 +16915,9 @@ pub(crate) mod wasm {
         let mut wb = workbench.borrow_mut();
         let camera = wb.camera;
         wb.camera_frames.exact_reconciled(camera);
-        required(document, "workbench-root")?.set_attribute("data-camera-presentation", "exact")?;
-        required(document, "workbench-root")?.remove_attribute("data-camera-retained-scale")?;
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-camera-presentation", "exact")?;
+        root.remove_attribute("data-camera-retained-scale")?;
         Ok(())
     }
 
@@ -16543,7 +17149,7 @@ pub(crate) mod wasm {
         required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
         required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
             "{:.1} px / unit",
-            wb.camera.pixels_per_model_unit
+            wb.camera.pixels_per_model_unit()
         )));
         let coordinate = super::coordinate_hud(
             wb.camera.viewport(),
@@ -18435,27 +19041,28 @@ mod tests {
         CapturedCanvasPointer, DismissibleDisclosure, DraftingPointerSample,
         FilletActionRenderAuthority, FinishDoubleClickTracker, ForegroundOverlayEscapeOwner,
         HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
-        ProjectionalConstructionDispatch, ProjectionalInspectorControl,
-        ProjectionalInspectorDispatch, ProjectionalInspectorStamp, ProjectionalInspectorSubmission,
-        ProjectionalPointerMoveQueue, ReproductionFocusReturn, ReproductionOverlayMode,
-        RetainedCameraQueue, WorkbenchDocumentAuthority, WorkbenchPresentationCounters,
-        WorkbenchPresentationEvent, WorkbenchRenderScope, annotation_family_name,
-        annotation_inspector_presentation, apply_native_fillet_profile,
+        ProjectionalConstructionDispatch, ProjectionalDelegatedFilletPublication,
+        ProjectionalInspectorControl, ProjectionalInspectorDispatch, ProjectionalInspectorStamp,
+        ProjectionalInspectorSubmission, ProjectionalPointerMoveQueue, ReproductionFocusReturn,
+        ReproductionOverlayMode, RetainedCameraQueue, WorkbenchDocumentAuthority,
+        WorkbenchPresentationCounters, WorkbenchPresentationEvent, WorkbenchRenderScope,
+        annotation_family_name, annotation_inspector_presentation, apply_native_fillet_profile,
         apply_projectional_scene_display, apply_validated_reproduction, canvas_cursor_key,
         canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
         canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
         coordinate_hud, current_problem_items, curve_control_inspector_detail,
         curve_control_inspector_markup, decode_projectional_inspector_control,
-        dispatch_projectional_authoring_application, dispatch_projectional_construction_effects,
-        dispatch_projectional_inspector_control, draft_inference_preference_is_stale,
-        feature_apply_returns_focus_to_select, foreground_overlay_escape_owner,
-        geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
-        native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
-        offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
-        offset_target_for_selection, owns_authoring_pick, projectional_cell_drop_before,
-        projectional_cell_move_patch, projectional_design_markup,
-        projectional_direct_gesture_is_capturable, projectional_outline_drop_before,
-        projectional_outline_move_patch, projectional_terminal_owns_capture,
+        delegate_projectional_code_fillet_radius_drag, dispatch_projectional_authoring_application,
+        dispatch_projectional_construction_effects, dispatch_projectional_inspector_control,
+        draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
+        foreground_overlay_escape_owner, geometry_sweep_flip_available,
+        geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
+        observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
+        offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
+        owns_authoring_pick, projectional_cell_drop_before, projectional_cell_move_patch,
+        projectional_design_markup, projectional_direct_gesture_is_capturable,
+        projectional_outline_drop_before, projectional_outline_move_patch,
+        projectional_terminal_owns_capture, publish_projectional_code_fillet_radius,
         rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
         reproduction_focus_target_after_action, reproduction_overlay_presentation,
         reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
@@ -18469,28 +19076,24 @@ mod tests {
         let exact = super::scene::CanvasCamera::default();
         let mut queue = RetainedCameraQueue::default();
         queue.exact_reconciled(exact);
-        let first = super::scene::CanvasCamera {
-            model_center: [1.0, -2.0],
-            pixels_per_model_unit: 75.0,
-        };
-        let latest = super::scene::CanvasCamera {
-            model_center: [-3.0, 4.0],
-            pixels_per_model_unit: 100.0,
-        };
+        let first = super::scene::CanvasCamera::new([1.0, -2.0], 75.0).expect("valid first camera");
+        let latest =
+            super::scene::CanvasCamera::new([-3.0, 4.0], 100.0).expect("valid latest camera");
 
         let frame = queue
             .request_frame(first)
             .expect("first raw event schedules RAF");
         assert_eq!(queue.request_frame(latest), None, "one RAF per frame");
         assert!(queue.take_frame(frame.wrapping_add(1)).is_none());
-        let transform = queue
+        let admitted = queue
             .take_frame(frame)
             .expect("current RAF uses newest camera");
         assert_eq!(
-            transform,
+            admitted.transform,
             super::scene::RetainedCameraTransform::between(exact, latest)
                 .expect("finite retained transform"),
         );
+        assert!(admitted.complete(&mut queue));
         assert!(queue.needs_exact_reconciliation());
 
         let stale_idle = queue.request_idle_reconciliation();
@@ -18507,10 +19110,8 @@ mod tests {
     #[test]
     fn retained_camera_exact_reconciliation_revokes_an_unpainted_frame() {
         let mut queue = RetainedCameraQueue::default();
-        let desired = super::scene::CanvasCamera {
-            model_center: [8.0, 5.0],
-            pixels_per_model_unit: 35.0,
-        };
+        let desired =
+            super::scene::CanvasCamera::new([8.0, 5.0], 35.0).expect("valid desired camera");
         let stale = queue
             .request_frame(desired)
             .expect("scheduled camera frame");
@@ -18523,9 +19124,9 @@ mod tests {
         let identity = queue
             .take_frame(queue.next_frame_generation)
             .expect("matching camera has a finite identity mapping");
-        assert_eq!(identity.scale.to_bits(), 1.0_f64.to_bits());
+        assert_eq!(identity.transform.scale.to_bits(), 1.0_f64.to_bits());
         assert_eq!(
-            identity.translate.map(f64::to_bits),
+            identity.transform.translate.map(f64::to_bits),
             [0.0, 0.0].map(f64::to_bits)
         );
     }
@@ -18534,10 +19135,8 @@ mod tests {
     fn production_camera_admission_records_one_completed_paint_and_stale_callbacks_record_zero() {
         let ledger = super::performance::PresentationWorkLedger::default();
         let mut queue = RetainedCameraQueue::default();
-        let desired = super::scene::CanvasCamera {
-            model_center: [2.0, -7.0],
-            pixels_per_model_unit: 91.0,
-        };
+        let desired =
+            super::scene::CanvasCamera::new([2.0, -7.0], 91.0).expect("valid desired camera");
         let generation = queue.request_frame(desired).expect("scheduled frame");
         let before = ledger.snapshot();
 
@@ -18546,7 +19145,8 @@ mod tests {
 
         let admitted = AdmittedCameraFrame::take(&mut queue, generation)
             .expect("authenticated production frame helper");
-        admitted.complete(&ledger);
+        assert!(admitted.complete(&mut queue));
+        ledger.record(super::performance::PresentationWork::CameraPresentation);
         let delta = ledger.snapshot().delta_since(before);
         assert!(delta.is_camera_frame_only());
         assert!(AdmittedCameraFrame::take(&mut queue, generation).is_none());
@@ -18555,6 +19155,85 @@ mod tests {
             delta,
             "replayed callback cannot record a second paint"
         );
+    }
+
+    #[test]
+    fn retained_camera_presentation_failure_reconciles_exactly_and_keeps_future_frames_live() {
+        let ledger = super::performance::PresentationWorkLedger::default();
+        let exact = super::scene::CanvasCamera::default();
+        let desired =
+            super::scene::CanvasCamera::new([13.0, -9.0], 117.0).expect("valid desired camera");
+        let mut queue = RetainedCameraQueue::default();
+        queue.exact_reconciled(exact);
+        let failed_generation = queue
+            .request_frame(desired)
+            .expect("camera input schedules one retained frame");
+        let before = ledger.snapshot();
+        let failed = AdmittedCameraFrame::take(&mut queue, failed_generation)
+            .expect("current callback is admitted without consuming desired state");
+
+        failed.retain_after_failure(&mut queue);
+        assert_eq!(
+            ledger.snapshot(),
+            before,
+            "failed DOM presentation cannot count as a completed camera paint"
+        );
+        assert_eq!(
+            queue.pending_camera,
+            Some(desired),
+            "the newest desired camera remains retryable"
+        );
+        assert!(queue.needs_exact_reconciliation());
+
+        // This is the callback recovery contract: a retained-presentation
+        // error immediately falls back to an exact reprojection of the latest
+        // desired camera, rather than retrying the failed retained delta.
+        queue.exact_reconciled(desired);
+        assert_eq!(queue.pending_camera, None);
+        assert_eq!(queue.scheduled_frame_generation, None);
+        assert_eq!(queue.admitted_frame_generation, None);
+        assert!(!queue.needs_exact_reconciliation());
+
+        let future =
+            super::scene::CanvasCamera::new([-4.0, 6.5], 83.0).expect("valid future camera");
+        let future_generation = queue
+            .request_frame(future)
+            .expect("a distinct future camera remains live after exact recovery");
+        let future_frame = AdmittedCameraFrame::take(&mut queue, future_generation)
+            .expect("future frame is admitted against the recovered exact camera");
+        assert_eq!(
+            future_frame.transform,
+            super::scene::RetainedCameraTransform::between(desired, future)
+                .expect("finite future transform"),
+        );
+        assert!(future_frame.complete(&mut queue));
+        ledger.record(super::performance::PresentationWork::CameraPresentation);
+        assert_eq!(queue.pending_camera, None);
+        assert!(ledger.snapshot().delta_since(before).is_camera_frame_only());
+    }
+
+    #[test]
+    fn retained_camera_completion_does_not_consume_a_newer_desired_frame() {
+        let ledger = super::performance::PresentationWorkLedger::default();
+        let mut queue = RetainedCameraQueue::default();
+        let first = super::scene::CanvasCamera::new([1.0, 2.0], 80.0).expect("valid first camera");
+        let latest =
+            super::scene::CanvasCamera::new([-4.0, 5.0], 125.0).expect("valid latest camera");
+        let first_generation = queue.request_frame(first).expect("first frame");
+        let admitted =
+            AdmittedCameraFrame::take(&mut queue, first_generation).expect("first frame admitted");
+        let latest_generation = queue
+            .request_frame(latest)
+            .expect("new input schedules behind the admitted frame");
+
+        assert!(admitted.complete(&mut queue));
+        ledger.record(super::performance::PresentationWork::CameraPresentation);
+        assert_eq!(queue.pending_camera, Some(latest));
+        let latest_frame = AdmittedCameraFrame::take(&mut queue, latest_generation)
+            .expect("newest desired frame survives older completion");
+        assert_eq!(latest_frame.target_camera, latest);
+        assert!(latest_frame.complete(&mut queue));
+        ledger.record(super::performance::PresentationWork::CameraPresentation);
     }
 
     #[test]
@@ -18579,10 +19258,8 @@ mod tests {
             0.8,
         )
         .expect("scene");
-        let initial = super::scene::CanvasCamera {
-            model_center: [3.5, -4.25],
-            pixels_per_model_unit: 73.0,
-        };
+        let initial =
+            super::scene::CanvasCamera::new([3.5, -4.25], 73.0).expect("valid initial camera");
         let mut projectional_camera = initial;
         let mut flat_camera = initial;
         let mut projectional_queue = RetainedCameraQueue::default();
@@ -18609,12 +19286,12 @@ mod tests {
             assert_eq!(projectional_outcome, flat_outcome);
             assert!(!action.notice(projectional_outcome).is_empty());
             assert_eq!(
-                projectional_camera.model_center.map(f64::to_bits),
-                flat_camera.model_center.map(f64::to_bits),
+                projectional_camera.model_center().map(f64::to_bits),
+                flat_camera.model_center().map(f64::to_bits),
             );
             assert_eq!(
-                projectional_camera.pixels_per_model_unit.to_bits(),
-                flat_camera.pixels_per_model_unit.to_bits(),
+                projectional_camera.pixels_per_model_unit().to_bits(),
+                flat_camera.pixels_per_model_unit().to_bits(),
             );
 
             let projectional = projectional_queue
@@ -18649,14 +19326,12 @@ mod tests {
 
     #[test]
     fn terminal_pan_sample_owns_the_exact_final_camera_for_both_routes() {
-        let initial = super::scene::CanvasCamera {
-            model_center: [8.0, -3.0],
-            pixels_per_model_unit: 40.0,
-        };
+        let initial =
+            super::scene::CanvasCamera::new([8.0, -3.0], 40.0).expect("valid initial camera");
         let gesture = super::CanvasPanGesture {
             pointer_id: 17,
             origin: ScreenPoint { x: 100.0, y: 150.0 },
-            origin_center: initial.model_center,
+            origin_center: initial.model_center(),
         };
         let preceding_move = ScreenPoint { x: 160.0, y: 180.0 };
         let terminal = ScreenPoint { x: 220.0, y: 90.0 };
@@ -18678,11 +19353,11 @@ mod tests {
 
         let expected = [5.0, -4.5];
         assert_eq!(
-            projectional.model_center.map(f64::to_bits),
+            projectional.model_center().map(f64::to_bits),
             expected.map(f64::to_bits)
         );
         assert_eq!(
-            flat.model_center.map(f64::to_bits),
+            flat.model_center().map(f64::to_bits),
             expected.map(f64::to_bits)
         );
         assert_eq!(
@@ -19389,6 +20064,388 @@ mod tests {
         ] {
             assert_guarded(route, mutation);
         }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact browser-adapter regression keeps queued sampling, native terminal, outer code publication, installed authority, validation and reload together"
+    )]
+    fn typed_panel_warm_fractional_drag_survives_the_browser_save_adapter() {
+        run_projectional_test_with_large_stack("typed-panel-browser-pixel-terminal", || {
+            let (mut code_project, editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("typed-panel")
+                    .expect("Typed Panel code project");
+            let mut authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("Typed Panel browser authority");
+            let upper_left = {
+                let accepted = authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .accepted_materialization()
+                    .expect("accepted Typed Panel materialization");
+                accepted
+                    .session
+                    .design_document()
+                    .points()
+                    .iter()
+                    .find(|point| {
+                        point.position.map(f64::to_bits) == [0.0_f64, 40.0].map(f64::to_bits)
+                    })
+                    .expect("Typed Panel upper-left source point")
+                    .id
+            };
+            let position = |authority: &WorkbenchDocumentAuthority| {
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .accepted_materialization()
+                    .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                    .and_then(|accepted| accepted.document().point(upper_left))
+                    .map(|point| point.position)
+                    .expect("accepted upper-left point")
+            };
+            let viewport = Viewport::new([1_000.0, 700.0], [40.0, 20.0], 10.9).unwrap();
+            let revision_before = code_project.code_session_identity().revision;
+
+            for (case_index, [x, y]) in [[100.0, 150.0], [83.0, 204.0]].into_iter().enumerate() {
+                let pointer_id = 87_101 + u64::try_from(case_index).unwrap();
+                let pointer = |position| PointerInput {
+                    pointer_id,
+                    position,
+                    modifiers: Modifiers::default(),
+                };
+                let mut queue = ProjectionalPointerMoveQueue::default();
+                let origin = position(&authority);
+                let down = queue
+                    .observe_for_pointer_down(pointer(viewport.model_to_screen(origin)))
+                    .input;
+                {
+                    let editor = authority.projectional_mut().unwrap();
+                    let scene = editor.scene(viewport, 0.5).expect("pointer-down scene");
+                    editor
+                        .pointer_down(&scene, down)
+                        .expect("upper-left pointer-down");
+                    assert!(
+                        code_project
+                            .prepare_semantic_point_drag(editor, pointer_id, upper_left, None)
+                            .expect("authenticated upper-left semantic route")
+                            .is_none(),
+                    );
+                }
+
+                let intermediate = pointer(viewport.model_to_screen([1.5, 39.0]));
+                let generation = queue.push(intermediate).expect("intermediate RAF");
+                let intermediate = queue
+                    .take_for_frame(generation)
+                    .expect("admitted intermediate sample")
+                    .input;
+                {
+                    let editor = authority.projectional_mut().unwrap();
+                    let scene = editor.scene(viewport, 0.5).expect("intermediate scene");
+                    editor
+                        .pointer_move(&scene, intermediate)
+                        .expect("accepted intermediate preview");
+                }
+
+                let terminal = pointer(ScreenPoint { x, y });
+                let stale_generation = queue.push(terminal).expect("terminal RAF");
+                let pending = queue.drain_before_terminal().map(|sample| sample.input);
+                assert!(queue.take_for_frame(stale_generation).is_none());
+                super::replay_projectional_terminal_samples(pending, terminal, |sample| {
+                    let editor = authority.projectional_mut().unwrap();
+                    let scene = editor.scene(viewport, 0.5).expect("terminal preview scene");
+                    editor
+                        .pointer_move(&scene, sample)
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                })
+                .expect("exact release sample remains valid");
+                let preview = authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .presentation_session()
+                    .and_then(|session| session.accepted_state_for_current_input())
+                    .and_then(|accepted| accepted.document().point(upper_left))
+                    .map(|point| point.position)
+                    .expect("latest accepted preview");
+                {
+                    let editor = authority.projectional_mut().unwrap();
+                    let scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
+                    assert!(
+                        editor
+                            .pointer_up(&scene, terminal)
+                            .expect("accepted upper-left terminal")
+                            .transaction
+                            .is_some(),
+                    );
+                }
+
+                let mut notice = "Projectional direct movement accepted".to_owned();
+                let (publication, work) = super::publish_projectional_code_checkpoint_for_save(
+                    &mut code_project,
+                    &mut authority,
+                    &mut notice,
+                    Some(pointer_id),
+                );
+                assert_eq!(
+                    publication,
+                    super::ProjectionalCodeSavePublication::ContinuePersistence
+                );
+                assert_eq!(work.expansion_attempts(), 1);
+                assert_eq!(work.accepted_publications(), 1);
+                assert_eq!(notice, "Projectional direct movement accepted");
+                assert_eq!(
+                    position(&authority).map(f64::to_bits),
+                    preview.map(f64::to_bits),
+                    "the browser adapter must install the independently staged terminal, not restore the prior checkpoint",
+                );
+                assert_eq!(
+                    authority
+                        .projectional_ref()
+                        .unwrap()
+                        .coordinator()
+                        .intent()
+                        .undo_len(),
+                    0,
+                    "source-owned terminals cannot leak nested Intent history",
+                );
+                let accepted = authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .accepted_materialization()
+                    .expect("installed terminal authority");
+                assert!(accepted.validation.hard_residuals_validated);
+                assert!(accepted.validation.all_active_features_current);
+                assert!(
+                    accepted
+                        .validation
+                        .maximum_normalized_hard_residual
+                        .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+                );
+                assert_eq!(accepted.computed.feature_evaluations().len(), 2);
+                assert!(
+                    accepted
+                        .computed
+                        .feature_evaluations()
+                        .iter()
+                        .all(|evaluation| {
+                            matches!(
+                        evaluation.state,
+                        geosolve_constraint_editor::ComputedFeatureEvaluationState::Current { .. }
+                    )
+                        })
+                );
+            }
+
+            assert_eq!(
+                code_project.code_session_identity().revision,
+                revision_before + 2,
+            );
+            let expected = position(&authority);
+            let persisted = code_project
+                .to_persistence_json()
+                .expect("persisted browser terminal");
+            let restored =
+                super::code_projects::CodeProjectWorkbench::from_persistence_json(&persisted)
+                    .expect("restored browser terminal");
+            let restored = restored
+                .restore_accepted_editor()
+                .expect("restored accepted editor");
+            let restored_position = restored
+                .coordinator()
+                .accepted_materialization()
+                .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                .and_then(|accepted| accepted.document().point(upper_left))
+                .map(|point| point.position)
+                .expect("restored upper-left point");
+            assert_eq!(
+                restored_position.map(f64::to_bits),
+                expected.map(f64::to_bits),
+            );
+        });
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one crossed-owner regression keeps GUI declaration creation, ordinary native point release, outer checkpoint publication, source non-interference and reload together"
+    )]
+    fn gui_owned_point_inside_code_project_keeps_the_ordinary_terminal_path() {
+        run_projectional_test_with_large_stack("gui-point-inside-code-workspace", || {
+            let (mut code_project, mut editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("rounded-polyline")
+                    .expect("Rounded Polyline code project");
+            let source_before = code_project.managed_source().to_owned();
+            let overlay_before = code_project.interaction_overlay().clone();
+            let alias = IntentKey::new("gui.marker").unwrap();
+            let outcome = editor
+                .apply_patch(IntentPatch::new(
+                    editor.coordinator().intent().identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateNode {
+                        alias: alias.clone(),
+                        draft: Box::new(
+                            IntentNodeDraft::new(
+                                IntentNodeKind::Geometry {
+                                    recipe: GeometryRecipeKind::SketchPoint,
+                                },
+                                IntentKey::new("gui.marker").unwrap(),
+                            )
+                            .with_instance_leaf(
+                                IntentPortSelector::Node {
+                                    role: IntentPortRole::Primary,
+                                    index: 0,
+                                },
+                                LeafField::X,
+                                IntentLiteral::Quantity {
+                                    value: -5.0,
+                                    unit: IntentUnit::Length,
+                                },
+                            )
+                            .with_instance_leaf(
+                                IntentPortSelector::Node {
+                                    role: IntentPortRole::Primary,
+                                    index: 0,
+                                },
+                                LeafField::Y,
+                                IntentLiteral::Quantity {
+                                    value: -4.0,
+                                    unit: IntentUnit::Length,
+                                },
+                            ),
+                        ),
+                        cell: None,
+                    }],
+                ))
+                .expect("ordinary GUI point creation");
+            let node = outcome.aliases.node(&alias).expect("GUI point alias");
+            let mut authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("GUI/code browser authority");
+            let mut notice = "GUI point created".to_owned();
+            let (save, _) = super::publish_projectional_code_checkpoint_for_save(
+                &mut code_project,
+                &mut authority,
+                &mut notice,
+                None,
+            );
+            assert_eq!(
+                save,
+                super::ProjectionalCodeSavePublication::ContinuePersistence,
+            );
+
+            let point = native_point_for_role(
+                authority
+                    .projectional_ref()
+                    .expect("projectional authority"),
+                node,
+                IntentPortRole::Primary,
+            );
+            let position = |authority: &WorkbenchDocumentAuthority| {
+                authority
+                    .projectional_ref()
+                    .and_then(|editor| editor.coordinator().accepted_materialization())
+                    .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                    .and_then(|accepted| accepted.document().point(point))
+                    .map(|point| point.position)
+                    .expect("accepted GUI marker")
+            };
+            let origin = position(&authority);
+            let target = [-8.0, 3.0];
+            let viewport = Viewport::new([900.0, 700.0], [0.0, 0.0], 10.0).unwrap();
+            let pointer_id = 87_401;
+            let pointer = |model| PointerInput {
+                pointer_id,
+                position: viewport.model_to_screen(model),
+                modifiers: Modifiers::default(),
+            };
+            {
+                let editor = authority
+                    .projectional_mut()
+                    .expect("projectional authority");
+                let scene = editor.scene(viewport, 0.5).expect("GUI point down scene");
+                editor
+                    .pointer_down_exact_point(&scene, pointer(origin), point)
+                    .expect("ordinary GUI point route");
+                assert!(
+                    code_project
+                        .prepare_semantic_point_drag(editor, pointer_id, point, None)
+                        .expect("GUI point ownership classification")
+                        .is_none(),
+                );
+                assert!(!code_project.has_pending_semantic_point_drag(pointer_id));
+                editor
+                    .pointer_move(&scene, pointer(target))
+                    .expect("ordinary GUI point preview");
+                let scene = editor.scene(viewport, 0.5).expect("GUI point up scene");
+                let audited = editor.pointer_up_audited(&scene, pointer(target));
+                assert!(
+                    audited
+                        .outcome
+                        .expect("ordinary GUI terminal")
+                        .transaction
+                        .is_some(),
+                );
+                assert_eq!(audited.work.history_publications(), 1);
+            }
+
+            let revision_before = code_project.code_session_identity().revision;
+            notice = "Projectional direct movement accepted".into();
+            let (save, work) = super::publish_projectional_code_checkpoint_for_save(
+                &mut code_project,
+                &mut authority,
+                &mut notice,
+                None,
+            );
+            assert_eq!(
+                save,
+                super::ProjectionalCodeSavePublication::ContinuePersistence,
+            );
+            assert_eq!(
+                work.accepted_publications(),
+                0,
+                "ordinary checkpoint capture does not perform semantic rematerialization",
+            );
+            assert_eq!(
+                code_project.code_session_identity().revision,
+                revision_before + 1,
+            );
+            assert_eq!(
+                position(&authority).map(f64::to_bits),
+                target.map(f64::to_bits)
+            );
+            assert_eq!(code_project.managed_source(), source_before);
+            assert_eq!(
+                code_project.interaction_overlay(),
+                &overlay_before,
+                "ordinary GUI movement must not create a semantic source draft",
+            );
+
+            let persisted = code_project
+                .to_persistence_json()
+                .expect("persisted GUI/code workspace");
+            let restored =
+                super::code_projects::CodeProjectWorkbench::from_persistence_json(&persisted)
+                    .expect("restored GUI/code workspace")
+                    .restore_accepted_editor()
+                    .expect("restored GUI/code editor");
+            let restored_point = native_point_for_role(&restored, node, IntentPortRole::Primary);
+            let restored_position = restored
+                .coordinator()
+                .accepted_materialization()
+                .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                .and_then(|accepted| accepted.document().point(restored_point))
+                .map(|point| point.position)
+                .expect("restored GUI marker");
+            assert_eq!(
+                restored_position.map(f64::to_bits),
+                target.map(f64::to_bits),
+            );
+        });
     }
 
     #[test]
@@ -20886,6 +21943,14 @@ mod tests {
                 .id;
             assert!(editor.set_selected_declaration(Some(node)));
             let retained = instance_inspector_control(editor, LeafField::Value, Some(16.0), "0");
+            let source_before = code_project.managed_source().to_owned();
+            let checkpoint_before = code_project.accepted_editor_checkpoint().clone();
+            let code_identity_before = code_project.code_session_identity().clone();
+            let persistence_before = code_project
+                .to_persistence_json()
+                .expect("code persistence before rejected edit");
+            let can_undo_before = code_project.can_undo();
+            let can_redo_before = code_project.can_redo();
             let accepted_before = authority
                 .snapshot()
                 .expect("accepted authority before retained edit")
@@ -20898,10 +21963,11 @@ mod tests {
                 &retained,
             );
 
-            assert_eq!(
-                dispatch,
-                ProjectionalInspectorDispatch::Committed(IntentPlanDisposition::RetainedFailed)
-            );
+            let ProjectionalInspectorDispatch::Rejected(diagnostic) = dispatch else {
+                panic!("zero target must be rejected by the positive managed-control schema")
+            };
+            assert!(diagnostic.contains("below its admitted minimum"));
+            assert!(!ProjectionalInspectorDispatch::Rejected(diagnostic).saves_workspace());
             assert_eq!(
                 authority
                     .snapshot()
@@ -20910,28 +21976,617 @@ mod tests {
                     .expect("encoded retained authority"),
                 accepted_before,
             );
-            assert!(code_project.managed_source().contains("target: mm(0)"));
-            let (save, _) = super::publish_projectional_code_checkpoint_for_save(
-                &mut code_project,
-                &mut authority,
-                &mut notice,
-                None,
+            assert_eq!(
+                code_project.managed_source(),
+                source_before,
+                "a schema-rejected edit must not rewrite managed source",
             );
             assert_eq!(
-                save,
-                super::ProjectionalCodeSavePublication::ContinuePersistence
+                code_project.accepted_editor_checkpoint(),
+                &checkpoint_before,
+                "a schema-rejected edit must not replace accepted checkpoint authority",
+            );
+            assert_eq!(code_project.code_session_identity(), &code_identity_before);
+            assert_eq!(code_project.can_undo(), can_undo_before);
+            assert_eq!(code_project.can_redo(), can_redo_before);
+            assert_eq!(
+                code_project
+                    .to_persistence_json()
+                    .expect("code persistence after rejected edit"),
+                persistence_before,
+                "a schema-rejected edit must not publish new persistence authority",
+            );
+        });
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one crossed-adapter regression keeps grouped preview, exact source publication, stable selection, outer-only history, validation, Undo and Redo together"
+    )]
+    fn m87_typed_panel_grouped_fillet_grip_publishes_one_outer_source_edit() {
+        run_projectional_test_with_large_stack("m87-typed-panel-grouped-fillet-grip", || {
+            let (mut code_project, editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("typed-panel")
+                    .expect("Typed Panel code project");
+            let mut authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("Typed Panel browser authority");
+            let mut camera = super::scene::CanvasCamera::default();
+            assert!(super::fit_projectional_camera_to_authority(
+                &mut camera,
+                &authority,
+            ));
+            let viewport = camera.viewport();
+            let mut features = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted Typed Panel materialization")
+                .features
+                .features()
+                .iter()
+                .map(|feature| feature.id)
+                .collect::<Vec<_>>();
+            features.sort_unstable();
+            assert_eq!(features.len(), 2, "Typed Panel owns two Fillet consumers");
+            let initiating = features[0];
+            authority
+                .projectional_mut()
+                .unwrap()
+                .set_selection([SelectionItem::Feature(initiating)]);
+            let selected_alias = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .intent()
+                .graph()
+                .node(
+                    authority
+                        .projectional_ref()
+                        .unwrap()
+                        .selected_declaration()
+                        .expect("selected generated Fillet declaration"),
+                )
+                .expect("selected generated Fillet node")
+                .symbol
+                .clone();
+            let scene = authority
+                .projectional_ref()
+                .unwrap()
+                .scene(viewport, super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS)
+                .expect("selected Typed Panel scene");
+            let rail = scene
+                .fillet_affordances
+                .iter()
+                .find(|affordance| affordance.owner.feature == initiating)
+                .expect("selected generated Fillet radius rail")
+                .radius_rail;
+            let pointer_id = 87_001;
+            let pointer = |position| PointerInput {
+                pointer_id,
+                position,
+                modifiers: Modifiers::default(),
+            };
+            authority
+                .projectional_mut()
+                .unwrap()
+                .pointer_down(&scene, pointer(rail.screen_grip))
+                .expect("start generated Fillet radius gesture");
+
+            let source_before = code_project.managed_source().to_owned();
+            let checkpoint_before = code_project.accepted_editor_checkpoint().clone();
+            let code_before = code_project.code_session_identity().clone();
+            let intent_before = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .intent()
+                .identity();
+            let nested_undo_before = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .intent()
+                .undo_len();
+            assert!(
+                delegate_projectional_code_fillet_radius_drag(&mut authority, &code_project,)
+                    .expect("authenticate complete managed Fillet consumer group")
+            );
+            assert_eq!(code_project.code_session_identity(), &code_before);
+            assert_eq!(code_project.managed_source(), source_before);
+
+            let origin_model = viewport.screen_to_model(rail.screen_grip);
+            let target_model = [
+                (-2.0_f64).mul_add(rail.model_derivative[0], origin_model[0]),
+                (-2.0_f64).mul_add(rail.model_derivative[1], origin_model[1]),
+            ];
+            let target = viewport.model_to_screen(target_model);
+            let effects = authority
+                .projectional_mut()
+                .unwrap()
+                .pointer_move(&scene, pointer(target))
+                .expect("preview grouped managed radius");
+            let preview_radius = effects
+                .iter()
+                .find_map(|effect| match effect {
+                    geosolve_constraint_editor::EditorEffect::PreviewComputedFeatureRadius {
+                        feature,
+                        radius,
+                        ..
+                    } if *feature == initiating => Some(*radius),
+                    _ => None,
+                })
+                .expect("initiating Fillet preview acknowledgement");
+            assert!(
+                (preview_radius - 2.0).abs() <= 1.0e-12,
+                "the 4-to-2 rail sample must remain within screen/model round-trip precision: {preview_radius:?}",
+            );
+            let preview = authority
+                .projectional_ref()
+                .unwrap()
+                .scene(viewport, super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS)
+                .expect("grouped managed preview scene");
+            for feature in &features {
+                let radii = preview
+                    .computed_curves
+                    .iter()
+                    .filter(|curve| curve.owner.feature == *feature)
+                    .map(|curve| curve.radius.to_bits())
+                    .collect::<Vec<_>>();
+                assert!(!radii.is_empty());
+                assert!(
+                    radii
+                        .iter()
+                        .all(|radius| *radius == preview_radius.to_bits())
+                );
+            }
+            assert_eq!(code_project.code_session_identity(), &code_before);
+            assert_eq!(code_project.managed_source(), source_before);
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .intent()
+                    .identity(),
+                intent_before,
+            );
+
+            let terminal = authority
+                .projectional_mut()
+                .unwrap()
+                .pointer_up(&preview, pointer(target))
+                .expect("finish delegated generated Fillet radius gesture");
+            assert!(terminal.transaction.is_none());
+            let proposal = terminal
+                .delegated_computed_fillet_radius
+                .expect("authenticated outer source proposal");
+            assert_eq!(proposal.features, features);
+            assert_eq!(proposal.origin_radius.to_bits(), 4.0_f64.to_bits());
+            assert_eq!(proposal.proposed_radius.to_bits(), preview_radius.to_bits());
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .intent()
+                    .identity(),
+                intent_before,
+            );
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .intent()
+                    .undo_len(),
+                nested_undo_before,
+            );
+
+            assert_eq!(
+                publish_projectional_code_fillet_radius(
+                    &mut authority,
+                    &mut code_project,
+                    &proposal,
+                )
+                .expect("publish one outer managed radius transaction"),
+                ProjectionalDelegatedFilletPublication::Accepted {
+                    revision: code_before.revision + 1,
+                },
+            );
+            assert_eq!(
+                source_before.matches("radius: mm(4)").count(),
+                1,
+                "the fixture authenticates one shared source token",
+            );
+            let expected_source = source_before.replacen(
+                "radius: mm(4)",
+                &format!("radius: mm({preview_radius})"),
+                1,
+            );
+            assert_eq!(
+                code_project.managed_source(),
+                expected_source,
+                "the grouped release rewrites exactly one shared source token",
+            );
+            assert_eq!(
+                code_project.code_session_identity().revision,
+                code_before.revision + 1
             );
             assert!(code_project.can_undo());
-            assert!(
-                code_project
-                    .step_history(true)
-                    .expect("retained managed dimension Undo")
-                    .is_some()
+            let accepted_editor = authority.projectional_ref().unwrap();
+            assert_eq!(accepted_editor.coordinator().intent().undo_len(), 0);
+            let selected = accepted_editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node(
+                    accepted_editor
+                        .selected_declaration()
+                        .expect("stable generated Fillet selection"),
+                )
+                .expect("selected generated Fillet after source edit");
+            assert_eq!(selected.symbol, selected_alias);
+            for feature in accepted_editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .features
+                .features()
+            {
+                let geosolve_constraint_editor::ComputedFeatureDefinition::FilletSet(fillet) =
+                    &feature.definition;
+                assert_eq!(fillet.radius.to_bits(), preview_radius.to_bits());
+            }
+            assert_code_editor_valid(accepted_editor);
+
+            let source_after = code_project.managed_source().to_owned();
+            let checkpoint_after = code_project.accepted_editor_checkpoint().clone();
+            let undone = code_project
+                .step_history(true)
+                .expect("grouped radius Undo")
+                .expect("one outer grouped radius history row");
+            assert_eq!(code_project.managed_source(), source_before);
+            assert_eq!(
+                code_project.accepted_editor_checkpoint(),
+                &checkpoint_before
             );
             assert!(
                 !code_project.can_undo(),
-                "the retained Inspector edit must also create exactly one outer history row",
+                "no nested Intent history leaked outward"
             );
+            assert_code_editor_valid(&undone.editor);
+            let redone = code_project
+                .step_history(false)
+                .expect("grouped radius Redo")
+                .expect("one redoable grouped radius history row");
+            assert_eq!(code_project.managed_source(), source_after);
+            assert_eq!(code_project.accepted_editor_checkpoint(), &checkpoint_after);
+            assert_code_editor_valid(&redone.editor);
+        });
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the camera-interruption regression keeps grouped preview, cancellation, source, history, persistence, and accepted-scene authority in one crossed-adapter case"
+    )]
+    fn m87_typed_panel_grouped_fillet_camera_interruption_restores_without_history() {
+        run_projectional_test_with_large_stack("m87-typed-panel-grouped-fillet-camera", || {
+            let (code_project, editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("typed-panel")
+                    .expect("Typed Panel code project");
+            let mut authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("Typed Panel browser authority");
+            let mut camera = super::scene::CanvasCamera::default();
+            assert!(super::fit_projectional_camera_to_authority(
+                &mut camera,
+                &authority,
+            ));
+            let viewport = camera.viewport();
+            let mut features = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted Typed Panel materialization")
+                .features
+                .features()
+                .iter()
+                .map(|feature| feature.id)
+                .collect::<Vec<_>>();
+            features.sort_unstable();
+            assert_eq!(features.len(), 2);
+            let initiating = features[0];
+            authority
+                .projectional_mut()
+                .unwrap()
+                .set_selection([SelectionItem::Feature(initiating)]);
+            let scene = authority
+                .projectional_ref()
+                .unwrap()
+                .scene(viewport, super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS)
+                .expect("selected Typed Panel scene");
+            let rail = scene
+                .fillet_affordances
+                .iter()
+                .find(|affordance| affordance.owner.feature == initiating)
+                .expect("selected generated Fillet radius rail")
+                .radius_rail;
+            let pointer_id = 87_004;
+            let pointer = |position| PointerInput {
+                pointer_id,
+                position,
+                modifiers: Modifiers::default(),
+            };
+            authority
+                .projectional_mut()
+                .unwrap()
+                .pointer_down(&scene, pointer(rail.screen_grip))
+                .expect("start generated Fillet radius gesture");
+            assert!(
+                delegate_projectional_code_fillet_radius_drag(&mut authority, &code_project)
+                    .expect("authenticate complete managed Fillet consumer group")
+            );
+
+            let source_before = code_project.managed_source().to_owned();
+            let checkpoint_before = code_project.accepted_editor_checkpoint().clone();
+            let persistence_before = code_project
+                .to_persistence_json()
+                .expect("code authority before camera interruption");
+            let code_before = code_project.code_session_identity().clone();
+            let intent_before = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .intent()
+                .identity();
+            let nested_undo_before = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .intent()
+                .undo_len();
+            let accepted_before = authority
+                .snapshot()
+                .expect("accepted authority before camera interruption")
+                .encode()
+                .expect("encoded accepted authority");
+
+            let origin = viewport.screen_to_model(rail.screen_grip);
+            let target = viewport.model_to_screen([
+                (-1.5_f64).mul_add(rail.model_derivative[0], origin[0]),
+                (-1.5_f64).mul_add(rail.model_derivative[1], origin[1]),
+            ]);
+            authority
+                .projectional_mut()
+                .unwrap()
+                .pointer_move(&scene, pointer(target))
+                .expect("preview grouped managed radius before camera change");
+            let preview = authority
+                .projectional_ref()
+                .unwrap()
+                .scene(viewport, super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS)
+                .expect("grouped managed preview scene");
+            assert!(features.iter().all(|feature| {
+                let radii = preview
+                    .computed_curves
+                    .iter()
+                    .filter(|curve| curve.owner.feature == *feature)
+                    .map(|curve| curve.radius)
+                    .collect::<Vec<_>>();
+                !radii.is_empty()
+                    && radii
+                        .iter()
+                        .all(|radius| radius.is_finite() && radius.to_bits() != 4.0_f64.to_bits())
+            }));
+
+            // Browser camera admission calls this exact presentation-independent
+            // cancellation before it changes the camera. No terminal proposal is
+            // available afterward for the outer code owner to publish.
+            authority.projectional_mut().unwrap().cancel_interaction();
+            assert!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .editor()
+                    .active_pointer_gesture()
+                    .is_none()
+            );
+            assert_eq!(code_project.managed_source(), source_before);
+            assert_eq!(
+                code_project.accepted_editor_checkpoint(),
+                &checkpoint_before
+            );
+            assert_eq!(code_project.code_session_identity(), &code_before);
+            assert_eq!(
+                code_project
+                    .to_persistence_json()
+                    .expect("code authority after camera interruption"),
+                persistence_before,
+            );
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .intent()
+                    .identity(),
+                intent_before,
+            );
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .intent()
+                    .undo_len(),
+                nested_undo_before,
+            );
+            assert_eq!(
+                authority
+                    .snapshot()
+                    .expect("accepted authority after camera interruption")
+                    .encode()
+                    .expect("encoded restored authority"),
+                accepted_before,
+            );
+            let restored = authority
+                .projectional_ref()
+                .unwrap()
+                .scene(viewport, super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS)
+                .expect("accepted scene after camera interruption");
+            for feature in features {
+                let radii = restored
+                    .computed_curves
+                    .iter()
+                    .filter(|curve| curve.owner.feature == feature)
+                    .map(|curve| curve.radius.to_bits())
+                    .collect::<Vec<_>>();
+                assert!(!radii.is_empty());
+                assert!(radii.iter().all(|radius| *radius == 4.0_f64.to_bits()));
+            }
+        });
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the retained-failure regression keeps the complete grouped proposal and outer source/scene rollback authority in one crossed-adapter case"
+    )]
+    fn m87_grouped_fillet_outer_failure_retains_the_exact_accepted_canvas() {
+        run_projectional_test_with_large_stack("m87-grouped-fillet-retained-failure", || {
+            let (mut code_project, editor) =
+                super::code_projects::CodeProjectWorkbench::open_key("typed-panel")
+                    .expect("Typed Panel code project");
+            let mut authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)
+                .expect("Typed Panel browser authority");
+            let mut features = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .accepted_materialization()
+                .expect("accepted Typed Panel materialization")
+                .features
+                .features()
+                .iter()
+                .map(|feature| feature.id)
+                .collect::<Vec<_>>();
+            features.sort_unstable();
+            assert_eq!(features.len(), 2);
+            let initiating = features[0];
+            authority
+                .projectional_mut()
+                .unwrap()
+                .set_selection([SelectionItem::Feature(initiating)]);
+            assert_eq!(
+                code_project
+                    .delegated_computed_fillet_radius_group(authority.projectional_ref().unwrap())
+                    .expect("authenticated managed radius group"),
+                Some(features.clone()),
+            );
+
+            let code_before = code_project.code_session_identity().clone();
+            let source_before = code_project.managed_source().to_owned();
+            let checkpoint_before = code_project.accepted_editor_checkpoint().clone();
+            let intent_before = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .intent()
+                .identity();
+            let nested_undo_before = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .intent()
+                .undo_len();
+            let accepted = authority
+                .projectional_ref()
+                .unwrap()
+                .coordinator()
+                .accepted_materialization()
+                .unwrap();
+            let accepted_input = accepted.computed.input();
+            let accepted_document = accepted
+                .session
+                .accepted_state_for_current_input()
+                .unwrap()
+                .document()
+                .clone();
+            let proposal = geosolve_constraint_editor::DelegatedComputedFilletRadiusProposal {
+                intent: intent_before,
+                expected: accepted_input,
+                initiating_feature: initiating,
+                features,
+                origin_radius: 4.0,
+                proposed_radius: 400.0,
+            };
+
+            let outcome = publish_projectional_code_fillet_radius(
+                &mut authority,
+                &mut code_project,
+                &proposal,
+            )
+            .expect("schema-valid radius reaches retained native validation");
+            let ProjectionalDelegatedFilletPublication::RetainedFailure {
+                revision,
+                diagnostic,
+            } = outcome
+            else {
+                panic!("an impossible Typed Panel radius must retain failure")
+            };
+            assert_eq!(revision, code_before.revision + 1);
+            assert!(!diagnostic.is_empty());
+            assert!(code_project.managed_source().contains("radius: mm(400)"));
+            assert_eq!(
+                code_project.accepted_editor_checkpoint(),
+                &checkpoint_before,
+                "failed outer publication must retain the accepted editor checkpoint",
+            );
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .intent()
+                    .identity(),
+                intent_before,
+            );
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .intent()
+                    .undo_len(),
+                nested_undo_before,
+            );
+            assert_eq!(
+                authority
+                    .projectional_ref()
+                    .unwrap()
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap()
+                    .session
+                    .accepted_state_for_current_input()
+                    .unwrap()
+                    .document(),
+                &accepted_document,
+            );
+            assert!(code_project.can_undo());
+            let undone = code_project
+                .step_history(true)
+                .expect("retained grouped radius Undo")
+                .expect("one outer retained-failure history row");
+            assert_eq!(code_project.managed_source(), source_before);
+            assert_eq!(
+                code_project.accepted_editor_checkpoint(),
+                &checkpoint_before
+            );
+            assert_code_editor_valid(&undone.editor);
         });
     }
 
@@ -21165,7 +22820,7 @@ mod tests {
 
             let projectional = authority.projectional_mut().unwrap();
             assert!(projectional.set_selected_declaration(Some(node)));
-            let markup = projectional_design_markup(projectional);
+            let markup = projectional_design_markup(projectional, None, None).unwrap();
             assert_eq!(markup.declaration_count, 1);
             assert!(markup.outline.contains("aria-selected=\"true\""));
             assert!(markup.source.contains("wb-intent-source-token"));
@@ -21194,7 +22849,8 @@ mod tests {
                 .edit_source_token(&projection, name_token, "\"renamed point\"")
                 .unwrap();
             assert!(
-                projectional_design_markup(projectional)
+                projectional_design_markup(projectional, None, None)
+                    .unwrap()
                     .inspector
                     .contains("renamed point")
             );
@@ -23260,8 +24916,10 @@ mod tests {
         assert!(css.contains(
             ".wb-fillet-action[data-fillet-action-input=\"canvas\"]:focus { outline: none; }"
         ));
-        let scene_source = include_str!("scene.rs");
-        assert!(scene_source.contains("fill=\\\"context-stroke\\\""));
+        let web_scene_adapter = include_str!("scene.rs");
+        assert!(web_scene_adapter.contains("geosolve_sketch_render"));
+        let shared_scene_source = include_str!("../../../geosolve-sketch-render/src/scene.rs");
+        assert!(shared_scene_source.contains("fill=\\\"context-stroke\\\""));
         for browser_owned_selector in [".wb-fillet-action:hover", ".wb-fillet-action:focus"] {
             assert!(
                 !css.contains(browser_owned_selector),
@@ -25076,6 +26734,27 @@ mod tests {
                 durable_panel_rebuilds: 1,
             },
             "authenticated release is exactly one durable save/render boundary",
+        );
+
+        let mut source_owned = WorkbenchPresentationCounters::default();
+        source_owned.record(WorkbenchPresentationEvent::CodeSourcePointerRelease);
+        assert!(
+            WorkbenchPresentationEvent::CodeSourcePointerRelease.code_source_already_published(),
+            "source-owned terminal must bypass delegated checkpoint publication",
+        );
+        assert!(
+            !WorkbenchPresentationEvent::PointerRelease.code_source_already_published(),
+            "ordinary GUI terminal keeps its existing checkpoint publication route",
+        );
+        assert_eq!(
+            source_owned,
+            WorkbenchPresentationCounters {
+                transient_renders: 0,
+                durable_renders: 1,
+                workspace_saves: 1,
+                durable_panel_rebuilds: 1,
+            },
+            "an already-published source terminal persists and renders exactly once",
         );
 
         let mut non_mutating = WorkbenchPresentationCounters::default();
@@ -26935,6 +28614,71 @@ export default sketch(($) => {
         }
     }
 
+    #[test]
+    fn delegated_code_point_terminal_adapter_installs_outer_authority() {
+        let mut fixture = collaborative_reference_fixture();
+        let declaration = segment_node_with_end(&fixture.editor, [-20.0, 5.0]);
+        let point = native_point_for_role(&fixture.editor, declaration, IntentPortRole::End);
+        let pointer_id = 87_302;
+        let start = native_point_position(&fixture.editor, point);
+        let target = [-18.0, 7.0];
+        let pointer = |model| PointerInput {
+            pointer_id,
+            position: fixture.viewport.model_to_screen(model),
+            modifiers: Modifiers::default(),
+        };
+        let scene = fixture
+            .editor
+            .scene(fixture.viewport, 0.5)
+            .expect("adapter pointer-down scene");
+        fixture
+            .editor
+            .pointer_down_exact_point(&scene, pointer(start), point)
+            .expect("adapter exact point route");
+        assert!(
+            fixture
+                .code
+                .prepare_semantic_point_drag(&fixture.editor, pointer_id, point, None)
+                .expect("adapter semantic point route")
+                .is_none()
+        );
+        fixture
+            .editor
+            .pointer_move(&scene, pointer(target))
+            .expect("adapter accepted preview");
+        let scene = fixture
+            .editor
+            .scene(fixture.viewport, 0.5)
+            .expect("adapter terminal scene");
+        let proposal = fixture
+            .editor
+            .pointer_up_delegated_point(&scene, pointer(target))
+            .expect("adapter delegated terminal")
+            .proposal
+            .expect("adapter moved proposal");
+        let mut authority = WorkbenchDocumentAuthority::from_projectional_editor(*fixture.editor)
+            .expect("adapter origin authority");
+        let (publication, work) = super::publish_projectional_code_point_terminal(
+            &mut authority,
+            &mut fixture.code,
+            pointer_id,
+            proposal,
+            None,
+        );
+        assert!(publication.is_ok());
+        assert_eq!(work.managed_parse_attempts(), 0);
+        assert_eq!(work.expansion_attempts(), 1);
+        assert_eq!(work.accepted_publications(), 1);
+        let accepted = authority
+            .projectional_ref()
+            .expect("adapter installed projectional authority");
+        assert_eq!(
+            native_point_position(accepted, point).map(f64::to_bits),
+            target.map(f64::to_bits),
+        );
+        assert_code_editor_valid(accepted);
+    }
+
     fn drag_selected_code_point(
         fixture: &mut CollaborativeReferenceFixture,
         declaration: NodeId,
@@ -26997,21 +28741,16 @@ export default sketch(($) => {
             .editor
             .scene(fixture.viewport, 0.5)
             .expect("accepted pointer-up scene");
-        assert!(
-            fixture
-                .editor
-                .pointer_up(&scene, pointer(target))
-                .expect("valid code-point terminal sample")
-                .transaction
-                .is_some()
-        );
+        let proposal = fixture
+            .editor
+            .pointer_up_delegated_point(&scene, pointer(target))
+            .expect("valid delegated code-point terminal sample")
+            .proposal
+            .expect("moved delegated code-point proposal");
         let publication = fixture
             .code
-            .publish_pointer_terminal_checkpoint(
-                pointer_id,
-                &delegated_editor_checkpoint(&fixture.editor),
-                label,
-            )
+            .publish_delegated_point_terminal_audited(pointer_id, &fixture.editor, proposal, label)
+            .outcome
             .expect("outer semantic point publication")
             .expect("one outer history row");
         fixture.editor = publication.editor;

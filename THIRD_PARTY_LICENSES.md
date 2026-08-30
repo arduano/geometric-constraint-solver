@@ -13,9 +13,12 @@ The locked graphs contain packages under these SPDX expressions:
 - `0BSD OR MIT OR Apache-2.0`;
 - `Apache-2.0`;
 - `Apache-2.0 OR MIT`;
+- `Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR MIT`;
 - `Apache-2.0 OR MIT OR Zlib`;
 - `(Apache-2.0 OR MIT) AND Unicode-3.0`;
 - `Apache-2.0 OR BSD-2-Clause OR MIT`;
+- `BSD-2-Clause`;
+- `BSD-3-Clause`;
 - `MIT`;
 - `MIT OR Apache-2.0`;
 - `MIT OR Zlib OR Apache-2.0`;
@@ -46,6 +49,59 @@ They implement strict URL-safe text encoding and zlib/Adler stream handling only
 native library, FFI or `unsafe` block to GeoSolve source. Their exact checksums remain locked in
 `Cargo.lock`; both platform inventories and `cargo deny check licenses` pass on the nominated
 candidate.
+
+## M87 native renderer dependencies and bundled font
+
+M87's pure-Rust native SVG rasterizer adds these locked packages and declared SPDX expressions:
+
+- `arrayref 0.3.9` — `BSD-2-Clause`;
+- `tiny-skia 0.12.0` — `BSD-3-Clause`;
+- `tiny-skia-path 0.12.0` — `BSD-3-Clause`.
+
+The native renderer also bundles Share Tech Mono Regular for hermetic text rasterization. The font
+is Copyright (c) 2012 Carrois Type Design and Ralph du Carrois, uses the Reserved Font Name
+"Share", and is distributed under `OFL-1.1`. The exact decoded font SHA-256 is
+`9ceab1f87414829af259c0f537573ae03ef7dd3147c0b27a36a1a0beb6732677`; its copyright and complete
+licence text are preserved in `crates/geosolve-sketch-render/assets/README.md` and
+`crates/geosolve-sketch-render/assets/ShareTechMono-OFL.txt`.
+
+## M87 atomic headless publication dependency
+
+M87's no-clobber generation publisher adds one direct locked dependency:
+
+- `rustix 1.1.4` — `Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR MIT`.
+
+GeoSolve uses its safe filesystem API for the platform's atomic rename-with-no-replace operation.
+Unsupported platforms fail closed instead of falling back to an overwriting rename; no `unsafe`
+block is added to GeoSolve source.
+
+## M87 Gridfinity profile reference
+
+The standards-informed `gridfinity-1x1x3-section` sketch derives its dimensional constants and
+profile stages from `src/core/standard.scad` in
+<https://github.com/kennetek/gridfinity-rebuilt-openscad> at commit
+`910e22d8607fd7f5f51ad5e5cbc5287a76810bfd`. GeoSolve translates those values into one managed 2D
+contour; it does not vendor or execute OpenSCAD. The reference is licensed under MIT and retains
+these upstream notices:
+
+Copyright (c) 2023 Kenneth Hodson
+
+Copyright (c) 2023 Zachary Freedman and Voidstar Lab LLC
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## `faer` bundled notices
 

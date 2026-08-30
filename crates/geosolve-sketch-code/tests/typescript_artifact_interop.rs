@@ -45,6 +45,24 @@ fn new_bundled_managed_programs_are_exact_type_checked_typescript_fixtures() {
                 "../../../packages/geosolve-sketch-code/test/managed/pc-water-manifold.managed.ts"
             ),
         ),
+        (
+            CodeProjectDemoId::RoboticRoutingBoard,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/robotic-routing-board.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::CncJoineryFitCoupon,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/cnc-joinery-fit-coupon.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::GridfinityBinSection,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/gridfinity-1x1x3-section.managed.ts"
+            ),
+        ),
     ];
     let demos = bundled_code_project_demos();
     for (id, fixture) in fixtures {
@@ -61,7 +79,7 @@ fn new_bundled_managed_programs_are_exact_type_checked_typescript_fixtures() {
     }
 }
 
-fn fixtures() -> [Fixture; 8] {
+fn fixtures() -> [Fixture; 10] {
     [
         Fixture {
             module: "./patches/round-every-corner.patch.ts",
@@ -127,12 +145,30 @@ fn fixtures() -> [Fixture; 8] {
             ),
         },
         Fixture {
+            module: "./patches/corner-reliefs.patch.ts",
+            source: include_str!(
+                "../../../packages/geosolve-sketch-code/examples/corner-reliefs.patch.ts"
+            ),
+            canonical_json: include_str!(
+                "../../../packages/geosolve-sketch-code/test/fixtures/corner-reliefs.artifact.json"
+            ),
+        },
+        Fixture {
             module: "./patches/water-channel.patch.ts",
             source: include_str!(
                 "../../../packages/geosolve-sketch-code/examples/water-channel.patch.ts"
             ),
             canonical_json: include_str!(
                 "../../../packages/geosolve-sketch-code/test/fixtures/water-channel.artifact.json"
+            ),
+        },
+        Fixture {
+            module: "./patches/harness-route.patch.ts",
+            source: include_str!(
+                "../../../packages/geosolve-sketch-code/examples/harness-route.patch.ts"
+            ),
+            canonical_json: include_str!(
+                "../../../packages/geosolve-sketch-code/test/fixtures/harness-route.artifact.json"
             ),
         },
     ]
@@ -175,6 +211,54 @@ fn typescript_emitted_artifacts_are_byte_exact_rust_canonical_values() {
             fixture.canonical_json
         );
     }
+}
+
+#[test]
+fn harness_route_sources_and_artifacts_are_byte_identical_across_hosts() {
+    let package_source =
+        include_str!("../../../packages/geosolve-sketch-code/examples/harness-route.patch.ts");
+    assert_eq!(
+        package_source,
+        include_str!(
+            "../../../packages/geosolve-sketch-code/test/managed/patches/harness-route.patch.ts"
+        )
+    );
+    assert_eq!(
+        package_source,
+        include_str!("../assets/patches/harness-route.patch.ts")
+    );
+
+    let package_artifact = include_str!(
+        "../../../packages/geosolve-sketch-code/test/fixtures/harness-route.artifact.json"
+    );
+    assert_eq!(
+        package_artifact,
+        include_str!("../assets/artifacts/harness-route.artifact.json")
+    );
+}
+
+#[test]
+fn corner_relief_sources_and_artifacts_are_byte_identical_across_hosts() {
+    let package_source =
+        include_str!("../../../packages/geosolve-sketch-code/examples/corner-reliefs.patch.ts");
+    assert_eq!(
+        package_source,
+        include_str!(
+            "../../../packages/geosolve-sketch-code/test/managed/patches/corner-reliefs.patch.ts"
+        )
+    );
+    assert_eq!(
+        package_source,
+        include_str!("../assets/patches/corner-reliefs.patch.ts")
+    );
+
+    let package_artifact = include_str!(
+        "../../../packages/geosolve-sketch-code/test/fixtures/corner-reliefs.artifact.json"
+    );
+    assert_eq!(
+        package_artifact,
+        include_str!("../assets/artifacts/corner-reliefs.artifact.json")
+    );
 }
 
 #[test]

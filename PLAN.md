@@ -6647,7 +6647,7 @@ qualification evidence. Product source `88d1b5e` is an ancestor of the approval 
 nine M86 closeout documents changed. `geosolve-m86-local-uat.service` and
 `geosolve-m86-uat.service` are inactive/dead with `MainPID=0`; both endpoints refuse connections
 with curl exit `7`/HTTP `000`, recorded at `/tmp/geosolve-m86-service-retirement.tLQ4hcSG`.
-M1-M86 are complete.
+M1-M86 are complete; M87 remains open at its focused visual-UAT boundary.
 
 Gate: a direct managed dimension edit is an authenticated source edit and one outer transaction,
 not an unauthenticated nested-Intent mutation; invalid input preserves prior accepted authority;
@@ -6656,6 +6656,145 @@ Fillet surface, and unrelated geometry does not invert globally; derived termina
 causal, conditional and bounded while public discrete feature authority remains exact; ordinary
 GUI dimensions and every solver equation remain unchanged; focused regression, proportional clean
 qualification, immutable nomination and explicit UAT precede publication.
+
+### M87: cohesive managed parameters and browser-free design loop
+
+Status: **open. M87-F003 sample-authority repair is proportionally mechanically qualified;
+M87-U9/U10 focused human visual UAT and milestone closure remain pending**. The sound managed-
+control, browser-free authoring, twelve-project dogfood, shared-
+renderer, graphics-hardening and full-detail retained-camera work is retained; all experimental
+adaptive-detail/LOD code remains deleted. The supervising user's earlier scoped disposition remains
+historical acceptance of U1-U8 without claiming a separate row-by-row replay. The shared dirty
+worktree is not a clean nominated source/tree; no immutable artifact, public deployment or service-
+retirement result is claimed. M88 is not activated.
+
+`docs/M87_AUDIT.md`, `docs/M87_GOALS.md`, and ADR 0042 own the audited scope. M87 edits
+code-defined non-DoF parameters and constraint state; existing solver-instance point drafts remain
+outside code.
+
+- [x] Reproduce M87-F001 at the smallest code expansion owner: two generated Typed Panel Fillets
+  consumed radius `4`, while the baseline public reverse-route inventory was empty.
+- [x] Add a transient bounded managed-control manifest, authoritative schemas, exact-CAS batch
+  edits, shared/transitive consumers, and typed read-only/navigation outcomes.
+- [x] Replace property-specific Inspector/lens routes with managed controls, add a code-control RPC,
+  preserve one outer history, and reject code-mode nested Intent mutations.
+- [x] Route shared Fillet-radius Inspector/grip edits through the same source transaction while
+  preserving M86 picking and leaving point drafts/overlays unchanged.
+- [x] Extract target-neutral camera/SVG presentation to `geosolve-sketch-render`, add native-only
+  pure-Rust PNG, and preserve browser composer bytes.
+- [x] Add native `geosolve-headless` inspect/render/exact-CAS-edit APIs and CLI for managed source,
+  canonical pinned projects, and bundled demos with deterministic reports and atomic output.
+- [x] Add the tenth bundled dogfood project: a 360 x 220 mm robotic cable-harness routing board
+  with eight keyed ten-vertex open routes, 72 native route segments, 80 generated clip circles and
+  64 host Fillets. Keep board/connector/endpoints fixed while interior route points remain ordinary
+  solver-instance overlays.
+- [x] Keep the dogfood composition modular: shared clip/bend literals disclose exact cross-route
+  fan-out, one localized invocation partitions only its consumers, keyed insertion owns stable
+  reconciliation generations, and the `harnessRoute` TypeScript/artifact copies remain immutable.
+- [x] Replace whole-scene visual-arrangement work in open-chain aggregate validation with exact
+  endpoint connectivity and batch noninteractive host-Fillet publication into one atomic intent
+  patch. Retain complete visual-profile authority for Offset operands and interactive preview
+  authority for real gestures.
+- [x] Append one separately reviewed routing-board code-project ledger row without changing the PC
+  Water Manifold row, update the CLI inventory to ten and freeze repeated headless
+  report/control/logical-scene/SVG/PNG equality for the board.
+- [x] Harden retained camera presentation against transient DOM loss. Failed camera paint retains
+  retryable desired state and reconciles exactly without stranding future frames. Remove the
+  adaptive-detail prototype completely; camera navigation always preserves the full SVG paint,
+  semantic/hit authority, exports and headless output.
+- [x] Qualify the complete implementation provisionally in the dirty shared worktree with
+  `GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` at
+  exit `0`. Formatting/diff hygiene, workspace Clippy/tests, exact golden `--require-clean`, WASM
+  including `actual_wasm_` 3/3, TypeScript 40/40 and 14/14 plus fixture/type/managed checks,
+  Rustdoc, benchmark/performance checks, `cargo-deny`, all 12 package-list checks, packaged
+  `geosolve-sketch-code` verification and Trunk assembly all pass.
+- [x] Complete the routing-board focused owner, incremental overlay, web history/reload, headless,
+  TypeScript-copy and deterministic ledger qualification. Treat the earlier provisional gate as
+  pre-amendment evidence only.
+- [x] Expand the bundled catalog from ten to twelve with a 120 x 140 mm CNC joinery fit coupon and
+  one 26-point symmetric Gridfinity 1 x 1 x 3U material cross-section. Keep both as 2D/2.5D design
+  sketches with no CAM, toolpath, cutter-compensation, boolean or solid authority.
+- [x] Add and pin the reusable `cornerReliefs` record mapping. Compose twelve shared 3.175 mm
+  relief circles and ten shared 6 mm handling Fillets around three 70 mm-wide loose/nominal/press
+  mortises with respective heights 18.4/18.0/17.6 mm and three 95 x 18 mm tabs without coupling
+  patch logic to the coupon layout.
+- [x] Compose the Gridfinity section from one explicit symmetric closed contour with 41.5/35.6 mm
+  widths, 4.75/7 mm base levels, 21 mm body, 0.95 mm walls, 4.4 mm nominal lip rise, two 2.8 mm
+  floor Fillets and two 0.6 mm lip Fillets.
+- [x] Reproduce M87-F003 at cold materialization: Gridfinity's 26 literal-seeded contour points had
+  no native constraints, while CNC located seven components with seven unrelated `FixedPoint`
+  locks. Preserve nominal geometry/topology/Fillets while replacing those sources with relational
+  design authority.
+- [x] Fully constrain CNC from exactly one `FixedPoint`, zero `FixedCoordinate` rows and seven
+  horizontal/vertical length-governed construction datums. Fully constrain Gridfinity from zero
+  `FixedPoint` rows, one Y `FixedCoordinate`, thirteen datum-axis symmetry relations and ten
+  orthogonal construction spans governing five diagonal stages.
+- [x] Require both revised samples to report zero numerical/structural left/right nullity, zero
+  equality DOF and zero bidirectional bounded DOF; literal positions remain solver seeds only.
+- [x] Pre-F003 owner tests proved CNC shared/local fan-out partitions 8/4 circles and 8/2 Fillets, fit-station locality,
+  and one relief-key remove/reinsert generation cycle; prove Gridfinity closure, symmetry,
+  dimensions and independent 2/2 radius fan-outs through focused owner tests; the manufacturing
+  suite passes 3/3 and the native-composition suite passes 13/13.
+- [x] Before F003, extend native/headless/CLI inventory from ten to twelve, cold-materialize all twelve demos and
+  freeze repeated report/control/logical-scene/SVG/PNG evidence for both additions; the focused
+  headless suite passes 10/10. In declaration/generated/output/point/curve/constraint/host-output/
+  feature/computed-edge order, the revised expected native inventories are CNC
+  `(62, 69, 14, 29, 47, 36, 10, 10, 23)` with 33 dimensions and Gridfinity
+  `(62, 66, 3, 31, 36, 31, 4, 4, 11)` with 18 dimensions.
+- [x] Revise only the CNC/Gridfinity rows in the separately reviewed twelve-row ledger for F003,
+  preserving its first ten rows and the unchanged 271-row golden.
+- [x] Record the pre-F003 additive focused qualification and then-current dirty-worktree release
+  gate at exit `0` on 2026-08-30. Retain it only as dirty mechanical evidence, not as a clean
+  source/tree, immutable nomination or publication result.
+- [x] Remove the entire LOD prototype—policy module, state, controls, camera hooks, DOM/CSS and
+  tests—while keeping two-phase retained-camera failure recovery and complete scene paint.
+- [x] Audit graphics ownership and resolve M87-F002 with validated transactional cameras and a
+  private bounded grid path. Preserve the frozen compositor bytes and current z-order contract.
+- [x] Preserve the supervising user's earlier scoped disposition as historical U1-U8 acceptance
+  without inventing separately replayed rows; it does not accept the later manufacturing rows.
+- [x] Record clean nomination/freeze/publication as deliberately unclaimed rather than weakening
+  those release concepts. The mutable Tailscale server remains development infrastructure.
+- [x] Record that no clean exact source/tree, clean release gate, immutable no-rebuild freeze,
+  publication or service retirement has been performed or inferred from dirty mechanical evidence.
+- [x] Complete proportional post-F003 mechanical qualification. Focused manufacturing passes 3/3,
+  native composition 13/13, the exact reviewed-ledger check 1/1 and all-demo headless/deterministic
+  products 10/10; fresh mutable visual bundles exist without implying human acceptance or a full
+  release gate.
+- [ ] Complete M87-U9/M87-U10 focused human visual UAT against the fresh mutable CNC/Gridfinity
+  bundles and record the supervising user's exact disposition.
+- [ ] Only after U9/U10 disposition, consider clean nomination, publication or M87 closure. Do not
+  activate M88.
+
+Historical pre-F003 focused additive and dirty-gate qualification record (2026-08-30):
+`m87_manufacturing_sketches` passes 3/3, `m87_headless` passes 10/10,
+`m84_native_composition` passes 13/13 and the exact separately reviewed code-project-ledger test
+passes 1/1. The complete dirty-worktree release gate also passes at exit `0` with:
+
+```bash
+TMPDIR=/home/arduano/.cache/geosolve-m87-tmp GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/.cache/geosolve-m87-tmp ./scripts/release-gate.sh'
+```
+
+Those passes cover the exact pre-F003 sources and do not qualify the relational-authority repair.
+The current reviewed twelve-row code-project ledger has SHA-256
+`f6ecd037cef8befc59f9a057fef499a14f0851f8ec5a0d3a1468a69e66a9d1bc`. The gate result is dirty
+historical evidence, not a clean source/tree, immutable artifact or publication claim. Mutable
+visual bundles at `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` predate F003. Fresh post-F003
+bundles awaiting U9/U10 are at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`.
+
+Gate: every enabled managed parameter has one authenticated source route; shared values disclose and
+update their complete bounded fan-out; DoF drafts never leak solved values into code; and the native
+agent loop produces the same independently accepted static scene without a web UI or TypeScript
+runtime. The routing-board dogfood additionally retains unrelated keyed/native identities across
+local control, overlay and structural edits, performs no parse or publish work for a point-overlay
+terminal, and exposes useful full-detail visual evidence. The CNC coupon additionally preserves
+12-circle/10-Fillet fan-out, localized keyed generations and one-point relational placement; the
+Gridfinity entry preserves one datum-governed symmetric 26-point profile and four independently
+controlled Fillets. Both are fully constrained with zero numerical/structural nullity and DOF. The
+earlier 2026-08-30
+scoped disposition remains historical U1-U8 evidence without a separate row-by-row replay. U9/U10
+and M87 closure remain pending. Clean nomination, freeze, publication and service retirement were
+not performed and remain unclaimed. Performance work is deferred to a follow-up milestone and M88
+is not activated.
 
 ## Explicit non-goals
 

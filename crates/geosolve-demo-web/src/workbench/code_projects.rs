@@ -9,43 +9,58 @@
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_constraint_editor::{
     BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1, ComputedEdgeGeometry, ComputedEdgeProvenance,
     ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFeatureEvaluation,
-    ComputedFeatureEvaluationState, ComputedFeatureSnapshot, IntentInspectorEditTarget,
-    IntentInspectorEditValue, IntentInspectorProjection, IntentNativeBinding,
-    ProjectionalEditorSession, SelectionItem,
+    ComputedFeatureEvaluationState, ComputedFeatureId, ComputedFeatureSnapshot,
+    DelegatedComputedFilletRadiusProposal, DelegatedPointDragProposal, IntentInspectorEditTarget,
+    IntentInspectorEditValue, IntentInspectorField, IntentInspectorProjection, IntentNativeBinding,
+    IntentWorkbenchProjection, NativeCurveSpanSource, ProjectionalEditorSession, SelectionItem,
 };
-use geosolve_sketch::{DocumentId, PersistentId};
+use geosolve_sketch::{
+    CurveSpan, DocumentId, OperationControl, OperationOutcome, PersistentId,
+    RetainedSketchDocumentSession, SketchHardValidity,
+};
 use geosolve_sketch_code::{
-    AuditedCodeWork, CodeGeneratedChildAddress, CodeInteractionOverlay, CodePointEdit, CodeProject,
-    CodeProjectDemo, CodeProjectDemoId, CodeRectangleCorner, CodeSessionIdentity,
-    CodeSessionReceipt, CodeWorkReceipt, CodeWritableAddress, EditorBootstrapDeclaration,
-    ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget, ExpandedWritablePoint,
-    KeyedReconcileState, ManagedDiagnostic, ManagedEdit, ManagedValue, MaterializedCodeProject,
-    PatchModuleArtifact, ProjectKey, SemanticSymbol, SketchCodeSession, UnitLiteral,
+    AuditedCodeWork, CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOwnerAddress,
+    CodePointEdit, CodeProject, CodeProjectDemo, CodeProjectDemoId, CodeRectangleCorner,
+    CodeSessionIdentity, CodeSessionReceipt, CodeWorkReceipt, CodeWritableAddress,
+    EditorBootstrapDeclaration, ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget,
+    ExpandedWritablePoint, GeneratedMemberAddress, GeneratedMemberIdentity, KeyedReconcileState,
+    ManagedControl, ManagedControlAccess, ManagedControlConsumerTarget, ManagedControlEdit,
+    ManagedControlEditBatch, ManagedControlId, ManagedControlManifest,
+    ManagedControlReadOnlyReason, ManagedControlSchema, ManagedControlToken, ManagedDiagnostic,
+    ManagedEdit, ManagedPathSegment, ManagedValue, MaterializedCodeProject, PatchModuleArtifact,
+    ProjectKey, SemanticOutputPath, SemanticSymbol, SketchCodeSession, UnitLiteral,
     apply_managed_edit, bundled_code_project_demos, expand_code_project_for_structural_edit,
-    initialize_code_project_from_editor, materialize_code_project_cold,
-    materialize_code_project_incremental_for_structural_edit,
+    initialize_code_project_from_editor, managed_control_authority, managed_control_manifest,
+    materialize_code_project_cold, materialize_code_project_incremental_for_structural_edit,
     materialize_code_project_incremental_with_overlay,
-    materialize_code_project_incremental_with_overlay_audited, parse_managed_source,
-    plan_managed_edit, rehydrate_materialized_code_project, required_generated_members,
+    materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited,
+    parse_managed_source, plan_managed_edit, rehydrate_materialized_code_project,
+    required_generated_members,
+};
+use geosolve_sketch_features::{
+    ComputedEvaluationAllocator, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
 };
 use geosolve_sketch_intent::{
-    BootstrapNativeKind, DimensionKind, GeometryRecipeKind, IntentLiteral, IntentNode,
-    IntentNodeKind, IntentPortKind, IntentPortRole, IntentPortSelector, IntentSessionId,
-    IntentUnit, LeafField, LeafRef, NodeId,
+    BootstrapNativeKind, GeometryRecipeKind, IntentLiteral, IntentNode, IntentNodeKind,
+    IntentPortKind, IntentSessionId, IntentUnit, LeafField, LeafRef, NodeId,
 };
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
-use geosolve_sketch_code::{FeatureKind, GeneratedMemberAddress};
+use geosolve_sketch_code::FeatureKind;
 #[cfg(test)]
 use geosolve_sketch_intent::IntentSession;
+#[cfg(test)]
+use geosolve_sketch_intent::{DimensionKind, IntentPortRole, IntentPortSelector};
 
 const MANAGED_FILE: &str = "sketch.ts";
 const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v2";
@@ -87,11 +102,49 @@ pub(crate) struct PreparedCodePointDrag {
 struct PendingSemanticPointDrag {
     pointer_id: u64,
     session: CodeSessionIdentity,
+    native_intent: geosolve_sketch_intent::IntentSessionIdentity,
+    native_point: geosolve_sketch::DesignPointId,
     point: ExpandedWritablePoint,
     /// Exact native authority from which the authenticated point gesture
     /// began when a referenced consumer first needed local detachment.
     /// Producer gestures use the accepted code checkpoint directly.
     detached_origin_checkpoint: Option<serde_json::Value>,
+}
+
+/// Read-only terminal view over an authenticated editor route and its exact
+/// independently accepted native preview. The editor contributes stable
+/// semantic/ownership bindings; `session` is the sole geometry witness.
+#[derive(Clone, Copy)]
+struct TerminalPointPreview<'a> {
+    editor: &'a ProjectionalEditorSession,
+    session: &'a RetainedSketchDocumentSession,
+}
+
+impl<'a> TerminalPointPreview<'a> {
+    fn from_accepted(editor: &'a ProjectionalEditorSession) -> Result<Self, String> {
+        let session = &editor
+            .coordinator()
+            .accepted_materialization()
+            .ok_or_else(|| "terminal code drag has no accepted native authority".to_owned())?
+            .session;
+        validate_terminal_preview_session(session)?;
+        Ok(Self { editor, session })
+    }
+
+    fn point(self, handle: &ExpandedPort) -> Option<geosolve_sketch::DesignPointId> {
+        expanded_port_point(self.editor, handle)
+    }
+
+    fn position(self, handle: &ExpandedPort) -> Option<[f64; 2]> {
+        let point = self.point(handle)?;
+        let position = self
+            .session
+            .accepted_state_for_current_input()?
+            .document()
+            .point(point)?
+            .position;
+        position.into_iter().all(f64::is_finite).then_some(position)
+    }
 }
 
 /// A syntactically valid Apply either replaces native authority atomically or
@@ -104,13 +157,223 @@ pub(crate) enum CodeApplyOutcome {
     },
 }
 
-/// Closed ownership result for one already decoded Inspector edit. Only the
-/// authenticated managed-dimension target route is claimed here; ordinary GUI
-/// declarations and existing semantic point routes remain with their current
-/// projectional/code-owned classifiers.
+/// Closed ownership result for one already decoded Inspector edit. Only an
+/// exact manifest-backed managed property is claimed here; ordinary GUI
+/// declarations and existing semantic point/solver-instance routes remain
+/// with their current projectional/code-owned classifiers.
 pub(crate) enum CodeInspectorEditRoute {
     NotClaimed,
     Claimed(CodeApplyOutcome),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum ManagedInspectorPropertyResolution<'a> {
+    ModifiableSource(&'a ManagedControl),
+    ModifiableInstance,
+    Encoded { reason: String },
+    Blocked { reason: String },
+}
+
+#[derive(Clone, Debug)]
+enum ManagedInspectorOwner {
+    Generated(CodeGeneratedChildAddress),
+    Declaration(SemanticSymbol),
+}
+
+#[derive(Clone, Debug)]
+struct ManagedInspectorContext<'a> {
+    owner: ManagedInspectorOwner,
+    controls: Vec<&'a ManagedControl>,
+    routes: BTreeMap<SemanticOutputPath, Vec<usize>>,
+    families: BTreeSet<String>,
+    blocked_reason: Option<String>,
+}
+
+struct ManagedInspectorScope {
+    owner: ManagedInspectorOwner,
+    is_dimension: bool,
+}
+
+fn managed_consumer_matches_inspector_owner(
+    consumer: &ManagedControlConsumerTarget,
+    owner: &ManagedInspectorOwner,
+) -> bool {
+    match (consumer, owner) {
+        (
+            ManagedControlConsumerTarget::Generated {
+                address, identity, ..
+            },
+            ManagedInspectorOwner::Generated(child),
+        ) => {
+            matches!(
+                &child.owner.address,
+                CodeOwnerAddress::GeneratedMember { address: child_address }
+                    if child_address == address
+            ) && child.owner.allocation == identity.allocation
+                && child.owner.generation == identity.generation
+        }
+        (
+            ManagedControlConsumerTarget::Declaration {
+                declaration: candidate,
+                ..
+            },
+            ManagedInspectorOwner::Declaration(declaration),
+        ) => candidate == declaration,
+        _ => false,
+    }
+}
+
+fn indexed_managed_inspector_context(
+    owner: ManagedInspectorOwner,
+    is_dimension: bool,
+    manifest: Option<&ManagedControlManifest>,
+    blocked_reason: Option<String>,
+) -> ManagedInspectorContext<'_> {
+    let mut controls = Vec::new();
+    let mut routes = BTreeMap::<SemanticOutputPath, Vec<usize>>::new();
+    let mut families = BTreeSet::new();
+    for control in manifest.into_iter().flat_map(|manifest| &manifest.controls) {
+        let mut properties = BTreeSet::new();
+        for consumer in &control.consumers {
+            if !managed_consumer_matches_inspector_owner(&consumer.target, &owner) {
+                continue;
+            }
+            let family = match &consumer.target {
+                ManagedControlConsumerTarget::Declaration { family, .. }
+                | ManagedControlConsumerTarget::Generated { family, .. } => family,
+            };
+            families.insert(family.clone());
+            properties.insert(consumer.property.clone());
+
+            // Direct dimension source spells the driving literal `target`,
+            // while the central Inspector schema presents it as `value`.
+            if is_dimension
+                && matches!(
+                    &consumer.target,
+                    ManagedControlConsumerTarget::Declaration { .. }
+                )
+                && family.starts_with("dimension.")
+                && matches!(
+                    control.source.path.0.as_slice(),
+                    [ManagedPathSegment::Field(source)] if source == "target"
+                )
+            {
+                properties.insert(SemanticOutputPath(vec![ManagedPathSegment::Field(
+                    "value".into(),
+                )]));
+            }
+        }
+        if properties.is_empty() {
+            continue;
+        }
+        let index = controls.len();
+        controls.push(control);
+        for property in properties {
+            routes.entry(property).or_default().push(index);
+        }
+    }
+    ManagedInspectorContext {
+        owner,
+        controls,
+        routes,
+        families,
+        blocked_reason,
+    }
+}
+
+/// Browser-decoded value for one Code-panel managed control. The stable
+/// control ID is the only source coordinate carried by DOM; this value is
+/// reinterpreted against a freshly derived manifest before mutation.
+pub(crate) enum ManagedControlSubmission {
+    Number(f64),
+    Boolean(bool),
+    String(String),
+}
+
+struct ManagedFilletRadiusRoute {
+    token: ManagedControlToken,
+    value_kind: ManagedFilletRadiusValueKind,
+    initiating_alias: geosolve_sketch_intent::IntentKey,
+    initiating_feature: ComputedFeatureId,
+    features: Vec<ComputedFeatureId>,
+    origin_radius: f64,
+}
+
+enum ManagedFilletRadiusValueKind {
+    Number,
+    Unit(String),
+}
+
+impl ManagedFilletRadiusValueKind {
+    fn replacement(&self, value: f64) -> ManagedValue {
+        match self {
+            Self::Number => ManagedValue::Number(value),
+            Self::Unit(unit) => ManagedValue::Unit(UnitLiteral {
+                unit: unit.clone(),
+                value,
+            }),
+        }
+    }
+}
+
+struct ManagedFilletAliasIndex<'a> {
+    declarations: BTreeMap<SemanticSymbol, Vec<&'a geosolve_sketch_intent::IntentKey>>,
+    generated: BTreeMap<
+        GeneratedMemberAddress,
+        BTreeMap<GeneratedMemberIdentity, Vec<&'a geosolve_sketch_intent::IntentKey>>,
+    >,
+}
+
+impl<'a> ManagedFilletAliasIndex<'a> {
+    fn new(expansion: &'a ExpandedCodeProject) -> Self {
+        let mut declarations = BTreeMap::<SemanticSymbol, Vec<_>>::new();
+        for (alias, declaration) in &expansion.declaration_provenance {
+            declarations
+                .entry(declaration.clone())
+                .or_default()
+                .push(alias);
+        }
+
+        let mut generated =
+            BTreeMap::<GeneratedMemberAddress, BTreeMap<GeneratedMemberIdentity, Vec<_>>>::new();
+        for child in &expansion.generated_children {
+            let CodeOwnerAddress::GeneratedMember { address } = &child.address.owner.address else {
+                continue;
+            };
+            let identity = GeneratedMemberIdentity {
+                allocation: child.address.owner.allocation,
+                generation: child.address.owner.generation,
+            };
+            generated
+                .entry(address.clone())
+                .or_default()
+                .entry(identity)
+                .or_default()
+                .push(&child.alias);
+        }
+        Self {
+            declarations,
+            generated,
+        }
+    }
+
+    fn aliases(
+        &self,
+        target: &ManagedControlConsumerTarget,
+    ) -> Option<&[&'a geosolve_sketch_intent::IntentKey]> {
+        match target {
+            ManagedControlConsumerTarget::Declaration { declaration, .. } => {
+                self.declarations.get(declaration).map(Vec::as_slice)
+            }
+            ManagedControlConsumerTarget::Generated {
+                address, identity, ..
+            } => self
+                .generated
+                .get(address)
+                .and_then(|identities| identities.get(identity))
+                .map(Vec::as_slice),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -146,7 +409,13 @@ struct CanonicalTerminalPointBundle {
     rectangle_projections: Vec<RectangleTerminalProjection>,
 }
 
+// This is an arithmetic-depth budget applied to a semantic coordinate scale,
+// not a fixed ULP-distance gate. Rectangle aliases are independently solved
+// projections of two canonical seeds, so their last-bit drift is relative to
+// the authenticated rectangle's own seeds and aliases rather than unrelated
+// document geometry or one (possibly near-zero) coordinate.
 const TERMINAL_SEED_ROUNDOFF_ULPS: u64 = 8;
+const TERMINAL_SEED_ROUNDOFF_FACTOR: f64 = 8.0;
 const TERMINAL_SEED_ZERO_ROUNDOFF: f64 = 32.0 * f64::EPSILON;
 const F64_SIGN_MASK: u64 = 0x8000_0000_0000_0000;
 
@@ -170,56 +439,101 @@ fn rectangle_lenses<'a>(
     expansion: &'a ExpandedCodeProject,
     key: &(CodeWritableAddress, CodeWritableAddress),
 ) -> Result<BTreeMap<CodeRectangleCorner, &'a ExpandedWritablePoint>, String> {
-    if key.0 == key.1 {
-        return Err("rectangle semantic seed codec aliases both seed addresses".into());
-    }
-    let mut lenses = BTreeMap::new();
-    let mut effective = None;
-    for point in &expansion.writable_points {
-        match &point.edit {
-            CodePointEdit::Point { address } if address == &key.0 || address == &key.1 => {
-                return Err(
-                    "rectangle semantic seed address collides with an ordinary point codec".into(),
-                );
-            }
-            CodePointEdit::RectangleCorner {
-                lower_left,
-                upper_right,
-                corner,
-                effective_lower_left,
-                effective_upper_right,
-            } if lower_left == &key.0 && upper_right == &key.1 => {
-                let seed_bits = (
-                    pair_bits(*effective_lower_left),
-                    pair_bits(*effective_upper_right),
-                );
-                if effective.is_some_and(|expected| expected != seed_bits) {
-                    return Err(
-                        "rectangle semantic corner codecs disagree on effective seeds".into(),
+    RectangleLensIndex::new(expansion)?
+        .groups
+        .get(key)
+        .cloned()
+        .ok_or_else(|| "rectangle semantic seed group has no complete corner codec".into())
+}
+
+struct RectangleLensIndex<'a> {
+    groups: BTreeMap<
+        (CodeWritableAddress, CodeWritableAddress),
+        BTreeMap<CodeRectangleCorner, &'a ExpandedWritablePoint>,
+    >,
+}
+
+impl<'a> RectangleLensIndex<'a> {
+    fn new(expansion: &'a ExpandedCodeProject) -> Result<Self, String> {
+        let mut groups = BTreeMap::<_, BTreeMap<_, _>>::new();
+        let mut effective = BTreeMap::new();
+        let mut ordinary = BTreeSet::new();
+        let mut seed_owners = BTreeMap::<CodeWritableAddress, _>::new();
+
+        for point in &expansion.writable_points {
+            match &point.edit {
+                CodePointEdit::Point { address } => {
+                    ordinary.insert(address.clone());
+                }
+                CodePointEdit::RectangleCorner {
+                    lower_left,
+                    upper_right,
+                    corner,
+                    effective_lower_left,
+                    effective_upper_right,
+                } => {
+                    if lower_left == upper_right {
+                        return Err(
+                            "rectangle semantic seed codec aliases both seed addresses".into()
+                        );
+                    }
+                    let key = (lower_left.clone(), upper_right.clone());
+                    for address in [lower_left, upper_right] {
+                        if seed_owners
+                            .insert(address.clone(), key.clone())
+                            .is_some_and(|owner| owner != key)
+                        {
+                            return Err("rectangle semantic seed groups partially overlap".into());
+                        }
+                    }
+                    let seed_bits = (
+                        pair_bits(*effective_lower_left),
+                        pair_bits(*effective_upper_right),
                     );
-                }
-                effective = Some(seed_bits);
-                if lenses.insert(*corner, point).is_some() {
-                    return Err("rectangle semantic seed group has a duplicate corner codec".into());
+                    if effective
+                        .insert(key.clone(), seed_bits)
+                        .is_some_and(|expected| expected != seed_bits)
+                    {
+                        return Err(
+                            "rectangle semantic corner codecs disagree on effective seeds".into(),
+                        );
+                    }
+                    if groups
+                        .entry(key)
+                        .or_default()
+                        .insert(*corner, point)
+                        .is_some()
+                    {
+                        return Err(
+                            "rectangle semantic seed group has a duplicate corner codec".into()
+                        );
+                    }
                 }
             }
-            CodePointEdit::RectangleCorner {
-                lower_left,
-                upper_right,
-                ..
-            } if [lower_left, upper_right]
-                .into_iter()
-                .any(|address| address == &key.0 || address == &key.1) =>
-            {
-                return Err("rectangle semantic seed groups partially overlap".into());
-            }
-            CodePointEdit::Point { .. } | CodePointEdit::RectangleCorner { .. } => {}
         }
+
+        if ordinary
+            .iter()
+            .any(|address| seed_owners.contains_key(address))
+        {
+            return Err(
+                "rectangle semantic seed address collides with an ordinary point codec".into(),
+            );
+        }
+        if groups.values().any(|lenses| lenses.len() != 4) {
+            return Err("rectangle semantic seed group has no complete corner codec".into());
+        }
+        Ok(Self { groups })
     }
-    if lenses.len() != 4 {
-        return Err("rectangle semantic seed group has no complete corner codec".into());
+
+    fn get(
+        &self,
+        key: &(CodeWritableAddress, CodeWritableAddress),
+    ) -> Result<&BTreeMap<CodeRectangleCorner, &'a ExpandedWritablePoint>, String> {
+        self.groups
+            .get(key)
+            .ok_or_else(|| "rectangle semantic seed group has no complete corner codec".into())
     }
-    Ok(lenses)
 }
 
 fn canonical_rectangle_seeds(
@@ -267,16 +581,96 @@ const fn rectangle_corner_position(
     }
 }
 
-fn point_seed_roundoff_compatible(left: [f64; 2], right: [f64; 2]) -> bool {
+fn point_seed_roundoff_compatible(left: [f64; 2], right: [f64; 2], model_scale: f64) -> bool {
     left.into_iter()
         .zip(right)
-        .all(|(left, right)| scalar_seed_roundoff_compatible(left, right))
+        .all(|(left, right)| scalar_seed_roundoff_compatible(left, right, model_scale))
 }
 
-fn scalar_seed_roundoff_compatible(left: f64, right: f64) -> bool {
-    if !left.is_finite() || !right.is_finite() {
-        return false;
+fn semantic_roundoff_tolerance(left: f64, right: f64, model_scale: f64) -> Option<f64> {
+    if !left.is_finite() || !right.is_finite() || !model_scale.is_finite() || model_scale <= 0.0 {
+        return None;
     }
+    Some(
+        left.abs().max(right.abs()).max(model_scale) * f64::EPSILON * TERMINAL_SEED_ROUNDOFF_FACTOR,
+    )
+}
+
+fn semantic_local_coordinate_scale(
+    model_scales: impl IntoIterator<Item = f64>,
+    positions: impl IntoIterator<Item = [f64; 2]>,
+) -> Option<f64> {
+    let mut scale = 1.0_f64;
+    for model_scale in model_scales {
+        if !model_scale.is_finite() || model_scale <= 0.0 {
+            return None;
+        }
+        scale = scale.max(model_scale);
+    }
+    for coordinate in positions.into_iter().flatten() {
+        if !coordinate.is_finite() {
+            return None;
+        }
+        scale = scale.max(coordinate.abs());
+    }
+    Some(scale)
+}
+
+fn semantic_point_coordinate_scale(
+    documents: [&geosolve_sketch::SketchDocument; 2],
+    points: &BTreeSet<geosolve_sketch::DesignPointId>,
+) -> Option<f64> {
+    if points.is_empty() {
+        return None;
+    }
+    let model_scales = documents.map(geosolve_sketch::SketchDocument::model_scale);
+    let positions = documents.into_iter().flat_map(|document| {
+        points
+            .iter()
+            .map(|point| document.point(*point).map(|point| point.position))
+    });
+    let positions = positions.collect::<Option<Vec<_>>>()?;
+    semantic_local_coordinate_scale(model_scales, positions)
+}
+
+fn accepted_validation_is_publishable(
+    validation: &geosolve_constraint_editor::IntentValidationEvidence,
+) -> bool {
+    validation.hard_residuals_validated
+        && validation.all_active_features_current
+        && validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+}
+
+fn validate_terminal_preview_session(
+    session: &RetainedSketchDocumentSession,
+) -> Result<(), String> {
+    let accepted = session
+        .accepted_state_for_current_input()
+        .ok_or_else(|| "terminal point preview has no current accepted native state".to_owned())?;
+    let solve = accepted
+        .diagnostics()
+        .solve
+        .ok_or_else(|| "terminal point preview has no independent solve evidence".to_owned())?;
+    if !solve.accepted
+        || solve.hard_validity != SketchHardValidity::Valid
+        || !solve.hard_residuals_validated
+        || solve
+            .maximum_normalized_hard_residual
+            .is_some_and(|residual| !residual.is_finite() || residual > 1.0e-9)
+    {
+        return Err(
+            "terminal point preview failed independent native hard-residual validation".into(),
+        );
+    }
+    Ok(())
+}
+
+fn scalar_seed_roundoff_compatible(left: f64, right: f64, model_scale: f64) -> bool {
+    let Some(tolerance) = semantic_roundoff_tolerance(left, right, model_scale) else {
+        return false;
+    };
     let left = left.to_bits();
     let right = right.to_bits();
     if left == right {
@@ -286,7 +680,7 @@ fn scalar_seed_roundoff_compatible(left: f64, right: f64) -> bool {
         return false;
     }
     (left & F64_SIGN_MASK == right & F64_SIGN_MASK
-        && left.abs_diff(right) <= TERMINAL_SEED_ROUNDOFF_ULPS)
+        && (f64::from_bits(left) - f64::from_bits(right)).abs() <= tolerance)
         || (f64::from_bits(left).abs() <= TERMINAL_SEED_ZERO_ROUNDOFF
             && f64::from_bits(right).abs() <= TERMINAL_SEED_ZERO_ROUNDOFF)
 }
@@ -375,6 +769,11 @@ pub(crate) struct CodeProjectWorkbench {
     // Reconstructible warm authority. Persistence stores the delegated editor
     // checkpoint plus authenticated expansion, never this runtime cache.
     materialized: Option<Box<MaterializedCodeProject>>,
+    // Exact-session immutable presentation authority. Dirty text is excluded;
+    // clean and retained-failure sessions receive distinct keyed entries.
+    // Mutations still derive a fresh borrow-scoped `ManagedControlAuthority`
+    // for exact-CAS application.
+    managed_control_manifest_cache: RefCell<Option<ManagedControlManifestCache>>,
     // A referenced consumer may need to be detached before native pointer
     // continuation starts. This is disposable gesture state and is never
     // serialized or entered into history unless the terminal sample commits.
@@ -384,6 +783,19 @@ pub(crate) struct CodeProjectWorkbench {
     // later parity rejection can restore accepted authority, so diagnostics
     // need this non-authoritative handle to report the post-restore point.
     trace_semantic_point: Option<(u64, ExpandedWritablePoint)>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ManagedControlManifestCacheKey {
+    session: CodeSessionIdentity,
+    project: ProjectKey,
+    source_digest: String,
+    expansion_digest: String,
+}
+
+struct ManagedControlManifestCache {
+    key: ManagedControlManifestCacheKey,
+    manifest: Rc<ManagedControlManifest>,
 }
 
 /// Presentation provenance for one genuine code project. Bundled projects
@@ -568,6 +980,16 @@ impl CodeProjectWorkbench {
         Self::open_project(CodeProjectOrigin::Bundled(demo), project)
     }
 
+    #[cfg(test)]
+    pub(crate) fn open_managed_test_source(
+        project_key: &str,
+        source: &str,
+    ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
+        let project = CodeProject::managed_only(ProjectKey(project_key.into()), source)
+            .map_err(|error| error.to_string())?;
+        Self::open_project(CodeProjectOrigin::Authored, project)
+    }
+
     /// Builds a genuine optional code project from every declaration in one
     /// accepted ordinary workspace. This is intentionally all-or-nothing: a
     /// successful promotion cannot silently discard unsupported ordinary
@@ -615,6 +1037,7 @@ impl CodeProjectWorkbench {
                 draft_diagnostic: None,
                 last_receipt: None,
                 materialized: Some(materialized),
+                managed_control_manifest_cache: RefCell::new(None),
                 pending_semantic_point_drag: None,
                 trace_semantic_point: None,
             },
@@ -743,6 +1166,7 @@ impl CodeProjectWorkbench {
             draft_diagnostic,
             last_receipt: None,
             materialized: Some(materialized),
+            managed_control_manifest_cache: RefCell::new(None),
             pending_semantic_point_drag: None,
             trace_semantic_point: None,
         };
@@ -857,6 +1281,144 @@ impl CodeProjectWorkbench {
         AuditedCodeWork { outcome, work }
     }
 
+    /// Publishes one typed native preview witness through the exact semantic
+    /// lens authenticated at pointer-down. The proposal is consumed linearly;
+    /// no generic projectional Intent patch or nested history precedes this
+    /// outer code-owned transaction.
+    pub(crate) fn publish_delegated_point_terminal_audited(
+        &mut self,
+        pointer_id: u64,
+        origin_editor: &ProjectionalEditorSession,
+        proposal: DelegatedPointDragProposal,
+        label: &str,
+    ) -> AuditedCodeWork<Result<Option<AcceptedCodePublication>, String>> {
+        let mut work = CodeWorkReceipt::default();
+        let outcome = self.publish_delegated_point_terminal_with_work(
+            pointer_id,
+            origin_editor,
+            proposal,
+            label,
+            &mut work,
+            None,
+        );
+        AuditedCodeWork { outcome, work }
+    }
+
+    pub(crate) fn publish_delegated_point_terminal_audited_with_trace(
+        &mut self,
+        pointer_id: u64,
+        origin_editor: &ProjectionalEditorSession,
+        proposal: DelegatedPointDragProposal,
+        label: &str,
+        trace: &mut super::interaction_trace::InteractionTrace,
+    ) -> AuditedCodeWork<Result<Option<AcceptedCodePublication>, String>> {
+        let mut work = CodeWorkReceipt::default();
+        let outcome = self.publish_delegated_point_terminal_with_work(
+            pointer_id,
+            origin_editor,
+            proposal,
+            label,
+            &mut work,
+            Some(trace),
+        );
+        AuditedCodeWork { outcome, work }
+    }
+
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "the authenticated terminal proposal is a linear capability consumed exactly once by outer publication"
+    )]
+    fn publish_delegated_point_terminal_with_work(
+        &mut self,
+        pointer_id: u64,
+        origin_editor: &ProjectionalEditorSession,
+        proposal: DelegatedPointDragProposal,
+        label: &str,
+        work: &mut CodeWorkReceipt,
+        mut trace: Option<&mut super::interaction_trace::InteractionTrace>,
+    ) -> Result<Option<AcceptedCodePublication>, String> {
+        if let Some(trace) = trace.as_deref_mut() {
+            trace.record(
+                "code.semantic-route.authenticate-delegated",
+                format!(
+                    "pointer={pointer_id} request={} label={label} {}",
+                    proposal.request_id,
+                    self.interaction_trace_context(),
+                ),
+            );
+        }
+        let pending = self.pending_semantic_point_drag.as_ref().ok_or_else(|| {
+            "delegated point terminal has no pending authenticated route".to_owned()
+        })?;
+        if pending.pointer_id != pointer_id || proposal.pointer_id != pointer_id {
+            return Err("terminal pointer does not own the pending semantic point gesture".into());
+        }
+        if &pending.session != self.session.identity() {
+            self.pending_semantic_point_drag = None;
+            return Err(
+                "semantic point gesture was invalidated by a newer code-session revision".into(),
+            );
+        }
+        if pending.native_intent != proposal.intent
+            || origin_editor.coordinator().intent().identity() != proposal.intent
+            || pending.native_point != proposal.point
+        {
+            return Err(
+                "delegated point terminal does not match its authenticated native route".into(),
+            );
+        }
+        let preview = TerminalPointPreview {
+            editor: origin_editor,
+            session: proposal.terminal_session(),
+        };
+        validate_terminal_preview_session(preview.session)?;
+        let point = pending.point.clone();
+        let target = preview.position(&point.handle).ok_or_else(|| {
+            "delegated point terminal has no accepted semantic lens position".to_owned()
+        })?;
+        if pair_bits(target) != pair_bits(proposal.accepted_position) {
+            return Err(
+                "delegated point terminal disagrees with its accepted native position".into(),
+            );
+        }
+        let bundle =
+            self.canonical_terminal_point_bundle(&point, vec![(point.clone(), target)], preview)?;
+        if let Some(trace) = trace.as_deref_mut() {
+            let placements = bundle
+                .placements
+                .iter()
+                .map(|(point, position)| {
+                    format!(
+                        "{}:{:?}={}",
+                        point.handle.alias,
+                        point.handle.selector,
+                        trace_pair(*position),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(";");
+            trace.record(
+                "code.semantic-route.bundle",
+                format!(
+                    "placements={} rectangle_projections={} values={placements}",
+                    bundle.placements.len(),
+                    bundle.rectangle_projections.len(),
+                ),
+            );
+        }
+        self.pending_semantic_point_drag
+            .take()
+            .expect("the authenticated delegated point route was present");
+        self.publish_semantic_point_preview_overlay_with_work(
+            &bundle.placements,
+            preview,
+            &bundle.rectangle_projections,
+            label,
+            work,
+            trace,
+        )
+    }
+
     fn publish_pointer_terminal_editor_with_work(
         &mut self,
         pointer_id: u64,
@@ -917,8 +1479,8 @@ impl CodeProjectWorkbench {
                 "terminal semantic point gesture has no authenticated placement bundle".into(),
             );
         };
-        let bundle =
-            self.canonical_terminal_point_bundle(&pending.point, placements, candidate_editor)?;
+        let preview = TerminalPointPreview::from_accepted(candidate_editor)?;
+        let bundle = self.canonical_terminal_point_bundle(&pending.point, placements, preview)?;
         if let Some(trace) = trace.as_deref_mut() {
             let placements = bundle
                 .placements
@@ -942,9 +1504,9 @@ impl CodeProjectWorkbench {
                 ),
             );
         }
-        self.publish_semantic_point_overlay_with_work(
+        self.publish_semantic_point_preview_overlay_with_work(
             &bundle.placements,
-            candidate_editor,
+            preview,
             &bundle.rectangle_projections,
             label,
             work,
@@ -966,7 +1528,7 @@ impl CodeProjectWorkbench {
         &self,
         authenticated: &ExpandedWritablePoint,
         placements: Vec<(ExpandedWritablePoint, [f64; 2])>,
-        candidate_editor: &ProjectionalEditorSession,
+        preview: TerminalPointPreview<'_>,
     ) -> Result<CanonicalTerminalPointBundle, String> {
         if !placements.iter().any(|(point, _)| point == authenticated) {
             return Err(
@@ -1025,8 +1587,14 @@ impl CodeProjectWorkbench {
         }
 
         let mut rectangle_projections = Vec::new();
+        let candidate_document = preview
+            .session
+            .accepted_state_for_current_input()
+            .ok_or_else(|| "terminal rectangle has no current accepted document".to_owned())?
+            .document();
+        let rectangle_lenses = RectangleLensIndex::new(expansion)?;
         for (key, group) in rectangle_groups {
-            let lenses = rectangle_lenses(expansion, &key)?;
+            let lenses = rectangle_lenses.get(&key)?;
             let authenticated_corner = group.iter().find_map(|(point, _)| {
                 (point == authenticated)
                     .then(|| rectangle_corner(&point.edit))
@@ -1051,27 +1619,79 @@ impl CodeProjectWorkbench {
                 .get(&second_corner)
                 .ok_or_else(|| "canonical rectangle second lens disappeared".to_owned())?)
             .clone();
-            let first_target =
-                expanded_port_position(candidate_editor, &first.handle).ok_or_else(|| {
-                    "canonical rectangle lens has no Cartesian instance seed".to_owned()
-                })?;
-            let second_target = expanded_port_position(candidate_editor, &second.handle)
-                .ok_or_else(|| {
-                    "canonical rectangle lens has no Cartesian instance seed".to_owned()
-                })?;
+            let first_target = preview.position(&first.handle).ok_or_else(|| {
+                "canonical rectangle lens has no accepted native position".to_owned()
+            })?;
+            let second_target = preview.position(&second.handle).ok_or_else(|| {
+                "canonical rectangle lens has no accepted native position".to_owned()
+            })?;
             let (lower_left, upper_right) = canonical_rectangle_seeds(
                 first_corner,
                 first_target,
                 second_corner,
                 second_target,
             )?;
+            let lens_positions = lenses
+                .values()
+                .map(|point| {
+                    preview.position(&point.handle).ok_or_else(|| {
+                        "rectangle parity lens has no accepted native position".to_owned()
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let coordinate_scale = semantic_local_coordinate_scale(
+                [candidate_document.model_scale()],
+                [lower_left, upper_right].into_iter().chain(lens_positions),
+            )
+            .ok_or_else(|| {
+                "terminal rectangle has no finite local semantic coordinate scale".to_owned()
+            })?;
+
+            // Authenticate every one of the exact four GUI lenses against the
+            // candidate's independently accepted native document. The two
+            // diagonal anchors above are the only source seeds; adjacent
+            // corners are solver-derived projections and may differ by
+            // scale-relative machine roundoff, but not materially.
+            for (corner, point) in lenses {
+                let instance_position = preview.position(&point.handle).ok_or_else(|| {
+                    "rectangle parity lens has no accepted native position".to_owned()
+                })?;
+                let native_point = preview.point(&point.handle).ok_or_else(|| {
+                    "rectangle parity lens has no accepted native point binding".to_owned()
+                })?;
+                let native_position = candidate_document
+                    .point(native_point)
+                    .ok_or_else(|| "rectangle parity native point disappeared".to_owned())?
+                    .position;
+                if pair_bits(instance_position) != pair_bits(native_position) {
+                    return Err(format!(
+                        "rectangle `{}` terminal lens is not authenticated by accepted native authority",
+                        key.0.display_path(),
+                    ));
+                }
+                let expected = rectangle_corner_position(lower_left, upper_right, *corner);
+                if !point_seed_roundoff_compatible(native_position, expected, coordinate_scale) {
+                    return Err(format!(
+                        "conflicting rectangle `{}` aliases disagree beyond semantic roundoff",
+                        key.0.display_path(),
+                    ));
+                }
+            }
             for (point, target) in &group {
                 let corner = rectangle_corner(&point.edit)
                     .ok_or_else(|| "rectangle group contains a non-rectangle lens".to_owned())?;
-                let expected = rectangle_corner_position(lower_left, upper_right, corner);
-                if !point_seed_roundoff_compatible(*target, expected) {
+                if lenses.get(&corner).copied() != Some(point) {
                     return Err(format!(
-                        "conflicting rectangle `{}` aliases disagree beyond solver roundoff",
+                        "rectangle `{}` terminal contains an unauthenticated corner lens",
+                        key.0.display_path(),
+                    ));
+                }
+                let accepted = preview
+                    .position(&point.handle)
+                    .ok_or_else(|| "rectangle terminal lens has no accepted position".to_owned())?;
+                if pair_bits(*target) != pair_bits(accepted) {
+                    return Err(format!(
+                        "rectangle `{}` placement is not authenticated by its accepted lens",
                         key.0.display_path(),
                     ));
                 }
@@ -1172,9 +1792,10 @@ impl CodeProjectWorkbench {
         rectangle_projections: &[RectangleTerminalProjection],
         label: &str,
     ) -> Result<Option<AcceptedCodePublication>, String> {
-        self.publish_semantic_point_overlay_with_work(
+        let preview = TerminalPointPreview::from_accepted(candidate_editor)?;
+        self.publish_semantic_point_preview_overlay_with_work(
             placements,
-            candidate_editor,
+            preview,
             rectangle_projections,
             label,
             &mut CodeWorkReceipt::default(),
@@ -1186,10 +1807,10 @@ impl CodeProjectWorkbench {
         clippy::too_many_lines,
         reason = "terminal publication keeps semantic staging, independent parity, trace checkpoints, history and receipt authority adjacent"
     )]
-    fn publish_semantic_point_overlay_with_work(
+    fn publish_semantic_point_preview_overlay_with_work(
         &mut self,
         placements: &[(ExpandedWritablePoint, [f64; 2])],
-        candidate_editor: &ProjectionalEditorSession,
+        preview: TerminalPointPreview<'_>,
         rectangle_projections: &[RectangleTerminalProjection],
         label: &str,
         work: &mut CodeWorkReceipt,
@@ -1236,21 +1857,31 @@ impl CodeProjectWorkbench {
             );
         }
         self.ensure_materialized_cache()?;
-        let audited = materialize_code_project_incremental_with_overlay_audited(
-            self.materialized
-                .as_deref()
-                .ok_or_else(|| "code project has no warm native authority".to_owned())?,
-            &self.project,
-            &self.session.snapshot().generated,
-            &overlay,
-        );
+        let accepted_continuation = preview
+            .session
+            .accepted_state_for_current_input()
+            .ok_or_else(|| {
+                "terminal code point has no current accepted numerical continuation".to_owned()
+            })?
+            .document();
+        let audited =
+            materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited(
+                self.materialized
+                    .as_deref()
+                    .ok_or_else(|| "code project has no warm native authority".to_owned())?,
+                &self.project,
+                &self.session.snapshot().generated,
+                &overlay,
+                accepted_continuation,
+            );
         work.merge(audited.work);
         let materialized = audited.outcome.map_err(|error| error.to_string())?;
         for (point, position) in placements {
             let staged_position = expanded_port_position(&materialized.editor, &point.handle)
                 .ok_or_else(|| "staged code point has no Cartesian instance seed".to_owned())?;
-            let terminal_position = expanded_port_position(candidate_editor, &point.handle)
-                .ok_or_else(|| "terminal code point has no Cartesian instance seed".to_owned())?;
+            let terminal_position = preview
+                .position(&point.handle)
+                .ok_or_else(|| "terminal code point has no accepted native position".to_owned())?;
             if let Some(trace) = trace.as_deref_mut() {
                 trace.record(
                     "code.seed-parity",
@@ -1272,10 +1903,11 @@ impl CodeProjectWorkbench {
                 return Err("semantic point draft failed exact terminal/native seed parity".into());
             }
         }
-        validate_terminal_native_parity_with_trace(
-            candidate_editor,
+        validate_terminal_preview_native_parity_with_trace(
+            preview,
             &materialized.editor,
             &materialized.expansion,
+            placements,
             rectangle_projections,
             trace.as_deref_mut(),
         )?;
@@ -1423,6 +2055,8 @@ impl CodeProjectWorkbench {
             self.pending_semantic_point_drag = Some(PendingSemanticPointDrag {
                 pointer_id,
                 session: self.session.identity().clone(),
+                native_intent: editor.coordinator().intent().identity(),
+                native_point,
                 point,
                 detached_origin_checkpoint: None,
             });
@@ -1460,6 +2094,8 @@ impl CodeProjectWorkbench {
         self.pending_semantic_point_drag = Some(PendingSemanticPointDrag {
             pointer_id,
             session: self.session.identity().clone(),
+            native_intent: materialized.editor.coordinator().intent().identity(),
+            native_point: detached_point,
             point,
             detached_origin_checkpoint: Some(checkpoint),
         });
@@ -1616,36 +2252,116 @@ impl CodeProjectWorkbench {
         }
     }
 
-    /// Reverse-projects one authenticated direct-dimension Inspector target
-    /// into its managed `target` scalar and rematerializes the complete code
-    /// project atomically.
-    ///
-    /// This is deliberately a closed route: unrelated GUI/code-owned
-    /// declarations return `NotClaimed`; once a supported direct managed
-    /// dimension is recognized, only its exact target leaf can be claimed.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one closed adapter route authenticates selection, provenance, exact leaf ownership, source parity, and atomic publication together"
-    )]
-    pub(crate) fn apply_managed_dimension_inspector_edit(
-        &mut self,
+    /// Derives presentation metadata for every parameter of the selected
+    /// code-owned Inspector from one fresh manifest. Ordinary GUI-owned fields
+    /// are omitted and retain their existing editor behavior.
+    pub(crate) fn inspector_parameter_presentations(
+        &self,
         editor: &ProjectionalEditorSession,
         inspector: &IntentInspectorProjection,
-        target: &IntentInspectorEditTarget,
-        value: &IntentInspectorEditValue,
-    ) -> Result<CodeInspectorEditRoute, String> {
+    ) -> Result<Vec<super::design_projection::InspectorParameterPresentation>, String> {
         let projection = editor.workbench_projection();
-        if editor.selected_inspector(&projection).as_ref() != Some(inspector) {
-            return Err("the Inspector edit belongs to a stale code-project projection".into());
+        let manifest = self.managed_controls_cached();
+        let descriptors = super::design_projection::InspectorDescriptorIndex::new(inspector);
+        self.inspector_parameter_presentations_with_manifest(
+            editor,
+            &projection,
+            inspector,
+            &descriptors,
+            manifest.as_ref().map(Rc::as_ref).map_err(String::as_str),
+        )
+    }
+
+    /// Uses the caller's one durable-render projection and managed manifest.
+    /// The Code panel and Inspector therefore share the same transient control
+    /// authority without either rebuilding it or rescanning complete fan-out.
+    pub(crate) fn inspector_parameter_presentations_with_manifest(
+        &self,
+        editor: &ProjectionalEditorSession,
+        projection: &IntentWorkbenchProjection,
+        inspector: &IntentInspectorProjection,
+        descriptors: &super::design_projection::InspectorDescriptorIndex<'_>,
+        manifest: Result<&ManagedControlManifest, &str>,
+    ) -> Result<Vec<super::design_projection::InspectorParameterPresentation>, String> {
+        use super::design_projection::{
+            InspectorParameterAuthority, InspectorParameterPresentation,
+        };
+
+        let Some(context) =
+            self.managed_inspector_context(editor, projection, inspector, manifest)?
+        else {
+            return Ok(Vec::new());
+        };
+        let targets = std::iter::once(IntentInspectorEditTarget::Suppressed).chain(
+            inspector.fields.iter().map(|field| match field {
+                IntentInspectorField::Definition { definition, .. } => {
+                    IntentInspectorEditTarget::Definition {
+                        field: definition.clone(),
+                    }
+                }
+                IntentInspectorField::Instance { leaf, .. } => {
+                    IntentInspectorEditTarget::Instance { leaf: *leaf }
+                }
+            }),
+        );
+        targets
+            .map(|target| {
+                let authority =
+                    match Self::resolve_managed_inspector_property(&context, descriptors, &target)?
+                    {
+                        ManagedInspectorPropertyResolution::ModifiableSource(control) => {
+                            let path = managed_source_path(control);
+                            let generated_consumer_count = control
+                                .consumers
+                                .iter()
+                                .filter(|consumer| {
+                                    matches!(
+                                        consumer.target,
+                                        ManagedControlConsumerTarget::Generated { .. }
+                                    )
+                                })
+                                .count();
+                            InspectorParameterAuthority::ModifiableSource {
+                                source_path: path,
+                                source_text: control.source.source_text.clone(),
+                                consumer_count: control.consumers.len(),
+                                generated_consumer_count,
+                            }
+                        }
+                        ManagedInspectorPropertyResolution::ModifiableInstance => {
+                            InspectorParameterAuthority::ModifiableInstance
+                        }
+                        ManagedInspectorPropertyResolution::Encoded { reason } => {
+                            InspectorParameterAuthority::Encoded { reason }
+                        }
+                        ManagedInspectorPropertyResolution::Blocked { reason } => {
+                            InspectorParameterAuthority::Blocked { reason }
+                        }
+                    };
+                Ok(InspectorParameterPresentation { target, authority })
+            })
+            .collect()
+    }
+
+    fn managed_inspector_scope(
+        &self,
+        editor: &ProjectionalEditorSession,
+        projection: &IntentWorkbenchProjection,
+        inspector: &IntentInspectorProjection,
+    ) -> Result<Option<ManagedInspectorScope>, String> {
+        if projection.identity != inspector.identity
+            || editor.coordinator().intent().identity() != inspector.identity
+            || editor.selected_declaration() != Some(inspector.node)
+        {
+            return Err("the Inspector belongs to a stale code-project projection".into());
         }
-        self.ensure_materialized_cache()?;
         if self
             .materialized
             .as_deref()
             .map(|materialized| materialized.editor.coordinator().intent().identity())
             != Some(editor.coordinator().intent().identity())
         {
-            return Err("the Inspector edit does not match accepted code-project authority".into());
+            return Err("the Inspector does not match accepted code-project authority".into());
         }
         let node = editor
             .coordinator()
@@ -1656,134 +2372,260 @@ impl CodeProjectWorkbench {
         if node.symbol != inspector.symbol {
             return Err("the selected Inspector symbol no longer matches its declaration".into());
         }
-        let expansion = self
-            .session
-            .snapshot()
-            .accepted_expansion
-            .as_ref()
-            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
-        let Some(declaration) = expansion.declaration_for_alias(&node.symbol).cloned() else {
+        let owner = {
+            let expansion = self
+                .session
+                .snapshot()
+                .accepted_expansion
+                .as_ref()
+                .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+            if let Some(child) = expansion.generated_child_for_alias(&node.symbol) {
+                Some(ManagedInspectorOwner::Generated(child.address.clone()))
+            } else {
+                expansion
+                    .declaration_for_alias(&node.symbol)
+                    .cloned()
+                    .map(ManagedInspectorOwner::Declaration)
+            }
+        };
+        let Some(owner) = owner else {
             if node.symbol.as_str().starts_with("code.") {
                 return Err(
                     "selected code-owned declaration has no authenticated managed-source provenance"
                         .into(),
                 );
             }
-            return Ok(CodeInspectorEditRoute::NotClaimed);
+            return Ok(None);
         };
-        let IntentNodeKind::Dimension { dimension } = node.kind else {
-            return Ok(CodeInspectorEditRoute::NotClaimed);
-        };
-        if !matches!(
-            dimension,
-            DimensionKind::CurveLength | DimensionKind::Diameter
-        ) {
-            return Ok(CodeInspectorEditRoute::NotClaimed);
-        }
-        if self.session.snapshot().failure.is_some() {
-            return Err(
-                "resolve or Undo the retained code failure before editing a code-owned dimension"
-                    .into(),
-            );
-        }
+        Ok(Some(ManagedInspectorScope {
+            owner,
+            is_dimension: matches!(node.kind, IntentNodeKind::Dimension { .. }),
+        }))
+    }
 
-        let managed_declaration = self
-            .project
-            .managed
-            .program
-            .declarations
-            .iter()
-            .find(|candidate| candidate.symbol == declaration)
-            .ok_or_else(|| {
-                "managed dimension provenance no longer resolves to source".to_owned()
-            })?;
-        let expected_builder = match dimension {
-            DimensionKind::CurveLength => ["dimension", "curveLength"],
-            DimensionKind::Diameter => ["dimension", "diameter"],
-            _ => unreachable!("direct managed dimensions are closed above"),
+    fn managed_inspector_context<'a>(
+        &self,
+        editor: &ProjectionalEditorSession,
+        projection: &IntentWorkbenchProjection,
+        inspector: &IntentInspectorProjection,
+        manifest: Result<&'a ManagedControlManifest, &str>,
+    ) -> Result<Option<ManagedInspectorContext<'a>>, String> {
+        let Some(scope) = self.managed_inspector_scope(editor, projection, inspector)? else {
+            return Ok(None);
         };
-        if managed_declaration.patch.is_some()
-            || managed_declaration.builder_path.as_slice() != expected_builder
-        {
-            return Err(
-                "managed dimension provenance does not authenticate a direct supported family"
-                    .into(),
-            );
-        }
+        let blocked_reason = self.session.snapshot().failure.as_ref().map_or_else(
+            || manifest.as_ref().err().map(|reason| (*reason).to_owned()),
+            |_| {
+                Some(
+                    "Resolve or Undo the retained code failure before modifying this parameter"
+                        .into(),
+                )
+            },
+        );
+        Ok(Some(indexed_managed_inspector_context(
+            scope.owner,
+            scope.is_dimension,
+            manifest.ok(),
+            blocked_reason,
+        )))
+    }
 
-        let IntentInspectorEditTarget::Instance { leaf } = target else {
-            return Err(
-                "this code-owned dimension property has no managed Inspector lens; edit managed source"
-                    .into(),
-            );
-        };
-        let target_port = node
-            .port_by_selector(IntentPortSelector::Node {
-                role: IntentPortRole::Target,
-                index: 0,
-            })
-            .ok_or_else(|| "managed dimension has no target scalar port".to_owned())?;
-        let expected_leaf = LeafRef {
-            node: node.id,
-            port: target_port.id,
-            field: LeafField::Value,
-        };
-        if *leaf != expected_leaf {
-            return Err(
-                "this code-owned dimension leaf has no managed Inspector lens; edit managed source"
-                    .into(),
-            );
-        }
-        let IntentInspectorEditValue::Literal {
-            literal:
-                IntentLiteral::Quantity {
-                    value,
-                    unit: IntentUnit::Length,
-                },
-        } = value
-        else {
-            return Err("managed dimension target requires a finite length literal".into());
-        };
-        if !value.is_finite() {
-            return Err("managed dimension target must be finite".into());
-        }
-        let source_target =
-            managed_object_path(&managed_declaration.arguments, &["target".to_owned()])
-                .and_then(managed_length_value)
+    fn managed_inspector_property_path(
+        descriptors: &super::design_projection::InspectorDescriptorIndex<'_>,
+        target: &IntentInspectorEditTarget,
+    ) -> Result<(SemanticOutputPath, bool), String> {
+        Ok(match target {
+            IntentInspectorEditTarget::Suppressed => (
+                SemanticOutputPath(vec![ManagedPathSegment::Field("suppressed".into())]),
+                false,
+            ),
+            IntentInspectorEditTarget::Definition { field } => descriptors
+                .definition(field)
+                .map(|descriptor| (semantic_output_path(&descriptor.path), false))
                 .ok_or_else(|| {
-                    "managed dimension target is not a direct scalar literal".to_owned()
+                    "the managed Inspector definition has no current schema path".to_owned()
+                })?,
+            IntentInspectorEditTarget::Instance { leaf } => {
+                let (descriptor, path) = descriptors.instance(*leaf).ok_or_else(|| {
+                    "the managed Inspector instance leaf has no current output descriptor"
+                        .to_owned()
                 })?;
-        let accepted_target = editor
-            .coordinator()
-            .intent()
-            .instance()
-            .values()
-            .get(&expected_leaf);
-        if accepted_target
-            != Some(&IntentLiteral::Quantity {
-                value: source_target,
-                unit: IntentUnit::Length,
-            })
-        {
-            return Err(
-                "managed dimension source and accepted target leaf no longer authenticate each other"
-                    .into(),
-            );
+                (
+                    semantic_output_path(path),
+                    descriptor.kind == IntentPortKind::Point,
+                )
+            }
+        })
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed resolver authenticates every Inspector target against semantic owner, manifest consumer, schema path, access token, and truthful fallback authority"
+    )]
+    fn resolve_managed_inspector_property<'a>(
+        context: &'a ManagedInspectorContext<'a>,
+        descriptors: &super::design_projection::InspectorDescriptorIndex<'_>,
+        target: &IntentInspectorEditTarget,
+    ) -> Result<ManagedInspectorPropertyResolution<'a>, String> {
+        let (property, solver_instance_fallback) =
+            Self::managed_inspector_property_path(descriptors, target)?;
+        if let Some(reason) = &context.blocked_reason {
+            return Ok(ManagedInspectorPropertyResolution::Blocked {
+                reason: reason.clone(),
+            });
         }
-        if self.is_dirty() {
-            return Err(
-                "Apply or Revert the managed-source draft before editing a code-owned dimension"
-                    .into(),
-            );
+        if solver_instance_fallback {
+            return Ok(ManagedInspectorPropertyResolution::ModifiableInstance);
         }
-        if self.pending_semantic_point_drag.is_some() {
-            return Err(
-                "finish or cancel the pending semantic point gesture before editing a code-owned dimension"
-                    .into(),
-            );
+        if let Some(matching) = context.routes.get(&property) {
+            let [index] = matching.as_slice() else {
+                return Err(
+                    "the managed Inspector property resolves to more than one source control"
+                        .into(),
+                );
+            };
+            let control = context.controls[*index];
+            return Ok(match &control.access {
+                ManagedControlAccess::Editable { .. } => {
+                    ManagedInspectorPropertyResolution::ModifiableSource(control)
+                }
+                ManagedControlAccess::ReadOnly { reason, navigation } => {
+                    ManagedInspectorPropertyResolution::Encoded {
+                        reason: managed_read_only_reason(*reason, navigation.as_ref()),
+                    }
+                }
+            });
         }
-        let selected_alias = node.symbol.clone();
-        let mut outcome = self.apply_scalar_lens(&declaration.0, "target", *value)?;
+        if context.families.len() > 1 {
+            return Err("one Inspector owner resolves to inconsistent generated families".into());
+        }
+        let family = context
+            .families
+            .first()
+            .map(|family| managed_family_label(family));
+        Ok(ManagedInspectorPropertyResolution::Encoded {
+            reason: match (&context.owner, family) {
+                (ManagedInspectorOwner::Generated(_), Some(family)) => {
+                    format!("Generated {family} state · not declared in sketch.ts")
+                }
+                (ManagedInspectorOwner::Generated(_), None) => {
+                    "Generated native state · not declared in sketch.ts".into()
+                }
+                (ManagedInspectorOwner::Declaration(_), Some(family)) => {
+                    format!("Code-owned {family} state · not declared in sketch.ts")
+                }
+                (ManagedInspectorOwner::Declaration(_), None) => {
+                    "Code-owned native state · not declared in sketch.ts".into()
+                }
+            },
+        })
+    }
+
+    /// Reverse-projects one authenticated Inspector property through the
+    /// transient managed-control manifest and rematerializes the complete code
+    /// project atomically.
+    ///
+    /// The selected alias and schema-derived property path are both required
+    /// to match one exact manifest consumer. Opaque `code.*` aliases and field
+    /// names are never decoded. Ordinary GUI declarations and code-owned
+    /// solver-instance point leaves remain unclaimed; any other code-owned
+    /// property without an editable manifest route rejects before nested
+    /// Intent history can mutate.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed adapter route authenticates selection, accepted provenance, schema path, exact manifest consumer, typed representation, and atomic publication together"
+    )]
+    pub(crate) fn apply_managed_inspector_edit(
+        &mut self,
+        editor: &ProjectionalEditorSession,
+        inspector: &IntentInspectorProjection,
+        target: &IntentInspectorEditTarget,
+        value: &IntentInspectorEditValue,
+    ) -> Result<CodeInspectorEditRoute, String> {
+        self.ensure_materialized_cache()?;
+        let projection = editor.workbench_projection();
+        let descriptors = super::design_projection::InspectorDescriptorIndex::new(inspector);
+        let selected_alias = inspector.symbol.clone();
+        let expected = self.session.identity().clone();
+        let candidate = {
+            let Some(scope) = self.managed_inspector_scope(editor, &projection, inspector)? else {
+                return Ok(CodeInspectorEditRoute::NotClaimed);
+            };
+            let (_, solver_instance_fallback) =
+                Self::managed_inspector_property_path(&descriptors, target)?;
+            let blocked_reason = if self.session.snapshot().failure.is_some() {
+                Some(
+                    "Resolve or Undo the retained code failure before modifying this parameter"
+                        .to_owned(),
+                )
+            } else if self.is_dirty() {
+                Some(
+                    "Apply or Revert the managed-source draft before inspecting managed controls"
+                        .to_owned(),
+                )
+            } else {
+                None
+            };
+            if let Some(reason) = blocked_reason {
+                return Err(format!(
+                    "this code-owned Inspector parameter is Blocked: {reason}"
+                ));
+            }
+            if solver_instance_fallback {
+                return Ok(CodeInspectorEditRoute::NotClaimed);
+            }
+            // Keep resolution and exact-CAS rewrite under one borrow-scoped
+            // authority. Re-deriving here used to repeat the complete source,
+            // provenance and consumer-fan-out walk after the control had
+            // already been selected.
+            let expansion = self.session.snapshot().expansion.as_ref().ok_or_else(|| {
+                "current managed source has no authenticated expansion for controls".to_owned()
+            })?;
+            let authority = managed_control_authority(&self.project, expansion)
+                .map_err(|error| error.to_string())?;
+            let context = indexed_managed_inspector_context(
+                scope.owner,
+                scope.is_dimension,
+                Some(authority.manifest()),
+                None,
+            );
+            let control =
+                match Self::resolve_managed_inspector_property(&context, &descriptors, target)? {
+                    ManagedInspectorPropertyResolution::ModifiableInstance => {
+                        return Ok(CodeInspectorEditRoute::NotClaimed);
+                    }
+                    ManagedInspectorPropertyResolution::ModifiableSource(control) => control,
+                    ManagedInspectorPropertyResolution::Encoded { reason } => {
+                        return Err(format!(
+                            "this code-owned Inspector parameter is Encoded: {reason}"
+                        ));
+                    }
+                    ManagedInspectorPropertyResolution::Blocked { reason } => {
+                        return Err(format!(
+                            "this code-owned Inspector parameter is Blocked: {reason}"
+                        ));
+                    }
+                };
+            if self.pending_semantic_point_drag.is_some() {
+                return Err(
+                    "finish or cancel the pending semantic point gesture before editing a managed property"
+                        .into(),
+                );
+            }
+            let replacement = managed_value_from_inspector(control, value)?;
+            let token = control
+                .token()
+                .expect("manifest editable iterator yields an editable token")
+                .clone();
+            let batch = ManagedControlEditBatch::new([ManagedControlEdit {
+                token,
+                value: replacement,
+            }]);
+            authority
+                .apply_batch(&batch)
+                .map_err(|error| error.to_string())?
+        };
+        let mut outcome = self.apply_managed_control_candidate(&expected, candidate)?;
         if let CodeApplyOutcome::Accepted(publication) = &mut outcome {
             let selected = publication
                 .editor
@@ -1791,14 +2633,365 @@ impl CodeProjectWorkbench {
                 .intent()
                 .graph()
                 .node_by_symbol(&selected_alias)
-                .expect("accepted managed dimension expansion preserves its semantic alias")
+                .expect("accepted managed-control expansion preserves its semantic alias")
                 .id;
             assert!(
                 publication.editor.set_selected_declaration(Some(selected)),
-                "accepted managed dimension expansion preserves selectable semantic ownership",
+                "accepted managed-control expansion preserves selectable semantic ownership",
             );
         }
         Ok(CodeInspectorEditRoute::Claimed(outcome))
+    }
+
+    /// Resolves the active selected computed Fillet through accepted code
+    /// ownership to one exact managed radius control, then returns every
+    /// current computed-Fillet consumer of that shared source value.
+    /// Ordinary GUI-owned or unmanaged Fillets deliberately return `None`.
+    pub(crate) fn delegated_computed_fillet_radius_group(
+        &self,
+        editor: &ProjectionalEditorSession,
+    ) -> Result<Option<Vec<ComputedFeatureId>>, String> {
+        self.managed_fillet_radius_route(editor)
+            .map(|route| route.map(|route| route.features))
+    }
+
+    /// Authenticates a history-neutral grouped Fillet proposal against fresh
+    /// accepted expansion/control authority and publishes exactly one outer
+    /// managed-source transaction.
+    pub(crate) fn apply_delegated_computed_fillet_radius(
+        &mut self,
+        editor: &ProjectionalEditorSession,
+        proposal: &DelegatedComputedFilletRadiusProposal,
+    ) -> Result<CodeApplyOutcome, String> {
+        let expected = self.session.identity().clone();
+        let (route, candidate) = {
+            let expansion = self.session.snapshot().expansion.as_ref().ok_or_else(|| {
+                "current managed source has no authenticated expansion for controls".to_owned()
+            })?;
+            let authority = managed_control_authority(&self.project, expansion)
+                .map_err(|error| error.to_string())?;
+            let route = self
+                .managed_fillet_radius_route_with_manifest(editor, authority.manifest())?
+                .ok_or_else(|| {
+                    "delegated Fillet radius no longer has managed-source authority".to_owned()
+                })?;
+            let accepted = editor
+                .coordinator()
+                .accepted_materialization()
+                .ok_or_else(|| {
+                    "delegated Fillet radius has no accepted native authority".to_owned()
+                })?;
+            if proposal.intent != editor.coordinator().intent().identity()
+                || proposal.expected != accepted.computed.input()
+                || proposal.initiating_feature != route.initiating_feature
+                || proposal.features != route.features
+                || proposal.origin_radius.to_bits() != route.origin_radius.to_bits()
+            {
+                return Err(
+                    "delegated Fillet radius proposal no longer matches its complete accepted source group"
+                        .into(),
+                );
+            }
+            if !proposal.proposed_radius.is_finite() {
+                return Err("delegated Fillet radius proposal must be finite".into());
+            }
+            let replacement = route.value_kind.replacement(proposal.proposed_radius);
+            let batch = ManagedControlEditBatch::new([ManagedControlEdit {
+                token: route.token.clone(),
+                value: replacement,
+            }]);
+            let candidate = authority
+                .apply_batch(&batch)
+                .map_err(|error| error.to_string())?;
+            (route, candidate)
+        };
+        let mut outcome = self.apply_managed_control_candidate(&expected, candidate)?;
+        if let CodeApplyOutcome::Accepted(publication) = &mut outcome {
+            let selected = publication
+                .editor
+                .coordinator()
+                .intent()
+                .graph()
+                .node_by_symbol(&route.initiating_alias)
+                .expect("accepted managed Fillet edit preserves the initiating alias")
+                .id;
+            assert!(
+                publication.editor.set_selected_declaration(Some(selected)),
+                "accepted managed Fillet edit preserves selectable semantic ownership",
+            );
+        }
+        Ok(outcome)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one route keeps selected native ownership, exact expansion provenance, fresh control fan-out, current feature state, and source radius parity adjacent"
+    )]
+    fn managed_fillet_radius_route(
+        &self,
+        editor: &ProjectionalEditorSession,
+    ) -> Result<Option<ManagedFilletRadiusRoute>, String> {
+        let manifest = self.managed_controls_cached()?;
+        self.managed_fillet_radius_route_with_manifest(editor, &manifest)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one route keeps selected native ownership, exact expansion provenance, supplied control fan-out, current feature state, and source radius parity adjacent"
+    )]
+    fn managed_fillet_radius_route_with_manifest(
+        &self,
+        editor: &ProjectionalEditorSession,
+        manifest: &ManagedControlManifest,
+    ) -> Result<Option<ManagedFilletRadiusRoute>, String> {
+        if self
+            .materialized
+            .as_deref()
+            .map(|materialized| materialized.editor.coordinator().intent().identity())
+            != Some(editor.coordinator().intent().identity())
+        {
+            return Err("the Fillet gesture does not match accepted code-project authority".into());
+        }
+        let Some(selected) = editor.selected_declaration() else {
+            return Ok(None);
+        };
+        let accepted = editor
+            .coordinator()
+            .accepted_materialization()
+            .ok_or_else(|| "code project has no accepted native authority".to_owned())?;
+        let selected_features = accepted
+            .ownership
+            .node(selected)
+            .into_iter()
+            .flat_map(|owner| owner.owned.iter())
+            .filter_map(|binding| match binding {
+                IntentNativeBinding::ComputedFeature(feature) => Some(*feature),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let initiating_feature = match selected_features.as_slice() {
+            [] => return Ok(None),
+            [feature] => *feature,
+            _ => {
+                return Err("the selected declaration owns more than one computed feature".into());
+            }
+        };
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node(selected)
+            .ok_or_else(|| "the selected Fillet declaration disappeared".to_owned())?;
+        if !matches!(
+            node.kind,
+            IntentNodeKind::ComputedFeature {
+                feature: geosolve_sketch_intent::ComputedFeatureKind::FilletSet
+            }
+        ) {
+            return Ok(None);
+        }
+        let snapshot = self.session.snapshot();
+        let expansion = snapshot
+            .accepted_expansion
+            .as_ref()
+            .ok_or_else(|| "code project has no accepted expansion authority".to_owned())?;
+        let generated = expansion.generated_child_for_alias(&node.symbol);
+        let declaration = generated
+            .is_none()
+            .then(|| expansion.declaration_for_alias(&node.symbol))
+            .flatten();
+        if generated.is_none() && declaration.is_none() {
+            if node.symbol.as_str().starts_with("code.") {
+                return Err(
+                    "selected code-owned Fillet has no authenticated expansion provenance".into(),
+                );
+            }
+            return Ok(None);
+        }
+        if self.session.snapshot().failure.is_some() {
+            return Err(
+                "resolve or Undo the retained code failure before dragging a managed Fillet".into(),
+            );
+        }
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before dragging a managed Fillet".into(),
+            );
+        }
+        let radius_path = SemanticOutputPath(vec![ManagedPathSegment::Field("radius".into())]);
+        let owns_selected =
+            |target: &ManagedControlConsumerTarget| match (target, generated, declaration) {
+                (
+                    ManagedControlConsumerTarget::Generated {
+                        address, identity, ..
+                    },
+                    Some(child),
+                    None,
+                ) => {
+                    matches!(
+                        &child.address.owner.address,
+                        CodeOwnerAddress::GeneratedMember { address: child_address }
+                            if child_address == address
+                    ) && child.address.owner.allocation == identity.allocation
+                        && child.address.owner.generation == identity.generation
+                }
+                (
+                    ManagedControlConsumerTarget::Declaration {
+                        declaration: candidate,
+                        ..
+                    },
+                    None,
+                    Some(declaration),
+                ) => candidate == declaration,
+                _ => false,
+            };
+        let mut controls = manifest.editable().filter(|control| {
+            control
+                .consumers
+                .iter()
+                .any(|consumer| consumer.property == radius_path && owns_selected(&consumer.target))
+        });
+        let Some(control) = controls.next() else {
+            return Ok(None);
+        };
+        if controls.next().is_some() {
+            return Err("selected Fillet radius resolves to more than one managed control".into());
+        }
+        let origin_radius = managed_numeric_value(&control.value).ok_or_else(|| {
+            "managed Fillet radius is not a finite numeric source value".to_owned()
+        })?;
+        let value_kind = managed_fillet_radius_value_kind(control)?;
+        let token = control
+            .token()
+            .expect("manifest editable iterator yields an editable token")
+            .clone();
+        let features_by_id = accepted
+            .features
+            .features()
+            .iter()
+            .map(|feature| (feature.id, feature))
+            .collect::<BTreeMap<_, _>>();
+        if features_by_id.len() != accepted.features.features().len() {
+            return Err("accepted managed Fillet authority repeats one feature ID".into());
+        }
+        let initiating = features_by_id
+            .get(&initiating_feature)
+            .copied()
+            .ok_or_else(|| {
+                "selected managed Fillet is absent from accepted authority".to_owned()
+            })?;
+        let ComputedFeatureDefinition::FilletSet(initiating) = &initiating.definition;
+        if initiating.radius.to_bits() != origin_radius.to_bits() {
+            return Err(
+                "managed Fillet source radius and accepted feature radius no longer match".into(),
+            );
+        }
+
+        let alias_index = ManagedFilletAliasIndex::new(expansion);
+        let graph = editor.coordinator().intent().graph();
+        let nodes_by_symbol = graph
+            .nodes()
+            .values()
+            .map(|candidate| (candidate.symbol.clone(), candidate))
+            .collect::<BTreeMap<_, _>>();
+        if nodes_by_symbol.len() != graph.nodes().len() {
+            return Err("accepted intent repeats one managed Fillet symbol".into());
+        }
+        let current_features = accepted
+            .computed
+            .feature_evaluations()
+            .iter()
+            .filter_map(|evaluation| {
+                matches!(
+                    &evaluation.state,
+                    ComputedFeatureEvaluationState::Current { .. }
+                )
+                .then_some(evaluation.feature)
+            })
+            .collect::<BTreeSet<_>>();
+
+        let mut features = BTreeSet::new();
+        for consumer in control
+            .consumers
+            .iter()
+            .filter(|consumer| consumer.property == radius_path)
+        {
+            let family = match &consumer.target {
+                ManagedControlConsumerTarget::Declaration { family, .. }
+                | ManagedControlConsumerTarget::Generated { family, .. } => family.as_str(),
+            };
+            if !matches!(family, "computed.fillet" | "computed.filletSet") {
+                continue;
+            }
+            let aliases = alias_index.aliases(&consumer.target);
+            let Some(aliases) = aliases.filter(|aliases| !aliases.is_empty()) else {
+                return Err(
+                    "managed Fillet control consumer has no accepted semantic alias".into(),
+                );
+            };
+            for alias in aliases {
+                let node = nodes_by_symbol.get(*alias).copied().ok_or_else(|| {
+                    "managed Fillet control consumer disappeared from accepted intent".to_owned()
+                })?;
+                if !matches!(
+                    node.kind,
+                    IntentNodeKind::ComputedFeature {
+                        feature: geosolve_sketch_intent::ComputedFeatureKind::FilletSet
+                    }
+                ) {
+                    return Err(
+                        "managed Fillet control consumer does not own a FilletSet declaration"
+                            .into(),
+                    );
+                }
+                let mut owned = accepted
+                    .ownership
+                    .node(node.id)
+                    .into_iter()
+                    .flat_map(|owner| owner.owned.iter())
+                    .filter_map(|binding| match binding {
+                        IntentNativeBinding::ComputedFeature(feature) => Some(*feature),
+                        _ => None,
+                    });
+                let Some(feature) = owned.next() else {
+                    return Err(
+                        "managed Fillet control consumer does not own exactly one feature".into(),
+                    );
+                };
+                if owned.next().is_some() {
+                    return Err(
+                        "managed Fillet control consumer does not own exactly one feature".into(),
+                    );
+                }
+                if !features.insert(feature) {
+                    return Err(
+                        "managed Fillet control fan-out repeats one computed feature".into(),
+                    );
+                }
+            }
+        }
+        if !features.contains(&initiating_feature) {
+            return Err("managed Fillet control fan-out omits the initiating feature".into());
+        }
+        for feature in &features {
+            let definition = features_by_id.get(feature).copied().ok_or_else(|| {
+                "managed Fillet consumer is absent from accepted authority".to_owned()
+            })?;
+            let ComputedFeatureDefinition::FilletSet(fillet) = &definition.definition;
+            if fillet.radius.to_bits() != origin_radius.to_bits()
+                || !current_features.contains(feature)
+            {
+                return Err("managed Fillet consumer group is mixed or not Current".into());
+            }
+        }
+        Ok(Some(ManagedFilletRadiusRoute {
+            token,
+            value_kind,
+            initiating_alias: node.symbol.clone(),
+            initiating_feature,
+            features: features.into_iter().collect(),
+            origin_radius,
+        }))
     }
 
     /// Resolves Delete through accepted code expansion. A generated host
@@ -2091,8 +3284,10 @@ impl CodeProjectWorkbench {
         }
     }
 
-    /// Applies one artifact-declared scalar edit lens through the exact same
-    /// managed-source/native transaction as an explicit source Apply.
+    /// Compatibility entry point for older callers which still hold a
+    /// declaration/path pair. Authority comes only from the freshly derived
+    /// managed-control manifest; artifact `EditLens` metadata is not consulted.
+    #[cfg(test)]
     pub(crate) fn apply_scalar_lens(
         &mut self,
         declaration: &str,
@@ -2111,36 +3306,20 @@ impl CodeProjectWorkbench {
             return Err("edit-lens argument path is empty".into());
         }
         let declaration = SemanticSymbol(declaration.to_owned());
-        let current = self
-            .project
-            .managed
-            .program
-            .declarations
-            .iter()
-            .find(|candidate| candidate.symbol == declaration)
-            .and_then(|candidate| managed_object_path(&candidate.arguments, &path))
-            .ok_or_else(|| "edit-lens target is unavailable in managed source".to_owned())?;
-        let replacement = match current {
-            ManagedValue::Unit(unit) => ManagedValue::Unit(UnitLiteral {
-                unit: unit.unit.clone(),
-                value,
-            }),
-            ManagedValue::Number(_) => ManagedValue::Number(value),
-            _ => return Err("this edit lens does not target a scalar literal".into()),
-        };
-        let plan = plan_managed_edit(
-            &self.project.managed,
-            ManagedEdit::SetInvocationArgument {
-                declaration,
-                path,
-                value: replacement,
-            },
-        )
-        .map_err(|error| error.to_string())?;
-        let managed =
-            apply_managed_edit(&self.project.managed, &plan).map_err(|error| error.to_string())?;
-        self.set_managed_draft(managed.source);
-        self.apply_managed_draft()
+        let path = SemanticOutputPath(path.into_iter().map(ManagedPathSegment::Field).collect());
+        let manifest = self.managed_controls()?;
+        let mut controls = manifest.editable().filter(|control| {
+            control.source.declaration == declaration && control.source.path == path
+        });
+        let control = controls
+            .next()
+            .ok_or_else(|| "edit-lens target has no managed-control authority".to_owned())?;
+        if controls.next().is_some() {
+            return Err("edit-lens target resolves to more than one managed control".into());
+        }
+        let id = control.id.0.clone();
+        self.apply_managed_control_submission(&id, ManagedControlSubmission::Number(value))?
+            .ok_or_else(|| "edit-lens value is unchanged".to_owned())
     }
 
     fn retain_candidate_failure(
@@ -2449,6 +3628,11 @@ impl CodeProjectWorkbench {
         &mut self,
         undo: bool,
     ) -> Result<Option<AcceptedCodePublication>, String> {
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before moving code history".into(),
+            );
+        }
         if (undo && !self.session.can_undo()) || (!undo && !self.session.can_redo()) {
             return Ok(None);
         }
@@ -2499,6 +3683,153 @@ impl CodeProjectWorkbench {
         self.session.can_redo()
     }
 
+    /// Exact outer code-session identity consumed by the code-control RPC.
+    pub(crate) fn code_session_identity(&self) -> &CodeSessionIdentity {
+        self.session.identity()
+    }
+
+    /// Exact accepted semantic interaction overlay, exposed read-only to the
+    /// crossed browser adapter that must distinguish source-owned drafts from
+    /// ordinary GUI-owned native transactions.
+    pub(crate) fn interaction_overlay(&self) -> &CodeInteractionOverlay {
+        &self.session.snapshot().interaction_overlay
+    }
+
+    /// Derives the transient managed-control manifest from current code
+    /// authority. A dirty editor draft is deliberately excluded: accepting a
+    /// token derived beneath uncommitted text would silently overwrite that
+    /// text when the control is edited.
+    pub(crate) fn managed_controls(&self) -> Result<ManagedControlManifest, String> {
+        self.managed_controls_cached()
+            .map(|manifest| manifest.as_ref().clone())
+    }
+
+    pub(crate) fn managed_controls_cached(&self) -> Result<Rc<ManagedControlManifest>, String> {
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before inspecting managed controls"
+                    .into(),
+            );
+        }
+        let expansion = self.session.snapshot().expansion.as_ref().ok_or_else(|| {
+            "current managed source has no authenticated expansion for controls".to_owned()
+        })?;
+        let key = ManagedControlManifestCacheKey {
+            session: self.session.identity().clone(),
+            project: self.project.project.clone(),
+            source_digest: self.project.managed.source_digest.clone(),
+            expansion_digest: expansion.digest.clone(),
+        };
+        if let Some(cached) = self.managed_control_manifest_cache.borrow().as_ref()
+            && cached.key == key
+        {
+            return Ok(Rc::clone(&cached.manifest));
+        }
+        let manifest = Rc::new(
+            managed_control_manifest(&self.project, expansion)
+                .map_err(|error| error.to_string())?,
+        );
+        *self.managed_control_manifest_cache.borrow_mut() = Some(ManagedControlManifestCache {
+            key,
+            manifest: Rc::clone(&manifest),
+        });
+        Ok(manifest)
+    }
+
+    /// Resolves only a stable control ID from browser presentation, then
+    /// derives a fresh manifest/token and preserves its current source value
+    /// representation before applying one outer transaction.
+    pub(crate) fn apply_managed_control_submission(
+        &mut self,
+        id: &str,
+        submission: ManagedControlSubmission,
+    ) -> Result<Option<CodeApplyOutcome>, String> {
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before editing managed controls".into(),
+            );
+        }
+        let expected = self.session.identity().clone();
+        let candidate = {
+            let expansion = self.session.snapshot().expansion.as_ref().ok_or_else(|| {
+                "current managed source has no authenticated expansion for controls".to_owned()
+            })?;
+            let authority = managed_control_authority(&self.project, expansion)
+                .map_err(|error| error.to_string())?;
+            let control = authority
+                .manifest()
+                .control(&ManagedControlId(id.to_owned()))
+                .filter(|control| control.token().is_some())
+                .ok_or_else(|| "managed control is unavailable or read-only".to_owned())?;
+            let replacement = managed_value_from_submission(control, submission)?;
+            if managed_values_exactly_equal(&control.value, &replacement) {
+                return Ok(None);
+            }
+            let batch = ManagedControlEditBatch::new([ManagedControlEdit {
+                token: control
+                    .token()
+                    .expect("editable managed control has one exact token")
+                    .clone(),
+                value: replacement,
+            }]);
+            authority
+                .apply_batch(&batch)
+                .map_err(|error| error.to_string())?
+        };
+        self.apply_managed_control_candidate(&expected, candidate)
+            .map(Some)
+    }
+
+    /// Applies one authenticated managed-control batch through the existing
+    /// outer code transaction. The control layer rewrites and reparses once;
+    /// this adapter then performs keyed reconciliation, native materialization
+    /// and independent validation before one code-history publication.
+    pub(crate) fn apply_managed_controls(
+        &mut self,
+        expected: &CodeSessionIdentity,
+        batch: &ManagedControlEditBatch,
+    ) -> Result<CodeApplyOutcome, String> {
+        if self.session.identity() != expected {
+            return Err("managed-control edit belongs to stale code-session authority".into());
+        }
+        if self.is_dirty() {
+            return Err(
+                "Apply or Revert the managed-source draft before editing managed controls".into(),
+            );
+        }
+        let candidate = {
+            let expansion = self.session.snapshot().expansion.as_ref().ok_or_else(|| {
+                "current managed source has no authenticated expansion for controls".to_owned()
+            })?;
+            managed_control_authority(&self.project, expansion)
+                .map_err(|error| error.to_string())?
+                .apply_batch(batch)
+                .map_err(|error| error.to_string())?
+        };
+        self.apply_managed_control_candidate(expected, candidate)
+    }
+
+    fn apply_managed_control_candidate(
+        &mut self,
+        expected: &CodeSessionIdentity,
+        candidate: CodeProject,
+    ) -> Result<CodeApplyOutcome, String> {
+        if self.session.identity() != expected {
+            return Err("managed-control edit belongs to stale code-session authority".into());
+        }
+        let previous_draft = self.managed_draft.clone();
+        let previous_diagnostic = self.draft_diagnostic.clone();
+        self.managed_draft = candidate.managed.source;
+        match self.apply_managed_draft() {
+            Ok(outcome) => Ok(outcome),
+            Err(error) => {
+                self.managed_draft = previous_draft;
+                self.draft_diagnostic = previous_diagnostic;
+                Err(error)
+            }
+        }
+    }
+
     pub(crate) fn is_dirty(&self) -> bool {
         self.managed_draft != self.session.snapshot().managed.source
     }
@@ -2509,13 +3840,23 @@ impl CodeProjectWorkbench {
     }
 
     pub(crate) fn panel_markup(&self) -> String {
+        let manifest = self.managed_controls_cached();
+        self.panel_markup_with_managed_controls(
+            manifest.as_ref().map(Rc::as_ref).map_err(String::as_str),
+        )
+    }
+
+    pub(crate) fn panel_markup_with_managed_controls(
+        &self,
+        manifest: Result<&ManagedControlManifest, &str>,
+    ) -> String {
         let mut markup = String::new();
         markup.push_str("<div class=\"wb-code-project\">");
         self.write_project_header(&mut markup);
         self.write_file_tabs(&mut markup);
         self.write_source_surface(&mut markup);
         self.write_artifact_status(&mut markup);
-        self.write_edit_lenses(&mut markup);
+        Self::write_managed_controls(&mut markup, manifest);
         self.write_generated_members(&mut markup);
         markup.push_str("</div>");
         markup
@@ -2643,7 +3984,7 @@ impl CodeProjectWorkbench {
             (
                 "Artifacts ready",
                 format!(
-                    "{} pinned module{} · {} edit lens{}",
+                    "{} pinned module{} · {} presentation hint{}",
                     artifact_count,
                     if artifact_count == 1 { "" } else { "s" },
                     lens_count,
@@ -2664,82 +4005,62 @@ impl CodeProjectWorkbench {
         );
     }
 
-    fn write_edit_lenses(&self, markup: &mut String) {
-        let lenses = self
-            .project
-            .artifacts
-            .values()
-            .filter_map(|value| serde_json::from_value::<PatchModuleArtifact>(value.clone()).ok())
-            .flat_map(|artifact| {
-                let module = artifact.module_specifier;
-                let export = artifact.export_name;
-                artifact
-                    .edit_lenses
-                    .into_iter()
-                    .map(move |lens| (module.clone(), export.clone(), lens))
-            })
-            .collect::<Vec<_>>();
-        if lenses.is_empty() {
-            return;
-        }
-        markup.push_str(
-            "<section class=\"wb-code-lenses\"><header><strong>Edit lenses</strong><span>Generated values with managed-source controls</span></header>",
-        );
-        for (module, export, lens) in lenses {
-            let output = managed_path_text(&lens.output.0);
-            let argument = lens.invocation_argument.join(".");
-            let scalar = self
-                .project
-                .managed
-                .program
-                .declarations
-                .iter()
-                .find(|declaration| {
-                    declaration
-                        .patch
-                        .as_ref()
-                        .is_some_and(|patch| patch.module_binding == export)
-                })
-                .and_then(|declaration| {
-                    managed_object_path(&declaration.arguments, &lens.invocation_argument)
-                        .and_then(|value| match value {
-                            ManagedValue::Number(value) => Some((*value, None)),
-                            ManagedValue::Unit(value) => {
-                                Some((value.value, Some(value.unit.as_str())))
-                            }
-                            _ => None,
-                        })
-                        .map(|value| (declaration, value))
-                });
-            let _ = write!(
-                markup,
-                concat!(
-                    "<div class=\"wb-code-lens\"><div><strong>{}</strong>",
-                    "<small>{} → invocation.{}</small></div>"
-                ),
-                escape_html(&output),
-                escape_html(&module),
-                escape_html(&argument),
-            );
-            if let Some((declaration, (value, unit))) = scalar {
+    fn write_managed_controls(
+        markup: &mut String,
+        manifest: Result<&ManagedControlManifest, &str>,
+    ) {
+        let manifest = match manifest {
+            Ok(manifest) => manifest,
+            Err(error) => {
                 let _ = write!(
                     markup,
                     concat!(
-                        "<label class=\"wb-code-lens-control\"><span class=\"wb-sr-only\">Edit {}</span>",
-                        "<input type=\"number\" step=\"any\" value=\"{}\" ",
-                        "data-code-lens-declaration=\"{}\" data-code-lens-path=\"{}\" />",
-                        "<small>{}</small></label>"
+                        "<section class=\"wb-code-lenses\"><header><strong>Managed controls</strong>",
+                        "<span>Apply or Revert the source draft to refresh controls</span></header>",
+                        "<p class=\"wb-code-editor-note\">{}</p></section>"
                     ),
-                    escape_html(&output),
-                    value,
-                    escape_attribute(&declaration.symbol.0),
-                    escape_attribute(&argument),
-                    escape_html(unit.unwrap_or("value")),
+                    escape_html(error),
                 );
-            } else {
-                markup.push_str(
-                    "<button type=\"button\" data-code-action=\"open-managed-lens\">Edit managed input</button>",
+                return;
+            }
+        };
+        let mut groups = BTreeMap::<&str, Vec<&ManagedControl>>::new();
+        for control in manifest.editable() {
+            groups
+                .entry(control.source.declaration.0.as_str())
+                .or_default()
+                .push(control);
+        }
+        if groups.is_empty() {
+            return;
+        }
+        markup.push_str(
+            "<section class=\"wb-code-lenses\"><header><strong>Managed controls</strong><span>Authenticated source values and complete fan-out</span></header>",
+        );
+        for (declaration, controls) in groups {
+            let _ = write!(
+                markup,
+                "<div class=\"wb-code-control-group\"><strong>{}</strong>",
+                escape_html(declaration),
+            );
+            for control in controls {
+                let path = managed_path_text(&control.source.path.0);
+                let consumers = control.consumers.len();
+                let _ = write!(
+                    markup,
+                    concat!(
+                        "<div class=\"wb-code-lens wb-code-managed-control\"><div>",
+                        "<strong>{}</strong><span class=\"wb-code-control-authority\">",
+                        "Modifiable in sketch.ts</span>",
+                        "<small><code>{}</code> · {} consumer{}</small></div>"
+                    ),
+                    escape_html(&path),
+                    escape_html(&control.source.source_text),
+                    consumers,
+                    if consumers == 1 { "" } else { "s" },
                 );
+                write_managed_control_input(markup, control, &path);
+                markup.push_str("</div>");
             }
             markup.push_str("</div>");
         }
@@ -3316,11 +4637,28 @@ fn classify_code_owned_editor_change(
 ) -> Result<Option<CodeOwnedEditorChange>, String> {
     let accepted_intent = accepted.coordinator().intent();
     let candidate_intent = candidate.coordinator().intent();
+    let accepted_nodes_by_symbol = accepted_intent
+        .graph()
+        .nodes()
+        .values()
+        .map(|node| (node.symbol.clone(), node))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_nodes_by_symbol = candidate_intent
+        .graph()
+        .nodes()
+        .values()
+        .map(|node| (node.symbol.clone(), node))
+        .collect::<BTreeMap<_, _>>();
+    if accepted_nodes_by_symbol.len() != accepted_intent.graph().nodes().len()
+        || candidate_nodes_by_symbol.len() != candidate_intent.graph().nodes().len()
+    {
+        return Err("code-owned change contains duplicate semantic symbols".into());
+    }
     let mut accepted_code_nodes = BTreeMap::new();
     for alias in expansion.declaration_provenance.keys() {
-        let node = accepted_intent
-            .graph()
-            .node_by_symbol(alias)
+        let node = accepted_nodes_by_symbol
+            .get(alias)
+            .copied()
             .ok_or_else(|| format!("accepted code declaration `{alias}` disappeared"))?;
         accepted_code_nodes.insert(alias.clone(), node.id);
     }
@@ -3333,10 +4671,9 @@ fn classify_code_owned_editor_change(
             node.symbol,
         ));
     }
-    let candidate_code_symbols = candidate_intent
-        .graph()
-        .nodes()
+    let candidate_code_symbols = candidate_nodes_by_symbol
         .values()
+        .copied()
         .filter(|node| expansion.declaration_provenance.contains_key(&node.symbol))
         .map(|node| node.symbol.clone())
         .collect::<BTreeSet<_>>();
@@ -3356,15 +4693,27 @@ fn classify_code_owned_editor_change(
         );
     }
 
+    let leaves_by_node = |intent: &geosolve_sketch_intent::IntentSession| {
+        let mut index = BTreeMap::<NodeId, BTreeSet<_>>::new();
+        for leaf in intent.instance().values().keys() {
+            index
+                .entry(leaf.node)
+                .or_default()
+                .insert((leaf.port, leaf.field));
+        }
+        index
+    };
+    let accepted_leaves = leaves_by_node(accepted_intent);
+    let candidate_leaves = leaves_by_node(candidate_intent);
     let mut changed_leaves = BTreeSet::new();
     for (symbol, accepted_node_id) in &accepted_code_nodes {
         let accepted_node = accepted_intent
             .graph()
             .node(*accepted_node_id)
             .ok_or_else(|| format!("accepted code declaration `{symbol}` disappeared"))?;
-        let candidate_node = candidate_intent
-            .graph()
-            .node_by_symbol(symbol)
+        let candidate_node = candidate_nodes_by_symbol
+            .get(symbol)
+            .copied()
             .ok_or_else(|| format!("candidate code declaration `{symbol}` disappeared"))?;
         if accepted_node != candidate_node {
             return Err(
@@ -3385,24 +4734,28 @@ fn classify_code_owned_editor_change(
                 "code-owned declaration names must be changed through managed source".into(),
             );
         }
-        let leaves = accepted_intent
-            .instance()
-            .values()
-            .keys()
-            .filter(|leaf| leaf.node == *accepted_node_id)
+        let coordinates = accepted_leaves
+            .get(accepted_node_id)
+            .into_iter()
+            .flatten()
             .chain(
-                candidate_intent
-                    .instance()
-                    .values()
-                    .keys()
-                    .filter(|leaf| leaf.node == candidate_node.id),
+                candidate_leaves
+                    .get(&candidate_node.id)
+                    .into_iter()
+                    .flatten(),
             )
             .copied()
             .collect::<BTreeSet<_>>();
-        for leaf in leaves {
+        for (port, field) in coordinates {
+            let leaf = LeafRef {
+                node: *accepted_node_id,
+                port,
+                field,
+            };
             let candidate_leaf = LeafRef {
                 node: candidate_node.id,
-                ..leaf
+                port,
+                field,
             };
             if accepted_intent.instance().values().get(&leaf)
                 == candidate_intent.instance().values().get(&candidate_leaf)
@@ -3420,7 +4773,7 @@ fn classify_code_owned_editor_change(
     let mut covered_leaves = BTreeSet::new();
     let mut placements = Vec::new();
     for point in &expansion.writable_points {
-        let leaves = expanded_port_leaves(accepted, &point.handle)?;
+        let leaves = expanded_port_leaves(&accepted_nodes_by_symbol, &point.handle)?;
         let matched = leaves
             .intersection(&changed_leaves)
             .copied()
@@ -3654,14 +5007,12 @@ fn managed_rectangle_argument_position(
 }
 
 fn expanded_port_leaves(
-    editor: &ProjectionalEditorSession,
+    nodes_by_symbol: &BTreeMap<geosolve_sketch_intent::IntentKey, &IntentNode>,
     handle: &ExpandedPort,
 ) -> Result<BTreeSet<LeafRef>, String> {
-    let node = editor
-        .coordinator()
-        .intent()
-        .graph()
-        .node_by_symbol(&handle.alias)
+    let node = nodes_by_symbol
+        .get(&handle.alias)
+        .copied()
         .ok_or_else(|| format!("semantic point owner `{}` is absent", handle.alias))?;
     let port = node.port_by_selector(handle.selector).ok_or_else(|| {
         format!(
@@ -3754,6 +5105,7 @@ fn expanded_port_point(
 fn feature_documents_match_for_terminal_parity(
     terminal: &ComputedFeatureDocument,
     staged: &ComputedFeatureDocument,
+    policy: &TerminalComputedParityPolicy,
 ) -> bool {
     let terminal_identity = terminal.identity();
     let staged_identity = staged.identity();
@@ -3772,6 +5124,7 @@ fn feature_documents_match_for_terminal_parity(
                 {
                     return false;
                 }
+                let admits_reanchoring = !terminal.suppressed;
                 let (
                     ComputedFeatureDefinition::FilletSet(terminal),
                     ComputedFeatureDefinition::FilletSet(staged),
@@ -3792,22 +5145,45 @@ fn feature_documents_match_for_terminal_parity(
                                 ]
                                 .into_iter()
                                 .all(|(terminal, staged)| {
+                                    let picked_parameter_matches = match policy {
+                                        TerminalComputedParityPolicy::RectangleAliasRoundoff {
+                                            source_scales,
+                                        } if admits_reanchoring
+                                            && source_scales.contains_key(&terminal.source)
+                                            && source_scales.contains_key(&staged.source) =>
+                                        {
+                                            terminal_derived_scalar_matches(
+                                                terminal.picked_parameter,
+                                                staged.picked_parameter,
+                                                1.0,
+                                            )
+                                        }
+                                        TerminalComputedParityPolicy::Exact
+                                        | TerminalComputedParityPolicy::RectangleAliasRoundoff {
+                                            ..
+                                        } => {
+                                            terminal.picked_parameter.to_bits()
+                                                == staged.picked_parameter.to_bits()
+                                        }
+                                    };
                                     // `picked_parameter` is a recomputable
-                                    // seed, not a branch cell. Every durable
-                                    // owner, winding, neighborhood, normal,
-                                    // endpoint and periodic anchor stays exact.
+                                    // scalar only in the authenticated causal
+                                    // curve closure. Every durable owner,
+                                    // winding, neighborhood, normal, endpoint
+                                    // and periodic anchor stays exact.
                                     terminal.source == staged.source
                                         && terminal.winding == staged.winding
                                         && terminal.neighborhood == staged.neighborhood
                                         && terminal.normal_side == staged.normal_side
                                         && terminal.retained_endpoint == staged.retained_endpoint
                                         && terminal.periodic_anchor == staged.periodic_anchor
+                                        && picked_parameter_matches
                                 })
                         })
             })
 }
 
-fn terminal_derived_scalar_matches(first: f64, second: f64) -> bool {
+fn terminal_derived_scalar_matches(first: f64, second: f64, coordinate_scale: f64) -> bool {
     // The staged overlay and accepted pointer terminal start from the same
     // authenticated rectangle seeds, but redundant rectangle aliases can
     // differ within the explicitly admitted terminal seed cell. Re-evaluated
@@ -3824,42 +5200,168 @@ fn terminal_derived_scalar_matches(first: f64, second: f64) -> bool {
     {
         return true;
     }
+    let Some(tolerance) = semantic_roundoff_tolerance(first, second, coordinate_scale) else {
+        return false;
+    };
+    let zero_tolerance = TERMINAL_SEED_ZERO_ROUNDOFF * coordinate_scale.max(1.0);
     (first_bits & F64_SIGN_MASK == second_bits & F64_SIGN_MASK
-        && first_bits.abs_diff(second_bits) <= TERMINAL_SEED_ROUNDOFF_ULPS)
-        || (first.abs() <= TERMINAL_SEED_ZERO_ROUNDOFF
-            && second.abs() <= TERMINAL_SEED_ZERO_ROUNDOFF)
+        && (first - second).abs() <= tolerance)
+        || (first.abs() <= zero_tolerance && second.abs() <= zero_tolerance)
 }
 
-fn terminal_derived_pair_matches(first: [f64; 2], second: [f64; 2]) -> bool {
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct TerminalPeriodicAngleUnwrap {
+    turns: i8,
+    staged: f64,
+    residual: f64,
+}
+
+fn terminal_periodic_angle_unwrap(
+    terminal: f64,
+    staged: f64,
+) -> Option<TerminalPeriodicAngleUnwrap> {
+    if !terminal.is_finite() || !staged.is_finite() {
+        return None;
+    }
+    let delta = terminal - staged;
+    if !delta.is_finite() {
+        return None;
+    }
+    let rounded_turns = (delta / std::f64::consts::TAU).round();
+    if !rounded_turns.is_finite() || rounded_turns.abs().to_bits() != 1.0_f64.to_bits() {
+        return None;
+    }
+    let turns = if rounded_turns.is_sign_negative() {
+        -1
+    } else {
+        1
+    };
+    let staged = staged + f64::from(turns) * std::f64::consts::TAU;
+    let residual = terminal - staged;
+    (staged.is_finite() && residual.is_finite()).then_some(TerminalPeriodicAngleUnwrap {
+        turns,
+        staged,
+        residual,
+    })
+}
+
+fn terminal_derived_periodic_angle_matches(first: f64, second: f64) -> bool {
+    if terminal_derived_scalar_matches(first, second, 1.0) {
+        return true;
+    }
+    terminal_periodic_angle_unwrap(first, second)
+        .is_some_and(|unwrapped| terminal_derived_scalar_matches(first, unwrapped.staged, 1.0))
+}
+
+fn terminal_derived_pair_matches(first: [f64; 2], second: [f64; 2], coordinate_scale: f64) -> bool {
     first
         .into_iter()
         .zip(second)
-        .all(|(first, second)| terminal_derived_scalar_matches(first, second))
+        .all(|(first, second)| terminal_derived_scalar_matches(first, second, coordinate_scale))
+}
+
+fn terminal_computed_edge_roundoff_scale(
+    terminal: &geosolve_constraint_editor::ComputedEdge,
+    staged: &geosolve_constraint_editor::ComputedEdge,
+    source_scales: &TerminalRoundoffSourceScales,
+) -> Option<f64> {
+    let mut maximum = None::<u64>;
+    let mut include_source = |source| {
+        if let Some(scale) = source_scales.get(&source).copied()
+            && maximum.is_none_or(|current| {
+                f64::from_bits(scale)
+                    .total_cmp(&f64::from_bits(current))
+                    .is_gt()
+            })
+        {
+            maximum = Some(scale);
+        }
+    };
+    match (
+        &terminal.geometry,
+        &terminal.provenance,
+        &staged.geometry,
+        &staged.provenance,
+    ) {
+        (
+            ComputedEdgeGeometry::NativeSourceFragment {
+                source: terminal_geometry,
+                ..
+            },
+            ComputedEdgeProvenance::SourceFragment {
+                source: terminal_provenance,
+                start_claim: terminal_start,
+                end_claim: terminal_end,
+                ..
+            },
+            ComputedEdgeGeometry::NativeSourceFragment {
+                source: staged_geometry,
+                ..
+            },
+            ComputedEdgeProvenance::SourceFragment {
+                source: staged_provenance,
+                start_claim: staged_start,
+                end_claim: staged_end,
+                ..
+            },
+        ) if terminal_geometry == terminal_provenance
+            && staged_geometry == staged_provenance
+            && terminal_geometry == staged_geometry
+            && terminal_start == staged_start
+            && terminal_end == staged_end =>
+        {
+            include_source(*terminal_geometry);
+        }
+        (
+            ComputedEdgeGeometry::CircularArc(terminal_geometry),
+            ComputedEdgeProvenance::FilletArc {
+                owner: terminal_owner,
+                sources: terminal_sources,
+            },
+            ComputedEdgeGeometry::CircularArc(staged_geometry),
+            ComputedEdgeProvenance::FilletArc {
+                owner: staged_owner,
+                sources: staged_sources,
+            },
+        ) if terminal_owner == staged_owner
+            && terminal_sources == staged_sources
+            && terminal_geometry
+                .contacts
+                .iter()
+                .map(|contact| contact.source)
+                .eq(terminal_sources.iter().copied())
+            && staged_geometry
+                .contacts
+                .iter()
+                .map(|contact| contact.source)
+                .eq(staged_sources.iter().copied()) =>
+        {
+            for source in terminal_sources {
+                include_source(*source);
+            }
+        }
+        _ => return None,
+    }
+    maximum
+        .map(f64::from_bits)
+        .filter(|scale| scale.is_finite() && *scale > 0.0)
 }
 
 fn terminal_computed_edge_matches(
     terminal: &geosolve_constraint_editor::ComputedEdge,
     staged: &geosolve_constraint_editor::ComputedEdge,
-    roundoff_curves: &BTreeSet<geosolve_sketch::CurveId>,
+    source_scales: &TerminalRoundoffSourceScales,
 ) -> bool {
-    if terminal.id.ordinal != staged.id.ordinal
-        || terminal.role != staged.role
-        || !terminal_computed_provenance_matches(&terminal.provenance, &staged.provenance)
-    {
+    if terminal.id.ordinal != staged.id.ordinal || terminal.role != staged.role {
         return false;
     }
-    let admits_roundoff = |geometry: &ComputedEdgeGeometry| match geometry {
-        ComputedEdgeGeometry::NativeSourceFragment { source, .. } => {
-            roundoff_curves.contains(&source.span.curve)
-        }
-        ComputedEdgeGeometry::CircularArc(arc) => arc
-            .contacts
-            .iter()
-            .any(|contact| roundoff_curves.contains(&contact.source.span.curve)),
-        _ => false,
-    };
-    if !admits_roundoff(&terminal.geometry) || !admits_roundoff(&staged.geometry) {
+    let Some(coordinate_scale) =
+        terminal_computed_edge_roundoff_scale(terminal, staged, source_scales)
+    else {
         return terminal.geometry == staged.geometry && terminal.provenance == staged.provenance;
+    };
+    if !terminal_computed_provenance_matches(&terminal.provenance, &staged.provenance) {
+        return false;
     }
     match (&terminal.geometry, &staged.geometry) {
         (
@@ -3873,17 +5375,21 @@ fn terminal_computed_edge_matches(
             },
         ) => {
             terminal_source == staged_source
-                && terminal_derived_scalar_matches(terminal_interval.start, staged_interval.start)
-                && terminal_derived_scalar_matches(terminal_interval.end, staged_interval.end)
+                && terminal_derived_scalar_matches(
+                    terminal_interval.start,
+                    staged_interval.start,
+                    1.0,
+                )
+                && terminal_derived_scalar_matches(terminal_interval.end, staged_interval.end, 1.0)
         }
         (
             ComputedEdgeGeometry::CircularArc(terminal),
             ComputedEdgeGeometry::CircularArc(staged),
         ) => {
-            terminal_derived_pair_matches(terminal.center, staged.center)
-                && terminal_derived_scalar_matches(terminal.radius, staged.radius)
-                && terminal_derived_scalar_matches(terminal.start_angle, staged.start_angle)
-                && terminal_derived_scalar_matches(terminal.end_angle, staged.end_angle)
+            terminal_derived_pair_matches(terminal.center, staged.center, coordinate_scale)
+                && terminal.radius.to_bits() == staged.radius.to_bits()
+                && terminal_derived_periodic_angle_matches(terminal.start_angle, staged.start_angle)
+                && terminal_derived_periodic_angle_matches(terminal.end_angle, staged.end_angle)
                 && terminal.sweep == staged.sweep
                 && terminal.tangent_orientations == staged.tangent_orientations
                 && terminal.contacts.len() == staged.contacts.len()
@@ -3894,12 +5400,21 @@ fn terminal_computed_edge_matches(
                     .all(|(terminal, staged)| {
                         terminal.source == staged.source
                             && terminal.winding == staged.winding
-                            && terminal_derived_scalar_matches(terminal.parameter, staged.parameter)
+                            && terminal_derived_scalar_matches(
+                                terminal.parameter,
+                                staged.parameter,
+                                1.0,
+                            )
                             && terminal_derived_scalar_matches(
                                 terminal.total_parameter,
                                 staged.total_parameter,
+                                1.0,
                             )
-                            && terminal_derived_pair_matches(terminal.position, staged.position)
+                            && terminal_derived_pair_matches(
+                                terminal.position,
+                                staged.position,
+                                coordinate_scale,
+                            )
                     })
         }
         _ => false,
@@ -3928,8 +5443,12 @@ fn terminal_computed_provenance_matches(
             terminal_source == staged_source
                 && terminal_start == staged_start
                 && terminal_end == staged_end
-                && terminal_derived_scalar_matches(terminal_interval.start, staged_interval.start)
-                && terminal_derived_scalar_matches(terminal_interval.end, staged_interval.end)
+                && terminal_derived_scalar_matches(
+                    terminal_interval.start,
+                    staged_interval.start,
+                    1.0,
+                )
+                && terminal_derived_scalar_matches(terminal_interval.end, staged_interval.end, 1.0)
         }
         (
             ComputedEdgeProvenance::FilletArc {
@@ -3948,10 +5467,9 @@ fn terminal_computed_provenance_matches(
 fn terminal_computed_fragment_matches(
     terminal: &geosolve_constraint_editor::ComputedConstructionFragment,
     staged: &geosolve_constraint_editor::ComputedConstructionFragment,
-    roundoff_curves: &BTreeSet<geosolve_sketch::CurveId>,
+    source_scales: &TerminalRoundoffSourceScales,
 ) -> bool {
-    if !roundoff_curves.contains(&terminal.source.span.curve)
-        || !roundoff_curves.contains(&staged.source.span.curve)
+    if !source_scales.contains_key(&terminal.source) || !source_scales.contains_key(&staged.source)
     {
         return terminal_computed_fragment_exact_matches(terminal, staged);
     }
@@ -3960,15 +5478,17 @@ fn terminal_computed_fragment_matches(
         && terminal.source_role == staged.source_role
         && terminal.provenance.owner == staged.provenance.owner
         && terminal.provenance.endpoint == staged.provenance.endpoint
-        && terminal_derived_scalar_matches(terminal.interval.start, staged.interval.start)
-        && terminal_derived_scalar_matches(terminal.interval.end, staged.interval.end)
+        && terminal_derived_scalar_matches(terminal.interval.start, staged.interval.start, 1.0)
+        && terminal_derived_scalar_matches(terminal.interval.end, staged.interval.end, 1.0)
         && terminal_derived_scalar_matches(
             terminal.provenance.base_interval.start,
             staged.provenance.base_interval.start,
+            1.0,
         )
         && terminal_derived_scalar_matches(
             terminal.provenance.base_interval.end,
             staged.provenance.base_interval.end,
+            1.0,
         )
 }
 
@@ -4019,12 +5539,18 @@ fn terminal_feature_evaluation_matches(
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum TerminalComputedParityPolicy {
     Exact,
     RectangleAliasRoundoff {
-        curves: BTreeSet<geosolve_sketch::CurveId>,
+        source_scales: TerminalRoundoffSourceScales,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum TerminalScalarParityPolicy {
+    Exact,
+    Roundoff { coordinate_scale: f64 },
 }
 
 fn computed_snapshots_match_for_terminal_parity(
@@ -4044,8 +5570,8 @@ fn computed_snapshots_match_for_terminal_parity(
                         && terminal.geometry == staged.geometry
                         && terminal.provenance == staged.provenance
                 }
-                TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
-                    terminal_computed_edge_matches(terminal, staged, curves)
+                TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales } => {
+                    terminal_computed_edge_matches(terminal, staged, source_scales)
                 }
             })
         && terminal.construction_fragments().len() == staged.construction_fragments().len()
@@ -4057,8 +5583,8 @@ fn computed_snapshots_match_for_terminal_parity(
                 TerminalComputedParityPolicy::Exact => {
                     terminal_computed_fragment_exact_matches(terminal, staged)
                 }
-                TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
-                    terminal_computed_fragment_matches(terminal, staged, curves)
+                TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales } => {
+                    terminal_computed_fragment_matches(terminal, staged, source_scales)
                 }
             })
         && terminal.replaced_sources() == staged.replaced_sources()
@@ -4070,9 +5596,86 @@ fn computed_snapshots_match_for_terminal_parity(
             .all(|(terminal, staged)| terminal_feature_evaluation_matches(terminal, staged))
 }
 
-fn terminal_scalar_mismatch_trace(path: &str, terminal: f64, staged: f64) -> String {
+fn terminal_computed_periodic_angle_evidence(
+    terminal: &ComputedFeatureSnapshot,
+    staged: &ComputedFeatureSnapshot,
+    policy: &TerminalComputedParityPolicy,
+) -> Vec<String> {
+    let TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales } = policy else {
+        return Vec::new();
+    };
+    terminal
+        .edges()
+        .iter()
+        .zip(staged.edges())
+        .enumerate()
+        .flat_map(|(index, (terminal_edge, staged_edge))| {
+            if terminal_computed_edge_roundoff_scale(terminal_edge, staged_edge, source_scales)
+                .is_none()
+                || !terminal_computed_edge_matches(terminal_edge, staged_edge, source_scales)
+            {
+                return Vec::new();
+            }
+            let (
+                ComputedEdgeGeometry::CircularArc(terminal_arc),
+                ComputedEdgeGeometry::CircularArc(staged_arc),
+            ) = (&terminal_edge.geometry, &staged_edge.geometry)
+            else {
+                return Vec::new();
+            };
+            [
+                (
+                    "start_angle",
+                    terminal_arc.start_angle,
+                    staged_arc.start_angle,
+                ),
+                (
+                    "end_angle",
+                    terminal_arc.end_angle,
+                    staged_arc.end_angle,
+                ),
+            ]
+            .into_iter()
+            .filter_map(|(field, terminal, staged)| {
+                if terminal_derived_scalar_matches(terminal, staged, 1.0) {
+                    return None;
+                }
+                let unwrapped = terminal_periodic_angle_unwrap(terminal, staged)?;
+                terminal_derived_scalar_matches(terminal, unwrapped.staged, 1.0).then(|| {
+                    format!(
+                        "path=edge[{index}].arc.{field} periodic_turn={} unwrapped_staged={:.17e} unwrapped_residual={:.17e}",
+                        unwrapped.turns, unwrapped.staged, unwrapped.residual,
+                    )
+                })
+            })
+            .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn terminal_scalar_mismatch_trace(
+    path: &str,
+    terminal: f64,
+    staged: f64,
+    policy: TerminalScalarParityPolicy,
+    coordinate_domain: bool,
+) -> String {
+    let (coordinate_scale, tolerance) = match policy {
+        TerminalScalarParityPolicy::Exact => (None, None),
+        TerminalScalarParityPolicy::Roundoff { coordinate_scale } => {
+            let scale = if coordinate_domain {
+                coordinate_scale
+            } else {
+                1.0
+            };
+            (
+                Some(scale),
+                semantic_roundoff_tolerance(terminal, staged, scale),
+            )
+        }
+    };
     format!(
-        "path={path} terminal={:.17e}/0x{:016x} staged={:.17e}/0x{:016x} ulp_diff={} allowed_ulps={} zero_cell={} terminal_finite={} staged_finite={}",
+        "path={path} terminal={:.17e}/0x{:016x} staged={:.17e}/0x{:016x} ulp_diff={} epsilon_budget={} coordinate_scale={coordinate_scale:?} tolerance={tolerance:?} zero_cell={} terminal_finite={} staged_finite={}",
         terminal,
         terminal.to_bits(),
         staged,
@@ -4085,18 +5688,49 @@ fn terminal_scalar_mismatch_trace(path: &str, terminal: f64, staged: f64) -> Str
     )
 }
 
+fn terminal_periodic_angle_mismatch_trace(
+    path: &str,
+    terminal: f64,
+    staged: f64,
+    policy: TerminalScalarParityPolicy,
+) -> String {
+    let scalar = terminal_scalar_mismatch_trace(path, terminal, staged, policy, false);
+    match policy {
+        TerminalScalarParityPolicy::Exact => {
+            format!("{scalar} periodic_policy=exact periodic_turn=None")
+        }
+        TerminalScalarParityPolicy::Roundoff { .. } => {
+            let unwrapped = terminal_periodic_angle_unwrap(terminal, staged);
+            let turn = unwrapped.map(|unwrapped| unwrapped.turns);
+            let staged = unwrapped.map(|unwrapped| unwrapped.staged);
+            let residual = unwrapped.map(|unwrapped| unwrapped.residual);
+            let tolerance = unwrapped
+                .and_then(|unwrapped| semantic_roundoff_tolerance(terminal, unwrapped.staged, 1.0));
+            format!(
+                "{scalar} periodic_policy=one-turn periodic_turn={turn:?} unwrapped_staged={staged:?} unwrapped_residual={residual:?} unwrapped_tolerance={tolerance:?}"
+            )
+        }
+    }
+}
+
 fn terminal_pair_mismatch_trace(
     path: &str,
     terminal: [f64; 2],
     staged: [f64; 2],
-    policy: &TerminalComputedParityPolicy,
+    policy: TerminalScalarParityPolicy,
 ) -> Option<String> {
     ["x", "y"]
         .into_iter()
         .zip(terminal.into_iter().zip(staged))
         .find_map(|(axis, (terminal, staged))| {
-            (!terminal_scalar_matches_trace_policy(terminal, staged, policy)).then(|| {
-                terminal_scalar_mismatch_trace(&format!("{path}.{axis}"), terminal, staged)
+            (!terminal_scalar_matches_trace_policy(terminal, staged, policy, true)).then(|| {
+                terminal_scalar_mismatch_trace(
+                    &format!("{path}.{axis}"),
+                    terminal,
+                    staged,
+                    policy,
+                    true,
+                )
             })
         })
 }
@@ -4104,12 +5738,34 @@ fn terminal_pair_mismatch_trace(
 fn terminal_scalar_matches_trace_policy(
     terminal: f64,
     staged: f64,
-    policy: &TerminalComputedParityPolicy,
+    policy: TerminalScalarParityPolicy,
+    coordinate_domain: bool,
 ) -> bool {
     match policy {
-        TerminalComputedParityPolicy::Exact => terminal.to_bits() == staged.to_bits(),
-        TerminalComputedParityPolicy::RectangleAliasRoundoff { .. } => {
-            terminal_derived_scalar_matches(terminal, staged)
+        TerminalScalarParityPolicy::Exact => terminal.to_bits() == staged.to_bits(),
+        TerminalScalarParityPolicy::Roundoff { coordinate_scale } => {
+            terminal_derived_scalar_matches(
+                terminal,
+                staged,
+                if coordinate_domain {
+                    coordinate_scale
+                } else {
+                    1.0
+                },
+            )
+        }
+    }
+}
+
+fn terminal_periodic_angle_matches_trace_policy(
+    terminal: f64,
+    staged: f64,
+    policy: TerminalScalarParityPolicy,
+) -> bool {
+    match policy {
+        TerminalScalarParityPolicy::Exact => terminal.to_bits() == staged.to_bits(),
+        TerminalScalarParityPolicy::Roundoff { .. } => {
+            terminal_derived_periodic_angle_matches(terminal, staged)
         }
     }
 }
@@ -4118,7 +5774,7 @@ fn first_terminal_computed_provenance_mismatch(
     prefix: &str,
     terminal: &ComputedEdgeProvenance,
     staged: &ComputedEdgeProvenance,
-    policy: &TerminalComputedParityPolicy,
+    policy: TerminalScalarParityPolicy,
 ) -> String {
     match (terminal, staged) {
         (
@@ -4166,11 +5822,13 @@ fn first_terminal_computed_provenance_mismatch(
                 ),
                 ("interval.end", terminal_interval.end, staged_interval.end),
             ] {
-                if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
+                if !terminal_scalar_matches_trace_policy(terminal, staged, policy, false) {
                     return terminal_scalar_mismatch_trace(
                         &format!("{prefix}.provenance.{path}"),
                         terminal,
                         staged,
+                        policy,
+                        false,
                     );
                 }
             }
@@ -4225,9 +5883,18 @@ fn first_terminal_computed_edge_mismatch(
             terminal.role, staged.role
         );
     }
-    let provenance_matches = match policy {
-        TerminalComputedParityPolicy::Exact => terminal.provenance == staged.provenance,
-        TerminalComputedParityPolicy::RectangleAliasRoundoff { .. } => {
+    let scalar_policy = match policy {
+        TerminalComputedParityPolicy::Exact => TerminalScalarParityPolicy::Exact,
+        TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales } => {
+            terminal_computed_edge_roundoff_scale(terminal, staged, source_scales)
+                .map_or(TerminalScalarParityPolicy::Exact, |coordinate_scale| {
+                    TerminalScalarParityPolicy::Roundoff { coordinate_scale }
+                })
+        }
+    };
+    let provenance_matches = match scalar_policy {
+        TerminalScalarParityPolicy::Exact => terminal.provenance == staged.provenance,
+        TerminalScalarParityPolicy::Roundoff { .. } => {
             terminal_computed_provenance_matches(&terminal.provenance, &staged.provenance)
         }
     };
@@ -4236,7 +5903,7 @@ fn first_terminal_computed_edge_mismatch(
             &prefix,
             &terminal.provenance,
             &staged.provenance,
-            policy,
+            scalar_policy,
         );
     }
     match (&terminal.geometry, &staged.geometry) {
@@ -4263,11 +5930,13 @@ fn first_terminal_computed_edge_mismatch(
                 ),
                 ("interval.end", terminal_interval.end, staged_interval.end),
             ] {
-                if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
+                if !terminal_scalar_matches_trace_policy(terminal, staged, scalar_policy, false) {
                     return terminal_scalar_mismatch_trace(
                         &format!("{prefix}.{field}"),
                         terminal,
                         staged,
+                        scalar_policy,
+                        false,
                     );
                 }
             }
@@ -4281,20 +5950,29 @@ fn first_terminal_computed_edge_mismatch(
                 &format!("{prefix}.arc.center"),
                 terminal.center,
                 staged.center,
-                policy,
+                scalar_policy,
             ) {
                 return mismatch;
             }
+            if terminal.radius.to_bits() != staged.radius.to_bits() {
+                return terminal_scalar_mismatch_trace(
+                    &format!("{prefix}.arc.radius"),
+                    terminal.radius,
+                    staged.radius,
+                    TerminalScalarParityPolicy::Exact,
+                    true,
+                );
+            }
             for (field, terminal, staged) in [
-                ("radius", terminal.radius, staged.radius),
                 ("start_angle", terminal.start_angle, staged.start_angle),
                 ("end_angle", terminal.end_angle, staged.end_angle),
             ] {
-                if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
-                    return terminal_scalar_mismatch_trace(
+                if !terminal_periodic_angle_matches_trace_policy(terminal, staged, scalar_policy) {
+                    return terminal_periodic_angle_mismatch_trace(
                         &format!("{prefix}.arc.{field}"),
                         terminal,
                         staged,
+                        scalar_policy,
                     );
                 }
             }
@@ -4341,11 +6019,14 @@ fn first_terminal_computed_edge_mismatch(
                         staged.total_parameter,
                     ),
                 ] {
-                    if !terminal_scalar_matches_trace_policy(terminal, staged, policy) {
+                    if !terminal_scalar_matches_trace_policy(terminal, staged, scalar_policy, false)
+                    {
                         return terminal_scalar_mismatch_trace(
                             &format!("{contact}.{field}"),
                             terminal,
                             staged,
+                            scalar_policy,
+                            false,
                         );
                     }
                 }
@@ -4353,7 +6034,7 @@ fn first_terminal_computed_edge_mismatch(
                     &format!("{contact}.position"),
                     terminal.position,
                     staged.position,
-                    policy,
+                    scalar_policy,
                 ) {
                     return mismatch;
                 }
@@ -4443,8 +6124,8 @@ fn first_terminal_computed_snapshot_mismatch(
                     && terminal.geometry == staged.geometry
                     && terminal.provenance == staged.provenance
             }
-            TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
-                terminal_computed_edge_matches(terminal, staged, curves)
+            TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales } => {
+                terminal_computed_edge_matches(terminal, staged, source_scales)
             }
         };
         if !matches {
@@ -4468,8 +6149,8 @@ fn first_terminal_computed_snapshot_mismatch(
             TerminalComputedParityPolicy::Exact => {
                 terminal_computed_fragment_exact_matches(terminal, staged)
             }
-            TerminalComputedParityPolicy::RectangleAliasRoundoff { curves } => {
-                terminal_computed_fragment_matches(terminal, staged, curves)
+            TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales } => {
+                terminal_computed_fragment_matches(terminal, staged, source_scales)
             }
         };
         if !matches {
@@ -4505,10 +6186,13 @@ fn first_terminal_computed_snapshot_mismatch(
     "path=computed_snapshot unknown_mismatch".into()
 }
 
+type TerminalRectangleAliasScales = BTreeMap<geosolve_sketch::DesignPointId, u64>;
+type TerminalRoundoffSourceScales = BTreeMap<NativeCurveSpanSource, u64>;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum TerminalDocumentParity {
     Exact,
-    NormalizedRedundantRectangleAliases(BTreeSet<geosolve_sketch::DesignPointId>),
+    NormalizedRedundantRectangleAliases(TerminalRectangleAliasScales),
     Mismatch,
 }
 
@@ -4517,9 +6201,7 @@ impl TerminalDocumentParity {
         !matches!(self, Self::Mismatch)
     }
 
-    fn normalized_redundant_rectangle_aliases(
-        &self,
-    ) -> Option<&BTreeSet<geosolve_sketch::DesignPointId>> {
+    fn normalized_redundant_rectangle_aliases(&self) -> Option<&TerminalRectangleAliasScales> {
         match self {
             Self::NormalizedRedundantRectangleAliases(points) => Some(points),
             Self::Exact | Self::Mismatch => None,
@@ -4530,44 +6212,80 @@ impl TerminalDocumentParity {
 fn terminal_computed_roundoff_points<'a>(
     design: &'a TerminalDocumentParity,
     accepted: &'a TerminalDocumentParity,
-) -> Option<&'a BTreeSet<geosolve_sketch::DesignPointId>> {
+) -> Option<&'a TerminalRectangleAliasScales> {
     match (
         design.normalized_redundant_rectangle_aliases(),
         accepted.normalized_redundant_rectangle_aliases(),
     ) {
-        (Some(design), Some(accepted)) if design == accepted && !accepted.is_empty() => {
+        (Some(design), Some(accepted))
+            if design.keys().eq(accepted.keys()) && !accepted.is_empty() =>
+        {
             Some(accepted)
         }
         _ => None,
     }
 }
 
-fn curve_definition_references_any_point(
-    definition: &geosolve_sketch::CurveDefinition,
-    points: &BTreeSet<geosolve_sketch::DesignPointId>,
+fn terminal_document_normalizations_match(
+    design: &TerminalDocumentParity,
+    accepted: &TerminalDocumentParity,
 ) -> bool {
+    match (design, accepted) {
+        (TerminalDocumentParity::Exact, TerminalDocumentParity::Exact) => true,
+        (
+            TerminalDocumentParity::NormalizedRedundantRectangleAliases(design),
+            TerminalDocumentParity::Exact,
+        ) => !design.is_empty(),
+        (
+            TerminalDocumentParity::NormalizedRedundantRectangleAliases(design),
+            TerminalDocumentParity::NormalizedRedundantRectangleAliases(accepted),
+        ) => design.keys().eq(accepted.keys()) && !design.is_empty(),
+        _ => false,
+    }
+}
+
+fn maximum_point_roundoff_scale(
+    point_scales: &TerminalRectangleAliasScales,
+    points: impl IntoIterator<Item = geosolve_sketch::DesignPointId>,
+) -> Option<u64> {
+    let mut maximum = None::<u64>;
+    for point in points {
+        if let Some(scale) = point_scales.get(&point).copied()
+            && maximum.is_none_or(|current| {
+                f64::from_bits(scale)
+                    .total_cmp(&f64::from_bits(current))
+                    .is_gt()
+            })
+        {
+            maximum = Some(scale);
+        }
+    }
+    maximum
+}
+
+fn curve_definition_roundoff_scale(
+    definition: &geosolve_sketch::CurveDefinition,
+    point_scales: &TerminalRectangleAliasScales,
+) -> Option<u64> {
     use geosolve_sketch::CurveDefinition;
 
     match definition {
         CurveDefinition::Line { start, end, .. }
         | CurveDefinition::RationalQuadraticConic { start, end, .. } => {
-            points.contains(start) || points.contains(end)
+            maximum_point_roundoff_scale(point_scales, [*start, *end])
         }
         CurveDefinition::Polyline {
             points: controls, ..
-        }
-        | CurveDefinition::BSpline { controls, .. }
-        | CurveDefinition::Nurbs { controls, .. } => {
-            controls.iter().any(|point| points.contains(point))
-        }
+        } => maximum_point_roundoff_scale(point_scales, controls.iter().copied()),
+        CurveDefinition::BSpline { .. } | CurveDefinition::Nurbs { .. } => None,
         CurveDefinition::Circle { center, .. } | CurveDefinition::CircularArc { center, .. } => {
-            points.contains(center)
+            maximum_point_roundoff_scale(point_scales, [*center])
         }
         CurveDefinition::QuadraticBezier { controls } => {
-            controls.iter().any(|point| points.contains(point))
+            maximum_point_roundoff_scale(point_scales, controls.iter().copied())
         }
         CurveDefinition::CubicBezier { controls } => {
-            controls.iter().any(|point| points.contains(point))
+            maximum_point_roundoff_scale(point_scales, controls.iter().copied())
         }
         CurveDefinition::Ellipse {
             center,
@@ -4578,30 +6296,206 @@ fn curve_definition_references_any_point(
             center,
             major_axis_point,
             ..
-        } => points.contains(center) || points.contains(major_axis_point),
+        } => maximum_point_roundoff_scale(point_scales, [*center, *major_axis_point]),
         CurveDefinition::ParabolaSegment { vertex, focus, .. } => {
-            points.contains(vertex) || points.contains(focus)
+            maximum_point_roundoff_scale(point_scales, [*vertex, *focus])
         }
         CurveDefinition::HyperbolaSegment {
             center,
             transverse_axis_point,
             ..
-        } => points.contains(center) || points.contains(transverse_axis_point),
+        } => maximum_point_roundoff_scale(point_scales, [*center, *transverse_axis_point]),
     }
 }
 
-fn terminal_roundoff_curves(
-    document: &geosolve_sketch::SketchDocument,
-    points: &BTreeSet<geosolve_sketch::DesignPointId>,
-) -> BTreeSet<geosolve_sketch::CurveId> {
-    document
-        .curves()
-        .iter()
-        .filter(|curve| curve_definition_references_any_point(&curve.definition, points))
-        .map(|curve| curve.id)
-        .collect()
+fn insert_terminal_roundoff_source(
+    sources: &mut TerminalRoundoffSourceScales,
+    source: NativeCurveSpanSource,
+    scale: u64,
+) -> Result<(), String> {
+    if sources.insert(source, scale).is_some() {
+        return Err("terminal roundoff policy repeats one native source span".into());
+    }
+    Ok(())
 }
 
+fn insert_terminal_spline_roundoff_sources(
+    sources: &mut TerminalRoundoffSourceScales,
+    curve: geosolve_sketch::CurveId,
+    definition: &geosolve_sketch::CurveDefinition,
+    point_scales: &TerminalRectangleAliasScales,
+) -> Result<(), String> {
+    let (geosolve_sketch::CurveDefinition::BSpline {
+        form,
+        degree,
+        controls,
+        knots,
+        span_ids,
+        ..
+    }
+    | geosolve_sketch::CurveDefinition::Nurbs {
+        form,
+        degree,
+        controls,
+        knots,
+        span_ids,
+        ..
+    }) = definition
+    else {
+        return Err("terminal roundoff spline helper received a non-spline curve".into());
+    };
+    if !controls
+        .iter()
+        .any(|control| point_scales.contains_key(control))
+    {
+        return Ok(());
+    }
+    let basis = match form {
+        geosolve_sketch::DocumentBSplineForm::Clamped => {
+            geosolve_sketch::BSplineBasis::try_clamped(*degree, controls.len(), knots.clone())
+        }
+        geosolve_sketch::DocumentBSplineForm::Periodic => {
+            geosolve_sketch::BSplineBasis::try_periodic(*degree, controls.len(), knots.clone())
+        }
+    }
+    .map_err(|error| {
+        format!("terminal roundoff policy encountered an invalid spline basis: {error}")
+    })?;
+    if span_ids.len() != basis.spans().len() {
+        return Err(
+            "terminal roundoff policy encountered inconsistent spline span identity".into(),
+        );
+    }
+    for (segment, span) in span_ids.iter().zip(basis.spans()) {
+        let support = span
+            .support()
+            .iter()
+            .map(|index| controls.get(*index).copied())
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| {
+                "terminal roundoff policy encountered invalid spline support".to_owned()
+            })?;
+        let Some(scale) = maximum_point_roundoff_scale(point_scales, support) else {
+            continue;
+        };
+        insert_terminal_roundoff_source(
+            sources,
+            NativeCurveSpanSource {
+                span: CurveSpan {
+                    curve,
+                    segment: *segment,
+                },
+            },
+            scale,
+        )?;
+    }
+    Ok(())
+}
+
+fn terminal_roundoff_sources(
+    document: &geosolve_sketch::SketchDocument,
+    point_scales: &TerminalRectangleAliasScales,
+) -> Result<TerminalRoundoffSourceScales, String> {
+    use geosolve_sketch::CurveDefinition;
+
+    let mut sources = TerminalRoundoffSourceScales::new();
+    for curve in document.curves() {
+        match &curve.definition {
+            CurveDefinition::Polyline { points, closed, .. } => {
+                let count = points.len().saturating_sub(1) + usize::from(*closed);
+                for index in 0..count {
+                    let end = if index + 1 == points.len() {
+                        0
+                    } else {
+                        index + 1
+                    };
+                    let start_point = points.get(index).copied().ok_or_else(|| {
+                        "terminal roundoff policy encountered an invalid polyline span".to_owned()
+                    })?;
+                    let end_point = points.get(end).copied().ok_or_else(|| {
+                        "terminal roundoff policy encountered an invalid polyline span".to_owned()
+                    })?;
+                    let Some(scale) =
+                        maximum_point_roundoff_scale(point_scales, [start_point, end_point])
+                    else {
+                        continue;
+                    };
+                    let segment = u32::try_from(index).map_err(|_| {
+                        "terminal roundoff policy has an unrepresentable polyline span".to_owned()
+                    })?;
+                    insert_terminal_roundoff_source(
+                        &mut sources,
+                        NativeCurveSpanSource {
+                            span: CurveSpan {
+                                curve: curve.id,
+                                segment,
+                            },
+                        },
+                        scale,
+                    )?;
+                }
+            }
+            CurveDefinition::BSpline { .. } | CurveDefinition::Nurbs { .. } => {
+                insert_terminal_spline_roundoff_sources(
+                    &mut sources,
+                    curve.id,
+                    &curve.definition,
+                    point_scales,
+                )?;
+            }
+            _ => {
+                let Some(scale) = curve_definition_roundoff_scale(&curve.definition, point_scales)
+                else {
+                    continue;
+                };
+                insert_terminal_roundoff_source(
+                    &mut sources,
+                    NativeCurveSpanSource {
+                        span: CurveSpan {
+                            curve: curve.id,
+                            segment: 0,
+                        },
+                    },
+                    scale,
+                )?;
+            }
+        }
+    }
+    Ok(sources)
+}
+
+fn point_positions_match_bits(
+    left: &geosolve_sketch::SketchDocument,
+    right: &geosolve_sketch::SketchDocument,
+) -> bool {
+    left.points().len() == right.points().len()
+        && left
+            .points()
+            .iter()
+            .zip(right.points())
+            .all(|(left, right)| {
+                left.id == right.id && pair_bits(left.position) == pair_bits(right.position)
+            })
+}
+
+fn scalar_values_match_bits(
+    left: &geosolve_sketch::SketchDocument,
+    right: &geosolve_sketch::SketchDocument,
+) -> bool {
+    left.scalars().len() == right.scalars().len()
+        && left
+            .scalars()
+            .iter()
+            .zip(right.scalars())
+            .all(|(left, right)| {
+                left.id == right.id && left.value.to_bits() == right.value.to_bits()
+            })
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one fail-closed parity normalizer keeps per-rectangle anchor, alias, local-scale, and exact-document checks adjacent"
+)]
 fn documents_match_for_terminal_parity(
     terminal_editor: &ProjectionalEditorSession,
     staged_editor: &ProjectionalEditorSession,
@@ -4610,7 +6504,10 @@ fn documents_match_for_terminal_parity(
     rectangle_projections: &[RectangleTerminalProjection],
     recomputable_line_branches: &BTreeSet<geosolve_sketch::CurveId>,
 ) -> Result<TerminalDocumentParity, String> {
-    if terminal.exact_except_recomputable_line_branches(staged, recomputable_line_branches) {
+    if terminal.exact_except_recomputable_line_branches(staged, recomputable_line_branches)
+        && point_positions_match_bits(terminal, staged)
+        && scalar_values_match_bits(terminal, staged)
+    {
         return Ok(TerminalDocumentParity::Exact);
     }
     let resolve = |editor: &ProjectionalEditorSession, handle: &ExpandedPort| {
@@ -4619,7 +6516,9 @@ fn documents_match_for_terminal_parity(
     };
     let mut anchors = BTreeSet::new();
     let mut redundant = BTreeSet::new();
+    let mut redundant_scales = BTreeMap::new();
     for projection in rectangle_projections {
+        let mut local_points = BTreeSet::new();
         for handle in &projection.anchors {
             let terminal_point = resolve(terminal_editor, handle)?;
             if terminal_point != resolve(staged_editor, handle)? {
@@ -4628,6 +6527,7 @@ fn documents_match_for_terminal_parity(
             if !anchors.insert(terminal_point) {
                 return Err("rectangle parity repeats one anchor point".into());
             }
+            local_points.insert(terminal_point);
         }
         for handle in &projection.redundant_aliases {
             let terminal_point = resolve(terminal_editor, handle)?;
@@ -4637,13 +6537,24 @@ fn documents_match_for_terminal_parity(
             if !redundant.insert(terminal_point) {
                 return Err("rectangle parity repeats one redundant point".into());
             }
+            local_points.insert(terminal_point);
+        }
+        let local_scale = semantic_point_coordinate_scale([terminal, staged], &local_points)
+            .ok_or_else(|| {
+                "rectangle parity has no finite local semantic coordinate scale".to_owned()
+            })?;
+        for handle in &projection.redundant_aliases {
+            let point = resolve(terminal_editor, handle)?;
+            if redundant_scales.insert(point, local_scale).is_some() {
+                return Err("rectangle parity repeats one redundant point scale".into());
+            }
         }
     }
     if !anchors.is_disjoint(&redundant) {
         return Err("rectangle parity anchor aliases a redundant point".into());
     }
     let mut normalized = terminal.clone();
-    let mut normalized_redundant_rectangle_aliases = BTreeSet::new();
+    let mut normalized_redundant_rectangle_aliases = TerminalRectangleAliasScales::new();
     for point in anchors {
         let terminal_position = terminal
             .point(point)
@@ -4669,15 +6580,32 @@ fn documents_match_for_terminal_parity(
         if pair_bits(terminal_position) == pair_bits(staged_position) {
             continue;
         }
-        if !point_seed_roundoff_compatible(terminal_position, staged_position) {
+        if !terminal_position.into_iter().all(f64::is_finite)
+            || !staged_position.into_iter().all(f64::is_finite)
+        {
+            return Ok(TerminalDocumentParity::Mismatch);
+        }
+        let coordinate_scale = redundant_scales
+            .get(&point)
+            .copied()
+            .ok_or_else(|| "rectangle parity redundant point has no local scale".to_owned())?;
+        if !point_seed_roundoff_compatible(terminal_position, staged_position, coordinate_scale) {
             return Ok(TerminalDocumentParity::Mismatch);
         }
         normalized
             .set_point_position(point, staged_position)
             .map_err(|error| format!("rectangle parity normalization failed: {error}"))?;
-        normalized_redundant_rectangle_aliases.insert(point);
+        if normalized_redundant_rectangle_aliases
+            .insert(point, coordinate_scale.to_bits())
+            .is_some()
+        {
+            return Err("rectangle parity repeats one normalized alias scale".into());
+        }
     }
-    if !normalized.exact_except_recomputable_line_branches(staged, recomputable_line_branches) {
+    if !normalized.exact_except_recomputable_line_branches(staged, recomputable_line_branches)
+        || !point_positions_match_bits(&normalized, staged)
+        || !scalar_values_match_bits(&normalized, staged)
+    {
         return Ok(TerminalDocumentParity::Mismatch);
     }
     Ok(if normalized_redundant_rectangle_aliases.is_empty() {
@@ -4687,6 +6615,86 @@ fn documents_match_for_terminal_parity(
             normalized_redundant_rectangle_aliases,
         )
     })
+}
+
+/// Reconstructs the exact source-seeded design witness beneath a delegated
+/// native drag. Retained preview sessions keep their origin design inputs and
+/// place the pointer target in the accepted solve; the semantic owner instead
+/// persists only its authenticated source seeds. Rectangle aliases are added
+/// as derived parity witnesses, never as extra drafts.
+fn terminal_seeded_design_document(
+    preview: TerminalPointPreview<'_>,
+    placements: &[(ExpandedWritablePoint, [f64; 2])],
+    rectangle_projections: &[RectangleTerminalProjection],
+) -> Result<geosolve_sketch::SketchDocument, String> {
+    let mut targets = BTreeMap::<geosolve_sketch::DesignPointId, [f64; 2]>::new();
+    let mut insert = |handle: &ExpandedPort, target: [f64; 2]| -> Result<(), String> {
+        let point = preview
+            .point(handle)
+            .ok_or_else(|| "terminal design seed has no native point binding".to_owned())?;
+        if let Some(previous) = targets.insert(point, target)
+            && pair_bits(previous) != pair_bits(target)
+        {
+            return Err("terminal design seed aliases conflicting native positions".into());
+        }
+        Ok(())
+    };
+    for (point, target) in placements {
+        insert(&point.handle, *target)?;
+    }
+    for projection in rectangle_projections {
+        for handle in projection
+            .anchors
+            .iter()
+            .chain(&projection.redundant_aliases)
+        {
+            let target = preview.position(handle).ok_or_else(|| {
+                "terminal rectangle design witness has no accepted position".to_owned()
+            })?;
+            insert(handle, target)?;
+        }
+    }
+    let mut design = preview.session.design_document().clone();
+    for (point, target) in targets {
+        design
+            .set_point_position(point, target)
+            .map_err(|error| format!("terminal design seed normalization failed: {error}"))?;
+    }
+    Ok(design)
+}
+
+fn terminal_semantic_inputs_match(
+    origin: &RetainedSketchDocumentSession,
+    staged: &RetainedSketchDocumentSession,
+) -> bool {
+    let Some(origin_input) = origin
+        .accepted_prepared_input()
+        .map(geosolve_sketch::PreparedSketchInput::attempt_input)
+    else {
+        return false;
+    };
+    let Some(staged_input) = staged
+        .accepted_prepared_input()
+        .map(geosolve_sketch::PreparedSketchInput::attempt_input)
+    else {
+        return false;
+    };
+    origin_input.publication_request() == staged_input.publication_request()
+        && origin_input.solver_config() == staged_input.solver_config()
+        && origin_input.effective_activation_revision()
+            == staged_input.effective_activation_revision()
+        && origin_input.activation_digest() == staged_input.activation_digest()
+        && origin_input.parameter_revision() == staged_input.parameter_revision()
+        && origin_input.parameter_digest() == staged_input.parameter_digest()
+        && origin_input.external_snapshot_set_revision()
+            == staged_input.external_snapshot_set_revision()
+        && origin_input.external_snapshot_set_digest()
+            == staged_input.external_snapshot_set_digest()
+        && origin.request() == staged.request()
+        && origin.parameter_batch() == staged.parameter_batch()
+        && origin.external_snapshot_set() == staged.external_snapshot_set()
+        && origin.accepted_parameter_batch() == staged.accepted_parameter_batch()
+        && origin.accepted_external_snapshot_set() == staged.accepted_external_snapshot_set()
 }
 
 #[cfg(test)]
@@ -4714,9 +6722,32 @@ fn validate_terminal_native_parity_with_trace(
     staged: &ProjectionalEditorSession,
     expansion: &ExpandedCodeProject,
     rectangle_projections: &[RectangleTerminalProjection],
+    trace: Option<&mut super::interaction_trace::InteractionTrace>,
+) -> Result<(), String> {
+    validate_terminal_preview_native_parity_with_trace(
+        TerminalPointPreview::from_accepted(terminal)?,
+        staged,
+        expansion,
+        &[],
+        rectangle_projections,
+        trace,
+    )
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one parity gate records every accepted-authority domain before issuing a single rejection"
+)]
+fn validate_terminal_preview_native_parity_with_trace(
+    terminal: TerminalPointPreview<'_>,
+    staged: &ProjectionalEditorSession,
+    expansion: &ExpandedCodeProject,
+    terminal_seed_placements: &[(ExpandedWritablePoint, [f64; 2])],
+    rectangle_projections: &[RectangleTerminalProjection],
     mut trace: Option<&mut super::interaction_trace::InteractionTrace>,
 ) -> Result<(), String> {
     let terminal_authority = terminal
+        .editor
         .coordinator()
         .accepted_materialization()
         .ok_or_else(|| "terminal code drag has no accepted native authority".to_owned())?;
@@ -4724,9 +6755,58 @@ fn validate_terminal_native_parity_with_trace(
         .coordinator()
         .accepted_materialization()
         .ok_or_else(|| "staged code drag has no accepted native authority".to_owned())?;
-    let mut recomputable = recomputable_code_line_branches(terminal, expansion)?;
+    if !accepted_validation_is_publishable(&terminal_authority.validation)
+        || !accepted_validation_is_publishable(&staged_authority.validation)
+    {
+        return Err(
+            "terminal parity requires two independently validated current native authorities"
+                .into(),
+        );
+    }
+    let terminal_input = terminal
+        .session
+        .accepted_prepared_input()
+        .ok_or_else(|| "terminal code drag has no accepted prepared input".to_owned())?;
+    let mut transient_computed = None;
+    let terminal_computed = if terminal_authority.computed.input().sketch == terminal_input {
+        &terminal_authority.computed
+    } else {
+        let mut allocator = ComputedEvaluationAllocator::from_high_water(
+            terminal_authority.computed_evaluation_high_water,
+        );
+        let outcome = ComputedFeatureEvaluationSnapshot::capture(
+            terminal.session,
+            &terminal_authority.features,
+            ComputedFeatureEvaluationPolicy::default(),
+        )
+        .map_err(|error| format!("terminal computed preview capture failed: {error}"))?
+        .prepare(&mut allocator)
+        .map_err(|error| format!("terminal computed preview preparation failed: {error}"))?
+        .execute(OperationControl::unlimited())
+        .map_err(|error| format!("terminal computed preview evaluation failed: {error}"))?;
+        let OperationOutcome::Completed {
+            value: computed, ..
+        } = outcome
+        else {
+            return Err("terminal computed preview evaluation did not complete".into());
+        };
+        transient_computed.insert(computed)
+    };
+    if terminal_computed
+        .feature_evaluations()
+        .iter()
+        .any(|evaluation| {
+            !matches!(
+                evaluation.state,
+                ComputedFeatureEvaluationState::Current { .. }
+            )
+        })
+    {
+        return Err("terminal computed preview contains a non-current feature".into());
+    }
+    let mut recomputable = recomputable_code_line_branches(terminal.editor, expansion)?;
     recomputable.extend(recomputable_code_line_branches(staged, expansion)?);
-    let terminal_accepted = terminal_authority
+    let terminal_accepted = terminal
         .session
         .accepted_state_for_current_input()
         .ok_or_else(|| "terminal code drag has no current accepted document".to_owned())?
@@ -4736,40 +6816,52 @@ fn validate_terminal_native_parity_with_trace(
         .accepted_state_for_current_input()
         .ok_or_else(|| "staged code drag has no current accepted document".to_owned())?
         .document();
+    let terminal_design =
+        terminal_seeded_design_document(terminal, terminal_seed_placements, rectangle_projections)?;
     let design_document_parity = documents_match_for_terminal_parity(
-        terminal,
+        terminal.editor,
         staged,
-        terminal_authority.session.design_document(),
+        &terminal_design,
         staged_authority.session.design_document(),
         rectangle_projections,
         &recomputable,
     )?;
     let accepted_document_parity = documents_match_for_terminal_parity(
-        terminal,
+        terminal.editor,
         staged,
         terminal_accepted,
         staged_accepted,
         rectangle_projections,
         &recomputable,
     )?;
-    let same_documents = design_document_parity.matches() && accepted_document_parity.matches();
+    let same_documents = design_document_parity.matches()
+        && accepted_document_parity.matches()
+        && terminal_document_normalizations_match(
+            &design_document_parity,
+            &accepted_document_parity,
+        );
+    let computed_policy =
+        terminal_computed_roundoff_points(&design_document_parity, &accepted_document_parity)
+            .map(|point_scales| {
+                terminal_roundoff_sources(staged_accepted, point_scales).map(|source_scales| {
+                    TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales }
+                })
+            })
+            .transpose()?
+            .unwrap_or(TerminalComputedParityPolicy::Exact);
     let same_feature_documents = feature_documents_match_for_terminal_parity(
         &terminal_authority.features,
         &staged_authority.features,
+        &computed_policy,
     );
-    let computed_policy =
-        terminal_computed_roundoff_points(&design_document_parity, &accepted_document_parity)
-            .map_or(TerminalComputedParityPolicy::Exact, |points| {
-                TerminalComputedParityPolicy::RectangleAliasRoundoff {
-                    curves: terminal_roundoff_curves(staged_accepted, points),
-                }
-            });
     let same_computed_snapshots = computed_snapshots_match_for_terminal_parity(
-        &terminal_authority.computed,
+        terminal_computed,
         &staged_authority.computed,
         &computed_policy,
     );
     let same_features = same_feature_documents && same_computed_snapshots;
+    let same_semantic_inputs =
+        terminal_semantic_inputs_match(&terminal_authority.session, &staged_authority.session);
     if let Some(trace) = trace.as_deref_mut() {
         trace.record(
             "parity.documents",
@@ -4778,6 +6870,17 @@ fn validate_terminal_native_parity_with_trace(
             ),
         );
         trace.record("parity.computed.policy", format!("{computed_policy:?}"));
+        let periodic_angles = terminal_computed_periodic_angle_evidence(
+            terminal_computed,
+            &staged_authority.computed,
+            &computed_policy,
+        );
+        if !periodic_angles.is_empty() {
+            trace.record(
+                "parity.computed.periodic-angle",
+                periodic_angles.join(" | "),
+            );
+        }
         trace.record(
             "parity.features",
             format!(
@@ -4786,11 +6889,15 @@ fn validate_terminal_native_parity_with_trace(
                 staged_authority.features.identity(),
             ),
         );
+        trace.record(
+            "parity.semantic-inputs",
+            format!("durable_input_payloads={same_semantic_inputs}"),
+        );
         if !same_computed_snapshots {
             trace.record(
                 "parity.computed.first-mismatch",
                 first_terminal_computed_snapshot_mismatch(
-                    &terminal_authority.computed,
+                    terminal_computed,
                     &staged_authority.computed,
                     &computed_policy,
                 ),
@@ -4828,7 +6935,7 @@ fn validate_terminal_native_parity_with_trace(
                 "feature_terminal={:?} feature_staged={:?} sketch_terminal={:?} sketch_staged={:?}",
                 terminal_authority.feature_lifecycle_high_water.allocator,
                 staged_authority.feature_lifecycle_high_water.allocator,
-                terminal_authority.session.persistent_identity_high_water(),
+                terminal.session.persistent_identity_high_water(),
                 staged_authority.session.persistent_identity_high_water(),
             ),
         );
@@ -4843,12 +6950,15 @@ fn validate_terminal_native_parity_with_trace(
     if !same_ownership {
         differences.push("native ownership");
     }
+    if !same_semantic_inputs {
+        differences.push("native semantic inputs");
+    }
     if terminal_authority.feature_lifecycle_high_water.allocator
         != staged_authority.feature_lifecycle_high_water.allocator
     {
         differences.push("feature allocator");
     }
-    if terminal_authority.session.persistent_identity_high_water()
+    if terminal.session.persistent_identity_high_water()
         != staged_authority.session.persistent_identity_high_water()
     {
         differences.push("sketch allocator");
@@ -4970,20 +7080,428 @@ fn pair_bits(value: [f64; 2]) -> [u64; 2] {
     [value[0].to_bits(), value[1].to_bits()]
 }
 
-fn managed_path_text(path: &[geosolve_sketch_code::ManagedPathSegment]) -> String {
+fn write_managed_control_input(markup: &mut String, control: &ManagedControl, path: &str) {
+    let Some(schema) = control.schema.as_ref() else {
+        return;
+    };
+    let id = escape_attribute(&control.id.0);
+    let label = escape_attribute(&format!("Edit managed {path}"));
+    match (schema, &control.value) {
+        (
+            ManagedControlSchema::Number {
+                number,
+                minimum,
+                maximum,
+            },
+            ManagedValue::Number(value),
+        ) => {
+            let step = if *number == geosolve_sketch_code::ManagedControlNumberKind::Real {
+                "any"
+            } else {
+                "1"
+            };
+            let _ = write!(
+                markup,
+                "<label class=\"wb-code-lens-control\"><span class=\"wb-sr-only\">{label}</span><input type=\"number\" step=\"{step}\" value=\"{value}\" data-code-control-id=\"{id}\"",
+            );
+            write_managed_control_bounds(markup, *minimum, *maximum);
+            markup.push_str(" /><small>value</small></label>");
+        }
+        (
+            ManagedControlSchema::Unit {
+                unit,
+                number,
+                minimum,
+                maximum,
+            },
+            ManagedValue::Unit(value),
+        ) if value.unit == *unit => {
+            let step = if *number == geosolve_sketch_code::ManagedControlNumberKind::Real {
+                "any"
+            } else {
+                "1"
+            };
+            let _ = write!(
+                markup,
+                "<label class=\"wb-code-lens-control\"><span class=\"wb-sr-only\">{label}</span><input type=\"number\" step=\"{step}\" value=\"{}\" data-code-control-id=\"{id}\"",
+                value.value,
+            );
+            write_managed_control_bounds(markup, *minimum, *maximum);
+            let _ = write!(markup, " /><small>{}</small></label>", escape_html(unit));
+        }
+        (ManagedControlSchema::Boolean, ManagedValue::Bool(value)) => {
+            let checked = if *value { " checked" } else { "" };
+            let _ = write!(
+                markup,
+                "<label class=\"wb-code-lens-control\"><span>{}</span><input type=\"checkbox\" data-code-control-id=\"{id}\"{checked} /></label>",
+                escape_html(path),
+            );
+        }
+        (ManagedControlSchema::Choice { choices }, ManagedValue::String(value)) => {
+            let _ = write!(
+                markup,
+                "<label class=\"wb-code-lens-control\"><span class=\"wb-sr-only\">{label}</span><select data-code-control-id=\"{id}\">",
+            );
+            for choice in choices {
+                let selected = if choice == value { " selected" } else { "" };
+                let _ = write!(
+                    markup,
+                    "<option value=\"{}\"{selected}>{}</option>",
+                    escape_attribute(choice),
+                    escape_html(choice),
+                );
+            }
+            markup.push_str("</select></label>");
+        }
+        (ManagedControlSchema::Text, ManagedValue::String(value)) => {
+            let _ = write!(
+                markup,
+                "<label class=\"wb-code-lens-control\"><span class=\"wb-sr-only\">{label}</span><input type=\"text\" value=\"{}\" data-code-control-id=\"{id}\" /></label>",
+                escape_attribute(value),
+            );
+        }
+        _ => {
+            markup
+                .push_str("<span class=\"wb-code-readonly\">Control schema/source mismatch</span>");
+        }
+    }
+}
+
+fn write_managed_control_bounds(
+    markup: &mut String,
+    minimum: Option<geosolve_sketch_code::ManagedControlBound>,
+    maximum: Option<geosolve_sketch_code::ManagedControlBound>,
+) {
+    if let Some(minimum) = minimum.filter(|bound| bound.inclusive) {
+        let _ = write!(markup, " min=\"{}\"", minimum.value);
+    }
+    if let Some(maximum) = maximum.filter(|bound| bound.inclusive) {
+        let _ = write!(markup, " max=\"{}\"", maximum.value);
+    }
+}
+
+fn semantic_output_path(path: &geosolve_sketch_intent::IntentProjectionPath) -> SemanticOutputPath {
+    SemanticOutputPath(
+        path.segments()
+            .iter()
+            .map(|segment| match segment {
+                geosolve_sketch_intent::IntentProjectionPathSegment::Field(field) => {
+                    ManagedPathSegment::Field(field.as_str().to_owned())
+                }
+                geosolve_sketch_intent::IntentProjectionPathSegment::Index(index) => {
+                    ManagedPathSegment::Index(usize::from(*index))
+                }
+            })
+            .collect(),
+    )
+}
+
+fn managed_value_from_inspector(
+    control: &ManagedControl,
+    value: &IntentInspectorEditValue,
+) -> Result<ManagedValue, String> {
+    let submission = match value {
+        IntentInspectorEditValue::Suppressed { suppressed } => {
+            ManagedControlSubmission::Boolean(*suppressed)
+        }
+        IntentInspectorEditValue::Literal { literal } => match literal {
+            IntentLiteral::Boolean(value) => ManagedControlSubmission::Boolean(*value),
+            IntentLiteral::Integer(value) => {
+                ManagedControlSubmission::Number(exact_i64_as_f64(*value)?)
+            }
+            IntentLiteral::Natural(value) => {
+                ManagedControlSubmission::Number(exact_u64_as_f64(*value)?)
+            }
+            IntentLiteral::Text(value) => {
+                ManagedControlSubmission::String(value.as_str().to_owned())
+            }
+            IntentLiteral::Enum(value) => ManagedControlSubmission::String(
+                managed_source_choice_for_intent(control, value.as_str())?,
+            ),
+            IntentLiteral::Quantity { value, unit } => {
+                if let ManagedValue::Unit(current) = &control.value
+                    && !managed_unit_matches_intent(&current.unit, *unit)
+                {
+                    return Err(format!(
+                        "managed source unit `{}` does not match the Inspector quantity",
+                        current.unit
+                    ));
+                }
+                ManagedControlSubmission::Number(*value)
+            }
+            IntentLiteral::Point(_) => {
+                return Err(
+                    "solver-instance point values remain on the semantic draft/overlay route"
+                        .into(),
+                );
+            }
+        },
+    };
+    managed_value_from_submission(control, submission)
+}
+
+/// Maps the semantic Inspector's canonical snake-case enum spelling back to
+/// the exact closed choice spelling used by managed source. This is derived
+/// only from the fresh control schema: it neither guesses an arbitrary source
+/// value nor special-cases a property name.
+fn managed_source_choice_for_intent(
+    control: &ManagedControl,
+    semantic: &str,
+) -> Result<String, String> {
+    let Some(ManagedControlSchema::Choice { choices }) = control.schema.as_ref() else {
+        return Err("the Inspector enum does not target a managed closed choice".into());
+    };
+    let mut matches = choices
+        .iter()
+        .filter(|choice| managed_choice_semantic_key(choice) == semantic);
+    let Some(choice) = matches.next() else {
+        return Err("the Inspector enum is not admitted by the managed source choices".into());
+    };
+    if matches.next().is_some() {
+        return Err("the managed source choices have an ambiguous semantic spelling".into());
+    }
+    Ok(choice.clone())
+}
+
+fn managed_choice_semantic_key(choice: &str) -> String {
+    let mut semantic = String::with_capacity(choice.len());
+    for (index, character) in choice.chars().enumerate() {
+        if character.is_ascii_uppercase() {
+            if index != 0 {
+                semantic.push('_');
+            }
+            semantic.push(character.to_ascii_lowercase());
+        } else if character == '-' || character == ' ' {
+            semantic.push('_');
+        } else {
+            semantic.push(character);
+        }
+    }
+    semantic
+}
+
+#[cfg(test)]
+mod managed_inspector_choice_tests {
+    use super::*;
+    use geosolve_sketch_code::{
+        ManagedControlAccess, ManagedControlSource, ManagedControlToken, ManagedOwnedSpanKind,
+        ManagedSpan,
+    };
+    use geosolve_sketch_intent::IntentKey;
+
+    fn choice_control() -> ManagedControl {
+        let id = ManagedControlId("choice".into());
+        let declaration = SemanticSymbol("fillet".into());
+        let path = SemanticOutputPath(vec![ManagedPathSegment::Field("endpointOrder".into())]);
+        let expected = ManagedValue::String("firstThenSecond".into());
+        ManagedControl {
+            id: id.clone(),
+            source: ManagedControlSource {
+                declaration: declaration.clone(),
+                path: path.clone(),
+                kind: ManagedOwnedSpanKind::Literal,
+                span: ManagedSpan { start: 0, end: 17 },
+                source_text: "\"firstThenSecond\"".into(),
+            },
+            value: expected.clone(),
+            schema: Some(ManagedControlSchema::Choice {
+                choices: vec!["firstThenSecond".into(), "secondThenFirst".into()],
+            }),
+            consumers: Vec::new(),
+            access: ManagedControlAccess::Editable {
+                token: ManagedControlToken {
+                    id,
+                    project: ProjectKey("choice-test".into()),
+                    project_digest: "project".into(),
+                    source_digest: "source".into(),
+                    declaration,
+                    path,
+                    expected,
+                    generation_digest: "generation".into(),
+                    authentication: "authentication".into(),
+                },
+            },
+        }
+    }
+
+    #[test]
+    fn inspector_enum_uses_the_fresh_camel_case_source_choice() {
+        let control = choice_control();
+        let replacement = managed_value_from_inspector(
+            &control,
+            &IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Enum(IntentKey::new("second_then_first").unwrap()),
+            },
+        )
+        .expect("semantic enum resolves through the closed source choice schema");
+        assert_eq!(replacement, ManagedValue::String("secondThenFirst".into()));
+
+        let error = managed_value_from_inspector(
+            &control,
+            &IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Enum(IntentKey::new("nearest").unwrap()),
+            },
+        )
+        .expect_err("a semantic value absent from the fresh source choices must reject");
+        assert!(error.contains("not admitted"));
+    }
+}
+
+fn managed_value_from_submission(
+    control: &ManagedControl,
+    submission: ManagedControlSubmission,
+) -> Result<ManagedValue, String> {
+    let schema = control
+        .schema
+        .as_ref()
+        .ok_or_else(|| "the selected managed control is read-only".to_owned())?;
+    match (schema, &control.value, submission) {
+        (
+            ManagedControlSchema::Number { .. },
+            ManagedValue::Number(_),
+            ManagedControlSubmission::Number(value),
+        ) if value.is_finite() => Ok(ManagedValue::Number(value)),
+        (
+            ManagedControlSchema::Unit { unit, .. },
+            ManagedValue::Unit(current),
+            ManagedControlSubmission::Number(value),
+        ) if current.unit == *unit && value.is_finite() => Ok(ManagedValue::Unit(UnitLiteral {
+            unit: current.unit.clone(),
+            value,
+        })),
+        (
+            ManagedControlSchema::Boolean,
+            ManagedValue::Bool(_),
+            ManagedControlSubmission::Boolean(value),
+        ) => Ok(ManagedValue::Bool(value)),
+        (
+            ManagedControlSchema::Choice { .. } | ManagedControlSchema::Text,
+            ManagedValue::String(_),
+            ManagedControlSubmission::String(value),
+        ) => Ok(ManagedValue::String(value)),
+        (
+            ManagedControlSchema::Number { .. } | ManagedControlSchema::Unit { .. },
+            _,
+            ManagedControlSubmission::Number(value),
+        ) if !value.is_finite() => Err("managed-control number must be finite".into()),
+        _ => Err(
+            "managed-control submission does not match its fresh source representation and schema"
+                .into(),
+        ),
+    }
+}
+
+fn exact_i64_as_f64(value: i64) -> Result<f64, String> {
+    const MAX_EXACT_INTEGER: u64 = 1_u64 << 53;
+    if value.unsigned_abs() > MAX_EXACT_INTEGER {
+        return Err("managed integer exceeds the exact source-number range".into());
+    }
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "the exact IEEE-754 integer range is checked immediately above"
+    )]
+    let result = value as f64;
+    Ok(result)
+}
+
+fn exact_u64_as_f64(value: u64) -> Result<f64, String> {
+    const MAX_EXACT_INTEGER: u64 = 1_u64 << 53;
+    if value > MAX_EXACT_INTEGER {
+        return Err("managed natural number exceeds the exact source-number range".into());
+    }
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "the exact IEEE-754 integer range is checked immediately above"
+    )]
+    let result = value as f64;
+    Ok(result)
+}
+
+fn managed_unit_matches_intent(unit: &str, intent: IntentUnit) -> bool {
+    matches!(
+        (unit, intent),
+        ("mm" | "cm" | "m" | "inch", IntentUnit::Length) | ("deg" | "rad", IntentUnit::Angle)
+    )
+}
+
+fn managed_values_exactly_equal(left: &ManagedValue, right: &ManagedValue) -> bool {
+    match (left, right) {
+        (ManagedValue::Null, ManagedValue::Null) => true,
+        (ManagedValue::Bool(left), ManagedValue::Bool(right)) => left == right,
+        (ManagedValue::Number(left), ManagedValue::Number(right)) => {
+            left.to_bits() == right.to_bits()
+        }
+        (ManagedValue::String(left), ManagedValue::String(right)) => left == right,
+        (ManagedValue::Unit(left), ManagedValue::Unit(right)) => {
+            left.unit == right.unit && left.value.to_bits() == right.value.to_bits()
+        }
+        (ManagedValue::Array(left), ManagedValue::Array(right)) => {
+            left.len() == right.len()
+                && left
+                    .iter()
+                    .zip(right)
+                    .all(|(left, right)| managed_values_exactly_equal(left, right))
+        }
+        (ManagedValue::Object(left), ManagedValue::Object(right)) => {
+            left.len() == right.len()
+                && left.iter().all(|(key, left)| {
+                    right
+                        .get(key)
+                        .is_some_and(|right| managed_values_exactly_equal(left, right))
+                })
+        }
+        (
+            ManagedValue::Reference {
+                declaration: left_declaration,
+                path: left_path,
+            },
+            ManagedValue::Reference {
+                declaration: right_declaration,
+                path: right_path,
+            },
+        ) => left_declaration == right_declaration && left_path == right_path,
+        _ => false,
+    }
+}
+
+fn managed_numeric_value(value: &ManagedValue) -> Option<f64> {
+    match value {
+        ManagedValue::Number(value) if value.is_finite() => Some(*value),
+        ManagedValue::Unit(value) if value.value.is_finite() => Some(value.value),
+        _ => None,
+    }
+}
+
+fn managed_fillet_radius_value_kind(
+    control: &ManagedControl,
+) -> Result<ManagedFilletRadiusValueKind, String> {
+    match (control.schema.as_ref(), &control.value) {
+        (Some(ManagedControlSchema::Number { .. }), ManagedValue::Number(_)) => {
+            Ok(ManagedFilletRadiusValueKind::Number)
+        }
+        (Some(ManagedControlSchema::Unit { unit, .. }), ManagedValue::Unit(value))
+            if value.unit == *unit =>
+        {
+            Ok(ManagedFilletRadiusValueKind::Unit(value.unit.clone()))
+        }
+        _ => Err("managed Fillet radius has an incompatible source schema".into()),
+    }
+}
+
+fn managed_path_text(path: &[ManagedPathSegment]) -> String {
     let mut text = String::new();
     for segment in path {
         match segment {
-            geosolve_sketch_code::ManagedPathSegment::Field(field) => {
+            ManagedPathSegment::Field(field) => {
                 if !text.is_empty() {
                     text.push('.');
                 }
                 text.push_str(field);
             }
-            geosolve_sketch_code::ManagedPathSegment::Index(index) => {
+            ManagedPathSegment::Index(index) => {
                 let _ = write!(text, "[{index}]");
             }
-            geosolve_sketch_code::ManagedPathSegment::Member { member } => {
+            ManagedPathSegment::Member { member } => {
                 let _ = write!(text, "[{member}]");
             }
         }
@@ -4995,23 +7513,63 @@ fn managed_path_text(path: &[geosolve_sketch_code::ManagedPathSegment]) -> Strin
     }
 }
 
-fn managed_object_path<'a>(value: &'a ManagedValue, path: &[String]) -> Option<&'a ManagedValue> {
-    path.iter().try_fold(value, |value, field| {
-        let ManagedValue::Object(object) = value else {
-            return None;
-        };
-        object.get(field)
-    })
+fn managed_source_path(control: &ManagedControl) -> String {
+    let path = managed_path_text(&control.source.path.0);
+    if control.source.path.0.is_empty() {
+        control.source.declaration.0.clone()
+    } else {
+        format!("{}.{}", control.source.declaration.0, path)
+    }
 }
 
-fn managed_length_value(value: &ManagedValue) -> Option<f64> {
-    match value {
-        ManagedValue::Number(value) if value.is_finite() => Some(*value),
-        ManagedValue::Unit(UnitLiteral { unit, value }) if unit == "mm" && value.is_finite() => {
-            Some(*value)
-        }
-        _ => None,
+fn managed_navigation_path(navigation: &geosolve_sketch_code::ManagedControlNavigation) -> String {
+    if navigation.path.0.is_empty() {
+        navigation.declaration.0.clone()
+    } else {
+        format!(
+            "{}.{}",
+            navigation.declaration.0,
+            managed_path_text(&navigation.path.0),
+        )
     }
+}
+
+fn managed_read_only_reason(
+    reason: ManagedControlReadOnlyReason,
+    navigation: Option<&geosolve_sketch_code::ManagedControlNavigation>,
+) -> String {
+    let reason = match reason {
+        ManagedControlReadOnlyReason::Structure => "Structural source value",
+        ManagedControlReadOnlyReason::Reference => "Source reference",
+        ManagedControlReadOnlyReason::StructuralIdentity => "Structural identity",
+        ManagedControlReadOnlyReason::SolverInstance => "Solver-owned instance value",
+        ManagedControlReadOnlyReason::Null => "Null source value",
+        ManagedControlReadOnlyReason::Absent => "Absent source value",
+        ManagedControlReadOnlyReason::IncompatibleSchemas => "Incompatible consumer schemas",
+        ManagedControlReadOnlyReason::UnprovenTransform => "Unproven source transform",
+    };
+    navigation.map_or_else(
+        || format!("{reason} · no direct sketch.ts edit lens"),
+        |navigation| {
+            format!(
+                "{reason} · navigate to {} in sketch.ts",
+                managed_navigation_path(navigation),
+            )
+        },
+    )
+}
+
+fn managed_family_label(family: &str) -> String {
+    let leaf = family.rsplit('.').next().unwrap_or(family);
+    let mut characters = leaf.chars();
+    characters.next().map_or_else(
+        || "native".into(),
+        |first| {
+            let mut label = first.to_uppercase().collect::<String>();
+            label.extend(characters);
+            label
+        },
+    )
 }
 
 fn escape_html(value: &str) -> String {
@@ -5036,45 +7594,233 @@ mod tests {
         let seed = 1.0_f64;
         let within = f64::from_bits(seed.to_bits() + TERMINAL_SEED_ROUNDOFF_ULPS);
         let outside = f64::from_bits(seed.to_bits() + TERMINAL_SEED_ROUNDOFF_ULPS + 1);
-        assert!(scalar_seed_roundoff_compatible(seed, seed));
-        assert!(scalar_seed_roundoff_compatible(seed, within));
-        assert!(!scalar_seed_roundoff_compatible(seed, outside));
+        assert!(scalar_seed_roundoff_compatible(seed, seed, 1.0));
+        assert!(scalar_seed_roundoff_compatible(seed, within, 1.0));
+        assert!(!scalar_seed_roundoff_compatible(seed, outside, 1.0));
         assert!(scalar_seed_roundoff_compatible(
             3.0 * f64::EPSILON,
             -2.0 * f64::EPSILON,
+            1.0,
         ));
         assert!(!scalar_seed_roundoff_compatible(
             2.0 * TERMINAL_SEED_ZERO_ROUNDOFF,
             0.0,
+            1.0,
         ));
-        assert!(!scalar_seed_roundoff_compatible(0.0, -0.0));
-        assert!(!scalar_seed_roundoff_compatible(f64::NAN, f64::NAN));
+        assert!(!scalar_seed_roundoff_compatible(0.0, -0.0, 1.0));
+        assert!(!scalar_seed_roundoff_compatible(f64::NAN, f64::NAN, 1.0));
         assert!(!scalar_seed_roundoff_compatible(
             f64::INFINITY,
             f64::INFINITY,
+            1.0,
         ));
 
-        assert!(terminal_derived_scalar_matches(seed, within));
-        assert!(!terminal_derived_scalar_matches(seed, outside));
-        assert!(terminal_derived_scalar_matches(0.0, -0.0));
+        assert!(terminal_derived_scalar_matches(seed, within, 1.0));
+        assert!(!terminal_derived_scalar_matches(seed, outside, 1.0));
+        assert!(terminal_derived_scalar_matches(0.0, -0.0, 1.0));
         assert!(terminal_derived_scalar_matches(
             3.0 * f64::EPSILON,
             -2.0 * f64::EPSILON,
+            1.0,
         ));
         assert!(!terminal_derived_scalar_matches(
             2.0 * TERMINAL_SEED_ZERO_ROUNDOFF,
             0.0,
+            1.0,
         ));
-        assert!(!terminal_derived_scalar_matches(f64::NAN, f64::NAN));
+        assert!(!terminal_derived_scalar_matches(f64::NAN, f64::NAN, 1.0));
         assert!(!terminal_derived_scalar_matches(
             f64::INFINITY,
             f64::INFINITY,
+            1.0,
         ));
+
+        let browser_terminal = 1.743_119_266_055_046_5_f64;
+        let projected_alias = f64::from_bits(browser_terminal.to_bits() + 14);
+        assert!(scalar_seed_roundoff_compatible(
+            browser_terminal,
+            projected_alias,
+            80.0,
+        ));
+        assert!(terminal_derived_scalar_matches(
+            browser_terminal,
+            projected_alias,
+            80.0,
+        ));
+        assert!(!scalar_seed_roundoff_compatible(
+            browser_terminal,
+            browser_terminal + 1.0e-10,
+            80.0,
+        ));
+    }
+
+    struct RedundantAliasParityFixture {
+        terminal_editor: Box<ProjectionalEditorSession>,
+        staged_editor: ProjectionalEditorSession,
+        terminal_document: geosolve_sketch::SketchDocument,
+        projection: RectangleTerminalProjection,
+        upper_left: geosolve_sketch::DesignPointId,
+        position: [f64; 2],
+    }
+
+    fn redundant_alias_parity_fixture() -> RedundantAliasParityFixture {
+        let (workbench, terminal_editor) = open_boxed("typed-panel");
+        let staged_editor = terminal_editor
+            .fork_accepted_authority()
+            .expect("independent Typed Panel staged authority");
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("Typed Panel accepted expansion");
+        let key = expansion
+            .writable_points
+            .iter()
+            .find_map(|point| match &point.edit {
+                CodePointEdit::RectangleCorner {
+                    lower_left,
+                    upper_right,
+                    ..
+                } => Some((lower_left.clone(), upper_right.clone())),
+                CodePointEdit::Point { .. } => None,
+            })
+            .expect("Typed Panel rectangle codec");
+        let lenses = rectangle_lenses(expansion, &key).expect("exact four-lens rectangle codec");
+        let projection = RectangleTerminalProjection {
+            anchors: [
+                lenses[&CodeRectangleCorner::LowerLeft].handle.clone(),
+                lenses[&CodeRectangleCorner::UpperRight].handle.clone(),
+            ],
+            redundant_aliases: [
+                lenses[&CodeRectangleCorner::LowerRight].handle.clone(),
+                lenses[&CodeRectangleCorner::UpperLeft].handle.clone(),
+            ],
+        };
+        let terminal_document = terminal_editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("Typed Panel accepted materialization")
+            .session
+            .design_document()
+            .clone();
+        let upper_left = expanded_port_point(
+            &terminal_editor,
+            &lenses[&CodeRectangleCorner::UpperLeft].handle,
+        )
+        .expect("upper-left native point");
+        let position = terminal_document
+            .point(upper_left)
+            .expect("upper-left document point")
+            .position;
+        assert_eq!(position[0].to_bits(), 0.0_f64.to_bits());
+        RedundantAliasParityFixture {
+            terminal_editor,
+            staged_editor,
+            terminal_document,
+            projection,
+            upper_left,
+            position,
+        }
+    }
+
+    #[test]
+    fn redundant_rectangle_alias_normalization_is_bounded_and_signed_zero_exact() {
+        let fixture = redundant_alias_parity_fixture();
+        let mut within = fixture.terminal_document.clone();
+        let mut within_position = fixture.position;
+        within_position[1] = f64::from_bits(within_position[1].to_bits() + 14);
+        within
+            .set_point_position(fixture.upper_left, within_position)
+            .expect("bounded redundant-alias roundoff");
+        assert!(matches!(
+            documents_match_for_terminal_parity(
+                &fixture.terminal_editor,
+                &fixture.staged_editor,
+                &fixture.terminal_document,
+                &within,
+                std::slice::from_ref(&fixture.projection),
+                &BTreeSet::new(),
+            )
+            .expect("bounded document parity"),
+            TerminalDocumentParity::NormalizedRedundantRectangleAliases(points)
+                if points.len() == 1 && points.contains_key(&fixture.upper_left)
+        ));
+
+        let mut material = fixture.terminal_document.clone();
+        let mut material_position = fixture.position;
+        material_position[1] += 1.0e-8;
+        material
+            .set_point_position(fixture.upper_left, material_position)
+            .expect("finite material redundant-alias difference");
+        assert_eq!(
+            documents_match_for_terminal_parity(
+                &fixture.terminal_editor,
+                &fixture.staged_editor,
+                &fixture.terminal_document,
+                &material,
+                std::slice::from_ref(&fixture.projection),
+                &BTreeSet::new(),
+            )
+            .expect("material document parity"),
+            TerminalDocumentParity::Mismatch,
+        );
+
+        let mut opposite_zero = fixture.terminal_document.clone();
+        let mut opposite_zero_position = fixture.position;
+        opposite_zero_position[0] = -0.0;
+        opposite_zero
+            .set_point_position(fixture.upper_left, opposite_zero_position)
+            .expect("finite opposite signed zero");
+        assert_eq!(
+            documents_match_for_terminal_parity(
+                &fixture.terminal_editor,
+                &fixture.staged_editor,
+                &fixture.terminal_document,
+                &opposite_zero,
+                &[fixture.projection],
+                &BTreeSet::new(),
+            )
+            .expect("signed-zero document parity"),
+            TerminalDocumentParity::Mismatch,
+        );
+    }
+
+    #[test]
+    fn unrelated_far_geometry_does_not_inflate_rectangle_alias_roundoff() {
+        let fixture = redundant_alias_parity_fixture();
+        let mut terminal = fixture.terminal_document.clone();
+        let mut staged = fixture.terminal_document.clone();
+        let terminal_far = terminal
+            .add_point("unrelated far terminal point", [1.0e12, -1.0e12])
+            .expect("bounded unrelated terminal point");
+        let staged_far = staged
+            .add_point("unrelated far terminal point", [1.0e12, -1.0e12])
+            .expect("bounded unrelated staged point");
+        assert_eq!(terminal_far, staged_far);
+        let mut material_position = fixture.position;
+        material_position[1] += 1.0e-8;
+        staged
+            .set_point_position(fixture.upper_left, material_position)
+            .expect("material local redundant-alias difference");
+
+        assert_eq!(
+            documents_match_for_terminal_parity(
+                &fixture.terminal_editor,
+                &fixture.staged_editor,
+                &terminal,
+                &staged,
+                &[fixture.projection],
+                &BTreeSet::new(),
+            )
+            .expect("far-geometry document parity"),
+            TerminalDocumentParity::Mismatch,
+        );
     }
 
     fn typed_panel_fillet_edge_and_sources() -> (
         geosolve_constraint_editor::ComputedEdge,
-        BTreeSet<geosolve_sketch::CurveId>,
+        TerminalRoundoffSourceScales,
     ) {
         let (_workbench, editor) = open_boxed("typed-panel");
         let edge = editor
@@ -5090,22 +7836,18 @@ mod tests {
         let ComputedEdgeGeometry::CircularArc(reference_arc) = &edge.geometry else {
             panic!("selected edge must remain a circular arc")
         };
-        let roundoff_curves = reference_arc
+        let source_scales = reference_arc
             .contacts
             .iter()
-            .map(|contact| contact.source.span.curve)
-            .collect::<BTreeSet<_>>();
-        (edge, roundoff_curves)
+            .map(|contact| (contact.source, 1.0_f64.to_bits()))
+            .collect();
+        (edge, source_scales)
     }
 
     #[test]
     fn rectangle_terminal_derived_roundoff_is_causal_and_bounded() {
-        let (edge, roundoff_curves) = typed_panel_fillet_edge_and_sources();
-        assert!(terminal_computed_edge_matches(
-            &edge,
-            &edge,
-            &roundoff_curves,
-        ));
+        let (edge, source_scales) = typed_panel_fillet_edge_and_sources();
+        assert!(terminal_computed_edge_matches(&edge, &edge, &source_scales));
 
         let changed_center = |ulp_delta| {
             let mut changed = edge.clone();
@@ -5119,23 +7861,280 @@ mod tests {
         assert!(terminal_computed_edge_matches(
             &edge,
             &within,
-            &roundoff_curves,
+            &source_scales
         ));
         assert!(
-            !terminal_computed_edge_matches(&edge, &within, &BTreeSet::new()),
+            !terminal_computed_edge_matches(&edge, &within, &TerminalRoundoffSourceScales::new()),
             "an unrelated computed edge must remain bit-exact",
         );
         let outside = changed_center(TERMINAL_SEED_ROUNDOFF_ULPS + 1);
         assert!(!terminal_computed_edge_matches(
             &edge,
             &outside,
-            &roundoff_curves,
+            &source_scales
         ));
     }
 
     #[test]
+    fn rectangle_terminal_periodic_arc_angle_roundoff_is_causal_and_bounded() {
+        let (mut terminal, source_scales) = typed_panel_fillet_edge_and_sources();
+        let mut staged = terminal.clone();
+        let ComputedEdgeGeometry::CircularArc(terminal_arc) = &mut terminal.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        let ComputedEdgeGeometry::CircularArc(staged_arc) = &mut staged.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        terminal_arc.start_angle = -std::f64::consts::PI;
+        staged_arc.start_angle = std::f64::consts::PI;
+
+        assert!(
+            terminal_computed_edge_matches(&terminal, &staged, &source_scales),
+            "the authenticated computed arc must treat -PI/+PI as one periodic direction",
+        );
+        assert!(
+            !terminal_computed_edge_matches(
+                &terminal,
+                &staged,
+                &TerminalRoundoffSourceScales::new(),
+            ),
+            "an empty or unrelated policy must keep the same arc angles bit-exact",
+        );
+        assert!(!terminal_periodic_angle_matches_trace_policy(
+            -std::f64::consts::PI,
+            std::f64::consts::PI,
+            TerminalScalarParityPolicy::Exact,
+        ));
+        assert!(terminal_periodic_angle_matches_trace_policy(
+            -std::f64::consts::PI,
+            std::f64::consts::PI,
+            TerminalScalarParityPolicy::Roundoff {
+                coordinate_scale: 1.0,
+            },
+        ));
+
+        let ComputedEdgeGeometry::CircularArc(staged_arc) = &mut staged.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        staged_arc.start_angle = std::f64::consts::PI - 1.0e-6;
+        assert!(
+            !terminal_computed_edge_matches(&terminal, &staged, &source_scales),
+            "a genuinely different direction must not enter the periodic seam cell",
+        );
+        let policy = TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales };
+        let edge_index = usize::try_from(terminal.id.ordinal).expect("bounded computed edge");
+        let mismatch =
+            first_terminal_computed_edge_mismatch(edge_index, &terminal, &staged, &policy);
+        assert!(mismatch.starts_with(&format!("path=edge[{edge_index}].arc.start_angle ")));
+        assert!(mismatch.contains("periodic_policy=one-turn"));
+        assert!(mismatch.contains("periodic_turn=Some(-1)"));
+        assert!(mismatch.contains("unwrapped_staged=Some("));
+        assert!(mismatch.contains("unwrapped_residual=Some("));
+        assert!(mismatch.contains("unwrapped_tolerance=Some("));
+        assert!(!mismatch.contains("unknown_mismatch"));
+    }
+
+    #[test]
+    fn rectangle_roundoff_keeps_the_encoded_fillet_radius_bit_exact() {
+        let (edge, source_scales) = typed_panel_fillet_edge_and_sources();
+        let mut changed = edge.clone();
+        let ComputedEdgeGeometry::CircularArc(arc) = &mut changed.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        arc.radius = f64::from_bits(arc.radius.to_bits() + 1);
+        assert!(
+            !terminal_computed_edge_matches(&edge, &changed, &source_scales),
+            "the feature-owned radius is copied input, not causal rectangle roundoff",
+        );
+        let policy = TerminalComputedParityPolicy::RectangleAliasRoundoff { source_scales };
+        let mismatch = first_terminal_computed_edge_mismatch(
+            usize::try_from(edge.id.ordinal).expect("bounded computed edge"),
+            &edge,
+            &changed,
+            &policy,
+        );
+        assert!(mismatch.contains(".arc.radius "));
+        assert!(mismatch.contains("coordinate_scale=None"));
+    }
+
+    #[test]
+    fn rectangle_roundoff_requires_internal_geometry_provenance_source_parity() {
+        let (terminal, source_scales) = typed_panel_fillet_edge_and_sources();
+        let mut inconsistent_terminal = terminal.clone();
+        let mut inconsistent_staged = terminal.clone();
+        for edge in [&mut inconsistent_terminal, &mut inconsistent_staged] {
+            let ComputedEdgeProvenance::FilletArc { sources, .. } = &mut edge.provenance else {
+                panic!("selected edge must retain Fillet provenance")
+            };
+            sources.swap(0, 1);
+        }
+        let ComputedEdgeGeometry::CircularArc(arc) = &mut inconsistent_staged.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        arc.center[0] = f64::from_bits(arc.center[0].to_bits() + 1);
+        assert_eq!(
+            terminal_computed_edge_roundoff_scale(
+                &inconsistent_terminal,
+                &inconsistent_staged,
+                &source_scales,
+            ),
+            None,
+        );
+        assert!(!terminal_computed_edge_matches(
+            &inconsistent_terminal,
+            &inconsistent_staged,
+            &source_scales,
+        ));
+    }
+
+    #[test]
+    fn unrelated_large_rectangle_scale_does_not_inflate_a_computed_edge() {
+        let (edge, mut source_scales) = typed_panel_fillet_edge_and_sources();
+        let (_workbench, editor) = open_boxed("typed-panel");
+        let unrelated_curve = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("Typed Panel accepted materialization")
+            .session
+            .design_document()
+            .curves()
+            .iter()
+            .map(|curve| NativeCurveSpanSource {
+                span: CurveSpan {
+                    curve: curve.id,
+                    segment: 0,
+                },
+            })
+            .find(|source| !source_scales.contains_key(source))
+            .expect("Typed Panel has an unrelated rectangle source curve");
+        source_scales.insert(unrelated_curve, 1.0e12_f64.to_bits());
+
+        let mut material_difference = edge.clone();
+        let ComputedEdgeGeometry::CircularArc(arc) = &mut material_difference.geometry else {
+            panic!("selected edge must remain a circular arc")
+        };
+        arc.center[0] += 1.0e-8;
+        assert_eq!(
+            terminal_computed_edge_roundoff_scale(&edge, &material_difference, &source_scales),
+            Some(1.0),
+        );
+        assert!(
+            !terminal_computed_edge_matches(&edge, &material_difference, &source_scales),
+            "an unrelated large rectangle must not loosen this edge's local roundoff cell",
+        );
+    }
+
+    #[test]
+    fn rectangle_roundoff_marks_only_incident_polyline_spans() {
+        let mut document = geosolve_sketch::SketchDocument::new(1.0).unwrap();
+        let points = [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]]
+            .map(|position| document.add_point("polyline control", position).unwrap());
+        let curve = document
+            .add_curve(
+                "polyline",
+                geosolve_sketch::CurveDefinition::Polyline {
+                    points: points.to_vec(),
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0]; 3],
+                },
+            )
+            .unwrap();
+        let sources =
+            terminal_roundoff_sources(&document, &BTreeMap::from([(points[0], 1.0_f64.to_bits())]))
+                .expect("valid polyline roundoff sources");
+        let source = |segment| NativeCurveSpanSource {
+            span: CurveSpan { curve, segment },
+        };
+        assert_eq!(
+            sources.keys().copied().collect::<BTreeSet<_>>(),
+            BTreeSet::from([source(0)]),
+        );
+        assert!(!sources.contains_key(&source(1)));
+        assert!(!sources.contains_key(&source(2)));
+    }
+
+    #[test]
+    fn rectangle_roundoff_marks_only_locally_supported_spline_spans() {
+        let mut document = geosolve_sketch::SketchDocument::new(1.0).unwrap();
+        let clamped_controls = (0..7)
+            .map(|index| {
+                document
+                    .add_point("clamped control", [f64::from(index), 0.0])
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let clamped_spans = [101, 103, 107, 109];
+        let clamped = document
+            .add_curve(
+                "clamped cubic",
+                geosolve_sketch::CurveDefinition::BSpline {
+                    form: geosolve_sketch::DocumentBSplineForm::Clamped,
+                    degree: 3,
+                    controls: clamped_controls.clone(),
+                    knots: vec![0.0, 0.0, 0.0, 0.0, 0.2, 0.55, 0.8, 1.0, 1.0, 1.0, 1.0],
+                    span_ids: clamped_spans.to_vec(),
+                    next_span_id: 110,
+                },
+            )
+            .unwrap();
+
+        let periodic_controls = (0..5)
+            .map(|index| {
+                document
+                    .add_point("periodic control", [f64::from(index), 10.0])
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let periodic_spans = [11, 17, 23, 29, 31];
+        let periodic = document
+            .add_curve(
+                "periodic quadratic",
+                geosolve_sketch::CurveDefinition::BSpline {
+                    form: geosolve_sketch::DocumentBSplineForm::Periodic,
+                    degree: 2,
+                    controls: periodic_controls.clone(),
+                    knots: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+                    span_ids: periodic_spans.to_vec(),
+                    next_span_id: 32,
+                },
+            )
+            .unwrap();
+        let sources = terminal_roundoff_sources(
+            &document,
+            &BTreeMap::from([
+                (clamped_controls[0], 1.0_f64.to_bits()),
+                (periodic_controls[0], 2.0_f64.to_bits()),
+            ]),
+        )
+        .expect("valid local spline roundoff sources");
+        let source = |curve, segment| NativeCurveSpanSource {
+            span: CurveSpan { curve, segment },
+        };
+
+        assert!(sources.contains_key(&source(clamped, clamped_spans[0])));
+        for segment in &clamped_spans[1..] {
+            assert!(
+                !sources.contains_key(&source(clamped, *segment)),
+                "a distant clamped span must remain exact",
+            );
+        }
+        for segment in [periodic_spans[0], periodic_spans[3], periodic_spans[4]] {
+            assert!(
+                sources.contains_key(&source(periodic, segment)),
+                "periodic wraparound support must remain causal",
+            );
+        }
+        for segment in [periodic_spans[1], periodic_spans[2]] {
+            assert!(
+                !sources.contains_key(&source(periodic, segment)),
+                "a distant periodic span must remain exact",
+            );
+        }
+    }
+
+    #[test]
     fn terminal_computed_mismatch_trace_names_the_first_out_of_cell_scalar() {
-        let (terminal, roundoff_curves) = typed_panel_fillet_edge_and_sources();
+        let (terminal, source_scales) = typed_panel_fillet_edge_and_sources();
         let mut staged = terminal.clone();
         let ComputedEdgeGeometry::CircularArc(staged_arc) = &mut staged.geometry else {
             panic!("selected edge must remain a circular arc")
@@ -5143,10 +8142,10 @@ mod tests {
         staged_arc.center[0] =
             f64::from_bits(staged_arc.center[0].to_bits() + TERMINAL_SEED_ROUNDOFF_ULPS + 1);
         let policy = TerminalComputedParityPolicy::RectangleAliasRoundoff {
-            curves: roundoff_curves.clone(),
+            source_scales: source_scales.clone(),
         };
         assert!(
-            !terminal_computed_edge_matches(&terminal, &staged, &roundoff_curves),
+            !terminal_computed_edge_matches(&terminal, &staged, &source_scales),
             "one scalar beyond the admitted ULP cell must reject computed parity",
         );
 
@@ -5173,7 +8172,8 @@ mod tests {
         assert!(mismatch_row < rejection_row);
         assert!(exported.contains(&format!("path={expected_path}")));
         assert!(exported.contains("ulp_diff=9"));
-        assert!(exported.contains(&format!("allowed_ulps={TERMINAL_SEED_ROUNDOFF_ULPS}")));
+        assert!(exported.contains(&format!("epsilon_budget={TERMINAL_SEED_ROUNDOFF_ULPS}")));
+        assert!(exported.contains("coordinate_scale=Some(1.0)"));
     }
 
     #[test]
@@ -5278,7 +8278,7 @@ mod tests {
         assert!(mismatch_row.contains(".arc."));
         assert!(!mismatch_row.contains("unknown_mismatch"));
         assert!(mismatch_row.contains("ulp_diff="));
-        assert!(mismatch_row.contains(&format!("allowed_ulps={TERMINAL_SEED_ROUNDOFF_ULPS}")));
+        assert!(mismatch_row.contains(&format!("epsilon_budget={TERMINAL_SEED_ROUNDOFF_ULPS}")));
         assert!(
             exported
                 .find("\tparity.computed.first-mismatch\t")
@@ -5291,7 +8291,7 @@ mod tests {
 
     #[test]
     fn rectangle_terminal_derived_roundoff_keeps_public_fillet_branch_state_exact() {
-        let (edge, roundoff_curves) = typed_panel_fillet_edge_and_sources();
+        let (edge, source_scales) = typed_panel_fillet_edge_and_sources();
         let mut changed_branch = edge.clone();
         let ComputedEdgeGeometry::CircularArc(arc) = &mut changed_branch.geometry else {
             panic!("selected edge must remain a circular arc")
@@ -5307,7 +8307,7 @@ mod tests {
         assert!(!terminal_computed_edge_matches(
             &edge,
             &changed_branch,
-            &roundoff_curves,
+            &source_scales,
         ));
 
         let mut changed_tangent = edge.clone();
@@ -5325,7 +8325,7 @@ mod tests {
         assert!(!terminal_computed_edge_matches(
             &edge,
             &changed_tangent,
-            &roundoff_curves,
+            &source_scales,
         ));
 
         let mut changed_winding = edge.clone();
@@ -5339,7 +8339,7 @@ mod tests {
         assert!(!terminal_computed_edge_matches(
             &edge,
             &changed_winding,
-            &roundoff_curves,
+            &source_scales,
         ));
 
         let mut changed_provenance = edge.clone();
@@ -5351,7 +8351,7 @@ mod tests {
         assert!(!terminal_computed_edge_matches(
             &edge,
             &changed_provenance,
-            &roundoff_curves,
+            &source_scales,
         ));
     }
 
@@ -5367,14 +8367,38 @@ mod tests {
             .points();
         let first = points.first().expect("Typed Panel point").id;
         let second = points.get(1).expect("second Typed Panel point").id;
-        let normalized =
-            TerminalDocumentParity::NormalizedRedundantRectangleAliases(BTreeSet::from([first]));
+        let normalized = TerminalDocumentParity::NormalizedRedundantRectangleAliases(
+            BTreeMap::from([(first, 1.0_f64.to_bits())]),
+        );
+        let accepted_scale = TerminalDocumentParity::NormalizedRedundantRectangleAliases(
+            BTreeMap::from([(first, 2.0_f64.to_bits())]),
+        );
         let other =
-            TerminalDocumentParity::NormalizedRedundantRectangleAliases(BTreeSet::from([second]));
+            TerminalDocumentParity::NormalizedRedundantRectangleAliases(BTreeMap::from([(
+                second,
+                1.0_f64.to_bits(),
+            )]));
         assert_eq!(
             terminal_computed_roundoff_points(&normalized, &normalized),
-            Some(&BTreeSet::from([first])),
+            Some(&BTreeMap::from([(first, 1.0_f64.to_bits())])),
         );
+        assert!(terminal_document_normalizations_match(
+            &normalized,
+            &normalized,
+        ));
+        assert_eq!(
+            terminal_computed_roundoff_points(&normalized, &accepted_scale),
+            accepted_scale.normalized_redundant_rectangle_aliases(),
+            "computed roundoff uses the accepted domain's scale metadata",
+        );
+        assert!(terminal_document_normalizations_match(
+            &normalized,
+            &accepted_scale,
+        ));
+        assert!(terminal_document_normalizations_match(
+            &TerminalDocumentParity::Exact,
+            &TerminalDocumentParity::Exact,
+        ));
         assert!(
             terminal_computed_roundoff_points(&TerminalDocumentParity::Exact, &normalized)
                 .is_none()
@@ -5384,6 +8408,15 @@ mod tests {
                 .is_none()
         );
         assert!(terminal_computed_roundoff_points(&normalized, &other).is_none());
+        assert!(!terminal_document_normalizations_match(
+            &TerminalDocumentParity::Exact,
+            &normalized,
+        ));
+        assert!(terminal_document_normalizations_match(
+            &normalized,
+            &TerminalDocumentParity::Exact,
+        ));
+        assert!(!terminal_document_normalizations_match(&normalized, &other,));
     }
 
     fn ordinary_rectangle_diagonal() -> ProjectionalEditorSession {
@@ -5403,12 +8436,6 @@ mod tests {
         reason = "the exact mouse-shaped F004 fixture keeps both inferred axis constraints and its computed Fillet together"
     )]
     fn ordinary_line_fillet() -> ProjectionalEditorSession {
-        use geosolve_constraint_editor::{
-            FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
-            FeatureAuthoringTool,
-        };
-        use geosolve_sketch_intent::{InputRole, InputSlot, PatchPortRef};
-
         let intent = IntentSession::with_id(IntentSessionId::from_raw(0x84_f004)).unwrap();
         let mut editor = ProjectionalEditorSession::restore(
             intent,
@@ -5416,6 +8443,21 @@ mod tests {
             1.0,
         )
         .unwrap();
+        add_ordinary_line_fillet(&mut editor);
+        editor
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact mouse-shaped F004 fixture keeps both inferred axis constraints and its computed Fillet together"
+    )]
+    fn add_ordinary_line_fillet(editor: &mut ProjectionalEditorSession) {
+        use geosolve_constraint_editor::{
+            FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
+            FeatureAuthoringTool,
+        };
+        use geosolve_sketch_intent::{InputRole, InputSlot, PatchPortRef};
+
         let selector = |role| IntentPortSelector::Node { role, index: 0 };
         let length = |value| IntentLiteral::Quantity {
             value,
@@ -5428,10 +8470,10 @@ mod tests {
             },
             geosolve_sketch_intent::IntentKey::new("gui.firstLine").unwrap(),
         )
-        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::X, length(0.0))
-        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::Y, length(0.0))
-        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(4.0))
-        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(0.0));
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::X, length(90.0))
+        .with_instance_leaf(selector(IntentPortRole::Start), LeafField::Y, length(45.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(94.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(45.0));
         let first = editor
             .apply_patch(geosolve_sketch_intent::IntentPatch::new(
                 editor.coordinator().intent().identity(),
@@ -5497,8 +8539,8 @@ mod tests {
             InputSlot::new(InputRole::Point, 0),
             PatchPortRef::Stable { port: shared },
         )
-        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(4.0))
-        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(4.0));
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, length(94.0))
+        .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, length(49.0));
         let second = editor
             .apply_patch(geosolve_sketch_intent::IntentPatch::new(
                 editor.coordinator().intent().identity(),
@@ -5568,7 +8610,148 @@ mod tests {
         editor
             .apply_computed_fillet_preview(&mut authoring, symbol)
             .unwrap();
-        editor
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the crossed-adapter negative route keeps GUI feature creation, grip dispatch, nested terminal, and outer checkpoint publication in one regression"
+    )]
+    fn code_workspace_gui_owned_fillet_declines_managed_delegation_and_keeps_intent_terminal() {
+        let (mut workbench, mut editor) = CodeProjectWorkbench::new_authored().unwrap();
+        let managed_source = workbench.managed_source().to_owned();
+        add_ordinary_line_fillet(&mut editor);
+        let publication = workbench
+            .publish_delegated_editor_checkpoint(
+                encode_editor_checkpoint(&editor).unwrap(),
+                "Add ordinary GUI-owned Fillet",
+            )
+            .unwrap()
+            .expect("the GUI-owned Fillet must join the code workspace checkpoint");
+        editor = publication.editor;
+        assert_eq!(workbench.managed_source(), managed_source);
+
+        let features = editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .features
+            .features();
+        assert_eq!(features.len(), 1, "the fixture owns one ordinary Fillet");
+        let feature = features[0].id;
+        editor.set_selection([SelectionItem::Feature(feature)]);
+        let mut authority =
+            super::super::WorkbenchDocumentAuthority::from_projectional_editor(*editor).unwrap();
+        let mut camera = super::super::scene::CanvasCamera::default();
+        assert!(super::super::fit_projectional_camera_to_authority(
+            &mut camera,
+            &authority,
+        ));
+        let viewport = camera.viewport();
+        let scene = authority
+            .projectional_ref()
+            .unwrap()
+            .scene(
+                viewport,
+                super::super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            )
+            .unwrap();
+        let rail = scene
+            .fillet_affordances
+            .iter()
+            .find(|affordance| affordance.owner.feature == feature)
+            .expect("ordinary selected Fillet radius rail")
+            .radius_rail;
+        let pointer_id = 87_002;
+        let pointer = |position| geosolve_constraint_editor::PointerInput {
+            pointer_id,
+            position,
+            modifiers: geosolve_constraint_editor::Modifiers::default(),
+        };
+        authority
+            .projectional_mut()
+            .unwrap()
+            .pointer_down(&scene, pointer(rail.screen_grip))
+            .expect("start ordinary GUI-owned Fillet radius gesture");
+        assert!(
+            !super::super::delegate_projectional_code_fillet_radius_drag(
+                &mut authority,
+                &workbench,
+            )
+            .expect("ordinary GUI-owned Fillet must be an unclaimed managed route"),
+            "ordinary GUI-owned Fillet must remain on the direct Intent route",
+        );
+
+        let nested_before = authority
+            .projectional_ref()
+            .unwrap()
+            .coordinator()
+            .intent()
+            .identity();
+        let nested_undo_before = authority
+            .projectional_ref()
+            .unwrap()
+            .coordinator()
+            .intent()
+            .undo_len();
+        let outer_before = workbench.code_session_identity().clone();
+        let origin = viewport.screen_to_model(rail.screen_grip);
+        let target = viewport.model_to_screen([
+            0.25_f64.mul_add(rail.model_derivative[0], origin[0]),
+            0.25_f64.mul_add(rail.model_derivative[1], origin[1]),
+        ]);
+        authority
+            .projectional_mut()
+            .unwrap()
+            .pointer_move(&scene, pointer(target))
+            .expect("preview ordinary Fillet radius");
+        let preview = authority
+            .projectional_ref()
+            .unwrap()
+            .scene(
+                viewport,
+                super::super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            )
+            .unwrap();
+        let terminal = authority
+            .projectional_mut()
+            .unwrap()
+            .pointer_up(&preview, pointer(target))
+            .expect("publish ordinary Fillet radius transaction");
+        assert!(terminal.delegated_computed_fillet_radius.is_none());
+        assert_eq!(
+            terminal
+                .transaction
+                .expect("ordinary Fillet must publish its nested Intent terminal")
+                .disposition,
+            geosolve_sketch_intent::IntentPlanDisposition::Accepted,
+        );
+        let nested_after = authority.projectional_ref().unwrap().coordinator().intent();
+        assert_eq!(
+            nested_after.identity().revision.raw(),
+            nested_before.revision.raw() + 1,
+        );
+        assert_eq!(nested_after.undo_len(), nested_undo_before + 1);
+        assert_eq!(workbench.code_session_identity(), &outer_before);
+        assert_eq!(workbench.managed_source(), managed_source);
+
+        let mut notice = String::new();
+        let (save, _) = super::super::publish_projectional_code_checkpoint_for_save(
+            &mut workbench,
+            &mut authority,
+            &mut notice,
+            None,
+        );
+        assert_eq!(
+            save,
+            super::super::ProjectionalCodeSavePublication::ContinuePersistence,
+        );
+        assert_eq!(
+            workbench.code_session_identity().revision,
+            outer_before.revision + 1,
+            "the ordinary browser save must add its established outer checkpoint row",
+        );
+        assert_eq!(workbench.managed_source(), managed_source);
     }
 
     fn add_ordinary_rectangle_diagonal(editor: &mut ProjectionalEditorSession) {
@@ -5673,6 +8856,57 @@ mod tests {
     fn open_boxed(key: &str) -> (Box<CodeProjectWorkbench>, Box<ProjectionalEditorSession>) {
         let (workbench, editor) = open_with_editor(key);
         (Box::new(workbench), editor)
+    }
+
+    fn assert_managed_fillet_authority(
+        editor: &ProjectionalEditorSession,
+        features: &[ComputedFeatureId],
+        radius: f64,
+    ) {
+        let accepted = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted managed Fillet authority");
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+        );
+        assert!(
+            accepted
+                .session
+                .accepted_state_for_current_input()
+                .expect("current accepted managed Fillet scene")
+                .document()
+                .points()
+                .iter()
+                .flat_map(|point| point.position)
+                .all(f64::is_finite)
+        );
+        for feature in features {
+            let definition = accepted
+                .features
+                .feature(*feature)
+                .expect("stable managed Fillet feature");
+            let ComputedFeatureDefinition::FilletSet(fillet) = &definition.definition;
+            assert_eq!(fillet.radius.to_bits(), radius.to_bits());
+            assert!(
+                accepted
+                    .computed
+                    .feature_evaluations()
+                    .iter()
+                    .any(|evaluation| {
+                        evaluation.feature == *feature
+                            && matches!(
+                                evaluation.state,
+                                ComputedFeatureEvaluationState::Current { .. }
+                            )
+                    })
+            );
+        }
     }
 
     fn code_node_ids(
@@ -5856,12 +9090,12 @@ mod tests {
     }
 
     #[test]
-    fn all_nine_samples_open_with_nonempty_independently_validated_native_canvases() {
+    fn all_twelve_samples_open_with_nonempty_independently_validated_native_canvases() {
         let demos = bundled_code_project_demos();
         assert_eq!(
             demos.len(),
-            9,
-            "the curated M84 catalog includes the manifold dogfood demo"
+            12,
+            "the additive code catalog includes the routing and manufacturing dogfood demonstrations"
         );
         for demo in demos {
             let (workbench, editor) = open_with_editor(demo.id.key());
@@ -5894,14 +9128,14 @@ mod tests {
     }
 
     #[test]
-    fn menu_owns_one_distinct_code_group_and_nine_genuine_project_leaves() {
+    fn menu_owns_one_distinct_code_group_and_twelve_genuine_project_leaves() {
         let markup = sample_group_markup(None);
         assert!(markup.contains("Code &amp; reusable patches"));
         let demos = bundled_code_project_demos();
         assert_eq!(
             demos.len(),
-            9,
-            "the curated M84 catalog includes the manifold dogfood demo"
+            12,
+            "the additive code catalog includes the routing and manufacturing dogfood demonstrations"
         );
         assert_eq!(markup.matches("data-code-sample-id=").count(), demos.len());
         for demo in demos {
@@ -6240,17 +9474,16 @@ export default sketch(($) => {
             );
             let projection = editor.workbench_projection();
             let inspector = editor.selected_inspector(&projection).unwrap();
-            assert!(matches!(
-                workbench
-                    .apply_managed_dimension_inspector_edit(
-                        &editor,
-                        &inspector,
-                        &IntentInspectorEditTarget::Suppressed,
-                        &IntentInspectorEditValue::Suppressed { suppressed: false },
-                    )
-                    .unwrap(),
-                CodeInspectorEditRoute::NotClaimed,
-            ));
+            let Err(error) = workbench.apply_managed_inspector_edit(
+                &editor,
+                &inspector,
+                &IntentInspectorEditTarget::Suppressed,
+                &IntentInspectorEditValue::Suppressed { suppressed: false },
+            ) else {
+                panic!("an unmatched code-owned definition must not fall through to nested Intent")
+            };
+            assert!(error.contains("Encoded"));
+            assert!(error.contains("not declared in sketch.ts"));
         }
     }
 
@@ -6662,9 +9895,14 @@ export default sketch(($) => {
         assert!(managed.contains("data-code-file-kind=\"managed\""));
         assert!(managed.contains("data-code-action=\"apply\""));
         assert!(managed.contains("GUI-managed subset"));
-        assert!(managed.contains("Edit lenses"));
-        assert!(managed.contains("data-code-lens-declaration=\"rounded\""));
-        assert!(managed.contains("data-code-lens-path=\"radius\""));
+        assert!(managed.contains("Managed controls"));
+        assert!(managed.contains("data-code-control-id="));
+        assert!(managed.contains("Modifiable in sketch.ts"));
+        assert!(managed.contains("<code>mm(4)</code>"));
+        assert!(managed.contains("<strong>rounded</strong>"));
+        assert!(managed.contains("<strong>radius</strong>"));
+        assert!(!managed.contains("data-code-lens-declaration="));
+        assert!(!managed.contains("data-code-lens-path="));
         assert!(!managed.contains("Read-only in demo"));
 
         workbench
@@ -6675,6 +9913,533 @@ export default sketch(($) => {
         assert!(custom.contains("Read-only in demo"));
         assert!(custom.contains("p.each"));
         assert!(!custom.contains("id=\"wb-code-managed-source\""));
+    }
+
+    #[test]
+    fn every_enabled_manifest_control_is_reachable_once_in_the_code_panel() {
+        for demo in bundled_code_project_demos() {
+            let workbench = open(demo.id.key());
+            let manifest = workbench
+                .managed_controls()
+                .unwrap_or_else(|error| panic!("{} manifest: {error}", demo.id.key()));
+            let markup = workbench.panel_markup();
+            let enabled = manifest.editable().collect::<Vec<_>>();
+            assert_eq!(
+                markup.matches("data-code-control-id=").count(),
+                enabled.len(),
+                "{} must render every enabled control exactly once",
+                demo.id.key(),
+            );
+            for control in enabled {
+                let attribute = format!(
+                    "data-code-control-id=\"{}\"",
+                    escape_attribute(&control.id.0),
+                );
+                assert_eq!(
+                    markup.matches(&attribute).count(),
+                    1,
+                    "{} omitted or duplicated enabled control {}",
+                    demo.id.key(),
+                    control.id.0,
+                );
+            }
+        }
+    }
+
+    fn assert_retained_failure_manifest_cache_is_transient(
+        workbench: &mut CodeProjectWorkbench,
+        clean_manifest: &Rc<ManagedControlManifest>,
+    ) {
+        workbench.set_managed_draft(workbench.managed_source().replace("mm(4)", "mm(400)"));
+        assert!(matches!(
+            workbench.apply_managed_draft().unwrap(),
+            CodeApplyOutcome::RetainedFailure { .. }
+        ));
+        assert!(workbench.session.snapshot().failure.is_some());
+        assert!(workbench.session.snapshot().expansion.is_some());
+        let retained_persistence = workbench.to_persistence_json().unwrap();
+        let retained_manifest = workbench.managed_controls_cached().unwrap();
+        let retained_again = workbench.managed_controls_cached().unwrap();
+        assert!(
+            !Rc::ptr_eq(clean_manifest, &retained_manifest),
+            "a retained failure must not reuse clean-session manifest authority",
+        );
+        assert!(
+            Rc::ptr_eq(&retained_manifest, &retained_again),
+            "unchanged retained-failure presentation must reuse its exact transient manifest",
+        );
+        assert_eq!(
+            workbench.to_persistence_json().unwrap(),
+            retained_persistence,
+            "failure-state manifest reuse must remain outside persistence",
+        );
+    }
+
+    fn assert_reloaded_manifests_are_transient(
+        reproduction_workspace: &str,
+        persistence_before: &str,
+        manifest: &ManagedControlManifest,
+    ) {
+        let mut restored =
+            CodeProjectWorkbench::from_persistence_json(reproduction_workspace).unwrap();
+        assert_eq!(restored.to_persistence_json().unwrap(), persistence_before);
+        let restored_clean_manifest = restored.managed_controls_cached().unwrap();
+        assert_eq!(
+            restored_clean_manifest.as_ref(),
+            manifest,
+            "reload must rederive the same deterministic transient manifest",
+        );
+        assert_retained_failure_manifest_cache_is_transient(
+            &mut restored,
+            &restored_clean_manifest,
+        );
+    }
+
+    #[test]
+    fn managed_manifest_and_capabilities_are_transient_browser_authority() {
+        let mut workbench = open("typed-panel");
+        let persistence_before = workbench.to_persistence_json().unwrap();
+        let project_before = workbench.project.to_canonical_json().unwrap();
+        let expansion_before = serde_json::to_string(
+            workbench
+                .session
+                .snapshot()
+                .accepted_expansion
+                .as_ref()
+                .expect("accepted Typed Panel expansion"),
+        )
+        .unwrap();
+        let cached_manifest = workbench.managed_controls_cached().unwrap();
+        let cached_again = workbench.managed_controls_cached().unwrap();
+        assert!(
+            Rc::ptr_eq(&cached_manifest, &cached_again),
+            "unchanged clean presentation must reuse one transient manifest authority",
+        );
+        let manifest = cached_manifest.as_ref().clone();
+        let tokens = manifest
+            .editable()
+            .map(|control| {
+                control
+                    .token()
+                    .expect("enabled control has an authenticated capability")
+            })
+            .collect::<Vec<_>>();
+        assert!(!tokens.is_empty());
+
+        assert_eq!(workbench.to_persistence_json().unwrap(), persistence_before);
+        assert_eq!(
+            workbench.project.to_canonical_json().unwrap(),
+            project_before
+        );
+        assert_eq!(
+            serde_json::to_string(
+                workbench
+                    .session
+                    .snapshot()
+                    .accepted_expansion
+                    .as_ref()
+                    .unwrap(),
+            )
+            .unwrap(),
+            expansion_before,
+        );
+        let reproduction = crate::reproduction::encode_workspace(&persistence_before)
+            .expect("encode exact code-workbench reproduction");
+        let reproduction_workspace = crate::reproduction::decode_workspace(&reproduction)
+            .expect("decode exact code-workbench reproduction");
+        assert_eq!(
+            reproduction_workspace.as_bytes(),
+            persistence_before.as_bytes(),
+            "reproduction transport must preserve the exact persistent code-workbench bytes",
+        );
+        assert!(!reproduction.contains("\"authentication\""));
+        assert!(!reproduction_workspace.contains("\"authentication\""));
+        for token in &tokens {
+            let token_wire = serde_json::to_string(token).unwrap();
+            assert!(!token.authentication.is_empty());
+            assert!(
+                !persistence_before.contains(&token.authentication),
+                "managed capability authentication must not enter workspace persistence",
+            );
+            for (label, wire) in [
+                ("reproduction payload", reproduction.as_str()),
+                (
+                    "decoded reproduction workspace",
+                    reproduction_workspace.as_str(),
+                ),
+            ] {
+                assert!(
+                    !wire.contains(&token_wire),
+                    "managed capability token must not enter {label}",
+                );
+                assert!(
+                    !wire.contains(&token.authentication),
+                    "managed capability authentication must not enter {label}",
+                );
+            }
+        }
+        let dirty_source = format!("{}// dirty cache isolation\n", workbench.managed_source());
+        workbench.set_managed_draft(dirty_source);
+        assert!(workbench.managed_controls_cached().is_err());
+        assert!(workbench.revert_managed_draft());
+        assert!(
+            Rc::ptr_eq(
+                &cached_manifest,
+                &workbench.managed_controls_cached().unwrap(),
+            ),
+            "reverting to the same exact clean identity may reuse its immutable manifest",
+        );
+        assert_reloaded_manifests_are_transient(
+            &reproduction_workspace,
+            &persistence_before,
+            &manifest,
+        );
+    }
+
+    #[test]
+    fn code_owned_point_instance_edit_declines_before_manifest_derivation() {
+        let (mut workbench, mut editor) = open_boxed("typed-panel");
+        let point = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("Typed Panel accepted expansion")
+            .writable_points
+            .iter()
+            .find(|point| !point.source.is_reference())
+            .expect("Typed Panel direct point lens");
+        let node = editor
+            .coordinator()
+            .intent()
+            .graph()
+            .node_by_symbol(&point.handle.alias)
+            .expect("point lens declaration")
+            .id;
+        assert!(editor.set_selected_declaration(Some(node)));
+        let projection = editor.workbench_projection();
+        let inspector = editor
+            .selected_inspector(&projection)
+            .expect("code-owned point Inspector");
+        let leaf = inspector
+            .fields
+            .iter()
+            .find_map(|field| match field {
+                IntentInspectorField::Instance { leaf, .. } => Some(*leaf),
+                IntentInspectorField::Definition { .. } => None,
+            })
+            .expect("code-owned point instance leaf");
+        let target = IntentInspectorEditTarget::Instance { leaf };
+        let value = IntentInspectorEditValue::Literal {
+            literal: IntentLiteral::Quantity {
+                value: 1.0,
+                unit: IntentUnit::Length,
+            },
+        };
+
+        assert!(matches!(
+            workbench
+                .apply_managed_inspector_edit(&editor, &inspector, &target, &value)
+                .expect("clean point instance route"),
+            CodeInspectorEditRoute::NotClaimed,
+        ));
+        assert!(
+            workbench.managed_control_manifest_cache.borrow().is_none(),
+            "a solver-instance point route must decline before manifest derivation",
+        );
+
+        let dirty = format!("{}// dirty instance route\n", workbench.managed_source());
+        workbench.set_managed_draft(dirty);
+        let Err(error) =
+            workbench.apply_managed_inspector_edit(&editor, &inspector, &target, &value)
+        else {
+            panic!("dirty code authority must block before instance fallback")
+        };
+        assert!(error.contains("Blocked"));
+        assert!(workbench.managed_control_manifest_cache.borrow().is_none());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the crossed-adapter regression keeps both generated aliases, one source token, complete fan-out, stable selection, outer history, Undo/Redo, and independent native validation together"
+    )]
+    fn typed_panel_either_generated_fillet_inspector_edits_one_shared_source_control() {
+        std::thread::Builder::new()
+            .name("m87-typed-panel-managed-inspector".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| {
+                for selected_index in 0..2 {
+                    let (mut workbench, mut editor) = open_boxed("typed-panel");
+                    let source_before = workbench.managed_source().to_owned();
+                    let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+                    let revision_before = workbench.session.identity().revision;
+                    assert!(!workbench.can_undo());
+                    assert!(!workbench.can_redo());
+                    assert_eq!(editor.coordinator().intent().undo_len(), 0);
+
+                    let expansion = workbench
+                        .session
+                        .snapshot()
+                        .accepted_expansion
+                        .clone()
+                        .expect("Typed Panel accepted expansion");
+                    let mut aliases = expansion
+                        .generated_children
+                        .iter()
+                        .filter_map(|child| {
+                            editor
+                                .coordinator()
+                                .intent()
+                                .graph()
+                                .node_by_symbol(&child.alias)
+                                .filter(|node| {
+                                    matches!(
+                                        node.kind,
+                                        IntentNodeKind::ComputedFeature {
+                                            feature: geosolve_sketch_intent::ComputedFeatureKind::FilletSet
+                                        }
+                                    )
+                                })
+                                .map(|_| child.alias.clone())
+                        })
+                        .collect::<Vec<_>>();
+                    aliases.sort();
+                    assert_eq!(aliases.len(), 2);
+                    assert!(aliases.iter().all(|alias| alias.as_str().starts_with("code.host.")));
+                    let selected_alias = aliases[selected_index].clone();
+                    let selected_node = editor
+                        .coordinator()
+                        .intent()
+                        .graph()
+                        .node_by_symbol(&selected_alias)
+                        .expect("selected generated Fillet")
+                        .id;
+                    assert!(editor.set_selected_declaration(Some(selected_node)));
+
+                    let radius_path =
+                        SemanticOutputPath(vec![ManagedPathSegment::Field("radius".into())]);
+                    let route = workbench
+                        .managed_fillet_radius_route(&editor)
+                        .expect("authenticated Typed Panel shared-radius route")
+                        .expect("generated Fillet must expose one managed radius");
+                    assert_eq!(route.features.len(), 2);
+                    assert_eq!(route.token.path, radius_path);
+                    assert_eq!(route.origin_radius.to_bits(), 4.0_f64.to_bits());
+                    assert_eq!(route.initiating_alias, selected_alias);
+
+                    let projection = editor.workbench_projection();
+                    let inspector = editor
+                        .selected_inspector(&projection)
+                        .expect("selected generated Fillet Inspector");
+                    let radius = inspector
+                        .descriptor
+                        .fields
+                        .iter()
+                        .find(|field| semantic_output_path(&field.path) == radius_path)
+                        .expect("computed Fillet radius descriptor")
+                        .schema
+                        .field
+                        .clone();
+                    assert!(inspector.fields.iter().any(|field| {
+                        matches!(
+                            field,
+                            geosolve_constraint_editor::IntentInspectorField::Definition {
+                                definition,
+                                value: Some(IntentLiteral::Quantity {
+                                    value,
+                                    unit: IntentUnit::Length,
+                                }),
+                            } if definition == &radius && value.to_bits() == 4.0_f64.to_bits()
+                        )
+                    }));
+
+                    let presentations = workbench
+                        .inspector_parameter_presentations(&editor, &inspector)
+                        .expect("Typed Panel parameter ownership metadata");
+                    let radius_target = IntentInspectorEditTarget::Definition {
+                        field: radius.clone(),
+                    };
+                    let radius_presentation = presentations
+                        .iter()
+                        .find(|presentation| presentation.target == radius_target)
+                        .expect("radius ownership presentation");
+                    assert_eq!(
+                        radius_presentation.authority,
+                        super::super::design_projection::InspectorParameterAuthority::ModifiableSource {
+                            source_path: "cornerFillets.radius".into(),
+                            source_text: "mm(4)".into(),
+                            consumer_count: 2,
+                            generated_consumer_count: 2,
+                        },
+                    );
+                    let encoded_definition = presentations
+                        .iter()
+                        .find(|presentation| {
+                            matches!(
+                                &presentation.target,
+                                IntentInspectorEditTarget::Definition { field }
+                                    if field != &radius
+                            ) && matches!(
+                                &presentation.authority,
+                                super::super::design_projection::InspectorParameterAuthority::Encoded { reason }
+                                    if reason.contains("Generated Fillet state")
+                                        && reason.contains("not declared in sketch.ts")
+                            )
+                        })
+                        .expect("generated Fillet contact/branch field is explicitly Encoded");
+                    assert!(matches!(
+                        encoded_definition.target,
+                        IntentInspectorEditTarget::Definition { .. }
+                    ));
+                    let markup = super::super::design_projection::inspector_markup_with_parameters(
+                        Some(&inspector),
+                        &presentations,
+                    );
+                    assert!(markup.contains("Modifiable in sketch.ts"));
+                    assert!(markup.contains("data-intent-source-path=\"cornerFillets.radius\""));
+                    assert!(markup.contains("<code>mm(4)</code>"));
+                    assert!(markup.contains("shared by 2 generated consumers"));
+                    assert!(markup.contains(
+                        "data-intent-parameter-authority=\"encoded\""
+                    ));
+                    let durable_markup = super::super::projectional_design_markup(
+                        &editor,
+                        Some(&workbench),
+                        None,
+                    )
+                    .expect("code-owned durable Inspector markup")
+                    .inspector;
+                    let display_name = durable_markup
+                        .split_once("Display name")
+                        .expect("display-name control")
+                        .1
+                        .split_once("</label>")
+                        .expect("bounded display-name label")
+                        .0;
+                    assert!(display_name.contains("data-intent-name-authority=\"encoded\""));
+                    assert!(display_name.contains("data-intent-encoded=\"true\""));
+                    assert!(!display_name.contains("data-intent-edit=\"name\""));
+                    for parameter in markup
+                        .split("<div class=\"wb-intent-parameter\">")
+                        .skip(1)
+                    {
+                        let parameter = parameter
+                            .split_once("</div>")
+                            .map_or(parameter, |(parameter, _)| parameter);
+                        if parameter.contains(
+                            "data-intent-parameter-authority=\"encoded\"",
+                        ) {
+                            assert!(parameter.contains("data-intent-encoded=\"true\""));
+                            assert!(!parameter.contains("data-intent-edit="));
+                        }
+                    }
+
+                    if selected_index == 0 {
+                        workbench.set_managed_draft(format!(
+                            "{source_before}// uncommitted ownership audit\n"
+                        ));
+                        let blocked = workbench
+                            .inspector_parameter_presentations(&editor, &inspector)
+                            .expect("dirty managed source must retain truthful Inspector markup");
+                        assert!(blocked.iter().all(|parameter| matches!(
+                            &parameter.authority,
+                            super::super::design_projection::InspectorParameterAuthority::Blocked {
+                                reason,
+                            } if reason.contains("Apply or Revert")
+                        )));
+                        let blocked_markup =
+                            super::super::design_projection::inspector_markup_with_parameters(
+                                Some(&inspector),
+                                &blocked,
+                            );
+                        assert!(blocked_markup.contains(
+                            "data-intent-parameter-authority=\"blocked\""
+                        ));
+                        assert!(blocked_markup.contains("data-intent-blocked=\"true\""));
+                        assert!(!blocked_markup.contains("data-intent-encoded=\"true\""));
+                        let blocked_durable = super::super::projectional_design_markup(
+                            &editor,
+                            Some(&workbench),
+                            None,
+                        )
+                        .expect("dirty code-owned durable Inspector markup")
+                        .inspector;
+                        assert!(blocked_durable
+                            .contains("data-intent-name-authority=\"blocked\""));
+                        assert!(workbench
+                            .panel_markup()
+                            .contains("Apply or Revert the source draft to refresh controls"));
+                        workbench.set_managed_draft(source_before.clone());
+                    }
+
+                    let CodeInspectorEditRoute::Claimed(CodeApplyOutcome::Accepted(publication)) =
+                        workbench
+                            .apply_managed_inspector_edit(
+                                &editor,
+                                &inspector,
+                                &IntentInspectorEditTarget::Definition { field: radius },
+                                &IntentInspectorEditValue::Literal {
+                                    literal: IntentLiteral::Quantity {
+                                        value: 2.0,
+                                        unit: IntentUnit::Length,
+                                    },
+                                },
+                            )
+                            .expect("managed generated-Fillet Inspector edit")
+                    else {
+                        panic!("generated Fillet radius must publish through managed source")
+                    };
+                    assert_eq!(publication.receipt.before.revision, revision_before);
+                    assert_eq!(publication.receipt.after.revision, revision_before + 1);
+                    editor = publication.editor;
+                    assert_eq!(editor.selected_declaration(), Some(selected_node));
+                    assert_eq!(
+                        editor
+                            .coordinator()
+                            .intent()
+                            .graph()
+                            .node(selected_node)
+                            .expect("stable selected Fillet node")
+                            .symbol,
+                        selected_alias,
+                    );
+                    assert_eq!(editor.coordinator().intent().undo_len(), 0);
+                    assert_eq!(editor.coordinator().intent().redo_len(), 0);
+                    let source_after = source_before.replacen("radius: mm(4)", "radius: mm(2)", 1);
+                    assert_eq!(workbench.managed_source(), source_after);
+                    assert_eq!(workbench.managed_source().matches("radius: mm(2)").count(), 1);
+                    assert!(workbench.can_undo());
+                    assert!(!workbench.can_redo());
+                    assert_managed_fillet_authority(&editor, &route.features, 2.0);
+                    let checkpoint_after = workbench.accepted_editor_checkpoint().clone();
+
+                    let undone = workbench
+                        .step_history(true)
+                        .expect("Typed Panel managed-radius Undo")
+                        .expect("one outer managed-radius history row");
+                    assert_eq!(workbench.managed_source(), source_before);
+                    assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+                    assert!(!workbench.can_undo());
+                    assert!(workbench.can_redo());
+                    assert_eq!(undone.editor.coordinator().intent().undo_len(), 0);
+                    assert_managed_fillet_authority(&undone.editor, &route.features, 4.0);
+
+                    let redone = workbench
+                        .step_history(false)
+                        .expect("Typed Panel managed-radius Redo")
+                        .expect("one outer managed-radius redo row");
+                    assert_eq!(workbench.managed_source(), source_after);
+                    assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_after);
+                    assert!(workbench.can_undo());
+                    assert!(!workbench.can_redo());
+                    assert_eq!(redone.editor.coordinator().intent().undo_len(), 0);
+                    assert_managed_fillet_authority(&redone.editor, &route.features, 2.0);
+                }
+            })
+            .expect("spawn Typed Panel managed-Inspector regression")
+            .join()
+            .expect("Typed Panel managed-Inspector regression");
     }
 
     #[test]
@@ -6804,7 +10569,7 @@ export default sketch(($) => {
             .selected_inspector(&projection)
             .expect("selected managed dimension Inspector");
         let route = workbench
-            .apply_managed_dimension_inspector_edit(
+            .apply_managed_inspector_edit(
                 &editor,
                 &inspector,
                 &IntentInspectorEditTarget::Instance { leaf: target_leaf },
@@ -7035,34 +10800,24 @@ export default sketch(($) => {
             .selected_inspector(&projection)
             .expect("direct managed diameter Inspector");
         let retained_checkpoint = workbench.accepted_editor_checkpoint().clone();
-        let retained_route = workbench
-            .apply_managed_dimension_inspector_edit(
-                &undone.editor,
-                &inspector,
-                &IntentInspectorEditTarget::Instance {
-                    leaf: diameter_target_leaf,
+        let rejected = workbench.apply_managed_inspector_edit(
+            &undone.editor,
+            &inspector,
+            &IntentInspectorEditTarget::Instance {
+                leaf: diameter_target_leaf,
+            },
+            &IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Quantity {
+                    value: 0.0,
+                    unit: IntentUnit::Length,
                 },
-                &IntentInspectorEditValue::Literal {
-                    literal: IntentLiteral::Quantity {
-                        value: 0.0,
-                        unit: IntentUnit::Length,
-                    },
-                },
-            )
-            .expect("invalid target remains a transactional code intent");
-        let CodeInspectorEditRoute::Claimed(CodeApplyOutcome::RetainedFailure {
-            receipt,
-            diagnostic,
-        }) = retained_route
-        else {
-            panic!("zero target must retain failure without replacing native authority")
+            },
+        );
+        let Err(rejected) = rejected else {
+            panic!("zero target must be rejected by the authoritative positive control schema")
         };
-        assert_eq!(receipt.before.revision, revision_before + 4);
-        assert_eq!(receipt.after.revision, revision_before + 5);
-        assert!(!diagnostic.is_empty());
-        assert!(workbench.managed_source().contains(
-            "const screwNwOuterDiameter = $.dimension.diameter(\"screwNwOuterDiameter\", { curve: screwNwOuter.circle, target: mm(0) });"
-        ));
+        assert!(rejected.contains("below its admitted minimum"));
+        assert_eq!(workbench.managed_source(), source_before);
         assert_eq!(workbench.accepted_editor_checkpoint(), &retained_checkpoint,);
         let retained = workbench.restore_accepted_editor().unwrap();
         let retained_accepted = retained
@@ -7080,47 +10835,8 @@ export default sketch(($) => {
                 .to_bits(),
             5.0_f64.to_bits(),
         );
-        let rejected_again = workbench.apply_managed_dimension_inspector_edit(
-            &undone.editor,
-            &inspector,
-            &IntentInspectorEditTarget::Instance {
-                leaf: diameter_target_leaf,
-            },
-            &IntentInspectorEditValue::Literal {
-                literal: IntentLiteral::Quantity {
-                    value: 12.0,
-                    unit: IntentUnit::Length,
-                },
-            },
-        );
-        let Err(rejected_again) = rejected_again else {
-            panic!("an active retained failure must reject another Inspector rewrite")
-        };
-        assert!(rejected_again.contains("resolve or Undo the retained code failure"));
-        assert_eq!(workbench.accepted_editor_checkpoint(), &retained_checkpoint,);
-
-        let restored = workbench
-            .step_history(true)
-            .expect("retained-invalid diameter Undo")
-            .expect("retained-invalid diameter adds one outer history entry");
-        assert_eq!(workbench.managed_source(), source_before);
-        assert_eq!(workbench.accepted_editor_checkpoint(), &retained_checkpoint);
         assert!(!workbench.can_undo());
         assert!(workbench.can_redo());
-        assert_eq!(
-            restored
-                .editor
-                .coordinator()
-                .accepted_materialization()
-                .unwrap()
-                .session
-                .design_document()
-                .scalar(diameter_target_scalar)
-                .unwrap()
-                .value
-                .to_bits(),
-            5.0_f64.to_bits(),
-        );
     }
 
     #[test]
@@ -7203,11 +10919,34 @@ export default sketch(($) => {
         let inspector = editor
             .selected_inspector(&projection)
             .expect("selected direct diameter Inspector");
+        let target = IntentInspectorEditTarget::Instance { leaf: target_leaf };
+        let presentations = workbench
+            .inspector_parameter_presentations(&editor, &inspector)
+            .expect("direct diameter parameter ownership metadata");
+        assert_eq!(
+            presentations
+                .iter()
+                .find(|presentation| presentation.target == target)
+                .expect("direct diameter target presentation")
+                .authority,
+            super::super::design_projection::InspectorParameterAuthority::ModifiableSource {
+                source_path: "screwDiameter.target".into(),
+                source_text: "mm(5)".into(),
+                consumer_count: 1,
+                generated_consumer_count: 0,
+            },
+        );
+        let inspector_markup = super::super::design_projection::inspector_markup_with_parameters(
+            Some(&inspector),
+            &presentations,
+        );
+        assert!(inspector_markup.contains("used by 1 direct declaration"));
+        assert!(!inspector_markup.contains("1 generated consumer"));
         let route = workbench
-            .apply_managed_dimension_inspector_edit(
+            .apply_managed_inspector_edit(
                 &editor,
                 &inspector,
-                &IntentInspectorEditTarget::Instance { leaf: target_leaf },
+                &target,
                 &IntentInspectorEditValue::Literal {
                     literal: IntentLiteral::Quantity {
                         value: 8.0,
@@ -7791,6 +11530,7 @@ export default sketch(($) => {
     )]
     fn generated_polyline_point_edit_becomes_one_semantic_overlay_draft() {
         let (mut workbench, mut editor) = open_boxed("rounded-polyline");
+        let source_before = workbench.managed_source().to_owned();
         let address = workbench
             .session
             .snapshot()
@@ -7851,6 +11591,11 @@ export default sketch(($) => {
         assert_eq!(receipt.before.revision, revision);
         assert_eq!(receipt.after.revision, revision + 1);
         assert_eq!(
+            workbench.managed_source(),
+            source_before,
+            "a point/DoF overlay must never rewrite sketch.ts",
+        );
+        assert_eq!(
             workbench.accepted_editor_checkpoint(),
             &encode_editor_checkpoint(&publication.editor).unwrap()
         );
@@ -7902,7 +11647,9 @@ export default sketch(($) => {
                 .is_empty()
         );
         assert_eq!(reset.receipt.after.revision, revision + 2);
+        assert_eq!(workbench.managed_source(), source_before);
         let undone_reset = workbench.step_history(true).unwrap().unwrap();
+        assert_eq!(workbench.managed_source(), source_before);
         assert_eq!(
             encode_editor_checkpoint(&undone_reset.editor).unwrap(),
             encode_editor_checkpoint(&publication.editor).unwrap(),
@@ -8585,9 +12332,17 @@ export default sketch(($) => {
         let inspector = editor
             .selected_inspector(&projection)
             .expect("ordinary GUI dimension Inspector");
+        assert!(
+            workbench
+                .inspector_parameter_presentations(&editor, &inspector)
+                .unwrap()
+                .is_empty(),
+            "ordinary GUI-owned parameters must retain their existing undecorated edit route",
+        );
+        *workbench.managed_control_manifest_cache.borrow_mut() = None;
         assert!(matches!(
             workbench
-                .apply_managed_dimension_inspector_edit(
+                .apply_managed_inspector_edit(
                     &editor,
                     &inspector,
                     &IntentInspectorEditTarget::Suppressed,
@@ -8596,6 +12351,10 @@ export default sketch(($) => {
                 .unwrap(),
             CodeInspectorEditRoute::NotClaimed,
         ));
+        assert!(
+            workbench.managed_control_manifest_cache.borrow().is_none(),
+            "an ordinary GUI Inspector edit must decline before deriving code authority",
+        );
 
         let reference_value = |editor: &ProjectionalEditorSession| {
             let authority = editor
@@ -10559,25 +14318,16 @@ export default sketch(($) => {
         assert_eq!(preview_position.map(f64::to_bits), target.map(f64::to_bits));
 
         let preview_scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
-        assert!(
-            editor
-                .pointer_up(&preview_scene, pointer(target))
-                .expect("valid shared-center terminal")
-                .transaction
-                .is_some(),
-        );
-        assert_eq!(
-            position(&editor, center).map(f64::to_bits),
-            preview_position.map(f64::to_bits),
-            "native terminal publication must retain the exact preview",
-        );
-        let terminal_authority = editor
-            .coordinator()
-            .accepted_materialization()
-            .expect("terminal accepted materialization");
-        let terminal_design = terminal_authority.session.design_document().clone();
-        let terminal_accepted = terminal_authority
-            .session
+        let terminal = editor
+            .pointer_up_delegated_point(&preview_scene, pointer(target))
+            .expect("valid delegated shared-center terminal");
+        let proposal = terminal.proposal.expect("moved shared-center proposal");
+        let mut terminal_design = proposal.terminal_session().design_document().clone();
+        terminal_design
+            .set_point_position(center, preview_position)
+            .expect("normalize the authenticated shared-center seed");
+        let terminal_accepted = proposal
+            .terminal_session()
             .accepted_state_for_current_input()
             .expect("terminal current accepted state")
             .document()
@@ -10585,7 +14335,13 @@ export default sketch(($) => {
         let revision_before = workbench.session.identity().revision;
 
         let publication = workbench
-            .publish_pointer_terminal_editor(pointer_id, &editor, "Move Compass Rose shared center")
+            .publish_delegated_point_terminal_audited(
+                pointer_id,
+                &editor,
+                proposal,
+                "Move Compass Rose shared center",
+            )
+            .outcome
             .expect("semantic terminal publication")
             .expect("one outer history row");
         let published_center = expanded_port_point(&publication.editor, &center_lens.handle)
@@ -10631,6 +14387,16 @@ export default sketch(($) => {
             "outer code publication must preserve the exact solved terminal scene",
         );
         assert_eq!(workbench.session.identity().revision, revision_before + 1);
+        assert_eq!(
+            workbench
+                .session
+                .snapshot()
+                .interaction_overlay
+                .drafts()
+                .len(),
+            1,
+            "solver-moved referenced spokes must not become extra source drafts",
+        );
         assert_eq!(publication.editor.coordinator().intent().undo_len(), 0);
         assert_eq!(publication.editor.coordinator().intent().redo_len(), 0);
         let warm = workbench
@@ -10794,25 +14560,22 @@ export default sketch(($) => {
                 .expect("accepted upper-left preview position");
             assert_eq!(preview_position.map(f64::to_bits), target.map(f64::to_bits));
             let scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
-            assert!(
-                editor
-                    .pointer_up(&scene, pointer(target))
-                    .expect("valid upper-left terminal")
-                    .transaction
-                    .is_some(),
-            );
-            let terminal_position = position(&editor, upper_left);
-            assert_eq!(
-                terminal_position.map(f64::to_bits),
-                preview_position.map(f64::to_bits),
-                "native release must retain the latest accepted preview",
-            );
+            let terminal = editor.pointer_up_delegated_point_audited(&scene, pointer(target));
+            assert_eq!(terminal.work.intent_materialization_attempts(), 0);
+            assert_eq!(terminal.work.history_publications(), 0);
+            let proposal = terminal
+                .outcome
+                .expect("valid delegated upper-left terminal")
+                .proposal
+                .expect("moved upper-left proposal");
+            let terminal_position = preview_position;
             let identity_before = workbench.session.identity().clone();
             let revision_before = identity_before.revision;
 
-            let audited = workbench.publish_pointer_terminal_editor_audited_with_trace(
+            let audited = workbench.publish_delegated_point_terminal_audited_with_trace(
                 pointer_id,
                 &editor,
+                proposal,
                 "Move Typed Panel upper-left",
                 &mut trace,
             );
@@ -10832,7 +14595,7 @@ export default sketch(($) => {
                 "Typed Panel terminal accepted",
             );
             let expected_stages = [
-                "code.semantic-route.authenticate",
+                "code.semantic-route.authenticate-delegated",
                 "code.semantic-route.bundle",
                 "code.overlay.staged",
                 "code.seed-parity",
@@ -10941,6 +14704,497 @@ export default sketch(($) => {
             expected_origin = target;
             editor = publication.editor;
         }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact retained browser-pixel sequence keeps the periodic-angle seam, native terminal, outer publication, Fillet validity, and persistence assertions at the owning boundary"
+    )]
+    fn typed_panel_repeated_pixel_terminals_remain_durable_across_the_periodic_angle_seam() {
+        use geosolve_constraint_editor::{Modifiers, PointerInput, ScreenPoint, Viewport};
+
+        let (mut workbench, mut editor) = open_boxed("typed-panel");
+        let upper_left_lens = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("accepted Typed Panel expansion")
+            .writable_points
+            .iter()
+            .find(|point| {
+                !point.source.is_reference()
+                    && matches!(
+                        point.edit,
+                        CodePointEdit::RectangleCorner {
+                            corner: CodeRectangleCorner::UpperLeft,
+                            ..
+                        }
+                    )
+            })
+            .expect("unique direct upper-left rectangle lens")
+            .clone();
+        let position = |editor: &ProjectionalEditorSession, point| {
+            editor
+                .coordinator()
+                .accepted_materialization()
+                .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                .and_then(|accepted| accepted.document().point(point))
+                .map(|point| point.position)
+                .expect("accepted native point")
+        };
+        let viewport = Viewport::new([1_000.0, 700.0], [40.0, 20.0], 10.9).unwrap();
+        let samples = [
+            [61.0, 91.0],
+            [72.0, 113.0],
+            [83.0, 127.0],
+            [94.0, 139.0],
+            [105.0, 151.0],
+            [116.0, 163.0],
+            [127.0, 177.0],
+            [138.0, 189.0],
+            [149.0, 201.0],
+            [160.0, 213.0],
+            [171.0, 227.0],
+            [182.0, 239.0],
+            [193.0, 251.0],
+            [204.0, 263.0],
+            [215.0, 277.0],
+            [226.0, 289.0],
+            [237.0, 301.0],
+            [248.0, 117.0],
+            [259.0, 143.0],
+            [270.0, 169.0],
+            [281.0, 195.0],
+            [292.0, 221.0],
+            [303.0, 247.0],
+        ];
+        let mut periodic_seam_cases = Vec::new();
+        let mut previous_start_angle = None::<f64>;
+        for (case_index, [x, y]) in samples.into_iter().enumerate() {
+            let terminal_screen = ScreenPoint { x, y };
+            let upper_left = expanded_port_point(&editor, &upper_left_lens.handle)
+                .expect("upper-left lens native point");
+            let origin = position(&editor, upper_left);
+            let origin_screen = viewport.model_to_screen(origin);
+            let pointer_id = 87_001 + u64::try_from(case_index).expect("bounded case index");
+            let pointer = |position| PointerInput {
+                pointer_id,
+                position,
+                modifiers: Modifiers::default(),
+            };
+
+            let scene = editor.scene(viewport, 0.5).expect("pointer-down scene");
+            editor
+                .pointer_down(&scene, pointer(origin_screen))
+                .expect("upper-left pointer-down");
+            assert!(
+                workbench
+                    .prepare_semantic_point_drag(&editor, pointer_id, upper_left, None)
+                    .expect("unique upper-left semantic route")
+                    .is_none(),
+            );
+            let scene = editor.scene(viewport, 0.5).expect("pointer-move scene");
+            editor
+                .pointer_move(&scene, pointer(terminal_screen))
+                .expect("accepted upper-left preview");
+            let preview_position = editor
+                .coordinator()
+                .presentation_session()
+                .and_then(|session| session.accepted_state_for_current_input())
+                .and_then(|state| state.document().point(upper_left))
+                .map(|point| point.position)
+                .expect("accepted upper-left preview position");
+            let scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
+            let proposal = editor
+                .pointer_up_delegated_point(&scene, pointer(terminal_screen))
+                .expect("valid delegated upper-left terminal")
+                .proposal
+                .expect("moved upper-left proposal");
+
+            let revision_before = workbench.session.identity().revision;
+            let mut trace = super::super::interaction_trace::InteractionTrace::default();
+            trace.begin_gesture("test.pointerdown", format!("case={case_index}"));
+            let audited = workbench.publish_delegated_point_terminal_audited_with_trace(
+                pointer_id,
+                &editor,
+                proposal,
+                "Move Typed Panel upper-left",
+                &mut trace,
+            );
+            let publication = audited
+                .outcome
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "valid browser-pixel terminal must publish: {error}\n{}",
+                        trace.export(&workbench.interaction_trace_context(), "rejected"),
+                    )
+                })
+                .expect("one outer code history row");
+            let accepted_trace = trace.export(
+                &workbench.interaction_trace_context(),
+                "Typed Panel browser-pixel terminal accepted",
+            );
+            assert!(
+                !accepted_trace.contains("\tparity.computed.periodic-angle\t"),
+                "the exact accepted continuation must not need computed-angle normalization",
+            );
+            assert_eq!(workbench.session.identity().revision, revision_before + 1);
+            assert_eq!(
+                workbench
+                    .session
+                    .snapshot()
+                    .interaction_overlay
+                    .drafts()
+                    .len(),
+                2,
+                "one rectangle terminal publishes two canonical seed drafts",
+            );
+            let accepted = publication
+                .editor
+                .coordinator()
+                .accepted_materialization()
+                .expect("published accepted materialization");
+            assert!(accepted.validation.hard_residuals_validated);
+            assert!(accepted.validation.all_active_features_current);
+            assert!(
+                accepted
+                    .validation
+                    .maximum_normalized_hard_residual
+                    .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9),
+            );
+            assert_eq!(accepted.computed.feature_evaluations().len(), 2);
+            assert!(
+                accepted
+                    .computed
+                    .feature_evaluations()
+                    .iter()
+                    .all(|evaluation| {
+                        matches!(
+                            evaluation.state,
+                            ComputedFeatureEvaluationState::Current { .. }
+                        )
+                    })
+            );
+            let ComputedEdgeGeometry::CircularArc(arc) = &accepted
+                .computed
+                .edges()
+                .get(4)
+                .expect("Typed Panel retained seam arc")
+                .geometry
+            else {
+                panic!("Typed Panel retained seam edge must remain a circular arc")
+            };
+            if previous_start_angle
+                .is_some_and(|previous| (arc.start_angle - previous).abs() > std::f64::consts::PI)
+            {
+                periodic_seam_cases.push(case_index);
+            }
+            previous_start_angle = Some(arc.start_angle);
+
+            let persisted = workbench
+                .to_persistence_json()
+                .expect("persisted Typed Panel terminal");
+            let restored = CodeProjectWorkbench::from_persistence_json(&persisted)
+                .expect("restored Typed Panel terminal");
+            let restored_editor = restore_editor_checkpoint(restored.accepted_editor_checkpoint())
+                .expect("restored editor");
+            let restored_upper_left =
+                expanded_port_point(&restored_editor, &upper_left_lens.handle)
+                    .expect("restored upper-left point");
+            assert_eq!(
+                position(&restored_editor, restored_upper_left).map(f64::to_bits),
+                preview_position.map(f64::to_bits),
+                "reload must retain the exact browser-pixel terminal",
+            );
+            editor = publication.editor;
+        }
+        assert!(
+            !periodic_seam_cases.is_empty(),
+            "the retained browser-pixel sequence must exercise the authenticated -PI/+PI seam",
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one routing-board dogfood regression keeps exact semantic picking, repeated terminal publication, native identity, outer history, and persistence authority adjacent"
+    )]
+    fn robotic_routing_board_service_loop_terminals_preserve_source_identity_history_and_reload() {
+        std::thread::Builder::new()
+            .name("m87-routing-board-service-loop-drag".into())
+            .stack_size(64 * 1024 * 1024)
+            .spawn(|| {
+                use geosolve_constraint_editor::{Modifiers, PointerInput, Viewport};
+
+                let (mut workbench, mut editor) = open_boxed("robotic-routing-board");
+                let service_address = GeneratedMemberAddress::new(
+                    "serviceRoute",
+                    ["polyline", "vertex"],
+                    ["serviceLoop"],
+                    ["point"],
+                );
+                let expansion = workbench
+                    .session
+                    .snapshot()
+                    .accepted_expansion
+                    .clone()
+                    .expect("accepted routing-board expansion");
+                let ExpandedSemanticTarget::Port { port: service_port } =
+                    &expansion.generated_provenance[&service_address].target
+                else {
+                    panic!("serviceLoop must publish one generated point port")
+                };
+                let service_lens = expansion
+                    .writable_points
+                    .iter()
+                    .find(|point| point.handle == *service_port)
+                    .expect("serviceLoop must own one writable generated-point lens")
+                    .clone();
+                let CodePointEdit::Point {
+                    address: service_draft_address,
+                } = &service_lens.edit
+                else {
+                    panic!("serviceLoop must be one direct keyed-Polyline point edit")
+                };
+                let service_draft_address = service_draft_address.clone();
+                assert_eq!(
+                    service_lens.draft_provenance(),
+                    geosolve_sketch_code::CodeDraftProvenance::GeneratedOverride,
+                );
+
+                let service_point = expanded_port_point(&editor, &service_lens.handle)
+                    .expect("serviceLoop accepted native point");
+                let source_before = workbench.managed_source().to_owned();
+                let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+                let overlay_before = workbench.session.snapshot().interaction_overlay.clone();
+                let generated_before = workbench.session.snapshot().generated.active().clone();
+                let code_nodes_before = code_node_ids(&editor);
+                let native_bindings_before = generated_native_bindings(&editor, &expansion);
+                let fillet_owners_before = generated_fillet_owners(&workbench);
+                assert_eq!(fillet_owners_before.len(), 64);
+                assert!(
+                    fillet_owners_before
+                        .values()
+                        .all(|owners| owners.len() == 1)
+                );
+
+                let position = |editor: &ProjectionalEditorSession| {
+                    editor
+                        .coordinator()
+                        .accepted_materialization()
+                        .and_then(|accepted| accepted.session.accepted_state_for_current_input())
+                        .and_then(|accepted| accepted.document().point(service_point))
+                        .map(|point| point.position)
+                        .expect("current accepted serviceLoop point")
+                };
+                let assert_authority =
+                    |workbench: &CodeProjectWorkbench,
+                     editor: &ProjectionalEditorSession,
+                     checkpoint: &serde_json::Value,
+                     overlay: &CodeInteractionOverlay,
+                     expected_position: [f64; 2]| {
+                        assert_eq!(workbench.managed_source(), source_before);
+                        assert_eq!(workbench.accepted_editor_checkpoint(), checkpoint);
+                        assert_eq!(workbench.session.snapshot().interaction_overlay, *overlay);
+                        assert_eq!(
+                            workbench.session.snapshot().generated.active(),
+                            &generated_before
+                        );
+                        assert_eq!(code_node_ids(editor), code_nodes_before);
+                        let current_expansion = workbench
+                            .session
+                            .snapshot()
+                            .accepted_expansion
+                            .as_ref()
+                            .expect("current routing-board expansion");
+                        assert_eq!(
+                            generated_native_bindings(editor, current_expansion),
+                            native_bindings_before,
+                        );
+                        assert_eq!(generated_fillet_owners(workbench), fillet_owners_before);
+                        assert_eq!(
+                            expanded_port_point(editor, &service_lens.handle),
+                            Some(service_point),
+                        );
+                        assert_eq!(
+                            position(editor).map(f64::to_bits),
+                            expected_position.map(f64::to_bits),
+                        );
+                        assert_eq!(editor.coordinator().intent().undo_len(), 0);
+                        assert_eq!(editor.coordinator().intent().redo_len(), 0);
+                        let accepted = editor
+                            .coordinator()
+                            .accepted_materialization()
+                            .expect("accepted routing-board authority");
+                        assert!(accepted.validation.hard_residuals_validated);
+                        assert!(accepted.validation.all_active_features_current);
+                        assert!(
+                            accepted
+                                .validation
+                                .maximum_normalized_hard_residual
+                                .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
+                        );
+                        assert_eq!(accepted.computed.feature_evaluations().len(), 64);
+                        assert!(
+                            accepted
+                                .computed
+                                .feature_evaluations()
+                                .iter()
+                                .all(|evaluation| {
+                                    matches!(
+                                        evaluation.state,
+                                        ComputedFeatureEvaluationState::Current { .. }
+                                    )
+                                })
+                        );
+                        assert_warm_cache_matches_session(workbench);
+                    };
+
+                let origin = position(&editor);
+                assert_eq!(origin.map(f64::to_bits), [-30.0, -82.0].map(f64::to_bits));
+                let viewport = Viewport::new([1_200.0, 800.0], [0.0, 0.0], 2.5).unwrap();
+                let pointer = |pointer_id, model| PointerInput {
+                    pointer_id,
+                    position: viewport.model_to_screen(model),
+                    modifiers: Modifiers::default(),
+                };
+                let targets = [[-28.0, -78.0], [-28.0, -76.0]];
+                let mut checkpoints = Vec::new();
+                let mut overlays = Vec::new();
+
+                for (index, target) in targets.into_iter().enumerate() {
+                    let pointer_id = 87_700 + u64::try_from(index).expect("bounded terminal index");
+                    let start = position(&editor);
+                    let scene = editor.scene(viewport, 0.5).expect("pointer-down scene");
+                    editor
+                        .pointer_down_exact_point(&scene, pointer(pointer_id, start), service_point)
+                        .expect("exact serviceLoop pointer-down");
+                    assert!(
+                        workbench
+                            .prepare_semantic_point_drag(&editor, pointer_id, service_point, None,)
+                            .expect("unique serviceLoop semantic route")
+                            .is_none(),
+                        "a direct keyed Polyline vertex needs no detachment",
+                    );
+                    let scene = editor.scene(viewport, 0.5).expect("pointer-move scene");
+                    editor
+                        .pointer_move(&scene, pointer(pointer_id, target))
+                        .expect("accepted serviceLoop preview");
+                    let preview = editor
+                        .coordinator()
+                        .presentation_session()
+                        .and_then(|session| session.accepted_state_for_current_input())
+                        .and_then(|state| state.document().point(service_point))
+                        .map(|point| point.position)
+                        .expect("accepted serviceLoop preview position");
+                    assert_eq!(preview.map(f64::to_bits), target.map(f64::to_bits));
+                    let scene = editor.scene(viewport, 0.5).expect("pointer-up scene");
+                    let terminal = editor
+                        .pointer_up_delegated_point_audited(&scene, pointer(pointer_id, target));
+                    assert_eq!(terminal.work.native_preview_attempts(), 0);
+                    assert_eq!(terminal.work.intent_materialization_attempts(), 0);
+                    assert_eq!(terminal.work.computed_evaluation_attempts(), 0);
+                    assert_eq!(terminal.work.history_publications(), 0);
+                    let proposal = terminal
+                        .outcome
+                        .expect("delegated serviceLoop terminal")
+                        .proposal
+                        .expect("moved serviceLoop proposal");
+
+                    let revision_before = workbench.session.identity().revision;
+                    let audited = workbench.publish_delegated_point_terminal_audited(
+                        pointer_id,
+                        &editor,
+                        proposal,
+                        "Move routing-board service loop",
+                    );
+                    let publication = audited
+                        .outcome
+                        .expect("serviceLoop terminal publication")
+                        .expect("one outer history row");
+                    assert_eq!(audited.work.managed_parse_attempts(), 0);
+                    assert_eq!(audited.work.expansion_attempts(), 1);
+                    assert_eq!(audited.work.accepted_publications(), 1);
+                    assert_eq!(workbench.session.identity().revision, revision_before + 1);
+                    assert_eq!(workbench.managed_source(), source_before);
+                    let overlay = workbench.session.snapshot().interaction_overlay.clone();
+                    assert_eq!(overlay.drafts().len(), 1);
+                    let draft = overlay
+                        .draft(&service_draft_address)
+                        .expect("one serviceLoop generated override");
+                    assert_eq!(
+                        draft.value,
+                        geosolve_sketch_code::CodeDraftValue::Point(target),
+                    );
+                    assert_eq!(
+                        draft.provenance,
+                        geosolve_sketch_code::CodeDraftProvenance::GeneratedOverride,
+                    );
+                    let checkpoint = workbench.accepted_editor_checkpoint().clone();
+                    editor = publication.editor;
+                    assert_authority(&workbench, &editor, &checkpoint, &overlay, target);
+                    checkpoints.push(checkpoint);
+                    overlays.push(overlay);
+                }
+
+                let publication = workbench.step_history(true).unwrap().unwrap();
+                editor = publication.editor;
+                assert_authority(
+                    &workbench,
+                    &editor,
+                    &checkpoints[0],
+                    &overlays[0],
+                    targets[0],
+                );
+                let publication = workbench.step_history(true).unwrap().unwrap();
+                editor = publication.editor;
+                assert_authority(
+                    &workbench,
+                    &editor,
+                    &checkpoint_before,
+                    &overlay_before,
+                    origin,
+                );
+                let publication = workbench.step_history(false).unwrap().unwrap();
+                editor = publication.editor;
+                assert_authority(
+                    &workbench,
+                    &editor,
+                    &checkpoints[0],
+                    &overlays[0],
+                    targets[0],
+                );
+                let publication = workbench.step_history(false).unwrap().unwrap();
+                editor = publication.editor;
+                assert_authority(
+                    &workbench,
+                    &editor,
+                    &checkpoints[1],
+                    &overlays[1],
+                    targets[1],
+                );
+
+                let persisted = workbench
+                    .to_persistence_json()
+                    .expect("persisted routing-board terminal");
+                let restored = CodeProjectWorkbench::from_persistence_json(&persisted)
+                    .expect("restored routing-board terminal");
+                let restored_editor =
+                    restore_editor_checkpoint(restored.accepted_editor_checkpoint())
+                        .expect("restored routing-board editor");
+                assert_authority(
+                    &restored,
+                    &restored_editor,
+                    &checkpoints[1],
+                    &overlays[1],
+                    targets[1],
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 
     #[test]
