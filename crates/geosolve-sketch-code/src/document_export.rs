@@ -226,10 +226,10 @@ impl<'a> DocumentExporter<'a> {
         let label = &self
             .document
             .curve(id)
-            .ok_or_else(|| missing("curve", id))?
+            .ok_or_else(|| missing("curve", &id))?
             .label;
         let mut fields = String::new();
-        match definition {
+        let method = match definition {
             CurveDefinition::Line {
                 start,
                 end,
@@ -241,10 +241,10 @@ impl<'a> DocumentExporter<'a> {
                 field(
                     &mut fields,
                     "branchDirection",
-                    &point_literal(*branch_direction),
+                    point_literal(*branch_direction),
                 );
                 presentation_fields(&mut fields, label, role);
-                return Ok(("segment", fields));
+                "segment"
             }
             CurveDefinition::Polyline {
                 points,
@@ -252,7 +252,7 @@ impl<'a> DocumentExporter<'a> {
                 branch_directions,
             } => {
                 if branch_directions.iter().any(|value| !finite(*value)) {
-                    return Err(non_finite("curve", id));
+                    return Err(non_finite("curve", &id));
                 }
                 fields.push_str("    vertices: [{\n");
                 for (index, point) in points.iter().enumerate() {
@@ -270,13 +270,13 @@ impl<'a> DocumentExporter<'a> {
                 fields.push_str("    }],\n");
                 field(&mut fields, "closed", bool_literal(*closed));
                 presentation_fields(&mut fields, label, role);
-                return Ok(("polyline", fields));
+                "polyline"
             }
             CurveDefinition::Circle { center, radius } => {
                 field(&mut fields, "center", &self.point_ref(*center)?);
                 field(&mut fields, "radius", &self.length_scalar(*radius)?);
                 presentation_fields(&mut fields, label, role);
-                return Ok(("centerRadiusCircle", fields));
+                "centerRadiusCircle"
             }
             CurveDefinition::CircularArc {
                 center,
@@ -292,23 +292,23 @@ impl<'a> DocumentExporter<'a> {
                 field(
                     &mut fields,
                     "start",
-                    &point_literal(self.curve_endpoint(id, 0.0)?),
+                    point_literal(self.curve_endpoint(id, 0.0)?),
                 );
                 field(
                     &mut fields,
                     "end",
-                    &point_literal(self.curve_endpoint(id, 1.0)?),
+                    point_literal(self.curve_endpoint(id, 1.0)?),
                 );
                 field(&mut fields, "sweep", json_string(sweep_name(*sweep)));
                 presentation_fields(&mut fields, label, role);
-                return Ok(("centerArc", fields));
+                "centerArc"
             }
             CurveDefinition::QuadraticBezier { controls } => {
                 field(&mut fields, "start", &self.point_ref(controls[0])?);
                 field(&mut fields, "control", &self.point_ref(controls[1])?);
                 field(&mut fields, "end", &self.point_ref(controls[2])?);
                 presentation_fields(&mut fields, label, role);
-                return Ok(("quadraticBezier", fields));
+                "quadraticBezier"
             }
             CurveDefinition::CubicBezier { controls } => {
                 field(&mut fields, "start", &self.point_ref(controls[0])?);
@@ -316,7 +316,7 @@ impl<'a> DocumentExporter<'a> {
                 field(&mut fields, "secondControl", &self.point_ref(controls[2])?);
                 field(&mut fields, "end", &self.point_ref(controls[3])?);
                 presentation_fields(&mut fields, label, role);
-                return Ok(("cubicBezier", fields));
+                "cubicBezier"
             }
             CurveDefinition::Ellipse {
                 center,
@@ -332,14 +332,14 @@ impl<'a> DocumentExporter<'a> {
                 field(
                     &mut fields,
                     "minorAxisPoint",
-                    &point_literal(self.minor_axis_point(
+                    point_literal(self.minor_axis_point(
                         *center,
                         *major_axis_point,
                         *minor_axis_ratio,
                     )?),
                 );
                 presentation_fields(&mut fields, label, role);
-                return Ok(("centerAxesEllipse", fields));
+                "centerAxesEllipse"
             }
             CurveDefinition::EllipticalArc {
                 center,
@@ -360,7 +360,7 @@ impl<'a> DocumentExporter<'a> {
                 field(
                     &mut fields,
                     "minorAxisPoint",
-                    &point_literal(self.minor_axis_point(
+                    point_literal(self.minor_axis_point(
                         *center,
                         *major_axis_point,
                         *minor_axis_ratio,
@@ -369,16 +369,16 @@ impl<'a> DocumentExporter<'a> {
                 field(
                     &mut fields,
                     "start",
-                    &point_literal(self.curve_endpoint(id, 0.0)?),
+                    point_literal(self.curve_endpoint(id, 0.0)?),
                 );
                 field(
                     &mut fields,
                     "end",
-                    &point_literal(self.curve_endpoint(id, 1.0)?),
+                    point_literal(self.curve_endpoint(id, 1.0)?),
                 );
                 field(&mut fields, "sweep", json_string(sweep_name(*sweep)));
                 presentation_fields(&mut fields, label, role);
-                return Ok(("centerAxesEllipticalArc", fields));
+                "centerAxesEllipticalArc"
             }
             CurveDefinition::RationalQuadraticConic {
                 start,
@@ -392,7 +392,7 @@ impl<'a> DocumentExporter<'a> {
                 field(
                     &mut fields,
                     "weightedMiddle",
-                    &point_literal(*weighted_middle),
+                    point_literal(*weighted_middle),
                 );
                 field(
                     &mut fields,
@@ -400,7 +400,7 @@ impl<'a> DocumentExporter<'a> {
                     &self.dimensionless_scalar(*middle_weight)?,
                 );
                 presentation_fields(&mut fields, label, role);
-                return Ok(("rationalQuadraticConic", fields));
+                "rationalQuadraticConic"
             }
             CurveDefinition::ParabolaSegment {
                 vertex,
@@ -421,7 +421,7 @@ impl<'a> DocumentExporter<'a> {
                     &self.dimensionless_scalar(*trim_end)?,
                 );
                 presentation_fields(&mut fields, label, role);
-                return Ok(("parabola", fields));
+                "parabola"
             }
             CurveDefinition::HyperbolaSegment {
                 center,
@@ -461,7 +461,7 @@ impl<'a> DocumentExporter<'a> {
                     }),
                 );
                 presentation_fields(&mut fields, label, role);
-                return Ok(("hyperbola", fields));
+                "hyperbola"
             }
             CurveDefinition::BSpline {
                 form,
@@ -471,10 +471,17 @@ impl<'a> DocumentExporter<'a> {
                 span_ids,
                 ..
             } => {
-                self.validate_spline_topology(id, *form, *degree, controls.len(), knots, span_ids)?;
+                Self::validate_spline_topology(
+                    id,
+                    *form,
+                    *degree,
+                    controls.len(),
+                    knots,
+                    span_ids,
+                )?;
                 self.spline_fields(&mut fields, controls, &vec![1.0; controls.len()], *degree)?;
                 presentation_fields(&mut fields, label, role);
-                return Ok((nurbs_method(*form), fields));
+                nurbs_method(*form)
             }
             CurveDefinition::Nurbs {
                 form,
@@ -486,7 +493,14 @@ impl<'a> DocumentExporter<'a> {
                 span_ids,
                 ..
             } => {
-                self.validate_spline_topology(id, *form, *degree, controls.len(), knots, span_ids)?;
+                Self::validate_spline_topology(
+                    id,
+                    *form,
+                    *degree,
+                    controls.len(),
+                    knots,
+                    span_ids,
+                )?;
                 let values = weights
                     .iter()
                     .map(|scalar| self.dimensionless_scalar_number(*scalar))
@@ -500,13 +514,13 @@ impl<'a> DocumentExporter<'a> {
                     })?;
                 self.spline_fields_with_gauge(&mut fields, controls, &values, *degree, gauge)?;
                 presentation_fields(&mut fields, label, role);
-                return Ok((nurbs_method(*form), fields));
+                nurbs_method(*form)
             }
-        }
+        };
+        Ok((method, fields))
     }
 
     fn validate_spline_topology(
-        &self,
         id: CurveId,
         form: DocumentBSplineForm,
         degree: u32,
@@ -515,7 +529,7 @@ impl<'a> DocumentExporter<'a> {
         span_ids: &[u32],
     ) -> Result<(), ManagedSketchExportError> {
         if knots.iter().any(|value| !value.is_finite()) {
-            return Err(non_finite("curve", id));
+            return Err(non_finite("curve", &id));
         }
         let degree = usize::try_from(degree)
             .map_err(|_| ManagedSketchExportError::UnsupportedSplineTopology { id })?;
@@ -581,7 +595,7 @@ impl<'a> DocumentExporter<'a> {
             .expect("writing managed source to a String cannot fail");
         }
         fields.push_str("    }],\n");
-        field(fields, "degree", &degree.to_string());
+        field(fields, "degree", degree.to_string());
         field(fields, "gauge", json_string(&spline_key(gauge)));
         Ok(())
     }
@@ -644,7 +658,7 @@ impl<'a> DocumentExporter<'a> {
             C::FixedPoint { point, target } => {
                 finite_pair(*target, "constraint", constraint.id.to_string())?;
                 field(&mut fields, "point", &self.point_ref(*point)?);
-                field(&mut fields, "target", &point_literal(*target));
+                field(&mut fields, "target", point_literal(*target));
                 "fixedPoint"
             }
             C::FixedCoordinate {
@@ -655,7 +669,7 @@ impl<'a> DocumentExporter<'a> {
                 finite_number(*target, "constraint", constraint.id.to_string())?;
                 field(&mut fields, "point", &self.point_ref(*point)?);
                 field(&mut fields, "axis", json_string(axis_name(*axis)));
-                field(&mut fields, "target", &unit("mm", *target));
+                field(&mut fields, "target", unit("mm", *target));
                 "fixedCoordinate"
             }
             C::CoincidentWithOrigin { point } => {
@@ -805,7 +819,7 @@ impl<'a> DocumentExporter<'a> {
                 field(
                     &mut fields,
                     "centerDirection",
-                    &point_literal(*center_direction),
+                    point_literal(*center_direction),
                 );
                 "circleCircleTangency"
             }
@@ -933,7 +947,7 @@ impl<'a> DocumentExporter<'a> {
                 field(&mut fields, "continuity", json_string(name));
                 if let Some(ratio) = ratio {
                     finite_number(ratio, "constraint", constraint.id.to_string())?;
-                    field(&mut fields, "parameterRatio", &number(ratio));
+                    field(&mut fields, "parameterRatio", number(ratio));
                 }
                 "endpointContinuity"
             }
@@ -1149,25 +1163,25 @@ impl<'a> DocumentExporter<'a> {
         self.point_symbols
             .get(&id)
             .map(|symbol| format!("{symbol}.point"))
-            .ok_or_else(|| missing("point", id))
+            .ok_or_else(|| missing("point", &id))
     }
 
     fn curve_ref(&self, id: CurveId) -> Result<String, ManagedSketchExportError> {
         self.curve_symbols
             .get(&id)
             .map(|symbol| format!("{symbol}.curve"))
-            .ok_or_else(|| missing("curve", id))
+            .ok_or_else(|| missing("curve", &id))
     }
 
     fn span_ref(&self, span: CurveSpan) -> Result<String, ManagedSketchExportError> {
         let symbol = self
             .curve_symbols
             .get(&span.curve)
-            .ok_or_else(|| missing("curve", span.curve))?;
+            .ok_or_else(|| missing("curve", &span.curve))?;
         let curve = self
             .document
             .curve(span.curve)
-            .ok_or_else(|| missing("curve", span.curve))?;
+            .ok_or_else(|| missing("curve", &span.curve))?;
         match &curve.definition {
             CurveDefinition::Polyline { points, closed, .. } => {
                 let count = if *closed {
@@ -1178,7 +1192,7 @@ impl<'a> DocumentExporter<'a> {
                 let index = usize::try_from(span.segment)
                     .ok()
                     .filter(|index| *index < count)
-                    .ok_or_else(|| missing("polyline span", span.segment))?;
+                    .ok_or_else(|| missing("polyline span", &span.segment))?;
                 Ok(format!(
                     "{symbol}.segments.byKey[{}]",
                     json_string(&polyline_key(index))
@@ -1188,14 +1202,14 @@ impl<'a> DocumentExporter<'a> {
                 let index = span_ids
                     .iter()
                     .position(|candidate| *candidate == span.segment)
-                    .ok_or_else(|| missing("spline span", span.segment))?;
+                    .ok_or_else(|| missing("spline span", &span.segment))?;
                 Ok(format!(
                     "{symbol}.spans.byKey[{}]",
                     json_string(&spline_key(index))
                 ))
             }
             _ if span.segment == 0 => Ok(format!("{symbol}.span")),
-            _ => Err(missing("curve span", span.segment)),
+            _ => Err(missing("curve span", &span.segment)),
         }
     }
 
@@ -1205,7 +1219,7 @@ impl<'a> DocumentExporter<'a> {
     ) -> Result<&geosolve_sketch::ContactSlot, ManagedSketchExportError> {
         self.document
             .contact(id)
-            .ok_or_else(|| missing("contact", id))
+            .ok_or_else(|| missing("contact", &id))
     }
 
     fn contact_state(
@@ -1216,12 +1230,12 @@ impl<'a> DocumentExporter<'a> {
         let contact = self.contact(id)?;
         let parameter = self.dimensionless_scalar_number(contact.parameter)?;
         let mut value = String::from("{\n");
-        nested_field(&mut value, nested_indent, "parameter", &number(parameter));
+        nested_field(&mut value, nested_indent, "parameter", number(parameter));
         nested_field(
             &mut value,
             nested_indent,
             "winding",
-            &contact.winding.to_string(),
+            contact.winding.to_string(),
         );
         if matches!(contact.domain, ContactDomain::SupportingLine) {
             nested_field(
@@ -1236,7 +1250,7 @@ impl<'a> DocumentExporter<'a> {
                 &mut value,
                 nested_indent,
                 "range",
-                &format!(
+                format!(
                     "{{\n{}lower: {},\n{}upper: {},\n{}}}",
                     " ".repeat(nested_indent + 2),
                     number(range.lower),
@@ -1250,7 +1264,7 @@ impl<'a> DocumentExporter<'a> {
             &mut value,
             nested_indent,
             "neighborhood",
-            &neighborhood_literal(contact.neighborhood, nested_indent),
+            neighborhood_literal(contact.neighborhood, nested_indent),
         );
         nested_field(
             &mut value,
@@ -1284,9 +1298,9 @@ impl<'a> DocumentExporter<'a> {
         let scalar = self
             .document
             .scalar(id)
-            .ok_or_else(|| missing("scalar", id))?;
+            .ok_or_else(|| missing("scalar", &id))?;
         if !scalar.value.is_finite() {
-            return Err(non_finite("scalar", id));
+            return Err(non_finite("scalar", &id));
         }
         if scalar.unit == ScalarUnit::Length {
             return Err(ManagedSketchExportError::InvalidDocument(format!(
@@ -1304,9 +1318,9 @@ impl<'a> DocumentExporter<'a> {
         let scalar = self
             .document
             .scalar(id)
-            .ok_or_else(|| missing("scalar", id))?;
+            .ok_or_else(|| missing("scalar", &id))?;
         if !scalar.value.is_finite() {
-            return Err(non_finite("scalar", id));
+            return Err(non_finite("scalar", &id));
         }
         if scalar.unit != unit {
             return Err(ManagedSketchExportError::InvalidDocument(format!(
@@ -1341,12 +1355,12 @@ impl<'a> DocumentExporter<'a> {
         let center = self
             .document
             .point(center)
-            .ok_or_else(|| missing("point", center))?
+            .ok_or_else(|| missing("point", &center))?
             .position;
         let major = self
             .document
             .point(major)
-            .ok_or_else(|| missing("point", major))?
+            .ok_or_else(|| missing("point", &major))?
             .position;
         let ratio = self.dimensionless_scalar_number(ratio)?;
         let vector = [major[0] - center[0], major[1] - center[1]];
@@ -1569,14 +1583,14 @@ fn finite_number(
     }
 }
 
-fn missing(kind: &'static str, id: impl ToString) -> ManagedSketchExportError {
+fn missing(kind: &'static str, id: &impl ToString) -> ManagedSketchExportError {
     ManagedSketchExportError::MissingObject {
         kind,
         id: id.to_string(),
     }
 }
 
-fn non_finite(kind: &'static str, id: impl ToString) -> ManagedSketchExportError {
+fn non_finite(kind: &'static str, id: &impl ToString) -> ManagedSketchExportError {
     ManagedSketchExportError::NonFinite {
         kind,
         id: id.to_string(),
@@ -1692,14 +1706,18 @@ fn canonical_knots(form: DocumentBSplineForm, degree: usize, controls: usize) ->
     match form {
         DocumentBSplineForm::Clamped => {
             let spans = controls - degree;
+            let finite_spans = u32::try_from(spans).ok()?;
             let mut knots = vec![0.0; degree + 1];
-            for index in 1..spans {
-                knots.push(index as f64);
+            for index in 1..finite_spans {
+                knots.push(f64::from(index));
             }
-            knots.extend(std::iter::repeat_n(spans as f64, degree + 1));
+            knots.extend(std::iter::repeat_n(f64::from(finite_spans), degree + 1));
             Some(knots)
         }
-        DocumentBSplineForm::Periodic => Some((0..=controls).map(|index| index as f64).collect()),
+        DocumentBSplineForm::Periodic => {
+            let finite_controls = u32::try_from(controls).ok()?;
+            Some((0..=finite_controls).map(f64::from).collect())
+        }
     }
 }
 

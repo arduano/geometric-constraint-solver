@@ -319,6 +319,10 @@ macro_rules! managed_sample {
 /// Direct-native constructors remain only as independently comparable
 /// reference/oracle fixtures.
 #[must_use]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed source-authoritative sample inventory is easier to audit for omissions"
+)]
 pub fn bundled_code_projects() -> Vec<BundledCodeProject> {
     let mut projects = vec![
         managed_sample!(
