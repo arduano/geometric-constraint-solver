@@ -461,3 +461,14 @@ remain unexecuted and transfer/defer—not pass or waive—into M91's one compos
 qualification accepts no human row. The immutable F006 snapshot and service remain exact Tailscale-
 only closing publication authority; no GitHub Pages deployment or public push was authorized or
 made. M90 is closed. `PLAN.md` owns the exact evidence and M91 intake ledger.
+
+Post-close clean-source qualification (2026-09-04) also passes. Exact commit
+`fd3a3b864422a4d014525aefafc6d0e4147fa93c`, tree
+`996ca79bc629337aba549cd6a05cf70ee5e1ee1f`, ran
+`NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from `00:20:58` through
+`00:41:06 AEST` and exited `0`. The `567,121`-byte log
+`/tmp/geosolve-m90-clean-gate.X6LGue/release-gate.log` has SHA-256
+`e7deed1da0a8f1fb139025753980e52e0621198a3d3fba73ca855ceee1b03e7b`. All nine resulting
+distribution files pass `/tmp/geosolve-m90-uat.EtWyWQlt.sha256`; the immutable F006 snapshot and
+service therefore remain exact candidate authority. This evidence changes no implementation,
+publication or human-UAT disposition.

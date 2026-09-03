@@ -335,6 +335,15 @@ UAT. Automated qualification accepts no human row. The immutable F006 snapshot a
 the exact Tailscale-only closing publication; no GitHub Pages deployment or public push was
 authorized or made. M90 is closed.
 
+Post-close clean-source qualification (2026-09-04) passes at exact commit
+`fd3a3b864422a4d014525aefafc6d0e4147fa93c`, tree
+`996ca79bc629337aba549cd6a05cf70ee5e1ee1f`. Command
+`NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited `0`; its
+`567,121`-byte log `/tmp/geosolve-m90-clean-gate.X6LGue/release-gate.log` has SHA-256
+`e7deed1da0a8f1fb139025753980e52e0621198a3d3fba73ca855ceee1b03e7b`. Every generated
+distribution file byte-matches `/tmp/geosolve-m90-uat.EtWyWQlt.sha256`, so the existing immutable
+F006 service remains the exact candidate. This automated evidence still accepts no scorecard row.
+
 ## Scorecard
 
 Every row is **Not run** and transferred/deferred into M91's composite UAT. A passing automated

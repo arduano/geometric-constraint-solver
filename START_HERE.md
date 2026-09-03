@@ -835,6 +835,14 @@ snapshot and service remain Tailscale-only closing publication authority; no Git
 or public push was authorized or made. Automated qualification accepts no human row. M90 is closed;
 `PLAN.md` owns the full evidence and M91 intake ledger.
 
+Post-close clean-source evidence now removes the remaining qualification caveat. Exact commit
+`fd3a3b864422a4d014525aefafc6d0e4147fa93c`, tree
+`996ca79bc629337aba549cd6a05cf70ee5e1ee1f`, passes the complete release gate at exit `0`; its
+`567,121`-byte log `/tmp/geosolve-m90-clean-gate.X6LGue/release-gate.log` has SHA-256
+`e7deed1da0a8f1fb139025753980e52e0621198a3d3fba73ca855ceee1b03e7b`. The resulting nine-file
+distribution byte-matches `/tmp/geosolve-m90-uat.EtWyWQlt.sha256`, so no replacement service or
+candidate was needed. M90-U1 through M90-U10 remain transferred and unexecuted.
+
 ## Read first
 
 1. `AGENTS.md`

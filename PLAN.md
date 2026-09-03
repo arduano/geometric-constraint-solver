@@ -7974,6 +7974,19 @@ UAT. The immutable F006 snapshot and Tailscale service above remain the exact cl
 Publication is Tailscale-only: no GitHub Pages deployment or public push was authorized or made.
 M90 is closed.
 
+Post-close clean-source qualification (2026-09-04): exact commit
+`fd3a3b864422a4d014525aefafc6d0e4147fa93c`, tree
+`996ca79bc629337aba549cd6a05cf70ee5e1ee1f`, passed
+`NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from `00:20:58` through
+`00:41:06 AEST` at exit `0`. The `567,121`-byte log
+`/tmp/geosolve-m90-clean-gate.X6LGue/release-gate.log` has SHA-256
+`e7deed1da0a8f1fb139025753980e52e0621198a3d3fba73ca855ceee1b03e7b`. Every generated
+distribution file passes the existing frozen manifest
+`/tmp/geosolve-m90-uat.EtWyWQlt.sha256`, including the unchanged release WASM, so the already
+running immutable F006 service remains the exact closing candidate. This documentation-only
+qualification does not execute, pass or waive any transferred human UAT row and makes no public
+push or deployment.
+
 Gate: one named typed source language and one executed V3 authority can reproduce every bundled and
 standalone-authoritative sketch; canvas declaration insertion and structured source edits return to
 source through the two-phase compiler transaction; generated `mm`/`rad` imports are closed and
