@@ -6,7 +6,9 @@
     "baseUrl": ".",
     "paths": {
       "@geosolve/sketch-code": ["src/index.ts"],
-      "@geosolve/sketch-code/compiler": ["src/compiler.ts"]
+      "@geosolve/sketch-code/compiler": ["src/compiler.ts"],
+      "@geosolve/sketch-code/control": ["src/control.ts"],
+      "@geosolve/sketch-code/ir": ["src/ir.ts"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -17,6 +19,14 @@
     "rootDir": ".",
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "test/authoring-*.test.ts",
+    "test/control-*.test.ts",
+    "test/deno-parity.test.ts",
+    "test/managed-clean.test.ts",
+    "test/patch-*.test.ts",
+    "examples/**/*.ts"
+  ],
   "exclude": ["test/managed/**/*.ts"]
 }

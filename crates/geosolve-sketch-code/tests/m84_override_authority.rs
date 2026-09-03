@@ -15,9 +15,7 @@ use geosolve_sketch_code::{
     materialize_code_project_cold, materialize_code_project_incremental,
     required_generated_members,
 };
-use geosolve_sketch_intent::{
-    IntentFieldKey, IntentKey, IntentLiteral, IntentPortRef, IntentSession, IntentSessionId, NodeId,
-};
+use geosolve_sketch_intent::{IntentPortRef, IntentSession, IntentSessionId, NodeId};
 
 fn rounded_project() -> CodeProject {
     bundled_code_project_demos()
@@ -160,26 +158,21 @@ fn segment_branch_direction(
     materialized: &MaterializedCodeProject,
     address: &GeneratedMemberAddress,
 ) -> [f64; 2] {
-    let provenance = materialized
-        .expansion
-        .generated_provenance
-        .get(address)
-        .unwrap();
-    let ExpandedSemanticTarget::Port { port } = &provenance.target else {
-        panic!("generated segment must lower to one stable span port")
+    let (_, port, IntentNativeBinding::CurveSpan(span)) =
+        generated_native_identity(materialized, address)
+    else {
+        panic!("generated segment must retain one stable native span")
     };
-    let node = materialized
+    assert_eq!(port.kind, geosolve_sketch_intent::IntentPortKind::CurveSpan);
+    materialized
         .editor
         .coordinator()
-        .intent()
-        .graph()
-        .node_by_symbol(&port.alias)
-        .unwrap();
-    let field = IntentFieldKey(IntentKey::new("branch_direction").unwrap());
-    let Some(IntentLiteral::Point(direction)) = node.fields.get(&field) else {
-        panic!("generated segment must retain one explicit branch direction")
-    };
-    *direction
+        .accepted_materialization()
+        .expect("independently accepted native authority")
+        .session
+        .design_document()
+        .curve_branch_direction(span)
+        .expect("generated Polyline span must retain one explicit branch direction")
 }
 
 fn unit(vector: [f64; 2]) -> [f64; 2] {

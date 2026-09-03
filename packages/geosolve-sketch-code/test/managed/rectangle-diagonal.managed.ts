@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-"use geosolve managed-v1";
+"use geosolve sketch";
 import { sketch } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
-  const frame = $.geometry.rectangle("frame", {
-    lowerLeft: [0, 0],
-    upperRight: [60, 35],
+  const frame = $.geometry.twoPointAlignedRectangle("frame", {
+    firstCorner: [0, 0],
+    oppositeCorner: [60, 35],
   });
-  const diagonal = $.geometry.line("diagonal", {
-    start: frame.corners.lowerLeft,
-    end: frame.corners.upperRight,
+  const diagonal = $.geometry.segment("diagonal", {
+    start: frame.corners[0],
+    end: frame.corners[2],
   });
-  $.organize("Frame", [frame, diagonal]);
-  return $.outputs({ frame, diagonal });
+  $.group("Frame", [frame, diagonal]);
+  return { frame, diagonal };
 });

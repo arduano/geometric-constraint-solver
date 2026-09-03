@@ -2,8 +2,6 @@
 
 import { definePatch, t } from "@geosolve/sketch-code";
 
-const compass = ["nw", "ne", "se", "sw"] as const;
-
 /** Rounded profile plus keyed holes; native Rust still owns all geometry. */
 export const mountingPlate = definePatch(
   {
@@ -13,9 +11,29 @@ export const mountingPlate = definePatch(
     holeRadius: t.length(),
   },
   (p, input) => {
-    const rounded = p.roundedRectangle(input.width, input.height, input.cornerRadius);
-    const holes = p.record(compass, (key) =>
-      p.circle(rounded.mounts[key], input.holeRadius));
+    const rounded = p.computed.roundedRectangleProfile("profile", {
+      width: input.width,
+      height: input.height,
+      cornerRadius: input.cornerRadius,
+    });
+    const holes = {
+      nw: p.geometry.centerRadiusCircle("hole-nw", {
+        center: rounded.mounts.nw,
+        radius: input.holeRadius,
+      }).curve,
+      ne: p.geometry.centerRadiusCircle("hole-ne", {
+        center: rounded.mounts.ne,
+        radius: input.holeRadius,
+      }).curve,
+      se: p.geometry.centerRadiusCircle("hole-se", {
+        center: rounded.mounts.se,
+        radius: input.holeRadius,
+      }).curve,
+      sw: p.geometry.centerRadiusCircle("hole-sw", {
+        center: rounded.mounts.sw,
+        radius: input.holeRadius,
+      }).curve,
+    };
     return { profile: rounded.profile, holes };
   },
 );

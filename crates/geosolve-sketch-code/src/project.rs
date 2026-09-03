@@ -7,8 +7,8 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::{
-    ArtifactValidationError, CODE_PROJECT_LIMIT, CodeProject, PatchModuleArtifact, ProjectKey,
-    parse_managed_source,
+    ArtifactValidationError, CODE_PROJECT_LIMIT, CodeProject, CompiledManagedSource,
+    ManagedValidationError, PatchModuleArtifact, ProjectKey,
 };
 
 const MAX_PROJECT_FILES: usize = 65_536;
@@ -44,32 +44,45 @@ pub enum CodeProjectError {
     #[error(transparent)]
     Artifact(#[from] ArtifactValidationError),
     #[error(transparent)]
-    Managed(#[from] crate::ManagedParseError),
+    Managed(#[from] ManagedValidationError),
 }
 
 impl CodeProject {
-    /// Creates one artifact-free project whose complete authored authority is
-    /// the bounded managed TypeScript source.
-    ///
-    /// This is the smallest code-only entry point: no ordinary GUI scene,
-    /// custom patch file or precompiled artifact is required. The resulting
-    /// project still expands through the ordinary intent/materialization path
-    /// and therefore acquires no solver authority merely by parsing.
+    /// Creates one empty managed project from the checked-in, executed V3
+    /// bootstrap envelope. The first canvas or source edit still uses the
+    /// ordinary prepared compiler transaction; no raw-source parser is
+    /// involved in project construction.
     ///
     /// # Errors
     ///
-    /// Returns a managed-source or project-validation error before the
-    /// candidate may be materialized.
-    pub fn managed_only(project: ProjectKey, source: &str) -> Result<Self, CodeProjectError> {
-        let managed = parse_managed_source(source)?;
+    /// Returns a managed authority or project-validation error before native
+    /// materialization.
+    pub fn empty(project: ProjectKey) -> Result<Self, CodeProjectError> {
+        let compiled = CompiledManagedSource::from_json(include_str!(
+            "../assets/demos/authored-empty.compiled.json"
+        ))?;
+        Self::managed(project, compiled)
+    }
+
+    /// Creates one artifact-free managed project from an independently
+    /// validated browser or Deno compiler handoff.
+    ///
+    /// # Errors
+    ///
+    /// Returns a managed authority or project-validation error before native
+    /// materialization.
+    pub fn managed(
+        project: ProjectKey,
+        compiled: CompiledManagedSource,
+    ) -> Result<Self, CodeProjectError> {
+        let managed = compiled.into_managed_document()?;
         if managed
             .imports
             .iter()
             .any(|import| import.module != "@geosolve/sketch-code")
         {
             return Err(CodeProjectError::InvalidProject(
-                "managed-only source cannot import a custom patch without its pinned artifact"
-                    .into(),
+                "artifact-free managed source cannot import a custom patch".into(),
             ));
         }
         let project = Self {
@@ -106,10 +119,26 @@ impl CodeProject {
                 "invalid project brand".into(),
             ));
         }
-        let reparsed = parse_managed_source(&self.managed.source)?;
-        if reparsed != self.managed {
+        if let Some(compiled) = self.managed.compiled.as_deref() {
+            compiled.validate()?;
+            if compiled.normalized_source != self.managed.source {
+                return Err(CodeProjectError::InvalidProject(
+                    "managed source differs from its normalized compiler authority".into(),
+                ));
+            }
+            let projected = compiled.projected_managed_document()?;
+            let mut candidate = self.managed.clone();
+            candidate.compiled = None;
+            let mut projected = projected;
+            projected.declaration_name_high_water = candidate.declaration_name_high_water;
+            if projected != candidate {
+                return Err(CodeProjectError::InvalidProject(
+                    "managed equation-free projection differs from its executed authority".into(),
+                ));
+            }
+        } else {
             return Err(CodeProjectError::InvalidProject(
-                "managed document is not its source's canonical parse".into(),
+                "managed project lacks compiled authority".into(),
             ));
         }
         if self.custom_files.len() > MAX_PROJECT_FILES || self.artifacts.len() > MAX_PROJECT_FILES {
@@ -257,59 +286,17 @@ mod tests {
 
     use super::*;
 
-    const CODE_ONLY_SOURCE: &str = r#""use geosolve managed-v1";
-import { sketch } from "@geosolve/sketch-code";
-
-export default sketch(($) => {
-  const frame = $.geometry.rectangle("frame", {
-    lowerLeft: [0, 0],
-    upperRight: [60, 35],
-  });
-  const diagonal = $.geometry.line("diagonal", {
-    start: frame.corners.lowerLeft,
-    end: frame.corners.upperRight,
-  });
-  return $.outputs({ frame, diagonal });
-});
-"#;
-
     #[test]
-    fn managed_only_project_is_valid_artifact_free_code_authority() {
-        let project =
-            CodeProject::managed_only(ProjectKey("code-only-test".into()), CODE_ONLY_SOURCE)
-                .unwrap();
+    fn empty_project_uses_checked_in_executed_v3_authority() {
+        let project = CodeProject::empty(ProjectKey("empty-project-test".into())).unwrap();
         assert!(project.custom_files.is_empty());
         assert!(project.artifacts.is_empty());
-        assert_eq!(project.managed.program.declarations.len(), 2);
-        assert_eq!(project.managed.source, CODE_ONLY_SOURCE);
-        assert_eq!(project.lock["format"], "geosolve-lock-v1");
-        assert_eq!(project.lock["modules"], serde_json::json!({}));
-        assert!(project.validate().is_ok());
-    }
-
-    #[test]
-    fn managed_only_project_rejects_invalid_source_and_project_brand() {
-        assert!(matches!(
-            CodeProject::managed_only(ProjectKey("code-only-test".into()), "not managed code"),
-            Err(CodeProjectError::Managed(_))
-        ));
-        assert!(matches!(
-            CodeProject::managed_only(ProjectKey(String::new()), CODE_ONLY_SOURCE),
-            Err(CodeProjectError::InvalidProject(_))
-        ));
-        let custom_import = CODE_ONLY_SOURCE.replacen(
-            "import { sketch } from \"@geosolve/sketch-code\";",
-            concat!(
-                "import { sketch } from \"@geosolve/sketch-code\";\n",
-                "import { custom } from \"./patches/custom.patch.ts\";"
-            ),
-            1,
+        assert!(project.managed.program.declarations.is_empty());
+        assert_eq!(
+            project.managed.source,
+            include_str!("../assets/demos/authored-empty.sketch.ts")
         );
-        assert!(matches!(
-            CodeProject::managed_only(ProjectKey("code-only-test".into()), &custom_import),
-            Err(CodeProjectError::InvalidProject(message))
-                if message.contains("cannot import a custom patch")
-        ));
+        assert!(project.validate().is_ok());
     }
 
     #[test]
@@ -371,9 +358,7 @@ export default sketch(($) => {
 
     #[test]
     fn project_json_rejects_unknown_top_level_authority() {
-        let project =
-            CodeProject::managed_only(ProjectKey("strict-project-json".into()), CODE_ONLY_SOURCE)
-                .unwrap();
+        let project = bundled_code_project_demos().remove(0).project();
         let mut value: serde_json::Value =
             serde_json::from_str(&project.to_canonical_json().unwrap()).unwrap();
         value["unexpectedAuthority"] = serde_json::json!(true);

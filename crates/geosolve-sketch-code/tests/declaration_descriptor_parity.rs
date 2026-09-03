@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
 use geosolve_sketch_code::{
-    CODE_DECLARATION_FAMILIES, NativeDeclarationContract, code_declaration_family,
-    declaration_result_catalog, typescript_declaration_result_catalog,
-};
-use geosolve_sketch_intent::{
-    ComputedFeatureKind, ConstraintKind, DimensionKind, GeometryRecipeKind, IntentNodeKind,
+    CODE_AUTHORING_FAMILIES, CodeAuthoringArgumentKind, CodeAuthoringAvailability, CodeResultShape,
+    FeatureKind, code_authoring_family, declaration_result_catalog, public_code_authoring_families,
+    resolve_code_authoring_declaration, typescript_declaration_result_catalog,
 };
 
 #[test]
@@ -23,59 +22,104 @@ fn checked_in_typescript_result_catalog_is_exactly_rust_generated() {
 }
 
 #[test]
-fn executable_code_families_are_unique_and_grounded_in_central_intent_schemas() {
-    let result_catalog = declaration_result_catalog();
-    let mut names = CODE_DECLARATION_FAMILIES
-        .iter()
-        .map(|descriptor| descriptor.family)
-        .collect::<Vec<_>>();
-    let original_len = names.len();
-    names.sort_unstable();
-    names.dedup();
-    assert_eq!(names.len(), original_len);
+fn contact_results_are_typed_leaves_beneath_their_contact_objects() {
+    let catalog = declaration_result_catalog();
+    let point_on_curve = &catalog["constraint.pointOnCurve"].outputs;
+    let CodeResultShape::Object { fields } = point_on_curve else {
+        panic!("point-on-curve result must be an object")
+    };
+    let CodeResultShape::Object { fields: contact } = &fields["contact"] else {
+        panic!("point-on-curve contact must be an object")
+    };
+    assert_eq!(
+        contact["contact"],
+        CodeResultShape::Leaf {
+            kind: FeatureKind::Contact,
+        }
+    );
+    assert_eq!(
+        contact["parameter"],
+        CodeResultShape::Leaf {
+            kind: FeatureKind::Scalar,
+        }
+    );
 
-    for descriptor in &CODE_DECLARATION_FAMILIES {
-        assert_eq!(code_declaration_family(descriptor.family), Some(descriptor));
-        match descriptor.native {
-            NativeDeclarationContract::Geometry(recipe) => {
-                let schema = IntentNodeKind::Geometry { recipe }.schema(0);
-                assert!(schema.maximum_children <= 4_096);
-                assert!(GeometryRecipeKind::ALL.contains(&recipe));
+    let paired = &catalog["constraint.curveCurveContact"].outputs;
+    let CodeResultShape::Object { fields } = paired else {
+        panic!("curve-curve contact result must be an object")
+    };
+    let CodeResultShape::Object { fields: contacts } = &fields["contacts"] else {
+        panic!("paired contacts must be an object")
+    };
+    for side in ["first", "second"] {
+        let CodeResultShape::Object { fields: contact } = &contacts[side] else {
+            panic!("paired contact side must be an object")
+        };
+        assert_eq!(
+            contact["contact"],
+            CodeResultShape::Leaf {
+                kind: FeatureKind::Contact,
             }
-            NativeDeclarationContract::Constraint(constraint) => {
-                let schema = IntentNodeKind::Constraint { constraint }.schema(0);
-                assert!(schema.maximum_children <= 4_096);
-                assert!(ConstraintKind::ALL.contains(&constraint));
-            }
-            NativeDeclarationContract::Dimension(dimension) => {
-                let schema = IntentNodeKind::Dimension { dimension }.schema(0);
-                assert!(schema.maximum_children <= 4_096);
-                assert!(DimensionKind::ALL.contains(&dimension));
-            }
-            NativeDeclarationContract::Aggregate(kind) => {
-                let schema = IntentNodeKind::Aggregate { aggregate: kind }.schema(0);
-                assert!(schema.maximum_children <= 4_096);
-            }
-            NativeDeclarationContract::ComputedFeature(feature) => {
-                let schema = IntentNodeKind::ComputedFeature { feature }.schema(1);
-                assert!(schema.maximum_children <= 4_096);
-                assert!(ComputedFeatureKind::ALL.contains(&feature));
-            }
-            NativeDeclarationContract::CompositePolyline => {
-                let schema = IntentNodeKind::Geometry {
-                    recipe: GeometryRecipeKind::Polyline,
-                }
-                .schema(2);
-                assert_eq!(schema.minimum_children, 2);
-            }
-            NativeDeclarationContract::HostAuthoredFillet => {}
-        }
-        if descriptor.family != "aggregate.chain" && descriptor.family != "aggregate.profile" {
-            assert!(
-                result_catalog.contains_key(descriptor.family),
-                "{} is executable but absent from the typed result catalog",
-                descriptor.family,
-            );
-        }
+        );
     }
+}
+
+#[test]
+fn result_catalog_contains_only_clean_methods_and_patch_private_composites() {
+    let actual = declaration_result_catalog()
+        .into_keys()
+        .collect::<BTreeSet<_>>();
+    let mut expected = CODE_AUTHORING_FAMILIES
+        .iter()
+        .map(|family| format!("{}.{}", family.namespace, family.method))
+        .collect::<BTreeSet<_>>();
+    expected.extend([
+        "computed.fillet".to_owned(),
+        "computed.roundedRectangleProfile".to_owned(),
+    ]);
+    assert_eq!(actual, expected);
+    for retired in [
+        "aggregate.chain",
+        "aggregate.profile",
+        "geometry.circle",
+        "geometry.line",
+        "geometry.rectangle",
+        "geometry.rounded_rectangle",
+    ] {
+        assert!(
+            !actual.contains(retired),
+            "retired alias `{retired}` leaked"
+        );
+    }
+}
+
+#[test]
+fn clean_authoring_catalog_is_publicly_consumable_and_exhaustive() {
+    assert_eq!(CODE_AUTHORING_FAMILIES.len(), 83);
+    assert_eq!(public_code_authoring_families().count(), 81);
+    assert_eq!(
+        CODE_AUTHORING_FAMILIES
+            .iter()
+            .filter(|family| {
+                family.availability == CodeAuthoringAvailability::RequiresHostSnapshot
+            })
+            .count(),
+        2
+    );
+    assert!(code_authoring_family("geometry", "quadraticBezier").is_some());
+    let bezier = resolve_code_authoring_declaration("geometry", "quadraticBezier", 0).unwrap();
+    assert_eq!(
+        bezier
+            .inputs
+            .iter()
+            .map(|input| input.name.as_str())
+            .collect::<Vec<_>>(),
+        ["start", "control", "end"]
+    );
+    assert!(
+        bezier
+            .inputs
+            .iter()
+            .all(|input| input.kind == CodeAuthoringArgumentKind::Point)
+    );
 }

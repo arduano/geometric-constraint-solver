@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-"use geosolve managed-v1";
+"use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 import { roundEveryCorner } from "./patches/round-every-corner.patch.ts";
 
@@ -20,6 +20,6 @@ export default sketch(($) => {
     corners: path.filletableCorners,
     radius: mm(4),
   });
-  $.organize("Adaptive profile", [path, rounded]);
-  return $.outputs({ path, rounded });
+  $.group("Adaptive profile", [path]);
+  return { path, rounded };
 });

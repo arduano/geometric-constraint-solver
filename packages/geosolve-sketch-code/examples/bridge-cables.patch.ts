@@ -14,13 +14,28 @@ export const bridgeCables = definePatch(
   },
   (p, anchors) => ({
     mainCable: {
-      left: p.line(anchors.leftAbutment, anchors.leftPeak),
-      crown: p.line(anchors.leftPeak, anchors.rightPeak),
-      right: p.line(anchors.rightPeak, anchors.rightAbutment),
+      left: p.geometry.segment("left", {
+        start: anchors.leftAbutment,
+        end: anchors.leftPeak,
+      }),
+      crown: p.geometry.segment("crown", {
+        start: anchors.leftPeak,
+        end: anchors.rightPeak,
+      }),
+      right: p.geometry.segment("right", {
+        start: anchors.rightPeak,
+        end: anchors.rightAbutment,
+      }),
     },
     stays: {
-      falling: p.line(anchors.leftPeak, anchors.rightBase),
-      rising: p.line(anchors.leftBase, anchors.rightPeak),
+      falling: p.geometry.segment("falling", {
+        start: anchors.leftPeak,
+        end: anchors.rightBase,
+      }),
+      rising: p.geometry.segment("rising", {
+        start: anchors.leftBase,
+        end: anchors.rightPeak,
+      }),
     },
   }),
 );

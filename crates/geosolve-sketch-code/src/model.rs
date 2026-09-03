@@ -21,6 +21,7 @@ pub enum FeatureKind {
     Curve,
     CurveSpan,
     Scalar,
+    Contact,
     Constraint,
     Dimension,
     Profile,
@@ -79,7 +80,6 @@ pub enum ManagedOwnedSpanKind {
     Literal,
     Reference,
     Organization,
-    Outputs,
 }
 
 /// Authenticated source coordinate which the GUI may replace without taking
@@ -92,8 +92,8 @@ pub struct ManagedOwnedSpan {
 }
 
 /// Declaration-relative coordinate of one exactly rewritable managed value.
-/// This is the edit-lens bridge: callers name semantic argument fields while
-/// the parser authenticates the exact source bytes which own that leaf.
+/// Runtime value-consumer provenance joins the semantic argument field to
+/// the compiler-authenticated source bytes that own the leaf.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ManagedValueOwnedSpan {
     pub declaration: SemanticSymbol,
@@ -164,9 +164,9 @@ pub struct AuthoringDeclaration {
     pub arguments_span: ManagedSpan,
 }
 
-/// One expression-free lexical managed-v1 numeric binding. It owns one
-/// parser-authenticated literal and may be referenced only by later
-/// declaration arguments; it is not a native declaration or sketch output.
+/// One lexical numeric binding projected from executed managed V3 authority.
+/// It may be referenced only by later declaration arguments; it is not a
+/// native declaration or sketch output.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ManagedScalarBinding {
     pub variable: String,
@@ -216,7 +216,6 @@ pub enum ManagedDiagnosticCode {
     DuplicateObjectKey,
     ForwardReference,
     NonFiniteLiteral,
-    MissingOutputs,
     TrailingSource,
     RewriteStale,
 }
@@ -240,6 +239,21 @@ pub struct ManagedDocument {
     pub owned_spans: Vec<ManagedOwnedSpan>,
     #[serde(default)]
     pub value_owned_spans: Vec<ManagedValueOwnedSpan>,
+    /// Complete executed/reversible compiler authority for managed source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compiled: Option<Box<crate::CompiledManagedSource>>,
+    /// Monotonic source-declaration allocator authority. This metadata is not
+    /// printed into `sketch.ts`; hosts retain its maximum across Undo/delete
+    /// so a canvas-authored name is never silently reused.
+    #[serde(default, skip_serializing_if = "crate::is_zero_u64")]
+    pub declaration_name_high_water: u64,
+}
+
+impl ManagedDocument {
+    #[must_use]
+    pub const fn has_compiled_authority(&self) -> bool {
+        self.compiled.is_some()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

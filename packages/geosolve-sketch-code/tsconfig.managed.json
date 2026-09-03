@@ -2,7 +2,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@geosolve/sketch-code": ["src/index.ts"],
+      "@geosolve/sketch-code/compiler": ["src/compiler.ts"],
+      "@geosolve/sketch-code/control": ["src/control.ts"],
+      "@geosolve/sketch-code/ir": ["src/ir.ts"]
+    }
   },
   "include": [
     "src/**/*.ts",

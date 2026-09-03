@@ -1703,6 +1703,76 @@ fn adjacent_batch_composes_both_middle_endpoints_and_variable_output_count() {
 }
 
 #[test]
+fn closed_polyline_wraparound_corner_is_a_valid_fillet_authoring_pair() {
+    let mut document = SketchDocument::with_id(
+        100.0,
+        geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(0x90_0001)),
+    )
+    .unwrap();
+    let points = [
+        document.add_point("lower left", [0.0, 0.0]).unwrap(),
+        document.add_point("lower right", [8.0, 0.0]).unwrap(),
+        document.add_point("upper right", [8.0, 4.0]).unwrap(),
+        document.add_point("upper left", [0.0, 4.0]).unwrap(),
+    ];
+    let curve = document
+        .add_curve(
+            "closed panel",
+            CurveDefinition::Polyline {
+                points: points.to_vec(),
+                closed: true,
+                branch_directions: vec![[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0]],
+            },
+        )
+        .unwrap();
+    let incoming = CurveSpan { curve, segment: 3 };
+    let outgoing = CurveSpan { curve, segment: 0 };
+    let session = retained(document.clone());
+    let accepted = session.accepted_state_for_current_input().unwrap();
+    let solve = accepted.diagnostics().solve.unwrap();
+    assert_eq!(solve.hard_validity, SketchHardValidity::Valid);
+    assert!(solve.hard_residuals_validated);
+    assert!(
+        solve
+            .maximum_normalized_hard_residual
+            .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+    );
+
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    let resolved = complete(
+        authoring
+            .resolve_fillet_corner(
+                ComputedFilletCornerAuthoringRequest {
+                    first: curve_pick(&document, incoming, 0.75, DocumentFilletTrimEndpoint::End),
+                    second: curve_pick(
+                        &document,
+                        outgoing,
+                        0.25,
+                        DocumentFilletTrimEndpoint::Start,
+                    ),
+                    options: ComputedFilletAuthoringOptions::default(),
+                },
+                0.5,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .unwrap(),
+    );
+    let resolved_sources = [
+        resolved.corner.first.source.span,
+        resolved.corner.second.source.span,
+    ];
+    assert!(resolved_sources.contains(&incoming));
+    assert!(resolved_sources.contains(&outgoing));
+    assert!(resolved.arc.center.into_iter().all(f64::is_finite));
+    assert!(resolved.arc.contacts.iter().all(|contact| {
+        contact.parameter.is_finite()
+            && contact.total_parameter.is_finite()
+            && contact.position.into_iter().all(f64::is_finite)
+    }));
+}
+
+#[test]
 fn effective_edge_roles_follow_native_sources_and_mixed_parent_fillet_semantics() {
     let mut fixture = line_circle_fixture();
     fixture

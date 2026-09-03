@@ -1563,6 +1563,74 @@ fn diagnostics_report_complete_truncated_and_skipped_budgets_in_source_order() {
 }
 
 #[test]
+fn full_hard_row_rank_proves_redundancy_empty_without_deletion_rank_trials() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::vec2([4.0, -3.0], [1.0, 1.0]).unwrap());
+    let source_id = source(&mut problem, "independent square hard system");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                vec![variable],
+                2,
+                vec![1.0, 1.0],
+                vec![row("independent x row"), row("independent y row")],
+                Vec2Target([1.25, -2.5]),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let jacobians = problem.check_jacobians(1.0e-5).unwrap();
+    assert!(jacobians.all_within(1.0e-8), "{jacobians:#?}");
+
+    let outcome = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap();
+    let geosolve_core::OperationOutcome::Completed {
+        value: report,
+        report: operation_report,
+    } = outcome
+    else {
+        panic!("full-rank hard solve must complete: {outcome:#?}")
+    };
+
+    assert_eq!(report.termination, SolveTermination::Converged);
+    assert_eq!(report.hard_validity, HardValidity::Valid);
+    assert!(report.hard_residuals_validated);
+    let VariableValue::Vec2(accepted) = problem.variable(variable).unwrap().value() else {
+        panic!("expected accepted Vec2 state")
+    };
+    assert!(accepted.into_iter().all(f64::is_finite));
+    let independently_recomputed_maximum =
+        (accepted[0] - 1.25).abs().max((accepted[1] + 2.5).abs());
+    assert!(
+        independently_recomputed_maximum <= 1.0e-9,
+        "independent hard residual {independently_recomputed_maximum:e}"
+    );
+    assert_eq!(report.rank, 2);
+    assert_eq!(report.left_nullity, 0);
+    assert_eq!(report.right_nullity, 0);
+    assert_eq!(report.local_degrees_of_freedom, 0);
+    assert_eq!(report.bidirectional_degrees_of_freedom, 0);
+    assert!(report.redundant_rows.is_empty());
+    assert!(report.redundant_sources.is_empty());
+    assert!(report.sources_containing_redundant_rows.is_empty());
+    assert_eq!(
+        report.redundancy_diagnostics.status,
+        DiagnosticStatus::Complete
+    );
+    assert_eq!(report.redundancy_diagnostics.consumed.components, 1);
+    assert_eq!(report.redundancy_diagnostics.consumed.scalar_rows, 2);
+    assert_eq!(report.redundancy_diagnostics.consumed.trials, 0);
+    assert_eq!(operation_report.consumed.diagnostic_candidates, 0);
+    assert_eq!(operation_report.consumed.diagnostic_trials, 0);
+    // One hard-solve kernel plus one mandatory returned-state rank kernel;
+    // redundancy contributes no additional selected-row rank kernel.
+    assert_eq!(operation_report.consumed.rank_kernels, 2);
+}
+
+#[test]
 fn invalid_bounds_reject_without_entering_a_problem() {
     let mut problem = Problem::new();
     let scalar = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());

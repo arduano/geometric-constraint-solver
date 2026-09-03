@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-"use geosolve managed-v1";
+"use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 import { harnessRoute } from "./patches/harness-route.patch.ts";
 
@@ -8,27 +8,27 @@ export default sketch(($) => {
   // A 360 x 220 mm perforated fixture board carries two connector banks and
   // eight independently keyed harness routes. Native geometry and constraints
   // remain authoritative; the reusable patch owns only adaptive clips/Fillets.
-  const board = $.geometry.rectangle("board", {
-    lowerLeft: [-180, -110],
-    upperRight: [180, 110],
+  const board = $.geometry.twoPointAlignedRectangle("board", {
+    firstCorner: [-180, -110],
+    oppositeCorner: [180, 110],
   });
   const boardAnchor = $.constraint.fixedPoint("boardAnchor", {
-    point: board.corners.lowerLeft,
+    point: board.corners[0],
     target: [-180, -110],
   });
   const boardWidth = $.dimension.curveLength("boardWidth", {
-    curve: board.edges.bottom,
-    target: mm(360),
+    curve: board.spans[0],
+    value: mm(360),
   });
   const boardHeight = $.dimension.curveLength("boardHeight", {
-    curve: board.edges.right,
-    target: mm(220),
+    curve: board.spans[1],
+    value: mm(220),
   });
 
-  const boreNw = $.geometry.circle("boreNw", { center: [-166, 96], radius: mm(4) });
-  const boreNe = $.geometry.circle("boreNe", { center: [166, 96], radius: mm(4) });
-  const boreSe = $.geometry.circle("boreSe", { center: [166, -96], radius: mm(4) });
-  const boreSw = $.geometry.circle("boreSw", { center: [-166, -96], radius: mm(4) });
+  const boreNw = $.geometry.centerRadiusCircle("boreNw", { center: [-166, 96], radius: mm(4) });
+  const boreNe = $.geometry.centerRadiusCircle("boreNe", { center: [166, 96], radius: mm(4) });
+  const boreSe = $.geometry.centerRadiusCircle("boreSe", { center: [166, -96], radius: mm(4) });
+  const boreSw = $.geometry.centerRadiusCircle("boreSw", { center: [-166, -96], radius: mm(4) });
   const boreNwFixed = $.constraint.fixedPoint("boreNwFixed", { point: boreNw.center, target: [-166, 96] });
   const boreNeFixed = $.constraint.fixedPoint("boreNeFixed", { point: boreNe.center, target: [166, 96] });
   const boreSeFixed = $.constraint.fixedPoint("boreSeFixed", { point: boreSe.center, target: [166, -96] });
@@ -36,22 +36,22 @@ export default sketch(($) => {
 
   // Explicit connector centres make the board manufacturable-style source,
   // while leaving generated clip centres derived from route vertices.
-  const leftPower = $.geometry.circle("leftPower", { center: [-156, 82], radius: mm(6) });
-  const rightPower = $.geometry.circle("rightPower", { center: [156, 82], radius: mm(6) });
-  const leftServoA = $.geometry.circle("leftServoA", { center: [-156, 58], radius: mm(6) });
-  const rightServoA = $.geometry.circle("rightServoA", { center: [156, 58], radius: mm(6) });
-  const leftServoB = $.geometry.circle("leftServoB", { center: [-156, 34], radius: mm(6) });
-  const rightServoB = $.geometry.circle("rightServoB", { center: [156, 34], radius: mm(6) });
-  const leftSensorA = $.geometry.circle("leftSensorA", { center: [-156, 10], radius: mm(6) });
-  const rightSensorA = $.geometry.circle("rightSensorA", { center: [156, 10], radius: mm(6) });
-  const leftSensorB = $.geometry.circle("leftSensorB", { center: [-156, -14], radius: mm(6) });
-  const rightSensorB = $.geometry.circle("rightSensorB", { center: [156, -14], radius: mm(6) });
-  const leftGripper = $.geometry.circle("leftGripper", { center: [-156, -38], radius: mm(6) });
-  const rightGripper = $.geometry.circle("rightGripper", { center: [156, -38], radius: mm(6) });
-  const leftVision = $.geometry.circle("leftVision", { center: [-156, -62], radius: mm(6) });
-  const rightVision = $.geometry.circle("rightVision", { center: [156, -62], radius: mm(6) });
-  const leftService = $.geometry.circle("leftService", { center: [-156, -86], radius: mm(6) });
-  const rightService = $.geometry.circle("rightService", { center: [156, -86], radius: mm(6) });
+  const leftPower = $.geometry.centerRadiusCircle("leftPower", { center: [-156, 82], radius: mm(6) });
+  const rightPower = $.geometry.centerRadiusCircle("rightPower", { center: [156, 82], radius: mm(6) });
+  const leftServoA = $.geometry.centerRadiusCircle("leftServoA", { center: [-156, 58], radius: mm(6) });
+  const rightServoA = $.geometry.centerRadiusCircle("rightServoA", { center: [156, 58], radius: mm(6) });
+  const leftServoB = $.geometry.centerRadiusCircle("leftServoB", { center: [-156, 34], radius: mm(6) });
+  const rightServoB = $.geometry.centerRadiusCircle("rightServoB", { center: [156, 34], radius: mm(6) });
+  const leftSensorA = $.geometry.centerRadiusCircle("leftSensorA", { center: [-156, 10], radius: mm(6) });
+  const rightSensorA = $.geometry.centerRadiusCircle("rightSensorA", { center: [156, 10], radius: mm(6) });
+  const leftSensorB = $.geometry.centerRadiusCircle("leftSensorB", { center: [-156, -14], radius: mm(6) });
+  const rightSensorB = $.geometry.centerRadiusCircle("rightSensorB", { center: [156, -14], radius: mm(6) });
+  const leftGripper = $.geometry.centerRadiusCircle("leftGripper", { center: [-156, -38], radius: mm(6) });
+  const rightGripper = $.geometry.centerRadiusCircle("rightGripper", { center: [156, -38], radius: mm(6) });
+  const leftVision = $.geometry.centerRadiusCircle("leftVision", { center: [-156, -62], radius: mm(6) });
+  const rightVision = $.geometry.centerRadiusCircle("rightVision", { center: [156, -62], radius: mm(6) });
+  const leftService = $.geometry.centerRadiusCircle("leftService", { center: [-156, -86], radius: mm(6) });
+  const rightService = $.geometry.centerRadiusCircle("rightService", { center: [156, -86], radius: mm(6) });
   const leftPowerFixed = $.constraint.fixedPoint("leftPowerFixed", { point: leftPower.center, target: [-156, 82] });
   const rightPowerFixed = $.constraint.fixedPoint("rightPowerFixed", { point: rightPower.center, target: [156, 82] });
   const leftServoAFixed = $.constraint.fixedPoint("leftServoAFixed", { point: leftServoA.center, target: [-156, 58] });
@@ -230,12 +230,11 @@ export default sketch(($) => {
   const visionHarness = $.use("visionHarness", harnessRoute, { vertices: visionRoute.vertices, corners: visionRoute.filletableCorners, clipRadius: sharedClipRadius, bendRadius: sharedBendRadius });
   const serviceHarness = $.use("serviceHarness", harnessRoute, { vertices: serviceRoute.vertices, corners: serviceRoute.filletableCorners, clipRadius: sharedClipRadius, bendRadius: sharedBendRadius });
 
-  $.organize("Fixture board", [board, boreNw, boreNe, boreSe, boreSw]);
-  $.organize("Connector banks", [leftPower, rightPower, leftServoA, rightServoA, leftServoB, rightServoB, leftSensorA, rightSensorA, leftSensorB, rightSensorB, leftGripper, rightGripper, leftVision, rightVision, leftService, rightService]);
-  $.organize("Harness routes", [powerRoute, servoARoute, servoBRoute, sensorARoute, sensorBRoute, gripperRoute, visionRoute, serviceRoute]);
-  $.organize("Adaptive clips and bends", [powerHarness, servoAHarness, servoBHarness, sensorAHarness, sensorBHarness, gripperHarness, visionHarness, serviceHarness]);
+  $.group("Fixture board", [board, boreNw, boreNe, boreSe, boreSw]);
+  $.group("Connector banks", [leftPower, rightPower, leftServoA, rightServoA, leftServoB, rightServoB, leftSensorA, rightSensorA, leftSensorB, rightSensorB, leftGripper, rightGripper, leftVision, rightVision, leftService, rightService]);
+  $.group("Harness routes", [powerRoute, servoARoute, servoBRoute, sensorARoute, sensorBRoute, gripperRoute, visionRoute, serviceRoute]);
 
-  return $.outputs({
+  return {
     board,
     powerRoute,
     powerClips: powerHarness.clips,
@@ -261,5 +260,5 @@ export default sketch(($) => {
     serviceRoute,
     serviceClips: serviceHarness.clips,
     serviceFillets: serviceHarness.fillets,
-  });
+  };
 });

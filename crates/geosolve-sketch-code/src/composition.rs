@@ -8,8 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use geosolve_constraint_editor::{
     ComputedCornerRef, ComputedFeatureDefinition, FeatureAuthoringCandidate,
     FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
-    IntentNativeBinding, ProjectionalEditorError, ProjectionalEditorSession,
-    ProjectionalPatchOutcome, SelectionItem, projectional_fillet_patch,
+    IntentNativeBinding, PreparedIntentOperationPlan, ProjectionalEditorError,
+    ProjectionalEditorSession, ProjectionalPatchOutcome, SelectionItem,
+    prepare_intent_operation_output_plan, projectional_fillet_patch,
 };
 use geosolve_sketch::{DocumentId, SketchDocument};
 use geosolve_sketch_intent::{
@@ -20,11 +21,11 @@ use geosolve_sketch_intent::{
 };
 use thiserror::Error;
 
+use crate::expansion::{CodeOperationPlanner, expand_code_project_with_overlay_and_planner};
 use crate::{
     AuditedCodeWork, CodeExpansionError, CodeHostRequest, CodeInteractionOverlay, CodeProject,
     CodeWorkReceipt, ExpandedCodeProject, ExpandedFeatureCorner, GeneratedMemberAddress,
     GeneratedMemberIdentity, KeyedFilletHostRequest, KeyedReconcileState,
-    expand_code_project_for_structural_edit, expand_code_project_with_overlay,
 };
 
 /// One exact native computed output produced for a generated member.
@@ -78,6 +79,26 @@ pub struct MaterializedCodeProject {
     pub expansion: ExpandedCodeProject,
     pub base_outcome: ProjectionalPatchOutcome,
     pub host_outputs: BTreeMap<GeneratedMemberAddress, Vec<MaterializedFilletOutput>>,
+}
+
+/// Stack-safe cold-composition carrier used only while nested lowering and
+/// independent validation frames are live.
+struct ColdMaterializedCodeProject {
+    editor: Box<ProjectionalEditorSession>,
+    expansion: ExpandedCodeProject,
+    base_outcome: ProjectionalPatchOutcome,
+    host_outputs: BTreeMap<GeneratedMemberAddress, Vec<MaterializedFilletOutput>>,
+}
+
+impl ColdMaterializedCodeProject {
+    fn into_public(self) -> MaterializedCodeProject {
+        MaterializedCodeProject {
+            editor: *self.editor,
+            expansion: self.expansion,
+            base_outcome: self.base_outcome,
+            host_outputs: self.host_outputs,
+        }
+    }
 }
 
 /// Fail-closed structural/native composition diagnostic.
@@ -134,8 +155,43 @@ pub enum CodeCompositionError {
     ExpansionSessionMismatch { expected: String, actual: String },
     #[error("restored base declaration `{symbol}` does not match the expanded code payload")]
     RehydratedBaseMismatch { symbol: String },
+    #[error("restored operation declaration `{symbol}` does not match its native output inventory")]
+    RehydratedOperationPlanMismatch { symbol: String },
     #[error("restored generated host member `{member}` does not match the expanded code payload")]
     RehydratedHostMismatch { member: String },
+}
+
+struct NativeCodeOperationPlanner {
+    expected: IntentSessionIdentity,
+    document: DocumentId,
+    model_scale: f64,
+}
+
+impl CodeOperationPlanner for NativeCodeOperationPlanner {
+    fn prepare(
+        &mut self,
+        prefix: &[IntentPatchOperation],
+        alias: &IntentKey,
+        provisional: &IntentNodeDraft,
+    ) -> Result<PreparedIntentOperationPlan, CodeExpansionError> {
+        let mut operations = prefix.to_vec();
+        operations.push(IntentPatchOperation::CreateNode {
+            alias: alias.clone(),
+            draft: Box::new(provisional.clone()),
+            cell: None,
+        });
+        prepare_intent_operation_output_plan(
+            self.expected,
+            &operations,
+            &provisional.symbol,
+            self.document,
+            self.model_scale,
+        )
+        .map_err(|error| CodeExpansionError::OperationPlanning {
+            declaration: provisional.symbol.to_string(),
+            message: error.to_string(),
+        })
+    }
 }
 
 /// Cold-expands and independently materializes one complete code project.
@@ -186,9 +242,21 @@ pub fn materialize_code_project_cold_with_overlay(
     model_scale: f64,
 ) -> Result<MaterializedCodeProject, CodeCompositionError> {
     let intent = fresh_intent_session(intent_session)?;
-    let expansion =
-        expand_code_project_with_overlay(project, reconciliation, overlay, intent.identity())?;
-    materialize_expanded_code_project_cold(expansion, intent, document, model_scale)
+    let expansion = expand_code_project_with_overlay_and_planner(
+        project,
+        reconciliation,
+        overlay,
+        intent.identity(),
+        &mut NativeCodeOperationPlanner {
+            expected: intent.identity(),
+            document,
+            model_scale,
+        },
+    )?;
+    Ok(
+        materialize_expanded_code_project_cold(expansion, intent, document, model_scale)?
+            .into_public(),
+    )
 }
 
 fn fresh_intent_session(
@@ -202,6 +270,20 @@ fn fresh_intent_session(
     })
 }
 
+fn restore_cold_editor(
+    intent: IntentSession,
+    document: DocumentId,
+    model_scale: f64,
+    pristine_empty: bool,
+) -> Result<Box<ProjectionalEditorSession>, CodeCompositionError> {
+    let editor = if pristine_empty {
+        ProjectionalEditorSession::restore_pristine_empty(intent, document, model_scale)?
+    } else {
+        ProjectionalEditorSession::restore(intent, document, model_scale)?
+    };
+    Ok(Box::new(editor))
+}
+
 /// Materializes one already expanded project through an independent fresh
 /// Intent/native authority. Keeping expansion outside this helper lets the
 /// incremental composer select its warm unchanged-host path without parsing
@@ -211,17 +293,18 @@ fn materialize_expanded_code_project_cold(
     intent: IntentSession,
     document: DocumentId,
     model_scale: f64,
-) -> Result<MaterializedCodeProject, CodeCompositionError> {
-    let mut editor = if expansion.patch.operations().is_empty() {
-        ProjectionalEditorSession::restore_pristine_empty(intent, document, model_scale)?
-    } else {
-        ProjectionalEditorSession::restore(intent, document, model_scale)?
-    };
+) -> Result<ColdMaterializedCodeProject, CodeCompositionError> {
+    // Cold lowering nests through intent planning, retained document solving,
+    // and independent validation. Keep the large editor authority on the heap
+    // while those shared frames are live; its public value shape is preserved
+    // when the completed project moves into the caller's return place.
+    let empty_patch = expansion.patch.operations().is_empty();
+    let mut editor = restore_cold_editor(intent, document, model_scale, empty_patch)?;
     // A managed project may legitimately become empty after deleting its
     // final declaration. The generic intent API still rejects caller-issued
     // no-op patches; composition alone recognizes its authenticated empty
     // expansion as an already-accepted base over the restored empty document.
-    let base_outcome = if expansion.patch.operations().is_empty() {
+    let base_outcome = if empty_patch {
         ProjectionalPatchOutcome {
             identity: editor.coordinator().intent().identity(),
             disposition: IntentPlanDisposition::Accepted,
@@ -253,7 +336,7 @@ fn materialize_expanded_code_project_cold(
         return Err(CodeCompositionError::BaseNotAccepted);
     }
 
-    Ok(MaterializedCodeProject {
+    Ok(ColdMaterializedCodeProject {
         editor,
         expansion,
         base_outcome,
@@ -285,6 +368,7 @@ pub fn rehydrate_materialized_code_project(
 ) -> Result<Box<MaterializedCodeProject>, CodeCompositionError> {
     validate_native_authority(&editor)?;
     authenticate_expansion_envelope(&editor, &expansion)?;
+    authenticate_rehydrated_operation_plans(&editor, &expansion)?;
     let aliases = rehydrate_base_aliases(&editor, &expansion)?;
     let host_outputs = rehydrate_host_outputs(&editor, &aliases, &expansion.host_requests)?;
     let base_outcome = ProjectionalPatchOutcome {
@@ -298,6 +382,120 @@ pub fn rehydrate_materialized_code_project(
         base_outcome,
         host_outputs,
     }))
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "coverage, source-order prefixes, native reprobes, and retained plan equality are authenticated together"
+)]
+fn authenticate_rehydrated_operation_plans(
+    editor: &ProjectionalEditorSession,
+    expansion: &ExpandedCodeProject,
+) -> Result<(), CodeCompositionError> {
+    let accepted = editor
+        .coordinator()
+        .accepted_materialization()
+        .ok_or(CodeCompositionError::BaseNotAccepted)?;
+    let document = accepted.session.design_document();
+    let mut creates = BTreeMap::<IntentKey, IntentPatchOperation>::new();
+    let mut native_operation_aliases = BTreeSet::<IntentKey>::new();
+    for operation in expansion.patch.operations() {
+        let IntentPatchOperation::CreateNode { alias, draft, .. } = operation else {
+            return Err(CodeCompositionError::IncrementalUnexpectedOperation);
+        };
+        if creates.insert(alias.clone(), operation.clone()).is_some() {
+            return Err(CodeCompositionError::RehydratedOperationPlanMismatch {
+                symbol: draft.symbol.to_string(),
+            });
+        }
+        if matches!(
+            draft.kind,
+            geosolve_sketch_intent::IntentNodeKind::Operation { .. }
+        ) {
+            native_operation_aliases.insert(alias.clone());
+        }
+    }
+
+    let retained_operation_aliases = expansion
+        .operation_plans
+        .iter()
+        .filter_map(|stored| stored.prefix_aliases.last().cloned())
+        .collect::<BTreeSet<_>>();
+    if retained_operation_aliases.len() != expansion.operation_plans.len()
+        || retained_operation_aliases != native_operation_aliases
+    {
+        let symbol = native_operation_aliases
+            .symmetric_difference(&retained_operation_aliases)
+            .next()
+            .or_else(|| retained_operation_aliases.iter().next())
+            .map_or_else(|| "operation-plan-coverage".to_owned(), ToString::to_string);
+        return Err(CodeCompositionError::RehydratedOperationPlanMismatch { symbol });
+    }
+
+    let mut prior_prefix = Vec::<IntentKey>::new();
+    for stored in &expansion.operation_plans {
+        if stored.prefix_aliases.len() <= prior_prefix.len()
+            || stored.prefix_aliases[..prior_prefix.len()] != prior_prefix
+        {
+            return Err(CodeCompositionError::RehydratedOperationPlanMismatch {
+                symbol: stored.symbol.to_string(),
+            });
+        }
+        let mut unique = BTreeSet::new();
+        let mut probe = Vec::with_capacity(stored.prefix_aliases.len());
+        for alias in &stored.prefix_aliases {
+            if !unique.insert(alias) {
+                return Err(CodeCompositionError::RehydratedOperationPlanMismatch {
+                    symbol: stored.symbol.to_string(),
+                });
+            }
+            probe.push(creates.get(alias).cloned().ok_or_else(|| {
+                CodeCompositionError::RehydratedOperationPlanMismatch {
+                    symbol: stored.symbol.to_string(),
+                }
+            })?);
+        }
+        let IntentPatchOperation::CreateNode {
+            draft: provisional, ..
+        } = probe
+            .last_mut()
+            .expect("a retained operation prefix includes its operation")
+        else {
+            unreachable!("the canonical patch lookup contains only create-node operations")
+        };
+        let geosolve_sketch_intent::IntentNodeKind::Operation {
+            operation: operation_kind,
+        } = provisional.kind
+        else {
+            return Err(CodeCompositionError::RehydratedOperationPlanMismatch {
+                symbol: stored.symbol.to_string(),
+            });
+        };
+        if provisional.symbol != stored.symbol || stored.plan.operation != operation_kind {
+            return Err(CodeCompositionError::RehydratedOperationPlanMismatch {
+                symbol: stored.symbol.to_string(),
+            });
+        }
+
+        provisional.operation_outputs.clear();
+        let regenerated = prepare_intent_operation_output_plan(
+            expansion.patch.expected,
+            &probe,
+            &stored.symbol,
+            document.id(),
+            document.model_scale(),
+        )
+        .map_err(|_| CodeCompositionError::RehydratedOperationPlanMismatch {
+            symbol: stored.symbol.to_string(),
+        })?;
+        if regenerated != stored.plan {
+            return Err(CodeCompositionError::RehydratedOperationPlanMismatch {
+                symbol: stored.symbol.to_string(),
+            });
+        }
+        prior_prefix.clone_from(&stored.prefix_aliases);
+    }
+    Ok(())
 }
 
 fn authenticate_expansion_envelope(
@@ -314,6 +512,7 @@ fn authenticate_expansion_envelope(
         &expansion.writable_points,
         &expansion.generated_children,
         &expansion.host_requests,
+        &expansion.operation_plans,
     ))
     .map_err(|error| CodeCompositionError::Encoding(error.to_string()))?;
     if intent_content_digest(&bytes).to_string() != expansion.digest {
@@ -525,12 +724,34 @@ pub fn materialize_code_project_incremental_for_structural_edit(
     reconciliation: &KeyedReconcileState,
     current_overlay: &CodeInteractionOverlay,
 ) -> Result<(MaterializedCodeProject, CodeInteractionOverlay), CodeCompositionError> {
-    let (_, retained) = expand_code_project_for_structural_edit(
+    let accepted = previous
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .ok_or(CodeCompositionError::BaseNotAccepted)?;
+    let document = accepted.session.design_document();
+    // Native operation result planning is a cold, non-publishing probe.  The
+    // accepted retained session has necessarily advanced beyond revision
+    // zero, so using its identity here makes every structural edit in a
+    // project with an operation fail the planner's pristine-session guard.
+    // Recreate only the session namespace for this overlay-free preflight;
+    // the accepted editor remains the authority used by the actual
+    // incremental materialization below.
+    let cold_intent =
+        fresh_intent_session(previous.editor.coordinator().intent().identity().session)?;
+    let expected = cold_intent.identity();
+    let overlay_free = expand_code_project_with_overlay_and_planner(
         project,
         reconciliation,
-        current_overlay,
-        previous.editor.coordinator().intent().identity(),
+        &CodeInteractionOverlay::empty(),
+        expected,
+        &mut NativeCodeOperationPlanner {
+            expected,
+            document: document.id(),
+            model_scale: document.model_scale(),
+        },
     )?;
+    let retained = overlay_free.retained_overlay(current_overlay);
     let materialized = materialize_code_project_incremental_with_overlay_and_work(
         previous,
         project,
@@ -642,6 +863,10 @@ fn apply_incremental_project_patch(
     outcome.map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one transactional path keeps cold planning, warm authority, host replay, and final validation adjacent"
+)]
 fn materialize_code_project_incremental_with_overlay_and_work(
     previous: &MaterializedCodeProject,
     project: &CodeProject,
@@ -661,8 +886,17 @@ fn materialize_code_project_incremental_with_overlay_and_work(
     let cold_intent =
         fresh_intent_session(previous.editor.coordinator().intent().identity().session)?;
     work.record_expansion_attempt();
-    let expansion =
-        expand_code_project_with_overlay(project, reconciliation, overlay, cold_intent.identity())?;
+    let expansion = expand_code_project_with_overlay_and_planner(
+        project,
+        reconciliation,
+        overlay,
+        cold_intent.identity(),
+        &mut NativeCodeOperationPlanner {
+            expected: cold_intent.identity(),
+            document: document.id(),
+            model_scale: document.model_scale(),
+        },
+    )?;
     if expansion.host_requests == previous.expansion.host_requests {
         return materialize_unchanged_host_project_incremental(
             previous,
@@ -676,7 +910,8 @@ fn materialize_code_project_incremental_with_overlay_and_work(
         cold_intent,
         document.id(),
         document.model_scale(),
-    )?;
+    )?
+    .into_public();
     let expansion = desired.expansion.clone();
     let replacement_slots = detached_reference_replacement_slots(&previous.expansion, &expansion);
     let previous_symbols = materialized_project_symbols(previous)?;
@@ -1202,13 +1437,19 @@ fn detached_reference_replacement_slots(
 ) -> BTreeMap<IntentKey, BTreeSet<InputSlot>> {
     let mut authorized = BTreeMap::<IntentKey, BTreeSet<InputSlot>>::new();
     for point in &desired.writable_points {
-        if !point.source.is_reference()
-            || !previous.writable_points.iter().any(|candidate| {
-                candidate.source.is_reference()
-                    && candidate.handle == point.handle
-                    && candidate.edit == point.edit
-            })
-        {
+        let Some(previous_point) = previous
+            .writable_points
+            .iter()
+            .find(|candidate| candidate.handle == point.handle && candidate.edit == point.edit)
+        else {
+            continue;
+        };
+        // Overlay detachment retains the lexical Reference marker in both
+        // expansions, while a managed source transaction replaces that
+        // selected consumer value with a literal. In either case the prior
+        // exact consumer must be reference-backed: this is authorization to
+        // detach one input, never a general local-to-reference schema seam.
+        if !previous_point.source.is_reference() {
             continue;
         }
         let IntentPortSelector::Node { role, index: 0 } = point.handle.selector else {

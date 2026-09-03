@@ -6,6 +6,7 @@ import { definePatch, t } from "@geosolve/sketch-code";
 export const fillets = definePatch(
   { corners: t.record(t.corner()), radius: t.length() },
   (p, { corners, radius }) => ({
-    fillets: p.mapRecord(corners, (corner) => p.fillet({ corner, radius })),
+    fillets: p.mapRecord(corners, (corner) =>
+      p.computed.fillet("fillet", { corner, radius })),
   }),
 );

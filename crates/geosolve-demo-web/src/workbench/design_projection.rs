@@ -34,6 +34,9 @@ pub(crate) struct DesignProjectionSelection {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InspectorParameterAuthority {
     ModifiableSource {
+        control_id: String,
+        source_start: usize,
+        source_end: usize,
         source_path: String,
         source_text: String,
         consumer_count: usize,
@@ -1133,6 +1136,9 @@ fn push_integer_editor(
 fn push_parameter_authority(markup: &mut String, authority: &InspectorParameterAuthority) {
     match authority {
         InspectorParameterAuthority::ModifiableSource {
+            control_id,
+            source_start,
+            source_end,
             source_path,
             source_text,
             consumer_count,
@@ -1160,7 +1166,9 @@ fn push_parameter_authority(markup: &mut String, authority: &InspectorParameterA
                     "<aside class=\"wb-intent-parameter-authority\" ",
                     "data-intent-parameter-authority=\"modifiable-source\" ",
                     "data-intent-source-path=\"{}\" data-intent-source-consumers=\"{}\" ",
-                    "data-intent-source-generated-consumers=\"{}\">",
+                    "data-intent-source-generated-consumers=\"{}\" ",
+                    "data-code-control-id=\"{}\" data-code-source-start=\"{}\" ",
+                    "data-code-source-end=\"{}\">",
                     "<strong>Modifiable in sketch.ts</strong>",
                     "<small><code>{}</code> · <code>{}</code> · {}</small>",
                     "</aside>"
@@ -1168,6 +1176,9 @@ fn push_parameter_authority(markup: &mut String, authority: &InspectorParameterA
                 escape_attribute(source_path),
                 consumer_count,
                 generated_consumer_count,
+                escape_attribute(control_id),
+                source_start,
+                source_end,
                 escape_html(source_path),
                 escape_html(source_text),
                 escape_html(&fan_out),
@@ -1249,7 +1260,7 @@ pub(crate) fn literal_schema_for_instance(
     )
 }
 
-fn node_family_label(kind: &IntentGraphNodeKind) -> &'static str {
+pub(crate) fn node_family_label(kind: &IntentGraphNodeKind) -> &'static str {
     match kind {
         IntentGraphNodeKind::Geometry { .. } => "Geometry",
         IntentGraphNodeKind::Constraint { .. } => "Relation",
@@ -1563,6 +1574,9 @@ mod tests {
         let source_backed = [InspectorParameterPresentation {
             target: IntentInspectorEditTarget::Suppressed,
             authority: InspectorParameterAuthority::ModifiableSource {
+                control_id: "point-enabled".into(),
+                source_start: 10,
+                source_end: 14,
                 source_path: "point.enabled".into(),
                 source_text: "true".into(),
                 consumer_count: 1,

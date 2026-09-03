@@ -11,12 +11,12 @@ use geosolve_sketch_intent::{
     IntentEvaluationFailureKind, IntentFieldChoices, IntentFieldDefault, IntentFieldKey,
     IntentGraphError, IntentIdentityFlow, IntentKey, IntentLiteral, IntentLiteralSchema,
     IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentOperationOutput,
-    IntentOperationOutputKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind,
-    IntentPatchPolicy, IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRef,
-    IntentPortRole, IntentPortSelector, IntentProjectionPath, IntentReservationState,
-    IntentSession, IntentSessionId, IntentSessionIdentity, IntentUnit, LeafField, LeafRef,
-    MAX_INTENT_PROJECTION_PATH_SEGMENTS, MaterializationEvidence, NodeId, OperationKind,
-    ParameterIntentKind, PatchPortRef, PortId,
+    IntentOperationOutputKind, IntentOutputDescriptor, IntentPatch, IntentPatchOperation,
+    IntentPatchOperationKind, IntentPatchPolicy, IntentPlanDisposition, IntentPlanError,
+    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector, IntentProjectionPath,
+    IntentReservationState, IntentSession, IntentSessionId, IntentSessionIdentity, IntentUnit,
+    LeafField, LeafRef, MAX_INTENT_PROJECTION_PATH_SEGMENTS, MaterializationEvidence, NodeId,
+    OperationKind, ParameterIntentKind, PatchPortRef, PortId,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -245,6 +245,20 @@ fn assert_semantic_path(path: &IntentProjectionPath, expected: &serde_json::Valu
     assert_eq!(&actual, expected);
 }
 
+fn assert_output_paths_form_an_unambiguous_tree(outputs: &[IntentOutputDescriptor]) {
+    for (index, output) in outputs.iter().enumerate() {
+        for other in outputs.iter().skip(index + 1) {
+            assert!(
+                !projection_path_is_strict_prefix(&output.path, &other.path)
+                    && !projection_path_is_strict_prefix(&other.path, &output.path),
+                "stable output paths must form an unambiguous tree: {:?} and {:?}",
+                output.path,
+                other.path,
+            );
+        }
+    }
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "one audit helper proves the complete input, definition, output, and writable-leaf path bijection"
@@ -323,6 +337,7 @@ fn assert_descriptor_target_paths_are_bijective(node: &geosolve_sketch_intent::I
         descriptor.outputs.len(),
         "each stable output must have one unique semantic path"
     );
+    assert_output_paths_form_an_unambiguous_tree(&descriptor.outputs);
 
     let instance_leaf_count = descriptor
         .outputs
@@ -370,6 +385,14 @@ fn assert_descriptor_target_paths_are_bijective(node: &geosolve_sketch_intent::I
             "raw node key leaked: {projected}"
         );
     }
+}
+
+fn projection_path_is_strict_prefix(
+    prefix: &IntentProjectionPath,
+    path: &IntentProjectionPath,
+) -> bool {
+    prefix.segments().len() < path.segments().len()
+        && path.segments().starts_with(prefix.segments())
 }
 
 fn dummy_input(kind: &IntentNodeKind, slot: InputSlot) -> PatchPortRef {
@@ -1061,6 +1084,7 @@ fn descriptor_omission_categories_are_an_explicit_closed_inventory() {
             "geometry.MidpointLine.branch_direction",
             "geometry.ThreePointCenterRectangle.side_midpoint",
             "constraint.FixedPoint.target",
+            "computed_feature.FilletSet.name",
             "annotation.offset",
         ]
         .into_iter()
@@ -1475,6 +1499,33 @@ fn descriptor_branch_choice_vocabularies_are_exact_and_profile_offset_is_driving
             "{kind:?}.{field}"
         );
     }
+}
+
+#[test]
+fn profile_offset_traversals_stay_named_fields_while_tangent_arc_source_is_nested_contact_state() {
+    let profile_offset = IntentNodeKind::Dimension {
+        dimension: DimensionKind::ProfileOffset,
+    };
+    assert_semantic_path(
+        &field_descriptor(&profile_offset, 0, "source_traversal").path,
+        &serde_json::json!(["sourceTraversal"]),
+    );
+    assert_semantic_path(
+        &field_descriptor(&profile_offset, 0, "target_traversal").path,
+        &serde_json::json!(["targetTraversal"]),
+    );
+
+    let tangent_arc = IntentNodeKind::Geometry {
+        recipe: GeometryRecipeKind::TangentArc,
+    };
+    assert_semantic_path(
+        &field_descriptor(&tangent_arc, 0, "source_parameter").path,
+        &serde_json::json!(["source", "contact", "parameter"]),
+    );
+    assert_semantic_path(
+        &field_descriptor(&tangent_arc, 0, "source_neighborhood").path,
+        &serde_json::json!(["source", "contact", "neighborhood", "kind"]),
+    );
 }
 
 #[test]
@@ -2336,9 +2387,9 @@ fn semantic_projection_path_deserialization_enforces_its_public_shape_and_bound(
 #[test]
 #[allow(
     clippy::too_many_lines,
-    reason = "one focused output-shape fixture compares singleton contact objects with repeated contact arrays"
+    reason = "one focused output-shape fixture compares singleton and paired named contact objects"
 )]
-fn singleton_contacts_are_objects_while_repeated_contacts_are_arrays() {
+fn singleton_and_paired_contacts_are_named_objects_with_typed_leaves() {
     let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83_51)).unwrap();
     let point_on_curve = IntentNodeDraft::new(
         IntentNodeKind::Constraint {
@@ -2412,6 +2463,7 @@ fn singleton_contacts_are_objects_while_repeated_contacts_are_arrays() {
     session.commit_plan(plan).unwrap();
 
     let singleton = session.graph().node(singleton).unwrap().descriptor();
+    assert_output_paths_form_an_unambiguous_tree(&singleton.outputs);
     let singleton_contact = singleton
         .outputs
         .iter()
@@ -2422,14 +2474,18 @@ fn singleton_contacts_are_objects_while_repeated_contacts_are_arrays() {
         .iter()
         .find(|output| output.selector == selector(IntentPortRole::Parameter, 0))
         .unwrap();
-    assert_semantic_path(&singleton_contact.path, &serde_json::json!(["contact"]));
+    assert_semantic_path(
+        &singleton_contact.path,
+        &serde_json::json!(["contact", "contact"]),
+    );
     assert_semantic_path(
         &singleton_parameter.path,
         &serde_json::json!(["contact", "parameter"]),
     );
 
     let repeated = session.graph().node(repeated).unwrap().descriptor();
-    for index in 0..2_u16 {
+    assert_output_paths_form_an_unambiguous_tree(&repeated.outputs);
+    for (index, side) in [(0_u16, "first"), (1, "second")] {
         let contact = repeated
             .outputs
             .iter()
@@ -2440,10 +2496,13 @@ fn singleton_contacts_are_objects_while_repeated_contacts_are_arrays() {
             .iter()
             .find(|output| output.selector == selector(IntentPortRole::Parameter, index))
             .unwrap();
-        assert_semantic_path(&contact.path, &serde_json::json!(["contacts", index]));
+        assert_semantic_path(
+            &contact.path,
+            &serde_json::json!(["contacts", side, "contact"]),
+        );
         assert_semantic_path(
             &parameter.path,
-            &serde_json::json!(["contacts", index, "parameter"]),
+            &serde_json::json!(["contacts", side, "parameter"]),
         );
     }
 }

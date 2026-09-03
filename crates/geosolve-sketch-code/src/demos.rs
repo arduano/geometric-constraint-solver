@@ -6,8 +6,8 @@ use geosolve_sketch_intent::{intent_content_digest, intent_content_digest as dig
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    CodeProject, CodeProjectFile, FeatureKind, GeneratedMemberAddress, PatchModuleArtifact,
-    ProjectKey, parse_managed_source,
+    CodeProject, CodeProjectFile, CompiledManagedSource, FeatureKind, GeneratedMemberAddress,
+    PatchModuleArtifact, ProjectKey,
 };
 
 /// Stable bundled demonstration identity.
@@ -98,6 +98,8 @@ pub struct CodeProjectDemo {
     pub id: CodeProjectDemoId,
     pub title: &'static str,
     pub managed_source: &'static str,
+    /// Checked-in V3 IR/execution authority for `managed_source`.
+    pub compiled_source: &'static str,
     pub custom_files: BTreeMap<&'static str, &'static str>,
     pub artifacts: Vec<PatchModuleArtifact>,
     pub output_kinds: BTreeMap<&'static str, FeatureKind>,
@@ -119,8 +121,20 @@ impl CodeProjectDemo {
     /// Panics only when a source-controlled bundled fixture violates the same
     /// public parser or artifact contract tested by this crate.
     pub fn project(&self) -> CodeProject {
-        let managed = parse_managed_source(self.managed_source)
-            .expect("bundled managed demonstration source is valid");
+        let compiled =
+            CompiledManagedSource::from_json(self.compiled_source).unwrap_or_else(|error| {
+                panic!(
+                    "bundled managed demonstration `{}` compiler authority is valid: {error:?}",
+                    self.id.key()
+                )
+            });
+        assert_eq!(
+            compiled.normalized_source, self.managed_source,
+            "bundled source must be the exact normalized source authenticated by its compiler envelope"
+        );
+        let managed = compiled
+            .into_managed_document()
+            .expect("bundled managed demonstration projects to equation-free Intent authority");
         let custom_files = self
             .custom_files
             .iter()
@@ -157,7 +171,7 @@ impl CodeProjectDemo {
             artifacts.insert(validated.digest().to_owned(), value);
         }
         CodeProject {
-            project: ProjectKey(format!("m84-demo-{}", self.id.key())),
+            project: ProjectKey(format!("geosolve-demo-{}", self.id.key())),
             managed,
             custom_files,
             artifacts,
@@ -261,35 +275,14 @@ pub fn rounded_polyline_member_addresses(
 
 fn rounded_polyline_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/rounded-polyline.patch.ts");
-    const SOURCE: &str = r#""use geosolve managed-v1";
-import { sketch, mm } from "@geosolve/sketch-code";
-import { roundEveryCorner } from "./patches/round-every-corner.patch.ts";
-
-export default sketch(($) => {
-  const path = $.geometry.polyline("path", {
-    vertices: [
-      { key: "start", position: [0, 0] },
-      { key: "rise", position: [20, 0] },
-      { key: "shoulder", position: [24, 12] },
-      { key: "ridge", position: [40, 18] },
-      { key: "fall", position: [55, 10] },
-      { key: "end", position: [65, 10] },
-    ],
-    closed: false,
-  });
-  const rounded = $.use("rounded", roundEveryCorner, {
-    corners: path.filletableCorners,
-    radius: mm(4),
-  });
-  $.organize("Adaptive profile", [path, rounded]);
-  return $.outputs({ path, rounded });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/rounded-polyline.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/rounded-polyline.compiled.json");
     let artifact = round_every_corner_artifact(PATCH);
     CodeProjectDemo {
         id: CodeProjectDemoId::RoundedPolyline,
         title: "Rounded polyline · dynamic corners",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/round-every-corner.patch.ts", PATCH)]),
         artifacts: vec![artifact],
         output_kinds: BTreeMap::from([
@@ -307,35 +300,8 @@ export default sketch(($) => {
 
 fn adaptive_lanterns_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/adaptive-lanterns.patch.ts");
-    const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
-
-"use geosolve managed-v1";
-import { sketch, mm } from "@geosolve/sketch-code";
-import { adaptiveLanterns } from "./patches/adaptive-lanterns.patch.ts";
-
-export default sketch(($) => {
-  const wire = $.geometry.polyline("wire", {
-    vertices: [
-      { key: "plug", position: [-55, 4] },
-      { key: "amber", position: [-38, 16] },
-      { key: "coral", position: [-20, 7] },
-      { key: "gold", position: [0, 18] },
-      { key: "mint", position: [21, 8] },
-      { key: "violet", position: [39, 16] },
-      { key: "tail", position: [56, 4] },
-    ],
-    closed: false,
-  });
-  const decorations = $.use("decorations", adaptiveLanterns, {
-    vertices: wire.vertices,
-    corners: wire.filletableCorners,
-    bulbRadius: mm(2.6),
-    bendRadius: mm(3.2),
-  });
-  $.organize("Adaptive lantern garland", [wire, decorations]);
-  return $.outputs({ wire, bulbs: decorations.bulbs, fillets: decorations.fillets });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/adaptive-lanterns.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/adaptive-lanterns.compiled.json");
     let keys = ["plug", "amber", "coral", "gold", "mint", "violet", "tail"];
     let mut generated_members = rounded_polyline_member_addresses("wire", "unused", &keys, false);
     generated_members.retain(|address| address.invocation != "unused");
@@ -352,6 +318,7 @@ export default sketch(($) => {
         id: CodeProjectDemoId::AdaptiveLanterns,
         title: "Lantern garland · adaptive decorations",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/adaptive-lanterns.patch.ts", PATCH)]),
         artifacts: vec![adaptive_lanterns_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -365,35 +332,8 @@ export default sketch(($) => {
 
 fn suspension_bridge_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/bridge-cables.patch.ts");
-    const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
-
-"use geosolve managed-v1";
-import { sketch } from "@geosolve/sketch-code";
-import { bridgeCables } from "./patches/bridge-cables.patch.ts";
-
-export default sketch(($) => {
-  const deckLeft = $.geometry.line("deckLeft", { start: [-65, 0], end: [-28, 0] });
-  const deckCenter = $.geometry.line("deckCenter", { start: deckLeft.end, end: [28, 0] });
-  const deckRight = $.geometry.line("deckRight", { start: deckCenter.end, end: [65, 0] });
-  const leftTower = $.geometry.line("leftTower", { start: deckLeft.end, end: [-28, 38] });
-  const rightTower = $.geometry.line("rightTower", { start: deckCenter.end, end: [28, 38] });
-  const cables = $.use("cables", bridgeCables, {
-    leftAbutment: deckLeft.start,
-    leftBase: leftTower.start,
-    leftPeak: leftTower.end,
-    rightBase: rightTower.start,
-    rightPeak: rightTower.end,
-    rightAbutment: deckRight.end,
-  });
-  const deckLeftAxis = $.constraint.horizontal("deckLeftAxis", { curve: deckLeft });
-  const deckCenterAxis = $.constraint.horizontal("deckCenterAxis", { curve: deckCenter });
-  const deckRightAxis = $.constraint.horizontal("deckRightAxis", { curve: deckRight });
-  const leftTowerAxis = $.constraint.vertical("leftTowerAxis", { curve: leftTower });
-  const rightTowerAxis = $.constraint.vertical("rightTowerAxis", { curve: rightTower });
-  $.organize("Suspension bridge", [deckLeft, deckCenter, deckRight, leftTower, rightTower, cables, deckLeftAxis, deckCenterAxis, deckRightAxis, leftTowerAxis, rightTowerAxis]);
-  return $.outputs({ deckLeft, deckCenter, deckRight, leftTower, rightTower, cables, crown: cables.mainCable.crown, fallingStay: cables.stays.falling });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/suspension-bridge.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/suspension-bridge.compiled.json");
     let generated_members = [
         ["mainCable", "left"],
         ["mainCable", "crown"],
@@ -408,6 +348,7 @@ export default sketch(($) => {
         id: CodeProjectDemoId::SuspensionBridge,
         title: "Suspension bridge · typed structural graph",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/bridge-cables.patch.ts", PATCH)]),
         artifacts: vec![bridge_cables_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -426,47 +367,8 @@ export default sketch(($) => {
 
 fn compass_rose_demo() -> CodeProjectDemo {
     const CORE_PATCH: &str = include_str!("../assets/patches/compass-core.patch.ts");
-    const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
-
-"use geosolve managed-v1";
-import { sketch, mm } from "@geosolve/sketch-code";
-import { compassCore } from "./patches/compass-core.patch.ts";
-
-export default sketch(($) => {
-  const north = $.geometry.line("north", { start: [0, 0], end: [0, 34] });
-  const east = $.geometry.line("east", { start: north.start, end: [34, 0] });
-  const south = $.geometry.line("south", { start: north.start, end: [0, -34] });
-  const west = $.geometry.line("west", { start: north.start, end: [-34, 0] });
-  const core = $.use("core", compassCore, {
-    north: north.end,
-    east: east.end,
-    south: south.end,
-    west: west.end,
-    markerRadius: mm(3),
-  });
-  const northAxis = $.constraint.vertical("northAxis", { curve: north.span });
-  const eastAxis = $.constraint.horizontal("eastAxis", { curve: east.span });
-  const southAxis = $.constraint.vertical("southAxis", { curve: south.span });
-  const westAxis = $.constraint.horizontal("westAxis", { curve: west.span });
-  $.organize("Composable compass rose", [north, east, south, west, core, northAxis, eastAxis, southAxis, westAxis]);
-  return $.outputs({
-    north,
-    east,
-    south,
-    west,
-    core,
-    northMarker: core.markers.north.circle,
-    eastMarker: core.markers.east.circle,
-    southMarker: core.markers.south.circle,
-    westMarker: core.markers.west.circle,
-    northEast: core.ring.northEast.span,
-    northAxis,
-    eastAxis,
-    southAxis,
-    westAxis,
-  });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/compass-rose.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/compass-rose.compiled.json");
     let mut generated_members = ["northEast", "southEast", "southWest", "northWest"]
         .into_iter()
         .map(|name| GeneratedMemberAddress::new("core", ["ring", name], ["self"], ["span"]))
@@ -480,6 +382,7 @@ export default sketch(($) => {
         id: CodeProjectDemoId::CompassRose,
         title: "Compass rose · generated semantic lattice",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/compass-core.patch.ts", CORE_PATCH)]),
         artifacts: vec![compass_core_artifact(CORE_PATCH)],
         output_kinds: BTreeMap::from([
@@ -503,85 +406,13 @@ export default sketch(($) => {
 }
 
 fn neon_manifold_demo() -> CodeProjectDemo {
-    const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
-
-"use geosolve managed-v1";
-import { sketch, mm } from "@geosolve/sketch-code";
-
-export default sketch(($) => {
-  const feed = $.geometry.line("feed", {
-    start: [-54, -20],
-    end: [-20, -20],
-  });
-  const rise = $.geometry.line("rise", {
-    start: feed.end,
-    end: [-20, 12],
-  });
-  const bridge = $.geometry.line("bridge", {
-    start: rise.end,
-    end: [20, 12],
-  });
-  const stack = $.geometry.line("stack", {
-    start: bridge.end,
-    end: [20, 44],
-  });
-  const feedAxis = $.constraint.horizontal("feedAxis", { curve: feed.span });
-  const riseAxis = $.constraint.vertical("riseAxis", { curve: rise.span });
-  const bridgeAxis = $.constraint.horizontal("bridgeAxis", { curve: bridge.span });
-  const stackAxis = $.constraint.vertical("stackAxis", { curve: stack.span });
-  const bends = $.computed.filletSet("bends", {
-    radius: mm(5),
-    corners: [{
-      parents: [{
-        span: feed.span,
-        parameter: 0.75,
-        winding: 0,
-        neighborhood: { kind: "interior" },
-        normalSide: "left",
-        retainedEndpoint: "end",
-        periodicAnchor: null,
-      }, {
-        span: rise.span,
-        parameter: 0.25,
-        winding: 0,
-        neighborhood: { kind: "interior" },
-        normalSide: "left",
-        retainedEndpoint: "start",
-        periodicAnchor: null,
-      }],
-      endpointOrder: "firstThenSecond",
-      sweep: "counterClockwise",
-    }, {
-      parents: [{
-        span: bridge.span,
-        parameter: 0.75,
-        winding: 0,
-        neighborhood: { kind: "interior" },
-        normalSide: "left",
-        retainedEndpoint: "end",
-        periodicAnchor: null,
-      }, {
-        span: stack.span,
-        parameter: 0.25,
-        winding: 0,
-        neighborhood: { kind: "interior" },
-        normalSide: "left",
-        retainedEndpoint: "start",
-        periodicAnchor: null,
-      }],
-      endpointOrder: "firstThenSecond",
-      sweep: "counterClockwise",
-    }],
-    suppressed: false,
-  });
-  $.organize("Neon manifold", [feed, rise, bridge, stack, bends, feedAxis, riseAxis, bridgeAxis, stackAxis]);
-  return $.outputs({ feed, rise, bridge, stack, bends, feedAxis, riseAxis, bridgeAxis, stackAxis });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/neon-manifold.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/neon-manifold.compiled.json");
     CodeProjectDemo {
         id: CodeProjectDemoId::NeonManifold,
         title: "Neon manifold · explicit native bends",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::new(),
         artifacts: Vec::new(),
         output_kinds: BTreeMap::from([
@@ -602,10 +433,12 @@ export default sketch(($) => {
 fn pc_water_manifold_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/water-channel.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/pc-water-manifold.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/pc-water-manifold.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::PcWaterManifold,
         title: "PC water manifold · fully constrained dogfood",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/water-channel.patch.ts", PATCH)]),
         artifacts: vec![water_channel_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -640,10 +473,12 @@ fn pc_water_manifold_demo() -> CodeProjectDemo {
 fn robotic_routing_board_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/harness-route.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/robotic-routing-board.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/robotic-routing-board.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::RoboticRoutingBoard,
         title: "Robotic cable-harness routing board · adaptive dogfood",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/harness-route.patch.ts", PATCH)]),
         artifacts: vec![harness_route_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -684,10 +519,12 @@ fn cnc_joinery_fit_coupon_demo() -> CodeProjectDemo {
     const RELIEF_PATCH: &str = include_str!("../assets/patches/corner-reliefs.patch.ts");
     const FILLET_PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/cnc-joinery-fit-coupon.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/cnc-joinery-fit-coupon.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::CncJoineryFitCoupon,
         title: "CNC joinery fit coupon · keyed corner reliefs",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([
             ("patches/corner-reliefs.patch.ts", RELIEF_PATCH),
             ("patches/fillet-record.patch.ts", FILLET_PATCH),
@@ -722,10 +559,12 @@ fn cnc_joinery_fit_coupon_demo() -> CodeProjectDemo {
 fn gridfinity_bin_section_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/gridfinity-1x1x3-section.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/gridfinity-1x1x3-section.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::GridfinityBinSection,
         title: "Gridfinity 1×1×3U section · keyed standard profile",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/fillet-record.patch.ts", PATCH)]),
         artifacts: vec![fillet_record_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -742,25 +581,8 @@ fn gridfinity_bin_section_demo() -> CodeProjectDemo {
 
 fn typed_panel_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
-    const SOURCE: &str = r#""use geosolve managed-v1";
-import { sketch, mm } from "@geosolve/sketch-code";
-import { fillets } from "./patches/fillet-record.patch.ts";
-
-export default sketch(($) => {
-  const panel = $.geometry.rectangle("panel", {
-    lowerLeft: [0, 0],
-    upperRight: [80, 40],
-  });
-  const corners = $.use("cornerFillets", fillets, {
-    corners: {
-      lowerLeft: panel.corners.lowerLeft,
-      upperRight: panel.corners.upperRight,
-    },
-    radius: mm(4),
-  });
-  return $.outputs({ panel, lowerLeft: corners.fillets.lowerLeft, upperRight: corners.fillets.upperRight });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/typed-panel.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/typed-panel.compiled.json");
     let artifact = fillet_record_artifact(PATCH);
     let generated_members = ["lowerLeft", "upperRight"]
         .into_iter()
@@ -770,6 +592,7 @@ export default sketch(($) => {
         id: CodeProjectDemoId::TypedPanel,
         title: "Typed panel · keyed Fillets",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/fillet-record.patch.ts", PATCH)]),
         artifacts: vec![artifact],
         output_kinds: BTreeMap::from([
@@ -783,28 +606,13 @@ export default sketch(($) => {
 
 fn braced_frame_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/braced-frame.patch.ts");
-    const SOURCE: &str = r#""use geosolve managed-v1";
-import { sketch } from "@geosolve/sketch-code";
-import { crossBrace } from "./patches/cross-brace.patch.ts";
-
-export default sketch(($) => {
-  const frame = $.geometry.rectangle("frame", {
-    lowerLeft: [0, 0],
-    upperRight: [60, 35],
-  });
-  const brace = $.use("brace", crossBrace, { frame: frame });
-  // A diagonal of an axis-aligned frame cannot itself be horizontal. Keep the
-  // downstream ordinary relation as an explicit, editable suppressed example
-  // rather than publishing an invalid demonstration scene.
-  const datum = $.constraint.horizontal("datum", { curve: brace.diagonals.rising, suppressed: true });
-  $.organize("Frame", [frame, brace, datum]);
-  return $.outputs({ frame, brace, rising: brace.diagonals.rising, datum });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/braced-frame.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/braced-frame.compiled.json");
     CodeProjectDemo {
         id: CodeProjectDemoId::BracedFrame,
         title: "Braced frame · GUI → code → GUI",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/cross-brace.patch.ts", PATCH)]),
         artifacts: vec![cross_brace_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -822,21 +630,8 @@ export default sketch(($) => {
 
 fn mounting_plate_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/mounting-plate.patch.ts");
-    const SOURCE: &str = r#""use geosolve managed-v1";
-import { sketch, mm } from "@geosolve/sketch-code";
-import { mountingPlate } from "./patches/mounting-plate.patch.ts";
-
-export default sketch(($) => {
-  const plate = $.use("plate", mountingPlate, {
-    width: mm(90),
-    height: mm(55),
-    cornerRadius: mm(7),
-    holeRadius: mm(2.5),
-  });
-  $.organize("Mounting plate", [plate]);
-  return $.outputs({ plate, profile: plate.profile, nw: plate.holes.nw, ne: plate.holes.ne, se: plate.holes.se, sw: plate.holes.sw });
-});
-"#;
+    const SOURCE: &str = include_str!("../assets/demos/mounting-plate.sketch.ts");
+    const COMPILED: &str = include_str!("../assets/demos/mounting-plate.compiled.json");
     let generated_members =
         ["profile", "nw", "ne", "se", "sw"]
             .into_iter()
@@ -849,6 +644,7 @@ export default sketch(($) => {
         id: CodeProjectDemoId::MountingPlate,
         title: "Mounting plate · reusable AI-authored module",
         managed_source: SOURCE,
+        compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/mounting-plate.patch.ts", PATCH)]),
         artifacts: vec![mounting_plate_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -1006,21 +802,21 @@ mod tests {
             lower_left.path.0,
             vec![
                 ManagedPathSegment::Field("fillets".into()),
-                ManagedPathSegment::Field("lowerLeft".into()),
+                ManagedPathSegment::Member {
+                    member: "lowerLeft".into(),
+                },
             ]
         );
         assert_eq!(demo.output_kinds["lowerLeft"], FeatureKind::CurveSpan);
     }
 
     #[test]
-    fn custom_patch_bytes_survive_managed_reparse_unchanged() {
+    fn custom_patch_bytes_survive_compiled_project_round_trip_unchanged() {
         let demo = mounting_plate_demo();
         let project = demo.project();
         let before = project.custom_files.clone();
-        let managed =
-            parse_managed_source(&project.managed.source.replacen("mm(90)", "mm(100)", 1)).unwrap();
-        let mut after = project;
-        after.managed = managed;
+        let json = project.to_canonical_json().unwrap();
+        let after = CodeProject::from_json(&json).unwrap();
         assert_eq!(after.custom_files, before);
     }
 }

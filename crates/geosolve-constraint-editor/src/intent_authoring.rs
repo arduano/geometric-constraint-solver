@@ -15,19 +15,21 @@ use geosolve_sketch::{
     DocumentDimensionMode, DocumentDirectionSense, SketchDatum, SketchDocument, TangentOrientation,
 };
 use geosolve_sketch_intent::{
-    ConstraintKind, DimensionKind as IntentDimensionKind, GeometryRecipeKind, InputRole, InputSlot,
-    IntentFieldKey, IntentIdentityFlow, IntentKey, IntentKeyError, IntentLiteral, IntentNodeDraft,
-    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole,
-    IntentPortSelector, IntentSession, IntentSessionIdentity, IntentUnit, LeafField, PatchPortRef,
+    ConstraintKind, DimensionKind as IntentDimensionKind, InputRole, InputSlot, IntentFieldKey,
+    IntentIdentityFlow, IntentKey, IntentKeyError, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector,
+    IntentSession, IntentSessionIdentity, IntentUnit, LeafField, PatchPortRef,
 };
 use thiserror::Error;
 
 use crate::{
-    AuthoringApplication, AuthoringTool, ConstraintRelationChoice, ConstructionCommitPlan,
-    ConstructionPoint, ConstructionRelationDefinition, ConstructionRelationProvenance,
-    DimensionKind as AuthoringDimensionKind, DraftContactDescriptor, DraftCurveSlot,
-    DraftPointSlot, DraftSpanSlot, GeometryToolVariant, InferredRelation, IntentMaterializationMap,
-    IntentNativeBinding, MAX_CONSTRUCTION_PLAN_RELATIONS, ResolvedConstraintKind, SelectionItem,
+    AuthoringApplication, AuthoringTool, ConicConstructionOptions, ConstraintRelationChoice,
+    ConstructionCommitPlan, ConstructionPoint, ConstructionRelationDefinition,
+    ConstructionRelationProvenance, DimensionKind as AuthoringDimensionKind,
+    DraftContactDescriptor, DraftCurveSlot, DraftPointSlot, DraftSpanSlot, GeometryToolVariant,
+    InferredRelation, IntentMaterializationMap, IntentNativeBinding,
+    MAX_CONSTRUCTION_PLAN_RELATIONS, NurbsConstructionOptions, ResolvedConstraintKind,
+    SelectionItem,
 };
 
 use crate::coordinator::{
@@ -43,6 +45,70 @@ use crate::coordinator::{
 pub struct ProjectionalConstructionPatch {
     pub patch: IntentPatch,
     pub geometry_alias: IntentKey,
+}
+
+/// Equation-free authored coordinate samples for one exact geometry recipe.
+///
+/// The coordinates retain the recipe's interaction-stage order rather than
+/// pretending that every sample becomes a persistent point. This distinction
+/// is essential for diameter/circumcircle, arc, ellipse and conic recipes,
+/// whose native storage is derived from one or more construction samples.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProjectionalGeometrySamples {
+    pub points: Vec<[f64; 2]>,
+    pub role: geosolve_sketch::GeometryRole,
+    pub regularized: bool,
+    pub closed: bool,
+    pub conic_options: ConicConstructionOptions,
+    pub nurbs_options: NurbsConstructionOptions,
+}
+
+/// One canonical geometry draft together with every finite native point seed
+/// encoded by its construction recipe.
+///
+/// The seed inventory includes derived native outputs such as the two
+/// non-authored corners of an aligned rectangle. Source adapters must publish
+/// these values alongside the draft so later declarations can deterministically
+/// reference any projected point without reproducing recipe equations.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProjectionalGeometryDraft {
+    pub draft: IntentNodeDraft,
+    pub point_seeds: BTreeMap<IntentPortSelector, [f64; 2]>,
+}
+
+/// Complete source-authored state for a tangent arc.
+///
+/// Unlike ordinary point recipes, a tangent arc depends on an already-owned
+/// source span and an explicit contact cell. The source span remains a caller
+/// reference while the arc's centre/radius/angles are native recipe state.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProjectionalTangentArc {
+    pub center: [f64; 2],
+    pub start: [f64; 2],
+    pub end: [f64; 2],
+    pub source: PatchPortRef,
+    pub source_domain: ContactDomain,
+    pub source_parameter: f64,
+    pub source_winding: i32,
+    pub source_neighborhood: ContactNeighborhood,
+    pub sweep: DocumentArcSweep,
+    pub orientation: TangentOrientation,
+    pub role: geosolve_sketch::GeometryRole,
+}
+
+impl ProjectionalGeometrySamples {
+    /// Creates ordinary profile samples with default curve options.
+    #[must_use]
+    pub fn profile(points: Vec<[f64; 2]>) -> Self {
+        Self {
+            points,
+            role: geosolve_sketch::GeometryRole::Profile,
+            regularized: false,
+            closed: false,
+            conic_options: ConicConstructionOptions::default(),
+            nurbs_options: NurbsConstructionOptions::default(),
+        }
+    }
 }
 
 /// One complete typed relation or dimension transaction produced from the
@@ -83,6 +149,237 @@ pub enum ProjectionalAuthoringError {
     CurveRoleMismatch,
     #[error("the construction proposal contains invalid finite geometry")]
     InvalidGeometry,
+}
+
+/// Converts authored coordinate samples through the same exact recipe
+/// authority used by presentation-independent canvas authoring.
+///
+/// The returned plan contains only native recipe state and intrinsic
+/// relations. It never carries interaction inference or presentation state.
+/// Callers that already own source-level references may replace only those
+/// native point leaves which the resulting draft exposes as stored points;
+/// coordinate-only construction samples deliberately have no native alias.
+///
+/// # Errors
+///
+/// Returns a typed mismatch for the Tangent Arc, whose source jet/contact is
+/// required in addition to coordinates, or when the samples/options do not
+/// form finite valid geometry for the selected exact recipe.
+pub fn projectional_geometry_plan_from_samples(
+    variant: GeometryToolVariant,
+    samples: &ProjectionalGeometrySamples,
+) -> Result<ConstructionCommitPlan, ProjectionalAuthoringError> {
+    if variant == GeometryToolVariant::TangentArc {
+        return Err(ProjectionalAuthoringError::RecipeProposalMismatch);
+    }
+    let mut stages = Vec::with_capacity(samples.points.len());
+    for (stage_index, position) in samples.points.iter().copied().enumerate() {
+        if !position.into_iter().all(f64::is_finite) {
+            return Err(ProjectionalAuthoringError::InvalidGeometry);
+        }
+        let resolved = crate::ResolvedDraftStage {
+            operand: ConstructionPoint::New(position),
+            position,
+            confirmed: None,
+            resolution: None,
+        };
+        stages.push(
+            crate::typed_draft_stage(
+                true,
+                variant.editor_tool(),
+                variant,
+                stage_index,
+                &resolved,
+                None,
+            )
+            .ok_or(ProjectionalAuthoringError::RecipeProposalMismatch)?,
+        );
+    }
+    let draft = crate::Draft {
+        tool: variant.editor_tool(),
+        variant,
+        exact_variant: true,
+        geometry_role: samples.role,
+        prepared_input: None,
+        pointer_id: 0,
+        stages,
+        regularized: samples.regularized,
+        closed: samples.closed,
+        conic_options: samples.conic_options,
+        nurbs_options: samples.nurbs_options.clone(),
+        authentication: crate::DraftAuthentication::Current,
+    };
+    let proposal =
+        crate::draft_proposal(&draft).ok_or(ProjectionalAuthoringError::InvalidGeometry)?;
+    let assembly =
+        crate::construction_commit_plan(&draft, proposal).map_err(|error| match error {
+            crate::ConstructionPlanError::InvalidDraftState => {
+                ProjectionalAuthoringError::InvalidGeometry
+            }
+            crate::ConstructionPlanError::IncompatibleConstraintIntent => {
+                ProjectionalAuthoringError::RecipeProposalMismatch
+            }
+        })?;
+    Ok(assembly.plan)
+}
+
+/// Produces one canonical geometry node draft from an already authenticated
+/// all-new construction plan.
+///
+/// This is the source/headless counterpart of [`projectional_construction_patch`].
+/// It deliberately has no accepted native ownership context, so any plan that
+/// attempts to alias an existing point/span fails closed.
+///
+/// # Errors
+///
+/// Returns the same recipe, role, intrinsic-relation, finite-geometry or
+/// missing-native-operand error as ordinary projectional authoring.
+pub fn projectional_geometry_draft_from_plan(
+    alias: IntentKey,
+    variant: GeometryToolVariant,
+    plan: &ConstructionCommitPlan,
+) -> Result<ProjectionalGeometryDraft, ProjectionalAuthoringError> {
+    let mut context = DraftContext {
+        intent: None,
+        ownership: None,
+        geometry_alias: alias,
+        created: CreatedOutputs::default(),
+    };
+    let mut geometry = geometry_draft(variant, plan, &mut context)?;
+    authenticate_curve_roles(variant, plan, &mut geometry)?;
+    authenticate_recipe_relations(variant, plan, &context)?;
+    let point_seeds = projectional_draft_point_seeds(&geometry)?;
+    Ok(ProjectionalGeometryDraft {
+        draft: geometry,
+        point_seeds,
+    })
+}
+
+fn projectional_draft_point_seeds(
+    draft: &IntentNodeDraft,
+) -> Result<BTreeMap<IntentPortSelector, [f64; 2]>, ProjectionalAuthoringError> {
+    let mut seeds = BTreeMap::new();
+    for (selector, leaves) in &draft.initial_instance {
+        let x = leaves.get(&LeafField::X);
+        let y = leaves.get(&LeafField::Y);
+        if x.is_none() && y.is_none() {
+            continue;
+        }
+        let coordinate = |literal: Option<&IntentLiteral>| match literal {
+            Some(IntentLiteral::Quantity {
+                value,
+                unit: IntentUnit::Length,
+            }) if value.is_finite() => Ok(*value),
+            _ => Err(ProjectionalAuthoringError::InvalidGeometry),
+        };
+        seeds.insert(*selector, [coordinate(x)?, coordinate(y)?]);
+    }
+    Ok(seeds)
+}
+
+/// Produces the canonical tangent-arc draft from explicit source contact
+/// state while retaining the caller's source-span reference.
+///
+/// This is the source/headless counterpart of interactive Tangent Arc
+/// authoring. It reuses the same circular-arc conversion and contact-field
+/// encoding as the ordinary canvas transaction rather than reimplementing
+/// derived radius or angle equations in a code adapter.
+///
+/// # Errors
+///
+/// Returns a typed invalid-geometry error for non-finite/degenerate arc state
+/// or malformed contact bounds, and a key error for invalid schema fields.
+pub fn projectional_tangent_arc_draft(
+    alias: IntentKey,
+    definition: &ProjectionalTangentArc,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    validate_projectional_contact(definition)?;
+    let mut context = DraftContext {
+        intent: None,
+        ownership: None,
+        geometry_alias: alias.clone(),
+        created: CreatedOutputs::default(),
+    };
+    let draft = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryToolVariant::TangentArc.intent_recipe(),
+        },
+        alias,
+    );
+    let mut draft = circular_arc_draft(
+        GeometryToolVariant::TangentArc,
+        draft,
+        ConstructionPoint::New(definition.center),
+        definition.start,
+        definition.end,
+        definition.sweep,
+        &mut context,
+    )?
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        definition.source.clone(),
+    );
+    draft = contact_fields_without_orientation(
+        draft,
+        "source",
+        DraftContactDescriptor {
+            // The span is carried by the typed input above; this descriptor is
+            // used only by the central contact-field encoder.
+            span: DraftSpanSlot::Created {
+                curve_index: 0,
+                segment: 0,
+            },
+            domain: definition.source_domain,
+            parameter: definition.source_parameter,
+            winding: definition.source_winding,
+            neighborhood: definition.source_neighborhood,
+        },
+    )?;
+    draft = enum_field(
+        draft,
+        "orientation",
+        orientation_key(definition.orientation),
+    )?;
+    enum_field(
+        draft,
+        "role",
+        match definition.role {
+            geosolve_sketch::GeometryRole::Profile => "profile",
+            geosolve_sketch::GeometryRole::Construction => "construction",
+        },
+    )
+}
+
+fn validate_projectional_contact(
+    definition: &ProjectionalTangentArc,
+) -> Result<(), ProjectionalAuthoringError> {
+    if !definition.source_parameter.is_finite() {
+        return Err(ProjectionalAuthoringError::InvalidGeometry);
+    }
+    match definition.source_domain {
+        ContactDomain::SupportingLine if definition.source_winding == 0 => {}
+        ContactDomain::Bounded { lower, upper }
+            if lower.is_finite()
+                && upper.is_finite()
+                && lower < upper
+                && (lower..=upper).contains(&definition.source_parameter)
+                && definition.source_winding == 0 => {}
+        ContactDomain::Periodic { period }
+            if period.is_finite()
+                && period > 0.0
+                && (0.0..period).contains(&definition.source_parameter) => {}
+        ContactDomain::SupportingLine
+        | ContactDomain::Bounded { .. }
+        | ContactDomain::Periodic { .. } => {
+            return Err(ProjectionalAuthoringError::InvalidGeometry);
+        }
+    }
+    if let ContactNeighborhood::Local { lower, upper } = definition.source_neighborhood
+        && (!lower.is_finite() || !upper.is_finite() || lower >= upper)
+    {
+        return Err(ProjectionalAuthoringError::InvalidGeometry);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Default)]
@@ -152,8 +449,8 @@ pub fn projectional_construction_patch(
         expected.revision.raw().saturating_add(1)
     ))?;
     let mut context = DraftContext {
-        intent,
-        ownership,
+        intent: Some(intent),
+        ownership: Some(ownership),
         geometry_alias: geometry_alias.clone(),
         created: CreatedOutputs::default(),
     };
@@ -711,8 +1008,8 @@ const fn authoring_dimension_label(kind: AuthoringDimensionKind) -> &'static str
 }
 
 struct DraftContext<'a> {
-    intent: &'a IntentSession,
-    ownership: &'a IntentMaterializationMap,
+    intent: Option<&'a IntentSession>,
+    ownership: Option<&'a IntentMaterializationMap>,
     geometry_alias: IntentKey,
     created: CreatedOutputs,
 }
@@ -729,7 +1026,13 @@ impl DraftContext<'_> {
         &self,
         binding: IntentNativeBinding,
     ) -> Result<PatchPortRef, ProjectionalAuthoringError> {
-        accepted_native_port(self.intent, self.ownership, binding)
+        accepted_native_port(
+            self.intent
+                .ok_or(ProjectionalAuthoringError::UnownedNativeOperand)?,
+            self.ownership
+                .ok_or(ProjectionalAuthoringError::UnownedNativeOperand)?,
+            binding,
+        )
     }
 
     fn point_slot(&self, slot: DraftPointSlot) -> Result<PatchPortRef, ProjectionalAuthoringError> {
@@ -800,7 +1103,7 @@ fn geometry_draft(
     use crate::ConstructionProposal as P;
     use GeometryToolVariant as V;
 
-    let recipe = recipe_kind(variant);
+    let recipe = variant.intent_recipe();
     let mut draft = IntentNodeDraft::new(
         IntentNodeKind::Geometry { recipe },
         context.geometry_alias.clone(),
@@ -1206,38 +1509,6 @@ fn geometry_draft(
         _ => return Err(ProjectionalAuthoringError::RecipeProposalMismatch),
     }
     Ok(draft)
-}
-
-fn recipe_kind(variant: GeometryToolVariant) -> GeometryRecipeKind {
-    use GeometryRecipeKind as R;
-    use GeometryToolVariant as V;
-    match variant {
-        V::SketchPoint => R::SketchPoint,
-        V::Segment => R::Segment,
-        V::Polyline => R::Polyline,
-        V::MidpointLine => R::MidpointLine,
-        V::TwoPointAlignedRectangle => R::TwoPointAlignedRectangle,
-        V::ThreePointCornerRectangle => R::ThreePointCornerRectangle,
-        V::CenterRectangle => R::CenterRectangle,
-        V::ThreePointCenterRectangle => R::ThreePointCenterRectangle,
-        V::CenterRadiusCircle => R::CenterRadiusCircle,
-        V::TwoPointDiameterCircle => R::TwoPointDiameterCircle,
-        V::ThreePointCircle => R::ThreePointCircle,
-        V::CenterArc => R::CenterArc,
-        V::ThreePointArc => R::ThreePointArc,
-        V::TangentArc => R::TangentArc,
-        V::CenterAxesEllipse => R::CenterAxesEllipse,
-        V::AxisEndpointsEllipse => R::AxisEndpointsEllipse,
-        V::CenterAxesEllipticalArc => R::CenterAxesEllipticalArc,
-        V::AxisEndpointsEllipticalArc => R::AxisEndpointsEllipticalArc,
-        V::QuadraticBezier => R::QuadraticBezier,
-        V::CubicBezier => R::CubicBezier,
-        V::RationalQuadraticConic => R::RationalQuadraticConic,
-        V::Parabola => R::Parabola,
-        V::Hyperbola => R::Hyperbola,
-        V::OpenControlNurbs => R::OpenControlNurbs,
-        V::PeriodicControlNurbs => R::PeriodicControlNurbs,
-    }
 }
 
 fn bind_point(

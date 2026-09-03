@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-"use geosolve managed-v1";
+"use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 import { adaptiveLanterns } from "./patches/adaptive-lanterns.patch.ts";
 
@@ -23,6 +23,6 @@ export default sketch(($) => {
     bulbRadius: mm(2.6),
     bendRadius: mm(3.2),
   });
-  $.organize("Adaptive lantern garland", [wire, decorations]);
-  return $.outputs({ wire, bulbs: decorations.bulbs, fillets: decorations.fillets });
+  $.group("Adaptive lantern garland", [wire]);
+  return { wire, bulbs: decorations.bulbs, fillets: decorations.fillets };
 });

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_sketch_code::{
-    ArtifactValidationError, CodeProjectDemoId, FeatureKind, ManagedPathSegment,
-    PatchModuleArtifact, TemplateBinding, bundled_code_project_demos,
+    ArtifactValidationError, CodeProjectDemoId, CompiledManagedSource, FeatureKind,
+    ManagedPathSegment, PatchModuleArtifact, PatchTemplateNode, SemanticOutputPath,
+    TemplateArgument, TemplateBinding, bundled_code_project_demos,
 };
 use geosolve_sketch_intent::intent_content_digest;
 
@@ -13,8 +14,32 @@ struct Fixture {
 }
 
 #[test]
-fn new_bundled_managed_programs_are_exact_type_checked_typescript_fixtures() {
+fn bundled_managed_programs_authenticate_input_and_publish_normalized_source() {
     let fixtures = [
+        (
+            CodeProjectDemoId::RoundedPolyline,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/rounded-polyline.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::TypedPanel,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/typed-panel.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::BracedFrame,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/braced-frame.managed.ts"
+            ),
+        ),
+        (
+            CodeProjectDemoId::MountingPlate,
+            include_str!(
+                "../../../packages/geosolve-sketch-code/test/managed/mounting-plate.managed.ts"
+            ),
+        ),
         (
             CodeProjectDemoId::AdaptiveLanterns,
             include_str!(
@@ -70,10 +95,18 @@ fn new_bundled_managed_programs_are_exact_type_checked_typescript_fixtures() {
             .iter()
             .find(|demo| demo.id == id)
             .unwrap_or_else(|| panic!("missing bundled demo `{}`", id.key()));
+        let compiled = CompiledManagedSource::from_json(demo.compiled_source)
+            .unwrap_or_else(|error| panic!("{} compiler envelope was rejected: {error}", id.key()));
         assert_eq!(
-            demo.managed_source.as_bytes(),
-            fixture.as_bytes(),
-            "{} must display the exact managed program checked by tsconfig.managed.json",
+            compiled.input_source_digest,
+            intent_content_digest(fixture.as_bytes()).to_string(),
+            "{} must authenticate the exact author input checked by tsconfig.managed.json",
+            id.key(),
+        );
+        assert_eq!(
+            compiled.normalized_source,
+            demo.managed_source,
+            "{} must display and replay the compiler's canonical normalized source",
             id.key(),
         );
     }
@@ -219,12 +252,6 @@ fn harness_route_sources_and_artifacts_are_byte_identical_across_hosts() {
         include_str!("../../../packages/geosolve-sketch-code/examples/harness-route.patch.ts");
     assert_eq!(
         package_source,
-        include_str!(
-            "../../../packages/geosolve-sketch-code/test/managed/patches/harness-route.patch.ts"
-        )
-    );
-    assert_eq!(
-        package_source,
         include_str!("../assets/patches/harness-route.patch.ts")
     );
 
@@ -241,12 +268,6 @@ fn harness_route_sources_and_artifacts_are_byte_identical_across_hosts() {
 fn corner_relief_sources_and_artifacts_are_byte_identical_across_hosts() {
     let package_source =
         include_str!("../../../packages/geosolve-sketch-code/examples/corner-reliefs.patch.ts");
-    assert_eq!(
-        package_source,
-        include_str!(
-            "../../../packages/geosolve-sketch-code/test/managed/patches/corner-reliefs.patch.ts"
-        )
-    );
     assert_eq!(
         package_source,
         include_str!("../assets/patches/corner-reliefs.patch.ts")
@@ -273,32 +294,52 @@ fn rust_rejects_a_well_formed_but_forged_typescript_interface_pin() {
     ));
 }
 
+fn field_path(fields: &[&str]) -> SemanticOutputPath {
+    SemanticOutputPath(
+        fields
+            .iter()
+            .map(|field| ManagedPathSegment::Field((*field).into()))
+            .collect(),
+    )
+}
+
+fn argument<'a>(template: &'a PatchTemplateNode, name: &str) -> &'a TemplateArgument {
+    let TemplateArgument::Object(arguments) = &template.arguments else {
+        panic!("patch declaration arguments must retain their named object shape")
+    };
+    arguments
+        .get(name)
+        .unwrap_or_else(|| panic!("missing patch declaration argument `{name}`"))
+}
+
 #[test]
 fn brace_paths_are_segmented_and_mounting_plate_has_profile_and_keyed_holes() {
     let cross = PatchModuleArtifact::from_canonical_json(fixtures()[2].canonical_json)
         .unwrap()
         .into_artifact();
     assert_eq!(cross.outputs["diagonals"], FeatureKind::Collection);
-    assert!(
-        cross
-            .templates
-            .iter()
-            .all(|template| template.result_output.as_deref() == Some("span"))
-    );
-    let TemplateBinding::Input {
+    assert_eq!(cross.templates.len(), 2);
+    for (template, key) in cross.templates.iter().zip(["rising", "falling"]) {
+        assert_eq!(
+            template.result_path,
+            Some(vec!["diagonals".into(), key.into()])
+        );
+        assert_eq!(template.result_output, None);
+    }
+    let TemplateArgument::Binding(TemplateBinding::Input {
         path,
         expected_kind,
         ..
-    } = &cross.templates[0].inputs["start"]
+    }) = argument(&cross.templates[0], "start")
     else {
         panic!("brace start must bind a semantic input path");
     };
-    assert_eq!(*expected_kind, FeatureKind::FeatureCorner);
+    assert_eq!(*expected_kind, FeatureKind::Point);
     assert_eq!(
         path.0,
         vec![
             ManagedPathSegment::Field("corners".into()),
-            ManagedPathSegment::Field("lowerLeft".into()),
+            ManagedPathSegment::Index(0),
         ]
     );
     assert!(path.0.iter().all(|segment| match segment {
@@ -316,15 +357,26 @@ fn brace_paths_are_segmented_and_mounting_plate_has_profile_and_keyed_holes() {
     assert_eq!(mounting.templates.len(), 5);
     assert_eq!(mounting.templates[0].path, ["profile"]);
     assert_eq!(
-        mounting.templates[0].result_output.as_deref(),
-        Some("profile")
+        mounting.templates[0].result_output.as_ref(),
+        Some(&field_path(&["profile"]))
     );
     for (template, key) in mounting.templates[1..].iter().zip(["nw", "ne", "se", "sw"]) {
-        assert_eq!(template.path, ["holes", key]);
-        assert_eq!(template.result_output.as_deref(), Some("circle"));
-        let TemplateBinding::TemplateOutput { output, .. } = &template.inputs["center"] else {
+        assert_eq!(template.path, [format!("hole-{key}")]);
+        assert_eq!(template.result_path, Some(vec!["holes".into(), key.into()]));
+        assert_eq!(
+            template.result_output.as_ref(),
+            Some(&field_path(&["curve"]))
+        );
+        let TemplateArgument::Binding(TemplateBinding::TemplateOutput {
+            template: source_template,
+            path,
+            expected_kind,
+        }) = argument(template, "center")
+        else {
             panic!("mounting hole center must bind the rounded-profile template");
         };
-        assert_eq!(output, key);
+        assert_eq!(source_template, &["profile"]);
+        assert_eq!(path, &field_path(&["mounts", key]));
+        assert_eq!(*expected_kind, FeatureKind::Point);
     }
 }

@@ -16,9 +16,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProject, CodeProjectDemoId, KeyedReconcileState, ManagedControlEditBatch,
-    ManagedControlManifest, ProjectKey, apply_managed_control_batch, bundled_code_project_demos,
-    managed_control_manifest, materialize_code_project_cold, required_generated_members,
+    CodeProject, CodeProjectDemoId, CodeSessionIdentity, KeyedReconcileState,
+    ManagedControlEditBatch, ManagedControlManifest, ManagedMutationAuthority, PatchModuleArtifact,
+    PreparedManagedMutationReceipt, PreparedManagedMutationRequest, ProjectKey,
+    bundled_code_project_demos, managed_control_manifest, materialize_code_project_cold,
+    prepare_managed_control_mutation, prepare_managed_mutation, required_generated_members,
+    validate_prepared_managed_mutation,
 };
 use geosolve_sketch_intent::{IntentSessionId, intent_content_digest};
 use geosolve_sketch_render::{
@@ -35,6 +38,9 @@ pub const HEADLESS_REPORT_VERSION: &str = "geosolve-headless-report-v1";
 pub const HEADLESS_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 /// Maximum encoded size of one exact-CAS edit batch accepted by the CLI.
 pub const HEADLESS_EDIT_BATCH_LIMIT: usize = 16 * 1024 * 1024;
+/// Maximum encoded prepared request or compiler receipt accepted by the CLI.
+pub const HEADLESS_PREPARED_EDIT_LIMIT: usize =
+    geosolve_sketch_code::PREPARED_MANAGED_MUTATION_WIRE_LIMIT;
 
 const MAX_INPUT_BYTES: usize = geosolve_sketch_code::CODE_PROJECT_LIMIT;
 static NEXT_TEMP_DIRECTORY: AtomicU64 = AtomicU64::new(1);
@@ -42,8 +48,6 @@ static NEXT_TEMP_DIRECTORY: AtomicU64 = AtomicU64::new(1);
 /// One admitted browser-free project input.
 #[derive(Clone, Debug, PartialEq)]
 pub enum HeadlessInput {
-    /// Managed-v1 `sketch.ts` with no custom patch imports.
-    ManagedSource { project: ProjectKey, source: String },
     /// Strict canonical `CodeProject` JSON, including any pinned artifacts.
     CodeProjectJson(String),
     /// One checked-in offline demonstration key.
@@ -54,7 +58,6 @@ pub enum HeadlessInput {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HeadlessInputIdentity {
-    ManagedSource { project: ProjectKey },
     CodeProjectJson { project: ProjectKey },
     BundledDemo { key: String, project: ProjectKey },
 }
@@ -110,6 +113,18 @@ pub struct HeadlessReport {
 pub struct HeadlessInspection {
     pub report: HeadlessReport,
     pub controls: ManagedControlManifest,
+}
+
+/// Exact compiler-host work required for one headless managed-control edit.
+///
+/// Pure Rust prepares and later authenticates this transaction. The browser-
+/// free caller executes `request` through the pinned Deno mutation sidecar,
+/// supplying `patches` as its complete compiler context.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HeadlessPreparedEdit {
+    pub request: PreparedManagedMutationRequest,
+    pub patches: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// Static scene products ready for atomic publication.
@@ -190,19 +205,6 @@ pub enum HeadlessError {
 impl HeadlessInput {
     fn load(&self) -> Result<(HeadlessInputIdentity, CodeProject), HeadlessError> {
         match self {
-            Self::ManagedSource { project, source } => {
-                if source.len() > MAX_INPUT_BYTES {
-                    return Err(HeadlessError::InputTooLarge);
-                }
-                let candidate = CodeProject::managed_only(project.clone(), source)
-                    .map_err(|error| HeadlessError::Project(error.to_string()))?;
-                Ok((
-                    HeadlessInputIdentity::ManagedSource {
-                        project: project.clone(),
-                    },
-                    candidate,
-                ))
-            }
             Self::CodeProjectJson(json) => {
                 if json.len() > MAX_INPUT_BYTES {
                     return Err(HeadlessError::InputTooLarge);
@@ -266,30 +268,77 @@ pub fn inspect(input: &HeadlessInput) -> Result<HeadlessInspection, HeadlessErro
     })
 }
 
-/// Exact-CAS edits one managed control batch, then cold-solves and renders the candidate.
+/// Prepares one exact-CAS managed control batch for a pinned compiler host.
 ///
 /// # Errors
 ///
-/// The complete candidate is rejected before publication for a stale/foreign
-/// token, schema mismatch, invalid source, failed solve, or failed independent
-/// validation. The input authority is never mutated.
-pub fn edit(
+/// A stale/foreign token, schema mismatch, invalid project, or malformed
+/// compiler authority rejects without changing the input.
+pub fn prepare_edit(
     input: &HeadlessInput,
     batch: &ManagedControlEditBatch,
+) -> Result<HeadlessPreparedEdit, HeadlessError> {
+    let (_, project) = input.load()?;
+    let staged = reconcile(&project)?;
+    let (intent, document) = deterministic_ids(&project)?;
+    let materialized = materialize_code_project_cold(&project, &staged, intent, document, 1.0)
+        .map_err(|error| HeadlessError::Materialization(error.to_string()))?;
+    let mutation = prepare_managed_control_mutation(&project, &materialized.expansion, batch)
+        .map_err(|error| HeadlessError::Controls(error.to_string()))?;
+    let compiled = project.managed.compiled.as_deref().ok_or_else(|| {
+        HeadlessError::Project("project has no compiled managed authority".into())
+    })?;
+    let authority =
+        headless_mutation_authority(&project, &materialized.expansion.digest, compiled)?;
+    let request = prepare_managed_mutation(
+        &authority,
+        compiled,
+        mutation,
+        project.managed.declaration_name_high_water,
+    )
+    .map_err(|error| HeadlessError::Controls(error.to_string()))?;
+    Ok(HeadlessPreparedEdit {
+        request,
+        patches: managed_compiler_patches(&project)?,
+    })
+}
+
+/// Authenticates a pinned-compiler receipt, then cold-solves and renders the
+/// complete candidate.
+///
+/// # Errors
+///
+/// A stale/tampered receipt, unrelated semantic delta, failed solve, or failed
+/// independent validation publishes no candidate and leaves `input`
+/// untouched.
+pub fn resolve_edit(
+    input: &HeadlessInput,
+    prepared: &HeadlessPreparedEdit,
+    receipt: PreparedManagedMutationReceipt,
 ) -> Result<HeadlessRender, HeadlessError> {
     let (identity, project) = input.load()?;
     let staged = reconcile(&project)?;
-    let (intent, _) = deterministic_ids(&project)?;
-    let expansion = geosolve_sketch_code::expand_code_project(
-        &project,
-        &staged,
-        geosolve_sketch_intent::IntentSession::with_id(intent)
-            .map_err(|error| HeadlessError::Materialization(error.to_string()))?
-            .identity(),
-    )
-    .map_err(|error| HeadlessError::Materialization(error.to_string()))?;
-    let edited = apply_managed_control_batch(&project, &expansion, batch)
+    let (intent, document) = deterministic_ids(&project)?;
+    let materialized = materialize_code_project_cold(&project, &staged, intent, document, 1.0)
+        .map_err(|error| HeadlessError::Materialization(error.to_string()))?;
+    let compiled = project.managed.compiled.as_deref().ok_or_else(|| {
+        HeadlessError::Project("project has no compiled managed authority".into())
+    })?;
+    let authority =
+        headless_mutation_authority(&project, &materialized.expansion.digest, compiled)?;
+    let validated = validate_prepared_managed_mutation(&authority, &prepared.request, receipt)
         .map_err(|error| HeadlessError::Controls(error.to_string()))?;
+    let candidate_high_water = validated.declaration_name_high_water();
+    let managed = validated
+        .into_compiled()
+        .into_managed_document()
+        .map_err(|error| HeadlessError::Project(error.to_string()))?;
+    let mut edited = project;
+    edited.managed = managed;
+    edited.managed.declaration_name_high_water = candidate_high_water;
+    edited
+        .validate()
+        .map_err(|error| HeadlessError::Project(error.to_string()))?;
     solve_and_render(identity_for_edited(identity, &edited), edited)
 }
 
@@ -309,9 +358,6 @@ fn identity_for_edited(
     project: &CodeProject,
 ) -> HeadlessInputIdentity {
     match identity {
-        HeadlessInputIdentity::ManagedSource { .. } => HeadlessInputIdentity::ManagedSource {
-            project: project.project.clone(),
-        },
         HeadlessInputIdentity::CodeProjectJson { .. } => HeadlessInputIdentity::CodeProjectJson {
             project: project.project.clone(),
         },
@@ -320,6 +366,65 @@ fn identity_for_edited(
             project: project.project.clone(),
         },
     }
+}
+
+fn headless_mutation_authority(
+    project: &CodeProject,
+    expansion_digest: &str,
+    compiled: &geosolve_sketch_code::CompiledManagedSource,
+) -> Result<ManagedMutationAuthority, HeadlessError> {
+    let project_json = project
+        .to_canonical_json()
+        .map_err(|error| HeadlessError::Project(error.to_string()))?;
+    let digest = intent_content_digest(project_json.as_bytes()).to_string();
+    ManagedMutationAuthority::new(
+        project.project.clone(),
+        CodeSessionIdentity {
+            session: 1,
+            revision: 0,
+            digest,
+        },
+        expansion_digest.to_owned(),
+        project.managed.declaration_name_high_water,
+        compiled,
+    )
+    .map_err(|error| HeadlessError::Controls(error.to_string()))
+}
+
+fn managed_compiler_patches(
+    project: &CodeProject,
+) -> Result<std::collections::BTreeMap<String, serde_json::Value>, HeadlessError> {
+    let mut patches = std::collections::BTreeMap::new();
+    for import in &project.managed.imports {
+        for binding in &import.bindings {
+            let matches = project
+                .artifacts
+                .values()
+                .filter_map(|value| {
+                    let artifact =
+                        serde_json::from_value::<PatchModuleArtifact>(value.clone()).ok()?;
+                    (artifact.module_specifier == import.module && artifact.export_name == *binding)
+                        .then_some(value.clone())
+                })
+                .collect::<Vec<_>>();
+            match matches.as_slice() {
+                [] => {}
+                [artifact] => {
+                    if patches.insert(binding.clone(), artifact.clone()).is_some() {
+                        return Err(HeadlessError::Project(format!(
+                            "managed compiler patch binding `{binding}` is ambiguous"
+                        )));
+                    }
+                }
+                _ => {
+                    return Err(HeadlessError::Project(format!(
+                        "managed compiler patch binding `{binding}` resolves more than once"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(patches)
 }
 
 #[allow(

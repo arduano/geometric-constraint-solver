@@ -5,12 +5,12 @@ pkgs.mkShell {
     binaryen
     cargo
     clippy
+    deno
     lld
     nodejs
     rust-analyzer
     rustc
     rustfmt
-    trunk
     wasm-bindgen-cli
   ];
 

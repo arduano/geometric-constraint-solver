@@ -48,9 +48,9 @@ pub use patch::{
 };
 pub use schema::{
     IntentDeclarationDescriptor, IntentDefinitionFieldDescriptor, IntentDefinitionFieldSchema,
-    IntentEditClassification, IntentFieldChoices, IntentFieldDefault, IntentInputCardinality,
-    IntentInputChoiceSchema, IntentInputDescriptor, IntentLiteralSchema, IntentNodeSchema,
-    IntentOutputDescriptor,
+    IntentDraftOutputDescriptor, IntentEditClassification, IntentFieldChoices, IntentFieldDefault,
+    IntentInputCardinality, IntentInputChoiceSchema, IntentInputDescriptor, IntentLiteralSchema,
+    IntentNodeSchema, IntentOutputDescriptor,
 };
 pub use session::{
     INTENT_SESSION_VERSION, IntentAcceptedAuthority, IntentAttemptDisposition, IntentCandidate,

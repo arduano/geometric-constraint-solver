@@ -3,6 +3,30 @@
 // Do not edit by hand.
 
 export const DECLARATION_RESULT_CATALOG = {
+  "aggregate.closedProfile": {
+    "feature_kind": "profile",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "profile": {
+          "shape": "leaf",
+          "kind": "profile"
+        }
+      }
+    }
+  },
+  "aggregate.openChain": {
+    "feature_kind": "chain",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "chain": {
+          "shape": "leaf",
+          "kind": "chain"
+        }
+      }
+    }
+  },
   "computed.fillet": {
     "feature_kind": "feature",
     "outputs": {
@@ -19,180 +43,28 @@ export const DECLARATION_RESULT_CATALOG = {
     "feature_kind": "feature",
     "outputs": {
       "shape": "object",
-      "fields": {}
-    }
-  },
-  "constraint.coincident": {
-    "feature_kind": "constraint",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "constraint"
-    }
-  },
-  "constraint.fixedCoordinate": {
-    "feature_kind": "constraint",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "constraint"
-    }
-  },
-  "constraint.fixedPoint": {
-    "feature_kind": "constraint",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "constraint"
-    }
-  },
-  "constraint.horizontal": {
-    "feature_kind": "constraint",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "constraint"
-    }
-  },
-  "constraint.symmetricAboutDatumAxis": {
-    "feature_kind": "constraint",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "constraint"
-    }
-  },
-  "constraint.vertical": {
-    "feature_kind": "constraint",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "constraint"
-    }
-  },
-  "dimension.curveLength": {
-    "feature_kind": "dimension",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "dimension"
-    }
-  },
-  "dimension.diameter": {
-    "feature_kind": "dimension",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "dimension"
-    }
-  },
-  "dimension.radius": {
-    "feature_kind": "dimension",
-    "outputs": {
-      "shape": "leaf",
-      "kind": "dimension"
-    }
-  },
-  "geometry.circle": {
-    "feature_kind": "feature",
-    "outputs": {
-      "shape": "object",
       "fields": {
-        "center": {
-          "shape": "leaf",
-          "kind": "point"
-        },
-        "circle": {
-          "shape": "leaf",
-          "kind": "curve"
-        }
-      }
-    }
-  },
-  "geometry.line": {
-    "feature_kind": "feature",
-    "outputs": {
-      "shape": "object",
-      "fields": {
-        "end": {
-          "shape": "leaf",
-          "kind": "point"
-        },
-        "span": {
-          "shape": "native_span"
-        },
-        "start": {
-          "shape": "leaf",
-          "kind": "point"
-        }
-      }
-    }
-  },
-  "geometry.polyline": {
-    "feature_kind": "feature",
-    "outputs": {
-      "shape": "object",
-      "fields": {
-        "filletableCorners": {
-          "shape": "keyed",
-          "kind": "feature_corner",
-          "derived_from_owner": true
-        },
-        "segments": {
-          "shape": "native_span_keyed",
-          "derived_from_owner": false
-        },
-        "vertices": {
-          "shape": "keyed",
-          "kind": "point",
-          "derived_from_owner": false
-        }
-      }
-    }
-  },
-  "geometry.rectangle": {
-    "feature_kind": "feature",
-    "outputs": {
-      "shape": "object",
-      "fields": {
-        "corners": {
-          "shape": "object",
-          "fields": {
-            "lowerLeft": {
-              "shape": "leaf",
-              "kind": "feature_corner"
-            },
-            "lowerRight": {
-              "shape": "leaf",
-              "kind": "feature_corner"
-            },
-            "upperLeft": {
-              "shape": "leaf",
-              "kind": "feature_corner"
-            },
-            "upperRight": {
-              "shape": "leaf",
-              "kind": "feature_corner"
+        "fillets": {
+          "shape": "dynamic_keyed",
+          "source": "fillet_corners",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "object",
+            "fields": {
+              "arc": {
+                "shape": "native_span"
+              },
+              "corner": {
+                "shape": "leaf",
+                "kind": "feature_corner"
+              }
             }
           }
-        },
-        "edges": {
-          "shape": "object",
-          "fields": {
-            "bottom": {
-              "shape": "native_span"
-            },
-            "left": {
-              "shape": "native_span"
-            },
-            "right": {
-              "shape": "native_span"
-            },
-            "top": {
-              "shape": "native_span"
-            }
-          }
-        },
-        "profile": {
-          "shape": "leaf",
-          "kind": "profile"
         }
       }
     }
   },
-  "geometry.rounded_rectangle": {
+  "computed.roundedRectangleProfile": {
     "feature_kind": "feature",
     "outputs": {
       "shape": "object",
@@ -224,5 +96,2470 @@ export const DECLARATION_RESULT_CATALOG = {
         }
       }
     }
+  },
+  "constraint.circleArcTangency": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.circleCircleTangency": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.coincident": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.coincidentWithOrigin": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.collinear": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.collinearWithDatumAxis": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.concentric": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.curveCurveContact": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.curveCurveFillet": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.curveCurveTangency": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.curveDirection": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contact": {
+          "shape": "object",
+          "fields": {
+            "contact": {
+              "shape": "leaf",
+              "kind": "contact"
+            },
+            "parameter": {
+              "shape": "leaf",
+              "kind": "scalar"
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.endpointContinuity": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.equalCurvature": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.equalLength": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.equalRadius": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.externalLineCollinear": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.externalPointCoincident": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.fixedCoordinate": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.fixedPoint": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.horizontal": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.horizontalPointToMidpoint": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.horizontalPoints": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.lineCircleTangency": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.lineCurveTangency": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contact": {
+          "shape": "object",
+          "fields": {
+            "contact": {
+              "shape": "leaf",
+              "kind": "contact"
+            },
+            "parameter": {
+              "shape": "leaf",
+              "kind": "scalar"
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.lineLineFillet": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contacts": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.midpoint": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.parallel": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.perpendicular": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.pointOnCurve": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "contact": {
+          "shape": "object",
+          "fields": {
+            "contact": {
+              "shape": "leaf",
+              "kind": "contact"
+            },
+            "parameter": {
+              "shape": "leaf",
+              "kind": "scalar"
+            }
+          }
+        }
+      }
+    }
+  },
+  "constraint.pointOnDatumAxis": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.symmetricAboutDatumAxis": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.symmetricAboutLine": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.vertical": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.verticalPointToMidpoint": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "constraint.verticalPoints": {
+    "feature_kind": "constraint",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        }
+      }
+    }
+  },
+  "dimension.curveLength": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "dimension.diameter": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "dimension.exactTranslatedSegmentOffset": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "dimension.orientedAngle": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "dimension.pointDistance": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "dimension.profileOffset": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "dimension.radius": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "dimension.supportingLineOffset": {
+    "feature_kind": "dimension",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "dimension": {
+          "shape": "leaf",
+          "kind": "dimension"
+        },
+        "value": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "geometry.axisEndpointsEllipse": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "majorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisRatio": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        }
+      }
+    }
+  },
+  "geometry.axisEndpointsEllipticalArc": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "endAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "majorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisRatio": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "startAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "geometry.centerArc": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "endAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "midpoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "radius": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "startAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "geometry.centerAxesEllipse": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "majorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisRatio": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        }
+      }
+    }
+  },
+  "geometry.centerAxesEllipticalArc": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "endAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "majorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "minorAxisRatio": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "startAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "geometry.centerRadiusCircle": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "radius": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        }
+      }
+    }
+  },
+  "geometry.centerRectangle": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "corners": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          ]
+        },
+        "curves": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            }
+          ]
+        },
+        "spans": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "geometry.cubicBezier": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "controls": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          ]
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.hyperbola": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "semiConjugate": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "transverseAxisPoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "trimEnd": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "trimStart": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "geometry.midpointLine": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraint": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "midpoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.openControlNurbs": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "controls": {
+          "shape": "dynamic_keyed",
+          "source": "spline_controls",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "object",
+            "fields": {
+              "position": {
+                "shape": "leaf",
+                "kind": "point"
+              },
+              "weight": {
+                "shape": "leaf",
+                "kind": "scalar"
+              }
+            }
+          }
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "spans": {
+          "shape": "dynamic_keyed",
+          "source": "spline_spans",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "native_span"
+          }
+        }
+      }
+    }
+  },
+  "geometry.parabola": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "focus": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "trimEnd": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "trimStart": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "vertex": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.periodicControlNurbs": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "controls": {
+          "shape": "dynamic_keyed",
+          "source": "spline_controls",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "object",
+            "fields": {
+              "position": {
+                "shape": "leaf",
+                "kind": "point"
+              },
+              "weight": {
+                "shape": "leaf",
+                "kind": "scalar"
+              }
+            }
+          }
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "spans": {
+          "shape": "dynamic_keyed",
+          "source": "spline_spans",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "native_span"
+          }
+        }
+      }
+    }
+  },
+  "geometry.polyline": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "filletableCorners": {
+          "shape": "dynamic_keyed",
+          "source": "polyline_corners",
+          "derived_from_owner": true,
+          "member": {
+            "shape": "leaf",
+            "kind": "feature_corner"
+          }
+        },
+        "segments": {
+          "shape": "dynamic_keyed",
+          "source": "polyline_segments",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "native_span"
+          }
+        },
+        "vertices": {
+          "shape": "dynamic_keyed",
+          "source": "polyline_vertices",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "leaf",
+            "kind": "point"
+          }
+        }
+      }
+    }
+  },
+  "geometry.quadraticBezier": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "control": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.rationalQuadraticConic": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "middleWeight": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "weightedMiddle": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.segment": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.sketchPoint": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "point": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.tangentArc": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "endAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "midpoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "radius": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "startAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "geometry.threePointArc": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "end": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "endAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "midpoint": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "radius": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "start": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "startAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "geometry.threePointCenterRectangle": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "corners": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          ]
+        },
+        "curves": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            }
+          ]
+        },
+        "spans": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "geometry.threePointCircle": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "radius": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        }
+      }
+    }
+  },
+  "geometry.threePointCornerRectangle": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "corners": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          ]
+        },
+        "curves": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            }
+          ]
+        },
+        "spans": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "geometry.twoPointAlignedRectangle": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "corners": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          ]
+        },
+        "curves": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            {
+              "shape": "leaf",
+              "kind": "curve"
+            }
+          ]
+        },
+        "spans": {
+          "shape": "tuple",
+          "items": [
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            },
+            {
+              "shape": "native_span"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "geometry.twoPointDiameterCircle": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "radius": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "span": {
+          "shape": "native_span"
+        }
+      }
+    }
+  },
+  "operation.associativeFillet": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "arc": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "association": {
+          "shape": "leaf",
+          "kind": "constraint"
+        },
+        "center": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "endAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "parents": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "radius": {
+          "shape": "leaf",
+          "kind": "scalar"
+        },
+        "radiusDimension": {
+          "shape": "object",
+          "fields": {
+            "dimension": {
+              "shape": "leaf",
+              "kind": "dimension"
+            },
+            "value": {
+              "shape": "leaf",
+              "kind": "scalar"
+            }
+          }
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "startAngle": {
+          "shape": "leaf",
+          "kind": "scalar"
+        }
+      }
+    }
+  },
+  "operation.break": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "after": {
+          "shape": "native_span"
+        },
+        "before": {
+          "shape": "native_span"
+        },
+        "middle": {
+          "shape": "native_span"
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        }
+      }
+    }
+  },
+  "operation.chamfer": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "distances": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "dimension": {
+                  "shape": "leaf",
+                  "kind": "dimension"
+                },
+                "value": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "dimension": {
+                  "shape": "leaf",
+                  "kind": "dimension"
+                },
+                "value": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "edge": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "endpoints": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            "second": {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          }
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "parents": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "object",
+              "fields": {
+                "constraint": {
+                  "shape": "leaf",
+                  "kind": "constraint"
+                },
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "second": {
+              "shape": "object",
+              "fields": {
+                "constraint": {
+                  "shape": "leaf",
+                  "kind": "constraint"
+                },
+                "contact": {
+                  "shape": "leaf",
+                  "kind": "contact"
+                },
+                "parameter": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "span": {
+          "shape": "native_span"
+        }
+      }
+    }
+  },
+  "operation.extend": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "span": {
+          "shape": "native_span"
+        }
+      }
+    }
+  },
+  "operation.linearPattern": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "instances": {
+          "shape": "tuple",
+          "items": []
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        }
+      }
+    }
+  },
+  "operation.mirror": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "controls": {
+          "shape": "object",
+          "fields": {}
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "span": {
+          "shape": "native_span"
+        },
+        "symmetryConstraints": {
+          "shape": "object",
+          "fields": {}
+        }
+      }
+    }
+  },
+  "operation.profileOffset": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "distance": {
+          "shape": "object",
+          "fields": {
+            "dimension": {
+              "shape": "leaf",
+              "kind": "dimension"
+            },
+            "value": {
+              "shape": "leaf",
+              "kind": "scalar"
+            }
+          }
+        },
+        "operand": {
+          "shape": "object",
+          "fields": {}
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        }
+      }
+    }
+  },
+  "operation.rectangle": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "constraints": {
+          "shape": "object",
+          "fields": {}
+        },
+        "corners": {
+          "shape": "object",
+          "fields": {
+            "bottomLeft": {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            "bottomRight": {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            "topLeft": {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            "topRight": {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          }
+        },
+        "dimensions": {
+          "shape": "object",
+          "fields": {
+            "height": {
+              "shape": "object",
+              "fields": {
+                "dimension": {
+                  "shape": "leaf",
+                  "kind": "dimension"
+                },
+                "value": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "width": {
+              "shape": "object",
+              "fields": {
+                "dimension": {
+                  "shape": "leaf",
+                  "kind": "dimension"
+                },
+                "value": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "edges": {
+          "shape": "object",
+          "fields": {
+            "bottom": {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            "left": {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            "right": {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            "top": {
+              "shape": "leaf",
+              "kind": "curve"
+            }
+          }
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "spans": {
+          "shape": "object",
+          "fields": {
+            "bottom": {
+              "shape": "native_span"
+            },
+            "left": {
+              "shape": "native_span"
+            },
+            "right": {
+              "shape": "native_span"
+            },
+            "top": {
+              "shape": "native_span"
+            }
+          }
+        }
+      }
+    }
+  },
+  "operation.regularPolygon": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "edges": {
+          "shape": "tuple",
+          "items": []
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "spans": {
+          "shape": "tuple",
+          "items": []
+        },
+        "vertices": {
+          "shape": "tuple",
+          "items": []
+        }
+      }
+    }
+  },
+  "operation.slot": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "arcs": {
+          "shape": "object",
+          "fields": {
+            "left": {
+              "shape": "object",
+              "fields": {
+                "curve": {
+                  "shape": "leaf",
+                  "kind": "curve"
+                },
+                "endAngle": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                },
+                "radius": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                },
+                "span": {
+                  "shape": "native_span"
+                },
+                "startAngle": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "right": {
+              "shape": "object",
+              "fields": {
+                "curve": {
+                  "shape": "leaf",
+                  "kind": "curve"
+                },
+                "endAngle": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                },
+                "radius": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                },
+                "span": {
+                  "shape": "native_span"
+                },
+                "startAngle": {
+                  "shape": "leaf",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        },
+        "boundaryPoints": {
+          "shape": "object",
+          "fields": {}
+        },
+        "centers": {
+          "shape": "object",
+          "fields": {
+            "first": {
+              "shape": "leaf",
+              "kind": "point"
+            },
+            "second": {
+              "shape": "leaf",
+              "kind": "point"
+            }
+          }
+        },
+        "edges": {
+          "shape": "object",
+          "fields": {
+            "bottom": {
+              "shape": "leaf",
+              "kind": "curve"
+            },
+            "top": {
+              "shape": "leaf",
+              "kind": "curve"
+            }
+          }
+        },
+        "fixedConstraints": {
+          "shape": "object",
+          "fields": {}
+        },
+        "joins": {
+          "shape": "object",
+          "fields": {}
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "spans": {
+          "shape": "object",
+          "fields": {
+            "bottom": {
+              "shape": "native_span"
+            },
+            "top": {
+              "shape": "native_span"
+            }
+          }
+        }
+      }
+    }
+  },
+  "operation.split": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "after": {
+          "shape": "native_span"
+        },
+        "before": {
+          "shape": "native_span"
+        },
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        }
+      }
+    }
+  },
+  "operation.trim": {
+    "feature_kind": "operation",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "operation": {
+          "shape": "leaf",
+          "kind": "operation"
+        },
+        "retained": {
+          "shape": "native_span"
+        }
+      }
+    }
   }
+} as const;
+
+export const AUTHORING_METHOD_CATALOG = {
+  "aggregate.closedProfile": "public",
+  "aggregate.openChain": "public",
+  "computed.filletSet": "public",
+  "constraint.circleArcTangency": "public",
+  "constraint.circleCircleTangency": "public",
+  "constraint.coincident": "public",
+  "constraint.coincidentWithOrigin": "public",
+  "constraint.collinear": "public",
+  "constraint.collinearWithDatumAxis": "public",
+  "constraint.concentric": "public",
+  "constraint.curveCurveContact": "public",
+  "constraint.curveCurveFillet": "public",
+  "constraint.curveCurveTangency": "public",
+  "constraint.curveDirection": "public",
+  "constraint.endpointContinuity": "public",
+  "constraint.equalCurvature": "public",
+  "constraint.equalLength": "public",
+  "constraint.equalRadius": "public",
+  "constraint.externalLineCollinear": "requires_host_snapshot",
+  "constraint.externalPointCoincident": "requires_host_snapshot",
+  "constraint.fixedCoordinate": "public",
+  "constraint.fixedPoint": "public",
+  "constraint.horizontal": "public",
+  "constraint.horizontalPointToMidpoint": "public",
+  "constraint.horizontalPoints": "public",
+  "constraint.lineCircleTangency": "public",
+  "constraint.lineCurveTangency": "public",
+  "constraint.lineLineFillet": "public",
+  "constraint.midpoint": "public",
+  "constraint.parallel": "public",
+  "constraint.perpendicular": "public",
+  "constraint.pointOnCurve": "public",
+  "constraint.pointOnDatumAxis": "public",
+  "constraint.symmetricAboutDatumAxis": "public",
+  "constraint.symmetricAboutLine": "public",
+  "constraint.vertical": "public",
+  "constraint.verticalPointToMidpoint": "public",
+  "constraint.verticalPoints": "public",
+  "dimension.curveLength": "public",
+  "dimension.diameter": "public",
+  "dimension.exactTranslatedSegmentOffset": "public",
+  "dimension.orientedAngle": "public",
+  "dimension.pointDistance": "public",
+  "dimension.profileOffset": "public",
+  "dimension.radius": "public",
+  "dimension.supportingLineOffset": "public",
+  "geometry.axisEndpointsEllipse": "public",
+  "geometry.axisEndpointsEllipticalArc": "public",
+  "geometry.centerArc": "public",
+  "geometry.centerAxesEllipse": "public",
+  "geometry.centerAxesEllipticalArc": "public",
+  "geometry.centerRadiusCircle": "public",
+  "geometry.centerRectangle": "public",
+  "geometry.cubicBezier": "public",
+  "geometry.hyperbola": "public",
+  "geometry.midpointLine": "public",
+  "geometry.openControlNurbs": "public",
+  "geometry.parabola": "public",
+  "geometry.periodicControlNurbs": "public",
+  "geometry.polyline": "public",
+  "geometry.quadraticBezier": "public",
+  "geometry.rationalQuadraticConic": "public",
+  "geometry.segment": "public",
+  "geometry.sketchPoint": "public",
+  "geometry.tangentArc": "public",
+  "geometry.threePointArc": "public",
+  "geometry.threePointCenterRectangle": "public",
+  "geometry.threePointCircle": "public",
+  "geometry.threePointCornerRectangle": "public",
+  "geometry.twoPointAlignedRectangle": "public",
+  "geometry.twoPointDiameterCircle": "public",
+  "operation.associativeFillet": "public",
+  "operation.break": "public",
+  "operation.chamfer": "public",
+  "operation.extend": "public",
+  "operation.linearPattern": "public",
+  "operation.mirror": "public",
+  "operation.profileOffset": "public",
+  "operation.rectangle": "public",
+  "operation.regularPolygon": "public",
+  "operation.slot": "public",
+  "operation.split": "public",
+  "operation.trim": "public"
 } as const;

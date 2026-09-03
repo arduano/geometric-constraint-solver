@@ -9,22 +9,28 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use geosolve_sketch_intent::intent_content_digest;
+use geosolve_sketch_intent::{
+    IntentFieldChoices, IntentLiteralSchema, IntentProjectionPath, IntentProjectionPathSegment,
+    intent_content_digest,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::parser::rewrite_managed_source_batch;
+use crate::artifact::template_argument_bindings_with_paths;
 use crate::{
-    AuthoringDeclaration, CodeProject, CodeProjectError, ExpandedCodeProject, FeatureKind,
-    GeneratedMemberAddress, GeneratedMemberIdentity, ManagedOwnedSpanKind, ManagedPathSegment,
-    ManagedRewrite, ManagedSpan, ManagedValue, PatchModuleArtifact, ProjectKey, SemanticOutputPath,
-    SemanticSymbol, TemplateBinding, UnitLiteral, ValidatedPatchModuleArtifact,
+    AuthoringDeclaration, CodeAuthoringArgumentKind, CodeAuthoringCollectionMember,
+    CodeAuthoringDeclarationDescriptor, CodeAuthoringDeclarationKind, CodeAuthoringDynamicChildren,
+    CodeProject, CodeProjectError, CompiledManagedSource, ExecutedConsumerTarget,
+    ExpandedCodeProject, FeatureKind, GeneratedMemberAddress, GeneratedMemberIdentity,
+    ManagedExpression, ManagedOwnedSpanKind, ManagedPathSegment, ManagedSketchMutation,
+    ManagedSpan, ManagedStatement, ManagedValue, ManagedValueMutation, PatchModuleArtifact,
+    ProjectKey, SemanticOutputPath, SemanticSymbol, TemplateBinding, UnitLiteral,
+    ValidatedPatchModuleArtifact, code_authoring_family, resolve_code_authoring_declaration,
 };
 
-/// Maximum transient source entries in one manifest. This is deliberately
-/// lower than the parser value-node bound so manifest construction has an
-/// independently exercisable resource ceiling.
-pub const MANAGED_CONTROL_LIMIT: usize = crate::MANAGED_VALUE_NODE_LIMIT / 2;
+/// Maximum transient source entries in one manifest. This independent bound
+/// is enforced after the V3 compiler envelope has passed its own wire limits.
+pub const MANAGED_CONTROL_LIMIT: usize = 8_192;
 
 /// Independent bound on source-to-consumer fan-out.
 pub const MANAGED_CONTROL_CONSUMER_LIMIT: usize = 65_536;
@@ -241,7 +247,7 @@ impl ManagedControlManifest {
 /// borrowed authorities cannot change underneath it.
 #[derive(Debug)]
 pub struct ManagedControlAuthority<'a> {
-    project: &'a CodeProject,
+    _project: &'a CodeProject,
     _expansion: &'a ExpandedCodeProject,
     manifest: ManagedControlManifest,
 }
@@ -252,19 +258,21 @@ impl ManagedControlAuthority<'_> {
         &self.manifest
     }
 
-    /// Applies one exact-CAS batch against this freshly authenticated
-    /// manifest without re-deriving its complete fan-out.
+    /// Prepares the exact semantic value mutation authorized by this freshly
+    /// derived manifest. Source printing and execution deliberately remain a
+    /// browser or pinned-Deno responsibility; Rust validates the resulting
+    /// compiler receipt through the ordinary prepared-mutation boundary.
     ///
     /// # Errors
     ///
-    /// Returns the ordinary batch shape, token, replacement, rewrite, parse,
-    /// or project-validation failure without changing the borrowed project.
-    pub fn apply_batch(
+    /// Returns a stale/foreign/read-only/typing/resource failure without
+    /// changing the borrowed project or expansion.
+    pub fn prepare_mutation(
         &self,
         batch: &ManagedControlEditBatch,
-    ) -> Result<CodeProject, ManagedControlError> {
+    ) -> Result<ManagedSketchMutation, ManagedControlError> {
         validate_control_batch_shape(batch)?;
-        apply_managed_control_batch_against_manifest(self.project, &self.manifest, batch)
+        prepare_managed_control_mutation_against_manifest(&self.manifest, batch)
     }
 }
 
@@ -281,7 +289,7 @@ pub fn managed_control_authority<'a>(
 ) -> Result<ManagedControlAuthority<'a>, ManagedControlError> {
     let manifest = managed_control_manifest(project, expansion)?;
     Ok(ManagedControlAuthority {
-        project,
+        _project: project,
         _expansion: expansion,
         manifest,
     })
@@ -340,27 +348,12 @@ pub enum ManagedControlError {
     #[error("managed control encoding failed: {0}")]
     Encoding(String),
     #[error(transparent)]
-    Managed(#[from] crate::ManagedParseError),
-    #[error(transparent)]
     Project(#[from] CodeProjectError),
 }
 
 type OwnedSpanIndex<'a> = BTreeMap<
     &'a SemanticSymbol,
     BTreeMap<&'a SemanticOutputPath, &'a crate::ManagedValueOwnedSpan>,
->;
-type GeneratedProvenanceIndex<'a> = BTreeMap<
-    &'a SemanticSymbol,
-    BTreeMap<
-        &'a str,
-        BTreeMap<
-            &'a [String],
-            Vec<(
-                &'a GeneratedMemberAddress,
-                &'a crate::GeneratedIntentProvenance,
-            )>,
-        >,
-    >,
 >;
 
 fn owned_span_index(project: &CodeProject) -> Result<OwnedSpanIndex<'_>, ManagedControlError> {
@@ -386,22 +379,125 @@ fn owned_span_index(project: &CodeProject) -> Result<OwnedSpanIndex<'_>, Managed
     Ok(index)
 }
 
-fn generated_provenance_index(expansion: &ExpandedCodeProject) -> GeneratedProvenanceIndex<'_> {
-    let mut index = GeneratedProvenanceIndex::new();
-    for (address, provenance) in &expansion.generated_provenance {
-        let Some(digest) = provenance.artifact_digest.as_deref() else {
-            continue;
-        };
-        index
-            .entry(&provenance.declaration)
-            .or_default()
-            .entry(digest)
-            .or_default()
-            .entry(address.template.as_slice())
-            .or_default()
-            .push((address, provenance));
+#[derive(Clone, Debug)]
+struct ManagedValueSiteOwner {
+    declaration: SemanticSymbol,
+    path: SemanticOutputPath,
+    span: ManagedSpan,
+}
+
+fn managed_value_site_index(
+    compiled: &CompiledManagedSource,
+) -> Result<BTreeMap<String, ManagedValueSiteOwner>, ManagedControlError> {
+    let spans = compiled
+        .ir
+        .source_sites
+        .iter()
+        .map(|site| {
+            (
+                site.id.as_str(),
+                ManagedSpan::new(site.span.start, site.span.end),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut index = BTreeMap::new();
+    for statement in &compiled.ir.statements {
+        match statement {
+            ManagedStatement::Binding {
+                variable, value, ..
+            } => collect_value_sites(
+                value,
+                &SemanticSymbol(variable.clone()),
+                &SemanticOutputPath::default(),
+                &spans,
+                &mut index,
+            )?,
+            ManagedStatement::Declaration {
+                symbol, arguments, ..
+            } => collect_value_sites(
+                arguments,
+                &SemanticSymbol(symbol.clone()),
+                &SemanticOutputPath::default(),
+                &spans,
+                &mut index,
+            )?,
+            ManagedStatement::Group { .. } | ManagedStatement::Suppression { .. } => {}
+        }
     }
-    index
+    Ok(index)
+}
+
+fn collect_value_sites(
+    expression: &ManagedExpression,
+    declaration: &SemanticSymbol,
+    path: &SemanticOutputPath,
+    spans: &BTreeMap<&str, ManagedSpan>,
+    output: &mut BTreeMap<String, ManagedValueSiteOwner>,
+) -> Result<(), ManagedControlError> {
+    let site = managed_expression_site(expression);
+    let span = spans.get(site).copied().ok_or_else(|| {
+        ManagedControlError::ForeignExpansion(format!(
+            "runtime value site `{site}` has no authenticated source span"
+        ))
+    })?;
+    if output
+        .insert(
+            site.to_owned(),
+            ManagedValueSiteOwner {
+                declaration: declaration.clone(),
+                path: path.clone(),
+                span,
+            },
+        )
+        .is_some()
+    {
+        return Err(ManagedControlError::ForeignExpansion(format!(
+            "runtime value site `{site}` is reused by multiple expressions"
+        )));
+    }
+    match expression {
+        ManagedExpression::Array { values, .. } => {
+            for (index, value) in values.iter().enumerate() {
+                let mut child = path.clone();
+                child.0.push(ManagedPathSegment::Index(index));
+                collect_value_sites(value, declaration, &child, spans, output)?;
+            }
+        }
+        ManagedExpression::Object { fields, .. } => {
+            for field in fields {
+                let mut child = path.clone();
+                child.0.push(ManagedPathSegment::Field(field.name.clone()));
+                collect_value_sites(&field.value, declaration, &child, spans, output)?;
+            }
+        }
+        // A unit call is one semantic managed value. Its argument sites remain
+        // indexed for complete source-site uniqueness, but cannot authenticate
+        // a control edge because they do not own a projected value span.
+        ManagedExpression::Call { arguments, .. } => {
+            for argument in arguments {
+                collect_value_sites(argument, declaration, path, spans, output)?;
+            }
+        }
+        ManagedExpression::Null { .. }
+        | ManagedExpression::Boolean { .. }
+        | ManagedExpression::Number { .. }
+        | ManagedExpression::String { .. }
+        | ManagedExpression::Reference { .. } => {}
+    }
+    Ok(())
+}
+
+fn managed_expression_site(expression: &ManagedExpression) -> &str {
+    match expression {
+        ManagedExpression::Null { site }
+        | ManagedExpression::Boolean { site, .. }
+        | ManagedExpression::Number { site, .. }
+        | ManagedExpression::String { site, .. }
+        | ManagedExpression::Array { site, .. }
+        | ManagedExpression::Object { site, .. }
+        | ManagedExpression::Reference { site, .. }
+        | ManagedExpression::Call { site, .. } => site,
+    }
 }
 
 /// Derives one transient control manifest from an exact project/expansion
@@ -421,6 +517,25 @@ pub fn managed_control_manifest(
     project.validate()?;
     validate_expansion_cross_links(project, expansion)?;
     let project_digest = project_authority_digest(project)?;
+    let compiled = project.managed.compiled.as_deref().ok_or_else(|| {
+        ManagedControlError::ForeignExpansion(
+            "managed V3 control authority requires its complete compiler envelope".into(),
+        )
+    })?;
+    managed_control_manifest_compiled(project, expansion, &project_digest, compiled)
+}
+#[allow(
+    clippy::too_many_lines,
+    reason = "one authenticated manifest pass keeps source sites, runtime consumers, access policy, and ordering visibly joined"
+)]
+fn managed_control_manifest_compiled(
+    project: &CodeProject,
+    expansion: &ExpandedCodeProject,
+    project_digest: &str,
+    compiled: &CompiledManagedSource,
+) -> Result<ManagedControlManifest, ManagedControlError> {
+    let owned_spans = owned_span_index(project)?;
+    let value_sites = managed_value_site_index(compiled)?;
     let artifact_plans = artifact_plans(project)?;
     let mut artifact_plan_index = BTreeMap::new();
     for plan in &artifact_plans {
@@ -434,68 +549,218 @@ pub fn managed_control_manifest(
             )));
         }
     }
-    let provenance_index = generated_provenance_index(expansion);
-    let owned_spans = owned_span_index(project)?;
+
     let mut consumer_map =
         BTreeMap::<(SemanticSymbol, SemanticOutputPath), BTreeSet<ManagedControlConsumer>>::new();
     let mut schema_map =
         BTreeMap::<(SemanticSymbol, SemanticOutputPath), Vec<ManagedControlSchema>>::new();
     let mut consumer_edges = 0_usize;
-
-    for plan in &artifact_plans {
-        for template in &plan.artifact.artifact().templates {
-            for (property, binding) in &template.inputs {
+    for executed in &compiled.artifact.value_consumers {
+        let owner = value_sites.get(&executed.value_site).ok_or_else(|| {
+            ManagedControlError::ForeignExpansion(format!(
+                "runtime consumer site `{}` has no exact IR value owner",
+                executed.value_site
+            ))
+        })?;
+        let lexical_owned = owned_spans
+            .get(&owner.declaration)
+            .and_then(|paths| paths.get(&owner.path))
+            .copied()
+            .ok_or_else(|| {
+                ManagedControlError::ForeignExpansion(format!(
+                    "runtime consumer site `{}` has no projected source owner",
+                    executed.value_site
+                ))
+            })?;
+        if lexical_owned.span != owner.span {
+            return Err(ManagedControlError::ForeignExpansion(format!(
+                "runtime consumer site `{}` does not own its complete managed value span",
+                executed.value_site
+            )));
+        }
+        let source_value = managed_source_value(project, &owner.declaration, &owner.path)
+            .ok_or_else(|| {
+                ManagedControlError::ForeignExpansion(format!(
+                    "runtime consumer site `{}` resolves to an absent managed value",
+                    executed.value_site
+                ))
+            })?;
+        let property = SemanticOutputPath(executed.property.clone());
+        let (consumer, schema) = match &executed.target {
+            ExecutedConsumerTarget::Declaration {
+                declaration,
+                family,
+            } => {
+                let symbol = SemanticSymbol(declaration.clone());
+                let target = project
+                    .managed
+                    .program
+                    .declarations
+                    .iter()
+                    .find(|candidate| candidate.symbol == symbol)
+                    .ok_or_else(|| {
+                        ManagedControlError::ForeignExpansion(format!(
+                            "runtime declaration consumer `{declaration}` has no managed owner"
+                        ))
+                    })?;
+                if target.builder_path.join(".") != *family
+                    || !expansion
+                        .declaration_provenance
+                        .values()
+                        .any(|candidate| candidate == &symbol)
+                {
+                    return Err(ManagedControlError::ForeignExpansion(format!(
+                        "runtime declaration consumer `{declaration}` is absent from exact expansion provenance"
+                    )));
+                }
+                let target_value =
+                    managed_value_at_path(&target.arguments, &property).ok_or_else(|| {
+                        ManagedControlError::ForeignExpansion(format!(
+                            "runtime declaration consumer `{declaration}` has no property `{}`",
+                            path_suffix_text(&property)
+                        ))
+                    })?;
+                let (expected_declaration, expected_path, _) =
+                    scalar_source_owner(project, &target.symbol, &property, target_value);
+                if expected_declaration != owner.declaration || expected_path != owner.path {
+                    return Err(ManagedControlError::ForeignExpansion(format!(
+                        "runtime declaration consumer `{declaration}` does not match its exact IR value origin"
+                    )));
+                }
+                (
+                    ManagedControlConsumer {
+                        target: ManagedControlConsumerTarget::Declaration {
+                            declaration: symbol,
+                            family: family.clone(),
+                        },
+                        property: property.clone(),
+                    },
+                    named_schema(target, &property, source_value)?,
+                )
+            }
+            ExecutedConsumerTarget::Generated { address, family } => {
+                let invocation = SemanticSymbol(address.invocation.clone());
+                let plan = artifact_plan_index
+                    .get(&invocation)
+                    .copied()
+                    .ok_or_else(|| {
+                        ManagedControlError::ForeignExpansion(format!(
+                            "runtime generated consumer `{}` has no pinned patch owner",
+                            address.invocation
+                        ))
+                    })?;
+                let template = plan
+                    .artifact
+                    .artifact()
+                    .templates
+                    .iter()
+                    .find(|template| template.path == address.template)
+                    .ok_or_else(|| {
+                        ManagedControlError::ForeignExpansion(format!(
+                            "runtime generated consumer `{}` has no exact template",
+                            address.invocation
+                        ))
+                    })?;
+                if template.declaration_family != *family {
+                    return Err(ManagedControlError::ForeignExpansion(format!(
+                        "runtime generated consumer `{}` has a foreign family",
+                        address.invocation
+                    )));
+                }
+                let binding = template_argument_bindings_with_paths(&template.arguments)
+                    .into_iter()
+                    .find(|(candidate, _)| candidate == &property)
+                    .map(|(_, binding)| binding)
+                    .ok_or_else(|| {
+                        ManagedControlError::ForeignExpansion(format!(
+                            "runtime generated consumer `{}` names no template argument `{}`",
+                            address.invocation,
+                            property_path_text(&property),
+                        ))
+                    })?;
                 let TemplateBinding::Input {
                     name,
-                    path,
+                    path: _,
                     expected_kind,
                 } = binding
                 else {
-                    continue;
+                    return Err(ManagedControlError::ForeignExpansion(format!(
+                        "runtime generated consumer `{}` is not backed by one source input",
+                        address.invocation
+                    )));
                 };
-                let source_path = invocation_input_path(name, path);
-                let Some(value) = managed_value_at_path(&plan.declaration.arguments, &source_path)
-                else {
-                    continue;
-                };
-                let (source_declaration, source_path, source_value) =
-                    scalar_source_owner(project, &plan.declaration.symbol, &source_path, value);
-                if let Some(schema) = schema_for_template_input(
-                    &template.declaration_family,
-                    property,
-                    *expected_kind,
-                    source_value,
-                ) {
-                    schema_map
-                        .entry((source_declaration.clone(), source_path.clone()))
-                        .or_default()
-                        .push(schema);
+                // The executed consumer site authenticates the complete
+                // lexical invocation argument. `binding.path` traverses the
+                // referenced runtime result, not nested source syntax.
+                let source_path = invocation_input_path(name, &SemanticOutputPath::default());
+                let invocation_value =
+                    managed_value_at_path(&plan.declaration.arguments, &source_path).ok_or_else(
+                        || {
+                            ManagedControlError::ForeignExpansion(format!(
+                                "runtime generated consumer `{}` lost its invocation input",
+                                address.invocation
+                            ))
+                        },
+                    )?;
+                let (expected_declaration, expected_path, _) = scalar_source_owner(
+                    project,
+                    &plan.declaration.symbol,
+                    &source_path,
+                    invocation_value,
+                );
+                if expected_declaration != owner.declaration || expected_path != owner.path {
+                    return Err(ManagedControlError::ForeignExpansion(format!(
+                        "runtime generated consumer `{}` does not match its exact IR value origin",
+                        address.invocation
+                    )));
                 }
-                let provenance_rows = provenance_index
-                    .get(&plan.declaration.symbol)
-                    .and_then(|digests| digests.get(plan.digest.as_str()))
-                    .and_then(|templates| templates.get(template.path.as_slice()));
-                for (address, provenance) in provenance_rows
-                    .into_iter()
-                    .flat_map(|rows| rows.iter().copied())
+                let generated_address = executed_generated_address(address);
+                let provenance = expansion
+                    .generated_provenance
+                    .get(&generated_address)
+                    .ok_or_else(|| {
+                        ManagedControlError::ForeignExpansion(format!(
+                            "runtime generated consumer `{}` is absent from exact expansion generation",
+                            generated_address.display_path()
+                        ))
+                    })?;
+                if provenance.declaration != invocation
+                    || provenance.artifact_digest.as_deref() != Some(plan.digest.as_str())
                 {
-                    let inserted = consumer_map
-                        .entry((source_declaration.clone(), source_path.clone()))
-                        .or_default()
-                        .insert(ManagedControlConsumer {
-                            target: ManagedControlConsumerTarget::Generated {
-                                address: address.clone(),
-                                identity: provenance.identity,
-                                artifact_digest: plan.digest.clone(),
-                                family: template.declaration_family.clone(),
-                            },
-                            property: fields_path(&[property]),
-                        });
-                    if inserted {
-                        admit_consumer_edge(&mut consumer_edges)?;
-                    }
+                    return Err(ManagedControlError::ForeignExpansion(format!(
+                        "runtime generated consumer `{}` has stale generation provenance",
+                        generated_address.display_path()
+                    )));
                 }
+                (
+                    ManagedControlConsumer {
+                        target: ManagedControlConsumerTarget::Generated {
+                            address: generated_address,
+                            identity: provenance.identity,
+                            artifact_digest: plan.digest.clone(),
+                            family: family.clone(),
+                        },
+                        property: property.clone(),
+                    },
+                    schema_for_template_input(
+                        family,
+                        last_field(&property).unwrap_or("argument"),
+                        *expected_kind,
+                        source_value,
+                    ),
+                )
             }
+        };
+        let key = (owner.declaration.clone(), owner.path.clone());
+        let inserted = consumer_map
+            .entry(key.clone())
+            .or_default()
+            .insert(consumer);
+        if inserted {
+            admit_consumer_edge(&mut consumer_edges)?;
+        }
+        if let Some(schema) = schema {
+            schema_map.entry(key).or_default().push(schema);
         }
     }
 
@@ -512,18 +777,18 @@ pub fn managed_control_manifest(
                     binding.symbol.0
                 ))
             })?;
-        let key = (binding.symbol.clone(), SemanticOutputPath::default());
+        let key = (binding.symbol.clone(), empty_path);
         let consumers = consumer_map
             .remove(&key)
             .unwrap_or_default()
             .into_iter()
             .collect::<Vec<_>>();
-        let schemas = schema_map.remove(&key).unwrap_or_default();
-        let classification = classify_scalar_binding(&binding.value, &schemas);
+        let classification =
+            classify_scalar_binding(&binding.value, &schema_map.remove(&key).unwrap_or_default());
         push_classified_control(
             &mut controls,
             project,
-            &project_digest,
+            project_digest,
             ClassifiedControl {
                 declaration: binding.symbol.clone(),
                 owned,
@@ -539,44 +804,30 @@ pub fn managed_control_manifest(
             .into_iter()
             .flat_map(|paths| paths.values().copied())
         {
-            let Some(value) = managed_value_at_path(&declaration.arguments, &owned.path) else {
-                return Err(ManagedControlError::ForeignExpansion(format!(
-                    "source path `{}` is absent",
-                    path_text(&declaration.symbol, &owned.path)
-                )));
-            };
+            let value =
+                managed_value_at_path(&declaration.arguments, &owned.path).ok_or_else(|| {
+                    ManagedControlError::ForeignExpansion(format!(
+                        "source path `{}` is absent",
+                        path_text(&declaration.symbol, &owned.path)
+                    ))
+                })?;
             let key = (declaration.symbol.clone(), owned.path.clone());
-            let mut consumers = consumer_map
+            let consumers = consumer_map
                 .remove(&key)
                 .unwrap_or_default()
                 .into_iter()
                 .collect::<Vec<_>>();
-            let classification = classify_control(
+            let classification = classify_compiled_control(
                 declaration,
                 &owned.path,
                 value,
-                schema_map.remove(&key).unwrap_or_default(),
+                &schema_map.remove(&key).unwrap_or_default(),
                 artifact_plan_index.get(&declaration.symbol).copied(),
             );
-            if let ControlClassification::Editable(_) = &classification
-                && declaration.patch.is_none()
-            {
-                let consumer = ManagedControlConsumer {
-                    target: ManagedControlConsumerTarget::Declaration {
-                        declaration: declaration.symbol.clone(),
-                        family: declaration.builder_path.join("."),
-                    },
-                    property: owned.path.clone(),
-                };
-                if !consumers.contains(&consumer) {
-                    admit_consumer_edge(&mut consumer_edges)?;
-                    consumers.push(consumer);
-                }
-            }
             push_classified_control(
                 &mut controls,
                 project,
-                &project_digest,
+                project_digest,
                 ClassifiedControl {
                     declaration: declaration.symbol.clone(),
                     owned,
@@ -587,15 +838,70 @@ pub fn managed_control_manifest(
             )?;
         }
     }
+    if !consumer_map.is_empty() || !schema_map.is_empty() {
+        return Err(ManagedControlError::ForeignExpansion(
+            "runtime consumer provenance did not resolve to one projected control".into(),
+        ));
+    }
     controls.sort_by(|left, right| left.id.cmp(&right.id));
-
     Ok(ManagedControlManifest {
         project: project.project.clone(),
-        project_digest,
+        project_digest: project_digest.to_owned(),
         source_digest: project.managed.source_digest.clone(),
         expansion_digest: expansion.digest.clone(),
         controls,
     })
+}
+
+fn managed_source_value<'a>(
+    project: &'a CodeProject,
+    declaration: &SemanticSymbol,
+    path: &SemanticOutputPath,
+) -> Option<&'a ManagedValue> {
+    if path.0.is_empty()
+        && let Some(binding) = project
+            .managed
+            .program
+            .scalar_bindings
+            .iter()
+            .find(|binding| binding.symbol == *declaration)
+    {
+        return Some(&binding.value);
+    }
+    project
+        .managed
+        .program
+        .declarations
+        .iter()
+        .find(|candidate| candidate.symbol == *declaration)
+        .and_then(|candidate| managed_value_at_path(&candidate.arguments, path))
+}
+
+fn executed_generated_address(
+    address: &crate::ExecutedGeneratedMemberAddress,
+) -> GeneratedMemberAddress {
+    GeneratedMemberAddress::new(
+        address.invocation.clone(),
+        address.template.clone(),
+        if address.member_key.is_empty() {
+            vec!["self".to_owned()]
+        } else {
+            address.member_key.clone()
+        },
+        address.output.clone(),
+    )
+}
+
+fn path_suffix_text(path: &SemanticOutputPath) -> String {
+    path.0
+        .iter()
+        .map(|segment| match segment {
+            ManagedPathSegment::Field(field) => field.clone(),
+            ManagedPathSegment::Index(index) => format!("[{index}]"),
+            ManagedPathSegment::Member { member } => format!("[\"{member}\"]"),
+        })
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 struct ClassifiedControl<'a> {
@@ -679,22 +985,26 @@ fn push_classified_control(
     Ok(())
 }
 
-/// Applies an unordered batch against the exact current manifest, validates
-/// every token and typed replacement before rewriting, then reparses once.
-/// The input project is never mutated and no partial candidate is returned.
+/// Authenticates one exact-CAS control batch and projects it to the single
+/// managed semantic mutation that a compiler host may execute.
+///
+/// This function never rewrites source. Callers pass the result to
+/// [`crate::prepare_managed_mutation`], execute that prepared request in the
+/// browser or pinned Deno host, and publish only after
+/// [`crate::validate_prepared_managed_mutation`] accepts the receipt.
 ///
 /// # Errors
 ///
-/// Returns a stale/foreign/read-only/typing/resource/parse/project failure
-/// without changing `project`.
-pub fn apply_managed_control_batch(
+/// Returns a stale/foreign/read-only/typing/resource failure without changing
+/// `project` or `expansion`.
+pub fn prepare_managed_control_mutation(
     project: &CodeProject,
     expansion: &ExpandedCodeProject,
     batch: &ManagedControlEditBatch,
-) -> Result<CodeProject, ManagedControlError> {
+) -> Result<ManagedSketchMutation, ManagedControlError> {
     validate_control_batch_shape(batch)?;
     let manifest = managed_control_manifest(project, expansion)?;
-    apply_managed_control_batch_against_manifest(project, &manifest, batch)
+    prepare_managed_control_mutation_against_manifest(&manifest, batch)
 }
 
 fn validate_control_batch_shape(
@@ -713,14 +1023,13 @@ fn validate_control_batch_shape(
     Ok(())
 }
 
-fn apply_managed_control_batch_against_manifest(
-    project: &CodeProject,
+fn prepare_managed_control_mutation_against_manifest(
     manifest: &ManagedControlManifest,
     batch: &ManagedControlEditBatch,
-) -> Result<CodeProject, ManagedControlError> {
+) -> Result<ManagedSketchMutation, ManagedControlError> {
     let mut seen = BTreeSet::new();
-    let mut rewrites = Vec::with_capacity(batch.edits.len());
     let mut spans = Vec::with_capacity(batch.edits.len());
+    let mut values = Vec::with_capacity(batch.edits.len());
     for edit in &batch.edits {
         if !seen.insert(edit.token.id.clone()) {
             return Err(ManagedControlError::DuplicateControl(
@@ -750,52 +1059,16 @@ fn apply_managed_control_batch_against_manifest(
                 message,
             }
         })?;
-        let replacement = format_control_value(&edit.value).ok_or_else(|| {
-            ManagedControlError::InvalidReplacement {
-                control: edit.token.id.0.clone(),
-                message: "replacement is not one editable scalar leaf".into(),
-            }
-        })?;
-        rewrites.push(ManagedRewrite::new(
-            &project.managed,
-            control.source.span,
-            replacement,
-        ));
+        values.push(ManagedValueMutation {
+            declaration: control.source.declaration.0.clone(),
+            path: control.source.path.0.clone(),
+            expected: control.value.clone(),
+            value: edit.value.clone(),
+        });
         spans.push((edit.token.id.0.as_str(), control.source.span));
     }
     validate_non_overlapping_control_spans(&mut spans)?;
-    let managed = rewrite_managed_source_batch(&project.managed, &rewrites)?;
-    let mut candidate = project.clone();
-    candidate.managed = managed;
-    candidate.validate()?;
-    Ok(candidate)
-}
-
-/// Applies an exact batch against a previously inspected manifest. The
-/// manifest is accepted only when it is byte-for-byte the current transient
-/// derivation, so callers can bind an inspect response to a later edit request
-/// without weakening source, project, or generation authentication.
-///
-/// # Errors
-///
-/// Returns [`ManagedControlError::StaleToken`] when any manifest authority has
-/// changed, otherwise the ordinary batch validation failures.
-pub fn apply_managed_control_manifest_batch(
-    project: &CodeProject,
-    expansion: &ExpandedCodeProject,
-    manifest: &ManagedControlManifest,
-    batch: &ManagedControlEditBatch,
-) -> Result<CodeProject, ManagedControlError> {
-    validate_control_batch_shape(batch)?;
-    let current = managed_control_manifest(project, expansion)?;
-    if &current != manifest {
-        let id = batch
-            .edits
-            .first()
-            .map_or_else(|| "manifest".into(), |edit| edit.token.id.0.clone());
-        return Err(ManagedControlError::StaleToken(id));
-    }
-    apply_managed_control_batch_against_manifest(project, &current, batch)
+    Ok(ManagedSketchMutation::SetValues { values })
 }
 
 #[derive(Clone)]
@@ -890,6 +1163,7 @@ fn validate_expansion_cross_links(
         &expansion.writable_points,
         &expansion.generated_children,
         &expansion.host_requests,
+        &expansion.operation_plans,
     ))
     .map_err(|error| ManagedControlError::Encoding(error.to_string()))?;
     if intent_content_digest(&bytes).to_string() != expansion.digest {
@@ -950,15 +1224,6 @@ fn invocation_input_path(name: &str, suffix: &SemanticOutputPath) -> SemanticOut
     SemanticOutputPath(path)
 }
 
-fn fields_path(fields: &[&str]) -> SemanticOutputPath {
-    SemanticOutputPath(
-        fields
-            .iter()
-            .map(|field| ManagedPathSegment::Field((*field).to_owned()))
-            .collect(),
-    )
-}
-
 fn managed_value_at_path<'a>(
     root: &'a ManagedValue,
     path: &SemanticOutputPath,
@@ -1017,11 +1282,15 @@ enum ControlClassification {
     },
 }
 
-fn classify_control(
+/// Managed schemas may validate an executed consumer edge, but may not
+/// create one. In particular, patch templates and the direct family catalog
+/// cannot make an unobserved value editable merely because its type looks
+/// compatible.
+fn classify_compiled_control(
     declaration: &AuthoringDeclaration,
     path: &SemanticOutputPath,
     value: &ManagedValue,
-    artifact_schemas: Vec<ManagedControlSchema>,
+    schemas: &[ManagedControlSchema],
     artifact: Option<&ArtifactPlan<'_>>,
 ) -> ControlClassification {
     match value {
@@ -1034,9 +1303,7 @@ fn classify_control(
                 }),
             };
         }
-        ManagedValue::Null => {
-            return read_only(ManagedControlReadOnlyReason::Null);
-        }
+        ManagedValue::Null => return read_only(ManagedControlReadOnlyReason::Null),
         ManagedValue::Array(_) | ManagedValue::Object(_) => {
             return read_only(ManagedControlReadOnlyReason::Structure);
         }
@@ -1052,21 +1319,6 @@ fn classify_control(
     }
     if direct_structural_identity_path(declaration, path) {
         return read_only(ManagedControlReadOnlyReason::StructuralIdentity);
-    }
-
-    let direct = (declaration.patch.is_none())
-        .then(|| direct_schema(declaration, path, value))
-        .flatten();
-    let mut schemas = artifact_schemas;
-    if let Some(direct) = direct {
-        schemas.push(direct);
-    }
-    if schemas.is_empty()
-        && let Some(plan) = artifact
-        && artifact_scalar_input_path(plan, path)
-        && let Some(schema) = scalar_schema(value, ManagedControlNumberKind::Real, None, None)
-    {
-        schemas.push(schema);
     }
     let Some(first) = schemas.first().cloned() else {
         return read_only(ManagedControlReadOnlyReason::UnprovenTransform);
@@ -1144,29 +1396,524 @@ fn read_only(reason: ManagedControlReadOnlyReason) -> ControlClassification {
     }
 }
 
+fn named_declaration_descriptor(
+    declaration: &AuthoringDeclaration,
+) -> Result<Option<CodeAuthoringDeclarationDescriptor>, ManagedControlError> {
+    if declaration.patch.is_some() {
+        return Ok(None);
+    }
+    let [namespace, method] = declaration.builder_path.as_slice() else {
+        return Ok(None);
+    };
+    let Some(family) = code_authoring_family(namespace, method) else {
+        return Ok(None);
+    };
+    let dynamic_children = match family.dynamic_children {
+        CodeAuthoringDynamicChildren::None => 0,
+        CodeAuthoringDynamicChildren::PolylineVertices => {
+            named_collection_len(&declaration.arguments, "vertices")?
+        }
+        CodeAuthoringDynamicChildren::SplineControls => {
+            named_collection_len(&declaration.arguments, "controls")?
+        }
+        CodeAuthoringDynamicChildren::FilletCorners => {
+            named_collection_len(&declaration.arguments, "corners")?
+        }
+        CodeAuthoringDynamicChildren::PatternInstances => {
+            let Some(ManagedValue::Number(value)) =
+                declaration_argument(&declaration.arguments, "instances")
+            else {
+                return Err(ManagedControlError::ForeignExpansion(format!(
+                    "named declaration `{}` has no exact pattern instance count",
+                    declaration.symbol.0
+                )));
+            };
+            if !value.is_finite()
+                || value.is_sign_negative()
+                || value.fract() != 0.0
+                || *value > f64::from(u16::MAX)
+            {
+                return Err(ManagedControlError::ForeignExpansion(format!(
+                    "named declaration `{}` has an invalid pattern instance count",
+                    declaration.symbol.0
+                )));
+            }
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "the finite integral value is bounded to u16 immediately above"
+            )]
+            {
+                *value as u16
+            }
+        }
+    };
+    resolve_code_authoring_declaration(namespace, method, dynamic_children)
+        .map(Some)
+        .map_err(|error| ManagedControlError::ForeignExpansion(error.to_string()))
+}
+
+fn named_collection_len(arguments: &ManagedValue, name: &str) -> Result<u16, ManagedControlError> {
+    let Some(ManagedValue::Array(values)) = declaration_argument(arguments, name) else {
+        return Err(ManagedControlError::ForeignExpansion(format!(
+            "named declaration argument `{name}` is not an array"
+        )));
+    };
+    u16::try_from(values.len()).map_err(|_| ManagedControlError::ResourceLimit {
+        resource: "named declaration dynamic children",
+        actual: values.len(),
+        limit: usize::from(u16::MAX),
+    })
+}
+
+fn declaration_argument<'a>(arguments: &'a ManagedValue, name: &str) -> Option<&'a ManagedValue> {
+    let ManagedValue::Object(fields) = arguments else {
+        return None;
+    };
+    fields.get(name)
+}
+
+fn named_schema(
+    declaration: &AuthoringDeclaration,
+    property: &SemanticOutputPath,
+    value: &ManagedValue,
+) -> Result<Option<ManagedControlSchema>, ManagedControlError> {
+    if path_is_field(property, "label") {
+        return Ok(matches!(value, ManagedValue::String(_)).then_some(ManagedControlSchema::Text));
+    }
+    if path_ends_with_field(property, "suppressed") {
+        return Ok(matches!(value, ManagedValue::Bool(_)).then_some(ManagedControlSchema::Boolean));
+    }
+    let Some(descriptor) = named_declaration_descriptor(declaration)? else {
+        return Ok(None);
+    };
+
+    if descriptor.dynamic_children.kind == CodeAuthoringDynamicChildren::SplineControls {
+        if spline_control_property(property, "weight") {
+            return Ok(positive_scalar_schema(value));
+        }
+        if path_is_field(property, "gauge") {
+            return named_spline_gauge_schema(declaration, value).map(Some);
+        }
+    }
+
+    let definition = descriptor
+        .fields
+        .iter()
+        .find(|field| named_source_projection_path(&field.path) == *property)
+        .map(|field| {
+            (
+                field.schema.field.0.as_str(),
+                field.schema.literal,
+                &field.choices,
+            )
+        });
+    let authored = descriptor
+        .values
+        .iter()
+        .find(|field| named_source_projection_path(&field.path) == *property)
+        .map(|field| ("", field.literal, &field.choices));
+    let Some((field, literal, choices)) = definition.or(authored) else {
+        return Ok(None);
+    };
+    if field.ends_with("_periodic_anchor") {
+        return Ok(matches!(value, ManagedValue::String(_)).then(|| {
+            ManagedControlSchema::Choice {
+                choices: vec!["none".into(), "anchor".into()],
+            }
+        }));
+    }
+    if let Some(schema) = named_numeric_schema_override(&descriptor, property, literal, value) {
+        return Ok(Some(schema));
+    }
+    Ok(schema_for_literal(literal, choices, value))
+}
+
+fn named_spline_gauge_schema(
+    declaration: &AuthoringDeclaration,
+    value: &ManagedValue,
+) -> Result<ManagedControlSchema, ManagedControlError> {
+    if !matches!(value, ManagedValue::String(_)) {
+        return Err(ManagedControlError::ForeignExpansion(format!(
+            "named NURBS declaration `{}` has a non-text gauge",
+            declaration.symbol.0
+        )));
+    }
+    let Some(ManagedValue::Array(controls)) =
+        declaration_argument(&declaration.arguments, "controls")
+    else {
+        return Err(ManagedControlError::ForeignExpansion(format!(
+            "named NURBS declaration `{}` has no control collection",
+            declaration.symbol.0
+        )));
+    };
+    let mut choices = Vec::with_capacity(controls.len());
+    for control in controls {
+        let ManagedValue::Object(fields) = control else {
+            return Err(ManagedControlError::ForeignExpansion(format!(
+                "named NURBS declaration `{}` has a malformed control",
+                declaration.symbol.0
+            )));
+        };
+        let Some(ManagedValue::String(key)) = fields.get("key") else {
+            return Err(ManagedControlError::ForeignExpansion(format!(
+                "named NURBS declaration `{}` has a control without a text key",
+                declaration.symbol.0
+            )));
+        };
+        choices.push(key.clone());
+    }
+    Ok(ManagedControlSchema::Choice { choices })
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the closed named API's numeric-domain policy is intentionally reviewed in one exhaustive match"
+)]
+fn named_numeric_schema_override(
+    descriptor: &CodeAuthoringDeclarationDescriptor,
+    property: &SemanticOutputPath,
+    literal: IntentLiteralSchema,
+    value: &ManagedValue,
+) -> Option<ManagedControlSchema> {
+    use geosolve_sketch_intent::{
+        ComputedFeatureKind, DimensionKind, GeometryRecipeKind, OperationKind,
+    };
+
+    let positive = match descriptor.declaration {
+        CodeAuthoringDeclarationKind::Geometry(GeometryRecipeKind::Hyperbola)
+            if path_is_field(property, "semiConjugate") =>
+        {
+            true
+        }
+        CodeAuthoringDeclarationKind::Dimension(
+            DimensionKind::PointDistance
+            | DimensionKind::CurveLength
+            | DimensionKind::Radius
+            | DimensionKind::Diameter
+            | DimensionKind::OrientedAngle
+            | DimensionKind::SupportingLineOffset
+            | DimensionKind::ExactTranslatedSegmentOffset
+            | DimensionKind::ProfileOffset,
+        ) if path_is_field(property, "value") => true,
+        CodeAuthoringDeclarationKind::Operation(OperationKind::Chamfer)
+            if path_is_field(property, "firstDistance")
+                || path_is_field(property, "secondDistance") =>
+        {
+            true
+        }
+        CodeAuthoringDeclarationKind::Operation(OperationKind::Rectangle)
+            if path_is_field(property, "width") || path_is_field(property, "height") =>
+        {
+            true
+        }
+        CodeAuthoringDeclarationKind::Operation(OperationKind::ProfileOffset)
+            if path_is_field(property, "distance") =>
+        {
+            true
+        }
+        CodeAuthoringDeclarationKind::Geometry(GeometryRecipeKind::CenterRadiusCircle)
+        | CodeAuthoringDeclarationKind::Operation(
+            OperationKind::AssociativeFillet | OperationKind::RegularPolygon | OperationKind::Slot,
+        )
+        | CodeAuthoringDeclarationKind::ComputedFeature(ComputedFeatureKind::FilletSet)
+            if path_is_field(property, "radius") =>
+        {
+            true
+        }
+        _ => false,
+    };
+    if positive {
+        return positive_scalar_schema(value);
+    }
+
+    match descriptor.declaration {
+        CodeAuthoringDeclarationKind::Geometry(
+            GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs,
+        ) if path_is_field(property, "degree") => scalar_schema(
+            value,
+            ManagedControlNumberKind::Natural,
+            Some(ManagedControlBound {
+                value: 1.0,
+                inclusive: true,
+            }),
+            Some(ManagedControlBound {
+                value: f64::from(descriptor.dynamic_children.count.saturating_sub(1)),
+                inclusive: true,
+            }),
+        ),
+        CodeAuthoringDeclarationKind::Operation(OperationKind::RegularPolygon)
+            if path_is_field(property, "sides") =>
+        {
+            scalar_schema(
+                value,
+                ManagedControlNumberKind::Natural,
+                Some(ManagedControlBound {
+                    value: 3.0,
+                    inclusive: true,
+                }),
+                Some(ManagedControlBound {
+                    value: 256.0,
+                    inclusive: true,
+                }),
+            )
+        }
+        CodeAuthoringDeclarationKind::Operation(OperationKind::LinearPattern)
+            if path_is_field(property, "instances") =>
+        {
+            scalar_schema(
+                value,
+                ManagedControlNumberKind::Natural,
+                Some(ManagedControlBound {
+                    value: 2.0,
+                    inclusive: true,
+                }),
+                Some(ManagedControlBound {
+                    value: 256.0,
+                    inclusive: true,
+                }),
+            )
+        }
+        _ if literal == IntentLiteralSchema::Natural => scalar_schema(
+            value,
+            ManagedControlNumberKind::Natural,
+            Some(ManagedControlBound {
+                value: 0.0,
+                inclusive: true,
+            }),
+            None,
+        ),
+        _ => None,
+    }
+}
+
+fn schema_for_literal(
+    literal: IntentLiteralSchema,
+    choices: &IntentFieldChoices,
+    value: &ManagedValue,
+) -> Option<ManagedControlSchema> {
+    match literal {
+        IntentLiteralSchema::Boolean => {
+            matches!(value, ManagedValue::Bool(_)).then_some(ManagedControlSchema::Boolean)
+        }
+        IntentLiteralSchema::Integer => scalar_schema(
+            value,
+            ManagedControlNumberKind::Integer,
+            Some(ManagedControlBound {
+                value: f64::from(i32::MIN),
+                inclusive: true,
+            }),
+            Some(ManagedControlBound {
+                value: f64::from(i32::MAX),
+                inclusive: true,
+            }),
+        ),
+        IntentLiteralSchema::Natural => scalar_schema(
+            value,
+            ManagedControlNumberKind::Natural,
+            Some(ManagedControlBound {
+                value: 0.0,
+                inclusive: true,
+            }),
+            None,
+        ),
+        IntentLiteralSchema::Text => {
+            matches!(value, ManagedValue::String(_)).then_some(ManagedControlSchema::Text)
+        }
+        IntentLiteralSchema::Enum => {
+            let IntentFieldChoices::Closed(choices) = choices else {
+                return None;
+            };
+            matches!(value, ManagedValue::String(_)).then(|| ManagedControlSchema::Choice {
+                choices: choices
+                    .iter()
+                    .map(|choice| source_enum_choice(choice.as_str()))
+                    .collect(),
+            })
+        }
+        IntentLiteralSchema::Point => None,
+        IntentLiteralSchema::Quantity(_) => {
+            scalar_schema(value, ManagedControlNumberKind::Real, None, None)
+        }
+    }
+}
+
+fn source_enum_choice(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut uppercase = false;
+    for character in value.chars() {
+        if character == '_' {
+            uppercase = true;
+        } else if uppercase {
+            result.extend(character.to_uppercase());
+            uppercase = false;
+        } else {
+            result.push(character);
+        }
+    }
+    result
+}
+
+/// Translates the central semantic projection coordinate to the exact clean
+/// named-object coordinate consumed by TypeScript. The mapping is structural
+/// and injective; runtime values are never compared to guess an owner.
+fn named_source_projection_path(path: &IntentProjectionPath) -> SemanticOutputPath {
+    let source = path.segments();
+    let mut output = Vec::with_capacity(source.len());
+    let mut index = 0;
+    while index < source.len() {
+        match &source[index] {
+            IntentProjectionPathSegment::Field(field) if index == 0 && field.as_str() == "name" => {
+                output.push(ManagedPathSegment::Field("label".into()));
+                index += 1;
+            }
+            IntentProjectionPathSegment::Field(field) if field.as_str() == "gaugeIndex" => {
+                output.push(ManagedPathSegment::Field("gauge".into()));
+                index += 1;
+            }
+            IntentProjectionPathSegment::Field(field)
+                if field.as_str() == "contacts"
+                    && matches!(
+                        source.get(index + 1),
+                        Some(IntentProjectionPathSegment::Index(0 | 1))
+                    ) =>
+            {
+                output.push(ManagedPathSegment::Field("contacts".into()));
+                let Some(IntentProjectionPathSegment::Index(side)) = source.get(index + 1) else {
+                    unreachable!("guarded contact side")
+                };
+                output.push(ManagedPathSegment::Field(
+                    if *side == 0 { "first" } else { "second" }.into(),
+                ));
+                index += 2;
+            }
+            IntentProjectionPathSegment::Field(field) if field.as_str() == "anchor" => {
+                output.push(ManagedPathSegment::Field("periodicAnchor".into()));
+                if matches!(
+                    (source.get(index + 1), source.get(index + 2)),
+                    (
+                        Some(IntentProjectionPathSegment::Field(anchor)),
+                        Some(IntentProjectionPathSegment::Field(enabled))
+                    ) if anchor.as_str() == "anchor" && enabled.as_str() == "enabled"
+                ) {
+                    output.push(ManagedPathSegment::Field("kind".into()));
+                    index += 3;
+                } else if matches!(
+                    source.get(index + 1),
+                    Some(IntentProjectionPathSegment::Field(enabled)) if enabled.as_str() == "enabled"
+                ) {
+                    output.push(ManagedPathSegment::Field("kind".into()));
+                    index += 2;
+                } else {
+                    index += 1;
+                }
+            }
+            IntentProjectionPathSegment::Field(field) => {
+                output.push(ManagedPathSegment::Field(field.as_str().to_owned()));
+                index += 1;
+            }
+            IntentProjectionPathSegment::Index(value) => {
+                output.push(ManagedPathSegment::Index(usize::from(*value)));
+                index += 1;
+            }
+        }
+    }
+    SemanticOutputPath(output)
+}
+
+fn spline_control_property(path: &SemanticOutputPath, property: &str) -> bool {
+    matches!(
+        path.0.as_slice(),
+        [
+            ManagedPathSegment::Field(collection),
+            ManagedPathSegment::Index(_),
+            ManagedPathSegment::Field(field),
+        ] if collection == "controls" && field == property
+    )
+}
+
+fn collection_member_field(path: &SemanticOutputPath, expected: &str) -> bool {
+    matches!(
+        path.0.get(1..3),
+        Some([
+            ManagedPathSegment::Index(_) | ManagedPathSegment::Member { .. },
+            ManagedPathSegment::Field(field),
+        ]) if field == expected
+    )
+}
+
+fn managed_projection_path(path: &IntentProjectionPath) -> SemanticOutputPath {
+    SemanticOutputPath(
+        path.segments()
+            .iter()
+            .map(|segment| match segment {
+                IntentProjectionPathSegment::Field(field) => {
+                    ManagedPathSegment::Field(field.as_str().to_owned())
+                }
+                IntentProjectionPathSegment::Index(index) => {
+                    ManagedPathSegment::Index(usize::from(*index))
+                }
+            })
+            .collect(),
+    )
+}
+
+fn path_has_prefix(path: &SemanticOutputPath, prefix: &SemanticOutputPath) -> bool {
+    path.0.starts_with(&prefix.0)
+}
+
 fn direct_solver_instance_path(
     declaration: &AuthoringDeclaration,
     path: &SemanticOutputPath,
 ) -> bool {
-    let family = declaration.builder_path.join(".");
-    match family.as_str() {
-        "geometry.line" => {
-            path_starts_with_field(path, "start") || path_starts_with_field(path, "end")
+    let Ok(Some(descriptor)) = named_declaration_descriptor(declaration) else {
+        return false;
+    };
+    for input in &descriptor.inputs {
+        match &input.kind {
+            CodeAuthoringArgumentKind::Point
+                if path_starts_with_field(path, input.name.as_str()) =>
+            {
+                return true;
+            }
+            CodeAuthoringArgumentKind::Collection(
+                CodeAuthoringCollectionMember::Point | CodeAuthoringCollectionMember::SplineControl,
+            ) if path_starts_with_field(path, input.name.as_str())
+                && collection_member_field(path, "position") =>
+            {
+                return true;
+            }
+            CodeAuthoringArgumentKind::Point
+            | CodeAuthoringArgumentKind::Reference(_)
+            | CodeAuthoringArgumentKind::ReferenceChoice(_)
+            | CodeAuthoringArgumentKind::Collection(_) => {}
         }
-        "geometry.circle" => path_starts_with_field(path, "center"),
-        "geometry.rectangle" => {
-            path_starts_with_field(path, "lowerLeft") || path_starts_with_field(path, "upperRight")
-        }
-        "geometry.polyline" => path_contains_field(path, "position"),
-        _ => false,
     }
+    descriptor.fields.iter().any(|field| {
+        field.schema.literal == IntentLiteralSchema::Point
+            && path_has_prefix(path, &managed_projection_path(&field.path))
+    })
 }
 
 fn direct_structural_identity_path(
     declaration: &AuthoringDeclaration,
     path: &SemanticOutputPath,
 ) -> bool {
-    declaration.builder_path.join(".") == "geometry.polyline" && path_ends_with_field(path, "key")
+    let Ok(Some(descriptor)) = named_declaration_descriptor(declaration) else {
+        return false;
+    };
+    path_ends_with_field(path, "key")
+        && descriptor.inputs.iter().any(|input| {
+            matches!(
+                input.kind,
+                CodeAuthoringArgumentKind::Collection(
+                    CodeAuthoringCollectionMember::Point
+                        | CodeAuthoringCollectionMember::SplineControl
+                        | CodeAuthoringCollectionMember::FilletCorner
+                        | CodeAuthoringCollectionMember::FilletParent
+                )
+            ) && path_starts_with_field(path, input.name.as_str())
+        })
 }
 
 fn artifact_solver_instance_path(plan: &ArtifactPlan<'_>, path: &SemanticOutputPath) -> bool {
@@ -1180,8 +1927,8 @@ fn artifact_solver_instance_path(plan: &ArtifactPlan<'_>, path: &SemanticOutputP
         .artifact()
         .templates
         .iter()
-        .flat_map(|template| template.inputs.values())
-        .any(|binding| match binding {
+        .flat_map(|template| template_argument_bindings_with_paths(&template.arguments))
+        .any(|(_, binding)| match binding {
             TemplateBinding::CollectionMember {
                 input: candidate,
                 expected_kind: FeatureKind::Point,
@@ -1196,91 +1943,6 @@ fn artifact_solver_instance_path(plan: &ArtifactPlan<'_>, path: &SemanticOutputP
         })
 }
 
-fn artifact_scalar_input_path(plan: &ArtifactPlan<'_>, path: &SemanticOutputPath) -> bool {
-    let [ManagedPathSegment::Field(input)] = path.0.as_slice() else {
-        return false;
-    };
-    plan.artifact.artifact().inputs.get(input) == Some(&FeatureKind::Scalar)
-}
-
-fn direct_schema(
-    declaration: &AuthoringDeclaration,
-    path: &SemanticOutputPath,
-    value: &ManagedValue,
-) -> Option<ManagedControlSchema> {
-    let family = declaration.builder_path.join(".");
-    if path_ends_with_field(path, "suppressed") {
-        return matches!(value, ManagedValue::Bool(_)).then_some(ManagedControlSchema::Boolean);
-    }
-    match family.as_str() {
-        "geometry.line" if path_is_field(path, "role") => {
-            choice_schema(value, &["profile", "construction"])
-        }
-        "geometry.circle" if path_is_field(path, "radius") => positive_scalar_schema(value),
-        "geometry.polyline" if path_is_field(path, "closed") => {
-            matches!(value, ManagedValue::Bool(_)).then_some(ManagedControlSchema::Boolean)
-        }
-        "constraint.fixedPoint" if path_starts_with_field(path, "target") && path.0.len() == 2 => {
-            scalar_schema(value, ManagedControlNumberKind::Real, None, None)
-        }
-        "constraint.fixedCoordinate" | "constraint.symmetricAboutDatumAxis"
-            if path_is_field(path, "axis") =>
-        {
-            choice_schema(value, &["x", "y"])
-        }
-        "constraint.fixedCoordinate" if path_is_field(path, "target") => {
-            scalar_schema(value, ManagedControlNumberKind::Real, None, None)
-        }
-        "dimension.curveLength" | "dimension.radius" | "dimension.diameter"
-            if path_is_field(path, "target") =>
-        {
-            positive_scalar_schema(value)
-        }
-        "dimension.curveLength" | "dimension.radius" | "dimension.diameter"
-            if path_is_field(path, "mode") =>
-        {
-            choice_schema(value, &["driving", "reference"])
-        }
-        "computed.filletSet" => direct_fillet_schema(path, value),
-        _ => None,
-    }
-}
-
-fn direct_fillet_schema(
-    path: &SemanticOutputPath,
-    value: &ManagedValue,
-) -> Option<ManagedControlSchema> {
-    if path_is_field(path, "radius") {
-        return positive_scalar_schema(value);
-    }
-    let field = last_field(path)?;
-    match field {
-        "endpointOrder" => choice_schema(value, &["firstThenSecond", "secondThenFirst"]),
-        "sweep" => choice_schema(value, &["counterClockwise", "clockwise"]),
-        "normalSide" => choice_schema(value, &["left", "right"]),
-        "retainedEndpoint" => choice_schema(value, &["start", "end"]),
-        "kind" if path_contains_field(path, "neighborhood") => {
-            choice_schema(value, &["interior", "start", "end", "local"])
-        }
-        "winding" => scalar_schema(
-            value,
-            ManagedControlNumberKind::Integer,
-            Some(ManagedControlBound {
-                value: f64::from(i32::MIN),
-                inclusive: true,
-            }),
-            Some(ManagedControlBound {
-                value: f64::from(i32::MAX),
-                inclusive: true,
-            }),
-        ),
-        "parameter" | "lower" | "upper" => {
-            scalar_schema(value, ManagedControlNumberKind::Real, None, None)
-        }
-        _ => None,
-    }
-}
-
 fn schema_for_template_input(
     family: &str,
     property: &str,
@@ -1292,9 +1954,12 @@ fn schema_for_template_input(
     }
     if matches!(
         (family, property),
-        ("computed.fillet" | "geometry.circle", "radius")
-            | ("dimension.radius", "target")
-            | ("geometry.rectangle", "width" | "height" | "cornerRadius")
+        ("computed.fillet" | "geometry.centerRadiusCircle", "radius")
+            | ("dimension.radius", "value")
+            | (
+                "computed.roundedRectangleProfile",
+                "width" | "height" | "cornerRadius"
+            )
     ) {
         positive_scalar_schema(value)
     } else {
@@ -1336,12 +2001,6 @@ fn scalar_schema(
         }
         _ => None,
     }
-}
-
-fn choice_schema(value: &ManagedValue, choices: &[&str]) -> Option<ManagedControlSchema> {
-    matches!(value, ManagedValue::String(_)).then(|| ManagedControlSchema::Choice {
-        choices: choices.iter().map(|choice| (*choice).to_owned()).collect(),
-    })
 }
 
 fn merge_schemas(
@@ -1628,39 +2287,6 @@ fn managed_value_fingerprint(value: &ManagedValue) -> String {
     }
 }
 
-fn format_control_value(value: &ManagedValue) -> Option<String> {
-    match value {
-        ManagedValue::Bool(value) => Some(value.to_string()),
-        ManagedValue::Number(value) if value.is_finite() => Some(format_number(*value)),
-        ManagedValue::String(value) => serde_json::to_string(value).ok(),
-        ManagedValue::Unit(value) if value.value.is_finite() && valid_identifier(&value.unit) => {
-            Some(format!("{}({})", value.unit, format_number(value.value)))
-        }
-        ManagedValue::Null
-        | ManagedValue::Number(_)
-        | ManagedValue::Array(_)
-        | ManagedValue::Object(_)
-        | ManagedValue::Reference { .. }
-        | ManagedValue::Unit(_) => None,
-    }
-}
-
-fn format_number(value: f64) -> String {
-    if value == 0.0 && value.is_sign_negative() {
-        "-0".into()
-    } else {
-        value.to_string()
-    }
-}
-
-fn valid_identifier(value: &str) -> bool {
-    let mut bytes = value.bytes();
-    bytes
-        .next()
-        .is_some_and(|byte| byte.is_ascii_alphabetic() || matches!(byte, b'_' | b'$'))
-        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$'))
-}
-
 fn path_is_field(path: &SemanticOutputPath, expected: &str) -> bool {
     matches!(path.0.as_slice(), [ManagedPathSegment::Field(field)] if field == expected)
 }
@@ -1671,12 +2297,6 @@ fn path_starts_with_field(path: &SemanticOutputPath, expected: &str) -> bool {
 
 fn path_ends_with_field(path: &SemanticOutputPath, expected: &str) -> bool {
     matches!(path.0.last(), Some(ManagedPathSegment::Field(field)) if field == expected)
-}
-
-fn path_contains_field(path: &SemanticOutputPath, expected: &str) -> bool {
-    path.0
-        .iter()
-        .any(|segment| matches!(segment, ManagedPathSegment::Field(field) if field == expected))
 }
 
 fn last_field(path: &SemanticOutputPath) -> Option<&str> {
@@ -1707,6 +2327,18 @@ fn path_text(declaration: &SemanticSymbol, path: &SemanticOutputPath) -> String 
         }
     }
     result
+}
+
+fn property_path_text(path: &SemanticOutputPath) -> String {
+    path.0
+        .iter()
+        .map(|segment| match segment {
+            ManagedPathSegment::Field(field) => field.clone(),
+            ManagedPathSegment::Index(index) => index.to_string(),
+            ManagedPathSegment::Member { member } => member.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 fn valid_digest(value: &str) -> bool {
@@ -1751,8 +2383,8 @@ mod tests {
         let value = ManagedValue::String("fixture text\nwith a quote: \"".into());
         assert_eq!(validate_replacement(&text, &value), Ok(()));
         assert_eq!(
-            format_control_value(&value).as_deref(),
-            Some("\"fixture text\\nwith a quote: \\\"\"")
+            value,
+            ManagedValue::String("fixture text\nwith a quote: \"".into())
         );
     }
 
@@ -1799,24 +2431,8 @@ mod tests {
             None
         );
 
-        let declaration = AuthoringDeclaration {
-            variable: "fixture".into(),
-            symbol: SemanticSymbol("fixture".into()),
-            builder_path: vec!["fixture".into()],
-            arguments: ManagedValue::Number(2.0),
-            patch: None,
-            statement_span: ManagedSpan::new(0, 0),
-            symbol_span: ManagedSpan::new(0, 0),
-            arguments_span: ManagedSpan::new(0, 0),
-        };
         assert!(matches!(
-            classify_control(
-                &declaration,
-                &SemanticOutputPath::default(),
-                &declaration.arguments,
-                vec![real, disjoint],
-                None,
-            ),
+            classify_scalar_binding(&ManagedValue::Number(2.0), &[real, disjoint]),
             ControlClassification::ReadOnly {
                 reason: ManagedControlReadOnlyReason::IncompatibleSchemas,
                 navigation: None,

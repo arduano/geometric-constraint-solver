@@ -514,17 +514,15 @@ export type IntentRpcRequest<S extends string = string> =
     };
 
 /**
- * The exact single-string surface implemented by WASM `IntentRpcHandle.apply`
- * and the live-workbench `apply_workbench_intent_rpc` export.
- *
- * A host can bind the typed client to the already installed GUI without
- * creating a second intent session:
+ * The exact single-string surface implemented by WASM `IntentRpcHandle.apply`.
+ * A host binds one typed client to one explicitly owned handle:
  *
  * ```ts
- * const first = JSON.parse(wasm.apply_workbench_intent_rpc('{"method":"snapshot"}'));
+ * const handle = new wasm.IntentRpcHandle(sessionId, documentId, 1);
+ * const first = JSON.parse(handle.apply('{"method":"snapshot"}'));
  * const sessionId = first.value.snapshot.identity.session;
  * const client = new IntentClient(sessionId, {
- *   apply: wasm.apply_workbench_intent_rpc,
+ *   apply: (request) => handle.apply(request),
  * });
  * await client.undo();
  * ```

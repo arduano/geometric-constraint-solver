@@ -103,6 +103,21 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## M88 browser application dependencies
+
+M88's React/Vite browser application is built from the exact dependency graph in
+`crates/geosolve-demo-web/frontend/package-lock.json`. Its published runtime graph uses the
+following compatible declared SPDX licences only: `0BSD`, `Apache-2.0`, `ISC` and `MIT`.
+The direct runtime families are React/React DOM, CodeMirror 6, Radix UI, Lucide React,
+`react-resizable-panels`, `class-variance-authority`, `clsx` and `tailwind-merge`; their transitive
+runtime packages are locked and mechanically checked by `npm run check:licenses`.
+
+Build, test and accessibility tooling is not shipped in the browser bundle. Its exact graph and
+declared licence metadata are also retained in `package-lock.json`. Copyright and complete licence
+texts remain in each dependency's source package. This attribution file, the GeoSolve GPL text and
+the public API-compatibility document are copied into every Vite release artifact; the corresponding
+GeoSolve source retains the locked build instructions.
+
 ## `faer` bundled notices
 
 `faer 0.24.4` declares MIT but its source distribution also carries code and

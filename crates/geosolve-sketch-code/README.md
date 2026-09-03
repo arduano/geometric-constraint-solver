@@ -2,14 +2,15 @@
 
 # geosolve-sketch-code
 
-Optional, equation-free code/GUI sketch authoring companion. It validates and rewrites the bounded
-managed `sketch.ts` subset, validates caller-built data-only patch artifacts, retains semantic
-feature references, reconciles keyed generated members and owns one atomic code/editor history.
+Optional, equation-free code/GUI sketch-authoring companion. It authenticates compiler-produced
+managed `sketch.ts` IR and execution artifacts, validates caller-built data-only patch artifacts,
+retains semantic feature references, reconciles keyed generated members, and owns one atomic
+code/editor history.
 
-The crate never evaluates JavaScript and never defines solver equations. Custom TypeScript is
-compiled by an explicitly invoked caller-owned Node process; Rust and WASM consume only canonical
-bounded artifacts which expand to ordinary Design Intent declarations handled by the existing
-materializer and independently validated solver.
+The crate never evaluates JavaScript and never defines solver equations. A browser or Deno compiler
+host parses and executes the bounded authoring program, then hands Rust a canonical IR/artifact
+envelope. Rust validates that complete envelope before expanding it into ordinary Design Intent
+declarations handled by the existing materializer and independently validated solver.
 
 ## Code-only sketch
 
@@ -17,53 +18,58 @@ An artifact-free sketch can start from one managed TypeScript file, without firs
 scene:
 
 ```typescript
-"use geosolve managed-v1";
-import { sketch } from "@geosolve/sketch-code";
+"use geosolve sketch";
+import { mm, sketch } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
-  const frame = $.geometry.rectangle("frame", {
-    lowerLeft: [0, 0],
-    upperRight: [60, 35],
+  const frame = $.geometry.twoPointAlignedRectangle("frame", {
+    firstCorner: [0, 0],
+    oppositeCorner: [60, 35],
+    role: "profile",
   });
-  const diagonal = $.geometry.line("diagonal", {
-    start: frame.corners.lowerLeft,
-    end: frame.corners.upperRight,
+  const diagonal = $.geometry.segment("diagonal", {
+    start: frame.corners[0],
+    end: frame.corners[2],
+    role: "construction",
   });
-  $.organize("Frame", [frame, diagonal]);
-  return $.outputs({ frame, diagonal });
+  const width = $.dimension.curveLength("width", {
+    curve: frame.spans[0],
+    value: mm(60),
+  });
+  $.group("Frame", [frame, diagonal, width]);
+  return { frame, diagonal, width };
 });
 ```
 
-`frame.corners.lowerLeft` is a lexical, type-checked feature reference—not a serialized ID. Moving
-or resizing `frame` therefore keeps the diagonal attached to the same semantic outputs. The exact
-directive selects `GeoSolve`'s deterministic managed-v1 subset, which Rust can parse and rewrite
-without executing the callback.
+`frame.corners[0]` is a lexical, type-checked feature reference—not a serialized ID. Moving or
+resizing `frame` therefore keeps the diagonal attached to the same semantic output. Declarations
+use named, domain-shaped inputs and the callback returns an ordinary nested result; transport
+tuples and explicit output wrappers are not part of the public authoring API.
 
-A native host admits those source bytes as a validated artifact-free project through the optional
-companion API:
+A browser or Deno host compiles those source bytes with `compileManagedSource` from
+`@geosolve/sketch-code/ir`. (`/compiler` is the separate build-time custom-patch compiler.) A
+native host then admits the compiler envelope as an
+artifact-free project through the optional companion API:
 
 ```rust
-use geosolve_sketch_code::{CodeProject, ProjectKey};
+use geosolve_sketch_code::{CodeProject, CompiledManagedSource, ProjectKey};
 
-let source = r#""use geosolve managed-v1";
-import { sketch } from "@geosolve/sketch-code";
-export default sketch(($) => {
-  const line = $.geometry.line("line", { start: [0, 0], end: [20, 0] });
-  return $.outputs({ line });
-});
-"#;
-let project = CodeProject::managed_only(ProjectKey("example".into()), source)?;
+let compiler_envelope = include_str!("../assets/demos/neon-manifold.compiled.json");
+let compiled = CompiledManagedSource::from_json(compiler_envelope)?;
+let project = CodeProject::managed(ProjectKey("example".into()), compiled)?;
 assert!(project.custom_files.is_empty());
 # Ok::<(), geosolve_sketch_code::CodeProjectError>(())
 ```
 
-Parsing alone never publishes geometry. The host still performs keyed expansion, ordinary Intent
-materialization, native solving and independent residual validation before the candidate can
-replace accepted scene authority.
+Compilation alone never publishes geometry. The host still performs keyed expansion, ordinary
+Intent materialization, native solving, and independent residual validation before the candidate
+can replace accepted scene authority. The authenticated IR remains deep enough to print the whole
+normalized sketch again, while the execution artifact records runtime reference flow and callback
+output structure.
 
 ## Demonstrations
 
-The bundled project catalog contains four complete code-authored examples:
+The bundled project catalog contains complete code-authored examples, including:
 
 - **Rounded polyline** maps one reusable Fillet patch over every current keyed corner, so insertion
   and removal change cardinality without ordinal retargeting.
@@ -75,5 +81,7 @@ The bundled project catalog contains four complete code-authored examples:
   and stable keyed holes without evaluating TypeScript in Rust or the browser.
 
 In `geosolve-demo-web`, open a fresh sketch, select **Code**, and choose **Start from code** or one
-of those examples. Editing `sketch.ts` and pressing **Apply** validates the complete candidate
-atomically; invalid syntax or geometry retains the prior accepted canvas and remains undoable.
+of those examples. Editing `sketch.ts` and pressing **Apply** compiles and validates the complete
+candidate atomically; invalid syntax or geometry retains the prior accepted canvas and remains
+undoable. Compiler/IR and live-control APIs intentionally live on the package's `/compiler`, `/ir`,
+and `/control` subpaths rather than the public authoring root.

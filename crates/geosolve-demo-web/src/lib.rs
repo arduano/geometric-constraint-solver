@@ -63,6 +63,121 @@ mod workbench;
 mod wasm {
     use wasm_bindgen::prelude::*;
 
+    /// Instance-scoped, DOM-free workbench authority for presentation hosts.
+    #[wasm_bindgen]
+    pub struct WorkbenchHandle {
+        bridge: crate::workbench::bridge::WorkbenchBridge,
+    }
+
+    impl std::fmt::Debug for WorkbenchHandle {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("WorkbenchHandle")
+                .finish_non_exhaustive()
+        }
+    }
+
+    #[wasm_bindgen]
+    impl WorkbenchHandle {
+        /// Constructs a fresh or atomically restored versioned workbench.
+        #[wasm_bindgen(constructor)]
+        pub fn new(request: &str) -> Result<WorkbenchHandle, JsValue> {
+            crate::workbench::bridge::WorkbenchBridge::construct_json(request)
+                .map(|bridge| Self { bridge })
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        pub fn snapshot(&mut self) -> Result<String, JsValue> {
+            self.bridge
+                .snapshot_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        /// Returns the immutable CAD command/icon catalog for this host.
+        #[wasm_bindgen(js_name = toolCatalog)]
+        pub fn tool_catalog(&self) -> Result<String, JsValue> {
+            crate::workbench::bridge::WorkbenchBridge::tool_catalog_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        pub fn dispatch(&mut self, request: &str) -> Result<String, JsValue> {
+            self.bridge
+                .dispatch_json(request)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        /// On-demand managed compiler context. This intentionally stays out
+        /// of ordinary workbench snapshots and pointer frames.
+        #[wasm_bindgen(js_name = managedCompilerContext)]
+        pub fn managed_compiler_context(&self) -> Result<String, JsValue> {
+            self.bridge
+                .managed_compiler_context_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        pub fn pointer(&mut self, request: &str) -> Result<String, JsValue> {
+            self.bridge
+                .pointer_json(request)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        pub fn wheel(&mut self, request: &str) -> Result<String, JsValue> {
+            self.bridge
+                .wheel_json(request)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        pub fn resize(&mut self, request: &str) -> Result<String, JsValue> {
+            self.bridge
+                .resize_json(request)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        pub fn cancel(&mut self, request: &str) -> Result<String, JsValue> {
+            self.bridge
+                .cancel_json(request)
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = exportProject)]
+        pub fn export_project(&self) -> Result<String, JsValue> {
+            self.bridge
+                .export_project_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = persistProject)]
+        pub fn persist_project(&self) -> Result<String, JsValue> {
+            self.bridge
+                .persistence_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = exportReproduction)]
+        pub fn export_reproduction(&self) -> Result<String, JsValue> {
+            self.bridge
+                .reproduction_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = exportInteractionTrace)]
+        pub fn export_interaction_trace(&self) -> Result<String, JsValue> {
+            self.bridge
+                .interaction_trace_json()
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
+        #[wasm_bindgen(js_name = intentRpc)]
+        pub fn intent_rpc(&mut self, request: &str) -> String {
+            self.bridge.apply_intent_rpc_json(request)
+        }
+
+        #[wasm_bindgen(js_name = codeControlRpc)]
+        pub fn code_control_rpc(&mut self, request: &str) -> String {
+            self.bridge.apply_code_control_rpc_json(request)
+        }
+    }
+
     /// DOM-free intent RPC handle. It is independent of the workbench and may
     /// be used by TypeScript hosts or workers without a browser document.
     #[wasm_bindgen]
@@ -98,43 +213,17 @@ mod wasm {
         }
     }
 
-    /// Applies one bounded canonical RPC request to the projectional workbench
-    /// installed in this browser document.
-    ///
-    /// Unlike [`IntentRpcHandle`], this function owns no independent session:
-    /// canvas gestures, Inspector/source edits, code patches and Undo/Redo all
-    /// mutate the installed workbench's one `ProjectionalEditorSession`.
-    #[wasm_bindgen]
-    pub fn apply_workbench_intent_rpc(request: &str) -> String {
-        crate::workbench::live_intent_rpc::apply_installed(request)
-    }
-
-    /// Applies one bounded managed-control or outer-history request to the
-    /// code project installed in this browser document.
-    #[wasm_bindgen]
-    pub fn apply_workbench_code_control_rpc(request: &str) -> String {
-        crate::workbench::code_control_rpc::apply_installed(request)
-    }
-
     #[cfg_attr(not(test), wasm_bindgen(start))]
     pub fn start() -> Result<(), JsValue> {
         console_error_panic_hook::set_once();
-        let document = web_sys::window()
-            .and_then(|window| window.document())
-            .ok_or_else(|| JsValue::from_str("browser document is unavailable"))?;
-        crate::workbench::wasm::install(&document)
+        Ok(())
     }
 
     #[cfg(test)]
     mod tests {
-        use std::cell::RefCell;
-        use std::rc::Rc;
-
         use geosolve_constraint_editor::{
-            ColdIntentMaterializer, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession,
-            IntentRpcSuccess, MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES, MAX_INTENT_RPC_REQUEST_BYTES,
-            ProjectionalEditorSession, ProjectionalIntentCoordinator,
-            apply_intent_rpc_json_to_editor,
+            IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSuccess,
+            MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES, MAX_INTENT_RPC_REQUEST_BYTES,
         };
         use geosolve_sketch_intent::{
             GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
@@ -143,9 +232,7 @@ mod wasm {
         };
         use wasm_bindgen_test::wasm_bindgen_test;
 
-        use super::{
-            IntentRpcHandle, apply_workbench_code_control_rpc, apply_workbench_intent_rpc,
-        };
+        use super::IntentRpcHandle;
 
         fn point_patch(session: &IntentRpcSession) -> IntentRpcRequest {
             let selector = IntentPortSelector::Node {
@@ -382,173 +469,6 @@ mod wasm {
                     accepted_evidence
                 );
             }
-        }
-
-        #[wasm_bindgen_test]
-        fn actual_wasm_workbench_export_mutates_the_registered_live_editor() {
-            let session = geosolve_sketch_intent::IntentSessionId::from_raw(0x8300_5102);
-            let document = geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(
-                0x8300_5102_0000,
-            ));
-            let materializer = ColdIntentMaterializer::with_default_policy(document, 1.0).unwrap();
-            let coordinator = ProjectionalIntentCoordinator::empty(session, materializer).unwrap();
-            let editor = Rc::new(RefCell::new(ProjectionalEditorSession::new(coordinator)));
-            let installed = Rc::clone(&editor);
-            crate::workbench::live_intent_rpc::install(move |request| {
-                apply_intent_rpc_json_to_editor(&mut installed.borrow_mut(), request)
-            });
-
-            let before = editor.borrow().coordinator().intent().identity();
-            let selector = IntentPortSelector::Node {
-                role: IntentPortRole::Primary,
-                index: 0,
-            };
-            let draft = IntentNodeDraft::new(
-                IntentNodeKind::Geometry {
-                    recipe: GeometryRecipeKind::SketchPoint,
-                },
-                IntentKey::new("wasm.live.point").unwrap(),
-            )
-            .with_instance_leaf(
-                selector,
-                LeafField::X,
-                IntentLiteral::Quantity {
-                    value: 3.0,
-                    unit: IntentUnit::Length,
-                },
-            )
-            .with_instance_leaf(
-                selector,
-                LeafField::Y,
-                IntentLiteral::Quantity {
-                    value: 4.0,
-                    unit: IntentUnit::Length,
-                },
-            );
-            let request = serde_json::to_string(&IntentRpcRequest::ApplyPatch {
-                patch: Box::new(IntentPatch::new(
-                    before,
-                    IntentPatchPolicy::RequireAccepted,
-                    vec![IntentPatchOperation::CreateNode {
-                        alias: IntentKey::new("point").unwrap(),
-                        draft: Box::new(draft),
-                        cell: None,
-                    }],
-                )),
-            })
-            .unwrap();
-            let encoded_response = apply_workbench_intent_rpc(&request);
-            assert!(!encoded_response.contains("\"snapshot\":"));
-            assert!(encoded_response.len() < MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES);
-            let response: IntentRpcOutcome = serde_json::from_str(&encoded_response).unwrap();
-            let after = editor.borrow().coordinator().intent().identity();
-            assert_ne!(after, before);
-            assert!(matches!(
-                response,
-                IntentRpcOutcome::Success {
-                    value: IntentRpcSuccess::Patch { receipt }
-                } if receipt.identity == after
-            ));
-
-            let snapshot: IntentRpcOutcome =
-                serde_json::from_str(&apply_workbench_intent_rpc(r#"{"method":"snapshot"}"#))
-                    .unwrap();
-            assert!(matches!(
-                snapshot,
-                IntentRpcOutcome::Success {
-                    value: IntentRpcSuccess::Snapshot { snapshot }
-                } if snapshot.identity == after
-            ));
-            assert_eq!(editor.borrow().coordinator().intent().undo_len(), 1);
-        }
-
-        #[wasm_bindgen_test]
-        fn actual_wasm_code_control_export_uses_the_registered_outer_session() {
-            use geosolve_sketch_code::{
-                ManagedControlAccess, ManagedControlEdit, ManagedControlEditBatch,
-                ManagedPathSegment, ManagedValue, UnitLiteral,
-            };
-
-            const SOURCE: &str = r#""use geosolve managed-v1";
-import { sketch, mm } from "@geosolve/sketch-code";
-
-export default sketch(($) => {
-  const circle = $.geometry.circle("circle", {
-    center: [0, 0],
-    radius: mm(4),
-  });
-  return $.outputs({ circle });
-});
-"#;
-            let (code, _editor) =
-                crate::workbench::code_projects::CodeProjectWorkbench::open_managed_test_source(
-                    "wasm-code-control",
-                    SOURCE,
-                )
-                .unwrap();
-            let code = Rc::new(RefCell::new(Box::new(code)));
-            let installed = Rc::clone(&code);
-            crate::workbench::code_control_rpc::install(move |request| {
-                crate::workbench::code_control_rpc::apply_to_code_project(
-                    &mut installed.borrow_mut(),
-                    request,
-                )
-                .response
-            });
-
-            let inspected: crate::workbench::code_control_rpc::CodeControlRpcOutcome =
-                serde_json::from_str(&apply_workbench_code_control_rpc(
-                    r#"{"method":"inspect_managed_controls"}"#,
-                ))
-                .unwrap();
-            let crate::workbench::code_control_rpc::CodeControlRpcOutcome::Success {
-                value:
-                    crate::workbench::code_control_rpc::CodeControlRpcSuccess::ManagedControls {
-                        snapshot,
-                    },
-            } = inspected
-            else {
-                panic!("code-control export must inspect the installed code project")
-            };
-            let token = snapshot
-                .manifest
-                .controls
-                .iter()
-                .find(|control| {
-                    control.source.declaration.0 == "circle"
-                        && control.source.path.0 == [ManagedPathSegment::Field("radius".into())]
-                })
-                .and_then(|control| match &control.access {
-                    ManagedControlAccess::Editable { token } => Some(token.clone()),
-                    ManagedControlAccess::ReadOnly { .. } => None,
-                })
-                .expect("Typed Panel radius control");
-            let request = serde_json::to_string(
-                &crate::workbench::code_control_rpc::CodeControlRpcRequest::EditManagedControls {
-                    expected: Box::new(snapshot.identity.clone()),
-                    batch: Box::new(ManagedControlEditBatch::new([ManagedControlEdit {
-                        token,
-                        value: ManagedValue::Unit(UnitLiteral {
-                            unit: "mm".into(),
-                            value: 2.0,
-                        }),
-                    }])),
-                },
-            )
-            .unwrap();
-            let edited: crate::workbench::code_control_rpc::CodeControlRpcOutcome =
-                serde_json::from_str(&apply_workbench_code_control_rpc(&request)).unwrap();
-            assert!(matches!(
-                edited,
-                crate::workbench::code_control_rpc::CodeControlRpcOutcome::Success {
-                    value:
-                        crate::workbench::code_control_rpc::CodeControlRpcSuccess::ManagedControlEdit {
-                            receipt,
-                        },
-                } if receipt.receipt.before == snapshot.identity
-                    && receipt.receipt.after == *code.borrow().code_session_identity()
-            ));
-            assert!(code.borrow().managed_source().contains("radius: mm(2)"));
         }
     }
 }

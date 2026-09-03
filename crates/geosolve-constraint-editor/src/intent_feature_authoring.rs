@@ -93,6 +93,7 @@ pub fn projectional_fillet_patch(
         "computed-fillet-{:016x}",
         expected.revision.raw().saturating_add(1)
     ))?;
+    let native_label = symbol.clone();
     let mut draft = IntentNodeDraft::new(
         IntentNodeKind::ComputedFeature {
             feature: ComputedFeatureKind::FilletSet,
@@ -100,6 +101,7 @@ pub fn projectional_fillet_patch(
         symbol,
     )
     .with_dynamic_children(child_count)
+    .with_field(key("name")?, IntentLiteral::Text(native_label))
     .with_field(
         key("radius")?,
         quantity(candidate.radius(), IntentUnit::Length),

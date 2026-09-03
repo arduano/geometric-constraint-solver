@@ -15,8 +15,7 @@ use geosolve_sketch::{
     DocumentCurveControlId, DocumentCurveControlProjection, DocumentCurveControlTarget,
     DocumentDragLocalityPlan, DocumentEdit, DocumentRationalConicControl, DocumentSessionError,
     DocumentSolveRequest, OperationControl, OperationOutcome, PreparedSketchOperation,
-    PreparedSketchPatch, RetainedSketchDocumentSession, ScalarUnit, SketchDesignIdentity,
-    SketchDocument,
+    PreparedSketchPatch, RetainedSketchDocumentSession, SketchDesignIdentity, SketchDocument,
 };
 use geosolve_sketch_intent::{
     DeletePolicy, GeometryRecipeKind, IntentAliasMap, IntentFieldKey, IntentKey, IntentLiteral,
@@ -26,6 +25,7 @@ use geosolve_sketch_intent::{
 };
 use thiserror::Error;
 
+use crate::intent::scalar_leaf_intent_unit;
 use crate::{
     AuditedInteraction, ColdIntentMaterialization, ColdIntentMaterializer,
     IntentMaterializationError, IntentNativeWritableLeaf, InteractionWorkReceipt,
@@ -714,7 +714,9 @@ impl ProjectionalIntentCoordinator {
     }
 
     /// Atomically restores the preceding intent transaction and independently
-    /// cold-rebuilds its accepted scene. A failed rebuild changes nothing.
+    /// rematerializes its accepted scene. Authenticated historical evidence may
+    /// supply only the exact numerical continuation after structural matching;
+    /// a failed rematerialization changes nothing.
     ///
     /// # Errors
     ///
@@ -724,7 +726,9 @@ impl ProjectionalIntentCoordinator {
     }
 
     /// Atomically restores the next intent transaction and independently
-    /// cold-rebuilds its accepted scene. A failed rebuild changes nothing.
+    /// rematerializes its accepted scene. Authenticated historical evidence may
+    /// supply only the exact numerical continuation after structural matching;
+    /// a failed rematerialization changes nothing.
     ///
     /// # Errors
     ///
@@ -743,10 +747,28 @@ impl ProjectionalIntentCoordinator {
         let Some(_) = moved else {
             return Ok(None);
         };
+        let continuation = staged
+            .accepted()
+            .filter(|authority| authority.target == staged.semantic_identity())
+            .map(|authority| {
+                let json = std::str::from_utf8(&authority.evidence.materialization)
+                    .map_err(|_| IntentMaterializationError::AcceptedAuthorityEvidenceMismatch)?;
+                SketchDocument::from_draft_v5_json(json).map_err(IntentMaterializationError::from)
+            })
+            .transpose()?;
         let mut refreshed = None;
         let current_was_refreshed = staged.refresh_current_accepted_evidence(|candidate| {
-            let (evaluation, materialized) =
-                self.materializer.evaluate_with_materialization(candidate);
+            let (evaluation, materialized) = if let Some(continuation) = continuation.as_ref() {
+                let (evaluation, materialized, _) = self
+                    .materializer
+                    .evaluate_with_materialization_from_accepted_continuation_audited(
+                        candidate,
+                        continuation,
+                    );
+                (evaluation, materialized)
+            } else {
+                self.materializer.evaluate_with_materialization(candidate)
+            };
             refreshed = materialized;
             evaluation
         })?;
@@ -946,8 +968,12 @@ impl ProjectionalIntentCoordinator {
     /// materialization's writable reverse map. Driving targets, fixed-target
     /// fields and explicit branch fields therefore cannot be rewritten merely
     /// because the native solver used them while resolving the gesture.
-    /// The cold result must reproduce the complete preview document byte-for-byte
-    /// before either intent or native authority is published.
+    /// The terminal preview is independently re-certified as the candidate's
+    /// exact numerical continuation before either intent or native authority is
+    /// published. A plain from-scratch solve is insufficient here: sequential
+    /// lowering may choose another valid representative for unrelated free
+    /// degrees of freedom even though the source patch exactly describes the
+    /// moved solution.
     ///
     /// # Errors
     ///
@@ -1003,7 +1029,9 @@ impl ProjectionalIntentCoordinator {
             IntentPatchPolicy::RequireAccepted,
             operations,
         );
-        let prepared = self.plan_patch_with_work(patch, work)?.into_accepted()?;
+        let prepared = self
+            .plan_patch_with_work_mode(patch, work, false, Some(preview_document))?
+            .into_accepted()?;
         let materialized = prepared.materialization();
         let preview_document = terminal
             .session
@@ -1171,7 +1199,8 @@ impl ProjectionalIntentCoordinator {
                 ProjectionalCurveControlRoute::Scalar {
                     scalar,
                     leaf,
-                    unit: intent_unit(scalar_value.unit),
+                    unit: scalar_leaf_intent_unit(leaf.field, scalar_value.unit)
+                        .ok_or(ProjectionalCoordinatorError::CurveControlNotWritable { control })?,
                     origin: scalar_value.value,
                 }
             }
@@ -1386,8 +1415,9 @@ impl ProjectionalIntentCoordinator {
     }
 
     /// Publishes the newest authenticated curve-control sample as one typed
-    /// intent patch. The cold materialization must exactly reproduce the native
-    /// preview document before either authority or history advances.
+    /// intent patch. The native preview is independently re-certified as the
+    /// candidate's exact numerical continuation before either authority or
+    /// history advances.
     ///
     /// # Errors
     ///
@@ -1455,17 +1485,19 @@ impl ProjectionalIntentCoordinator {
             IntentPatchPolicy::RequireAccepted,
             latest.operations,
         );
-        let prepared = self.plan_patch_with_work(patch, work)?.into_accepted()?;
+        let preview_patch = latest.patch.preview();
+        let preview_document = preview_patch
+            .accepted_document()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?;
+        let prepared = self
+            .plan_patch_with_work_mode(patch, work, false, Some(preview_document))?
+            .into_accepted()?;
         let materialized = prepared.materialization();
         let ownership = &self
             .accepted
             .as_ref()
             .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?
             .ownership;
-        let preview_patch = latest.patch.preview();
-        let preview_document = preview_patch
-            .accepted_document()
-            .ok_or(ProjectionalCoordinatorError::NoAcceptedCurveControlSample)?;
         let cold_document = materialized
             .session
             .accepted_state_for_current_input()
@@ -1791,7 +1823,9 @@ fn point_drag_intent_operations(
                         scalar,
                     });
                 }
-                (origin.value, preview.value, intent_unit(preview.unit))
+                let unit = scalar_leaf_intent_unit(leaf.field, preview.unit)
+                    .ok_or(ProjectionalCoordinatorError::WritableScalarUnitMismatch { scalar })?;
+                (origin.value, preview.value, unit)
             }
         };
         if origin_value.to_bits() != preview_value.to_bits() {
@@ -1805,14 +1839,6 @@ fn point_drag_intent_operations(
         }
     }
     Ok(operations)
-}
-
-const fn intent_unit(unit: ScalarUnit) -> IntentUnit {
-    match unit {
-        ScalarUnit::Length => IntentUnit::Length,
-        ScalarUnit::Angle => IntentUnit::Angle,
-        ScalarUnit::Parameter => IntentUnit::Dimensionless,
-    }
 }
 
 fn exact_owned_curve_node(

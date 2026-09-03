@@ -11,12 +11,12 @@ use geosolve_sketch_intent::intent_content_digest;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::expansion::expand_code_project_with_overlay_and_retained_operation_plans;
 use crate::{
     AuditedCodeWork, CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOverlayError,
     CodeProject, CodeWorkReceipt, ExpandedCodeProject, ExpandedWritablePoint,
     GeneratedMemberAddress, GeneratedMemberIdentity, KeyedReconcileError, KeyedReconcilePlan,
-    KeyedReconcileState, ManagedDocument, ManagedParseError, ManagedValue, ProjectKey,
-    expand_code_project_with_overlay, parse_managed_source, stage_point_drags,
+    KeyedReconcileState, ManagedDocument, ManagedValue, ProjectKey, stage_point_drags,
 };
 
 const MAX_HISTORY: usize = 256;
@@ -36,6 +36,299 @@ pub struct CodeSessionIdentity {
     pub digest: String,
 }
 
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use geosolve_sketch_intent::{IntentSession, IntentSessionId};
+
+    use super::*;
+
+    fn compiled_fixture(name: &str) -> crate::CompiledManagedSource {
+        let json = match name {
+            "base" => include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/fixtures/managed-compiler-envelope.json"
+            )),
+            "restored" => include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/fixtures/managed-compiler-envelope-restored.json"
+            )),
+            _ => panic!("unknown compiled session fixture"),
+        };
+        crate::CompiledManagedSource::from_json(json).expect("compiled session fixture")
+    }
+
+    fn project(key: &ProjectKey, fixture: &str) -> CodeProject {
+        CodeProject::managed(key.clone(), compiled_fixture(fixture)).expect("valid V3 project")
+    }
+
+    fn generated(project: &CodeProject) -> KeyedReconcileState {
+        KeyedReconcileState::empty()
+            .plan(
+                crate::required_generated_members(project).expect("member inventory"),
+                &BTreeSet::new(),
+            )
+            .expect("member reconciliation")
+            .into_staged()
+    }
+
+    fn expanded(
+        project: &CodeProject,
+        generated: &KeyedReconcileState,
+        seed: u128,
+    ) -> ExpandedCodeProject {
+        let intent = IntentSession::with_id(IntentSessionId::from_raw(seed)).expect("intent");
+        crate::expand_code_project(project, generated, intent.identity()).expect("V3 expansion")
+    }
+
+    fn session(key: &str) -> SketchCodeSession {
+        let key = ProjectKey(key.into());
+        let project = project(&key, "base");
+        let generated = generated(&project);
+        let expansion = expanded(&project, &generated, 0x90_5001);
+        SketchCodeSession::new_project(
+            project,
+            generated,
+            expansion,
+            serde_json::json!({"accepted": "base"}),
+        )
+        .expect("V3 session")
+    }
+
+    fn prepare_fixture_edit(
+        session: &SketchCodeSession,
+        fixture: &str,
+        seed: u128,
+        checkpoint: serde_json::Value,
+    ) -> PreparedCodeEdit {
+        let candidate = project(&session.snapshot().project, fixture);
+        let plan = session
+            .plan_structural_reconciliation(
+                session.identity(),
+                crate::required_generated_members(&candidate).expect("candidate members"),
+                &BTreeSet::new(),
+            )
+            .expect("candidate reconciliation");
+        let expansion = expanded(&candidate, plan.staged(), seed);
+        session
+            .prepare_project_edit_from_plan(
+                session.identity(),
+                candidate,
+                plan,
+                expansion,
+                checkpoint,
+                "Compile V3 source",
+            )
+            .expect("prepared V3 edit")
+    }
+
+    #[test]
+    fn complete_v3_edit_is_exact_cas_and_one_history_entry() {
+        let mut session = session("exact-cas");
+        let prepared = prepare_fixture_edit(
+            &session,
+            "restored",
+            0x90_5002,
+            serde_json::json!({"accepted": "restored"}),
+        );
+        let published = session.apply_prepared_audited(prepared.clone());
+        published.outcome.expect("publication");
+        assert_eq!(published.work.accepted_publications(), 1);
+        assert!(session.can_undo());
+        assert!(matches!(
+            session.apply_prepared(prepared),
+            Err(CodeSessionError::StaleSession { .. })
+        ));
+    }
+
+    #[test]
+    fn pointer_frames_are_compiler_and_expansion_free() {
+        let session = session("pointer-frame");
+        for _ in 0..1_000 {
+            assert_eq!(
+                session.pointer_frame_checkpoint(),
+                &serde_json::json!({"accepted": "base"})
+            );
+        }
+        assert_eq!(session.structural_expansions(), 0);
+    }
+
+    #[test]
+    fn managed_v3_instance_overlay_is_exact_cas_history_and_persistence_authority() {
+        let mut session = session("instance-overlay");
+        let source_authority = session.snapshot().managed.clone();
+        let project_authority = session.snapshot().code_project.clone();
+        let generated = session.snapshot().generated.clone();
+        let accepted = session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .expect("accepted V3 expansion")
+            .clone();
+        let point = accepted
+            .writable_points
+            .first()
+            .expect("managed fixture exposes a writable instance point")
+            .clone();
+
+        assert!(session.stage_point_drag(&point, [f64::NAN, 2.0]).is_err());
+        let mut foreign = point.clone();
+        match &mut foreign.edit {
+            crate::CodePointEdit::Point { address } => {
+                address.project = ProjectKey("foreign-project".into());
+            }
+            crate::CodePointEdit::RectangleCorner {
+                lower_left,
+                upper_right,
+                ..
+            } => {
+                lower_left.project = ProjectKey("foreign-project".into());
+                upper_right.project = ProjectKey("foreign-project".into());
+            }
+        }
+        assert!(matches!(
+            session.stage_point_drag(&foreign, [3.0, 2.0]),
+            Err(CodeSessionError::UnknownSemanticOwner(_))
+        ));
+
+        let overlay = session
+            .stage_point_drag(&point, [3.0, 2.0])
+            .expect("finite authenticated point overlay");
+        assert!(!overlay.drafts().is_empty());
+        let expansion = crate::expand_code_project_with_overlay(
+            session
+                .snapshot()
+                .code_project
+                .as_ref()
+                .expect("complete V3 project"),
+            &generated,
+            &overlay,
+            accepted.patch.expected,
+        )
+        .expect("instance-overlay expansion");
+        let prepared = session
+            .prepare_project_overlay(
+                session.identity(),
+                overlay.clone(),
+                expansion,
+                serde_json::json!({"accepted": "instance-overlay"}),
+                "Move managed instance point",
+            )
+            .expect("prepared overlay publication");
+        let stale = prepared.clone();
+        let published = session.apply_prepared_audited(prepared);
+        published.outcome.expect("overlay publication");
+        assert_eq!(published.work.accepted_publications(), 1);
+        assert_eq!(session.snapshot().managed, source_authority);
+        assert_eq!(session.snapshot().code_project, project_authority);
+        assert_eq!(session.snapshot().interaction_overlay, overlay);
+        assert_eq!(
+            session.snapshot().interaction_overlay,
+            session.snapshot().accepted_interaction_overlay
+        );
+        assert!(matches!(
+            session.apply_prepared(stale),
+            Err(CodeSessionError::StaleSession { .. })
+        ));
+
+        let published_json = session.to_canonical_json().expect("published session wire");
+        let restored =
+            SketchCodeSession::from_json(&published_json).expect("overlay session replay");
+        assert_eq!(
+            restored.to_canonical_json().expect("replayed session wire"),
+            published_json
+        );
+
+        session.undo().expect("overlay Undo").expect("Undo receipt");
+        assert_eq!(
+            session.snapshot().interaction_overlay,
+            CodeInteractionOverlay::empty()
+        );
+        assert_eq!(session.snapshot().managed, source_authority);
+        session.redo().expect("overlay Redo").expect("Redo receipt");
+        assert_eq!(session.snapshot().interaction_overlay, overlay);
+        assert_eq!(session.snapshot().managed, source_authority);
+    }
+
+    #[test]
+    fn complete_v3_history_round_trips_and_authenticates_host_checkpoints() {
+        let mut session = session("persistence");
+        let prepared = prepare_fixture_edit(
+            &session,
+            "restored",
+            0x90_5003,
+            serde_json::json!({"accepted": "restored"}),
+        );
+        session.apply_prepared(prepared).expect("publication");
+        let canonical = session.to_canonical_json().expect("canonical session");
+        let restored =
+            SketchCodeSession::from_json_validating_checkpoints(&canonical, |checkpoint| {
+                checkpoint
+                    .get("accepted")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|_| ())
+                    .ok_or("missing accepted marker")
+            })
+            .expect("authenticated restore");
+        assert_eq!(
+            restored.to_canonical_json().expect("canonical restore"),
+            canonical
+        );
+
+        let mut hostile: serde_json::Value = serde_json::from_str(&canonical).expect("wire");
+        hostile["snapshot"]["accepted_editor_checkpoint"] = serde_json::json!({"hostile": true});
+        assert!(matches!(
+            SketchCodeSession::from_json_validating_checkpoints(
+                &serde_json::to_string(&hostile).expect("hostile wire"),
+                |checkpoint| checkpoint
+                    .get("accepted")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|_| ())
+                    .ok_or("missing accepted marker")
+            ),
+            Err(CodeSessionError::InvalidPersistence(_))
+        ));
+    }
+
+    #[test]
+    fn retained_v3_failure_preserves_complete_previous_authority() {
+        let mut session = session("retained-failure");
+        let candidate = project(&session.snapshot().project, "restored");
+        let plan = session
+            .plan_structural_reconciliation(
+                session.identity(),
+                crate::required_generated_members(&candidate).expect("candidate members"),
+                &BTreeSet::new(),
+            )
+            .expect("candidate reconciliation");
+        let expansion = expanded(&candidate, plan.staged(), 0x90_5004);
+        let accepted_before = session.snapshot().accepted_code_project.clone();
+        let prepared = session
+            .prepare_project_retained_failure(
+                session.identity(),
+                candidate,
+                Some(plan),
+                CodeInteractionOverlay::empty(),
+                Some(expansion),
+                serde_json::json!({"attempted": "restored"}),
+                "native validation",
+                "candidate rejected",
+                "Retain rejected V3 candidate",
+            )
+            .expect("retained failure");
+        session
+            .apply_prepared(prepared)
+            .expect("failure publication");
+        assert_eq!(session.snapshot().accepted_code_project, accepted_before);
+        assert_eq!(
+            session.pointer_frame_checkpoint(),
+            &serde_json::json!({"accepted": "base"})
+        );
+        assert!(session.snapshot().failure.is_some());
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CodeSessionFailure {
@@ -51,8 +344,9 @@ pub struct CodeSessionFailure {
 pub struct CodeSessionSnapshot {
     pub project: ProjectKey,
     pub managed: ManagedDocument,
-    /// Complete current offline code authority. Legacy unit-level sessions
-    /// constructed without artifacts deliberately leave this absent.
+    /// Complete current offline code authority. Clean-break sessions always
+    /// carry this field; the optional wire shape lets validation reject
+    /// incomplete or hostile persisted transactions explicitly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code_project: Option<CodeProject>,
     /// Last code project whose nested editor checkpoint independently
@@ -149,67 +443,6 @@ pub struct SketchCodeSession {
 }
 
 impl SketchCodeSession {
-    pub fn new(
-        project: ProjectKey,
-        managed_source: &str,
-        editor_checkpoint: serde_json::Value,
-    ) -> Result<Self, CodeSessionError> {
-        Self::new_reconciled(
-            project,
-            managed_source,
-            KeyedReconcileState::empty(),
-            editor_checkpoint,
-            BTreeMap::new(),
-        )
-    }
-
-    /// Initializes an already cold-validated project checkpoint without
-    /// manufacturing a user-visible history entry.
-    pub fn new_reconciled(
-        project: ProjectKey,
-        managed_source: &str,
-        generated: KeyedReconcileState,
-        editor_checkpoint: serde_json::Value,
-        artifact_digests: BTreeMap<String, String>,
-    ) -> Result<Self, CodeSessionError> {
-        let managed = parse_managed_source(managed_source)?;
-        let snapshot = CodeSessionSnapshot {
-            project,
-            accepted_source_digest: managed.source_digest.clone(),
-            managed,
-            code_project: None,
-            accepted_code_project: None,
-            expansion: None,
-            accepted_expansion: None,
-            accepted_generated: None,
-            interaction_overlay: CodeInteractionOverlay::empty(),
-            accepted_interaction_overlay: CodeInteractionOverlay::empty(),
-            artifact_digests,
-            generated,
-            accepted_editor_checkpoint: editor_checkpoint.clone(),
-            editor_checkpoint,
-            failure: None,
-        };
-        let session = allocate_session()?;
-        let identity = identity(session, 0, &snapshot, &[], &[], 0)?;
-        let result = Self {
-            identity,
-            snapshot,
-            undo: Vec::new(),
-            redo: Vec::new(),
-            structural_expansions: 0,
-        };
-        validate_snapshot(&result.snapshot)?;
-        validate_wire_size(
-            &result.identity,
-            &result.snapshot,
-            &result.undo,
-            &result.redo,
-            result.structural_expansions,
-        )?;
-        Ok(result)
-    }
-
     /// Initializes one complete, already cold-materialized code project
     /// without manufacturing a user-visible history entry.
     ///
@@ -291,32 +524,9 @@ impl SketchCodeSession {
     }
 
     /// Pointer frames consume only the already accepted nested checkpoint.
-    /// No managed parse or custom-patch expansion is reachable here.
+    /// No compiler execution or custom-patch expansion is reachable here.
     pub fn pointer_frame_checkpoint(&self) -> &serde_json::Value {
         &self.snapshot.accepted_editor_checkpoint
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn prepare_structural_edit(
-        &self,
-        expected: &CodeSessionIdentity,
-        managed_source: &str,
-        desired_members: Vec<GeneratedMemberAddress>,
-        outside_dependents: &BTreeSet<GeneratedMemberIdentity>,
-        editor_checkpoint: serde_json::Value,
-        artifact_digests: BTreeMap<String, String>,
-        label: impl Into<String>,
-    ) -> Result<PreparedCodeEdit, CodeSessionError> {
-        let plan =
-            self.plan_structural_reconciliation(expected, desired_members, outside_dependents)?;
-        self.prepare_structural_edit_from_plan(
-            expected,
-            managed_source,
-            plan,
-            editor_checkpoint,
-            artifact_digests,
-            label,
-        )
     }
 
     /// Stages keyed membership first so callers can expand and cold-validate
@@ -335,43 +545,6 @@ impl SketchCodeSession {
             .plan(desired_members, outside_dependents)?)
     }
 
-    /// Authenticates a previously inspected reconciliation plan and combines
-    /// it with the final cold-validated editor checkpoint as one prepared edit.
-    #[allow(clippy::too_many_arguments)]
-    pub fn prepare_structural_edit_from_plan(
-        &self,
-        expected: &CodeSessionIdentity,
-        managed_source: &str,
-        plan: KeyedReconcilePlan,
-        editor_checkpoint: serde_json::Value,
-        artifact_digests: BTreeMap<String, String>,
-        label: impl Into<String>,
-    ) -> Result<PreparedCodeEdit, CodeSessionError> {
-        self.authenticate(expected)?;
-        if self.snapshot.code_project.is_some() {
-            return Err(CodeSessionError::CompletePublicationRequired);
-        }
-        if plan.expected_identity() != self.snapshot.generated.identity() {
-            return Err(KeyedReconcileError::StalePlan.into());
-        }
-        let managed = parse_managed_source(managed_source)?;
-        let mut next = self.snapshot.clone();
-        next.generated = plan.staged().clone();
-        next.managed = managed;
-        next.accepted_source_digest
-            .clone_from(&next.managed.source_digest);
-        next.artifact_digests = artifact_digests;
-        next.editor_checkpoint = editor_checkpoint.clone();
-        next.accepted_editor_checkpoint = editor_checkpoint;
-        next.failure = None;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: Some(plan),
-            label: label.into(),
-        })
-    }
-
     /// Stages one complete code-project/native-editor publication.
     ///
     /// Unlike the lower-level reconciliation helper, this owns every custom
@@ -388,11 +561,12 @@ impl SketchCodeSession {
         editor_checkpoint: serde_json::Value,
         label: impl Into<String>,
     ) -> Result<PreparedCodeEdit, CodeSessionError> {
-        let overlay_free = expand_code_project_with_overlay(
+        let overlay_free = expand_code_project_with_overlay_and_retained_operation_plans(
             &project,
             plan.staged(),
             &CodeInteractionOverlay::empty(),
             expansion.patch.expected,
+            &expansion.operation_plans,
         )
         .map_err(|error| {
             CodeSessionError::InvalidPersistence(format!(
@@ -434,11 +608,12 @@ impl SketchCodeSession {
             CodeSessionError::InvalidPersistence(format!("invalid code project: {error}"))
         })?;
         overlay.validate()?;
-        let overlay_free = expand_code_project_with_overlay(
+        let overlay_free = expand_code_project_with_overlay_and_retained_operation_plans(
             &project,
             plan.staged(),
             &CodeInteractionOverlay::empty(),
             expansion.patch.expected,
+            &expansion.operation_plans,
         )
         .map_err(|error| {
             CodeSessionError::InvalidPersistence(format!(
@@ -515,11 +690,12 @@ impl SketchCodeSession {
         };
         interaction_overlay.validate()?;
         if let Some(expansion) = &expansion {
-            let overlay_free = expand_code_project_with_overlay(
+            let overlay_free = expand_code_project_with_overlay_and_retained_operation_plans(
                 &project,
                 &generated,
                 &CodeInteractionOverlay::empty(),
                 expansion.patch.expected,
+                &expansion.operation_plans,
             )
             .map_err(|error| {
                 CodeSessionError::InvalidPersistence(format!(
@@ -812,81 +988,6 @@ impl SketchCodeSession {
         .map(Some)
     }
 
-    /// Keeps a valid current code attempt and its exact diagnostic while the
-    /// prior accepted generated graph/editor checkpoint remains visible.
-    pub fn prepare_retained_failure(
-        &self,
-        expected: &CodeSessionIdentity,
-        managed_source: &str,
-        stage: impl Into<String>,
-        diagnostic: impl Into<String>,
-        label: impl Into<String>,
-    ) -> Result<PreparedCodeEdit, CodeSessionError> {
-        self.authenticate(expected)?;
-        if self.snapshot.code_project.is_some() {
-            return Err(CodeSessionError::CompletePublicationRequired);
-        }
-        let managed = parse_managed_source(managed_source)?;
-        let mut next = self.snapshot.clone();
-        next.managed = managed;
-        next.editor_checkpoint
-            .clone_from(&next.accepted_editor_checkpoint);
-        next.failure = Some(CodeSessionFailure {
-            stage: stage.into(),
-            diagnostic: diagnostic.into(),
-            attempted_source_digest: next.managed.source_digest.clone(),
-        });
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: None,
-            label: label.into(),
-        })
-    }
-
-    pub fn prepare_override(
-        &self,
-        expected: &CodeSessionIdentity,
-        address: &GeneratedMemberAddress,
-        value: ManagedValue,
-        label: impl Into<String>,
-    ) -> Result<PreparedCodeEdit, CodeSessionError> {
-        self.authenticate(expected)?;
-        if self.snapshot.code_project.is_some() {
-            return Err(CodeSessionError::CompletePublicationRequired);
-        }
-        let mut next = self.snapshot.clone();
-        next.generated.set_override(address, value)?;
-        next.failure = None;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: None,
-            label: label.into(),
-        })
-    }
-
-    pub fn prepare_reset_to_code(
-        &self,
-        expected: &CodeSessionIdentity,
-        address: &GeneratedMemberAddress,
-        label: impl Into<String>,
-    ) -> Result<PreparedCodeEdit, CodeSessionError> {
-        self.authenticate(expected)?;
-        if self.snapshot.code_project.is_some() {
-            return Err(CodeSessionError::CompletePublicationRequired);
-        }
-        let mut next = self.snapshot.clone();
-        next.generated.reset_to_code(address)?;
-        next.failure = None;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: None,
-            label: label.into(),
-        })
-    }
-
     pub fn apply_prepared(
         &mut self,
         prepared: PreparedCodeEdit,
@@ -910,6 +1011,13 @@ impl SketchCodeSession {
     ) -> Result<CodeSessionReceipt, CodeSessionError> {
         self.authenticate(&prepared.expected)?;
         validate_snapshot(&prepared.next)?;
+        if prepared.next.managed.declaration_name_high_water
+            < self.snapshot.managed.declaration_name_high_water
+        {
+            return Err(CodeSessionError::InvalidPersistence(
+                "prepared edit forgets declaration-name allocator authority".into(),
+            ));
+        }
         if !prepared
             .next
             .generated
@@ -1126,6 +1234,13 @@ impl SketchCodeSession {
         for entry in wire.undo.iter().chain(&wire.redo) {
             validate_snapshot(&entry.snapshot)?;
             validate_snapshot_editor_checkpoints(&entry.snapshot, &mut validate_checkpoint)?;
+            if wire.snapshot.managed.declaration_name_high_water
+                < entry.snapshot.managed.declaration_name_high_water
+            {
+                return Err(CodeSessionError::InvalidPersistence(
+                    "live checkpoint forgets declaration-name allocator history".into(),
+                ));
+            }
             if !wire
                 .snapshot
                 .generated
@@ -1252,6 +1367,17 @@ fn restore_snapshot(
     current: &CodeSessionSnapshot,
     mut checkpoint: CodeSessionSnapshot,
 ) -> Result<CodeSessionSnapshot, CodeSessionError> {
+    let declaration_name_high_water = current
+        .managed
+        .declaration_name_high_water
+        .max(checkpoint.managed.declaration_name_high_water);
+    checkpoint.managed.declaration_name_high_water = declaration_name_high_water;
+    if let Some(project) = checkpoint.code_project.as_mut() {
+        project.managed.declaration_name_high_water = declaration_name_high_water;
+    }
+    if let Some(project) = checkpoint.accepted_code_project.as_mut() {
+        project.managed.declaration_name_high_water = declaration_name_high_water;
+    }
     checkpoint.generated = current
         .generated
         .restored_checkpoint(&checkpoint.generated)?;
@@ -1383,8 +1509,6 @@ fn validate_wire_size(
 #[derive(Clone, Debug, PartialEq, Error)]
 pub enum CodeSessionError {
     #[error(transparent)]
-    Parse(#[from] ManagedParseError),
-    #[error(transparent)]
     Reconcile(#[from] KeyedReconcileError),
     #[error(transparent)]
     Overlay(#[from] CodeOverlayError),
@@ -1397,8 +1521,6 @@ pub enum CodeSessionError {
     Serialization(String),
     #[error("invalid persisted code session: {0}")]
     InvalidPersistence(String),
-    #[error("complete code-project publication requires expansion and delegated editor authority")]
-    CompletePublicationRequired,
     #[error("this operation requires complete code-project authority")]
     CompleteProjectRequired,
     #[error("a retained code failure must be resolved or undone before this publication")]
@@ -1419,10 +1541,33 @@ pub enum CodeSessionError {
     reason = "one audit pass validates all current and accepted snapshot cross-links"
 )]
 fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionError> {
-    let reparsed = parse_managed_source(&snapshot.managed.source)?;
-    if reparsed != snapshot.managed {
+    if snapshot.managed.declaration_name_high_water > MAX_CODE_SESSION_WIRE_INTEGER {
         return Err(CodeSessionError::InvalidPersistence(
-            "managed document is not its source's canonical parse".into(),
+            "declaration-name high-water is outside the exact JavaScript integer range".into(),
+        ));
+    }
+    if let Some(compiled) = snapshot.managed.compiled.as_deref() {
+        compiled.validate().map_err(|error| {
+            CodeSessionError::InvalidPersistence(format!(
+                "invalid managed compiler authority: {error}"
+            ))
+        })?;
+        let mut projected = compiled.projected_managed_document().map_err(|error| {
+            CodeSessionError::InvalidPersistence(format!(
+                "invalid managed equation-free projection: {error}"
+            ))
+        })?;
+        projected.declaration_name_high_water = snapshot.managed.declaration_name_high_water;
+        let mut managed = snapshot.managed.clone();
+        managed.compiled = None;
+        if projected != managed {
+            return Err(CodeSessionError::InvalidPersistence(
+                "managed document differs from its executed compiler authority".into(),
+            ));
+        }
+    } else {
+        return Err(CodeSessionError::InvalidPersistence(
+            "code session lacks executed managed compiler authority".into(),
         ));
     }
     snapshot.generated.validate()?;
@@ -1477,22 +1622,9 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
             }
         }
         None => {
-            if snapshot.accepted_code_project.is_some()
-                || snapshot.expansion.is_some()
-                || snapshot.accepted_expansion.is_some()
-                || snapshot.accepted_generated.is_some()
-            {
-                return Err(CodeSessionError::InvalidPersistence(
-                    "partial complete-project authority".into(),
-                ));
-            }
-            if snapshot.interaction_overlay != CodeInteractionOverlay::empty()
-                || snapshot.accepted_interaction_overlay != CodeInteractionOverlay::empty()
-            {
-                return Err(CodeSessionError::InvalidPersistence(
-                    "legacy code session cannot retain semantic interaction drafts".into(),
-                ));
-            }
+            return Err(CodeSessionError::InvalidPersistence(
+                "code session lacks complete code-project authority".into(),
+            ));
         }
     }
     match (
@@ -1511,6 +1643,11 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
                     "accepted code project belongs to another project".into(),
                 ));
             }
+            if project.managed.compiled.is_none() || snapshot.managed.compiled.is_none() {
+                return Err(CodeSessionError::InvalidPersistence(
+                    "accepted and current code projects require compiled managed authority".into(),
+                ));
+            }
             validate_expansion(
                 project,
                 generated,
@@ -1523,7 +1660,6 @@ fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionEr
                 ));
             }
         }
-        (None, None, None) if snapshot.code_project.is_none() => {}
         _ => {
             return Err(CodeSessionError::InvalidPersistence(
                 "accepted project, expansion and generated ledger are incomplete".into(),
@@ -1593,13 +1729,18 @@ fn validate_expansion(
     overlay: &CodeInteractionOverlay,
     expansion: &ExpandedCodeProject,
 ) -> Result<(), CodeSessionError> {
-    let recomputed =
-        expand_code_project_with_overlay(project, generated, overlay, expansion.patch.expected)
-            .map_err(|error| {
-                CodeSessionError::InvalidPersistence(format!(
-                    "code-project expansion cannot be reconstructed: {error}"
-                ))
-            })?;
+    let recomputed = expand_code_project_with_overlay_and_retained_operation_plans(
+        project,
+        generated,
+        overlay,
+        expansion.patch.expected,
+        &expansion.operation_plans,
+    )
+    .map_err(|error| {
+        CodeSessionError::InvalidPersistence(format!(
+            "code-project expansion cannot be reconstructed: {error}"
+        ))
+    })?;
     if &recomputed != expansion {
         return Err(CodeSessionError::InvalidPersistence(
             "code-project expansion/provenance is not canonical".into(),
@@ -1619,837 +1760,5 @@ fn validate_digest(value: &str) -> Result<(), CodeSessionError> {
         Err(CodeSessionError::InvalidPersistence(format!(
             "invalid content digest `{value}`"
         )))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeSet;
-
-    use geosolve_sketch_intent::{IntentSession, IntentSessionId};
-
-    use super::*;
-
-    const SOURCE: &str = r#""use geosolve managed-v1";
-import { sketch } from "@geosolve/sketch-code";
-export default sketch(($) => {
-  const point = $.geometry.point("point", { position: [0, 0] });
-  return $.outputs({ point });
-});
-"#;
-
-    fn address(key: &str) -> GeneratedMemberAddress {
-        GeneratedMemberAddress::new("point", ["handles"], [key], ["point"])
-    }
-
-    #[test]
-    fn prepared_edit_is_exact_cas_and_one_history_entry() {
-        let mut session = SketchCodeSession::new(
-            ProjectKey("test".to_owned()),
-            SOURCE,
-            serde_json::json!({"editor": 1}),
-        )
-        .unwrap();
-        let expected = session.identity().clone();
-        let prepared = session
-            .prepare_structural_edit(
-                &expected,
-                SOURCE,
-                vec![address("a")],
-                &BTreeSet::new(),
-                serde_json::json!({"editor": 2}),
-                BTreeMap::new(),
-                "Expand point handles",
-            )
-            .unwrap();
-        let published = session.apply_prepared_audited(prepared.clone());
-        published.outcome.unwrap();
-        assert_eq!(published.work.managed_parse_attempts(), 0);
-        assert_eq!(published.work.expansion_attempts(), 0);
-        assert_eq!(published.work.accepted_publications(), 1);
-        assert!(session.can_undo());
-        assert_eq!(session.structural_expansions(), 1);
-        let stale = session.apply_prepared_audited(prepared);
-        assert!(matches!(
-            stale.outcome,
-            Err(CodeSessionError::StaleSession { .. })
-        ));
-        assert_eq!(stale.work, CodeWorkReceipt::default());
-    }
-
-    #[test]
-    fn retained_failure_keeps_accepted_editor_checkpoint() {
-        let mut session = SketchCodeSession::new(
-            ProjectKey("test".to_owned()),
-            SOURCE,
-            serde_json::json!({"accepted": true}),
-        )
-        .unwrap();
-        let prepared = session
-            .prepare_retained_failure(
-                session.identity(),
-                SOURCE,
-                "expansion",
-                "radius is impossible",
-                "Try radius",
-            )
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        assert_eq!(
-            session.pointer_frame_checkpoint(),
-            &serde_json::json!({"accepted": true})
-        );
-        assert!(session.snapshot().failure.is_some());
-    }
-
-    #[test]
-    fn pointer_frames_do_not_expand_code() {
-        let session =
-            SketchCodeSession::new(ProjectKey("test".to_owned()), SOURCE, serde_json::json!({}))
-                .unwrap();
-        for _ in 0..1_000 {
-            let _ = session.pointer_frame_checkpoint();
-        }
-        assert_eq!(session.structural_expansions(), 0);
-    }
-
-    #[test]
-    fn undo_and_redo_restore_generated_identity() {
-        let mut session =
-            SketchCodeSession::new(ProjectKey("test".to_owned()), SOURCE, serde_json::json!({}))
-                .unwrap();
-        let prepared = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                vec![address("a")],
-                &BTreeSet::new(),
-                serde_json::json!({"after": true}),
-                BTreeMap::new(),
-                "Add member",
-            )
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        let identity = session.snapshot().generated.active()[&address("a")];
-        session.undo().unwrap();
-        assert!(session.snapshot().generated.active().is_empty());
-        session.redo().unwrap();
-        assert_eq!(
-            session.snapshot().generated.active()[&address("a")],
-            identity
-        );
-    }
-
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one test follows the exact branching history"
-    )]
-    fn undo_redo_reload_and_divergence_never_reuse_generation_or_allocation() {
-        let mut session = SketchCodeSession::new(
-            ProjectKey("history".to_owned()),
-            SOURCE,
-            serde_json::json!({}),
-        )
-        .unwrap();
-
-        let add_first = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                vec![address("a")],
-                &BTreeSet::new(),
-                serde_json::json!({"step": "add-first"}),
-                BTreeMap::new(),
-                "Add first generation",
-            )
-            .unwrap();
-        session.apply_prepared(add_first).unwrap();
-        let first = session.snapshot().generated.active()[&address("a")];
-        assert_eq!(first.generation, 0);
-
-        let remove = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                Vec::new(),
-                &BTreeSet::new(),
-                serde_json::json!({"step": "remove"}),
-                BTreeMap::new(),
-                "Remove member",
-            )
-            .unwrap();
-        session.apply_prepared(remove).unwrap();
-        let add_second = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                vec![address("a")],
-                &BTreeSet::new(),
-                serde_json::json!({"step": "add-second"}),
-                BTreeMap::new(),
-                "Add second generation",
-            )
-            .unwrap();
-        session.apply_prepared(add_second).unwrap();
-        let second = session.snapshot().generated.active()[&address("a")];
-        assert_eq!(second.generation, 1);
-
-        session.undo().unwrap();
-        session.undo().unwrap();
-        assert_eq!(session.snapshot().generated.active()[&address("a")], first);
-        assert_eq!(session.snapshot().generated.high_water(), second.allocation);
-        assert_eq!(
-            session
-                .snapshot()
-                .generated
-                .generation_high_water(&address("a")),
-            Some(1)
-        );
-
-        let persisted = session.to_canonical_json().unwrap();
-        let mut forgotten: SessionWire = serde_json::from_str(&persisted).unwrap();
-        let mut generated = serde_json::to_value(&forgotten.snapshot.generated).unwrap();
-        generated["generation_high_water"][0][1] = serde_json::json!(0);
-        forgotten.snapshot.generated = serde_json::from_value(generated).unwrap();
-        forgotten.identity = identity(
-            forgotten.identity.session,
-            forgotten.identity.revision,
-            &forgotten.snapshot,
-            &forgotten.undo,
-            &forgotten.redo,
-            forgotten.structural_expansions,
-        )
-        .unwrap();
-        assert!(matches!(
-            SketchCodeSession::from_json(&serde_json::to_string(&forgotten).unwrap()),
-            Err(CodeSessionError::InvalidPersistence(message))
-                if message == "live checkpoint forgets generated allocator history"
-        ));
-        session = SketchCodeSession::from_json(&persisted).unwrap();
-        assert_eq!(session.to_canonical_json().unwrap(), persisted);
-        session.redo().unwrap();
-        session.redo().unwrap();
-        assert_eq!(session.snapshot().generated.active()[&address("a")], second);
-        session.undo().unwrap();
-        session.undo().unwrap();
-        assert_eq!(session.snapshot().generated.active()[&address("a")], first);
-        assert_eq!(
-            session
-                .snapshot()
-                .generated
-                .generation_high_water(&address("a")),
-            Some(1)
-        );
-
-        let divergent_remove = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                Vec::new(),
-                &BTreeSet::new(),
-                serde_json::json!({"step": "divergent-remove"}),
-                BTreeMap::new(),
-                "Divergent remove",
-            )
-            .unwrap();
-        session.apply_prepared(divergent_remove).unwrap();
-        assert!(!session.can_redo());
-        let divergent_add = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                vec![address("a")],
-                &BTreeSet::new(),
-                serde_json::json!({"step": "divergent-add"}),
-                BTreeMap::new(),
-                "Divergent add",
-            )
-            .unwrap();
-        session.apply_prepared(divergent_add).unwrap();
-        let third = session.snapshot().generated.active()[&address("a")];
-        assert!(third.allocation > second.allocation);
-        assert_eq!(third.generation, 2);
-        let persisted = session.to_canonical_json().unwrap();
-        let restored = SketchCodeSession::from_json(&persisted).unwrap();
-        assert_eq!(restored.snapshot().generated.active()[&address("a")], third);
-    }
-
-    #[test]
-    fn complete_history_and_opaque_editor_checkpoint_round_trip() {
-        let mut session = SketchCodeSession::new(
-            ProjectKey("persist".to_owned()),
-            SOURCE,
-            serde_json::json!({"opaque": {"editor": [1, 2, 3]}}),
-        )
-        .unwrap();
-        let prepared = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                vec![address("a")],
-                &BTreeSet::new(),
-                serde_json::json!({"opaque": {"editor": [4, 5, 6]}}),
-                BTreeMap::new(),
-                "Add generated member",
-            )
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        let canonical = session.to_canonical_json().unwrap();
-        let restored = SketchCodeSession::from_json(&canonical).unwrap();
-        assert_eq!(restored, session);
-        assert_eq!(restored.to_canonical_json().unwrap(), canonical);
-        assert!(restored.can_undo());
-    }
-
-    #[test]
-    fn host_validator_authenticates_current_accepted_undo_and_redo_checkpoints() {
-        let mut session = SketchCodeSession::new(
-            ProjectKey("validated-history".to_owned()),
-            SOURCE,
-            serde_json::json!({"valid": "base"}),
-        )
-        .unwrap();
-        let prepared = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                vec![address("a")],
-                &BTreeSet::new(),
-                serde_json::json!({"valid": "applied"}),
-                BTreeMap::new(),
-                "Apply",
-            )
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        let prepared = session
-            .prepare_structural_edit(
-                session.identity(),
-                SOURCE,
-                vec![address("a"), address("b")],
-                &BTreeSet::new(),
-                serde_json::json!({"valid": "applied-two"}),
-                BTreeMap::new(),
-                "Apply two",
-            )
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        session.undo().unwrap();
-        let canonical = session.to_canonical_json().unwrap();
-        let restored =
-            SketchCodeSession::from_json_validating_checkpoints(&canonical, |checkpoint| {
-                checkpoint
-                    .get("valid")
-                    .and_then(serde_json::Value::as_str)
-                    .map(|_| ())
-                    .ok_or("missing host checkpoint marker")
-            })
-            .unwrap();
-        assert_eq!(restored, session);
-
-        for coordinate in [
-            &["snapshot", "editor_checkpoint"][..],
-            &["snapshot", "accepted_editor_checkpoint"][..],
-            &["undo", "0", "snapshot", "editor_checkpoint"][..],
-            &["redo", "0", "snapshot", "accepted_editor_checkpoint"][..],
-        ] {
-            let mut wire: serde_json::Value = serde_json::from_str(&canonical).unwrap();
-            let mut current = &mut wire;
-            for segment in coordinate {
-                current = if let Ok(index) = segment.parse::<usize>() {
-                    &mut current[index]
-                } else {
-                    &mut current[*segment]
-                };
-            }
-            *current = serde_json::json!({"corrupt": true});
-            let tampered = serde_json::to_string(&wire).unwrap();
-            assert!(matches!(
-                SketchCodeSession::from_json_validating_checkpoints(&tampered, |checkpoint| {
-                    checkpoint
-                        .get("valid")
-                        .and_then(serde_json::Value::as_str)
-                        .map(|_| ())
-                        .ok_or("missing host checkpoint marker")
-                }),
-                Err(CodeSessionError::InvalidPersistence(_))
-            ));
-        }
-    }
-
-    #[test]
-    fn hostile_persisted_session_identity_cannot_exhaust_runtime_allocator() {
-        let session = SketchCodeSession::new(
-            ProjectKey("hostile-session".to_owned()),
-            SOURCE,
-            serde_json::json!({}),
-        )
-        .unwrap();
-        let mut wire: SessionWire =
-            serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
-        for hostile in [
-            MAX_CODE_SESSION_WIRE_INTEGER + 1,
-            u64::MAX - 2,
-            u64::MAX - 1,
-        ] {
-            wire.identity.session = hostile;
-            wire.identity = identity(
-                wire.identity.session,
-                wire.identity.revision,
-                &wire.snapshot,
-                &wire.undo,
-                &wire.redo,
-                wire.structural_expansions,
-            )
-            .unwrap();
-            assert!(matches!(
-                SketchCodeSession::from_json(&serde_json::to_string(&wire).unwrap()),
-                Err(CodeSessionError::InvalidPersistence(message))
-                    if message == "invalid code-session allocation"
-            ));
-        }
-        assert_eq!(
-            validate_imported_identity(&CodeSessionIdentity {
-                session: MAX_CODE_SESSION_WIRE_INTEGER,
-                revision: MAX_CODE_SESSION_WIRE_INTEGER,
-                digest: String::new(),
-            }),
-            Ok(())
-        );
-        assert!(matches!(
-            validate_imported_identity(&CodeSessionIdentity {
-                session: 0,
-                revision: 0,
-                digest: String::new(),
-            }),
-            Err(CodeSessionError::InvalidPersistence(message))
-                if message == "invalid code-session allocation"
-        ));
-        assert!(matches!(
-            validate_imported_identity(&CodeSessionIdentity {
-                session: 1,
-                revision: MAX_CODE_SESSION_WIRE_INTEGER + 1,
-                digest: String::new(),
-            }),
-            Err(CodeSessionError::InvalidPersistence(message))
-                if message == "invalid code-session revision"
-        ));
-        assert_eq!(
-            next_revision(MAX_CODE_SESSION_WIRE_INTEGER - 1),
-            Ok(MAX_CODE_SESSION_WIRE_INTEGER),
-        );
-        assert_eq!(
-            next_revision(MAX_CODE_SESSION_WIRE_INTEGER),
-            Err(CodeSessionError::RevisionExhausted),
-        );
-        SketchCodeSession::new(
-            ProjectKey("allocator-survives".to_owned()),
-            SOURCE,
-            serde_json::json!({}),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn persistence_rejects_tampered_authority_before_construction() {
-        let session = SketchCodeSession::new(
-            ProjectKey("persist".to_owned()),
-            SOURCE,
-            serde_json::json!({"editor": true}),
-        )
-        .unwrap();
-        let canonical = session.to_canonical_json().unwrap();
-        let tampered = canonical.replacen(
-            &session.snapshot().managed.source_digest,
-            &"0".repeat(64),
-            1,
-        );
-        assert!(matches!(
-            SketchCodeSession::from_json(&tampered),
-            Err(CodeSessionError::InvalidPersistence(_))
-        ));
-        let oversized = " ".repeat(crate::CODE_PROJECT_LIMIT + 1);
-        assert!(matches!(
-            SketchCodeSession::from_json(&oversized),
-            Err(CodeSessionError::ResourceLimit { .. })
-        ));
-    }
-
-    #[test]
-    fn complete_project_history_owns_files_expansion_and_editor_atomically() {
-        let demo = crate::bundled_code_project_demos()
-            .into_iter()
-            .find(|demo| demo.id == crate::CodeProjectDemoId::TypedPanel)
-            .unwrap();
-        let project = demo.project();
-        let generated = KeyedReconcileState::empty()
-            .plan(
-                crate::required_generated_members(&project).unwrap(),
-                &BTreeSet::new(),
-            )
-            .unwrap()
-            .into_staged();
-        let intent = IntentSession::with_id(IntentSessionId::from_raw(0x8401)).unwrap();
-        let expansion =
-            crate::expand_code_project(&project, &generated, intent.identity()).unwrap();
-        let mut session = SketchCodeSession::new_project(
-            project.clone(),
-            generated,
-            expansion,
-            serde_json::json!({"nested": "accepted-one"}),
-        )
-        .unwrap();
-
-        let mut candidate = project.clone();
-        candidate.managed = crate::parse_managed_source(
-            &candidate
-                .managed
-                .source
-                .replace("upperRight: [80, 40]", "upperRight: [82, 41]"),
-        )
-        .unwrap();
-        let plan = session
-            .plan_structural_reconciliation(
-                session.identity(),
-                crate::required_generated_members(&candidate).unwrap(),
-                &BTreeSet::new(),
-            )
-            .unwrap();
-        let next_intent = IntentSession::with_id(IntentSessionId::from_raw(0x8402)).unwrap();
-        let candidate_expansion =
-            crate::expand_code_project(&candidate, plan.staged(), next_intent.identity()).unwrap();
-        let prepared = session
-            .prepare_project_edit_from_plan(
-                session.identity(),
-                candidate.clone(),
-                plan,
-                candidate_expansion,
-                serde_json::json!({"nested": "accepted-two"}),
-                "Resize typed panel",
-            )
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        assert_eq!(session.snapshot().code_project.as_ref(), Some(&candidate));
-        assert_eq!(
-            session.snapshot().accepted_editor_checkpoint,
-            serde_json::json!({"nested": "accepted-two"})
-        );
-
-        session.undo().unwrap();
-        assert_eq!(session.snapshot().code_project.as_ref(), Some(&project));
-        assert_eq!(
-            session.snapshot().accepted_editor_checkpoint,
-            serde_json::json!({"nested": "accepted-one"})
-        );
-        session.redo().unwrap();
-        assert_eq!(session.snapshot().code_project.as_ref(), Some(&candidate));
-        let canonical = session.to_canonical_json().unwrap();
-        assert_eq!(
-            SketchCodeSession::from_json(&canonical)
-                .unwrap()
-                .to_canonical_json()
-                .unwrap(),
-            canonical
-        );
-    }
-
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one lifecycle test proves override, reset and delegated publication compose"
-    )]
-    fn complete_override_reset_and_delegated_editor_publish_atomically() {
-        let demo = crate::bundled_code_project_demos()
-            .into_iter()
-            .find(|demo| demo.id == crate::CodeProjectDemoId::RoundedPolyline)
-            .unwrap();
-        let project = demo.project();
-        let generated = KeyedReconcileState::empty()
-            .plan(
-                crate::required_generated_members(&project).unwrap(),
-                &BTreeSet::new(),
-            )
-            .unwrap()
-            .into_staged();
-        let intent = IntentSession::with_id(IntentSessionId::from_raw(0x8420)).unwrap();
-        let expansion =
-            crate::expand_code_project(&project, &generated, intent.identity()).unwrap();
-        let mut session = SketchCodeSession::new_project(
-            project.clone(),
-            generated,
-            expansion.clone(),
-            serde_json::json!({"accepted": "base"}),
-        )
-        .unwrap();
-        let address = session
-            .snapshot()
-            .generated
-            .active()
-            .keys()
-            .find(|address| {
-                address.template == ["polyline", "vertex"] && address.member_key == ["rise"]
-            })
-            .unwrap()
-            .clone();
-        let override_value =
-            ManagedValue::Array(vec![ManagedValue::Number(21.0), ManagedValue::Number(1.0)]);
-
-        assert_eq!(
-            session
-                .prepare_override(
-                    session.identity(),
-                    &address,
-                    override_value.clone(),
-                    "Incomplete override",
-                )
-                .unwrap_err(),
-            CodeSessionError::CompletePublicationRequired
-        );
-
-        let mut overridden = session.snapshot().generated.clone();
-        overridden
-            .set_override(&address, override_value.clone())
-            .unwrap();
-        let override_intent = IntentSession::with_id(IntentSessionId::from_raw(0x8421)).unwrap();
-        let override_expansion =
-            crate::expand_code_project(&project, &overridden, override_intent.identity()).unwrap();
-        let prepared = session
-            .prepare_project_override(
-                session.identity(),
-                &address,
-                override_value,
-                override_expansion.clone(),
-                serde_json::json!({"accepted": "override"}),
-                "Place generated override",
-            )
-            .unwrap();
-        assert_eq!(prepared.next().generated, overridden);
-        assert_eq!(
-            prepared.next().accepted_generated.as_ref(),
-            Some(&overridden)
-        );
-        assert_eq!(
-            prepared.next().expansion.as_ref(),
-            Some(&override_expansion)
-        );
-        assert_eq!(
-            prepared.next().accepted_expansion.as_ref(),
-            Some(&override_expansion)
-        );
-        session.apply_prepared(prepared).unwrap();
-        assert!(
-            session
-                .snapshot()
-                .generated
-                .override_for(&address)
-                .is_some()
-        );
-        assert_eq!(
-            session.pointer_frame_checkpoint(),
-            &serde_json::json!({"accepted": "override"})
-        );
-
-        session.undo().unwrap();
-        assert!(
-            session
-                .snapshot()
-                .generated
-                .override_for(&address)
-                .is_none()
-        );
-        assert_eq!(session.snapshot().expansion.as_ref(), Some(&expansion));
-        session.redo().unwrap();
-        assert!(
-            session
-                .snapshot()
-                .generated
-                .override_for(&address)
-                .is_some()
-        );
-
-        let mut reset = session.snapshot().generated.clone();
-        assert!(reset.reset_to_code(&address).unwrap());
-        let reset_intent = IntentSession::with_id(IntentSessionId::from_raw(0x8422)).unwrap();
-        let reset_expansion =
-            crate::expand_code_project(&project, &reset, reset_intent.identity()).unwrap();
-        let prepared = session
-            .prepare_project_reset_to_code(
-                session.identity(),
-                &address,
-                reset_expansion.clone(),
-                serde_json::json!({"accepted": "reset"}),
-                "Reset generated override",
-            )
-            .unwrap()
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        assert!(
-            session
-                .snapshot()
-                .generated
-                .override_for(&address)
-                .is_none()
-        );
-        assert_eq!(
-            session.snapshot().expansion.as_ref(),
-            Some(&reset_expansion)
-        );
-        assert!(
-            session
-                .prepare_project_reset_to_code(
-                    session.identity(),
-                    &address,
-                    reset_expansion,
-                    serde_json::json!({"accepted": "unused"}),
-                    "No-op reset",
-                )
-                .unwrap()
-                .is_none()
-        );
-
-        let before_project = session.snapshot().code_project.clone();
-        let before_expansion = session.snapshot().expansion.clone();
-        let before_generated = session.snapshot().generated.clone();
-        let delegated = session
-            .prepare_delegated_editor_publication(
-                session.identity(),
-                serde_json::json!({"accepted": "gui-action"}),
-                "Delegated GUI action",
-            )
-            .unwrap();
-        session.apply_prepared(delegated).unwrap();
-        assert_eq!(session.snapshot().code_project, before_project);
-        assert_eq!(session.snapshot().expansion, before_expansion);
-        assert_eq!(session.snapshot().generated, before_generated);
-        assert_eq!(
-            session.pointer_frame_checkpoint(),
-            &serde_json::json!({"accepted": "gui-action"})
-        );
-        assert_eq!(
-            SketchCodeSession::from_json(&session.to_canonical_json().unwrap())
-                .unwrap()
-                .snapshot(),
-            session.snapshot()
-        );
-    }
-
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one retained-failure lifecycle compares the entire accepted bundle"
-    )]
-    fn retained_project_failure_keeps_complete_previous_acceptance() {
-        let demo = crate::bundled_code_project_demos().remove(1);
-        let project = demo.project();
-        let generated = KeyedReconcileState::empty()
-            .plan(
-                crate::required_generated_members(&project).unwrap(),
-                &BTreeSet::new(),
-            )
-            .unwrap()
-            .into_staged();
-        let intent = IntentSession::with_id(IntentSessionId::from_raw(0x8410)).unwrap();
-        let expansion =
-            crate::expand_code_project(&project, &generated, intent.identity()).unwrap();
-        let mut session = SketchCodeSession::new_project(
-            project.clone(),
-            generated,
-            expansion.clone(),
-            serde_json::json!({"accepted": 1}),
-        )
-        .unwrap();
-        let accepted_before = (
-            session.snapshot().accepted_code_project.clone(),
-            session.snapshot().accepted_expansion.clone(),
-            session.snapshot().accepted_generated.clone(),
-            session.snapshot().accepted_source_digest.clone(),
-            session.snapshot().accepted_editor_checkpoint.clone(),
-        );
-        let mut candidate = project.clone();
-        candidate.managed = crate::parse_managed_source(
-            &candidate
-                .managed
-                .source
-                .replace("radius: mm(4)", "radius: mm(400)"),
-        )
-        .unwrap();
-        let plan = session
-            .plan_structural_reconciliation(
-                session.identity(),
-                crate::required_generated_members(&candidate).unwrap(),
-                &BTreeSet::new(),
-            )
-            .unwrap();
-        let attempted_intent = IntentSession::with_id(IntentSessionId::from_raw(0x8411)).unwrap();
-        let attempted =
-            crate::expand_code_project(&candidate, plan.staged(), attempted_intent.identity())
-                .unwrap();
-        let prepared = session
-            .prepare_project_retained_failure(
-                session.identity(),
-                candidate.clone(),
-                Some(plan),
-                CodeInteractionOverlay::empty(),
-                Some(attempted),
-                serde_json::json!({"retained-intent": 2, "accepted-scene": 1}),
-                "native validation",
-                "Fillet radius is outside the branch cell",
-                "Try impossible radius",
-            )
-            .unwrap();
-        session.apply_prepared(prepared).unwrap();
-        let accepted_after = (
-            session.snapshot().accepted_code_project.clone(),
-            session.snapshot().accepted_expansion.clone(),
-            session.snapshot().accepted_generated.clone(),
-            session.snapshot().accepted_source_digest.clone(),
-            session.snapshot().accepted_editor_checkpoint.clone(),
-        );
-        assert_eq!(accepted_after, accepted_before);
-        assert_eq!(session.snapshot().code_project.as_ref(), Some(&candidate));
-        assert_eq!(
-            session.snapshot().accepted_code_project.as_ref(),
-            Some(&project)
-        );
-        assert_eq!(
-            session.snapshot().accepted_expansion.as_ref(),
-            Some(&expansion)
-        );
-        assert_eq!(
-            session.pointer_frame_checkpoint(),
-            &serde_json::json!({"accepted": 1})
-        );
-        assert!(session.snapshot().failure.is_some());
-        assert_eq!(
-            session
-                .prepare_project_override(
-                    session.identity(),
-                    session.snapshot().generated.active().keys().next().unwrap(),
-                    ManagedValue::Number(1.0),
-                    session.snapshot().expansion.clone().unwrap(),
-                    serde_json::json!({"must": "not publish"}),
-                    "Override retained failure",
-                )
-                .unwrap_err(),
-            CodeSessionError::RetainedFailureActive
-        );
-        let restored = SketchCodeSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
-        assert_eq!(
-            (
-                restored.snapshot().accepted_code_project.clone(),
-                restored.snapshot().accepted_expansion.clone(),
-                restored.snapshot().accepted_generated.clone(),
-                restored.snapshot().accepted_source_digest.clone(),
-                restored.snapshot().accepted_editor_checkpoint.clone(),
-            ),
-            accepted_before
-        );
-        assert_eq!(
-            restored.pointer_frame_checkpoint(),
-            &serde_json::json!({"accepted": 1})
-        );
-        session.undo().unwrap();
-        assert_eq!(session.snapshot().code_project.as_ref(), Some(&project));
-        assert!(session.snapshot().failure.is_none());
     }
 }

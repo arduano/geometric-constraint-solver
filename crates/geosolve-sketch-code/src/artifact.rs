@@ -8,10 +8,10 @@ use thiserror::Error;
 
 use crate::{
     FeatureKind, ManagedPathSegment, ManagedValue, PATCH_ARTIFACT_LIMIT, SKETCH_CODE_SDK_ABI,
-    SemanticOutputPath, code_declaration_family,
+    SemanticOutputPath, code_authoring_family,
 };
 
-pub const PATCH_ARTIFACT_FORMAT: &str = "geosolve-patch-artifact-v1";
+pub const PATCH_ARTIFACT_FORMAT: &str = "geosolve-patch-artifact-v2";
 const MAX_ARTIFACT_ITEMS: usize = 65_536;
 const MAX_ARTIFACT_DEPTH: usize = 64;
 const MAX_ARTIFACT_KEY_BYTES: usize = 256;
@@ -20,13 +20,55 @@ const MAX_ARTIFACT_KEY_BYTES: usize = 256;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PatchTemplateNode {
+    /// Mandatory patch-local identity, independent of where an ordinary
+    /// callback return exposes one selected result.
     pub path: Vec<String>,
-    /// Exact output exposed at `path`; `None` keeps the path as a namespace.
-    pub result_output: Option<String>,
+    /// Exact ordinary callback return path. With `result_output`, this exposes
+    /// one selected semantic result; without it, this exposes the complete
+    /// authenticated result tree. `None` keeps the declaration private or
+    /// collection-owned.
+    pub result_path: Option<Vec<String>>,
+    /// Exact semantic output exposed at `result_path`. `None` means the whole
+    /// authenticated result tree when `result_path` is present.
+    pub result_output: Option<SemanticOutputPath>,
     pub declaration_family: String,
-    pub inputs: BTreeMap<String, TemplateBinding>,
-    pub fields: BTreeMap<String, ManagedValue>,
-    pub outputs: BTreeMap<String, FeatureKind>,
+    /// Complete named declaration arguments. Bindings may occur at any leaf;
+    /// keeping them in the data tree preserves nested typed API shapes such as
+    /// tangent sources, contact state, Fillet parents and aggregate arrays.
+    pub arguments: TemplateArgument,
+    /// Rust-catalog-derived typed result inventory. Paths are recursive
+    /// semantic coordinates, never flattened transport keys or caller
+    /// manifests. Dynamic keyed collection nodes and their concrete typed
+    /// members are both first-class results.
+    pub outputs: Vec<PatchTemplateOutput>,
+}
+
+/// One exact typed node in a patch declaration result tree.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PatchTemplateOutput {
+    pub path: SemanticOutputPath,
+    pub kind: FeatureKind,
+}
+
+/// One recursively typed custom-patch declaration argument.
+///
+/// Literal values and dependency bindings share one lossless tree. This is a
+/// transport contract only: Rust still authenticates the declaration family
+/// and lowers the reconstructed named arguments through the ordinary clean
+/// authoring catalog.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "argument",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum TemplateArgument {
+    Literal(ManagedValue),
+    Binding(TemplateBinding),
+    Array(Vec<Self>),
+    Object(BTreeMap<String, Self>),
 }
 
 /// Data-only source for a template input. There is no raw intent identity or
@@ -41,7 +83,7 @@ pub enum TemplateBinding {
     },
     TemplateOutput {
         template: Vec<String>,
-        output: String,
+        path: SemanticOutputPath,
         expected_kind: FeatureKind,
     },
     CollectionMember {
@@ -68,15 +110,6 @@ pub enum CollectionRule {
     },
 }
 
-/// Explicit GUI edit path declared by trusted custom patch source.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct EditLens {
-    pub output: SemanticOutputPath,
-    pub invocation_argument: Vec<String>,
-    pub expected_kind: FeatureKind,
-}
-
 /// Canonical, data-only product of the explicit caller-owned Node build step.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -91,7 +124,6 @@ pub struct PatchModuleArtifact {
     pub outputs: BTreeMap<String, FeatureKind>,
     pub templates: Vec<PatchTemplateNode>,
     pub collections: Vec<CollectionRule>,
-    pub edit_lenses: Vec<EditLens>,
 }
 
 /// Fully bounded and structurally authenticated artifact.
@@ -162,8 +194,6 @@ pub enum ArtifactValidationError {
     KindMismatch(String),
     #[error("artifact collection rule is invalid: {0}")]
     InvalidCollection(String),
-    #[error("artifact edit lens is invalid: {0}")]
-    InvalidEditLens(String),
     #[error("artifact literal exceeds the maximum nesting depth")]
     LiteralDepth,
 }
@@ -261,6 +291,9 @@ fn validate_artifact(artifact: &PatchModuleArtifact) -> Result<(), ArtifactValid
     let mut template_paths = BTreeMap::<Vec<String>, &PatchTemplateNode>::new();
     for template in &artifact.templates {
         validate_path(&template.path)?;
+        if let Some(result_path) = &template.result_path {
+            validate_path(result_path)?;
+        }
         if template_paths
             .insert(template.path.clone(), template)
             .is_some()
@@ -274,35 +307,46 @@ fn validate_artifact(artifact: &PatchModuleArtifact) -> Result<(), ArtifactValid
                 template.declaration_family.clone(),
             ));
         }
-        for key in template
-            .inputs
-            .keys()
-            .chain(template.fields.keys())
-            .chain(template.outputs.keys())
-        {
-            validate_key(key)?;
-        }
-        if let Some(output) = &template.result_output {
-            validate_key(output)?;
-            if !template.outputs.contains_key(output) {
-                return Err(ArtifactValidationError::InvalidReference(format!(
-                    "template `{}` exposes unknown result output `{output}`",
-                    path_text(&template.path)
+        let mut output_paths = BTreeSet::new();
+        for output in &template.outputs {
+            validate_semantic_path(&output.path, false)?;
+            if !output_paths.insert(output.path.clone()) {
+                return Err(ArtifactValidationError::DuplicatePath(format!(
+                    "{}/{}",
+                    path_text(&template.path),
+                    semantic_path_text(&output.path)
                 )));
             }
         }
-        for value in template.fields.values() {
-            validate_managed_value(value, 0)?;
+        if let Some(output) = &template.result_output {
+            validate_semantic_path(output, false)?;
+            if !output_paths.contains(output) {
+                return Err(ArtifactValidationError::InvalidReference(format!(
+                    "template `{}` exposes unknown result output `{}`",
+                    path_text(&template.path),
+                    semantic_path_text(output)
+                )));
+            }
         }
+        validate_template_argument(&template.arguments, 0)?;
         validate_family_schema(template)?;
     }
 
     let available = template_paths
         .iter()
-        .map(|(path, template)| (path.clone(), template.outputs.clone()))
+        .map(|(path, template)| {
+            (
+                path.clone(),
+                template
+                    .outputs
+                    .iter()
+                    .map(|output| (output.path.clone(), output.kind))
+                    .collect::<BTreeMap<_, _>>(),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     for template in &artifact.templates {
-        for binding in template.inputs.values() {
+        for binding in template_bindings(&template.arguments) {
             validate_binding(binding, artifact, &available)?;
         }
     }
@@ -352,42 +396,6 @@ fn validate_artifact(artifact: &PatchModuleArtifact) -> Result<(), ArtifactValid
         }
     }
 
-    let mut lenses = BTreeSet::new();
-    for lens in &artifact.edit_lenses {
-        if lens.output.0.is_empty() || lens.invocation_argument.is_empty() {
-            return Err(ArtifactValidationError::InvalidEditLens(
-                "lens paths cannot be empty".into(),
-            ));
-        }
-        for key in &lens.invocation_argument {
-            validate_key(key)?;
-        }
-        validate_semantic_path(&lens.output, false)?;
-        let Some(ManagedPathSegment::Field(output_root)) = lens.output.0.first() else {
-            return Err(ArtifactValidationError::InvalidEditLens(
-                "lens output must begin at a named patch output".into(),
-            ));
-        };
-        if !artifact.outputs.contains_key(output_root) {
-            return Err(ArtifactValidationError::InvalidEditLens(format!(
-                "lens references unknown output `{output_root}`"
-            )));
-        }
-        let argument_root = &lens.invocation_argument[0];
-        if artifact.inputs.get(argument_root) != Some(&lens.expected_kind) {
-            return Err(ArtifactValidationError::InvalidEditLens(format!(
-                "lens argument `{argument_root}` is not {:?}",
-                lens.expected_kind
-            )));
-        }
-        let identity = serde_json::to_string(lens)
-            .map_err(|error| ArtifactValidationError::InvalidJson(error.to_string()))?;
-        if !lenses.insert(identity) {
-            return Err(ArtifactValidationError::InvalidEditLens(
-                "duplicate lens".into(),
-            ));
-        }
-    }
     Ok(())
 }
 
@@ -399,24 +407,25 @@ fn validate_structural_item_bound(
     add_structural_items(&mut count, artifact.outputs.len())?;
     add_structural_items(&mut count, artifact.templates.len())?;
     add_structural_items(&mut count, artifact.collections.len())?;
-    add_structural_items(&mut count, artifact.edit_lenses.len())?;
 
     for template in &artifact.templates {
         add_structural_items(&mut count, template.path.len())?;
-        add_structural_items(&mut count, template.inputs.len())?;
-        add_structural_items(&mut count, template.fields.len())?;
+        add_structural_items(
+            &mut count,
+            template.result_path.as_ref().map_or(0, Vec::len),
+        )?;
+        add_structural_items(
+            &mut count,
+            template
+                .result_output
+                .as_ref()
+                .map_or(0, |path| path.0.len()),
+        )?;
         add_structural_items(&mut count, template.outputs.len())?;
-        for binding in template.inputs.values() {
-            let path_len = match binding {
-                TemplateBinding::Input { path, .. }
-                | TemplateBinding::CollectionMember { path, .. } => path.0.len(),
-                TemplateBinding::TemplateOutput { template, .. } => template.len(),
-            };
-            add_structural_items(&mut count, path_len)?;
+        for output in &template.outputs {
+            add_structural_items(&mut count, output.path.0.len())?;
         }
-        for value in template.fields.values() {
-            count_managed_value_items(value, 0, &mut count)?;
-        }
+        count_template_argument_items(&template.arguments, 0, &mut count)?;
     }
     for collection in &artifact.collections {
         let (path, templates) = match collection {
@@ -433,11 +442,45 @@ fn validate_structural_item_bound(
             add_structural_items(&mut count, template.len())?;
         }
     }
-    for lens in &artifact.edit_lenses {
-        add_structural_items(&mut count, lens.output.0.len())?;
-        add_structural_items(&mut count, lens.invocation_argument.len())?;
-    }
     Ok(())
+}
+
+fn count_template_argument_items(
+    argument: &TemplateArgument,
+    depth: usize,
+    count: &mut usize,
+) -> Result<(), ArtifactValidationError> {
+    if depth > MAX_ARTIFACT_DEPTH {
+        return Err(ArtifactValidationError::LiteralDepth);
+    }
+    add_structural_items(count, 1)?;
+    match argument {
+        TemplateArgument::Literal(value) => count_managed_value_items(value, depth + 1, count),
+        TemplateArgument::Binding(binding) => {
+            let path_len = match binding {
+                TemplateBinding::Input { path, .. }
+                | TemplateBinding::CollectionMember { path, .. } => path.0.len(),
+                TemplateBinding::TemplateOutput { template, path, .. } => {
+                    template.len().saturating_add(path.0.len())
+                }
+            };
+            add_structural_items(count, path_len)
+        }
+        TemplateArgument::Array(values) => {
+            add_structural_items(count, values.len())?;
+            for value in values {
+                count_template_argument_items(value, depth + 1, count)?;
+            }
+            Ok(())
+        }
+        TemplateArgument::Object(values) => {
+            add_structural_items(count, values.len())?;
+            for value in values.values() {
+                count_template_argument_items(value, depth + 1, count)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn count_managed_value_items(
@@ -491,7 +534,7 @@ fn add_structural_items(
 fn validate_binding(
     binding: &TemplateBinding,
     artifact: &PatchModuleArtifact,
-    available: &BTreeMap<Vec<String>, BTreeMap<String, FeatureKind>>,
+    available: &BTreeMap<Vec<String>, BTreeMap<SemanticOutputPath, FeatureKind>>,
 ) -> Result<(), ArtifactValidationError> {
     match binding {
         TemplateBinding::Input {
@@ -528,7 +571,7 @@ fn validate_binding(
         }
         TemplateBinding::TemplateOutput {
             template,
-            output,
+            path,
             expected_kind,
         } => {
             let Some(outputs) = available.get(template) else {
@@ -537,16 +580,28 @@ fn validate_binding(
                     path_text(template)
                 )));
             };
-            let Some(actual) = outputs.get(output) else {
+            if path.0.is_empty() {
+                if *expected_kind != FeatureKind::Feature {
+                    return Err(ArtifactValidationError::KindMismatch(format!(
+                        "whole template `{}` is a feature, not {expected_kind:?}",
+                        path_text(template)
+                    )));
+                }
+                return Ok(());
+            }
+            validate_semantic_path(path, false)?;
+            let Some(actual) = outputs.get(path) else {
                 return Err(ArtifactValidationError::InvalidReference(format!(
-                    "template `{}` has no output `{output}`",
-                    path_text(template)
+                    "template `{}` has no output `{}`",
+                    path_text(template),
+                    semantic_path_text(path)
                 )));
             };
             if actual != expected_kind {
                 return Err(ArtifactValidationError::KindMismatch(format!(
-                    "template output `{}`.`{output}` is {actual:?}, not {expected_kind:?}",
-                    path_text(template)
+                    "template output `{}`.`{}` is {actual:?}, not {expected_kind:?}",
+                    path_text(template),
+                    semantic_path_text(path)
                 )));
             }
         }
@@ -558,9 +613,8 @@ fn validate_template_dag(templates: &[PatchTemplateNode]) -> Result<(), Artifact
     let dependencies = templates
         .iter()
         .map(|template| {
-            let dependencies = template
-                .inputs
-                .values()
+            let dependencies = template_bindings(&template.arguments)
+                .into_iter()
                 .filter_map(|binding| match binding {
                     TemplateBinding::TemplateOutput { template, .. } => Some(template.clone()),
                     TemplateBinding::Input { .. } | TemplateBinding::CollectionMember { .. } => {
@@ -595,6 +649,93 @@ fn validate_template_dag(templates: &[PatchTemplateNode]) -> Result<(), Artifact
         }
     }
     Ok(())
+}
+
+fn template_bindings(argument: &TemplateArgument) -> Vec<&TemplateBinding> {
+    let mut bindings = Vec::new();
+    collect_template_bindings(argument, &mut bindings);
+    bindings
+}
+
+pub(crate) fn template_argument_bindings_with_paths(
+    argument: &TemplateArgument,
+) -> Vec<(SemanticOutputPath, &TemplateBinding)> {
+    let mut bindings = Vec::new();
+    collect_template_argument_bindings_with_paths(argument, &mut Vec::new(), &mut bindings);
+    bindings
+}
+
+fn collect_template_argument_bindings_with_paths<'a>(
+    argument: &'a TemplateArgument,
+    path: &mut Vec<ManagedPathSegment>,
+    bindings: &mut Vec<(SemanticOutputPath, &'a TemplateBinding)>,
+) {
+    match argument {
+        TemplateArgument::Binding(binding) => {
+            bindings.push((SemanticOutputPath(path.clone()), binding));
+        }
+        TemplateArgument::Array(values) => {
+            for (index, value) in values.iter().enumerate() {
+                path.push(ManagedPathSegment::Index(index));
+                collect_template_argument_bindings_with_paths(value, path, bindings);
+                path.pop();
+            }
+        }
+        TemplateArgument::Object(values) => {
+            for (name, value) in values {
+                path.push(ManagedPathSegment::Field(name.clone()));
+                collect_template_argument_bindings_with_paths(value, path, bindings);
+                path.pop();
+            }
+        }
+        TemplateArgument::Literal(_) => {}
+    }
+}
+
+fn collect_template_bindings<'a>(
+    argument: &'a TemplateArgument,
+    bindings: &mut Vec<&'a TemplateBinding>,
+) {
+    match argument {
+        TemplateArgument::Binding(binding) => bindings.push(binding),
+        TemplateArgument::Array(values) => {
+            for value in values {
+                collect_template_bindings(value, bindings);
+            }
+        }
+        TemplateArgument::Object(values) => {
+            for value in values.values() {
+                collect_template_bindings(value, bindings);
+            }
+        }
+        TemplateArgument::Literal(_) => {}
+    }
+}
+
+fn validate_template_argument(
+    argument: &TemplateArgument,
+    depth: usize,
+) -> Result<(), ArtifactValidationError> {
+    if depth > MAX_ARTIFACT_DEPTH {
+        return Err(ArtifactValidationError::LiteralDepth);
+    }
+    match argument {
+        TemplateArgument::Literal(value) => validate_managed_value(value, depth + 1),
+        TemplateArgument::Binding(_) => Ok(()),
+        TemplateArgument::Array(values) => {
+            for value in values {
+                validate_template_argument(value, depth + 1)?;
+            }
+            Ok(())
+        }
+        TemplateArgument::Object(values) => {
+            for (key, value) in values {
+                validate_key(key)?;
+                validate_template_argument(value, depth + 1)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn validate_managed_value(
@@ -668,8 +809,33 @@ fn path_text(path: &[String]) -> String {
     path.join("/")
 }
 
+fn semantic_path_text(path: &SemanticOutputPath) -> String {
+    path.0
+        .iter()
+        .map(|segment| match segment {
+            ManagedPathSegment::Field(field) => field.clone(),
+            ManagedPathSegment::Index(index) => format!("[{index}]"),
+            ManagedPathSegment::Member { member } => format!("[{member}]"),
+        })
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
 fn supported_declaration_family(value: &str) -> bool {
-    code_declaration_family(value).is_some_and(|descriptor| descriptor.template.is_some())
+    // These two families are deliberately patch-private host-authored
+    // composites. Unlike ordinary clean declarations, neither pretends to be
+    // one standalone Intent node. Expansion authenticates them through the
+    // existing native Fillet/rounded-profile authoring routes.
+    if matches!(
+        value,
+        "computed.fillet" | "computed.roundedRectangleProfile"
+    ) {
+        return true;
+    }
+    let Some((namespace, method)) = value.split_once('.') else {
+        return false;
+    };
+    code_authoring_family(namespace, method).is_some()
 }
 
 #[derive(Serialize)]
@@ -697,177 +863,12 @@ fn canonical_interface_digest(
     Ok(intent_content_digest(&canonical).to_string())
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "one closed dispatch visibly authenticates every family admitted by runtime lowering"
-)]
 fn validate_family_schema(template: &PatchTemplateNode) -> Result<(), ArtifactValidationError> {
-    if !template.fields.is_empty() {
-        return family_schema_error(
-            template,
-            "literal template fields are not lowered by the supported runtime families",
-        );
+    if !matches!(template.arguments, TemplateArgument::Object(_)) {
+        return family_schema_error(template, "named declaration arguments must be an object");
     }
-    let inputs = template
-        .inputs
-        .iter()
-        .map(|(name, binding)| (name.clone(), binding_kind(binding)))
-        .collect::<BTreeMap<_, _>>();
-    match template.declaration_family.as_str() {
-        "geometry.line" => {
-            if inputs.len() != 2
-                || !["start", "end"].into_iter().all(|name| {
-                    matches!(
-                        inputs.get(name),
-                        Some(FeatureKind::Point | FeatureKind::FeatureCorner)
-                    )
-                })
-            {
-                return family_schema_error(
-                    template,
-                    "inputs must be exactly point-like `start` and `end` values",
-                );
-            }
-            require_exact_schema(
-                template,
-                "outputs",
-                &template.outputs,
-                &[("span", FeatureKind::CurveSpan)],
-            )
-        }
-        "geometry.circle" => {
-            require_exact_schema(
-                template,
-                "inputs",
-                &inputs,
-                &[
-                    ("center", FeatureKind::Point),
-                    ("radius", FeatureKind::Scalar),
-                ],
-            )?;
-            require_exact_schema(
-                template,
-                "outputs",
-                &template.outputs,
-                &[("circle", FeatureKind::Curve)],
-            )
-        }
-        "geometry.rectangle" => {
-            let required = BTreeMap::from([
-                ("height".to_owned(), FeatureKind::Scalar),
-                ("width".to_owned(), FeatureKind::Scalar),
-            ]);
-            for (name, kind) in &required {
-                if inputs.get(name) != Some(kind) {
-                    return family_schema_error(
-                        template,
-                        format!("input `{name}` must be {kind:?}"),
-                    );
-                }
-            }
-            for (name, kind) in &inputs {
-                let valid = required.get(name) == Some(kind)
-                    || (name == "cornerRadius" && *kind == FeatureKind::Scalar);
-                if !valid {
-                    return family_schema_error(
-                        template,
-                        format!("unsupported input `{name}` with kind {kind:?}"),
-                    );
-                }
-            }
-            if template.outputs.get("profile") != Some(&FeatureKind::Profile) {
-                return family_schema_error(template, "output `profile` must be Profile");
-            }
-            for (name, kind) in &template.outputs {
-                let valid = name == "profile"
-                    || (matches!(name.as_str(), "nw" | "ne" | "se" | "sw")
-                        && *kind == FeatureKind::Point);
-                if !valid {
-                    return family_schema_error(
-                        template,
-                        format!("unsupported output `{name}` with kind {kind:?}"),
-                    );
-                }
-            }
-            Ok(())
-        }
-        "dimension.radius" => {
-            require_exact_schema(
-                template,
-                "inputs",
-                &inputs,
-                &[
-                    ("curve", FeatureKind::Curve),
-                    ("target", FeatureKind::Scalar),
-                ],
-            )?;
-            require_exact_schema(
-                template,
-                "outputs",
-                &template.outputs,
-                &[("dimension", FeatureKind::Dimension)],
-            )
-        }
-        "computed.fillet" => {
-            require_exact_schema(
-                template,
-                "inputs",
-                &inputs,
-                &[
-                    ("corner", FeatureKind::FeatureCorner),
-                    ("radius", FeatureKind::Scalar),
-                ],
-            )?;
-            require_exact_schema(
-                template,
-                "outputs",
-                &template.outputs,
-                &[("arc", FeatureKind::CurveSpan)],
-            )
-        }
-        "aggregate.profile" | "aggregate.chain" => {
-            if inputs.is_empty() || inputs.values().any(|kind| *kind != FeatureKind::CurveSpan) {
-                return family_schema_error(
-                    template,
-                    "aggregate inputs must contain one or more CurveSpan values",
-                );
-            }
-            let (name, kind) = if template.declaration_family == "aggregate.profile" {
-                ("profile", FeatureKind::Profile)
-            } else {
-                ("chain", FeatureKind::Chain)
-            };
-            require_exact_schema(template, "outputs", &template.outputs, &[(name, kind)])
-        }
-        family => Err(ArtifactValidationError::UnsupportedDeclarationFamily(
-            family.to_owned(),
-        )),
-    }
-}
-
-const fn binding_kind(binding: &TemplateBinding) -> FeatureKind {
-    match binding {
-        TemplateBinding::Input { expected_kind, .. }
-        | TemplateBinding::TemplateOutput { expected_kind, .. }
-        | TemplateBinding::CollectionMember { expected_kind, .. } => *expected_kind,
-    }
-}
-
-fn require_exact_schema(
-    template: &PatchTemplateNode,
-    label: &str,
-    actual: &BTreeMap<String, FeatureKind>,
-    expected: &[(&str, FeatureKind)],
-) -> Result<(), ArtifactValidationError> {
-    let expected = expected
-        .iter()
-        .map(|(name, kind)| ((*name).to_owned(), *kind))
-        .collect::<BTreeMap<_, _>>();
-    if actual != &expected {
-        return family_schema_error(
-            template,
-            format!("{label} are {actual:?}; expected {expected:?}"),
-        );
+    if template.outputs.is_empty() {
+        return family_schema_error(template, "declaration result shape cannot be empty");
     }
     Ok(())
 }
@@ -905,6 +906,17 @@ fn validate_semantic_path(
 mod tests {
     use super::*;
 
+    fn output(name: &str, kind: FeatureKind) -> PatchTemplateOutput {
+        PatchTemplateOutput {
+            path: SemanticOutputPath(vec![ManagedPathSegment::Field(name.into())]),
+            kind,
+        }
+    }
+
+    fn output_path(name: &str) -> SemanticOutputPath {
+        SemanticOutputPath(vec![ManagedPathSegment::Field(name.into())])
+    }
+
     fn artifact() -> PatchModuleArtifact {
         let mut artifact = PatchModuleArtifact {
             format: PATCH_ARTIFACT_FORMAT.into(),
@@ -920,41 +932,34 @@ mod tests {
             outputs: BTreeMap::from([("fillets".into(), FeatureKind::Collection)]),
             templates: vec![PatchTemplateNode {
                 path: vec!["fillet".into()],
-                result_output: Some("arc".into()),
+                result_path: None,
+                result_output: Some(output_path("arc")),
                 declaration_family: "computed.fillet".into(),
-                inputs: BTreeMap::from([
+                arguments: TemplateArgument::Object(BTreeMap::from([
                     (
                         "corner".into(),
-                        TemplateBinding::CollectionMember {
+                        TemplateArgument::Binding(TemplateBinding::CollectionMember {
                             input: "corners".into(),
                             path: SemanticOutputPath::default(),
                             expected_kind: FeatureKind::FeatureCorner,
-                        },
+                        }),
                     ),
                     (
                         "radius".into(),
-                        TemplateBinding::Input {
+                        TemplateArgument::Binding(TemplateBinding::Input {
                             name: "radius".into(),
                             path: SemanticOutputPath::default(),
                             expected_kind: FeatureKind::Scalar,
-                        },
+                        }),
                     ),
-                ]),
-                fields: BTreeMap::new(),
-                outputs: BTreeMap::from([("arc".into(), FeatureKind::CurveSpan)]),
+                ])),
+                outputs: vec![output("arc", FeatureKind::CurveSpan)],
             }],
             collections: vec![CollectionRule::Each {
                 path: vec!["fillets".into()],
                 input: "corners".into(),
                 member_key_field: "key".into(),
                 templates: vec![vec!["fillet".into()]],
-            }],
-            edit_lenses: vec![EditLens {
-                output: SemanticOutputPath(vec![crate::ManagedPathSegment::Field(
-                    "fillets".into(),
-                )]),
-                invocation_argument: vec!["radius".into()],
-                expected_kind: FeatureKind::Scalar,
             }],
         };
         artifact.interface_digest = canonical_interface_digest(&artifact).unwrap();
@@ -1004,14 +1009,14 @@ mod tests {
         ));
 
         let mut wrong_schema = artifact();
-        wrong_schema.templates[0].outputs = BTreeMap::from([("arc".into(), FeatureKind::Curve)]);
+        wrong_schema.templates[0].arguments = TemplateArgument::Array(Vec::new());
         assert!(matches!(
             wrong_schema.validate(),
             Err(ArtifactValidationError::InvalidFamilySchema { .. })
         ));
 
         let mut unknown_result = artifact();
-        unknown_result.templates[0].result_output = Some("alphabeticAccident".into());
+        unknown_result.templates[0].result_output = Some(output_path("alphabeticAccident"));
         assert!(matches!(
             unknown_result.validate(),
             Err(ArtifactValidationError::InvalidReference(_))
@@ -1033,45 +1038,48 @@ mod tests {
     fn radius_dimension_template_requires_exact_curve_target_and_dimension_schema() {
         let mut template = PatchTemplateNode {
             path: vec!["radius".into()],
+            result_path: None,
             result_output: None,
             declaration_family: "dimension.radius".into(),
-            inputs: BTreeMap::from([
+            arguments: TemplateArgument::Object(BTreeMap::from([
                 (
                     "curve".into(),
-                    TemplateBinding::TemplateOutput {
+                    TemplateArgument::Binding(TemplateBinding::TemplateOutput {
                         template: vec!["circle".into()],
-                        output: "circle".into(),
+                        path: output_path("circle"),
                         expected_kind: FeatureKind::Curve,
-                    },
+                    }),
                 ),
                 (
                     "target".into(),
-                    TemplateBinding::Input {
+                    TemplateArgument::Binding(TemplateBinding::Input {
                         name: "radius".into(),
                         path: SemanticOutputPath::default(),
                         expected_kind: FeatureKind::Scalar,
-                    },
+                    }),
                 ),
-            ]),
-            fields: BTreeMap::new(),
-            outputs: BTreeMap::from([("dimension".into(), FeatureKind::Dimension)]),
+            ])),
+            outputs: vec![output("dimension", FeatureKind::Dimension)],
         };
 
         assert!(supported_declaration_family("dimension.radius"));
         validate_family_schema(&template).unwrap();
 
-        template.inputs.insert(
+        let TemplateArgument::Object(arguments) = &mut template.arguments else {
+            unreachable!("fixture arguments are an object")
+        };
+        arguments.insert(
             "target".into(),
-            TemplateBinding::Input {
+            TemplateArgument::Binding(TemplateBinding::Input {
                 name: "radius".into(),
                 path: SemanticOutputPath::default(),
                 expected_kind: FeatureKind::Point,
-            },
+            }),
         );
-        assert!(matches!(
-            validate_family_schema(&template),
-            Err(ArtifactValidationError::InvalidFamilySchema { .. })
-        ));
+        // Artifact admission authenticates structure and family identity.
+        // Exact argument names and kinds are checked once references have
+        // been resolved by catalog-driven lowering.
+        validate_family_schema(&template).unwrap();
     }
 
     #[test]
@@ -1105,32 +1113,38 @@ mod tests {
     #[test]
     fn template_dag_is_order_independent_but_rejects_cycles() {
         let mut valid = artifact().templates;
-        valid[0].inputs.insert(
+        let TemplateArgument::Object(arguments) = &mut valid[0].arguments else {
+            unreachable!("fixture arguments are an object")
+        };
+        arguments.insert(
             "future".into(),
-            TemplateBinding::TemplateOutput {
+            TemplateArgument::Binding(TemplateBinding::TemplateOutput {
                 template: vec!["later".into()],
-                output: "point".into(),
+                path: output_path("point"),
                 expected_kind: FeatureKind::Point,
-            },
+            }),
         );
         valid.push(PatchTemplateNode {
             path: vec!["later".into()],
-            result_output: Some("point".into()),
-            declaration_family: "test.future".into(),
-            inputs: BTreeMap::new(),
-            fields: BTreeMap::new(),
-            outputs: BTreeMap::from([("point".into(), FeatureKind::Point)]),
+            result_path: Some(vec!["point".into()]),
+            result_output: Some(output_path("point")),
+            declaration_family: "geometry.sketchPoint".into(),
+            arguments: TemplateArgument::Object(BTreeMap::new()),
+            outputs: vec![output("point", FeatureKind::Point)],
         });
         validate_template_dag(&valid).unwrap();
 
         let mut invalid = valid;
-        invalid[1].inputs.insert(
+        let TemplateArgument::Object(arguments) = &mut invalid[1].arguments else {
+            unreachable!("fixture arguments are an object")
+        };
+        arguments.insert(
             "back".into(),
-            TemplateBinding::TemplateOutput {
+            TemplateArgument::Binding(TemplateBinding::TemplateOutput {
                 template: vec!["fillet".into()],
-                output: "arc".into(),
+                path: output_path("arc"),
                 expected_kind: FeatureKind::CurveSpan,
-            },
+            }),
         );
         assert!(matches!(
             validate_template_dag(&invalid),
@@ -1161,5 +1175,14 @@ mod tests {
             widened.validate(),
             Err(ArtifactValidationError::InterfaceDigestMismatch { .. })
         ));
+    }
+
+    #[test]
+    fn admits_only_the_two_explicit_patch_private_composites() {
+        assert!(supported_declaration_family("computed.fillet"));
+        assert!(supported_declaration_family(
+            "computed.roundedRectangleProfile"
+        ));
+        assert!(!supported_declaration_family("computed.unknownComposite"));
     }
 }

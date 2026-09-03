@@ -53,6 +53,12 @@ cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown
   npm ci --ignore-scripts
   npm test
 )
+cargo test --locked -p geosolve-headless --test m87_headless \
+  inspect_edit_solve_and_static_render_share_one_exact_control_authority \
+  -- --exact --ignored
+cargo test --locked -p geosolve-headless --test m87_headless \
+  cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs \
+  -- --exact --ignored
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run
 
@@ -92,5 +98,9 @@ done
 
 ./scripts/verify-geosolve-sketch-code-package.sh
 
-nix-shell "$root/shell.nix" --run \
-  "cd '$root/crates/geosolve-demo-web' && env -u NO_COLOR trunk build --release"
+(
+  cd crates/geosolve-demo-web/frontend
+  npm ci --ignore-scripts
+  npm run check
+  npm run validate:dist -- ../dist ./
+)

@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/authoring.ts",
+    "src/authoring-private.ts",
+    "src/compiler.ts",
+    "src/index.ts",
+    "test/authoring-*.test.ts",
+    "test/patch-*.test.ts",
+    "examples/adaptive-lanterns.patch.ts",
+    "examples/braced-frame.patch.ts",
+    "examples/bridge-cables.patch.ts",
+    "examples/compass-core.patch.ts",
+    "examples/corner-reliefs.patch.ts",
+    "examples/harness-route.patch.ts",
+    "examples/mounting-plate.patch.ts",
+    "examples/rounded-polyline.patch.ts",
+    "examples/typed-panel.patch.ts",
+    "examples/water-channel.patch.ts"
+  ],
+  "exclude": []
+}

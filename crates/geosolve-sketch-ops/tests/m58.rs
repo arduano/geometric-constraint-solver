@@ -860,6 +860,58 @@ fn successful_point_edit_is_current_for_geometry_operation_preparation() {
 }
 
 #[test]
+fn mirror_and_pattern_ignore_unrelated_accepted_coordinate_changes() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let (source, _) = line(&mut document, "source", [1.0, 0.0], [2.0, 1.0]);
+    let (axis, _) = line(&mut document, "axis", [0.0, -2.0], [0.0, 2.0]);
+    let unrelated = document.add_point("unrelated", [10.0, 10.0]).unwrap();
+    document
+        .add_constraint(
+            "move unrelated",
+            DocumentConstraintDefinition::FixedPoint {
+                point: unrelated,
+                target: [12.0, 8.0],
+            },
+        )
+        .unwrap();
+    let session = session(document);
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("initial constrained document is accepted");
+    assert_ne!(
+        accepted.document().point(unrelated).unwrap().position,
+        session.design_document().point(unrelated).unwrap().position,
+        "the fixture must retain one unrelated solved/design difference"
+    );
+
+    for request in [
+        SketchOperationRequest::Mirror {
+            label: "unrelated-change mirror".into(),
+            source,
+            axis: CurveSpan::line(axis),
+        },
+        SketchOperationRequest::LinearPattern {
+            label: "unrelated-change pattern".into(),
+            sources: vec![source],
+            instances: 2,
+            step: [0.0, 3.0],
+        },
+    ] {
+        let outcome = SketchOperationSnapshot::capture(&session)
+            .prepare(request)
+            .execute(OperationControl::default())
+            .unwrap();
+        assert!(matches!(
+            outcome,
+            OperationOutcome::Completed {
+                value: SketchOperationResult::Proposed(_),
+                ..
+            }
+        ));
+    }
+}
+
+#[test]
 fn geometry_operation_rejects_an_older_acceptance_beneath_a_newer_same_design_attempt() {
     let (mut session, request, _) = mirror_current_input_fixture();
     let accepted = session.accepted_state().unwrap().identity();

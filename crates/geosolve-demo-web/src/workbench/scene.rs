@@ -43,7 +43,6 @@ mod tests {
         svg_markup_with_computed_context_action_stamp_display_and_provisional,
         svg_markup_with_computed_context_and_action_stamp, svg_markup_with_context, viewport,
     };
-    use crate::workbench::panels::{lifecycle_presentation, problem_markup};
 
     fn arc_geometry(large_arc: bool, sweep_radians: f64) -> ConstructionPreviewGeometry {
         ConstructionPreviewGeometry::CounterClockwiseArc {
@@ -1135,17 +1134,9 @@ mod tests {
             None,
             viewport(),
         );
-        let tree = crate::workbench::panels::tree_markup_with_pending(
-            accepted.document(),
-            &scene.constraint_entries,
-            &selection,
-            &[],
-        );
         let point_identity = format!("data-persistent-id=\"{}\"", rectangle.points[0]);
         assert!(markup.contains("class=\"wb-point selected\""));
         assert!(markup.contains(&point_identity));
-        assert!(tree.contains(&point_identity));
-        assert!(tree.contains("aria-selected=\"true\""));
         for constraint in accepted.document().constraints() {
             let contextual = svg_markup(
                 Some(&scene),
@@ -2255,14 +2246,8 @@ mod tests {
         assert!(markup.contains("data-problem-marker=\"global\""));
         assert!(!markup.contains("has-problem"));
         assert_eq!(accepted.solve_result().geometry, accepted_geometry);
-        assert_eq!(
-            lifecycle_presentation(coordinator.lifecycle().status),
-            ("rejected-attempt", "Rejected attempt")
-        );
         let problems = coordinator.problems();
         assert!(problems.failure.is_some() || problems.rejection.is_some());
-        let problem = problem_markup("Rejected attempt: parameter value has the wrong kind");
-        assert!(problem.contains("Rejected attempt"));
 
         let expected = coordinator.session().design_identity();
         coordinator

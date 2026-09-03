@@ -96,11 +96,17 @@ pub use inference::*;
 pub use intent::{
     ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
     IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf,
-    IntentNodeMaterialization, IntentValidationEvidence,
+    IntentNodeMaterialization, IntentValidationEvidence, PreparedIntentOperationOutput,
+    PreparedIntentOperationOutputRole, PreparedIntentOperationPathSegment,
+    PreparedIntentOperationPlan, PreparedIntentOperationPlanError,
+    PreparedIntentOperationSourceRef, prepare_intent_operation_output_plan,
 };
 pub use intent_authoring::{
     ProjectionalApplicationPatch, ProjectionalAuthoringError, ProjectionalConstructionPatch,
+    ProjectionalGeometryDraft, ProjectionalGeometrySamples, ProjectionalTangentArc,
     projectional_application_patch, projectional_construction_patch,
+    projectional_geometry_draft_from_plan, projectional_geometry_plan_from_samples,
+    projectional_tangent_arc_draft,
 };
 pub use intent_bootstrap::{
     BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1, BOOTSTRAP_CONSTRAINT_CODEC_V1, BOOTSTRAP_CONTACT_CODEC_V1,

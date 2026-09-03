@@ -1,0 +1,63 @@
+{
+  "geometry": [
+    {"group":"Point","id":"sketch-point","label":"Sketch Point"},
+    {"group":"Lines","id":"segment","label":"Segment"},
+    {"group":"Lines","id":"polyline","label":"Polyline"},
+    {"group":"Lines","id":"midpoint-line","label":"Midpoint Line"},
+    {"group":"Rectangles","id":"two-point-aligned-rectangle","label":"2-Point Aligned"},
+    {"group":"Rectangles","id":"three-point-corner-rectangle","label":"3-Point Corner"},
+    {"group":"Rectangles","id":"center-rectangle","label":"Center Rectangle"},
+    {"group":"Rectangles","id":"three-point-center-rectangle","label":"3-Point Center"},
+    {"group":"Circles","id":"center-radius-circle","label":"Center–Radius"},
+    {"group":"Circles","id":"two-point-diameter-circle","label":"2-Point Diameter"},
+    {"group":"Circles","id":"three-point-circle","label":"3-Point Circle"},
+    {"group":"Arcs","id":"center-arc","label":"Center Arc"},
+    {"group":"Arcs","id":"three-point-arc","label":"3-Point Arc"},
+    {"group":"Arcs","id":"tangent-arc","label":"Tangent Arc"},
+    {"group":"Ellipses","id":"center-axes-ellipse","label":"Center–Axes Ellipse"},
+    {"group":"Ellipses","id":"axis-endpoints-ellipse","label":"Axis-Endpoints Ellipse"},
+    {"group":"Ellipses","id":"center-axes-elliptical-arc","label":"Center–Axes Elliptical Arc"},
+    {"group":"Ellipses","id":"axis-endpoints-elliptical-arc","label":"Axis-Endpoints Elliptical Arc"},
+    {"group":"Béziers","id":"quadratic-bezier","label":"Quadratic"},
+    {"group":"Béziers","id":"cubic-bezier","label":"Cubic"},
+    {"group":"Conics","id":"rational-quadratic-conic","label":"Rational Quadratic"},
+    {"group":"Conics","id":"parabola","label":"Parabola"},
+    {"group":"Conics","id":"hyperbola","label":"Hyperbola"},
+    {"group":"Splines","id":"open-control-nurbs","label":"Open Control NURBS"},
+    {"group":"Splines","id":"periodic-control-nurbs","label":"Periodic Control NURBS"}
+  ],
+  "constraints": [
+    {"group":"Placement","id":"lock","label":"Lock"},
+    {"group":"Placement","id":"coincident","label":"Coincident"},
+    {"group":"Placement","id":"concentric","label":"Concentric"},
+    {"group":"Placement","id":"collinear","label":"Collinear"},
+    {"group":"Placement","id":"midpoint","label":"Midpoint"},
+    {"group":"Orientation","id":"horizontal","label":"Horizontal"},
+    {"group":"Orientation","id":"vertical","label":"Vertical"},
+    {"group":"Orientation","id":"parallel","label":"Parallel"},
+    {"group":"Orientation","id":"perpendicular","label":"Perpendicular / Normal"},
+    {"group":"Equality & symmetry","id":"equal","label":"Equal"},
+    {"group":"Equality & symmetry","id":"symmetric","label":"Symmetric"},
+    {"group":"Curve join","id":"tangent","label":"Tangent"},
+    {"group":"Curve join","id":"continuity","label":"Continuity"}
+  ],
+  "dimensions": [
+    {"group":"Linear","id":"point-distance","label":"Point distance"},
+    {"group":"Linear","id":"segment-length","label":"Segment length"},
+    {"group":"Circular","id":"radius","label":"Radius"},
+    {"group":"Circular","id":"diameter","label":"Diameter"},
+    {"group":"Angular","id":"oriented-angle","label":"Oriented angle"}
+  ],
+  "modify": [
+    {"group":"Curve operations","id":"fillet","label":"Fillet"},
+    {"group":"Curve operations","id":"offset","label":"Offset"}
+  ],
+  "context": [
+    {"group":"Geometry role","id":"geometry-role","label":"Toggle Profile / Construction","command":"geometry.role.toggle"}
+  ],
+  "canvas": [
+    {"group":"Canvas view","id":"construction-display","label":"Toggle grid","command":"view.grid.toggle"},
+    {"group":"Canvas view","id":"zoom-fit","label":"Fit sketch","command":"view.fit"},
+    {"group":"Canvas view","id":"zoom-origin","label":"Center on origin","command":"view.origin"}
+  ]
+}

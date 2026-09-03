@@ -966,7 +966,7 @@ pub enum ComputedFeatureAuthoringError {
     #[error("a Fillet corner requires two distinct native spans")]
     DuplicateSource,
     #[error(
-        "same-curve Fillet parents must be adjacent or explicitly Coincident-joined spans of one open polyline"
+        "same-curve Fillet parents must be adjacent or explicitly Coincident-joined spans of one polyline"
     )]
     UnsupportedSameCurvePair,
     #[error("two non-affine Fillet parents require pairwise continuation")]
@@ -2260,7 +2260,7 @@ fn resolve_authoring_corner(
         return Err(ComputedFeatureAuthoringError::DuplicateSource);
     }
     if request.first.source.span.curve == request.second.source.span.curve
-        && !same_open_polyline_joined_spans(
+        && !same_polyline_joined_spans(
             sketch,
             request.first.source.span,
             request.second.source.span,
@@ -5007,7 +5007,7 @@ fn is_constant_curvature_circular_span(sketch: &SketchDocument, span: CurveSpan)
         })
 }
 
-fn same_open_polyline_joined_spans(
+fn same_polyline_joined_spans(
     sketch: &SketchDocument,
     first: CurveSpan,
     second: CurveSpan,
@@ -5018,12 +5018,7 @@ fn same_open_polyline_joined_spans(
     let Some(curve) = sketch.curve(first.curve) else {
         return false;
     };
-    let CurveDefinition::Polyline {
-        points,
-        closed: false,
-        ..
-    } = &curve.definition
-    else {
+    let CurveDefinition::Polyline { points, closed, .. } = &curve.definition else {
         return false;
     };
     let (Ok(first_index), Ok(second_index)) = (
@@ -5038,15 +5033,25 @@ fn same_open_polyline_joined_spans(
     let Some(second_end) = second_index.checked_add(1) else {
         return false;
     };
-    if first_end >= points.len() || second_end >= points.len() {
+    if first_index >= points.len()
+        || second_index >= points.len()
+        || (!closed && (first_end >= points.len() || second_end >= points.len()))
+    {
         return false;
     }
-    if first.segment.abs_diff(second.segment) == 1 {
+    let segment_count = if *closed {
+        points.len()
+    } else {
+        points.len().saturating_sub(1)
+    };
+    if first_index.abs_diff(second_index) == 1
+        || (*closed && segment_count > 1 && first_index.abs_diff(second_index) == segment_count - 1)
+    {
         return true;
     }
     let representatives = sketch.point_coincidence_representatives();
-    let first_endpoints = [points[first_index], points[first_end]];
-    let second_endpoints = [points[second_index], points[second_end]];
+    let first_endpoints = [points[first_index], points[first_end % points.len()]];
+    let second_endpoints = [points[second_index], points[second_end % points.len()]];
     first_endpoints
         .into_iter()
         .flat_map(|first| {

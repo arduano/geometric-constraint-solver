@@ -26,18 +26,18 @@ use geosolve_sketch::{
     DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef,
     DocumentOffsetTraversal, DocumentParameter, DocumentParameterBinding, DocumentParameterId,
     DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget,
-    DocumentProfileOffsetChain, DocumentProfileOffsetEdgePair, DocumentProfileOffsetLoop,
-    DocumentProfileOffsetOperand, DocumentProfileOffsetTerminalPolicy, DocumentScalarBranch,
-    DocumentScalarPropertyRef, DocumentScalarUnit, DocumentSessionError, DocumentSolveRequest,
-    DocumentSourceId, DocumentTrimBoundary, DocumentTrimParameter, ExternalFeatureKindV1,
-    ExternalSnapshotSet, ExternalTopologyDigest, FeatureEndpoint, GeometryRole, GeometryRoleEdit,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationOutcome, ParameterBatch,
-    PersistentId, RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE,
-    ScalarDomain, ScalarUnit, SketchHardValidity, SketchMaterializationBatch,
-    SketchMaterializationConstraintReservation, SketchMaterializationDimensionReservation,
-    SketchMaterializationIdentityKind, SketchMaterializationIdentityReservation,
-    SketchMaterializationReservationAllocator, SketchPersistentIdentityHighWater, SolverConfig,
-    TangentOrientation,
+    DocumentProfileOffsetChain, DocumentProfileOffsetEdgePair, DocumentProfileOffsetJunctionOwner,
+    DocumentProfileOffsetLoop, DocumentProfileOffsetOperand, DocumentProfileOffsetTerminalPolicy,
+    DocumentScalarBranch, DocumentScalarPropertyRef, DocumentScalarUnit, DocumentSessionError,
+    DocumentSolveRequest, DocumentSourceId, DocumentTrimBoundary, DocumentTrimParameter,
+    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, FeatureEndpoint,
+    GeometryRole, GeometryRoleEdit, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl,
+    OperationOutcome, ParameterBatch, PersistentId, RetainedSketchDocumentSession,
+    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarDomain, ScalarUnit, SketchHardValidity,
+    SketchMaterializationBatch, SketchMaterializationConstraintReservation,
+    SketchMaterializationDimensionReservation, SketchMaterializationIdentityKind,
+    SketchMaterializationIdentityReservation, SketchMaterializationReservationAllocator,
+    SketchPersistentIdentityHighWater, SolverConfig, TangentOrientation,
 };
 use geosolve_sketch_intent::{
     AggregateKind, BootstrapNativeKind, ConstraintKind, DimensionKind, ExternalIntentKind,
@@ -45,14 +45,18 @@ use geosolve_sketch_intent::{
     IntentCandidate, IntentEvaluation, IntentEvaluationFailure, IntentEvaluationFailureKind,
     IntentExternalInputs, IntentGraph, IntentGraphError, IntentIdentityFlow, IntentInstanceState,
     IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNode, IntentNodeKind,
-    IntentOperationOutputKind, IntentPort, IntentPortKind, IntentPortRef, IntentPortRole,
-    IntentPortSelector, IntentReservationLedger, IntentReservationRecord, IntentReservationState,
-    IntentSemanticIdentity, IntentSession, IntentUnit, LeafField, LeafRef, MaterializationEvidence,
-    NodeId, OperationKind as IntentOperationKind, ParameterIntentKind, ReservationId,
+    IntentOperationOutput, IntentOperationOutputKind, IntentPatch, IntentPlanError, IntentPort,
+    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector, IntentReservationLedger,
+    IntentReservationRecord, IntentReservationState, IntentSemanticIdentity, IntentSession,
+    IntentSessionError, IntentSessionIdentity, IntentUnit, LeafField, LeafRef,
+    MaterializationEvidence, NodeId, OperationKind as IntentOperationKind, ParameterIntentKind,
+    ReservationId,
 };
 use geosolve_sketch_ops::{
-    LineEndpoint, SketchOperationKind, SketchOperationRequest, SketchOperationResult,
-    SketchOperationSnapshot, SketchProfileOffsetOperand, SplitRetainedPiece, TrimRetainedSide,
+    LineEndpoint, SketchOperationKind, SketchOperationOutputPathSegment, SketchOperationOutputPlan,
+    SketchOperationOutputRole, SketchOperationProposal, SketchOperationRequest,
+    SketchOperationResult, SketchOperationSnapshot, SketchProfileOffsetOperand, SplitRetainedPiece,
+    TrimRetainedSide,
 };
 use geosolve_sketch_topology::{
     EndpointTopologyIndex, EndpointTopologyRequest, OffsetDirectedSpan, OffsetEndpointRef,
@@ -807,10 +811,19 @@ fn expected_logical_feature<'a>(
     if !matches!(node.kind, IntentNodeKind::ComputedFeature { .. }) {
         return Err(IntentMaterializationError::OwnershipPortBindingMismatch { port: reference });
     }
+    let expected_label = match field_value(node, "name") {
+        Some(IntentLiteral::Text(value)) => value.as_str(),
+        None => node.symbol.as_str(),
+        Some(_) => {
+            return Err(IntentMaterializationError::OwnershipPortBindingMismatch {
+                port: reference,
+            });
+        }
+    };
     let mut matching = features
         .features()
         .iter()
-        .filter(|feature| feature.label == node.symbol.as_str());
+        .filter(|feature| feature.label == expected_label);
     let feature = matching
         .next()
         .ok_or(IntentMaterializationError::OwnershipPortBindingMismatch { port: reference })?;
@@ -1005,20 +1018,11 @@ fn validate_writable_binding(
             IntentNativeWritableLeaf::ScalarValue { scalar },
             IntentNativeBinding::Scalar(expected),
             field,
-        ) if scalar == expected && document.scalar(scalar).is_some() => match field {
-            LeafField::Angle => IntentUnit::Angle,
-            LeafField::Weight | LeafField::Parameter => IntentUnit::Dimensionless,
-            LeafField::Value => {
-                match document.scalar(scalar).expect("checked scalar exists").unit {
-                    ScalarUnit::Length => IntentUnit::Length,
-                    ScalarUnit::Angle => IntentUnit::Angle,
-                    ScalarUnit::Parameter => IntentUnit::Dimensionless,
-                }
-            }
-            LeafField::X | LeafField::Y => {
-                return Err(IntentMaterializationError::InvalidWritableOwnership { leaf });
-            }
-        },
+        ) if scalar == expected && document.scalar(scalar).is_some() => scalar_leaf_intent_unit(
+            field,
+            document.scalar(scalar).expect("checked scalar exists").unit,
+        )
+        .ok_or(IntentMaterializationError::InvalidWritableOwnership { leaf })?,
         _ => return Err(IntentMaterializationError::InvalidWritableOwnership { leaf }),
     };
     if let Some(IntentLiteral::Quantity { unit: actual, .. }) = instance.values().get(&leaf)
@@ -1027,6 +1031,80 @@ fn validate_writable_binding(
         return Err(IntentMaterializationError::WritableOwnershipUnitMismatch { leaf });
     }
     Ok(())
+}
+
+/// Returns the authored Intent unit for one native scalar-backed writable leaf.
+///
+/// `Parameter` is dimensionless in authored source even when a periodic curve
+/// stores it as a native angle. `Weight` is dimensionless over native parameter
+/// storage, while only the generic `Value` leaf inherits any native scalar unit.
+pub(crate) const fn scalar_leaf_intent_unit(
+    field: LeafField,
+    native_unit: ScalarUnit,
+) -> Option<IntentUnit> {
+    match (field, native_unit) {
+        (LeafField::Value, ScalarUnit::Length) => Some(IntentUnit::Length),
+        (LeafField::Value | LeafField::Angle, ScalarUnit::Angle) => Some(IntentUnit::Angle),
+        (LeafField::Value | LeafField::Weight | LeafField::Parameter, ScalarUnit::Parameter)
+        | (LeafField::Parameter, ScalarUnit::Angle) => Some(IntentUnit::Dimensionless),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod scalar_leaf_intent_unit_tests {
+    use super::scalar_leaf_intent_unit;
+    use geosolve_sketch::ScalarUnit;
+    use geosolve_sketch_intent::{IntentUnit, LeafField};
+
+    #[test]
+    fn authored_scalar_leaf_units_form_one_closed_native_storage_matrix() {
+        let valid = [
+            (LeafField::Value, ScalarUnit::Length, IntentUnit::Length),
+            (LeafField::Value, ScalarUnit::Angle, IntentUnit::Angle),
+            (
+                LeafField::Value,
+                ScalarUnit::Parameter,
+                IntentUnit::Dimensionless,
+            ),
+            (LeafField::Angle, ScalarUnit::Angle, IntentUnit::Angle),
+            (
+                LeafField::Weight,
+                ScalarUnit::Parameter,
+                IntentUnit::Dimensionless,
+            ),
+            (
+                LeafField::Parameter,
+                ScalarUnit::Parameter,
+                IntentUnit::Dimensionless,
+            ),
+            (
+                LeafField::Parameter,
+                ScalarUnit::Angle,
+                IntentUnit::Dimensionless,
+            ),
+        ];
+        for (field, native, authored) in valid {
+            assert_eq!(scalar_leaf_intent_unit(field, native), Some(authored));
+        }
+
+        let invalid = [
+            (LeafField::X, ScalarUnit::Length),
+            (LeafField::X, ScalarUnit::Angle),
+            (LeafField::X, ScalarUnit::Parameter),
+            (LeafField::Y, ScalarUnit::Length),
+            (LeafField::Y, ScalarUnit::Angle),
+            (LeafField::Y, ScalarUnit::Parameter),
+            (LeafField::Angle, ScalarUnit::Length),
+            (LeafField::Angle, ScalarUnit::Parameter),
+            (LeafField::Weight, ScalarUnit::Length),
+            (LeafField::Weight, ScalarUnit::Angle),
+            (LeafField::Parameter, ScalarUnit::Length),
+        ];
+        for (field, native) in invalid {
+            assert_eq!(scalar_leaf_intent_unit(field, native), None);
+        }
+    }
 }
 
 /// Compact host-created proof that the materialized document was accepted by
@@ -1061,6 +1139,156 @@ pub struct ColdIntentMaterialization {
     pub ownership: IntentMaterializationMap,
     pub validation: IntentValidationEvidence,
     pub evidence: MaterializationEvidence,
+}
+
+/// Persistent-ID-free semantic owner of one dynamic operation-result member.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PreparedIntentOperationSourceRef {
+    /// Stable graph symbol of the source declaration. Code adapters map this
+    /// through their own authenticated declaration provenance.
+    pub declaration: IntentKey,
+    /// Exact schema selector within `declaration`.
+    pub selector: IntentPortSelector,
+    /// Independently authenticated source-port kind.
+    pub kind: IntentPortKind,
+}
+
+/// Source-relative segment in one native-authenticated operation result path.
+///
+/// Persistent native IDs never cross this seam. Every dynamic path owner is
+/// projected back to its exact declaration and schema selector before the
+/// plan reaches an authored-code adapter.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[non_exhaustive]
+pub enum PreparedIntentOperationPathSegment {
+    Field(String),
+    Index(usize),
+    SourceControl {
+        source: PreparedIntentOperationSourceRef,
+    },
+    SourceCurve {
+        source: PreparedIntentOperationSourceRef,
+    },
+    SourceSpan {
+        source: PreparedIntentOperationSourceRef,
+    },
+    SourceJunction {
+        source: PreparedIntentOperationSourceRef,
+    },
+}
+
+/// Semantic role of one native-authenticated operation output.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[non_exhaustive]
+pub enum PreparedIntentOperationOutputRole {
+    Geometry,
+    ContactParameter,
+    Contact,
+    Constraint,
+    DimensionTarget,
+    Dimension,
+    Parameter,
+    ExternalBinding,
+}
+
+/// One exact output reserved by a prepared native operation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PreparedIntentOperationOutput {
+    pub output: IntentOperationOutput,
+    pub path: Vec<PreparedIntentOperationPathSegment>,
+    pub role: PreparedIntentOperationOutputRole,
+}
+
+/// Non-publishing native result inventory for one provisional intent
+/// operation declaration.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PreparedIntentOperationPlan {
+    pub operation: IntentOperationKind,
+    pub outputs: Vec<PreparedIntentOperationOutput>,
+}
+
+/// Failure to stage or natively prepare one provisional operation manifest.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PreparedIntentOperationPlanError {
+    #[error(transparent)]
+    Intent(#[from] IntentSessionError),
+    #[error(transparent)]
+    Plan(#[from] IntentPlanError),
+    #[error(transparent)]
+    Materialization(#[from] IntentMaterializationError),
+    #[error("operation planning expected a pristine intent-session identity")]
+    NonPristineSession,
+    #[error("operation planning callback was not evaluated")]
+    NotEvaluated,
+}
+
+/// Stages one provisional create-only patch and prepares the target
+/// operation's native result inventory without publishing the patch or a
+/// native document.
+///
+/// This is the compiler-host seam used by executed managed sketches. The
+/// target operation is forced active only for planning; the returned manifest
+/// may then be attached to the original suppressed or active declaration and
+/// is authenticated again during ordinary cold materialization.
+///
+/// # Errors
+///
+/// Rejects a non-pristine exact-CAS identity, invalid patch, missing target,
+/// invalid accepted prefix, or incomplete native operation proposal.
+pub fn prepare_intent_operation_output_plan(
+    expected: IntentSessionIdentity,
+    operations: &[geosolve_sketch_intent::IntentPatchOperation],
+    symbol: &IntentKey,
+    document: DocumentId,
+    model_scale: f64,
+) -> Result<PreparedIntentOperationPlan, PreparedIntentOperationPlanError> {
+    let session = IntentSession::with_id(expected.session)?;
+    if session.identity() != expected {
+        return Err(PreparedIntentOperationPlanError::NonPristineSession);
+    }
+    let mut operations = operations.to_vec();
+    let mut target_present = false;
+    for operation in &mut operations {
+        if let geosolve_sketch_intent::IntentPatchOperation::CreateNode { draft, .. } = operation
+            && &draft.symbol == symbol
+        {
+            draft.suppressed = false;
+            target_present = true;
+        }
+    }
+    if !target_present {
+        return Err(PreparedIntentOperationPlanError::NotEvaluated);
+    }
+    let materializer = ColdIntentMaterializer::with_default_policy(document, model_scale)?;
+    let prepared = std::cell::RefCell::new(None);
+    let probe = IntentPatch::new(
+        expected,
+        geosolve_sketch_intent::IntentPatchPolicy::RetainFailedIntent,
+        operations,
+    );
+    let _ = session.plan_patch(probe, |candidate| {
+        let target = candidate
+            .graph()
+            .nodes()
+            .values()
+            .find(|node| &node.symbol == symbol)
+            .map(|node| node.id);
+        let result = materializer.prepare_operation_output_plan(candidate, symbol);
+        prepared.replace(Some(result));
+        IntentEvaluation::Failed {
+            failure: IntentEvaluationFailure {
+                kind: IntentEvaluationFailureKind::MaterializationRejected,
+                failed_nodes: target.into_iter().collect(),
+                diagnostic: symbol.clone(),
+            },
+        }
+    })?;
+    prepared
+        .into_inner()
+        .ok_or(PreparedIntentOperationPlanError::NotEvaluated)?
+        .map_err(Into::into)
 }
 
 trait IntentMaterializationSource {
@@ -1245,6 +1473,190 @@ impl ColdIntentMaterializer {
         candidate: &IntentCandidate,
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         self.materialize_source(candidate)
+    }
+
+    /// Prepares the exact native output inventory for one provisional
+    /// operation in a structurally validated candidate without publishing an
+    /// intent plan, native document, or history entry.
+    ///
+    /// The target operation must still have an empty `operation_outputs`
+    /// vector. Every dependency is reconstructed through the ordinary cold
+    /// lowering path, and preceding operations are applied to scratch state.
+    /// Dynamic native path owners are converted to typed source-input slots so
+    /// persistent native IDs never become authored-code identity.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing/non-operation target, an already claimed output
+    /// shape, any invalid accepted prefix, or a native operation which cannot
+    /// produce one complete proposal for that exact prefix.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the non-publishing planner deliberately mirrors the accepted-prefix cold lowering transaction"
+    )]
+    pub fn prepare_operation_output_plan(
+        &self,
+        candidate: &IntentCandidate,
+        symbol: &IntentKey,
+    ) -> Result<PreparedIntentOperationPlan, IntentMaterializationError> {
+        candidate.graph().validate()?;
+        preflight_supported(candidate)?;
+        let target = candidate
+            .graph()
+            .nodes()
+            .values()
+            .find(|node| &node.symbol == symbol)
+            .ok_or_else(|| {
+                IntentMaterializationError::HostInput(format!(
+                    "provisional operation `{symbol}` is absent from its exact candidate prefix"
+                ))
+            })?;
+        let IntentNodeKind::Operation { operation } = target.kind else {
+            return Err(IntentMaterializationError::UnsupportedNode { node: target.id });
+        };
+        if !target.operation_outputs.is_empty() {
+            return Err(invalid_operation(
+                target,
+                "provisional operation already claims a native output shape",
+            ));
+        }
+
+        let host_inputs = decode_intent_external_inputs(candidate.external_inputs())
+            .map_err(|error| IntentMaterializationError::HostInput(error.to_string()))?;
+        let (document, bootstrap_ownership, bootstrap_nodes) = if let Some(seed) = &self.bootstrap {
+            validate_bootstrap_seed(candidate, seed)?;
+            (
+                seed.document.clone(),
+                Some(seed.ownership.clone()),
+                seed.declarations.keys().copied().collect::<BTreeSet<_>>(),
+            )
+        } else {
+            (
+                SketchDocumentBuilder::empty(self.document, self.model_scale)?,
+                None,
+                BTreeSet::new(),
+            )
+        };
+        let allocated = allocate_reservation_ledger(
+            document.persistent_identity_high_water().clone(),
+            candidate.reservations().entries(),
+            candidate.graph(),
+        )?;
+        let initial_parameters = self
+            .bootstrap
+            .as_ref()
+            .map_or_else(ParameterBatch::default, |_| host_inputs.parameters.clone());
+        let initial_snapshots = self
+            .bootstrap
+            .as_ref()
+            .map_or_else(ExternalSnapshotSet::default, |_| {
+                host_inputs.external_snapshots.clone()
+            });
+        let mut session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            initial_parameters,
+            initial_snapshots,
+            self.request,
+            self.config,
+        )?;
+        require_current_acceptance(&session)?;
+        for reservations in &allocated.stages {
+            apply_materialization_stage(
+                &mut session,
+                SketchMaterializationBatch::retaining_unused_reservations(reservations.clone()),
+            )?;
+        }
+        let mut state = LoweringState::new(
+            candidate.semantic_identity(),
+            allocated.bindings,
+            bootstrap_ownership,
+            session.design_document(),
+        );
+        let mut owner_reservations = allocated.live;
+        for node_id in candidate.graph().canonical_schedule()? {
+            let node = candidate
+                .graph()
+                .node(node_id)
+                .ok_or(IntentMaterializationError::UnknownNode(node_id))?;
+            state.bind_schema_ports(node)?;
+            let owner_reservation = owner_reservations.remove(&node.id);
+            if bootstrap_nodes.contains(&node.id) {
+                if node.id == target.id {
+                    return Err(invalid_operation(
+                        node,
+                        "a bootstrap declaration cannot be a provisional operation",
+                    ));
+                }
+                continue;
+            }
+            if node.id == target.id {
+                if node.suppressed {
+                    return Err(invalid_operation(
+                        node,
+                        "a suppressed operation has no native output plan",
+                    ));
+                }
+                try_publish_host_inputs(
+                    &mut session,
+                    &host_inputs.parameters,
+                    &host_inputs.external_snapshots,
+                    self.request,
+                )?;
+                let proposal = prepare_operation_proposal(node, operation, &session, &state)?;
+                return prepared_intent_operation_plan(
+                    candidate.graph(),
+                    node,
+                    operation,
+                    &state,
+                    proposal.output_plan(),
+                );
+            }
+            if node.suppressed {
+                try_publish_host_inputs(
+                    &mut session,
+                    &host_inputs.parameters,
+                    &host_inputs.external_snapshots,
+                    self.request,
+                )?;
+                continue;
+            }
+            if let IntentNodeKind::Operation { operation } = node.kind {
+                try_publish_host_inputs(
+                    &mut session,
+                    &host_inputs.parameters,
+                    &host_inputs.external_snapshots,
+                    self.request,
+                )?;
+                lower_operation(candidate, node, operation, &mut session, &mut state)?;
+                continue;
+            }
+            let reservations = owner_reservation.unwrap_or(
+                SketchMaterializationReservationAllocator::new(
+                    session
+                        .design_document()
+                        .persistent_identity_high_water()
+                        .clone(),
+                )?
+                .finish()?,
+            );
+            let mut batch = SketchMaterializationBatch::new(reservations);
+            if lower_declarative_node(
+                candidate,
+                node,
+                session.external_snapshot_set(),
+                &mut batch,
+                &mut state,
+            )? {
+                apply_reserved_node_materialization(&mut session, batch)?;
+            }
+            try_publish_host_inputs(
+                &mut session,
+                &host_inputs.parameters,
+                &host_inputs.external_snapshots,
+                self.request,
+            )?;
+        }
+        Err(IntentMaterializationError::UnknownNode(target.id))
     }
 
     /// Independently materializes one pristine empty semantic session so its
@@ -1432,9 +1844,20 @@ impl ColdIntentMaterializer {
         if let Some(accepted_continuation) = accepted_continuation {
             work.record_native_preview_attempt();
             let expected = session.prepared_input();
+            // Intent history deliberately retains every allocator cursor ever
+            // observed, even when Undo restores an older accepted topology.
+            // The authenticated historical materialization therefore carries
+            // the same durable objects but may predate the retained cursor.
+            // Advance only that host-owned high-water metadata before asking
+            // the document seam to project continuous values; every object,
+            // topology row, branch and source field must still match exactly.
+            let mut accepted_continuation = accepted_continuation.clone();
+            accepted_continuation.retain_persistent_identity_high_water(
+                &session.design_document().persistent_identity_high_water(),
+            )?;
             let accepted = session
                 .design_document()
-                .project_accepted_numerical_continuation(accepted_continuation)?;
+                .project_accepted_numerical_continuation(&accepted_continuation)?;
             session.replace_current_accepted_materialization(expected, accepted)?;
         }
         state.validate_declared_consumption(candidate)?;
@@ -2060,11 +2483,8 @@ fn apply_bootstrap_instance(
                 let native = document
                     .scalar(*scalar)
                     .ok_or(IntentMaterializationError::BootstrapSeedMismatch)?;
-                let expected = match native.unit {
-                    ScalarUnit::Length => IntentUnit::Length,
-                    ScalarUnit::Angle => IntentUnit::Angle,
-                    ScalarUnit::Parameter => IntentUnit::Dimensionless,
-                };
+                let expected = scalar_leaf_intent_unit(leaf.field, native.unit)
+                    .ok_or(IntentMaterializationError::InvalidWritableLeaf { leaf: *leaf })?;
                 if *unit != expected {
                     return Err(IntentMaterializationError::InvalidWritableLeaf { leaf: *leaf });
                 }
@@ -2471,6 +2891,7 @@ impl LoweringState {
     ) -> Self {
         let mut port_bindings = BTreeMap::new();
         let mut reverse_leaves = BTreeMap::new();
+        let mut aggregate_bindings = BTreeMap::new();
         let mut consumed_reservations = BTreeSet::new();
         let mut seed_node_ownership = BTreeMap::new();
         if let Some(bootstrap) = bootstrap {
@@ -2480,6 +2901,12 @@ impl LoweringState {
             }
             port_bindings.extend(bootstrap.ports);
             reverse_leaves.extend(bootstrap.writable_leaves);
+            aggregate_bindings.extend(
+                bootstrap
+                    .aggregates
+                    .into_iter()
+                    .map(|aggregate| (aggregate.port, aggregate)),
+            );
             seed_node_ownership.extend(
                 bootstrap
                     .nodes
@@ -2507,7 +2934,7 @@ impl LoweringState {
                 .iter()
                 .map(|parameter| (parameter.id, parameter.kind))
                 .collect(),
-            aggregate_bindings: BTreeMap::new(),
+            aggregate_bindings,
             contact_states: document
                 .contacts()
                 .iter()
@@ -4732,6 +5159,55 @@ fn lower_operation(
     session: &mut RetainedSketchDocumentSession,
     state: &mut LoweringState,
 ) -> Result<(), IntentMaterializationError> {
+    let proposal = prepare_operation_proposal(node, operation, session, state)?;
+    let reservations = operation_output_reservations(node, state)?;
+    let claimed = node
+        .operation_outputs
+        .iter()
+        .map(|output| operation_output_native_kind(output.kind))
+        .collect::<Vec<_>>();
+    let authenticated = proposal
+        .output_plan()
+        .slots
+        .iter()
+        .map(|slot| slot.kind)
+        .collect::<Vec<_>>();
+    if claimed != authenticated {
+        return Err(invalid_operation(
+            node,
+            "persisted output shape disagrees with native proposal",
+        ));
+    }
+    if node
+        .operation_outputs
+        .iter()
+        .zip(&proposal.output_plan().slots)
+        .any(|(claimed, authenticated)| {
+            claimed.kind == IntentOperationOutputKind::Curve
+                && claimed.curve_span_count != authenticated.curve_span_count
+        })
+    {
+        return Err(invalid_operation(
+            node,
+            "persisted curve-span shape disagrees with native proposal",
+        ));
+    }
+    let outcome = proposal
+        .apply_with_reserved_outputs(session, &reservations)
+        .map_err(|_| invalid_operation(node, "reserved native operation application failed"))?;
+    if outcome.published_accepted_identity().is_none() {
+        return Err(IntentMaterializationError::SolverRejected);
+    }
+    require_current_acceptance(session)?;
+    bind_operation_outputs(node, session.design_document(), state)
+}
+
+fn prepare_operation_proposal(
+    node: &IntentNode,
+    operation: IntentOperationKind,
+    session: &RetainedSketchDocumentSession,
+    state: &LoweringState,
+) -> Result<Box<SketchOperationProposal>, IntentMaterializationError> {
     let request = operation_request(node, operation, session, state)?;
     let source_free = match operation {
         IntentOperationKind::Rectangle
@@ -4758,11 +5234,26 @@ fn lower_operation(
             ));
         }
     };
-    let SketchOperationResult::Proposed(proposal) = result else {
-        return Err(invalid_operation(
-            node,
-            "native operation is unsupported or incomplete for the exact accepted prefix",
-        ));
+    let proposal = match result {
+        SketchOperationResult::Proposed(proposal) => proposal,
+        SketchOperationResult::Unsupported(_) => {
+            return Err(invalid_operation(
+                node,
+                "native operation is unsupported for the exact accepted prefix",
+            ));
+        }
+        SketchOperationResult::Incomplete(_) => {
+            return Err(invalid_operation(
+                node,
+                "native operation is incomplete for the exact accepted prefix",
+            ));
+        }
+        _ => {
+            return Err(invalid_operation(
+                node,
+                "native operation returned an unknown proposal state",
+            ));
+        }
     };
     if proposal.output_plan().kind != sketch_operation_kind(operation) {
         return Err(invalid_operation(
@@ -4770,32 +5261,7 @@ fn lower_operation(
             "native operation kind authentication failed",
         ));
     }
-    let reservations = operation_output_reservations(node, state)?;
-    let claimed = node
-        .operation_outputs
-        .iter()
-        .map(|output| operation_output_native_kind(output.kind))
-        .collect::<Vec<_>>();
-    let authenticated = proposal
-        .output_plan()
-        .slots
-        .iter()
-        .map(|slot| slot.kind)
-        .collect::<Vec<_>>();
-    if claimed != authenticated {
-        return Err(invalid_operation(
-            node,
-            "persisted output shape disagrees with native proposal",
-        ));
-    }
-    let outcome = proposal
-        .apply_with_reserved_outputs(session, &reservations)
-        .map_err(|_| invalid_operation(node, "reserved native operation application failed"))?;
-    if outcome.published_accepted_identity().is_none() {
-        return Err(IntentMaterializationError::SolverRejected);
-    }
-    require_current_acceptance(session)?;
-    bind_operation_outputs(node, session.design_document(), state)
+    Ok(proposal)
 }
 
 const fn sketch_operation_kind(operation: IntentOperationKind) -> SketchOperationKind {
@@ -4812,6 +5278,249 @@ const fn sketch_operation_kind(operation: IntentOperationKind) -> SketchOperatio
         IntentOperationKind::Slot => SketchOperationKind::Slot,
         IntentOperationKind::LinearPattern => SketchOperationKind::LinearPattern,
         IntentOperationKind::ProfileOffset => SketchOperationKind::ProfileOffset,
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "native output kinds, source-relative paths, and semantic roles are authenticated together"
+)]
+fn prepared_intent_operation_plan(
+    graph: &IntentGraph,
+    node: &IntentNode,
+    operation: IntentOperationKind,
+    state: &LoweringState,
+    plan: &SketchOperationOutputPlan,
+) -> Result<PreparedIntentOperationPlan, IntentMaterializationError> {
+    if plan.kind != sketch_operation_kind(operation) {
+        return Err(invalid_operation(
+            node,
+            "native operation kind authentication failed",
+        ));
+    }
+    let mut outputs = Vec::with_capacity(plan.slots.len());
+    for (ordinal, slot) in plan.slots.iter().enumerate() {
+        if slot.ordinal != ordinal {
+            return Err(invalid_operation(
+                node,
+                "native operation output order is not canonical",
+            ));
+        }
+        let output = match slot.kind {
+            SketchMaterializationIdentityKind::Point => {
+                IntentOperationOutput::native(IntentOperationOutputKind::Point)
+            }
+            SketchMaterializationIdentityKind::Scalar => {
+                IntentOperationOutput::native(IntentOperationOutputKind::Scalar)
+            }
+            SketchMaterializationIdentityKind::Curve => {
+                IntentOperationOutput::curve(slot.curve_span_count)
+            }
+            SketchMaterializationIdentityKind::Contact => {
+                IntentOperationOutput::native(IntentOperationOutputKind::Contact)
+            }
+            SketchMaterializationIdentityKind::Constraint => {
+                IntentOperationOutput::native(IntentOperationOutputKind::Constraint)
+            }
+            SketchMaterializationIdentityKind::Dimension => {
+                IntentOperationOutput::native(IntentOperationOutputKind::Dimension)
+            }
+            SketchMaterializationIdentityKind::Parameter => {
+                IntentOperationOutput::native(IntentOperationOutputKind::Parameter)
+            }
+            SketchMaterializationIdentityKind::ExternalBinding => {
+                IntentOperationOutput::native(IntentOperationOutputKind::ExternalBinding)
+            }
+            _ => {
+                return Err(invalid_operation(
+                    node,
+                    "native operation produced an unsupported output kind",
+                ));
+            }
+        };
+        let mut path = Vec::with_capacity(slot.path.len());
+        for segment in &slot.path {
+            path.push(match *segment {
+                SketchOperationOutputPathSegment::Field(name) => {
+                    PreparedIntentOperationPathSegment::Field(name.to_owned())
+                }
+                SketchOperationOutputPathSegment::Index(index) => {
+                    PreparedIntentOperationPathSegment::Index(index)
+                }
+                SketchOperationOutputPathSegment::SourceControl { point, .. } => {
+                    PreparedIntentOperationPathSegment::SourceControl {
+                        source: operation_source_reference(
+                            graph,
+                            node,
+                            state,
+                            IntentNativeBinding::Point(point),
+                        )?,
+                    }
+                }
+                SketchOperationOutputPathSegment::SourceCurve(curve) => {
+                    PreparedIntentOperationPathSegment::SourceCurve {
+                        source: operation_source_reference(
+                            graph,
+                            node,
+                            state,
+                            IntentNativeBinding::Curve(curve),
+                        )?,
+                    }
+                }
+                SketchOperationOutputPathSegment::SourceSpan(span) => {
+                    PreparedIntentOperationPathSegment::SourceSpan {
+                        source: operation_source_reference(
+                            graph,
+                            node,
+                            state,
+                            IntentNativeBinding::CurveSpan(span),
+                        )?,
+                    }
+                }
+                SketchOperationOutputPathSegment::SourceJunction(owner) => {
+                    let binding = match owner {
+                        DocumentProfileOffsetJunctionOwner::SharedPoint(point) => {
+                            IntentNativeBinding::Point(point)
+                        }
+                        DocumentProfileOffsetJunctionOwner::Constraint(constraint) => {
+                            IntentNativeBinding::Constraint(constraint)
+                        }
+                    };
+                    PreparedIntentOperationPathSegment::SourceJunction {
+                        source: operation_source_reference(graph, node, state, binding)?,
+                    }
+                }
+                _ => {
+                    return Err(invalid_operation(
+                        node,
+                        "native operation produced an unsupported path segment",
+                    ));
+                }
+            });
+        }
+        let role = match slot.role {
+            SketchOperationOutputRole::Geometry => PreparedIntentOperationOutputRole::Geometry,
+            SketchOperationOutputRole::ContactParameter => {
+                PreparedIntentOperationOutputRole::ContactParameter
+            }
+            SketchOperationOutputRole::Contact => PreparedIntentOperationOutputRole::Contact,
+            SketchOperationOutputRole::Constraint => PreparedIntentOperationOutputRole::Constraint,
+            SketchOperationOutputRole::DimensionTarget => {
+                PreparedIntentOperationOutputRole::DimensionTarget
+            }
+            SketchOperationOutputRole::Dimension => PreparedIntentOperationOutputRole::Dimension,
+            SketchOperationOutputRole::Parameter => PreparedIntentOperationOutputRole::Parameter,
+            SketchOperationOutputRole::ExternalBinding => {
+                PreparedIntentOperationOutputRole::ExternalBinding
+            }
+            _ => {
+                return Err(invalid_operation(
+                    node,
+                    "native operation produced an unsupported semantic role",
+                ));
+            }
+        };
+        if !role.accepts_output_kind(output.kind) {
+            return Err(invalid_operation(
+                node,
+                "native operation semantic role disagrees with its output kind",
+            ));
+        }
+        outputs.push(PreparedIntentOperationOutput { output, path, role });
+    }
+    Ok(PreparedIntentOperationPlan { operation, outputs })
+}
+
+fn operation_source_reference(
+    graph: &IntentGraph,
+    node: &IntentNode,
+    state: &LoweringState,
+    binding: IntentNativeBinding,
+) -> Result<PreparedIntentOperationSourceRef, IntentMaterializationError> {
+    // Logical span ports do not own a native reservation. Anchor their lookup
+    // to the exact declaration which owns the underlying curve reservation so
+    // an unrelated alias of the same span cannot rename a result member.
+    let owner_binding = match binding {
+        IntentNativeBinding::CurveSpan(span) => IntentNativeBinding::Curve(span.curve),
+        binding => binding,
+    };
+    let owner_nodes = state
+        .port_bindings
+        .iter()
+        .filter_map(|(reference, candidate)| {
+            if *candidate != owner_binding {
+                return None;
+            }
+            let source = graph.node(reference.node)?;
+            let port = source.port(reference.port)?;
+            matches!(port.flow, IntentIdentityFlow::Created { .. }).then_some(reference.node)
+        })
+        .collect::<BTreeSet<_>>();
+    let preferred_owner = (owner_nodes.len() == 1)
+        .then(|| owner_nodes.iter().next().copied())
+        .flatten();
+
+    let mut candidates = state
+        .port_bindings
+        .iter()
+        .filter_map(|(reference, candidate)| {
+            if *candidate != binding || preferred_owner.is_some_and(|owner| reference.node != owner)
+            {
+                return None;
+            }
+            let source = graph.node(reference.node)?;
+            let port = source.port(reference.port)?;
+            Some(PreparedIntentOperationSourceRef {
+                declaration: source.symbol.clone(),
+                selector: port.selector,
+                kind: port.kind,
+            })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_unstable_by(|left, right| {
+        (&left.declaration, left.selector, left.kind).cmp(&(
+            &right.declaration,
+            right.selector,
+            right.kind,
+        ))
+    });
+    candidates.dedup();
+    match candidates.as_slice() {
+        [source] => Ok(source.clone()),
+        [] => Err(invalid_operation(
+            node,
+            "native operation path names an object without a semantic source port",
+        )),
+        _ => Err(invalid_operation(
+            node,
+            "native operation path names an ambiguously aliased semantic source port",
+        )),
+    }
+}
+
+impl PreparedIntentOperationOutputRole {
+    /// Whether this semantic role accepts one independently authenticated
+    /// native operation-output kind.
+    #[must_use]
+    pub const fn accepts_output_kind(self, kind: IntentOperationOutputKind) -> bool {
+        match self {
+            Self::Geometry => matches!(
+                kind,
+                IntentOperationOutputKind::Point
+                    | IntentOperationOutputKind::Scalar
+                    | IntentOperationOutputKind::Curve
+            ),
+            Self::ContactParameter | Self::DimensionTarget => {
+                matches!(kind, IntentOperationOutputKind::Scalar)
+            }
+            Self::Contact => matches!(kind, IntentOperationOutputKind::Contact),
+            Self::Constraint => matches!(kind, IntentOperationOutputKind::Constraint),
+            Self::Dimension => matches!(kind, IntentOperationOutputKind::Dimension),
+            Self::Parameter => matches!(kind, IntentOperationOutputKind::Parameter),
+            Self::ExternalBinding => {
+                matches!(kind, IntentOperationOutputKind::ExternalBinding)
+            }
+        }
     }
 }
 

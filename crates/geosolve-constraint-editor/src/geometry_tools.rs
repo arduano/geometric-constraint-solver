@@ -3,6 +3,7 @@
 //! Exact geometry-authoring tool identities and their legacy projections.
 
 use crate::EditorTool;
+use geosolve_sketch_intent::GeometryRecipeKind;
 
 /// A stable palette family for related geometry-authoring recipes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -275,6 +276,71 @@ impl GeometryToolVariant {
             Self::Parabola => EditorTool::Parabola,
             Self::Hyperbola => EditorTool::Hyperbola,
             Self::OpenControlNurbs | Self::PeriodicControlNurbs => EditorTool::Nurbs,
+        }
+    }
+
+    /// Canonical persistent Intent recipe implemented by this authoring tool.
+    #[must_use]
+    pub const fn intent_recipe(self) -> GeometryRecipeKind {
+        use GeometryRecipeKind as R;
+        match self {
+            Self::SketchPoint => R::SketchPoint,
+            Self::Segment => R::Segment,
+            Self::Polyline => R::Polyline,
+            Self::MidpointLine => R::MidpointLine,
+            Self::TwoPointAlignedRectangle => R::TwoPointAlignedRectangle,
+            Self::ThreePointCornerRectangle => R::ThreePointCornerRectangle,
+            Self::CenterRectangle => R::CenterRectangle,
+            Self::ThreePointCenterRectangle => R::ThreePointCenterRectangle,
+            Self::CenterRadiusCircle => R::CenterRadiusCircle,
+            Self::TwoPointDiameterCircle => R::TwoPointDiameterCircle,
+            Self::ThreePointCircle => R::ThreePointCircle,
+            Self::CenterArc => R::CenterArc,
+            Self::ThreePointArc => R::ThreePointArc,
+            Self::TangentArc => R::TangentArc,
+            Self::CenterAxesEllipse => R::CenterAxesEllipse,
+            Self::AxisEndpointsEllipse => R::AxisEndpointsEllipse,
+            Self::CenterAxesEllipticalArc => R::CenterAxesEllipticalArc,
+            Self::AxisEndpointsEllipticalArc => R::AxisEndpointsEllipticalArc,
+            Self::QuadraticBezier => R::QuadraticBezier,
+            Self::CubicBezier => R::CubicBezier,
+            Self::RationalQuadraticConic => R::RationalQuadraticConic,
+            Self::Parabola => R::Parabola,
+            Self::Hyperbola => R::Hyperbola,
+            Self::OpenControlNurbs => R::OpenControlNurbs,
+            Self::PeriodicControlNurbs => R::PeriodicControlNurbs,
+        }
+    }
+
+    /// Exact authoring tool which owns one persistent Intent recipe.
+    #[must_use]
+    pub const fn from_intent_recipe(recipe: GeometryRecipeKind) -> Self {
+        match recipe {
+            GeometryRecipeKind::SketchPoint => Self::SketchPoint,
+            GeometryRecipeKind::Segment => Self::Segment,
+            GeometryRecipeKind::Polyline => Self::Polyline,
+            GeometryRecipeKind::MidpointLine => Self::MidpointLine,
+            GeometryRecipeKind::TwoPointAlignedRectangle => Self::TwoPointAlignedRectangle,
+            GeometryRecipeKind::ThreePointCornerRectangle => Self::ThreePointCornerRectangle,
+            GeometryRecipeKind::CenterRectangle => Self::CenterRectangle,
+            GeometryRecipeKind::ThreePointCenterRectangle => Self::ThreePointCenterRectangle,
+            GeometryRecipeKind::CenterRadiusCircle => Self::CenterRadiusCircle,
+            GeometryRecipeKind::TwoPointDiameterCircle => Self::TwoPointDiameterCircle,
+            GeometryRecipeKind::ThreePointCircle => Self::ThreePointCircle,
+            GeometryRecipeKind::CenterArc => Self::CenterArc,
+            GeometryRecipeKind::ThreePointArc => Self::ThreePointArc,
+            GeometryRecipeKind::TangentArc => Self::TangentArc,
+            GeometryRecipeKind::CenterAxesEllipse => Self::CenterAxesEllipse,
+            GeometryRecipeKind::AxisEndpointsEllipse => Self::AxisEndpointsEllipse,
+            GeometryRecipeKind::CenterAxesEllipticalArc => Self::CenterAxesEllipticalArc,
+            GeometryRecipeKind::AxisEndpointsEllipticalArc => Self::AxisEndpointsEllipticalArc,
+            GeometryRecipeKind::QuadraticBezier => Self::QuadraticBezier,
+            GeometryRecipeKind::CubicBezier => Self::CubicBezier,
+            GeometryRecipeKind::RationalQuadraticConic => Self::RationalQuadraticConic,
+            GeometryRecipeKind::Parabola => Self::Parabola,
+            GeometryRecipeKind::Hyperbola => Self::Hyperbola,
+            GeometryRecipeKind::OpenControlNurbs => Self::OpenControlNurbs,
+            GeometryRecipeKind::PeriodicControlNurbs => Self::PeriodicControlNurbs,
         }
     }
 

@@ -1,6 +1,9 @@
 /target/
 **/dist/
+**/dist-patch/
 **/.trunk/
+crates/geosolve-demo-web/frontend/src/generated/
+crates/geosolve-demo-web/frontend/node_modules/
 *.profraw
 *.svg.tmp
 .DS_Store

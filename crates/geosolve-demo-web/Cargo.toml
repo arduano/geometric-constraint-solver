@@ -28,39 +28,13 @@ serde_json.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
-js-sys = "=0.3.98"
 wasm-bindgen = "=0.2.121"
-wasm-bindgen-futures = "=0.4.71"
-web-sys = { version = "=0.3.98", features = [
-    "Blob",
-    "BlobPropertyBag",
-    "CanvasRenderingContext2d",
-    "Clipboard",
-    "Document",
-    "DomRect",
-    "Element",
-    "Event",
-    "EventTarget",
-    "FocusEvent",
-    "HtmlAnchorElement",
-    "HtmlCanvasElement",
-    "HtmlElement",
-    "HtmlImageElement",
-    "HtmlInputElement",
-    "HtmlSelectElement",
-    "HtmlTextAreaElement",
-    "KeyboardEvent",
-    "MouseEvent",
-    "Navigator",
-    "PointerEvent",
-    "Storage",
-    "Url",
-    "WheelEvent",
-    "Window",
-] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "=0.3.71"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+geosolve-headless = { version = "0.2.0", path = "../geosolve-headless" }
 
 [lints]
 workspace = true

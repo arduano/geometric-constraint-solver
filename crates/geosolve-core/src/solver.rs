@@ -1171,9 +1171,10 @@ impl Problem {
             }
 
             if validation.valid && numerical.rank_is_valid {
+                let summary = &plan.structural.component_summaries[component.index];
                 let candidate_count = candidate_sources(self, component).len();
                 if let Some(reason) = diagnostic_component_budget_reason(
-                    &plan.structural.component_summaries[component.index],
+                    summary,
                     candidate_count,
                     redundancy_work.trials,
                     config.redundancy_diagnostic_budget,
@@ -1190,7 +1191,6 @@ impl Problem {
                     {
                         redundancy_reason.get_or_insert(DiagnosticIncompleteReason::TrialBudget);
                     } else {
-                        let summary = &plan.structural.component_summaries[component.index];
                         redundancy_work.components += 1;
                         redundancy_work.tangent_dimensions = redundancy_work
                             .tangent_dimensions
@@ -1198,20 +1198,27 @@ impl Problem {
                         redundancy_work.scalar_rows = redundancy_work
                             .scalar_rows
                             .saturating_add(summary.active_hard_rows);
-                        redundancy_work.candidate_sources += candidate_count;
-                        redundancy_work.trials += trials;
                         redundancy_analyzed = true;
-                        let Some(redundancy) = find_redundancy(
-                            &numerical.hard,
-                            &validation.rows,
-                            &source_order,
-                            numerical.diagnostics.threshold,
-                            config.normalized_residual_tolerance,
-                            control.as_deref_mut(),
-                        ) else {
-                            return Ok(None);
-                        };
-                        all_redundancy.extend(redundancy.rows);
+                        if numerical.diagnostics.rank == numerical.hard.jacobian.nrows() {
+                            // The mandatory component rank kernel already
+                            // proves every hard row independent. Preserve the
+                            // configured admission envelope above, but perform
+                            // and charge no source-deletion rank trials.
+                        } else {
+                            redundancy_work.candidate_sources += candidate_count;
+                            redundancy_work.trials += trials;
+                            let Some(redundancy) = find_redundancy(
+                                &numerical.hard,
+                                &validation.rows,
+                                &source_order,
+                                numerical.diagnostics.threshold,
+                                config.normalized_residual_tolerance,
+                                control.as_deref_mut(),
+                            ) else {
+                                return Ok(None);
+                            };
+                            all_redundancy.extend(redundancy.rows);
+                        }
                     }
                 }
             } else if validation.evaluated && !validation.valid {

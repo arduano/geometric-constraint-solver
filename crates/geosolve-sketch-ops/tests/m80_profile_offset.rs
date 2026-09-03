@@ -15,8 +15,9 @@ use geosolve_sketch::{
 };
 use geosolve_sketch_ops::{
     SketchOperationApplyError, SketchOperationIncompleteReason, SketchOperationKind,
-    SketchOperationProposal, SketchOperationRequest, SketchOperationResult,
-    SketchOperationSnapshot, SketchOperationUnsupportedReason, SketchProfileOffsetOperand,
+    SketchOperationOutputPathSegment, SketchOperationProposal, SketchOperationRequest,
+    SketchOperationResult, SketchOperationSnapshot, SketchOperationUnsupportedReason,
+    SketchProfileOffsetOperand,
 };
 use geosolve_sketch_topology::{
     OffsetDirectedSpan, OffsetEndpointRole, OffsetOperandIndex, OffsetOperandIneligibility,
@@ -195,6 +196,39 @@ fn assert_signed_line_offset(
     );
 }
 
+fn assert_face_output_plan_has_source_keys(
+    output_plan: &geosolve_sketch_ops::SketchOperationOutputPlan,
+    edge_count: usize,
+) {
+    assert_eq!(output_plan.slots.len(), edge_count * 2 + 2);
+    assert_eq!(
+        output_plan
+            .slots
+            .iter()
+            .filter(|slot| {
+                slot.path.iter().any(|segment| {
+                    matches!(segment, SketchOperationOutputPathSegment::SourceSpan(_))
+                })
+            })
+            .count(),
+        edge_count,
+        "each target edge must remain keyed by its exact source span"
+    );
+    assert_eq!(
+        output_plan
+            .slots
+            .iter()
+            .filter(|slot| {
+                slot.path.iter().any(|segment| {
+                    matches!(segment, SketchOperationOutputPathSegment::SourceJunction(_))
+                })
+            })
+            .count(),
+        edge_count,
+        "each target boundary must remain keyed by its exact source junction owner"
+    );
+}
+
 fn circle_radius(document: &SketchDocument, span: CurveSpan) -> f64 {
     let CurveDefinition::Circle { radius, .. } = &document
         .curve(span.curve)
@@ -277,6 +311,7 @@ fn authenticated_face_becomes_one_atomic_preview_and_exact_cas_commit() {
             .count(),
         face.outer.spans.len()
     );
+    assert_face_output_plan_has_source_keys(proposal.output_plan(), 4);
 
     let edit = proposal
         .profile_offset_document_edit()

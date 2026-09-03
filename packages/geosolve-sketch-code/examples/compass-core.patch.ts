@@ -11,25 +11,26 @@ export const compassCore = definePatch(
     west: t.point(),
     markerRadius: t.length(),
   },
-  (p, input) => {
-    p.editLens({
-      output: ["markers"],
-      invocationArgument: ["markerRadius"],
-      expectedKind: "scalar",
-    });
-    return {
-      ring: {
-        northEast: p.line(input.north, input.east),
-        southEast: p.line(input.east, input.south),
-        southWest: p.line(input.south, input.west),
-        northWest: p.line(input.west, input.north),
-      },
-      markers: {
-        north: p.circle(input.north, input.markerRadius),
-        east: p.circle(input.east, input.markerRadius),
-        south: p.circle(input.south, input.markerRadius),
-        west: p.circle(input.west, input.markerRadius),
-      },
-    };
-  },
+  (p, input) => ({
+    ring: {
+      northEast: p.geometry.segment("northEast", { start: input.north, end: input.east }),
+      southEast: p.geometry.segment("southEast", { start: input.east, end: input.south }),
+      southWest: p.geometry.segment("southWest", { start: input.south, end: input.west }),
+      northWest: p.geometry.segment("northWest", { start: input.west, end: input.north }),
+    },
+    markers: {
+      north: p.geometry.centerRadiusCircle("northMarker", {
+        center: input.north, radius: input.markerRadius,
+      }),
+      east: p.geometry.centerRadiusCircle("eastMarker", {
+        center: input.east, radius: input.markerRadius,
+      }),
+      south: p.geometry.centerRadiusCircle("southMarker", {
+        center: input.south, radius: input.markerRadius,
+      }),
+      west: p.geometry.centerRadiusCircle("westMarker", {
+        center: input.west, radius: input.markerRadius,
+      }),
+    },
+  }),
 );

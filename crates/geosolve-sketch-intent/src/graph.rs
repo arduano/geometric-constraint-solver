@@ -18,6 +18,7 @@ use crate::model::{
     MAX_INTENT_NODE_FIELDS, MAX_INTENT_NODE_INPUTS, MAX_INTENT_OPERATION_OUTPUTS, PatchPortRef,
     PortSpec, checked_child_count, child_port_specs, literal_matches_leaf, node_port_specs,
 };
+use crate::schema::IntentDraftOutputDescriptor;
 
 /// Strict canonical graph wire version.
 pub const INTENT_GRAPH_VERSION: u32 = 2;
@@ -2865,6 +2866,73 @@ pub(crate) fn finish_allocated_draft(
         child_order: allocated.child_order,
         children: allocated.children,
     })
+}
+
+impl IntentNodeDraft {
+    /// Derives the exact stable output selector/path/kind contract generated
+    /// by this draft without consuming any caller allocator or publishing a
+    /// graph mutation.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same bounded schema, field, input, child, operation-output
+    /// or instance error that would reject the draft at transaction planning.
+    pub fn output_descriptors(&self) -> Result<Vec<IntentDraftOutputDescriptor>, IntentGraphError> {
+        let inputs = self
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(ordinal, (slot, source))| {
+                let port = match source {
+                    PatchPortRef::Stable { port } => *port,
+                    PatchPortRef::Alias { .. } => IntentPortRef {
+                        node: NodeId::from_raw(0),
+                        port: PortId::from_raw(
+                            u64::try_from(ordinal)
+                                .map_err(|_| IntentGraphError::IdExhausted("probe input port"))?
+                                .checked_add(1)
+                                .ok_or(IntentGraphError::IdExhausted("probe input port"))?,
+                        ),
+                        kind: slot
+                            .role
+                            .expected_kind()
+                            .or(match self.kind {
+                                IntentNodeKind::Identity { port_kind, .. } => Some(port_kind),
+                                _ => None,
+                            })
+                            .ok_or(IntentGraphError::InputRoleNotAccepted {
+                                node: NodeId::from_raw(1),
+                                role: slot.role,
+                            })?,
+                    },
+                };
+                Ok((*slot, port))
+            })
+            .collect::<Result<BTreeMap<_, _>, IntentGraphError>>()?;
+        let allocated = allocate_draft(self.clone(), &mut IntentAllocatorHighWater::initial())?;
+        let node = finish_allocated_draft(allocated, inputs, &mut IntentInstanceState::empty())?;
+        Ok(node
+            .descriptor()
+            .outputs
+            .into_iter()
+            .map(|output| IntentDraftOutputDescriptor {
+                alias_input: node
+                    .ports
+                    .get(&output.port.port)
+                    .and_then(|port| match port.flow {
+                        IntentIdentityFlow::Aliased { source } => node
+                            .inputs
+                            .iter()
+                            .find_map(|(slot, input)| (*input == source).then_some(*slot)),
+                        _ => None,
+                    }),
+                selector: output.selector,
+                path: output.path,
+                kind: output.kind,
+                writable: output.writable,
+            })
+            .collect())
+    }
 }
 
 pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(), IntentGraphError> {

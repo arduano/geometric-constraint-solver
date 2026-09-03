@@ -181,7 +181,7 @@ pub(crate) fn materialize_computed_features(
         feature_suppression.insert(feature_id, node.suppressed);
         features.push(ComputedFeature {
             id: feature_id,
-            label: node.symbol.as_str().to_owned(),
+            label: native_feature_name(node)?.to_owned(),
             suppressed: node.suppressed,
             definition,
         });
@@ -447,8 +447,7 @@ fn fillet_corner(
                 node: node.id,
                 reason: "Fillet input index exceeds intent limits",
             })?;
-    Ok(ComputedFilletCorner {
-        id,
+    let corner = geosolve_sketch_features::NewComputedFilletCorner {
         first: fillet_parent(node, ownership, ordinal, "first", first_index)?,
         second: fillet_parent(node, ownership, ordinal, "second", second_index)?,
         endpoint_order: match enum_value(node, &corner_field(ordinal, "endpoint_order"))? {
@@ -461,6 +460,14 @@ fn fillet_corner(
             "clockwise" => DocumentArcSweep::Clockwise,
             _ => return Err(invalid(node, "Fillet arc sweep is invalid")),
         },
+    }
+    .canonicalized();
+    Ok(ComputedFilletCorner {
+        id,
+        first: corner.first,
+        second: corner.second,
+        endpoint_order: corner.endpoint_order,
+        sweep: corner.sweep,
     })
 }
 
@@ -564,6 +571,14 @@ fn field<'a>(node: &'a IntentNode, name: &str) -> Option<&'a IntentLiteral> {
     node.fields
         .iter()
         .find_map(|(key, value)| (key.0.as_str() == name).then_some(value))
+}
+
+fn native_feature_name(node: &IntentNode) -> Result<&str, ComputedIntentMaterializationError> {
+    match field(node, "name") {
+        Some(IntentLiteral::Text(value)) => Ok(value.as_str()),
+        None => Ok(node.symbol.as_str()),
+        Some(_) => Err(invalid(node, "computed feature name is invalid")),
+    }
 }
 
 fn quantity(

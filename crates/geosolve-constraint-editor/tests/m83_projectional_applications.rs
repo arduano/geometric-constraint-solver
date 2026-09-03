@@ -10,13 +10,13 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{
     CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentId,
-    OperationControl, PersistentId,
+    OperationControl, PersistentId, ScalarUnit,
 };
 use geosolve_sketch_intent::{
     ConstraintKind, DimensionKind as IntentDimensionKind, GeometryRecipeKind, IntentAliasMap,
     IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
     IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
-    IntentPortSelector, IntentSessionId, IntentUnit, LeafField,
+    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -1008,6 +1008,765 @@ fn point_curve_application_preserves_picked_contact_metadata() {
     };
     assert_eq!(actual, point);
     assert_eq!(document.contact(contact).unwrap().curve, edge);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one periodic-contact drag keeps unit, validation, metadata, history, and Undo invariants together"
+)]
+fn circle_point_on_curve_drag_round_trips_native_angle_as_dimensionless_parameter() {
+    let mut coordinator = coordinator(0x8300_9005);
+    let aliases = create(
+        &mut coordinator,
+        [
+            ("point", point("point", [1.0, 0.0])),
+            ("circle", circle("circle", [0.0, 0.0], 1.0)),
+        ],
+    );
+    let IntentNativeBinding::Point(point) =
+        alias_binding(&coordinator, &aliases, "point", IntentPortRole::Primary)
+    else {
+        panic!("point declaration must own one native point");
+    };
+    let IntentNativeBinding::CurveSpan(circle) =
+        alias_binding(&coordinator, &aliases, "circle", IntentPortRole::Span)
+    else {
+        panic!("circle declaration must own one native span");
+    };
+    let translated = translate(
+        &coordinator,
+        &relation(
+            ConstraintIntent::Coincident,
+            vec![
+                AuthoringOperand::selected(SelectionItem::Point(point)),
+                AuthoringOperand::picked(SelectionItem::Curve(circle), Some(0.0)),
+            ],
+            ResolvedConstraintKind::PointOnCurve,
+        ),
+    )
+    .unwrap();
+    coordinator.apply_patch(translated.patch).unwrap();
+
+    let accepted_before = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let DocumentConstraintDefinition::PointOnCurve { contact, .. } =
+        accepted_before.constraints()[0].definition
+    else {
+        panic!("fixture must lower one Point-on-Curve relation");
+    };
+    let contact_before = accepted_before.contact(contact).unwrap().clone();
+    let parameter = contact_before.parameter;
+    let parameter_leaf = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .ownership
+        .writable_leaf(IntentNativeWritableLeaf::ScalarValue { scalar: parameter })
+        .expect("contact parameter must retain a writable reverse owner");
+    let history_before = coordinator.intent().undo_len();
+
+    coordinator.begin_point_drag(90_005, point).unwrap();
+    let preview = coordinator
+        .preview_point_drag(90_005, 1, [0.0, 1.0], OperationControl::unlimited())
+        .unwrap()
+        .expect("circle-constrained point must have one accepted preview");
+    assert!(preview.accepted_position.into_iter().all(f64::is_finite));
+    let outcome = coordinator.finish_point_drag(90_005, 1).unwrap();
+
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(coordinator.intent().undo_len(), history_before + 1);
+    assert!(matches!(
+        coordinator.intent().instance().values().get(&parameter_leaf),
+        Some(IntentLiteral::Quantity {
+            value,
+            unit: IntentUnit::Dimensionless,
+        }) if value.is_finite()
+    ));
+    let accepted = coordinator.accepted_materialization().unwrap();
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+    );
+    let document = accepted
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    assert!(
+        document
+            .points()
+            .iter()
+            .flat_map(|point| point.position)
+            .chain(document.scalars().iter().map(|scalar| scalar.value))
+            .all(f64::is_finite)
+    );
+    let contact_after = document.contact(contact).unwrap();
+    assert_eq!(contact_after.domain, contact_before.domain);
+    assert_eq!(contact_after.winding, contact_before.winding);
+    assert_eq!(contact_after.neighborhood, contact_before.neighborhood);
+    assert_eq!(
+        contact_after.tangent_orientation,
+        contact_before.tangent_orientation
+    );
+
+    coordinator.undo().unwrap().expect("drag must be undoable");
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &accepted_before
+    );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one mixed-contact drag keeps both authored/native unit boundaries and transaction invariants together"
+)]
+fn line_circle_tangency_drag_round_trips_mixed_contact_units_and_radius() {
+    let mut coordinator = coordinator(0x8300_9006);
+    let aliases = create(
+        &mut coordinator,
+        [
+            (
+                "line",
+                segment("line", [2.0, 1.0], [-2.0, 1.0]).with_field(
+                    IntentFieldKey(key("branch_direction")),
+                    IntentLiteral::Point([-1.0, 0.0]),
+                ),
+            ),
+            ("circle", circle("circle", [0.0, 0.0], 1.0)),
+        ],
+    );
+    let IntentNativeBinding::Point(line_start) =
+        alias_binding(&coordinator, &aliases, "line", IntentPortRole::Start)
+    else {
+        panic!("line declaration must own one native start point");
+    };
+    let IntentNativeBinding::Point(line_end) =
+        alias_binding(&coordinator, &aliases, "line", IntentPortRole::End)
+    else {
+        panic!("line declaration must own one native end point");
+    };
+    let IntentNativeBinding::CurveSpan(line) =
+        alias_binding(&coordinator, &aliases, "line", IntentPortRole::Span)
+    else {
+        panic!("line declaration must own one native span");
+    };
+    let IntentNativeBinding::Point(circle_center) =
+        alias_binding(&coordinator, &aliases, "circle", IntentPortRole::Center)
+    else {
+        panic!("circle declaration must own one native center point");
+    };
+    let IntentNativeBinding::Scalar(radius) =
+        alias_binding(&coordinator, &aliases, "circle", IntentPortRole::Target)
+    else {
+        panic!("circle declaration must own one native radius scalar");
+    };
+    let IntentNativeBinding::CurveSpan(circle) =
+        alias_binding(&coordinator, &aliases, "circle", IntentPortRole::Span)
+    else {
+        panic!("circle declaration must own one native span");
+    };
+
+    for point in [line_start, circle_center] {
+        let lock = translate(
+            &coordinator,
+            &relation(
+                ConstraintIntent::Lock,
+                vec![AuthoringOperand::selected(SelectionItem::Point(point))],
+                ResolvedConstraintKind::FixedPoint,
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            coordinator.apply_patch(lock.patch).unwrap().disposition,
+            IntentPlanDisposition::Accepted,
+        );
+    }
+    let tangency = translate(
+        &coordinator,
+        &relation(
+            ConstraintIntent::Tangent,
+            vec![
+                AuthoringOperand::picked(SelectionItem::Curve(line), Some(0.5)),
+                AuthoringOperand::picked(
+                    SelectionItem::Curve(circle),
+                    Some(std::f64::consts::FRAC_PI_2),
+                ),
+            ],
+            ResolvedConstraintKind::CurveTangency,
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        coordinator.apply_patch(tangency.patch).unwrap().disposition,
+        IntentPlanDisposition::Accepted,
+    );
+
+    let accepted_before = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let (first_contact, second_contact) = accepted_before
+        .constraints()
+        .iter()
+        .find_map(|constraint| match &constraint.definition {
+            DocumentConstraintDefinition::CurveCurveTangency {
+                first_contact,
+                second_contact,
+            } => Some((*first_contact, *second_contact)),
+            _ => None,
+        })
+        .expect("fixture must lower one mixed curve tangency");
+    let line_contact_before = accepted_before.contact(first_contact).unwrap().clone();
+    let circle_contact_before = accepted_before.contact(second_contact).unwrap().clone();
+    let line_parameter = line_contact_before.parameter;
+    let circle_parameter = circle_contact_before.parameter;
+    assert_eq!(
+        accepted_before.scalar(line_parameter).unwrap().unit,
+        ScalarUnit::Parameter,
+    );
+    assert_eq!(
+        accepted_before.scalar(circle_parameter).unwrap().unit,
+        ScalarUnit::Angle,
+    );
+    assert_eq!(
+        accepted_before.scalar(radius).unwrap().unit,
+        ScalarUnit::Length
+    );
+
+    let ownership = &coordinator.accepted_materialization().unwrap().ownership;
+    let line_parameter_leaf = ownership
+        .writable_leaf(IntentNativeWritableLeaf::ScalarValue {
+            scalar: line_parameter,
+        })
+        .expect("line contact parameter must retain one reverse owner");
+    let circle_parameter_leaf = ownership
+        .writable_leaf(IntentNativeWritableLeaf::ScalarValue {
+            scalar: circle_parameter,
+        })
+        .expect("circle contact parameter must retain one reverse owner");
+    let radius_leaf = ownership
+        .writable_leaf(IntentNativeWritableLeaf::ScalarValue { scalar: radius })
+        .expect("circle radius must retain one reverse owner");
+    let instance_before = coordinator.intent().instance().values().clone();
+    let history_before = coordinator.intent().undo_len();
+
+    coordinator.begin_point_drag(90_006, line_end).unwrap();
+    let preview = coordinator
+        .preview_point_drag(90_006, 1, [-2.0, 2.0], OperationControl::unlimited())
+        .unwrap()
+        .expect("mixed line-circle tangency must have one accepted drag preview");
+    assert!(preview.accepted_position.into_iter().all(f64::is_finite));
+    let outcome = coordinator.finish_point_drag(90_006, 1).unwrap();
+
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(coordinator.intent().undo_len(), history_before + 1);
+    let expected_line_parameter = 7.0 / 17.0;
+    let expected_circle_parameter = 4.0_f64.atan2(1.0);
+    let expected_radius = 6.0 / 17.0_f64.sqrt();
+    for (leaf, expected, unit) in [
+        (
+            line_parameter_leaf,
+            expected_line_parameter,
+            IntentUnit::Dimensionless,
+        ),
+        (
+            circle_parameter_leaf,
+            expected_circle_parameter,
+            IntentUnit::Dimensionless,
+        ),
+        (radius_leaf, expected_radius, IntentUnit::Length),
+    ] {
+        let Some(IntentLiteral::Quantity {
+            value,
+            unit: actual,
+        }) = coordinator.intent().instance().values().get(&leaf)
+        else {
+            panic!("reverse-projected scalar leaf must remain a quantity");
+        };
+        assert_eq!(*actual, unit);
+        assert!((*value - expected).abs() <= 1.0e-8, "{value} != {expected}");
+    }
+
+    let accepted = coordinator.accepted_materialization().unwrap();
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_some_and(|residual| residual.is_finite() && residual <= 1.0e-9),
+        "{:?}",
+        accepted.validation,
+    );
+    let document = accepted
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    assert!(
+        document
+            .points()
+            .iter()
+            .flat_map(|point| point.position)
+            .chain(document.scalars().iter().map(|scalar| scalar.value))
+            .all(f64::is_finite)
+    );
+    let assert_point = |actual: [f64; 2], expected: [f64; 2]| {
+        assert!((actual[0] - expected[0]).hypot(actual[1] - expected[1]) <= 1.0e-8);
+    };
+    assert_point(document.point(line_start).unwrap().position, [2.0, 1.0]);
+    assert_point(document.point(line_end).unwrap().position, [-2.0, 2.0]);
+    assert_point(document.point(circle_center).unwrap().position, [0.0, 0.0]);
+    assert!(
+        (document.scalar(line_parameter).unwrap().value - expected_line_parameter).abs() <= 1.0e-8
+    );
+    assert!(
+        (document.scalar(circle_parameter).unwrap().value - expected_circle_parameter).abs()
+            <= 1.0e-8
+    );
+    assert!((document.scalar(radius).unwrap().value - expected_radius).abs() <= 1.0e-8);
+
+    let line_contact_after = document.contact(first_contact).unwrap();
+    let circle_contact_after = document.contact(second_contact).unwrap();
+    for (before, after) in [
+        (&line_contact_before, line_contact_after),
+        (&circle_contact_before, circle_contact_after),
+    ] {
+        assert_eq!(after.curve, before.curve);
+        assert_eq!(after.domain, before.domain);
+        assert_eq!(after.winding, before.winding);
+        assert_eq!(after.neighborhood, before.neighborhood);
+        assert_eq!(after.tangent_orientation, before.tangent_orientation);
+    }
+    let line_jet = document.evaluate_contact_jet(first_contact).unwrap();
+    let circle_jet = document.evaluate_contact_jet(second_contact).unwrap();
+    assert_point(
+        [line_jet.position.x, line_jet.position.y],
+        [circle_jet.position.x, circle_jet.position.y],
+    );
+    let tangent_cross = line_jet.first_derivative.x * circle_jet.first_derivative.y
+        - line_jet.first_derivative.y * circle_jet.first_derivative.x;
+    let tangent_dot = line_jet.first_derivative.x * circle_jet.first_derivative.x
+        + line_jet.first_derivative.y * circle_jet.first_derivative.y;
+    assert!(tangent_cross.abs() <= 1.0e-8);
+    assert!(
+        tangent_dot > 0.0,
+        "aligned orientation must remain explicit"
+    );
+
+    coordinator
+        .undo()
+        .unwrap()
+        .expect("drag must be exactly undoable");
+    assert_eq!(coordinator.intent().instance().values(), &instance_before);
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &accepted_before,
+    );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one underconstrained terminal keeps preview continuity, certification, persistence and Undo together"
+)]
+fn point_drag_terminal_certifies_the_exact_accepted_underconstrained_preview() {
+    let raw = 0x8300_9007;
+    let mut coordinator = coordinator(raw);
+    let aliases = create(
+        &mut coordinator,
+        [
+            ("base", point("base", [0.0, 0.0])),
+            ("elbow", point("elbow", [1.0, 1.0])),
+            ("end", point("end", [2.0, 0.0])),
+        ],
+    );
+    let bound_point = |alias| {
+        let IntentNativeBinding::Point(point) =
+            alias_binding(&coordinator, &aliases, alias, IntentPortRole::Primary)
+        else {
+            panic!("{alias} must own one point");
+        };
+        point
+    };
+    let base = bound_point("base");
+    let elbow = bound_point("elbow");
+    let end = bound_point("end");
+
+    let fixed = translate(
+        &coordinator,
+        &relation(
+            ConstraintIntent::Lock,
+            vec![AuthoringOperand::selected(SelectionItem::Point(base))],
+            ResolvedConstraintKind::FixedPoint,
+        ),
+    )
+    .unwrap();
+    coordinator.apply_patch(fixed.patch).unwrap();
+    for (first, second) in [(base, elbow), (elbow, end)] {
+        let dimension = translate(
+            &coordinator,
+            &AuthoringApplication {
+                tool: AuthoringTool::Dimension(AuthoringDimensionKind::PointDistance),
+                operands: vec![
+                    AuthoringOperand::selected(SelectionItem::Point(first)),
+                    AuthoringOperand::selected(SelectionItem::Point(second)),
+                ],
+                options: AuthoringOptions::default(),
+                resolved_constraint: None,
+            },
+        )
+        .unwrap();
+        coordinator.apply_patch(dimension.patch).unwrap();
+    }
+
+    let accepted_before = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let history_before = coordinator.intent().undo_len();
+    coordinator.begin_point_drag(90_007, end).unwrap();
+    coordinator
+        .preview_point_drag(90_007, 1, [0.0, 0.0], OperationControl::unlimited())
+        .unwrap()
+        .expect("the two-link chain has one accepted terminal preview");
+    let preview = coordinator
+        .presentation_session()
+        .unwrap()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    assert_ne!(
+        preview.point(end).unwrap().position.map(f64::to_bits),
+        accepted_before
+            .point(end)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+    );
+
+    coordinator.finish_point_drag(90_007, 1).unwrap();
+    let accepted = coordinator.accepted_materialization().unwrap();
+    let published = accepted
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    assert_eq!(published, &preview);
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+    );
+    assert_eq!(coordinator.intent().undo_len(), history_before + 1);
+
+    let canonical = coordinator.intent().to_canonical_json().unwrap();
+    let restored = ProjectionalIntentCoordinator::restore(
+        IntentSession::from_json(&canonical).unwrap(),
+        ColdIntentMaterializer::with_default_policy(
+            DocumentId(PersistentId::from_u128(raw << 32)),
+            1.0,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        restored
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &preview,
+    );
+
+    coordinator.undo().unwrap().expect("drag must be undoable");
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &accepted_before,
+    );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one contact-rich terminal freezes continuity, locality, validation, metadata, history, Undo and Redo"
+)]
+fn disconnected_underconstrained_contacts_retain_the_terminal_preview() {
+    let mut coordinator = coordinator(0x8300_9008);
+    let aliases = create(
+        &mut coordinator,
+        [
+            (
+                "circle_a",
+                circle(
+                    "circle_a",
+                    [-1.058_996_046_522_978_6, 3.792_711_470_877_848_4],
+                    1.741_155_992_950_786_3,
+                ),
+            ),
+            (
+                "circle_b",
+                circle(
+                    "circle_b",
+                    [-4.401_625_972_775_653, 1.152_443_862_041_915_3],
+                    1.381_593_248_489_370_5,
+                ),
+            ),
+            (
+                "between",
+                segment(
+                    "between",
+                    [-5.493_509_551_454_087, 1.998_960_344_388_117],
+                    [-2.218_656_389_778_542_5, 5.091_484_769_059_186],
+                )
+                .with_field(
+                    IntentFieldKey(key("branch_direction")),
+                    IntentLiteral::Point([0.737_788_637_523_594_1, 0.675_031_796_540_784]),
+                ),
+            ),
+            (
+                "guide",
+                segment(
+                    "guide",
+                    [-1.058_996_046_522_978_6, 1.152_443_862_041_915_3],
+                    [-0.910_063_380_846_682_1, -1.745_781_295_964_486_7],
+                )
+                .with_field(
+                    IntentFieldKey(key("branch_direction")),
+                    IntentLiteral::Point([0.699_294_155_463_731_2, -0.714_834_025_585_147_4]),
+                ),
+            ),
+            (
+                "tangent",
+                segment(
+                    "tangent",
+                    [-5.373_546_124_484_037_5, -1.648_098_981_835_005_4],
+                    [2.449_463_235_547_789, 4.260_673_108_107_254],
+                )
+                .with_field(
+                    IntentFieldKey(key("branch_direction")),
+                    IntentLiteral::Point([0.769_856_553_302_791_3, 0.638_216_959_455_596_4]),
+                ),
+            ),
+        ],
+    );
+    let bound_point = |alias, role| {
+        let IntentNativeBinding::Point(point) = alias_binding(&coordinator, &aliases, alias, role)
+        else {
+            panic!("{alias} must own one point");
+        };
+        point
+    };
+    let bound_span = |alias| {
+        let IntentNativeBinding::CurveSpan(span) =
+            alias_binding(&coordinator, &aliases, alias, IntentPortRole::Span)
+        else {
+            panic!("{alias} must own one span");
+        };
+        span
+    };
+    let upper_circle_center = bound_point("circle_a", IntentPortRole::Center);
+    let lower_circle_center = bound_point("circle_b", IntentPortRole::Center);
+    let between_start = bound_point("between", IntentPortRole::Start);
+    let between_end = bound_point("between", IntentPortRole::End);
+    let guide_start = bound_point("guide", IntentPortRole::Start);
+    let guide_end = bound_point("guide", IntentPortRole::End);
+    let circle_a = bound_span("circle_a");
+    let circle_b = bound_span("circle_b");
+    let tangent = bound_span("tangent");
+
+    for (point, curve, parameter) in [
+        (between_start, circle_b, 2.482_107_115_878_143),
+        (between_end, circle_a, 2.299_668_758_371_277_4),
+    ] {
+        let contact = translate(
+            &coordinator,
+            &relation(
+                ConstraintIntent::Coincident,
+                vec![
+                    AuthoringOperand::selected(SelectionItem::Point(point)),
+                    AuthoringOperand::picked(SelectionItem::Curve(curve), Some(parameter)),
+                ],
+                ResolvedConstraintKind::PointOnCurve,
+            ),
+        )
+        .unwrap();
+        coordinator.apply_patch(contact.patch).unwrap();
+    }
+    for (tool, first, second, resolved) in [
+        (
+            ConstraintIntent::Horizontal,
+            guide_start,
+            lower_circle_center,
+            ResolvedConstraintKind::HorizontalPoints,
+        ),
+        (
+            ConstraintIntent::Vertical,
+            guide_start,
+            upper_circle_center,
+            ResolvedConstraintKind::VerticalPoints,
+        ),
+    ] {
+        let relation = translate(
+            &coordinator,
+            &relation(
+                tool,
+                vec![
+                    AuthoringOperand::selected(SelectionItem::Point(first)),
+                    AuthoringOperand::selected(SelectionItem::Point(second)),
+                ],
+                resolved,
+            ),
+        )
+        .unwrap();
+        coordinator.apply_patch(relation.patch).unwrap();
+    }
+    let tangency = translate(
+        &coordinator,
+        &relation(
+            ConstraintIntent::Tangent,
+            vec![
+                AuthoringOperand::picked(
+                    SelectionItem::Curve(circle_a),
+                    Some(5.359_277_792_595_967),
+                ),
+                AuthoringOperand::picked(
+                    SelectionItem::Curve(tangent),
+                    Some(0.685_664_076_214_954_8),
+                ),
+            ],
+            ResolvedConstraintKind::CurveTangency,
+        ),
+    )
+    .unwrap();
+    coordinator.apply_patch(tangency.patch).unwrap();
+
+    let accepted_before = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let moved_before = accepted_before.point(between_start).unwrap().position;
+    let unrelated_before = accepted_before.point(guide_end).unwrap().position;
+    let contacts_before = accepted_before.contacts().to_vec();
+    let history_before = coordinator.intent().undo_len();
+
+    coordinator.begin_point_drag(90_008, between_start).unwrap();
+    coordinator
+        .preview_point_drag(90_008, 1, [-5.0, 2.35], OperationControl::unlimited())
+        .unwrap()
+        .expect("contact-rich fixture has one accepted terminal preview");
+    let preview = coordinator
+        .presentation_session()
+        .unwrap()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let moved_preview = preview.point(between_start).unwrap().position;
+    assert!(moved_preview.into_iter().all(f64::is_finite));
+    assert_ne!(
+        moved_preview.map(f64::to_bits),
+        moved_before.map(f64::to_bits)
+    );
+    assert_eq!(
+        preview.point(guide_end).unwrap().position.map(f64::to_bits),
+        unrelated_before.map(f64::to_bits),
+        "the disconnected guide endpoint must retain drag locality",
+    );
+
+    coordinator.finish_point_drag(90_008, 1).unwrap();
+    let accepted = coordinator.accepted_materialization().unwrap();
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+    );
+    let published = accepted
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    assert_eq!(published, &preview);
+    assert_eq!(coordinator.intent().undo_len(), history_before + 1);
+    assert_eq!(published.contacts().len(), contacts_before.len());
+    for (before, after) in contacts_before.iter().zip(published.contacts()) {
+        assert_eq!(after.id, before.id);
+        assert_eq!(after.curve, before.curve);
+        assert_eq!(after.parameter, before.parameter);
+        assert_eq!(after.domain, before.domain);
+        assert_eq!(after.winding, before.winding);
+        assert_eq!(after.neighborhood, before.neighborhood);
+        assert_eq!(after.tangent_orientation, before.tangent_orientation);
+    }
+
+    coordinator.undo().unwrap().expect("drag must be undoable");
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &accepted_before,
+    );
+    coordinator.redo().unwrap().expect("drag must be redoable");
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &preview,
+    );
 }
 
 #[test]

@@ -7,8 +7,14 @@ export const crossBrace = definePatch(
   { frame: t.feature("rectangle") },
   (p, { frame }) => ({
     diagonals: {
-      rising: p.line(frame.corners.lowerLeft, frame.corners.upperRight),
-      falling: p.line(frame.corners.upperLeft, frame.corners.lowerRight),
+      rising: p.geometry.segment("rising", {
+        start: frame.corners[0],
+        end: frame.corners[2],
+      }),
+      falling: p.geometry.segment("falling", {
+        start: frame.corners[3],
+        end: frame.corners[1],
+      }),
     },
   }),
 );

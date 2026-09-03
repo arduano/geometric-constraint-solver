@@ -10,28 +10,10 @@ export const harnessRoute = definePatch(
     clipRadius: t.length(),
     bendRadius: t.length(),
   },
-  (p, { vertices, corners, clipRadius, bendRadius }) => {
-    p.editLens({
-      output: ["clips"],
-      invocationArgument: ["clipRadius"],
-      expectedKind: "scalar",
-    });
-    p.editLens({
-      output: ["fillets"],
-      invocationArgument: ["bendRadius"],
-      expectedKind: "scalar",
-    });
-    return {
-      clips: p.each(
-        vertices,
-        (vertex) => p.circle(vertex, clipRadius),
-        { key: (vertex) => vertex.key },
-      ),
-      fillets: p.each(
-        corners,
-        (corner) => p.fillet({ corner, radius: bendRadius }),
-        { key: (corner) => corner.key },
-      ),
-    };
-  },
+  (p, { vertices, corners, clipRadius, bendRadius }) => ({
+    clips: p.each(vertices, (vertex) =>
+      p.geometry.centerRadiusCircle("clip", { center: vertex, radius: clipRadius })),
+    fillets: p.each(corners, (corner) =>
+      p.computed.fillet("fillet", { corner, radius: bendRadius })),
+  }),
 );

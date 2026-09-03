@@ -14,7 +14,8 @@ use geosolve_sketch::{
     cancellation_pair,
 };
 use geosolve_sketch_ops::{
-    LineEndpoint, SketchOperationIdentityChange, SketchOperationOutputPlan,
+    LineEndpoint, SketchOperationIdentityChange, SketchOperationKind,
+    SketchOperationOutputPathSegment, SketchOperationOutputPlan, SketchOperationOutputRole,
     SketchOperationProposal, SketchOperationRequest, SketchOperationResult,
     SketchOperationSnapshot, SketchProfileOffsetOperand, SplitRetainedPiece, TrimRetainedSide,
 };
@@ -195,12 +196,13 @@ fn apply_reserved_case(
 ) -> RetainedSketchDocumentSession {
     let preliminary = proposal(&session, request(&session));
     let expected_plan = preliminary.output_plan().clone();
+    assert_output_plan_is_semantic(&expected_plan);
     let should_allocate = !matches!(
         expected_plan.kind,
-        geosolve_sketch_ops::SketchOperationKind::Split
-            | geosolve_sketch_ops::SketchOperationKind::Break
-            | geosolve_sketch_ops::SketchOperationKind::Trim
-            | geosolve_sketch_ops::SketchOperationKind::Extend
+        SketchOperationKind::Split
+            | SketchOperationKind::Break
+            | SketchOperationKind::Trim
+            | SketchOperationKind::Extend
     );
     assert_eq!(
         !expected_plan.slots.is_empty(),
@@ -250,6 +252,141 @@ fn apply_reserved_case(
         );
     }
     session
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed twelve-kind oracle keeps every public operation result shape visibly exhaustive"
+)]
+fn assert_output_plan_is_semantic(plan: &SketchOperationOutputPlan) {
+    for (ordinal, slot) in plan.slots.iter().enumerate() {
+        assert_eq!(slot.ordinal, ordinal);
+        assert!(!slot.path.is_empty());
+        assert!(
+            plan.slots[..ordinal]
+                .iter()
+                .all(|prior| prior.path != slot.path),
+            "one operation output path was repeated: {:?}",
+            slot.path
+        );
+        let role_accepts_kind = match slot.role {
+            SketchOperationOutputRole::Geometry => matches!(
+                slot.kind,
+                SketchMaterializationIdentityKind::Point
+                    | SketchMaterializationIdentityKind::Scalar
+                    | SketchMaterializationIdentityKind::Curve
+            ),
+            SketchOperationOutputRole::ContactParameter
+            | SketchOperationOutputRole::DimensionTarget => {
+                slot.kind == SketchMaterializationIdentityKind::Scalar
+            }
+            SketchOperationOutputRole::Contact => {
+                slot.kind == SketchMaterializationIdentityKind::Contact
+            }
+            SketchOperationOutputRole::Constraint => {
+                slot.kind == SketchMaterializationIdentityKind::Constraint
+            }
+            SketchOperationOutputRole::Dimension => {
+                slot.kind == SketchMaterializationIdentityKind::Dimension
+            }
+            SketchOperationOutputRole::Parameter => {
+                slot.kind == SketchMaterializationIdentityKind::Parameter
+            }
+            SketchOperationOutputRole::ExternalBinding => {
+                slot.kind == SketchMaterializationIdentityKind::ExternalBinding
+            }
+            _ => false,
+        };
+        assert!(role_accepts_kind, "{slot:?}");
+    }
+    let top_level_count = |name| {
+        plan.slots
+            .iter()
+            .filter(|slot| {
+                slot.path.first() == Some(&SketchOperationOutputPathSegment::Field(name))
+            })
+            .count()
+    };
+    match plan.kind {
+        SketchOperationKind::Split
+        | SketchOperationKind::Break
+        | SketchOperationKind::Trim
+        | SketchOperationKind::Extend => assert!(plan.slots.is_empty()),
+        SketchOperationKind::Mirror => {
+            assert_eq!(plan.slots.len(), 5);
+            assert_eq!(top_level_count("controls"), 2);
+            assert_eq!(top_level_count("curves"), 1);
+            assert_eq!(top_level_count("symmetryConstraints"), 2);
+            assert!(plan.slots.iter().all(|slot| matches!(
+                slot.path.as_slice(),
+                [
+                    SketchOperationOutputPathSegment::Field("controls" | "symmetryConstraints"),
+                    SketchOperationOutputPathSegment::SourceControl { .. },
+                ] | [
+                    SketchOperationOutputPathSegment::Field("curves"),
+                    SketchOperationOutputPathSegment::SourceCurve(_),
+                ]
+            )));
+        }
+        SketchOperationKind::Chamfer => {
+            assert_eq!(plan.slots.len(), 13);
+            assert_eq!(top_level_count("endpoints"), 2);
+            assert_eq!(top_level_count("edge"), 1);
+            assert_eq!(top_level_count("parents"), 6);
+            assert_eq!(top_level_count("distances"), 4);
+        }
+        SketchOperationKind::AssociativeFillet => {
+            assert_eq!(plan.slots.len(), 12);
+            assert_eq!(top_level_count("parents"), 4);
+            assert_eq!(top_level_count("association"), 1);
+            assert_eq!(top_level_count("radiusDimension"), 2);
+        }
+        SketchOperationKind::Rectangle => {
+            assert_eq!(plan.slots.len(), 17);
+            assert_eq!(top_level_count("corners"), 4);
+            assert_eq!(top_level_count("edges"), 4);
+            assert_eq!(top_level_count("constraints"), 5);
+            assert_eq!(top_level_count("dimensions"), 4);
+        }
+        SketchOperationKind::RegularPolygon => {
+            assert_eq!(plan.slots.len(), 10);
+            assert_eq!(top_level_count("vertices"), 5);
+            assert_eq!(top_level_count("edges"), 5);
+        }
+        SketchOperationKind::Slot => {
+            assert_eq!(plan.slots.len(), 34);
+            assert_eq!(top_level_count("centers"), 2);
+            assert_eq!(top_level_count("boundaryPoints"), 4);
+            assert_eq!(top_level_count("edges"), 2);
+            assert_eq!(top_level_count("arcs"), 8);
+            assert_eq!(top_level_count("joins"), 12);
+            assert_eq!(top_level_count("fixedConstraints"), 6);
+        }
+        SketchOperationKind::LinearPattern => {
+            assert_eq!(plan.slots.len(), 6);
+            assert_eq!(top_level_count("instances"), 6);
+            assert!(plan.slots.iter().all(|slot| matches!(
+                slot.path.as_slice(),
+                [
+                    SketchOperationOutputPathSegment::Field("instances"),
+                    SketchOperationOutputPathSegment::Index(1 | 2),
+                    SketchOperationOutputPathSegment::Field("sources"),
+                    SketchOperationOutputPathSegment::SourceCurve(_),
+                    ..
+                ]
+            )));
+        }
+        SketchOperationKind::ProfileOffset => {
+            assert_eq!(plan.slots.len(), 5);
+            assert_eq!(top_level_count("operand"), 3);
+            assert_eq!(top_level_count("distance"), 2);
+            assert!(plan.slots.iter().any(|slot| {
+                slot.path.iter().any(|segment| {
+                    matches!(segment, SketchOperationOutputPathSegment::SourceSpan(_))
+                })
+            }));
+        }
+    }
 }
 
 #[test]
@@ -506,6 +643,103 @@ fn all_twelve_operations_publish_authenticated_stable_output_inventories() {
             operand_index: index,
         }
     });
+}
+
+#[test]
+fn mirror_and_pattern_dynamic_members_retain_exact_source_keys() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let (line_curve, line_points) = line(&mut document, "dynamic line", [1.0, 0.0], [2.0, 1.0]);
+    let quadratic_points = [
+        document.add_point("quadratic start", [0.0, 0.0]).unwrap(),
+        document.add_point("quadratic control", [1.0, 2.0]).unwrap(),
+        document.add_point("quadratic end", [3.0, 0.0]).unwrap(),
+    ];
+    let quadratic = document
+        .add_curve(
+            "dynamic quadratic",
+            CurveDefinition::QuadraticBezier {
+                controls: quadratic_points,
+            },
+        )
+        .unwrap();
+    let (axis, _) = line(&mut document, "dynamic axis", [0.0, -3.0], [0.0, 3.0]);
+    let session = retained(document);
+
+    let mirror = proposal(
+        &session,
+        SketchOperationRequest::Mirror {
+            label: "dynamic mirror".into(),
+            source: quadratic,
+            axis: CurveSpan::line(axis),
+        },
+    );
+    let mirror_plan = mirror.output_plan();
+    assert_eq!(mirror_plan.slots.len(), 7);
+    let mirror_control_keys = mirror_plan
+        .slots
+        .iter()
+        .filter_map(|slot| match slot.path.as_slice() {
+            [
+                SketchOperationOutputPathSegment::Field("controls"),
+                SketchOperationOutputPathSegment::SourceControl { curve, point, .. },
+            ] if *curve == quadratic => Some(*point),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(mirror_control_keys, BTreeSet::from(quadratic_points));
+    assert!(mirror_plan.slots.iter().any(|slot| {
+        slot.path
+            == vec![
+                SketchOperationOutputPathSegment::Field("curves"),
+                SketchOperationOutputPathSegment::SourceCurve(quadratic),
+            ]
+    }));
+
+    let pattern = proposal(
+        &session,
+        SketchOperationRequest::LinearPattern {
+            label: "dynamic pattern".into(),
+            sources: vec![line_curve, quadratic],
+            instances: 4,
+            step: [0.0, 3.0],
+        },
+    );
+    let pattern_plan = pattern.output_plan();
+    assert_eq!(pattern_plan.slots.len(), 21);
+    for instance in 1..4 {
+        for (source, points) in [
+            (line_curve, line_points.as_slice()),
+            (quadratic, quadratic_points.as_slice()),
+        ] {
+            assert!(pattern_plan.slots.iter().any(|slot| {
+                slot.path
+                    == vec![
+                        SketchOperationOutputPathSegment::Field("instances"),
+                        SketchOperationOutputPathSegment::Index(instance),
+                        SketchOperationOutputPathSegment::Field("sources"),
+                        SketchOperationOutputPathSegment::SourceCurve(source),
+                        SketchOperationOutputPathSegment::Field("curve"),
+                    ]
+            }));
+            for (ordinal, point) in points.iter().enumerate() {
+                assert!(pattern_plan.slots.iter().any(|slot| {
+                    slot.path
+                        == vec![
+                            SketchOperationOutputPathSegment::Field("instances"),
+                            SketchOperationOutputPathSegment::Index(instance),
+                            SketchOperationOutputPathSegment::Field("sources"),
+                            SketchOperationOutputPathSegment::SourceCurve(source),
+                            SketchOperationOutputPathSegment::Field("controls"),
+                            SketchOperationOutputPathSegment::SourceControl {
+                                curve: source,
+                                point: *point,
+                                ordinal,
+                            },
+                        ]
+                }));
+            }
+        }
+    }
 }
 
 #[test]

@@ -2,52 +2,34 @@
 
 //! Strict RPC over the optional code workbench's outer managed authority.
 //!
-//! This protocol is deliberately separate from Intent RPC. Managed control
-//! edits and history move [`SketchCodeSession`](geosolve_sketch_code::SketchCodeSession),
-//! whose checkpoint contains the delegated projectional editor. Routing them
-//! through Intent RPC would expose the wrong Undo stack and bypass managed
-//! source authentication.
-
-use std::cell::RefCell;
-use std::rc::Rc;
+//! This protocol is deliberately separate from Intent RPC. Read-only managed
+//! control inspection and outer code history address
+//! [`SketchCodeSession`](geosolve_sketch_code::SketchCodeSession), whose
+//! checkpoint contains the delegated projectional editor. Source mutations do
+//! not belong here: the presentation bridge routes them through the prepared
+//! compiler transaction.
 
 use geosolve_constraint_editor::ProjectionalEditorSession;
 use geosolve_sketch_code::{
-    CodeSessionIdentity, CodeSessionReceipt, MAX_CODE_SESSION_WIRE_INTEGER,
-    ManagedControlEditBatch, ManagedControlManifest,
+    CodeSessionIdentity, CodeSessionReceipt, MAX_CODE_SESSION_WIRE_INTEGER, ManagedControlManifest,
 };
 use serde::{Deserialize, Serialize};
 
-use super::code_projects::{CodeApplyOutcome, CodeProjectWorkbench};
+use super::code_projects::CodeProjectWorkbench;
 
 pub(crate) const MAX_CODE_CONTROL_RPC_REQUEST_BYTES: usize = 16 * 1024 * 1024;
 pub(crate) const MAX_CODE_CONTROL_RPC_MUTATION_RECEIPT_BYTES: usize = 16 * 1024 * 1024;
 pub(crate) const MAX_CODE_CONTROL_RPC_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_FAILURE_MESSAGE_BYTES: usize = 64 * 1024;
 
-type InstalledCodeControlRpc = dyn Fn(&str) -> String;
-
-std::thread_local! {
-    static INSTALLED_CODE_CONTROL_RPC: RefCell<Option<Rc<InstalledCodeControlRpc>>> =
-        RefCell::new(None);
-}
-
-/// Closed version-one request vocabulary for managed controls and outer
-/// code-project history.
+/// Closed request vocabulary for read-only managed controls and outer
+/// code-project history. Source edits use the prepared compiler bridge.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum CodeControlRpcRequest {
     InspectManagedControls {},
-    EditManagedControls {
-        expected: Box<CodeSessionIdentity>,
-        batch: Box<ManagedControlEditBatch>,
-    },
-    Undo {
-        expected: Box<CodeSessionIdentity>,
-    },
-    Redo {
-        expected: Box<CodeSessionIdentity>,
-    },
+    Undo { expected: Box<CodeSessionIdentity> },
+    Redo { expected: Box<CodeSessionIdentity> },
 }
 
 /// Read-only control manifest plus exact outer-history availability.
@@ -58,14 +40,6 @@ pub(crate) struct CodeControlRpcSnapshot {
     pub(crate) manifest: ManagedControlManifest,
     pub(crate) can_undo: bool,
     pub(crate) can_redo: bool,
-}
-
-/// Accepted or retained-failure result of one source-backed control batch.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct CodeControlRpcEditReceipt {
-    pub(crate) receipt: CodeSessionReceipt,
-    pub(crate) diagnostic: Option<String>,
 }
 
 /// Fixed outer-history result. A moved history cursor always includes the
@@ -83,9 +57,6 @@ pub(crate) struct CodeControlRpcHistoryReceipt {
 pub(crate) enum CodeControlRpcSuccess {
     ManagedControls {
         snapshot: Box<CodeControlRpcSnapshot>,
-    },
-    ManagedControlEdit {
-        receipt: Box<CodeControlRpcEditReceipt>,
     },
     History {
         receipt: Box<CodeControlRpcHistoryReceipt>,
@@ -108,46 +79,12 @@ pub(crate) enum CodeControlRpcOutcome {
 }
 
 /// Non-serializable publication returned beside one already encoded receipt.
-/// The WASM adapter installs this editor only after the outer code session has
-/// accepted the matching checkpoint.
+/// The instance-scoped workbench bridge publishes this editor only after the
+/// outer code session has accepted the matching checkpoint.
 pub(crate) struct CodeControlRpcApplication {
     pub(crate) response: String,
     pub(crate) editor: Option<Box<ProjectionalEditorSession>>,
     pub(crate) identity_changed: bool,
-}
-
-/// Installs the callback which closes over the browser's one code workbench.
-#[cfg_attr(test, allow(dead_code, reason = "installed only by the WASM adapter"))]
-pub(crate) fn install(handler: impl Fn(&str) -> String + 'static) {
-    INSTALLED_CODE_CONTROL_RPC.with(|installed| {
-        *installed.borrow_mut() = Some(Rc::new(handler));
-    });
-}
-
-/// Retires a prior callback before another workbench is installed.
-#[cfg_attr(
-    test,
-    allow(dead_code, reason = "called only by the WASM startup adapter")
-)]
-pub(crate) fn clear() {
-    INSTALLED_CODE_CONTROL_RPC.with(|installed| {
-        installed.borrow_mut().take();
-    });
-}
-
-/// Applies one request to the installed workbench callback.
-pub(crate) fn apply_installed(request: &str) -> String {
-    let handler = INSTALLED_CODE_CONTROL_RPC.with(|installed| installed.borrow().clone());
-    handler.map_or_else(
-        || {
-            encode_failure(
-                "code_workbench_unavailable",
-                "the managed code workbench is not installed",
-                None,
-            )
-        },
-        |handler| handler(request),
-    )
 }
 
 /// Returns whether one strict bounded request may move outer authority.
@@ -160,10 +97,11 @@ pub(crate) fn request_may_change_identity(request: &str) -> bool {
     })
 }
 
-/// Applies strict JSON to one outer code workbench. Parse, authentication and
-/// control failures publish neither source nor history. A retained native
-/// failure deliberately advances outer history while returning no replacement
-/// editor, leaving the prior accepted canvas authoritative.
+/// Applies strict JSON to one outer code workbench. Decode, authentication and
+/// history failures publish neither source nor history.
+// Keep request authentication, dispatch, bounded response encoding, and the
+// resulting identity comparison together as one auditable RPC transaction.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn apply_to_code_project(
     code: &mut CodeProjectWorkbench,
     request: &str,
@@ -210,33 +148,6 @@ pub(crate) fn apply_to_code_project(
                     }),
                 })
                 .map_err(|error| ("control_inspection_rejected", error)),
-            CodeControlRpcRequest::EditManagedControls { expected, batch } => {
-                authenticate_expected(code, &expected).and_then(|()| {
-                    code.apply_managed_controls(&expected, &batch)
-                        .map(|result| match result {
-                            CodeApplyOutcome::Accepted(publication) => {
-                                let receipt = publication.receipt;
-                                editor = Some(publication.editor);
-                                CodeControlRpcSuccess::ManagedControlEdit {
-                                    receipt: Box::new(CodeControlRpcEditReceipt {
-                                        receipt,
-                                        diagnostic: None,
-                                    }),
-                                }
-                            }
-                            CodeApplyOutcome::RetainedFailure {
-                                receipt,
-                                diagnostic,
-                            } => CodeControlRpcSuccess::ManagedControlEdit {
-                                receipt: Box::new(CodeControlRpcEditReceipt {
-                                    receipt,
-                                    diagnostic: Some(bounded_text(&diagnostic)),
-                                }),
-                            },
-                        })
-                        .map_err(|error| ("control_edit_rejected", error))
-                })
-            }
             CodeControlRpcRequest::Undo { expected } => authenticate_expected(code, &expected)
                 .and_then(|()| history(code, true, &mut editor)),
             CodeControlRpcRequest::Redo { expected } => authenticate_expected(code, &expected)
@@ -269,9 +180,9 @@ pub(crate) fn apply_to_code_project(
 fn request_expected_identity(request: &CodeControlRpcRequest) -> Option<&CodeSessionIdentity> {
     match request {
         CodeControlRpcRequest::InspectManagedControls {} => None,
-        CodeControlRpcRequest::EditManagedControls { expected, .. }
-        | CodeControlRpcRequest::Undo { expected }
-        | CodeControlRpcRequest::Redo { expected } => Some(expected),
+        CodeControlRpcRequest::Undo { expected } | CodeControlRpcRequest::Redo { expected } => {
+            Some(expected)
+        }
     }
 }
 
@@ -380,22 +291,18 @@ fn bounded_text(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use geosolve_sketch_code::{
-        CodeSessionIdentity, ManagedControlAccess, ManagedControlEdit, ManagedControlEditBatch,
-        ManagedPathSegment, ManagedValue, UnitLiteral,
-    };
-
     use super::{
-        CodeControlRpcOutcome, CodeControlRpcRequest, CodeControlRpcSuccess,
-        MAX_CODE_CONTROL_RPC_REQUEST_BYTES, apply_installed, apply_to_code_project,
-        request_may_change_identity,
+        CodeControlRpcOutcome, CodeControlRpcSuccess, MAX_CODE_CONTROL_RPC_REQUEST_BYTES,
+        apply_to_code_project, request_may_change_identity,
     };
     use crate::workbench::code_projects::CodeProjectWorkbench;
 
-    fn typed_panel_radius_edit(
-        code: &mut CodeProjectWorkbench,
-    ) -> (CodeSessionIdentity, ManagedControlEditBatch) {
-        let inspected = apply_to_code_project(code, r#"{"method":"inspect_managed_controls"}"#);
+    #[test]
+    fn strict_rpc_inspects_controls_without_moving_outer_authority() {
+        let (mut code, _editor) = CodeProjectWorkbench::open_key("typed-panel").unwrap();
+        let before = code.code_session_identity().clone();
+        let inspected =
+            apply_to_code_project(&mut code, r#"{"method":"inspect_managed_controls"}"#);
         assert!(!inspected.identity_changed);
         assert!(inspected.editor.is_none());
         let inspected: CodeControlRpcOutcome = serde_json::from_str(&inspected.response).unwrap();
@@ -405,194 +312,17 @@ mod tests {
         else {
             panic!("managed controls must inspect successfully")
         };
-        let control = snapshot
+        assert_eq!(snapshot.identity, before);
+        assert!(snapshot
             .manifest
             .controls
             .iter()
-            .find(|control| {
+            .any(|control| {
                 control.source.declaration.0 == "cornerFillets"
-                    && control.source.path.0 == [ManagedPathSegment::Field("radius".into())]
-            })
-            .expect("Typed Panel radius control");
-        assert_eq!(control.consumers.len(), 2);
-        let ManagedControlAccess::Editable { token } = &control.access else {
-            panic!("Typed Panel radius must be editable")
-        };
-        let batch = ManagedControlEditBatch::new([ManagedControlEdit {
-            token: token.clone(),
-            value: ManagedValue::Unit(UnitLiteral {
-                unit: "mm".into(),
-                value: 2.0,
-            }),
-        }]);
-        (snapshot.identity, batch)
-    }
-
-    #[test]
-    fn strict_rpc_edits_typed_panel_and_moves_only_outer_history() {
-        let (code, _editor) = CodeProjectWorkbench::open_key("typed-panel").unwrap();
-        let mut code = Box::new(code);
-        let (original_identity, batch) = typed_panel_radius_edit(&mut code);
-        let edit = CodeControlRpcRequest::EditManagedControls {
-            expected: Box::new(original_identity.clone()),
-            batch: Box::new(batch.clone()),
-        };
-        let encoded = serde_json::to_string(&edit).unwrap();
-        let edited = apply_to_code_project(&mut code, &encoded);
-        assert!(edited.identity_changed);
-        assert!(edited.editor.is_some());
-        assert_eq!(
-            edited
-                .editor
-                .as_ref()
-                .unwrap()
-                .coordinator()
-                .intent()
-                .undo_len(),
-            0
-        );
-        assert!(code.managed_source().contains("radius: mm(2)"));
-        assert!(!code.managed_source().contains("radius: mm(4)"));
-        assert!(matches!(
-            serde_json::from_str::<CodeControlRpcOutcome>(&edited.response).unwrap(),
-            CodeControlRpcOutcome::Success {
-                value: CodeControlRpcSuccess::ManagedControlEdit { receipt }
-            } if receipt.receipt.before == original_identity
-                && receipt.receipt.after == *code.code_session_identity()
-                && !receipt.receipt.retained_failure
-                && receipt.diagnostic.is_none()
-        ));
-
-        let stale = apply_to_code_project(&mut code, &encoded);
-        assert!(!stale.identity_changed);
-        assert!(stale.editor.is_none());
-        assert!(matches!(
-            serde_json::from_str::<CodeControlRpcOutcome>(&stale.response).unwrap(),
-            CodeControlRpcOutcome::Failure { failure }
-                if failure.code == "stale_code_session"
-        ));
-
-        let stale_token = serde_json::to_string(&CodeControlRpcRequest::EditManagedControls {
-            expected: Box::new(code.code_session_identity().clone()),
-            batch: Box::new(batch),
-        })
-        .unwrap();
-        let stale_token = apply_to_code_project(&mut code, &stale_token);
-        assert!(!stale_token.identity_changed);
-        assert!(stale_token.editor.is_none());
-        assert!(matches!(
-            serde_json::from_str::<CodeControlRpcOutcome>(&stale_token.response).unwrap(),
-            CodeControlRpcOutcome::Failure { failure }
-                if failure.code == "control_edit_rejected"
-                    && failure.message.contains("stale")
-        ));
-
-        let undo = serde_json::to_string(&CodeControlRpcRequest::Undo {
-            expected: Box::new(code.code_session_identity().clone()),
-        })
-        .unwrap();
-        let undone = apply_to_code_project(&mut code, &undo);
-        assert!(undone.identity_changed);
-        assert!(undone.editor.is_some());
-        assert!(code.managed_source().contains("radius: mm(4)"));
-        assert!(matches!(
-            serde_json::from_str::<CodeControlRpcOutcome>(&undone.response).unwrap(),
-            CodeControlRpcOutcome::Success {
-                value: CodeControlRpcSuccess::History { receipt }
-            } if receipt.moved && receipt.receipt.is_some()
-        ));
-
-        let redo = serde_json::to_string(&CodeControlRpcRequest::Redo {
-            expected: Box::new(code.code_session_identity().clone()),
-        })
-        .unwrap();
-        let redone = apply_to_code_project(&mut code, &redo);
-        assert!(redone.identity_changed);
-        assert!(redone.editor.is_some());
-        assert!(code.managed_source().contains("radius: mm(2)"));
-    }
-
-    #[test]
-    fn outer_history_rejects_dirty_source_without_erasing_undo_or_redo_drafts() {
-        let (code, _editor) = CodeProjectWorkbench::open_key("typed-panel").unwrap();
-        let mut code = Box::new(code);
-        let (identity, batch) = typed_panel_radius_edit(&mut code);
-        let edit = serde_json::to_string(&CodeControlRpcRequest::EditManagedControls {
-            expected: Box::new(identity),
-            batch: Box::new(batch),
-        })
-        .unwrap();
-        assert!(apply_to_code_project(&mut code, &edit).identity_changed);
-
-        let dirty_undo = code.managed_source().replacen("mm(2)", "mm(3)", 1);
-        code.set_managed_draft(dirty_undo);
-        let before_undo = code.code_session_identity().clone();
-        let undo = serde_json::to_string(&CodeControlRpcRequest::Undo {
-            expected: Box::new(before_undo.clone()),
-        })
-        .unwrap();
-        let rejected = apply_to_code_project(&mut code, &undo);
-        assert!(!rejected.identity_changed);
-        assert_eq!(code.code_session_identity(), &before_undo);
-        assert!(code.is_dirty());
-        assert!(code.panel_markup().contains("mm(3)"));
-        assert!(matches!(
-            serde_json::from_str::<CodeControlRpcOutcome>(&rejected.response).unwrap(),
-            CodeControlRpcOutcome::Failure { failure }
-                if failure.code == "history_rejected"
-                    && failure.message.contains("Apply or Revert")
-        ));
-
-        assert!(code.revert_managed_draft());
-        assert!(apply_to_code_project(&mut code, &undo).identity_changed);
-        let dirty_redo = code.managed_source().replacen("mm(4)", "mm(3)", 1);
-        code.set_managed_draft(dirty_redo);
-        let before_redo = code.code_session_identity().clone();
-        let redo = serde_json::to_string(&CodeControlRpcRequest::Redo {
-            expected: Box::new(before_redo.clone()),
-        })
-        .unwrap();
-        let rejected = apply_to_code_project(&mut code, &redo);
-        assert!(!rejected.identity_changed);
-        assert_eq!(code.code_session_identity(), &before_redo);
-        assert!(code.is_dirty());
-        assert!(code.panel_markup().contains("mm(3)"));
-    }
-
-    #[test]
-    fn retained_failure_advances_outer_source_and_undo_recovers_accepted_authority() {
-        let (code, _editor) = CodeProjectWorkbench::open_key("typed-panel").unwrap();
-        let mut code = Box::new(code);
-        let (identity, mut batch) = typed_panel_radius_edit(&mut code);
-        batch.edits[0].value = ManagedValue::Unit(UnitLiteral {
-            unit: "mm".into(),
-            value: 400.0,
-        });
-        let edit = serde_json::to_string(&CodeControlRpcRequest::EditManagedControls {
-            expected: Box::new(identity),
-            batch: Box::new(batch),
-        })
-        .unwrap();
-        let retained = apply_to_code_project(&mut code, &edit);
-        assert!(retained.identity_changed);
-        assert!(retained.editor.is_none());
-        assert!(code.managed_source().contains("radius: mm(400)"));
-        assert!(matches!(
-            serde_json::from_str::<CodeControlRpcOutcome>(&retained.response).unwrap(),
-            CodeControlRpcOutcome::Success {
-                value: CodeControlRpcSuccess::ManagedControlEdit { receipt }
-            } if receipt.receipt.retained_failure
-                && receipt.diagnostic.as_ref().is_some_and(|value| !value.is_empty())
-        ));
-
-        let undo = serde_json::to_string(&CodeControlRpcRequest::Undo {
-            expected: Box::new(code.code_session_identity().clone()),
-        })
-        .unwrap();
-        let recovered = apply_to_code_project(&mut code, &undo);
-        assert!(recovered.identity_changed);
-        assert!(recovered.editor.is_some());
-        assert!(code.managed_source().contains("radius: mm(4)"));
+                    && control.source.path.0.iter().any(|segment| {
+                        matches!(segment, geosolve_sketch_code::ManagedPathSegment::Field(field) if field == "radius")
+                    })
+            }));
     }
 
     #[test]
@@ -662,18 +392,5 @@ mod tests {
                         && failure.message.contains("JavaScript-safe")
             ));
         }
-    }
-
-    #[test]
-    fn unavailable_bridge_returns_the_code_control_failure_envelope() {
-        let response: CodeControlRpcOutcome =
-            serde_json::from_str(&apply_installed(r#"{"method":"inspect_managed_controls"}"#))
-                .unwrap();
-        assert!(matches!(
-            response,
-            CodeControlRpcOutcome::Failure { failure }
-                if failure.code == "code_workbench_unavailable"
-                    && failure.identity.is_none()
-        ));
     }
 }

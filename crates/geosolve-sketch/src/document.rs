@@ -1632,6 +1632,32 @@ pub enum DocumentObjectId {
     ExternalBinding(DocumentExternalBindingId),
 }
 
+/// One exact human-readable label transition admitted by a projectional host.
+///
+/// The persistent object identity and both labels are explicit so a document
+/// comparison cannot turn this into a broad "ignore labels" policy.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DocumentObjectRelabel {
+    pub object: DocumentObjectId,
+    pub current: String,
+    pub replacement: String,
+}
+
+impl DocumentObjectRelabel {
+    #[must_use]
+    pub fn new(
+        object: DocumentObjectId,
+        current: impl Into<String>,
+        replacement: impl Into<String>,
+    ) -> Self {
+        Self {
+            object,
+            current: current.into(),
+            replacement: replacement.into(),
+        }
+    }
+}
+
 /// Any persistent sketch-document element that application state may reference.
 ///
 /// This is a semantic identity seam only. It never lowers to a runtime or core ID.
@@ -4169,6 +4195,108 @@ impl SketchDocument {
             }
         }
         normalized == *other
+    }
+
+    /// Compares complete documents while admitting only caller-authenticated
+    /// object-label transitions and caller-declared recomputable line branches.
+    ///
+    /// Every relabel must name a distinct existing persistent object, match
+    /// the exact current label in `self`, and match the exact replacement label
+    /// already present in `other`. No identity, geometry, topology, source,
+    /// activation, allocator, or other persistent field is normalized.
+    #[must_use]
+    pub fn exact_except_recomputable_line_branches_and_object_relabels(
+        &self,
+        other: &Self,
+        recomputable: &BTreeSet<CurveId>,
+        relabels: &[DocumentObjectRelabel],
+    ) -> bool {
+        if relabels.is_empty() {
+            return self.exact_except_recomputable_line_branches(other, recomputable);
+        }
+        let mut normalized = self.clone();
+        let mut projected = BTreeSet::new();
+        for relabel in relabels {
+            if relabel.current == relabel.replacement || !projected.insert(relabel.object) {
+                return false;
+            }
+            let Some(other_label) = other.object_label(relabel.object) else {
+                return false;
+            };
+            if other_label != relabel.replacement {
+                return false;
+            }
+            let Some(current_label) = normalized.object_label_mut(relabel.object) else {
+                return false;
+            };
+            if *current_label != relabel.current {
+                return false;
+            }
+            current_label.clone_from(&relabel.replacement);
+        }
+        normalized.exact_except_recomputable_line_branches(other, recomputable)
+    }
+
+    fn object_label(&self, object: DocumentObjectId) -> Option<&str> {
+        match object {
+            DocumentObjectId::Point(id) => self.point(id).map(|value| value.label.as_str()),
+            DocumentObjectId::Scalar(id) => self.scalar(id).map(|value| value.label.as_str()),
+            DocumentObjectId::Curve(id) => self.curve(id).map(|value| value.label.as_str()),
+            DocumentObjectId::Contact(id) => self.contact(id).map(|value| value.label.as_str()),
+            DocumentObjectId::Constraint(id) => {
+                self.constraint(id).map(|value| value.label.as_str())
+            }
+            DocumentObjectId::Dimension(id) => self.dimension(id).map(|value| value.label.as_str()),
+            DocumentObjectId::Parameter(id) => self.parameter(id).map(|value| value.label.as_str()),
+            DocumentObjectId::ExternalBinding(id) => {
+                self.external_binding(id).map(|value| value.label.as_str())
+            }
+        }
+    }
+
+    fn object_label_mut(&mut self, object: DocumentObjectId) -> Option<&mut String> {
+        match object {
+            DocumentObjectId::Point(id) => self
+                .points
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+            DocumentObjectId::Scalar(id) => self
+                .scalars
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+            DocumentObjectId::Curve(id) => self
+                .curves
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+            DocumentObjectId::Contact(id) => self
+                .contacts
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+            DocumentObjectId::Constraint(id) => self
+                .constraints
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+            DocumentObjectId::Dimension(id) => self
+                .dimensions
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+            DocumentObjectId::Parameter(id) => self
+                .parameters
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+            DocumentObjectId::ExternalBinding(id) => self
+                .external_bindings
+                .iter_mut()
+                .find(|value| value.id == id)
+                .map(|value| &mut value.label),
+        }
     }
 
     /// Projects only accepted continuous solver values from an independently
@@ -14874,6 +15002,102 @@ mod projectional_branch_audit_tests {
             !fixture
                 .document
                 .exact_except_recomputable_line_branches(&changed_geometry, &recomputable)
+        );
+    }
+
+    #[test]
+    fn object_relabel_projection_is_exact_local_and_geometry_neutral() {
+        let fixture = branch_audit_fixture();
+        let mut staged = fixture.document.clone();
+        staged
+            .point_mut(fixture.line_end)
+            .expect("line endpoint")
+            .label = "code.segment.end".into();
+        staged.curve_mut(fixture.line).expect("line").label = "code.segment".into();
+        let relabels = [
+            DocumentObjectRelabel::new(
+                DocumentObjectId::Point(fixture.line_end),
+                fixture
+                    .document
+                    .point(fixture.line_end)
+                    .expect("terminal endpoint")
+                    .label
+                    .clone(),
+                "code.segment.end",
+            ),
+            DocumentObjectRelabel::new(
+                DocumentObjectId::Curve(fixture.line),
+                fixture
+                    .document
+                    .curve(fixture.line)
+                    .expect("terminal line")
+                    .label
+                    .clone(),
+                "code.segment",
+            ),
+        ];
+        assert!(
+            fixture
+                .document
+                .exact_except_recomputable_line_branches_and_object_relabels(
+                    &staged,
+                    &BTreeSet::new(),
+                    &relabels,
+                )
+        );
+
+        let mut unrelated_label = staged.clone();
+        unrelated_label
+            .point_mut(fixture.unrelated_point)
+            .expect("unrelated point")
+            .label = "unlisted relabel".into();
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches_and_object_relabels(
+                    &unrelated_label,
+                    &BTreeSet::new(),
+                    &relabels,
+                )
+        );
+
+        let mut changed_geometry = staged.clone();
+        changed_geometry
+            .set_point_position(fixture.line_end, [4.0, 0.25])
+            .expect("finite geometry change");
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches_and_object_relabels(
+                    &changed_geometry,
+                    &BTreeSet::new(),
+                    &relabels,
+                )
+        );
+
+        let wrong_current = [DocumentObjectRelabel::new(
+            DocumentObjectId::Curve(fixture.line),
+            "forged terminal label",
+            "code.segment",
+        )];
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches_and_object_relabels(
+                    &staged,
+                    &BTreeSet::new(),
+                    &wrong_current,
+                )
+        );
+        let duplicate = [relabels[0].clone(), relabels[0].clone()];
+        assert!(
+            !fixture
+                .document
+                .exact_except_recomputable_line_branches_and_object_relabels(
+                    &staged,
+                    &BTreeSet::new(),
+                    &duplicate,
+                )
         );
     }
 

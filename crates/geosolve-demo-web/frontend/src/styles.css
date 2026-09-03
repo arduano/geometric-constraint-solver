@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --canvas: 220 9% 9%;
+  --surface: 216 8% 12%;
+  --raised: 216 8% 16%;
+  --border: 216 7% 25%;
+  --foreground: 40 12% 91%;
+  --muted: 216 7% 65%;
+  --accent: 38 82% 63%;
+  --danger: 4 62% 50%;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; width: 100%; min-width: 1024px; height: 100%; min-height: 720px; overflow: hidden; }
+body { background: hsl(var(--canvas)); }
+.bootstrap-error { display: grid; place-content: center; height: 100%; padding: 2rem; color: hsl(var(--foreground)); text-align: center; }
+.bootstrap-error h1 { margin: 0; font-size: 1rem; }
+.bootstrap-error p { max-width: 32rem; color: hsl(var(--muted)); font-size: .8rem; }
+button, input, textarea { font: inherit; }
+button { cursor: default; }
+::selection { color: hsl(220 9% 9%); background: hsl(var(--accent)); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: hsl(var(--surface)); }
+::-webkit-scrollbar-thumb { border: 3px solid hsl(var(--surface)); border-radius: 999px; background: hsl(var(--border)); }
+
+[role="application"] > svg { display: block; width: 100%; height: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

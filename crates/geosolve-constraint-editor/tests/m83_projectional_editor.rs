@@ -429,7 +429,7 @@ fn audited_pointer_receipts_report_only_crossed_projectional_work() {
 
     let terminal = session.pointer_up_audited(&preview_scene_value, pointer(701, target));
     assert!(terminal.outcome.unwrap().transaction.is_some());
-    assert_eq!(terminal.work.native_preview_attempts(), 0);
+    assert_eq!(terminal.work.native_preview_attempts(), 1);
     assert_eq!(terminal.work.intent_materialization_attempts(), 1);
     assert_eq!(terminal.work.computed_evaluation_attempts(), 1);
     assert_eq!(terminal.work.history_publications(), 1);

@@ -191,6 +191,27 @@ pub struct IntentOutputDescriptor {
     pub edit: IntentEditClassification,
 }
 
+/// Stable, allocation-independent output contract for one caller-authored
+/// [`IntentNodeDraft`](crate::IntentNodeDraft).
+///
+/// Unlike [`IntentOutputDescriptor`], this deliberately omits node, port,
+/// reservation and identity-flow IDs. It is the exact equation-free shape a
+/// source recorder may persist before a real transaction allocates durable
+/// identities.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentDraftOutputDescriptor {
+    pub selector: IntentPortSelector,
+    pub path: IntentProjectionPath,
+    pub kind: IntentPortKind,
+    pub writable: Vec<LeafField>,
+    /// Authored input slot whose native identity is reused by this output.
+    /// This is structural schema metadata; the referenced port is supplied by
+    /// the caller's draft and remains the actual identity authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias_input: Option<InputSlot>,
+}
+
 impl IntentOutputDescriptor {
     /// Returns the schema-derived semantic path for one exact writable leaf
     /// owned by this output.
@@ -266,6 +287,46 @@ impl IntentNodeKind {
                 edit: IntentEditClassification::Definition,
             })
             .collect()
+    }
+
+    /// Returns the central semantic projection path for one structurally
+    /// admissible input slot of a caller-authored draft.
+    ///
+    /// This is equation-free schema metadata for source adapters. It does not
+    /// allocate a node, resolve a dependency, or grant mutation authority.
+    /// Context-dependent operation paths remain available only on concrete
+    /// declaration descriptors; geometry recipe and persistent-constraint
+    /// paths are fully determined by their kind, slot and dynamic child count.
+    #[must_use]
+    pub fn draft_input_projection_path(
+        &self,
+        slot: InputSlot,
+        dynamic_children: u16,
+    ) -> Option<IntentProjectionPath> {
+        let schema = self.schema(dynamic_children);
+        let cardinality = schema.input(slot.role)?;
+        if slot.index >= cardinality.maximum {
+            return None;
+        }
+        match self {
+            Self::Geometry { recipe } if slot.role == InputRole::Point => {
+                Some(geometry_point_input_projection_path(*recipe, slot.index))
+            }
+            Self::Geometry {
+                recipe: GeometryRecipeKind::TangentArc,
+            } if slot.role == InputRole::Span && slot.index == 0 => {
+                Some(projection_path(&["source", "span"]))
+            }
+            Self::Geometry { .. } | Self::Constraint { .. } => {
+                let role = input_role_projection_key(slot.role);
+                Some(if cardinality.maximum > 1 {
+                    indexed_projection_path(plural_projection_key(role), slot.index)
+                } else {
+                    projection_path(&[role])
+                })
+            }
+            _ => None,
+        }
     }
 }
 
@@ -404,8 +465,14 @@ fn definition_projection_path(
     if let Some(path) = contact_projection_path(name) {
         return path;
     }
-    if let Some(suffix) = name.strip_prefix("source_") {
-        return nested_contact_component(projection_path(&["source"]), suffix);
+    if matches!(
+        kind,
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::TangentArc
+        }
+    ) && let Some(suffix) = name.strip_prefix("source_")
+    {
+        return nested_contact_component(projection_path(&["source", "contact"]), suffix);
     }
     IntentProjectionPath::field(projection_key(&camel_case(name)))
 }
@@ -539,7 +606,7 @@ fn input_projection_path(
         }
         IntentNodeKind::Geometry {
             recipe: GeometryRecipeKind::TangentArc,
-        } if slot.role == InputRole::Span => return projection_path(&["source"]),
+        } if slot.role == InputRole::Span => return projection_path(&["source", "span"]),
         _ => {}
     }
     let role = input_role_projection_key(slot.role);
@@ -848,7 +915,7 @@ fn specialized_output_projection_path(
             },
             R::Contact,
             index,
-        ) => Some(indexed_projection_path("contacts", index)),
+        ) => Some(indexed_projection_path("contacts", index).with_field(projection_key("contact"))),
         (
             IntentNodeKind::Geometry {
                 recipe: G::TangentArc,
@@ -867,7 +934,7 @@ fn specialized_output_projection_path(
             },
             R::Contact,
             0,
-        ) => Some(projection_path(&["contact"])),
+        ) => Some(projection_path(&["contact", "contact"])),
         (
             IntentNodeKind::Constraint {
                 constraint:
@@ -879,10 +946,12 @@ fn specialized_output_projection_path(
             0,
         ) => Some(projection_path(&["contact", "parameter"])),
         (IntentNodeKind::Constraint { .. }, R::Contact, index) => {
-            Some(indexed_projection_path("contacts", index))
+            paired_contact_projection_path(index)
+                .map(|path| path.with_field(projection_key("contact")))
         }
         (IntentNodeKind::Constraint { .. }, R::Parameter, index) => {
-            Some(indexed_projection_path("contacts", index).with_field(projection_key("parameter")))
+            paired_contact_projection_path(index)
+                .map(|path| path.with_field(projection_key("parameter")))
         }
         (IntentNodeKind::Dimension { .. }, R::Target, 0) => Some(projection_path(&["value"])),
         (IntentNodeKind::Bootstrap { object }, R::Primary, 0)
@@ -895,6 +964,14 @@ fn specialized_output_projection_path(
         {
             Some(projection_path(&["value"]))
         }
+        _ => None,
+    }
+}
+
+fn paired_contact_projection_path(index: u16) -> Option<IntentProjectionPath> {
+    match index {
+        0 => Some(projection_path(&["contacts", "first"])),
+        1 => Some(projection_path(&["contacts", "second"])),
         _ => None,
     }
 }
@@ -2196,11 +2273,14 @@ fn operation_schema(kind: OperationKind, dynamic_children: u16) -> IntentNodeSch
 fn computed_feature_schema(kind: ComputedFeatureKind, dynamic_children: u16) -> IntentNodeSchema {
     match kind {
         ComputedFeatureKind::FilletSet => {
-            let mut fields = vec![field(
-                "radius",
-                IntentLiteralSchema::Quantity(IntentUnit::Length),
-                true,
-            )];
+            let mut fields = vec![
+                field("name", IntentLiteralSchema::Text, false),
+                field(
+                    "radius",
+                    IntentLiteralSchema::Quantity(IntentUnit::Length),
+                    true,
+                ),
+            ];
             for corner in 0..dynamic_children {
                 for parent in ["first", "second"] {
                     let prefix = format!("corner_{corner:04}_{parent}");

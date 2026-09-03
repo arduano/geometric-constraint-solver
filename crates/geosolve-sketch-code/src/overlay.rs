@@ -74,7 +74,7 @@ impl CodeOwnerIdentity {
 
 /// Typed leaf family owned at one semantic output path.
 ///
-/// M84 deliberately exposes only Cartesian point seeds. Scalar edits remain
+/// The interaction overlay deliberately exposes only Cartesian point seeds. Scalar edits remain
 /// ordinary managed-source lens edits until expansion can publish an equally
 /// explicit writable-scalar manifest and lowering contract.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]

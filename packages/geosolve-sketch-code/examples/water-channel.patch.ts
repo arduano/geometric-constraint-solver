@@ -15,18 +15,8 @@ export const waterChannel = definePatch(
     corners: t.keyed(t.corner()),
     bendRadius: t.length(),
   },
-  (p, { corners, bendRadius }) => {
-    p.editLens({
-      output: ["bends"],
-      invocationArgument: ["bendRadius"],
-      expectedKind: "scalar",
-    });
-    return {
-      bends: p.each(
-        corners,
-        (corner) => p.fillet({ corner, radius: bendRadius }),
-        { key: (corner) => corner.key },
-      ),
-    };
-  },
+  (p, { corners, bendRadius }) => ({
+    bends: p.each(corners, (corner) =>
+      p.computed.fillet("bend", { corner, radius: bendRadius })),
+  }),
 );

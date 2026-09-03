@@ -12,24 +12,34 @@
     "./compiler": {
       "types": "./dist/src/compiler.d.ts",
       "default": "./dist/src/compiler.js"
+    },
+    "./control": {
+      "types": "./dist/src/control.d.ts",
+      "default": "./dist/src/control.js"
+    },
+    "./ir": {
+      "types": "./dist/src/ir.d.ts",
+      "default": "./dist/src/ir.js"
     }
   },
   "scripts": {
     "clean": "node --eval \"import('node:fs').then(({rmSync}) => rmSync('dist', { recursive: true, force: true }))\"",
     "build": "npm run clean && tsc -p tsconfig.json",
+    "compile:managed:deno": "deno run --no-config --no-lock --no-prompt --cached-only --no-remote --node-modules-dir=manual --ignore-env scripts/compile-managed-deno.mjs",
+    "mutate:managed:deno": "deno run --no-config --no-lock --no-prompt --cached-only --no-remote --node-modules-dir=manual --ignore-env scripts/mutate-managed-deno.mjs",
     "generate:fixtures": "npm run build && node scripts/generate-artifact-fixtures.mjs",
     "test:fixtures": "node scripts/generate-artifact-fixtures.mjs --check",
-    "test:runtime": "node --test dist/test/runtime.test.js",
+    "test:runtime": "node --test dist/test/authoring-runtime.test.js dist/test/control-runtime.test.js dist/test/deno-parity.test.js dist/test/managed-clean.test.js dist/test/patch-compiler.test.js",
     "test:types": "tsc -p tsconfig.json --noEmit",
     "test:managed": "tsc -p tsconfig.managed.json",
     "test": "npm run build && npm run test:fixtures && npm run test:runtime && npm run test:types && npm run test:managed"
   },
   "dependencies": {
-    "@geosolve/intent": "file:../geosolve-intent"
+    "@geosolve/intent": "file:../geosolve-intent",
+    "typescript": "5.9.2"
   },
   "devDependencies": {
-    "@types/node": "24.3.0",
-    "typescript": "5.9.2"
+    "@types/node": "24.3.0"
   },
   "license": "GPL-3.0-or-later"
 }

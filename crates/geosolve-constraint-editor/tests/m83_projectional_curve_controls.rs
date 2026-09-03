@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, EditorEffect, IntentNativeBinding, Modifiers, PointerInput,
-    ProjectionalCoordinatorError, ProjectionalEditorError, ProjectionalEditorSession,
-    ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
+    AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
+    ColdIntentMaterializer, ConstraintIntent, EditorEffect, IntentNativeBinding, Modifiers,
+    PointerInput, ProjectionalCoordinatorError, ProjectionalEditorError, ProjectionalEditorSession,
+    ProjectionalIntentCoordinator, ResolvedConstraintKind, ScreenPoint, SelectionItem, Viewport,
+    projectional_application_patch,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveId, CurveSpan, DocumentCurveControlId, DocumentCurveControlKind,
@@ -118,6 +120,21 @@ fn circle_draft() -> IntentNodeDraft {
     )
 }
 
+fn segment_draft() -> IntentNodeDraft {
+    let draft = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("segment.main"),
+    )
+    .with_field(
+        IntentFieldKey(key("branch_direction")),
+        IntentLiteral::Point([-1.0, 0.0]),
+    );
+    let draft = point_leaf(draft, IntentPortRole::Start, 0, [2.0, 1.0]);
+    point_leaf(draft, IntentPortRole::End, 0, [-2.0, 1.0])
+}
+
 fn rational_draft() -> IntentNodeDraft {
     let draft = IntentNodeDraft::new(
         IntentNodeKind::Geometry {
@@ -198,6 +215,34 @@ fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
 
 fn assert_pair(actual: [f64; 2], expected: [f64; 2]) {
     assert_eq!(actual.map(f64::to_bits), expected.map(f64::to_bits));
+}
+
+fn apply_relation(
+    coordinator: &mut ProjectionalIntentCoordinator,
+    intent: ConstraintIntent,
+    operands: Vec<AuthoringOperand>,
+    resolved: ResolvedConstraintKind,
+) {
+    let accepted = coordinator.accepted_materialization().unwrap();
+    let translated = projectional_application_patch(
+        coordinator.intent().identity(),
+        coordinator.intent(),
+        &accepted.ownership,
+        accepted.session.design_document(),
+        accepted
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &AuthoringApplication {
+            tool: AuthoringTool::Constraint(intent),
+            operands,
+            options: AuthoringOptions::default(),
+            resolved_constraint: Some(resolved),
+        },
+    )
+    .unwrap();
+    coordinator.apply_patch(translated.patch).unwrap();
 }
 
 #[test]
@@ -342,6 +387,152 @@ fn scalar_control_keeps_last_valid_sample_across_rejection_and_stale_input() {
             .is_some()
     );
     assert_pair(accepted_control_position(&coordinator, control), [3.0, 0.0]);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one underconstrained radius terminal keeps its complete accepted numerical continuation and history"
+)]
+fn constrained_radius_control_retains_the_exact_terminal_preview() {
+    let mut coordinator = coordinator(0x8300_7106);
+    let (_, line) = create_geometry(&mut coordinator, "line", segment_draft());
+    let (_, circle) = create_geometry(&mut coordinator, "circle", circle_draft());
+    let document = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    let CurveDefinition::Line {
+        start: line_start,
+        end: line_end,
+        ..
+    } = document.curve(line).unwrap().definition
+    else {
+        panic!("segment fixture must lower to one line");
+    };
+    let CurveDefinition::Circle {
+        center: circle_center,
+        ..
+    } = document.curve(circle).unwrap().definition
+    else {
+        panic!("circle fixture must lower to one circle");
+    };
+
+    for point in [line_start, circle_center] {
+        apply_relation(
+            &mut coordinator,
+            ConstraintIntent::Lock,
+            vec![AuthoringOperand::selected(SelectionItem::Point(point))],
+            ResolvedConstraintKind::FixedPoint,
+        );
+    }
+    apply_relation(
+        &mut coordinator,
+        ConstraintIntent::Tangent,
+        vec![
+            AuthoringOperand::picked(SelectionItem::Curve(CurveSpan::line(line)), Some(0.5)),
+            AuthoringOperand::picked(
+                SelectionItem::Curve(CurveSpan::line(circle)),
+                Some(std::f64::consts::FRAC_PI_2),
+            ),
+        ],
+        ResolvedConstraintKind::CurveTangency,
+    );
+
+    let before = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let line_end_before = before.point(line_end).unwrap().position;
+    let control = control(&coordinator, circle, DocumentCurveControlKind::Radius);
+    let expected = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_identity();
+    let history_before = coordinator.intent().undo_len();
+
+    coordinator
+        .begin_curve_control_drag(23, accepted_revision(&coordinator), expected, control)
+        .unwrap();
+    coordinator
+        .preview_curve_control_drag(
+            23,
+            1,
+            expected,
+            control,
+            [1.5, 0.0],
+            OperationControl::unlimited(),
+        )
+        .unwrap()
+        .expect("the constrained radius has one accepted terminal preview");
+    let preview = coordinator
+        .presentation_session()
+        .unwrap()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    assert_ne!(
+        preview.point(line_end).unwrap().position.map(f64::to_bits),
+        line_end_before.map(f64::to_bits),
+        "the tangent companion must move with the radius control",
+    );
+
+    coordinator
+        .finish_curve_control_drag(23, 1, expected, control)
+        .unwrap()
+        .expect("the constrained radius terminal must publish");
+    let accepted = coordinator.accepted_materialization().unwrap();
+    assert_eq!(
+        accepted
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &preview,
+    );
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9)
+    );
+    assert_eq!(coordinator.intent().undo_len(), history_before + 1);
+    coordinator
+        .undo()
+        .unwrap()
+        .expect("control drag must be undoable");
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &before,
+    );
+    coordinator
+        .redo()
+        .unwrap()
+        .expect("control drag must be redoable");
+    assert_eq!(
+        coordinator
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &preview,
+    );
 }
 
 #[test]

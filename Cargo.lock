@@ -757,19 +757,17 @@ dependencies = [
  "console_error_panic_hook",
  "geosolve-constraint-editor",
  "geosolve-core",
+ "geosolve-headless",
  "geosolve-sketch",
  "geosolve-sketch-code",
  "geosolve-sketch-features",
  "geosolve-sketch-intent",
  "geosolve-sketch-render",
- "js-sys",
  "miniz_oxide 0.9.1",
  "serde",
  "serde_json",
  "wasm-bindgen",
- "wasm-bindgen-futures",
  "wasm-bindgen-test",
- "web-sys",
 ]
 
 [[package]]
