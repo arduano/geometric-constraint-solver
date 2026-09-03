@@ -7995,11 +7995,12 @@ synchronously as solver-instance overlays without compiling; compiled projects s
 a browser; all accepted geometry is finite and independently validated at normalized hard residual
 `<= 1e-9`; no legacy parser, edit-lens, tuple recipe or GUI-only source-project fallback remains.
 
-## Provisional M91 intake — parallel follow-up bundle
+## M91 — cohesive code-driven authoring
 
-Status: **Intake only. M90 is closed; M91 implementation, frozen scope and acceptance are not yet
-started.** M91 is intended to contain several bounded, independently owned workstreams that can
-run in parallel, followed by one integrated candidate and one composite human UAT. An individual
+Status: **Implementation in progress. Scope and integration order are frozen in
+`docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`; no candidate is nominated and no row in
+`docs/M91_UAT.md` has run.** M91 contains several bounded, independently owned workstreams running
+in parallel, followed by one integrated candidate and one composite human UAT. An individual
 workstream cannot nominate or close the milestone on its own.
 
 - [ ] **Constraint-edit intent reconciliation.** Derive intrinsic curve parameter topology from the
