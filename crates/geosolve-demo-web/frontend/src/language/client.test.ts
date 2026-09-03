@@ -73,6 +73,19 @@ describe("TypeScript language worker client", () => {
     expect(worker.messages.filter((message) => message.kind === "sync")).toHaveLength(1);
     client.dispose();
   });
+
+  it("settles pending and late queries harmlessly when disposed", async () => {
+    const worker = new FakeWorker();
+    const client = new TypeScriptLanguageWorkerClient(worker);
+    client.sync(project("const pending = 1;"));
+    const pending = client.hover(6);
+
+    client.dispose();
+
+    expect(await pending).toBeNull();
+    expect(await client.diagnostics()).toBeNull();
+    expect(worker.terminated).toBe(true);
+  });
 });
 
 function project(contents: string) {

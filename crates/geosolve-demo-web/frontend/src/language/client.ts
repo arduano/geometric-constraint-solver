@@ -119,9 +119,7 @@ export class TypeScriptLanguageWorkerClient {
     this.disposed = true;
     this.worker.removeEventListener("message", this.receive);
     this.worker.terminate();
-    for (const pending of this.pending.values()) {
-      pending.reject(new Error("TypeScript language worker was disposed"));
-    }
+    for (const pending of this.pending.values()) pending.resolve(null);
     this.pending.clear();
   }
 
@@ -133,7 +131,7 @@ export class TypeScriptLanguageWorkerClient {
         ? { position: number }
         : Record<never, never>,
   ): Promise<TypeScriptLanguageResults[Kind] | null> {
-    if (this.disposed) return Promise.reject(new Error("TypeScript language worker is disposed"));
+    if (this.disposed) return Promise.resolve(null);
     const context = this.context;
     if (!context) return Promise.resolve(null);
     this.request += 1;
