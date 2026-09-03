@@ -369,14 +369,18 @@ function validateSyncRequest(request: TypeScriptLanguageSyncRequest): void {
     const path = projectPath(file.path);
     if (paths.has(path)) throw new Error(`duplicate TypeScript source file ${JSON.stringify(file.path)}`);
     paths.add(path);
-    total += file.contents.length;
-  }
-  if (total > TYPESCRIPT_LANGUAGE_SOURCE_LIMIT) {
-    throw new Error("TypeScript language-service project exceeds its source limit");
+    total += utf8Length(file.contents);
+    if (total > TYPESCRIPT_LANGUAGE_SOURCE_LIMIT) {
+      throw new Error("TypeScript language-service project exceeds its source limit");
+    }
   }
   if (!paths.has(projectPath(request.file))) {
     throw new Error("selected TypeScript source file is absent from the project");
   }
+}
+
+function utf8Length(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }
 
 function validateQueryRequest(

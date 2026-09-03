@@ -208,6 +208,39 @@ describe("TypeScript project language service", () => {
     expect(service.diagnostics("sketch.ts")).toEqual([]);
     service.dispose();
   });
+
+  it("measures the project source bound as UTF-8 bytes", () => {
+    const service = synchronized(SOURCE);
+    const prefix = "export {};";
+    const response = synchronizeThroughWorker(
+      service,
+      [{
+        path: "sketch.ts",
+        contents: `${prefix}${"é".repeat((TYPESCRIPT_LANGUAGE_SOURCE_LIMIT - prefix.length) / 2)}`,
+      }],
+      2,
+    );
+
+    expect(response).toBeNull();
+    expect(service.identity().revision).toBe(2);
+
+    const rejected = synchronizeThroughWorker(
+      service,
+      [{
+        path: "sketch.ts",
+        contents: `${prefix}${"é".repeat((TYPESCRIPT_LANGUAGE_SOURCE_LIMIT - prefix.length) / 2)}a`,
+      }],
+      3,
+    );
+    expect(rejected).toMatchObject({
+      kind: "sync-error",
+      project: "test-project",
+      revision: 3,
+      error: "TypeScript language-service project exceeds its source limit",
+    });
+    expect(service.identity().revision).toBe(2);
+    service.dispose();
+  });
 });
 
 const SOURCE_WITH_WRONG = SOURCE.replace("end: [10, 0]", "end: [10, \"wrong\"]");

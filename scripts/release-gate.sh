@@ -101,6 +101,11 @@ done
 (
   cd crates/geosolve-demo-web/frontend
   npm ci --ignore-scripts
+  if [[ -z "${GEOSOLVE_CHROMIUM_PATH:-}" ]] && command -v google-chrome >/dev/null 2>&1; then
+    export GEOSOLVE_CHROMIUM_PATH
+    GEOSOLVE_CHROMIUM_PATH="$(command -v google-chrome)"
+  fi
+  npm run test:e2e:language
   npm run check
   npm run validate:dist -- ../dist ./
 )
