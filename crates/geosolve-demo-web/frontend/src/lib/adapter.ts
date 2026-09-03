@@ -113,6 +113,9 @@ export interface DeclarationRow {
   rowKind: "group" | "declaration" | "generated";
   selected: boolean;
   suppressed?: boolean;
+  visible: boolean;
+  effectiveVisible: boolean;
+  visibilityState: "visible" | "hidden" | "mixed";
   source?: { path: string; from: number; to: number };
   children: DeclarationRow[];
   capabilities: DeclarationCapabilities;
@@ -122,7 +125,7 @@ export interface WorkbenchSnapshot {
   version: typeof WORKBENCH_PROTOCOL_VERSION;
   revision: number;
   project: { title: string; sampleKey?: string; status: ProjectStatus };
-  presentation: { activeTool: string; gridVisible: boolean; canUndo: boolean; canRedo: boolean; canFinish: boolean; geometryRole: "profile" | "construction"; selectedGeometryRole?: "profile" | "construction" | "mixed" };
+  presentation: { activeTool: string; gridVisible: boolean; constructionVisible: boolean; visibilityRestoreAvailable: boolean; canUndo: boolean; canRedo: boolean; canFinish: boolean; geometryRole: "profile" | "construction"; selectedGeometryRole?: "profile" | "construction" | "mixed" };
   frame: { svg: string; ariaLabel: string };
   source: { selectedPath: string; files: SourceFileSnapshot[]; dirty: boolean };
   explorer: DeclarationRow[];
@@ -161,7 +164,7 @@ export interface WorkbenchAdapter {
 export function assertWorkbenchSnapshot(value: WorkbenchSnapshot): WorkbenchSnapshot {
   const geometryRole = value.presentation?.geometryRole;
   const selectedGeometryRole = value.presentation?.selectedGeometryRole;
-  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
+  if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {
     throw new Error("Unsupported or malformed workbench snapshot");
   }
   return value;
@@ -299,6 +302,9 @@ function validDeclarationRow(row: DeclarationRow): boolean {
     && (row.rowKind === "group" || row.rowKind === "declaration" || row.rowKind === "generated")
     && typeof row.selected === "boolean"
     && (row.suppressed === undefined || typeof row.suppressed === "boolean")
+    && typeof row.visible === "boolean"
+    && typeof row.effectiveVisible === "boolean"
+    && (row.visibilityState === "visible" || row.visibilityState === "hidden" || row.visibilityState === "mixed")
     && (row.source === undefined || (typeof row.source.path === "string" && Number.isSafeInteger(row.source.from) && Number.isSafeInteger(row.source.to) && row.source.from >= 0 && row.source.to >= row.source.from))
     && Array.isArray(row.children)
     && row.children.every(validDeclarationRow)

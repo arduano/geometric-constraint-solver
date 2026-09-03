@@ -46,10 +46,13 @@ function mockExplorer(): DeclarationRow[] {
     kind: "Group",
     rowKind: "group",
     selected: false,
+    visible: true,
+    effectiveVisible: true,
+    visibilityState: "visible",
     children: [
-      { id: "origin", label: "Origin", kind: "Reference", rowKind: "declaration", selected: false, source: source("sketch"), children: [], capabilities: managedCapabilities({ edit: disabled("Reference declarations are read-only."), delete: disabled("Reference declarations cannot be deleted."), moveUp: disabled("Already first in this group.") }) },
-      { id: "line-1", label: "Line 1", kind: "Geometry", rowKind: "declaration", selected: false, source: source("const edge"), children: [], capabilities: managedCapabilities() },
-      { id: "fillet-1", label: "Fillet 1", kind: "Computed", rowKind: "declaration", selected: true, source: source("fillet(edge.end"), children: [{ id: "generated:fillet-1:arc", label: "corner / arc", kind: "Generated output", rowKind: "generated", selected: false, suppressed: false, source: source("fillet(edge.end"), children: [], capabilities: managedCapabilities({ edit: disabled("Generated outputs are edited through their source invocation."), move: disabled("Generated outputs remain ordered by their source invocation."), moveUp: disabled("Generated outputs cannot move independently."), moveDown: disabled("Generated outputs cannot move independently."), suppress: { enabled: true } }) }], capabilities: managedCapabilities({ moveDown: disabled("Already last in this group."), suppress: { enabled: true } }) },
+      { id: "origin", label: "Origin", kind: "Reference", rowKind: "declaration", selected: false, visible: true, effectiveVisible: true, visibilityState: "visible", source: source("sketch"), children: [], capabilities: managedCapabilities({ edit: disabled("Reference declarations are read-only."), delete: disabled("Reference declarations cannot be deleted."), moveUp: disabled("Already first in this group.") }) },
+      { id: "line-1", label: "Line 1", kind: "Geometry", rowKind: "declaration", selected: false, visible: true, effectiveVisible: true, visibilityState: "visible", source: source("const edge"), children: [], capabilities: managedCapabilities() },
+      { id: "fillet-1", label: "Fillet 1", kind: "Computed", rowKind: "declaration", selected: true, visible: true, effectiveVisible: true, visibilityState: "visible", source: source("fillet(edge.end"), children: [{ id: "generated:fillet-1:arc", label: "corner / arc", kind: "Generated output", rowKind: "generated", selected: false, suppressed: false, visible: true, effectiveVisible: true, visibilityState: "visible", source: source("fillet(edge.end"), children: [], capabilities: managedCapabilities({ edit: disabled("Generated outputs are edited through their source invocation."), move: disabled("Generated outputs remain ordered by their source invocation."), moveUp: disabled("Generated outputs cannot move independently."), moveDown: disabled("Generated outputs cannot move independently."), suppress: { enabled: true } }) }], capabilities: managedCapabilities({ moveDown: disabled("Already last in this group."), suppress: { enabled: true } }) },
     ],
     capabilities: groupCapabilities(),
   }];
@@ -60,7 +63,7 @@ function initialSnapshot(): WorkbenchSnapshot {
     version: 1,
     revision: 1,
     project: { title: "Untitled sketch", status: "accepted" },
-    presentation: { activeTool: "select", gridVisible: true, canUndo: false, canRedo: false, canFinish: false, geometryRole: "profile" },
+    presentation: { activeTool: "select", gridVisible: true, constructionVisible: true, visibilityRestoreAvailable: false, canUndo: false, canRedo: false, canFinish: false, geometryRole: "profile" },
     frame: {
       ariaLabel: "Accepted GeoSolve sketch viewport",
       svg: `<svg viewBox="0 0 900 600" role="img" aria-label="Empty accepted sketch"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M 24 0 L 0 0 0 24" fill="none" stroke="#353a40" stroke-width="1"/></pattern></defs><rect width="900" height="600" fill="url(#grid)"/><path d="M180 390 L430 390 L610 210" fill="none" stroke="#e7a83e" stroke-width="3"/><circle cx="180" cy="390" r="6" fill="#f1c36d"/><circle cx="610" cy="210" r="6" fill="#f1c36d"/></svg>`,
@@ -85,6 +88,7 @@ function initialSnapshot(): WorkbenchSnapshot {
 
 export class MockWorkbenchAdapter implements WorkbenchAdapter {
   protected state = initialSnapshot();
+  private visibilityRestore: Map<string, boolean> | null = null;
   async construct(_input?: { version: 1; persistedProject?: string }): Promise<WorkbenchSnapshot> { return structuredClone(this.state); }
   async toolCatalog(): Promise<ToolCatalog> { return structuredClone(MOCK_TOOL_CATALOG); }
   async snapshot(): Promise<WorkbenchSnapshot> { return structuredClone(this.state); }
@@ -147,10 +151,13 @@ export class MockWorkbenchAdapter implements WorkbenchAdapter {
     if (input.command === "sample.open") {
       const sample = input.payload as { key: string; title: string };
       this.state.project = { title: sample.title, sampleKey: sample.key, status: "accepted" };
+      this.visibilityRestore = null;
+      resetVisibility(this.state);
       this.state.revision += 1;
     }
     if (input.command === "project.new" || input.command === "project.new-code") {
       this.state = initialSnapshot();
+      this.visibilityRestore = null;
       this.state.project.title = input.command === "project.new-code" ? "Untitled code sketch" : "Untitled sketch";
       this.state.revision += 1;
     }
@@ -184,6 +191,30 @@ export class MockWorkbenchAdapter implements WorkbenchAdapter {
       if (item) item.suppressed = edit.suppressed;
       this.state.revision += 1;
     }
+    if (input.command === "explorer.visibility.set") {
+      const edit = input.payload as { id: string; visible: boolean };
+      const item = findDeclaration(this.state.explorer, edit.id);
+      if (item) item.visible = edit.visible;
+      this.visibilityRestore = null;
+      this.state.presentation.visibilityRestoreAvailable = false;
+      reconcileVisibility(this.state.explorer, true);
+    }
+    if (input.command === "explorer.visibility.isolate") {
+      const id = String((input.payload as { id: string }).id);
+      if (!this.visibilityRestore) {
+        this.visibilityRestore = new Map<string, boolean>();
+        visitDeclarations(this.state.explorer, (row) => this.visibilityRestore?.set(row.id, row.visible));
+      }
+      for (const group of this.state.explorer) group.visible = group.id === id;
+      this.state.presentation.visibilityRestoreAvailable = true;
+      reconcileVisibility(this.state.explorer, true);
+    }
+    if (input.command === "explorer.visibility.restore" && this.visibilityRestore) {
+      visitDeclarations(this.state.explorer, (row) => { row.visible = this.visibilityRestore?.get(row.id) ?? row.visible; });
+      this.visibilityRestore = null;
+      this.state.presentation.visibilityRestoreAvailable = false;
+      reconcileVisibility(this.state.explorer, true);
+    }
     if (input.command === "declaration.delete") {
       removeDeclaration(this.state.explorer, String((input.payload as { id: string }).id));
       this.state.revision += 1;
@@ -215,6 +246,7 @@ export class MockWorkbenchAdapter implements WorkbenchAdapter {
     if (input.command === "geometry.authoring-role.toggle") this.state.presentation.geometryRole = this.state.presentation.geometryRole === "profile" ? "construction" : "profile";
     if (input.command === "geometry.role.toggle" && this.state.presentation.selectedGeometryRole) this.state.presentation.selectedGeometryRole = this.state.presentation.selectedGeometryRole === "construction" ? "profile" : "construction";
     if (input.command === "view.grid.toggle") this.state.presentation.gridVisible = !this.state.presentation.gridVisible;
+    if (input.command === "view.construction.toggle") this.state.presentation.constructionVisible = !this.state.presentation.constructionVisible;
     return structuredClone(this.state);
   }
   async pointer(_input: PointerSample): Promise<WorkbenchSnapshot | null> { return null; }
@@ -247,6 +279,34 @@ function removeDeclaration(rows: DeclarationRow[], id: string): boolean {
   const index = rows.findIndex((row) => row.id === id);
   if (index >= 0) { rows.splice(index, 1); return true; }
   return rows.some((row) => removeDeclaration(row.children, id));
+}
+
+function visitDeclarations(rows: DeclarationRow[], visit: (row: DeclarationRow) => void) {
+  for (const row of rows) {
+    visit(row);
+    visitDeclarations(row.children, visit);
+  }
+}
+
+function reconcileVisibility(rows: DeclarationRow[], parentVisible: boolean) {
+  for (const row of rows) {
+    row.effectiveVisible = parentVisible && row.visible;
+    reconcileVisibility(row.children, row.effectiveVisible);
+    if (!row.effectiveVisible) row.visibilityState = "hidden";
+    else if (!row.children.length) row.visibilityState = "visible";
+    else {
+      const states = new Set(row.children.map((child) => child.visibilityState));
+      if (row.rowKind !== "group") states.add("visible");
+      row.visibilityState = states.size > 1 || states.has("mixed") ? "mixed" : states.has("hidden") ? "hidden" : "visible";
+    }
+  }
+}
+
+function resetVisibility(state: WorkbenchSnapshot) {
+  visitDeclarations(state.explorer, (row) => { row.visible = true; });
+  state.presentation.constructionVisible = true;
+  state.presentation.visibilityRestoreAvailable = false;
+  reconcileVisibility(state.explorer, true);
 }
 
 function mockTool(entry: MockCommandEntry, stableId: string, iconKey: string): ToolCommandDefinition {

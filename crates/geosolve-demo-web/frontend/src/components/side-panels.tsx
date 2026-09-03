@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { AlertCircle, Box, Braces, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, GripVertical, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
+import { AlertCircle, Box, Braces, ChevronDown, ChevronUp, DraftingCompass, ExternalLink, Eye, EyeOff, Focus, GripVertical, Minus, Pencil, RotateCcw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { DeclarationCapability, DeclarationRow, WorkbenchSnapshot } from "../lib/adapter";
 import { Button } from "./ui/button";
@@ -11,12 +11,25 @@ export interface DeclarationPanelActions {
   onSelect: (id: string) => void;
   onNavigate: (row: DeclarationRow, edit: boolean) => void;
   onMove: (id: string, move: DeclarationMove) => void;
+  onVisibility: (id: string, visible: boolean) => void;
+  onIsolate: (id: string) => void;
+  onRestoreVisibility: () => void;
+  onConstructionVisibility: () => void;
   onSuppress: (id: string, suppressed: boolean) => void;
   onDelete: (id: string) => void;
 }
 
 export function Explorer({ snapshot, actions, blockedReason }: { snapshot: WorkbenchSnapshot; actions: DeclarationPanelActions; blockedReason?: string }) {
-  return <aside aria-label="Explorer" className="flex h-full min-h-0 flex-col bg-surface"><header className="flex h-10 items-center border-b border-border px-3 text-xs font-semibold uppercase tracking-wide text-muted">Explorer</header><DeclarationPanel rows={snapshot.explorer} actions={actions} blockedReason={blockedReason} className="min-h-0 flex-1 overflow-auto p-2" /></aside>;
+  return <aside aria-label="Explorer" className="flex h-full min-h-0 flex-col bg-surface">
+    <header className="shrink-0 border-b border-border p-2">
+      <div className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Explorer</div>
+      <div role="group" aria-label="Explorer display filters" className="mt-2 flex min-w-0 items-center gap-1">
+        <Button aria-label={`${snapshot.presentation.constructionVisible ? "Hide" : "Show"} construction geometry`} aria-pressed={snapshot.presentation.constructionVisible} className="h-7 min-w-0 flex-1 justify-start px-2 text-[10px]" onClick={actions.onConstructionVisibility} size="compact" title="Show or hide all explicit and Fillet-derived construction geometry without changing solver participation" variant="ghost"><DraftingCompass className="size-3.5 shrink-0" /><span className="truncate">Construction</span></Button>
+        <Button aria-label="Restore visibility before isolate" className="size-7 shrink-0" disabled={!snapshot.presentation.visibilityRestoreAvailable} onClick={actions.onRestoreVisibility} size="icon" title={snapshot.presentation.visibilityRestoreAvailable ? "Restore visibility from before group isolation" : "No isolated visibility state to restore"} variant="ghost"><RotateCcw className="size-3.5" /></Button>
+      </div>
+    </header>
+    <DeclarationPanel rows={snapshot.explorer} actions={actions} blockedReason={blockedReason} className="min-h-0 flex-1 overflow-auto p-2" />
+  </aside>;
 }
 
 export function DeclarationPanel({ rows, actions, blockedReason, className = "" }: { rows: DeclarationRow[]; actions: DeclarationPanelActions; blockedReason?: string; className?: string }) {
@@ -29,7 +42,7 @@ export function DeclarationPanel({ rows, actions, blockedReason, className = "" 
 
 function DeclarationTreeRow({ row, depth, actions, blockedReason, dragged, drop, onDrag, onDropTarget, onDragEnd }: { row: DeclarationRow; depth: number; actions: DeclarationPanelActions; blockedReason?: string; dragged: string | null; drop: { id: string; position: "before" | "after" } | null; onDrag: (id: string | null) => void; onDropTarget: (target: { id: string; position: "before" | "after" } | null) => void; onDragEnd: () => void }) {
   if (row.rowKind === "group") {
-    return <li><div className="mt-2 flex h-7 items-center gap-2 border-b border-border px-2 text-[10px] font-semibold uppercase tracking-wider text-muted first:mt-0"><Box className="size-3 shrink-0" /><span className="min-w-0 flex-1 truncate">{row.label}</span><span className="shrink-0 tabular-nums">{row.children.length}</span></div>{row.children.length > 0 && <ul className="grid gap-1" aria-label={row.label}>{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}</li>;
+    return <li><div className="mt-2 flex h-7 items-center gap-1 border-b border-border px-1 text-[10px] font-semibold uppercase tracking-wider text-muted first:mt-0"><Box className="size-3 shrink-0" /><span className="min-w-0 flex-1 truncate">{row.label}</span><span className="shrink-0 tabular-nums">{row.children.length}</span><VisibilityButton row={row} onVisibility={actions.onVisibility} /><button type="button" aria-label={`Isolate ${row.label}`} onClick={() => actions.onIsolate(row.id)} title={`Show only ${row.label}; Restore returns the previous visibility`} className="grid size-6 shrink-0 place-items-center rounded outline-none hover:bg-raised hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent"><Focus className="size-3" /></button></div>{row.children.length > 0 && <ul className="grid gap-1" aria-label={row.label}>{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}</li>;
   }
   const blocked = blockedReason ? { enabled: false, reason: blockedReason } : undefined;
   const mutationCapability = (capability: DeclarationCapability) => blocked ?? capability;
@@ -38,12 +51,12 @@ function DeclarationTreeRow({ row, depth, actions, blockedReason, dragged, drop,
   const nested = row.rowKind === "generated" || depth > 0;
   return <li className={`${nested ? "ml-4 border-l border-border pl-1" : ""} border-y ${dropClass}`}>
     <div className="group rounded" draggable={movable} onDragStart={(event) => { if (!movable) return; event.stopPropagation(); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-geosolve-declaration", row.id); onDrag(row.id); }} onDragEnd={onDragEnd} onDragOver={(event) => { if (!dragged || dragged === row.id) return; event.preventDefault(); event.stopPropagation(); const bounds = event.currentTarget.getBoundingClientRect(); onDropTarget({ id: row.id, position: event.clientY < bounds.top + bounds.height / 2 ? "before" : "after" }); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); if (dragged && dragged !== row.id) actions.onMove(dragged, { targetId: row.id, position: drop?.id === row.id ? drop.position : "before" }); onDragEnd(); }}>
-      <button type="button" aria-current={row.selected ? "true" : undefined} disabled={!row.capabilities.select.enabled} title={row.capabilities.select.enabled ? `${row.kind} declaration` : row.capabilities.select.reason} onClick={() => actions.onSelect(row.id)} className="flex h-8 w-full items-center gap-1.5 rounded px-1.5 text-left text-sm text-foreground outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-default disabled:opacity-60 aria-current:bg-amber-400/10 aria-current:text-accent">
+      <div className="flex min-w-0 items-center"><button type="button" aria-current={row.selected ? "true" : undefined} disabled={!row.capabilities.select.enabled} title={row.capabilities.select.enabled ? `${row.kind} declaration` : row.capabilities.select.reason} onClick={() => actions.onSelect(row.id)} className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 text-left text-sm text-foreground outline-none hover:bg-raised focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-default disabled:opacity-60 aria-current:bg-amber-400/10 aria-current:text-accent">
         <GripVertical aria-hidden="true" className={`size-3 shrink-0 ${movable ? "cursor-grab text-muted group-active:cursor-grabbing" : "text-transparent"}`} />
         <Box className={`size-3.5 shrink-0 ${row.rowKind === "generated" ? "text-cyan-300" : "text-muted"}`} />
         <span className={`min-w-0 flex-1 truncate ${row.suppressed ? "line-through opacity-60" : ""}`}>{row.label}</span>
         {row.rowKind === "generated" && <span className="shrink-0 rounded bg-cyan-400/10 px-1 text-[8px] uppercase tracking-wide text-cyan-200">generated</span>}
-      </button>
+      </button><VisibilityButton row={row} onVisibility={actions.onVisibility} /></div>
       {(row.selected || row.suppressed === true) && <div role="group" aria-label={`${row.label} actions`} className="mb-1 ml-8 flex flex-wrap items-center gap-0.5 px-1">
         <RowAction label="Move up" capability={mutationCapability(row.capabilities.moveUp)} onClick={() => actions.onMove(row.id, { direction: "up" })}><ChevronUp /></RowAction>
         <RowAction label="Move down" capability={mutationCapability(row.capabilities.moveDown)} onClick={() => actions.onMove(row.id, { direction: "down" })}><ChevronDown /></RowAction>
@@ -55,6 +68,17 @@ function DeclarationTreeRow({ row, depth, actions, blockedReason, dragged, drop,
     </div>
     {row.children.length > 0 && <ul aria-label={`${row.label} generated outputs`} className="grid gap-1">{row.children.map((child) => <DeclarationTreeRow key={child.id} row={child} depth={depth + 1} actions={actions} blockedReason={blockedReason} dragged={dragged} drop={drop} onDrag={onDrag} onDropTarget={onDropTarget} onDragEnd={onDragEnd} />)}</ul>}
   </li>;
+}
+
+function VisibilityButton({ row, onVisibility }: { row: DeclarationRow; onVisibility: (id: string, visible: boolean) => void }) {
+  const action = row.visible ? "Hide" : "Show";
+  const inherited = row.visible && !row.effectiveVisible;
+  const pressed = row.visibilityState === "mixed" ? "mixed" : row.visible;
+  const title = inherited ? `${row.label} is individually shown but hidden by an ancestor group` : `${action} ${row.label} without suppressing or changing solver activity`;
+  return <button type="button" aria-label={`${action} ${row.label}`} aria-pressed={pressed} data-visibility-state={row.visibilityState} onClick={() => onVisibility(row.id, !row.visible)} title={title} className={`relative grid size-6 shrink-0 place-items-center rounded outline-none hover:bg-raised hover:text-foreground focus-visible:ring-1 focus-visible:ring-accent ${inherited ? "text-muted/50" : "text-muted"}`}>
+    {row.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+    {row.visibilityState === "mixed" && <Minus className="absolute size-2.5 stroke-[3]" />}
+  </button>;
 }
 
 function RowAction({ label, capability, pressed, danger = false, onClick, children }: { label: string; capability: DeclarationCapability; pressed?: boolean; danger?: boolean; onClick: () => void; children: React.ReactNode }) {

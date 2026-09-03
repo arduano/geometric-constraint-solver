@@ -31,6 +31,7 @@ const DRAFT_KEY = "geosolve.source-draft.v1";
 const SPLIT_CODE_DEFAULT_PX = 560;
 const SPLIT_CODE_MINIMUM_PX = 520;
 const DURABLE_REPLACEMENT_COMMANDS = new Set(["project.new", "project.new-code", "project.import", "sample.open"]);
+const PRESENTATION_SAVE_COMMANDS = new Set(["explorer.visibility.set", "explorer.visibility.isolate", "explorer.visibility.restore", "view.construction.toggle"]);
 type CodeSurface = "source" | "parameters" | "problems" | "generated" | "artifacts";
 type ProjectSaveIntent = "auto" | "manual" | "replacement";
 
@@ -225,6 +226,8 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
         suppressInstalledSnapshotAutosave.current = accepted;
         projectSaveEpoch.current += 1;
         void queueProjectSave("replacement", false);
+      } else if (PRESENTATION_SAVE_COMMANDS.has(name)) {
+        void queueProjectSave("auto", false);
       }
       return accepted;
     } catch (error) {
@@ -371,6 +374,10 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       void verifiedCommand("declaration.source.open", { id: row.id, from: row.source.from, to: row.source.to }).then((next) => { if (next) navigateToSource(row.source!.path, row.source!.from, row.source!.to); });
     },
     onMove: (id, move) => { void command("declaration.move", { id, ...move }); },
+    onVisibility: (id, visible) => { void command("explorer.visibility.set", { id, visible }); },
+    onIsolate: (id) => { void command("explorer.visibility.isolate", { id }); },
+    onRestoreVisibility: () => { void command("explorer.visibility.restore"); },
+    onConstructionVisibility: () => { void command("view.construction.toggle"); },
     onSuppress: (id, suppressed) => { void command("declaration.suppression.set", { id, suppressed }); },
     onDelete: (id) => { void command("declaration.delete", { id }); },
   };

@@ -16,7 +16,7 @@ const catalog = {
   ],
   geometryRole: tool("inspector.geometry-role", "geometry-role", "Toggle Profile / Construction", "geometry-role-construction"),
 };
-const snapshot: WorkbenchSnapshot = { version: 1, revision: 0, project: { title: "Bridge", status: "accepted" }, presentation: { activeTool: "select", gridVisible: true, canUndo: false, canRedo: false, canFinish: false, geometryRole: "profile" }, frame: { svg: "<svg/>", ariaLabel: "frame" }, source: { selectedPath: "", files: [], dirty: false }, explorer: [], parameters: [], problems: [] };
+const snapshot: WorkbenchSnapshot = { version: 1, revision: 0, project: { title: "Bridge", status: "accepted" }, presentation: { activeTool: "select", gridVisible: true, constructionVisible: true, visibilityRestoreAvailable: false, canUndo: false, canRedo: false, canFinish: false, geometryRole: "profile" }, frame: { svg: "<svg/>", ariaLabel: "frame" }, source: { selectedPath: "", files: [], dirty: false }, explorer: [], parameters: [], problems: [] };
 
 class FakeHandle implements JsonWorkbenchHandle {
   static requests: string[] = [];

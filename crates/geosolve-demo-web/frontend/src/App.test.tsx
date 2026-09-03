@@ -477,6 +477,80 @@ describe("M88 workbench interaction contract", () => {
     await waitFor(() => expect(container.querySelector(".cm-content")?.textContent).toContain("export const radius = 4;"));
   });
 
+  it("composes accessible Explorer row, group, isolate and construction visibility controls", async () => {
+    class VisibilityAdapter extends MockWorkbenchAdapter {
+      commands: Array<{ command: string; payload?: unknown }> = [];
+
+      constructor() {
+        super();
+        const other = structuredClone(this.state.explorer[0]);
+        other.id = "group:other";
+        other.label = "Other declarations";
+        other.children = [];
+        this.state.explorer.push(other);
+      }
+
+      override async dispatch(input: { command: string; payload?: unknown }) {
+        this.commands.push(input);
+        return super.dispatch(input);
+      }
+    }
+
+    const adapter = new VisibilityAdapter();
+    const { user } = await ready(adapter);
+    const explorer = screen.getByRole("complementary", { name: "Explorer" });
+    const construction = within(explorer).getByRole("button", {
+      name: "Hide construction geometry",
+    });
+    expect(construction).toHaveAttribute("aria-pressed", "true");
+    await user.click(construction);
+    expect(adapter.commands.at(-1)).toMatchObject({ command: "view.construction.toggle" });
+    expect(within(explorer).getByRole("button", {
+      name: "Show construction geometry",
+    })).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(within(explorer).getByRole("button", { name: "Hide Line 1" }));
+    expect(adapter.commands.at(-1)).toMatchObject({
+      command: "explorer.visibility.set",
+      payload: { id: "line-1", visible: false },
+    });
+    expect(within(explorer).getByRole("button", { name: "Show Line 1" }))
+      .toHaveAttribute("aria-pressed", "false");
+    expect(within(explorer).getByRole("button", { name: "Hide Sketch declarations" }))
+      .toHaveAttribute("data-visibility-state", "mixed");
+    expect(within(explorer).getByRole("button", { name: "Hide Sketch declarations" }))
+      .toHaveAttribute("aria-pressed", "mixed");
+
+    await user.click(within(explorer).getByRole("button", { name: "Hide Sketch declarations" }));
+    expect(within(explorer).getByRole("button", { name: "Hide Origin" }))
+      .toHaveAttribute("title", expect.stringContaining("hidden by an ancestor group"));
+    await user.click(within(explorer).getByRole("button", { name: "Show Sketch declarations" }));
+    expect(within(explorer).getByRole("button", { name: "Show Line 1" }))
+      .toHaveAttribute("aria-pressed", "false");
+
+    await user.click(within(explorer).getByRole("button", {
+      name: "Isolate Sketch declarations",
+    }));
+    expect(adapter.commands.at(-1)).toMatchObject({
+      command: "explorer.visibility.isolate",
+      payload: { id: "group:sketch" },
+    });
+    expect(within(explorer).getByRole("button", { name: "Show Other declarations" }))
+      .toHaveAttribute("aria-pressed", "false");
+    const restore = within(explorer).getByRole("button", {
+      name: "Restore visibility before isolate",
+    });
+    expect(restore).toBeEnabled();
+    restore.focus();
+    await user.keyboard("{Enter}");
+    expect(adapter.commands.at(-1)).toMatchObject({ command: "explorer.visibility.restore" });
+    expect(within(explorer).getByRole("button", { name: "Hide Other declarations" }))
+      .toHaveAttribute("aria-pressed", "true");
+    expect(within(explorer).getByRole("button", {
+      name: "Restore visibility before isolate",
+    })).toBeDisabled();
+  });
+
   it("renders the same ordered source-owned declaration tree in Explorer and Code", async () => {
     class RecordingAdapter extends MockWorkbenchAdapter {
       commands: Array<{ command: string; payload?: unknown }> = [];
@@ -491,7 +565,7 @@ describe("M88 workbench interaction contract", () => {
     const origin = within(panel).getByRole("button", { name: "Origin" });
     const line = within(panel).getByRole("button", { name: "Line 1" });
     const fillet = within(panel).getByRole("button", { name: "Fillet 1" });
-    const generated = within(panel).getByRole("button", { name: /corner \/ arc/ });
+    const generated = within(panel).getByRole("button", { name: "corner / arc generated" });
     expect(origin.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(line.compareDocumentPosition(fillet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(fillet.compareDocumentPosition(generated) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -505,7 +579,7 @@ describe("M88 workbench interaction contract", () => {
     expect(adapter.commands.at(-1)).toMatchObject({ command: "declaration.source.open", payload: { id: "line-1" } });
 
     await user.click(screen.getByRole("tab", { name: "Generated" }));
-    await user.click(screen.getByRole("button", { name: /corner \/ arc/ }));
+    await user.click(screen.getByRole("button", { name: "corner / arc generated" }));
     await user.click(within(screen.getByRole("group", { name: "corner / arc actions" })).getByRole("button", { name: "Suppress" }));
     expect(adapter.commands.at(-1)).toMatchObject({ command: "declaration.suppression.set", payload: { id: "generated:fillet-1:arc", suppressed: true } });
   });

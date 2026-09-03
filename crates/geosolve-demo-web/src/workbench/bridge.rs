@@ -17,8 +17,8 @@ use geosolve_constraint_editor::{
     ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome, AuthoringState, EditorEffect,
     EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
     FeatureAuthoringState, FeatureAuthoringTool, GeometryRoleSelectionState, GeometryToolVariant,
-    Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance, PointerInput,
-    ScreenPoint, SelectionItem,
+    GeometryVisibility, Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance,
+    PointerInput, ScreenPoint, SelectionItem,
 };
 use geosolve_sketch::GeometryRole;
 use geosolve_sketch_code::{
@@ -48,7 +48,9 @@ const MAX_TITLE_BYTES: usize = 1_024;
 const MAX_HOST_EXTENT: f64 = 32_768.0;
 const MAX_PIXEL_RATIO: f64 = 16.0;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+const MAX_VISIBILITY_ROWS: usize = 4_096;
 const MIDDLE_POINTER_BUTTON: u16 = 4;
+const WORKBENCH_PERSISTENCE_FORMAT: &str = "geosolve-workbench-presentation-v1";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -217,6 +219,19 @@ struct DeclarationSuppressionPayload {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ExplorerVisibilityPayload {
+    id: String,
+    visible: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExplorerIsolatePayload {
+    id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ParameterPayload {
     id: String,
     value: serde_json::Value,
@@ -264,6 +279,8 @@ struct FrameSnapshot {
 struct PresentationSnapshot {
     active_tool: String,
     grid_visible: bool,
+    construction_visible: bool,
+    visibility_restore_available: bool,
     can_undo: bool,
     can_redo: bool,
     can_finish: bool,
@@ -309,16 +326,27 @@ struct ExplorerSnapshot {
     suppressed: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     source: Option<SelectionSourceSnapshot>,
+    visible: bool,
+    effective_visible: bool,
+    visibility_state: ExplorerVisibilitySnapshot,
     children: Vec<Self>,
     capabilities: ExplorerCapabilities,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum ExplorerRowKind {
     Group,
     Declaration,
     Generated,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ExplorerVisibilitySnapshot {
+    Visible,
+    Hidden,
+    Mixed,
 }
 
 #[derive(Debug, Serialize)]
@@ -414,6 +442,29 @@ struct PersistenceSnapshot {
     contents: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkbenchPersistenceEnvelope {
+    format: String,
+    project: String,
+    presentation: WorkbenchPresentationPersistence,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkbenchPresentationPersistence {
+    hidden_rows: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    isolate_restore: Option<Vec<String>>,
+    construction_visible: bool,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct ExplorerVisibilityState {
+    hidden_rows: std::collections::BTreeSet<String>,
+    isolate_restore: Option<std::collections::BTreeSet<String>>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ManagedCompilerContextSnapshot {
@@ -500,6 +551,7 @@ pub(crate) struct WorkbenchBridge {
     offset_authoring: OffsetAuthoringState,
     active_tool: String,
     grid_visible: bool,
+    explorer_visibility: ExplorerVisibilityState,
     title: String,
     host_size: [f64; 2],
     pixel_ratio: f64,
@@ -538,6 +590,37 @@ impl WorkbenchBridge {
             return Err(format!(
                 "persisted project exceeds the {MAX_REQUEST_BYTES}-byte bridge limit"
             ));
+        }
+        if let Ok(envelope) = serde_json::from_str::<WorkbenchPersistenceEnvelope>(encoded)
+            && envelope.format == WORKBENCH_PERSISTENCE_FORMAT
+        {
+            let hidden_rows = decode_visibility_rows(envelope.presentation.hidden_rows)?;
+            let isolate_restore = envelope
+                .presentation
+                .isolate_restore
+                .map(decode_visibility_rows)
+                .transpose()?;
+            let mut bridge = Self::restore(&envelope.project)?;
+            bridge.explorer_visibility = ExplorerVisibilityState {
+                hidden_rows,
+                isolate_restore,
+            };
+            let visibility = GeometryVisibility {
+                explicit_construction: envelope.presentation.construction_visible,
+                implicit_construction: envelope.presentation.construction_visible,
+                ..bridge
+                    .editor()
+                    .editor()
+                    .geometry_interaction_policy()
+                    .visibility
+            };
+            let _ = bridge
+                .editor_mut()
+                .editor_mut()
+                .set_geometry_visibility(visibility);
+            bridge.retained_scene = None;
+            bridge.accepted_frame = None;
+            return Ok(bridge);
         }
         if let Ok(workspace) = crate::reproduction::decode_workspace(encoded) {
             return Self::restore(&workspace).map(|mut bridge| {
@@ -608,6 +691,7 @@ impl WorkbenchBridge {
             offset_authoring: OffsetAuthoringState::default(),
             active_tool: "select".into(),
             grid_visible: true,
+            explorer_visibility: ExplorerVisibilityState::default(),
             title,
             host_size: super::scene::SCREEN_SIZE,
             pixel_ratio: 1.0,
@@ -838,14 +922,7 @@ impl WorkbenchBridge {
 
     /// Exact application persistence for the browser-owned offline slot.
     pub(crate) fn persistence_json(&self) -> Result<String, String> {
-        let contents = self.code_project.as_ref().map_or_else(
-            || {
-                self.authority
-                    .snapshot()
-                    .and_then(|snapshot| snapshot.encode())
-            },
-            CodeProjectWorkbench::to_persistence_json,
-        )?;
+        let contents = self.persistence_contents()?;
         serde_json::to_string(&PersistenceSnapshot {
             version: PROTOCOL_VERSION,
             contents,
@@ -853,13 +930,45 @@ impl WorkbenchBridge {
         .map_err(|error| error.to_string())
     }
 
+    fn persistence_contents(&self) -> Result<String, String> {
+        let project = self.code_project.as_ref().map_or_else(
+            || {
+                self.authority
+                    .snapshot()
+                    .and_then(|snapshot| snapshot.encode())
+            },
+            CodeProjectWorkbench::to_persistence_json,
+        )?;
+        let construction = self
+            .editor()
+            .editor()
+            .geometry_interaction_policy()
+            .visibility;
+        serde_json::to_string(&WorkbenchPersistenceEnvelope {
+            format: WORKBENCH_PERSISTENCE_FORMAT.into(),
+            project,
+            presentation: WorkbenchPresentationPersistence {
+                hidden_rows: self
+                    .explorer_visibility
+                    .hidden_rows
+                    .iter()
+                    .cloned()
+                    .collect(),
+                isolate_restore: self
+                    .explorer_visibility
+                    .isolate_restore
+                    .as_ref()
+                    .map(|rows| rows.iter().cloned().collect()),
+                construction_visible: construction.explicit_construction
+                    && construction.implicit_construction,
+            },
+        })
+        .map_err(|error| error.to_string())
+    }
+
     pub(crate) fn reproduction_json(&self) -> Result<String, String> {
-        let contents = if let Some(code) = &self.code_project {
-            let persisted = code.to_persistence_json()?;
-            crate::reproduction::encode_workspace(&persisted).map_err(|error| error.to_string())?
-        } else {
-            super::persistence::reproduction_payload_from_snapshot(self.authority.snapshot()?)?
-        };
+        let contents = crate::reproduction::encode_workspace(&self.persistence_contents()?)
+            .map_err(|error| error.to_string())?;
         serde_json::to_string(&ExportSnapshot {
             version: PROTOCOL_VERSION,
             filename: "geosolve-reproduction.txt",
@@ -946,10 +1055,7 @@ impl WorkbenchBridge {
 
     fn dispatch(&mut self, command: &str, payload: serde_json::Value) -> Result<(), String> {
         if self.pending_managed_mutation.is_some()
-            && !matches!(
-                command,
-                "managed.mutation.resolve" | "managed.mutation.abort"
-            )
+            && !command_allowed_while_managed_mutation_pending(command)
         {
             return Err(
                 "a prepared managed-source mutation is awaiting its compiler receipt".into(),
@@ -1027,6 +1133,10 @@ impl WorkbenchBridge {
                 let payload: DeclarationSuppressionPayload = decode_payload(payload)?;
                 self.set_declaration_suppressed(&payload.id, payload.suppressed)
             }
+            "explorer.visibility.set"
+            | "explorer.visibility.isolate"
+            | "explorer.visibility.restore"
+            | "view.construction.toggle" => self.dispatch_explorer_presentation(command, payload),
             "declaration.delete" => {
                 let payload: SelectionPayload = decode_payload(payload)?;
                 self.delete_declaration_row(&payload.id)
@@ -1046,12 +1156,33 @@ impl WorkbenchBridge {
         }
     }
 
+    fn dispatch_explorer_presentation(
+        &mut self,
+        command: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        match command {
+            "explorer.visibility.set" => {
+                let payload: ExplorerVisibilityPayload = decode_payload(payload)?;
+                self.set_explorer_row_visible(&payload.id, payload.visible)
+            }
+            "explorer.visibility.isolate" => {
+                let payload: ExplorerIsolatePayload = decode_payload(payload)?;
+                self.isolate_explorer_group(&payload.id)
+            }
+            "explorer.visibility.restore" => self.restore_explorer_visibility(),
+            "view.construction.toggle" => self.toggle_construction_visibility(),
+            _ => Err(format!("unknown Explorer presentation command `{command}`")),
+        }
+    }
+
     fn new_sketch(&mut self) -> Result<(), String> {
         self.cancel_active_interaction(None)?;
         self.authority = super::fresh_projectional_authority()?;
         self.code_project = None;
         self.samples = super::samples::SampleCatalogState::default();
         self.camera.reset();
+        self.reset_explorer_visibility();
         self.reset_transient_tools();
         self.title = "Untitled sketch".into();
         self.notice = "New sketch created".into();
@@ -1067,6 +1198,7 @@ impl WorkbenchBridge {
         self.code_project = Some(code_project);
         self.samples = super::samples::SampleCatalogState::default();
         self.camera.reset();
+        self.reset_explorer_visibility();
         let _ = fit_projectional_camera_to_authority(&mut self.camera, &self.authority);
         self.reset_transient_tools();
         self.notice = "New managed code project created".into();
@@ -1101,6 +1233,7 @@ impl WorkbenchBridge {
                 .to_owned();
             self.samples = samples;
         }
+        self.reset_explorer_visibility();
         self.reset_transient_tools();
         self.camera.reset();
         let _ = fit_projectional_camera_to_authority(&mut self.camera, &self.authority);
@@ -1624,6 +1757,138 @@ impl WorkbenchBridge {
                 "Profile"
             },
         );
+    }
+
+    fn set_explorer_row_visible(&mut self, id: &str, visible: bool) -> Result<(), String> {
+        let rows = self.base_explorer_snapshot();
+        if find_explorer_row(&rows, id).is_none() {
+            return Err("the Explorer visibility target is unavailable or stale".into());
+        }
+        self.cancel_active_gesture(None)?;
+        let changed = if visible {
+            self.explorer_visibility.hidden_rows.remove(id)
+        } else {
+            if self.explorer_visibility.hidden_rows.len() >= MAX_VISIBILITY_ROWS
+                && !self.explorer_visibility.hidden_rows.contains(id)
+            {
+                return Err(format!(
+                    "Explorer visibility exceeds the {MAX_VISIBILITY_ROWS}-row limit"
+                ));
+            }
+            self.explorer_visibility.hidden_rows.insert(id.to_owned())
+        };
+        if changed {
+            self.explorer_visibility.isolate_restore = None;
+            self.invalidate_visibility_presentation();
+            self.notice = if visible {
+                "Explorer item shown"
+            } else {
+                "Explorer item hidden"
+            }
+            .into();
+        }
+        Ok(())
+    }
+
+    fn isolate_explorer_group(&mut self, id: &str) -> Result<(), String> {
+        let rows = self.base_explorer_snapshot();
+        if !rows
+            .iter()
+            .any(|row| row.id == id && row.row_kind == ExplorerRowKind::Group)
+        {
+            return Err("only a current top-level Explorer group can be isolated".into());
+        }
+        self.cancel_active_gesture(None)?;
+        let baseline = self
+            .explorer_visibility
+            .isolate_restore
+            .clone()
+            .unwrap_or_else(|| self.explorer_visibility.hidden_rows.clone());
+        let mut isolated = baseline.clone();
+        for group in &rows {
+            if group.id == id {
+                isolated.remove(&group.id);
+            } else {
+                isolated.insert(group.id.clone());
+            }
+        }
+        if isolated.len() > MAX_VISIBILITY_ROWS {
+            return Err(format!(
+                "Explorer visibility exceeds the {MAX_VISIBILITY_ROWS}-row limit"
+            ));
+        }
+        self.explorer_visibility.hidden_rows = isolated;
+        self.explorer_visibility.isolate_restore = Some(baseline);
+        self.invalidate_visibility_presentation();
+        self.notice = "Explorer group isolated; previous visibility can be restored".into();
+        Ok(())
+    }
+
+    fn restore_explorer_visibility(&mut self) -> Result<(), String> {
+        let restore = self
+            .explorer_visibility
+            .isolate_restore
+            .clone()
+            .ok_or_else(|| {
+                "there is no isolated Explorer visibility state to restore".to_owned()
+            })?;
+        self.cancel_active_gesture(None)?;
+        self.explorer_visibility.isolate_restore = None;
+        self.explorer_visibility.hidden_rows = restore;
+        self.invalidate_visibility_presentation();
+        self.notice = "Explorer visibility restored".into();
+        Ok(())
+    }
+
+    fn toggle_construction_visibility(&mut self) -> Result<(), String> {
+        self.cancel_active_gesture(None)?;
+        let current = self
+            .editor()
+            .editor()
+            .geometry_interaction_policy()
+            .visibility;
+        let show = !(current.explicit_construction && current.implicit_construction);
+        let effects = self
+            .editor_mut()
+            .editor_mut()
+            .set_geometry_visibility(GeometryVisibility {
+                explicit_construction: show,
+                implicit_construction: show,
+                ..current
+            });
+        self.dispatch_construction(effects);
+        self.invalidate_visibility_presentation();
+        self.notice = if show {
+            "Construction geometry shown"
+        } else {
+            "Construction geometry hidden"
+        }
+        .into();
+        Ok(())
+    }
+
+    fn reset_explorer_visibility(&mut self) {
+        self.explorer_visibility = ExplorerVisibilityState::default();
+        let current = self
+            .editor()
+            .editor()
+            .geometry_interaction_policy()
+            .visibility;
+        let _ = self
+            .editor_mut()
+            .editor_mut()
+            .set_geometry_visibility(GeometryVisibility {
+                explicit_construction: true,
+                implicit_construction: true,
+                ..current
+            });
+        self.invalidate_visibility_presentation();
+    }
+
+    fn invalidate_visibility_presentation(&mut self) {
+        self.retained_scene = None;
+        self.accepted_frame = None;
+        self.preserve_frame_once = false;
     }
 
     fn toggle_grid(&mut self) {
@@ -2962,8 +3227,102 @@ impl WorkbenchBridge {
         if let Some(error) = presentation.status_override {
             self.last_error = Some(error);
         }
-        self.retained_scene = presentation.scene;
+        let mut scene = presentation.scene;
+        if let Some(candidate) = scene.as_mut() {
+            let hidden = self.hidden_scene_items(candidate);
+            if let Err(error) = candidate.hide_items(hidden) {
+                self.last_error = Some(format!(
+                    "Explorer visibility could not authenticate the accepted scene: {error}"
+                ));
+                scene = None;
+            }
+        }
+        self.retained_scene = scene;
         self.retained_scene.clone()
+    }
+
+    fn hidden_scene_items(&self, scene: &EditorScene) -> Vec<SelectionItem> {
+        let rows = self.explorer_snapshot();
+        let mut hidden_rows = Vec::new();
+        collect_effectively_hidden_leaves(&rows, &mut hidden_rows);
+        let Some(materialization) = self.editor().coordinator().accepted_materialization() else {
+            return Vec::new();
+        };
+        let mut nodes = std::collections::BTreeSet::new();
+        for id in hidden_rows {
+            let node = match self.declaration_row_target(&id) {
+                Some(
+                    DeclarationRowTarget::Intent { node }
+                    | DeclarationRowTarget::Managed {
+                        node: Some(node), ..
+                    }
+                    | DeclarationRowTarget::Generated {
+                        node: Some(node), ..
+                    },
+                ) => Some(node),
+                Some(
+                    DeclarationRowTarget::Managed { node: None, .. }
+                    | DeclarationRowTarget::Generated { node: None, .. },
+                )
+                | None => None,
+            };
+            if let Some(node) = node {
+                nodes.insert(node);
+            }
+        }
+
+        let mut hidden = std::collections::BTreeSet::new();
+        for node in nodes {
+            let Some(owner) = materialization.ownership.node(node) else {
+                continue;
+            };
+            for binding in &owner.owned {
+                match *binding {
+                    geosolve_constraint_editor::IntentNativeBinding::Point(point) => {
+                        hidden.insert(SelectionItem::Point(point));
+                    }
+                    geosolve_constraint_editor::IntentNativeBinding::Curve(curve) => {
+                        hidden.extend(
+                            scene
+                                .curves
+                                .iter()
+                                .filter(|candidate| candidate.span.curve == curve)
+                                .map(|candidate| SelectionItem::Curve(candidate.span)),
+                        );
+                    }
+                    geosolve_constraint_editor::IntentNativeBinding::CurveSpan(span) => {
+                        hidden.insert(SelectionItem::Curve(span));
+                    }
+                    geosolve_constraint_editor::IntentNativeBinding::Constraint(constraint) => {
+                        hidden.insert(SelectionItem::Constraint(constraint));
+                    }
+                    geosolve_constraint_editor::IntentNativeBinding::Dimension(dimension) => {
+                        hidden.insert(SelectionItem::Dimension(dimension));
+                    }
+                    geosolve_constraint_editor::IntentNativeBinding::ComputedFeature(feature) => {
+                        hidden.insert(SelectionItem::Feature(feature));
+                    }
+                    geosolve_constraint_editor::IntentNativeBinding::ComputedFeatureCorner(
+                        corner,
+                    ) => {
+                        hidden.extend(
+                            scene
+                                .computed_curves
+                                .iter()
+                                .filter(|curve| curve.owner.corner == corner)
+                                .map(|curve| SelectionItem::FeatureCorner(curve.owner)),
+                        );
+                    }
+                    geosolve_constraint_editor::IntentNativeBinding::Scalar(_)
+                    | geosolve_constraint_editor::IntentNativeBinding::Contact(_)
+                    | geosolve_constraint_editor::IntentNativeBinding::Source(_)
+                    | geosolve_constraint_editor::IntentNativeBinding::Parameter(_)
+                    | geosolve_constraint_editor::IntentNativeBinding::ExternalBinding(_)
+                    | geosolve_constraint_editor::IntentNativeBinding::Logical(_) => {}
+                }
+            }
+        }
+        hidden.into_iter().collect()
     }
 
     fn snapshot(&mut self) -> Result<BridgeSnapshot, String> {
@@ -2990,6 +3349,11 @@ impl WorkbenchBridge {
                 GeometryRoleSelectionState::Construction => GeometryRoleStateSnapshot::Construction,
                 GeometryRoleSelectionState::Mixed => GeometryRoleStateSnapshot::Mixed,
             });
+        let geometry_visibility = self
+            .editor()
+            .editor()
+            .geometry_interaction_policy()
+            .visibility;
         Ok(BridgeSnapshot {
             version: PROTOCOL_VERSION,
             revision: self.revision,
@@ -3001,6 +3365,9 @@ impl WorkbenchBridge {
             presentation: PresentationSnapshot {
                 active_tool: self.active_tool.clone(),
                 grid_visible: self.grid_visible,
+                construction_visible: geometry_visibility.explicit_construction
+                    && geometry_visibility.implicit_construction,
+                visibility_restore_available: self.explorer_visibility.isolate_restore.is_some(),
                 can_undo: self.can_undo(),
                 can_redo: self.can_redo(),
                 can_finish: self.can_finish_active_tool(),
@@ -3114,7 +3481,7 @@ impl WorkbenchBridge {
     // The capability matrix is serialized as one cohesive projection so the
     // frontend never has to infer source-authority policy from row shape.
     #[allow(clippy::too_many_lines)]
-    fn explorer_snapshot(&self) -> Vec<ExplorerSnapshot> {
+    fn base_explorer_snapshot(&self) -> Vec<ExplorerSnapshot> {
         let selected = self.editor().selected_declaration();
         let Some(code) = &self.code_project else {
             return self
@@ -3130,6 +3497,9 @@ impl WorkbenchBridge {
                     selected: false,
                     suppressed: None,
                     source: None,
+                    visible: true,
+                    effective_visible: true,
+                    visibility_state: ExplorerVisibilitySnapshot::Visible,
                     children: cell
                         .declarations
                         .into_iter()
@@ -3141,6 +3511,9 @@ impl WorkbenchBridge {
                             selected: selected == Some(declaration.node),
                             suppressed: Some(declaration.suppressed),
                             source: None,
+                            visible: true,
+                            effective_visible: true,
+                            visibility_state: ExplorerVisibilitySnapshot::Visible,
                             children: Vec::new(),
                             capabilities: read_only_intent_capabilities(),
                         })
@@ -3172,6 +3545,9 @@ impl WorkbenchBridge {
                     selected: false,
                     suppressed: None,
                     source: None,
+                    visible: true,
+                    effective_visible: true,
+                    visibility_state: ExplorerVisibilitySnapshot::Visible,
                     children: Vec::new(),
                     capabilities: group_capabilities(),
                 });
@@ -3188,6 +3564,12 @@ impl WorkbenchBridge {
                 ));
         }
         groups
+    }
+
+    fn explorer_snapshot(&self) -> Vec<ExplorerSnapshot> {
+        let mut rows = self.base_explorer_snapshot();
+        apply_explorer_visibility(&mut rows, &self.explorer_visibility.hidden_rows, true);
+        rows
     }
 
     fn selection_snapshot(&self) -> Option<SelectionSnapshot> {
@@ -3305,6 +3687,18 @@ impl WorkbenchBridge {
     }
 }
 
+fn command_allowed_while_managed_mutation_pending(command: &str) -> bool {
+    matches!(
+        command,
+        "managed.mutation.resolve"
+            | "managed.mutation.abort"
+            | "explorer.visibility.set"
+            | "explorer.visibility.isolate"
+            | "explorer.visibility.restore"
+            | "view.construction.toggle"
+    )
+}
+
 fn decode_request<T: for<'de> Deserialize<'de>>(request: &str) -> Result<T, String> {
     if request.len() > MAX_REQUEST_BYTES {
         return Err(format!(
@@ -3316,6 +3710,26 @@ fn decode_request<T: for<'de> Deserialize<'de>>(request: &str) -> Result<T, Stri
 
 fn decode_payload<T: for<'de> Deserialize<'de>>(payload: serde_json::Value) -> Result<T, String> {
     serde_json::from_value(payload).map_err(|error| format!("invalid command payload: {error}"))
+}
+
+fn decode_visibility_rows(rows: Vec<String>) -> Result<std::collections::BTreeSet<String>, String> {
+    if rows.len() > MAX_VISIBILITY_ROWS {
+        return Err(format!(
+            "Explorer visibility exceeds the {MAX_VISIBILITY_ROWS}-row limit"
+        ));
+    }
+    if rows
+        .iter()
+        .any(|row| row.is_empty() || row.len() > MAX_COMMAND_BYTES)
+    {
+        return Err("Explorer visibility contains an invalid row identity".into());
+    }
+    let count = rows.len();
+    let rows = rows.into_iter().collect::<std::collections::BTreeSet<_>>();
+    if rows.len() != count {
+        return Err("Explorer visibility contains duplicate row identities".into());
+    }
+    Ok(rows)
 }
 
 fn require_version(version: u8) -> Result<(), String> {
@@ -3371,6 +3785,61 @@ fn source_language(path: &str) -> &'static str {
 
 fn intent_panel_row_id(symbol: &IntentKey) -> String {
     format!("intent:{symbol}")
+}
+
+fn apply_explorer_visibility(
+    rows: &mut [ExplorerSnapshot],
+    hidden: &std::collections::BTreeSet<String>,
+    ancestor_visible: bool,
+) {
+    for row in rows {
+        row.visible = !hidden.contains(&row.id);
+        row.effective_visible = ancestor_visible && row.visible;
+        apply_explorer_visibility(&mut row.children, hidden, row.effective_visible);
+        row.visibility_state = if !row.effective_visible {
+            ExplorerVisibilitySnapshot::Hidden
+        } else if row.children.is_empty() {
+            ExplorerVisibilitySnapshot::Visible
+        } else {
+            let mut has_visible = false;
+            let mut has_hidden = false;
+            for child in &row.children {
+                match child.visibility_state {
+                    ExplorerVisibilitySnapshot::Visible => has_visible = true,
+                    ExplorerVisibilitySnapshot::Hidden => has_hidden = true,
+                    ExplorerVisibilitySnapshot::Mixed => {
+                        has_visible = true;
+                        has_hidden = true;
+                    }
+                }
+            }
+            if row.row_kind != ExplorerRowKind::Group {
+                has_visible = true;
+            }
+            match (has_visible, has_hidden) {
+                (true, true) => ExplorerVisibilitySnapshot::Mixed,
+                (false, true) => ExplorerVisibilitySnapshot::Hidden,
+                (_, false) => ExplorerVisibilitySnapshot::Visible,
+            }
+        };
+    }
+}
+
+fn find_explorer_row<'a>(rows: &'a [ExplorerSnapshot], id: &str) -> Option<&'a ExplorerSnapshot> {
+    rows.iter().find_map(|row| {
+        (row.id == id)
+            .then_some(row)
+            .or_else(|| find_explorer_row(&row.children, id))
+    })
+}
+
+fn collect_effectively_hidden_leaves(rows: &[ExplorerSnapshot], hidden: &mut Vec<String>) {
+    for row in rows {
+        if row.row_kind != ExplorerRowKind::Group && !row.effective_visible {
+            hidden.push(row.id.clone());
+        }
+        collect_effectively_hidden_leaves(&row.children, hidden);
+    }
 }
 
 fn managed_declaration_row_target(
@@ -3452,6 +3921,9 @@ fn managed_generated_explorer_snapshot(
             from: generated.source_start,
             to: generated.source_end,
         }),
+        visible: true,
+        effective_visible: true,
+        visibility_state: ExplorerVisibilitySnapshot::Visible,
         children: Vec::new(),
         capabilities: ExplorerCapabilities {
             select: capability_if(
@@ -3546,6 +4018,9 @@ fn managed_declaration_explorer_snapshot(
             from: declaration.source_start,
             to: declaration.source_end,
         }),
+        visible: true,
+        effective_visible: true,
+        visibility_state: ExplorerVisibilitySnapshot::Visible,
         children,
         capabilities: ExplorerCapabilities {
             select,
@@ -7362,6 +7837,409 @@ export default sketch(($) => {
                 .unwrap_err()
                 .contains("stale declaration authority")
         );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one presentation-state regression keeps row/group composition, isolate restore, paint/pick filtering, accepted authority, and persistence together"
+    )]
+    fn m91_explorer_visibility_is_composed_presentation_only_and_restorable() {
+        let mut bridge = managed_lifecycle_bridge();
+        let base_revision = bridge.revision;
+        let base_project = canonical_project_json(&bridge);
+        let base_source = bridge
+            .code_project
+            .as_ref()
+            .expect("managed project")
+            .managed_source()
+            .to_owned();
+        let base_can_undo = bridge.can_undo();
+        let base_can_redo = bridge.can_redo();
+        let accepted = bridge
+            .editor()
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted materialization");
+        let base_design_identity = accepted.session.design_identity();
+        let base_document = accepted
+            .session
+            .accepted_state_for_current_input()
+            .expect("accepted document")
+            .document()
+            .clone();
+        let base_validation = accepted.validation.clone();
+        let base_scene = bridge.current_scene().expect("base accepted scene");
+
+        let base_snapshot: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let lifecycle_group = base_snapshot["explorer"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|group| group["label"] == "Lifecycle")
+            .expect("Lifecycle group");
+        let lifecycle_group_id = lifecycle_group["id"].as_str().unwrap().to_owned();
+        let declarations_group_id = base_snapshot["explorer"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|group| group["label"] == "Declarations")
+            .and_then(|group| group["id"].as_str())
+            .expect("ungrouped declarations")
+            .to_owned();
+        let guide_id = managed_row_id(&base_snapshot, "guide");
+        let panel_id = managed_row_id(&base_snapshot, "panel");
+        let corner_fillets = nested_explorer_row(&base_snapshot, "cornerFillets");
+        let lower_left_id = corner_fillets["children"]
+            .as_array()
+            .expect("generated Fillet rows")
+            .iter()
+            .find(|row| row["label"] == "lowerLeft")
+            .expect("generated lower-left Fillet row")["id"]
+            .as_str()
+            .expect("generated lower-left row identity")
+            .to_owned();
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": lower_left_id, "visible": false },
+                })
+                .to_string(),
+            )
+            .expect("generated output hides independently");
+        let generated_hidden: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let corner_fillets = nested_explorer_row(&generated_hidden, "cornerFillets");
+        let generated = corner_fillets["children"]
+            .as_array()
+            .expect("generated Fillet rows");
+        assert_eq!(
+            generated
+                .iter()
+                .find(|row| row["label"] == "lowerLeft")
+                .unwrap()["effectiveVisible"],
+            false
+        );
+        assert_eq!(
+            generated
+                .iter()
+                .find(|row| row["label"] == "upperRight")
+                .unwrap()["effectiveVisible"],
+            true
+        );
+        assert_eq!(corner_fillets["visibilityState"], "mixed");
+        assert_eq!(
+            bridge
+                .current_scene()
+                .expect("generated-filtered scene")
+                .computed_curves
+                .len()
+                + 1,
+            base_scene.computed_curves.len()
+        );
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": lower_left_id, "visible": true },
+                })
+                .to_string(),
+            )
+            .expect("generated output shows independently");
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": panel_id, "visible": false },
+                })
+                .to_string(),
+            )
+            .expect("individual row hides");
+        let hidden_child: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            nested_explorer_row(&hidden_child, "panel")["visible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&hidden_child, "panel")["effectiveVisible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&hidden_child, "Lifecycle")["visibilityState"],
+            "mixed"
+        );
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": lifecycle_group_id, "visible": false },
+                })
+                .to_string(),
+            )
+            .expect("ancestor group hides");
+        let hidden_group: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(nested_explorer_row(&hidden_group, "guide")["visible"], true);
+        assert_eq!(
+            nested_explorer_row(&hidden_group, "guide")["effectiveVisible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&hidden_group, "panel")["visible"],
+            false
+        );
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": lifecycle_group_id, "visible": true },
+                })
+                .to_string(),
+            )
+            .expect("ancestor group shows");
+        let reshown_group: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            nested_explorer_row(&reshown_group, "guide")["effectiveVisible"],
+            true
+        );
+        assert_eq!(
+            nested_explorer_row(&reshown_group, "panel")["visible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&reshown_group, "panel")["effectiveVisible"],
+            false
+        );
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": panel_id, "visible": true },
+                })
+                .to_string(),
+            )
+            .expect("child shows independently");
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": guide_id, "visible": false },
+                })
+                .to_string(),
+            )
+            .expect("guide hides independently");
+
+        let hidden_items = bridge.hidden_scene_items(&base_scene);
+        let hidden_curve = hidden_items
+            .iter()
+            .find_map(|item| match item {
+                SelectionItem::Curve(span) => Some(*span),
+                _ => None,
+            })
+            .expect("guide owns a native curve");
+        let guide_curve = base_scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == hidden_curve)
+            .expect("base guide curve");
+        let start = guide_curve.screen_polyline.first().copied().unwrap();
+        let end = guide_curve.screen_polyline.last().copied().unwrap();
+        let midpoint = ScreenPoint {
+            x: (start.x + end.x) * 0.5,
+            y: (start.y + end.y) * 0.5,
+        };
+        let tolerance = geosolve_constraint_editor::PickTolerance::default();
+        assert_eq!(
+            base_scene.hit_test(midpoint, tolerance).map(|hit| hit.item),
+            Some(SelectionItem::Curve(hidden_curve))
+        );
+        let filtered_scene = bridge.current_scene().expect("filtered accepted scene");
+        assert!(
+            filtered_scene
+                .curves
+                .iter()
+                .all(|curve| curve.span != hidden_curve)
+        );
+        assert_ne!(
+            filtered_scene
+                .hit_test(midpoint, tolerance)
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(hidden_curve))
+        );
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.isolate",
+                    "payload": { "id": declarations_group_id },
+                })
+                .to_string(),
+            )
+            .expect("group isolates");
+        let isolated: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(isolated["presentation"]["visibilityRestoreAvailable"], true);
+        assert_eq!(
+            nested_explorer_row(&isolated, "Lifecycle")["effectiveVisible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&isolated, "Declarations")["effectiveVisible"],
+            true
+        );
+
+        bridge
+            .dispatch_json(r#"{"version":1,"command":"explorer.visibility.restore"}"#)
+            .expect("isolate baseline restores");
+        let restored_visibility: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            restored_visibility["presentation"]["visibilityRestoreAvailable"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&restored_visibility, "guide")["visible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&restored_visibility, "panel")["visible"],
+            true
+        );
+
+        bridge
+            .dispatch_json(r#"{"version":1,"command":"view.construction.toggle"}"#)
+            .expect("construction presentation toggles");
+        let construction_hidden: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            construction_hidden["presentation"]["constructionVisible"],
+            false
+        );
+        let policy = bridge.editor().editor().geometry_interaction_policy();
+        assert!(!policy.visibility.explicit_construction);
+        assert!(!policy.visibility.implicit_construction);
+        let construction = filtered_scene
+            .curves
+            .iter()
+            .find(|curve| curve.role == GeometryRole::Construction)
+            .expect("Fillet source portions expose construction composition");
+        assert!(!construction.is_visible(policy));
+        assert!(!construction.is_interactive(policy));
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.isolate",
+                    "payload": { "id": declarations_group_id },
+                })
+                .to_string(),
+            )
+            .expect("persisted isolate starts");
+        let persistence: serde_json::Value =
+            serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
+        let restore_request = serde_json::json!({
+            "version": 1,
+            "persistedProject": persistence["contents"].as_str().unwrap(),
+        });
+        let mut reloaded = WorkbenchBridge::construct_json(&restore_request.to_string())
+            .expect("presentation envelope reloads");
+        let reloaded_snapshot: serde_json::Value =
+            serde_json::from_str(&reloaded.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            reloaded_snapshot["presentation"]["visibilityRestoreAvailable"],
+            true
+        );
+        assert_eq!(
+            reloaded_snapshot["presentation"]["constructionVisible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&reloaded_snapshot, "Lifecycle")["effectiveVisible"],
+            false
+        );
+
+        let reproduction: serde_json::Value =
+            serde_json::from_str(&bridge.reproduction_json().unwrap()).unwrap();
+        let reproduction_request = serde_json::json!({
+            "version": 1,
+            "persistedProject": reproduction["contents"].as_str().unwrap(),
+        });
+        let mut reproduced = WorkbenchBridge::construct_json(&reproduction_request.to_string())
+            .expect("reproduction restores presentation envelope");
+        let reproduced_snapshot: serde_json::Value =
+            serde_json::from_str(&reproduced.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            reproduced_snapshot["presentation"]["visibilityRestoreAvailable"],
+            true
+        );
+        assert_eq!(
+            reproduced_snapshot["presentation"]["constructionVisible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&reproduced_snapshot, "Lifecycle")["effectiveVisible"],
+            false
+        );
+
+        reloaded
+            .dispatch_json(r#"{"version":1,"command":"explorer.visibility.restore"}"#)
+            .expect("reloaded isolate baseline restores");
+        let reloaded_restored: serde_json::Value =
+            serde_json::from_str(&reloaded.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            nested_explorer_row(&reloaded_restored, "guide")["visible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&reloaded_restored, "panel")["visible"],
+            true
+        );
+
+        assert_eq!(bridge.revision, base_revision);
+        assert_eq!(canonical_project_json(&bridge), base_project);
+        assert_eq!(
+            bridge
+                .code_project
+                .as_ref()
+                .expect("managed project")
+                .managed_source(),
+            base_source
+        );
+        assert_eq!(bridge.can_undo(), base_can_undo);
+        assert_eq!(bridge.can_redo(), base_can_redo);
+        let accepted = bridge
+            .editor()
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted materialization remains");
+        assert_eq!(accepted.session.design_identity(), base_design_identity);
+        assert_eq!(
+            accepted
+                .session
+                .accepted_state_for_current_input()
+                .expect("accepted document remains")
+                .document(),
+            &base_document
+        );
+        assert_eq!(accepted.validation, base_validation);
     }
 
     #[test]

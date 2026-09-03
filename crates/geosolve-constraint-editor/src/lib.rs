@@ -1078,6 +1078,7 @@ struct RetainedSceneReprojectionSeal {
     design_identity: SketchDesignIdentity,
     viewport: Viewport,
     chord_tolerance_pixels: f64,
+    hidden_presentation_items: std::collections::BTreeSet<SelectionItem>,
     points: Vec<ScenePoint>,
     curves: Vec<SceneCurve>,
     datums: Vec<SceneDatum>,
@@ -1197,6 +1198,7 @@ impl RetainedSceneReprojectionSeal {
             design_identity: scene.design_identity,
             viewport: scene.viewport,
             chord_tolerance_pixels: scene.chord_tolerance_pixels,
+            hidden_presentation_items: scene.hidden_presentation_items.clone(),
             points: scene.points.clone(),
             curves: scene.curves.clone(),
             datums: scene.datums.clone(),
@@ -1221,6 +1223,7 @@ impl RetainedSceneReprojectionSeal {
             && self.design_identity == scene.design_identity
             && self.viewport == scene.viewport
             && self.chord_tolerance_pixels.to_bits() == scene.chord_tolerance_pixels.to_bits()
+            && self.hidden_presentation_items == scene.hidden_presentation_items
             && self.points == scene.points
             && self.curves == scene.curves
             && self.datums == scene.datums
@@ -1257,6 +1260,8 @@ pub struct EditorScene {
     /// Private collision-free copy of every non-camera public field consumed
     /// by [`Self::reproject_viewport`].
     retained_reprojection_seal: Option<RetainedSceneReprojectionSeal>,
+    /// Presentation-only removals that must survive camera reprojection.
+    hidden_presentation_items: std::collections::BTreeSet<SelectionItem>,
     /// Pixel chord tolerance used to build the retained native and computed
     /// curve representatives. Camera-only reprojection reuses this exact
     /// presentation contract without re-solving or re-evaluating features.
@@ -1434,6 +1439,11 @@ impl EditorScene {
             .accepted_document
             .points()
             .iter()
+            .filter(|point| {
+                !self
+                    .hidden_presentation_items
+                    .contains(&SelectionItem::Point(point.id))
+            })
             .map(|point| ScenePoint {
                 id: point.id,
                 model_position: point.position,
@@ -1497,7 +1507,14 @@ impl EditorScene {
         self.points = points;
         self.construction_snap_points = construction_snap_points;
         self.curves = curves;
-        self.datums = scene_datums(viewport);
+        self.datums = scene_datums(viewport)
+            .into_iter()
+            .filter(|datum| {
+                !self
+                    .hidden_presentation_items
+                    .contains(&SelectionItem::Datum(datum.datum))
+            })
+            .collect();
         self.computed_curves = computed_curves;
 
         self.curve_controls.clear();
@@ -1548,6 +1565,88 @@ impl EditorScene {
     /// Sets the shared paint/pick visibility policy for all annotations.
     pub fn set_annotations_visible(&mut self, visible: bool) {
         self.annotations_visible = visible;
+    }
+
+    /// Removes an explicitly hidden set of accepted items from this scene's
+    /// paint, pick, control, annotation, and drafting surfaces.
+    ///
+    /// This is a presentation operation over an already authenticated scene.
+    /// It never changes the accepted document, solver activity, selection,
+    /// design identity, or history. The remaining scene is resealed so a
+    /// trusted host can use the same filtered geometry for rendering and
+    /// pointer ownership without reconstructing semantic identities from SVG.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EditorError::StaleSceneProjection`] when a caller has already
+    /// modified public scene geometry outside an authenticated scene method.
+    pub fn hide_items(
+        &mut self,
+        hidden: impl IntoIterator<Item = SelectionItem>,
+    ) -> Result<(), EditorError> {
+        if !self.retained_reprojection_semantics_are_sealed() {
+            return Err(EditorError::StaleSceneProjection);
+        }
+        let hidden = hidden
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        if hidden.is_empty() {
+            return Ok(());
+        }
+
+        self.hidden_presentation_items
+            .extend(hidden.iter().copied());
+        let native_hidden = |item: SelectionItem| hidden.contains(&item);
+        let computed_hidden = |owner: geosolve_sketch_features::ComputedCornerRef| {
+            hidden.contains(&SelectionItem::Feature(owner.feature))
+                || hidden.contains(&SelectionItem::FeatureCorner(owner))
+        };
+        let hidden_curve_ids = hidden
+            .iter()
+            .filter_map(|item| match item {
+                SelectionItem::Curve(span) => Some(span.curve),
+                _ => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+
+        self.points
+            .retain(|point| !native_hidden(SelectionItem::Point(point.id)));
+        self.datums
+            .retain(|datum| !native_hidden(SelectionItem::Datum(datum.datum)));
+        self.construction_snap_points
+            .retain(|point| !native_hidden(SelectionItem::Point(point.id)));
+        self.curves
+            .retain(|curve| !native_hidden(SelectionItem::Curve(curve.span)));
+        self.computed_curves
+            .retain(|curve| !computed_hidden(curve.owner));
+        self.curve_controls.retain(|control| {
+            !native_hidden(SelectionItem::Curve(control.owner))
+                && !matches!(
+                    control.interaction,
+                    SceneCurveControlInteraction::PointAlias(point)
+                        if native_hidden(SelectionItem::Point(point))
+                )
+        });
+        self.curve_control_guides
+            .retain(|guide| !hidden_curve_ids.contains(&guide.owner));
+        if self
+            .selected_curve_control_owner
+            .is_some_and(|owner| native_hidden(SelectionItem::Curve(owner)))
+        {
+            self.selected_curve_control_owner = None;
+        }
+        self.fillet_affordances
+            .retain(|affordances| !computed_hidden(affordances.owner));
+        self.computed_fillet_continuation_statuses
+            .retain(|status| !computed_hidden(status.owner));
+        self.annotations.retain(|annotation| {
+            !native_hidden(annotation.item)
+                && !annotation.operands.iter().copied().any(native_hidden)
+        });
+
+        self.refresh_draft_inference_seal();
+        self.refresh_retained_reprojection_seal();
+        Ok(())
     }
 
     fn set_selected_curve_controls(&mut self, owner: Option<CurveSpan>) -> Result<(), EditorError> {
@@ -1722,6 +1821,7 @@ impl EditorScene {
             prepared_input: None,
             draft_inference_seal: None,
             retained_reprojection_seal: None,
+            hidden_presentation_items: std::collections::BTreeSet::new(),
             chord_tolerance_pixels,
             selected_curve_control_owner: None,
             viewport,
@@ -14616,6 +14716,103 @@ mod tests {
         .expect("scene")
         .with_retained_session(&session)
         .expect("bound scene")
+    }
+
+    #[test]
+    fn hidden_scene_items_leave_accepted_authority_intact_and_cannot_own_pointer_hits() {
+        let (document, spans, points) = line_document();
+        let mut scene = scene(&document);
+        let accepted_revision = scene.accepted_revision;
+        let design_identity = scene.design_identity;
+        let feature_identity = scene.feature_identity;
+        let computed_input = scene.computed_input;
+        let constraint_entries = scene.constraint_entries.clone();
+        let visible_midpoint = scene.viewport.model_to_screen([0.0, 1.0]);
+        let unaffected_midpoint = scene.viewport.model_to_screen([0.0, -1.0]);
+        let tolerance = PickTolerance {
+            point_pixels: 7.0,
+            curve_pixels: 5.0,
+            annotation_pixels: 6.0,
+        };
+
+        assert_eq!(
+            scene
+                .hit_test(visible_midpoint, tolerance)
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(spans[0]))
+        );
+        assert_eq!(
+            scene
+                .hit_test(unaffected_midpoint, tolerance)
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(spans[1]))
+        );
+
+        scene
+            .hide_items([
+                SelectionItem::Point(points[0]),
+                SelectionItem::Point(points[1]),
+                SelectionItem::Curve(spans[0]),
+                SelectionItem::Datum(SketchDatum::XAxis),
+            ])
+            .expect("an authenticated scene admits presentation filtering");
+
+        assert!(
+            scene
+                .points
+                .iter()
+                .all(|point| !points[..2].contains(&point.id))
+        );
+        assert!(scene.curves.iter().all(|curve| curve.span != spans[0]));
+        assert!(
+            scene
+                .datums
+                .iter()
+                .all(|datum| datum.datum != SketchDatum::XAxis)
+        );
+        assert_ne!(
+            scene
+                .hit_test(visible_midpoint, tolerance)
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(spans[0]))
+        );
+        assert_eq!(
+            scene
+                .hit_test(unaffected_midpoint, tolerance)
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(spans[1]))
+        );
+        assert_eq!(scene.accepted_revision, accepted_revision);
+        assert_eq!(scene.design_identity, design_identity);
+        assert_eq!(scene.feature_identity, feature_identity);
+        assert_eq!(scene.computed_input, computed_input);
+        assert_eq!(scene.constraint_entries, constraint_entries);
+        assert_eq!(scene.accepted_document, document);
+        assert!(scene.retained_reprojection_semantics_are_sealed());
+
+        let reprojected = Viewport::new([900.0, 600.0], [1.0, -2.0], 37.0).expect("viewport");
+        scene
+            .reproject_viewport(reprojected)
+            .expect("filtered accepted scene reprojects");
+        assert!(scene.curves.iter().all(|curve| curve.span != spans[0]));
+        assert!(
+            scene
+                .points
+                .iter()
+                .all(|point| !points[..2].contains(&point.id))
+        );
+        assert!(
+            scene
+                .datums
+                .iter()
+                .all(|datum| datum.datum != SketchDatum::XAxis)
+        );
+        assert_eq!(
+            scene
+                .hit_test(reprojected.model_to_screen([0.0, -1.0]), tolerance)
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(spans[1]))
+        );
     }
 
     fn point_identity_branch_fixture() -> (RetainedEditorCoordinator, EditorScene, DesignPointId) {
