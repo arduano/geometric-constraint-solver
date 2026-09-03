@@ -9,9 +9,9 @@ import {
   type TypeScriptLanguageHover,
   type TypeScriptLanguageQueryKind,
   type TypeScriptLanguageRequest,
-  type TypeScriptLanguageResponse,
   type TypeScriptLanguageResults,
   type TypeScriptLanguageSignature,
+  type TypeScriptLanguageWorkerResponse,
 } from "./protocol";
 
 export interface TypeScriptLanguageProject {
@@ -22,8 +22,16 @@ export interface TypeScriptLanguageProject {
 
 export interface TypeScriptLanguageWorkerPort {
   postMessage(message: TypeScriptLanguageRequest): void;
-  addEventListener(type: "message", listener: (event: MessageEvent<TypeScriptLanguageResponse>) => void): void;
-  removeEventListener(type: "message", listener: (event: MessageEvent<TypeScriptLanguageResponse>) => void): void;
+  addEventListener(
+    type: "message" | "error",
+    listener: ((event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void)
+      | ((event: ErrorEvent) => void),
+  ): void;
+  removeEventListener(
+    type: "message" | "error",
+    listener: ((event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void)
+      | ((event: ErrorEvent) => void),
+  ): void;
   terminate(): void;
 }
 
@@ -40,22 +48,35 @@ export class TypeScriptLanguageWorkerClient {
   private request = 0;
   private context: TypeScriptLanguageProject | null = null;
   private readonly pending = new Map<number, PendingQuery>();
+  private synchronizationError: Error | null = null;
+  private workerError: Error | null = null;
   private disposed = false;
 
-  private readonly receive = (event: MessageEvent<TypeScriptLanguageResponse>) => {
+  private readonly receive = (event: MessageEvent<TypeScriptLanguageWorkerResponse>) => {
     const response = event.data;
     if (
       !response
       || response.protocol !== TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION
-      || !Number.isSafeInteger(response.request)
     ) return;
+    if (response.kind === "sync-error") {
+      if (
+        response.project !== this.context?.key
+        || response.revision !== this.revision
+      ) return;
+      const error = response.typescriptVersion === TYPESCRIPT_LANGUAGE_VERSION
+        ? new Error(response.error)
+        : versionMismatch(response.typescriptVersion);
+      this.synchronizationError = error;
+      this.rejectPending(error);
+      this.onUnavailable?.(error);
+      return;
+    }
+    if (!Number.isSafeInteger(response.request)) return;
     const pending = this.pending.get(response.request);
     if (!pending) return;
     this.pending.delete(response.request);
     if (response.typescriptVersion !== TYPESCRIPT_LANGUAGE_VERSION) {
-      pending.reject(new Error(
-        `GeoSolve requires TypeScript ${TYPESCRIPT_LANGUAGE_VERSION}; worker reported ${String(response.typescriptVersion)}`,
-      ));
+      pending.reject(versionMismatch(response.typescriptVersion));
       return;
     }
     if (
@@ -76,8 +97,16 @@ export class TypeScriptLanguageWorkerClient {
     pending.resolve((response.result ?? null) as TypeScriptLanguageResults[typeof pending.kind] | null);
   };
 
-  constructor(private readonly worker: TypeScriptLanguageWorkerPort) {
+  private readonly receiveWorkerError = (event: ErrorEvent) => {
+    this.failWorker(new Error(event.message || "TypeScript language worker failed"));
+  };
+
+  constructor(
+    private readonly worker: TypeScriptLanguageWorkerPort,
+    private readonly onUnavailable?: (error: Error) => void,
+  ) {
     worker.addEventListener("message", this.receive);
+    worker.addEventListener("error", this.receiveWorkerError);
   }
 
   sync(context: TypeScriptLanguageProject): number {
@@ -85,16 +114,22 @@ export class TypeScriptLanguageWorkerClient {
     if (sameProject(this.context, context)) return this.revision;
     this.context = cloneProject(context);
     this.revision += 1;
+    this.synchronizationError = null;
     for (const pending of this.pending.values()) pending.resolve(null);
     this.pending.clear();
-    this.worker.postMessage({
-      protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
-      kind: "sync",
-      project: context.key,
-      revision: this.revision,
-      file: context.file,
-      files: context.files,
-    });
+    if (this.workerError) return this.revision;
+    try {
+      this.worker.postMessage({
+        protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+        kind: "sync",
+        project: context.key,
+        revision: this.revision,
+        file: context.file,
+        files: context.files,
+      });
+    } catch (error) {
+      this.failWorker(asError(error));
+    }
     return this.revision;
   }
 
@@ -118,6 +153,7 @@ export class TypeScriptLanguageWorkerClient {
     if (this.disposed) return;
     this.disposed = true;
     this.worker.removeEventListener("message", this.receive);
+    this.worker.removeEventListener("error", this.receiveWorkerError);
     this.worker.terminate();
     for (const pending of this.pending.values()) pending.resolve(null);
     this.pending.clear();
@@ -134,6 +170,8 @@ export class TypeScriptLanguageWorkerClient {
     if (this.disposed) return Promise.resolve(null);
     const context = this.context;
     if (!context) return Promise.resolve(null);
+    const unavailable = this.workerError ?? this.synchronizationError;
+    if (unavailable) return Promise.reject(unavailable);
     this.request += 1;
     const request = this.request;
     return new Promise((resolve, reject) => {
@@ -144,16 +182,31 @@ export class TypeScriptLanguageWorkerClient {
         resolve: resolve as PendingQuery["resolve"],
         reject,
       });
-      this.worker.postMessage({
-        protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
-        kind,
-        request,
-        project: context.key,
-        revision: this.revision,
-        file: context.file,
-        ...details,
-      } as TypeScriptLanguageRequest);
+      try {
+        this.worker.postMessage({
+          protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+          kind,
+          request,
+          project: context.key,
+          revision: this.revision,
+          file: context.file,
+          ...details,
+        } as TypeScriptLanguageRequest);
+      } catch (error) {
+        this.failWorker(asError(error));
+      }
     });
+  }
+
+  private rejectPending(error: Error): void {
+    for (const pending of this.pending.values()) pending.reject(error);
+    this.pending.clear();
+  }
+
+  private failWorker(error: Error): void {
+    this.workerError = error;
+    this.rejectPending(error);
+    this.onUnavailable?.(error);
   }
 }
 
@@ -187,4 +240,14 @@ function sameProject(
     const other = right.files[index];
     return other?.path === file.path && other.contents === file.contents;
   });
+}
+
+function versionMismatch(version: unknown): Error {
+  return new Error(
+    `GeoSolve requires TypeScript ${TYPESCRIPT_LANGUAGE_VERSION}; worker reported ${String(version)}`,
+  );
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }

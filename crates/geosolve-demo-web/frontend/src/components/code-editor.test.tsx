@@ -9,16 +9,29 @@ import {
   TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
   TYPESCRIPT_LANGUAGE_VERSION,
   type TypeScriptLanguageRequest,
-  type TypeScriptLanguageResponse,
+  type TypeScriptLanguageWorkerResponse,
 } from "../language/protocol";
 
 class EditorLanguageWorker implements TypeScriptLanguageWorkerPort {
-  listener?: (event: MessageEvent<TypeScriptLanguageResponse>) => void;
+  messageListener?: (event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void;
+  errorListener?: (event: ErrorEvent) => void;
   syncs: TypeScriptLanguageRequest[] = [];
+
+  constructor(private readonly rejectSync = false) {}
 
   postMessage(message: TypeScriptLanguageRequest): void {
     if (message.kind === "sync") {
       this.syncs.push(message);
+      if (this.rejectSync) {
+        queueMicrotask(() => this.messageListener?.({ data: {
+          protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+          kind: "sync-error",
+          project: message.project,
+          revision: message.revision,
+          typescriptVersion: TYPESCRIPT_LANGUAGE_VERSION,
+          error: "TypeScript language-service project exceeds its source limit",
+        } } as MessageEvent<TypeScriptLanguageWorkerResponse>));
+      }
       return;
     }
     if (message.kind !== "diagnostics") return;
@@ -27,7 +40,7 @@ class EditorLanguageWorker implements TypeScriptLanguageWorkerPort {
       ? latest.files.find((file) => file.path === "sketch.ts")?.contents ?? ""
       : "";
     const from = source.indexOf("wrong");
-    queueMicrotask(() => this.listener?.({ data: {
+    queueMicrotask(() => this.messageListener?.({ data: {
       protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
       request: message.request,
       project: message.project,
@@ -43,11 +56,24 @@ class EditorLanguageWorker implements TypeScriptLanguageWorkerPort {
         code: 2322,
         source: "TypeScript",
       }],
-    } } as MessageEvent<TypeScriptLanguageResponse>));
+    } } as MessageEvent<TypeScriptLanguageWorkerResponse>));
   }
 
-  addEventListener(_type: "message", listener: (event: MessageEvent<TypeScriptLanguageResponse>) => void): void { this.listener = listener; }
-  removeEventListener(): void { this.listener = undefined; }
+  addEventListener(
+    type: "message" | "error",
+    listener: ((event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void)
+      | ((event: ErrorEvent) => void),
+  ): void {
+    if (type === "message") {
+      this.messageListener = listener as (event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void;
+    } else {
+      this.errorListener = listener as (event: ErrorEvent) => void;
+    }
+  }
+  removeEventListener(type: "message" | "error"): void {
+    if (type === "message") this.messageListener = undefined;
+    else this.errorListener = undefined;
+  }
   terminate(): void {}
 }
 
@@ -89,5 +115,21 @@ describe("CodeEditor TypeScript language integration", () => {
     const status = await screen.findByText("1 error");
     fireEvent.click(status.closest("button")!);
     expect(screen.getByText("Type 'string' is not assignable to type 'number'.")).toBeInTheDocument();
+  });
+
+  it("shows analysis unavailable when the worker refuses project synchronization", async () => {
+    const worker = new EditorLanguageWorker(true);
+    render(<CodeEditor
+      value="const radius = 1;"
+      onChange={() => undefined}
+      languageProject={{ key: "project", file: "sketch.ts", files: [{ path: "sketch.ts", contents: "const radius = 1;" }] }}
+      languageWorkerFactory={() => worker}
+    />);
+
+    const status = await screen.findByText("TypeScript analysis unavailable");
+    expect(status.closest("button")).toHaveAttribute(
+      "title",
+      "TypeScript language-service project exceeds its source limit",
+    );
   });
 });

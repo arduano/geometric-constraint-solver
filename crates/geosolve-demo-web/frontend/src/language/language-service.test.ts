@@ -6,9 +6,12 @@ import {
   TypeScriptProjectLanguageService,
 } from "./language-service";
 import {
+  TYPESCRIPT_LANGUAGE_FILE_LIMIT,
   TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+  TYPESCRIPT_LANGUAGE_SOURCE_LIMIT,
   TYPESCRIPT_LANGUAGE_VERSION,
   type TypeScriptLanguageResponse,
+  type TypeScriptLanguageWorkerResponse,
 } from "./protocol";
 
 const SOURCE = `"use geosolve sketch";
@@ -129,6 +132,82 @@ describe("TypeScript project language service", () => {
     expect("result" in response).toBe(false);
     service.dispose();
   });
+
+  it("reports malformed synchronization without terminating the worker boundary", () => {
+    const service = synchronized(SOURCE);
+    const response = handleTypeScriptLanguageRequest(service, {
+      protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+      kind: "sync",
+      project: "test-project",
+      revision: 2,
+      file: "sketch.ts",
+      files: Array.from(
+        { length: TYPESCRIPT_LANGUAGE_FILE_LIMIT + 1 },
+        (_, index) => ({ path: `file-${index}.ts`, contents: "" }),
+      ),
+    });
+
+    expect(response).toMatchObject({
+      kind: "sync-error",
+      project: "test-project",
+      revision: 2,
+      error: "malformed TypeScript language-service sync request",
+    });
+    expect(service.identity()).toMatchObject({
+      project: "test-project",
+      revision: 1,
+      file: "/project/sketch.ts",
+    });
+    expect(service.diagnostics("sketch.ts")).toEqual([]);
+    service.dispose();
+  });
+
+  it("reports a valid-shape project beyond the analysis bound and retains prior state", () => {
+    const service = synchronized(SOURCE);
+    const main = `export {};${" ".repeat(TYPESCRIPT_LANGUAGE_SOURCE_LIMIT - "export {};".length)}`;
+    const response = synchronizeThroughWorker(
+      service,
+      [
+        { path: "sketch.ts", contents: main },
+        { path: "patches/helper.patch.ts", contents: "export {};" },
+      ],
+      2,
+    );
+
+    expect(response).toMatchObject({
+      kind: "sync-error",
+      project: "test-project",
+      revision: 2,
+      error: "TypeScript language-service project exceeds its source limit",
+    });
+    expect(service.identity().revision).toBe(1);
+    expect(service.diagnostics("sketch.ts")).toEqual([]);
+    service.dispose();
+  });
+
+  it("accepts a project exactly at the bounded large-source limit", () => {
+    const service = new TypeScriptProjectLanguageService();
+    const response = synchronizeThroughWorker(
+      service,
+      [
+        { path: "sketch.ts", contents: "export {};" },
+        {
+          path: "large.ts",
+          contents: " ".repeat(TYPESCRIPT_LANGUAGE_SOURCE_LIMIT - "export {};".length),
+        },
+      ],
+      1,
+    );
+
+    expect(response).toBeNull();
+    expect(service.identity()).toMatchObject({
+      project: "test-project",
+      revision: 1,
+      file: "/project/sketch.ts",
+    });
+    expect(service.diagnostics("sketch.ts")).toEqual([]);
+    service.dispose();
+  });
 });
 
 const SOURCE_WITH_WRONG = SOURCE.replace("end: [10, 0]", "end: [10, \"wrong\"]");
@@ -155,5 +234,20 @@ function synchronizeFiles(
       { path: "sketch.ts", contents: source },
       ...(values === undefined ? [] : [{ path: "values.ts", contents: values }]),
     ],
+  });
+}
+
+function synchronizeThroughWorker(
+  service: TypeScriptProjectLanguageService,
+  files: Array<{ path: string; contents: string }>,
+  revision: number,
+): TypeScriptLanguageWorkerResponse | null {
+  return handleTypeScriptLanguageRequest(service, {
+    protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+    kind: "sync",
+    project: "test-project",
+    revision,
+    file: "sketch.ts",
+    files,
   });
 }

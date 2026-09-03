@@ -131,3 +131,17 @@ export interface TypeScriptLanguageResponse<
   result?: TypeScriptLanguageResults[Kind];
   error?: string;
 }
+
+/** A rejected project synchronization. Successful syncs stay acknowledgement-free. */
+export interface TypeScriptLanguageSyncErrorResponse {
+  protocol: typeof TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION;
+  kind: "sync-error";
+  project: string;
+  revision: number;
+  typescriptVersion: typeof TYPESCRIPT_LANGUAGE_VERSION;
+  error: string;
+}
+
+export type TypeScriptLanguageWorkerResponse =
+  | TypeScriptLanguageResponse
+  | TypeScriptLanguageSyncErrorResponse;

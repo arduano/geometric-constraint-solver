@@ -115,7 +115,10 @@ export function CodeEditor({
         setLanguageStatus(languageFailure("Web Workers are unavailable"));
         return;
       }
-      const client = new TypeScriptLanguageWorkerClient(worker);
+      const client = new TypeScriptLanguageWorkerClient(
+        worker,
+        (error) => setLanguageStatus(languageFailure(error)),
+      );
       languageClient.current = client;
       editor.dispatch({
         effects: languageCompartment.current.reconfigure(typeScriptLanguageExtensions({

@@ -21,6 +21,7 @@ import {
   type TypeScriptLanguageResponse,
   type TypeScriptLanguageSignature,
   type TypeScriptLanguageSyncRequest,
+  type TypeScriptLanguageWorkerResponse,
 } from "./protocol";
 
 const PROJECT_ROOT = "/project";
@@ -304,10 +305,21 @@ export class TypeScriptProjectLanguageService {
 export function handleTypeScriptLanguageRequest(
   service: TypeScriptProjectLanguageService,
   request: TypeScriptLanguageRequest,
-): TypeScriptLanguageResponse | null {
+): TypeScriptLanguageWorkerResponse | null {
   if (request.kind === "sync") {
-    service.sync(request);
-    return null;
+    try {
+      service.sync(request);
+      return null;
+    } catch (error) {
+      return {
+        protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+        kind: "sync-error",
+        project: request.project,
+        revision: request.revision,
+        typescriptVersion: TYPESCRIPT_LANGUAGE_VERSION,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
   const kind = request.kind as TypeScriptLanguageQueryKind;
   const response = {

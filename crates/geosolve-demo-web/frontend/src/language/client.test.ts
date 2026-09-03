@@ -9,20 +9,46 @@ import {
   TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
   TYPESCRIPT_LANGUAGE_VERSION,
   type TypeScriptLanguageRequest,
-  type TypeScriptLanguageResponse,
+  type TypeScriptLanguageWorkerResponse,
 } from "./protocol";
 
 class FakeWorker implements TypeScriptLanguageWorkerPort {
   messages: TypeScriptLanguageRequest[] = [];
-  listeners = new Set<(event: MessageEvent<TypeScriptLanguageResponse>) => void>();
+  messageListeners = new Set<(event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void>();
+  errorListeners = new Set<(event: ErrorEvent) => void>();
   terminated = false;
 
   postMessage(message: TypeScriptLanguageRequest): void { this.messages.push(message); }
-  addEventListener(_type: "message", listener: (event: MessageEvent<TypeScriptLanguageResponse>) => void): void { this.listeners.add(listener); }
-  removeEventListener(_type: "message", listener: (event: MessageEvent<TypeScriptLanguageResponse>) => void): void { this.listeners.delete(listener); }
+  addEventListener(
+    type: "message" | "error",
+    listener: ((event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void)
+      | ((event: ErrorEvent) => void),
+  ): void {
+    if (type === "message") {
+      this.messageListeners.add(listener as (event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void);
+    } else {
+      this.errorListeners.add(listener as (event: ErrorEvent) => void);
+    }
+  }
+  removeEventListener(
+    type: "message" | "error",
+    listener: ((event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void)
+      | ((event: ErrorEvent) => void),
+  ): void {
+    if (type === "message") {
+      this.messageListeners.delete(listener as (event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void);
+    } else {
+      this.errorListeners.delete(listener as (event: ErrorEvent) => void);
+    }
+  }
   terminate(): void { this.terminated = true; }
-  respond(response: TypeScriptLanguageResponse): void {
-    for (const listener of this.listeners) listener({ data: response } as MessageEvent<TypeScriptLanguageResponse>);
+  respond(response: TypeScriptLanguageWorkerResponse): void {
+    for (const listener of this.messageListeners) {
+      listener({ data: response } as MessageEvent<TypeScriptLanguageWorkerResponse>);
+    }
+  }
+  fail(message: string): void {
+    for (const listener of this.errorListeners) listener({ message } as ErrorEvent);
   }
 }
 
@@ -85,6 +111,63 @@ describe("TypeScript language worker client", () => {
     expect(await pending).toBeNull();
     expect(await client.diagnostics()).toBeNull();
     expect(worker.terminated).toBe(true);
+  });
+
+  it("rejects pending analysis on sync refusal and recovers on a newer valid project", async () => {
+    const worker = new FakeWorker();
+    const unavailable: string[] = [];
+    const client = new TypeScriptLanguageWorkerClient(
+      worker,
+      (error) => unavailable.push(error.message),
+    );
+    client.sync(project("const rejected = 1;"));
+    const pending = client.diagnostics();
+    worker.respond({
+      protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+      kind: "sync-error",
+      project: "project",
+      revision: 0,
+      typescriptVersion: TYPESCRIPT_LANGUAGE_VERSION,
+      error: "TypeScript language-service project exceeds its source limit",
+    });
+
+    await expect(pending).rejects.toThrow("exceeds its source limit");
+    await expect(client.hover(0)).rejects.toThrow("exceeds its source limit");
+    expect(unavailable).toEqual(["TypeScript language-service project exceeds its source limit"]);
+
+    client.sync(project("const recovered = 1;"));
+    const recovered = client.diagnostics();
+    const request = worker.messages.at(-1)!;
+    worker.respond({
+      protocol: TYPESCRIPT_LANGUAGE_PROTOCOL_VERSION,
+      request: (request as { request: number }).request,
+      project: "project",
+      revision: 1,
+      kind: "diagnostics",
+      typescriptVersion: TYPESCRIPT_LANGUAGE_VERSION,
+      stale: false,
+      result: [],
+    });
+    await expect(recovered).resolves.toEqual([]);
+    client.dispose();
+  });
+
+  it("settles pending analysis and reports an unavailable crashed worker", async () => {
+    const worker = new FakeWorker();
+    const unavailable: string[] = [];
+    const client = new TypeScriptLanguageWorkerClient(
+      worker,
+      (error) => unavailable.push(error.message),
+    );
+    client.sync(project("const pending = 1;"));
+    const pending = client.signature(5);
+
+    worker.fail("language worker crashed");
+
+    await expect(pending).rejects.toThrow("language worker crashed");
+    await expect(client.diagnostics()).rejects.toThrow("language worker crashed");
+    expect(unavailable).toEqual(["language worker crashed"]);
+    client.dispose();
   });
 });
 
