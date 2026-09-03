@@ -99,7 +99,7 @@ impl IntentLiteral {
     }
 }
 
-/// Complete existing M78 geometry-authoring recipe catalog.
+/// Complete persistent geometry-authoring recipe catalog.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GeometryRecipeKind {

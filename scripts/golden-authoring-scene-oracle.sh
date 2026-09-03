@@ -187,7 +187,8 @@ run_authoring_parity() {
   local exit_code=$?
   set -e
   if [[ "$exit_code" -ne 0 ]]; then
-    classify_failed_process "$case_id" "$family" "$exit_code" "$log"
+    classify_failed_process \
+      "$case_id" "$family" "$exit_code" "$log" "$parity_timeout_seconds"
     return 1
   fi
   set +e
@@ -234,7 +235,8 @@ run_authoring_parity() {
   exit_code=$?
   set -e
   if [[ "$exit_code" -ne 0 ]]; then
-    classify_failed_process "$case_id" "$family" "$exit_code" "$log"
+    classify_failed_process \
+      "$case_id" "$family" "$exit_code" "$log" "$parity_timeout_seconds"
     return 1
   fi
   set +e
@@ -267,7 +269,8 @@ run_scene_parity() {
   local exit_code=$?
   set -e
   if [[ "$exit_code" -ne 0 ]]; then
-    classify_failed_process "$case_id" scene-authority "$exit_code" "$log"
+    classify_failed_process \
+      "$case_id" scene-authority "$exit_code" "$log" "$parity_timeout_seconds"
     return 1
   fi
   set +e
@@ -316,7 +319,8 @@ run_scene_parity() {
   exit_code=$?
   set -e
   if [[ "$exit_code" -ne 0 ]]; then
-    classify_failed_process "$case_id" scene-authority "$exit_code" "$log"
+    classify_failed_process \
+      "$case_id" scene-authority "$exit_code" "$log" "$parity_timeout_seconds"
     return 1
   fi
   set +e
@@ -338,8 +342,10 @@ classify_failed_process() {
   local family="$2"
   local exit_code="$3"
   local log="$4"
+  local reported_timeout_seconds="${5:-$timeout_seconds}"
   if [[ "$exit_code" -eq 124 || "$exit_code" -eq 137 ]]; then
-    append_harness_result "$case_id" "$family" TIMEOUT case-timeout "${timeout_seconds}s"
+    append_harness_result \
+      "$case_id" "$family" TIMEOUT case-timeout "${reported_timeout_seconds}s"
   elif rg -q 'panicked at|test result: FAILED' "$log"; then
     append_harness_result "$case_id" "$family" PANIC test-process "exit-$exit_code"
   else

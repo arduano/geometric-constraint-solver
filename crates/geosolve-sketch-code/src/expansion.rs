@@ -2455,7 +2455,7 @@ fn lower_named_geometry_samples(
         },
         nurbs_options: NurbsConstructionOptions::default(),
     };
-    let variant = GeometryToolVariant::from_intent_recipe(recipe);
+    let variant = GeometryToolVariant::construction_variant_for_intent_recipe(recipe);
     let plan = projectional_geometry_plan_from_samples(variant, &samples).map_err(|error| {
         CodeExpansionError::InvalidDeclaration {
             declaration: declaration.symbol.0.clone(),
@@ -3063,7 +3063,7 @@ fn lower_named_spline(
         .map(|value| geometry_role(value, "spline role"))
         .transpose()?
         .unwrap_or(GeometryRole::Profile);
-    let variant = GeometryToolVariant::from_intent_recipe(recipe);
+    let variant = GeometryToolVariant::construction_variant_for_intent_recipe(recipe);
     let samples = ProjectionalGeometrySamples {
         points: resolved_controls
             .iter()

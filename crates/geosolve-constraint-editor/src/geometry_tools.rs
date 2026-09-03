@@ -312,9 +312,16 @@ impl GeometryToolVariant {
         }
     }
 
-    /// Exact authoring tool which owns one persistent Intent recipe.
+    /// Construction-tool adapter for one persistent Intent recipe.
+    ///
+    /// The 25-tool interactive palette predates the distinct non-rational
+    /// B-spline recipes. Those two recipes deliberately borrow the matching
+    /// NURBS construction stages; their caller must restore the original
+    /// recipe and remove projective weight/gauge state before publication.
+    /// Every other recipe maps to the variant returned by
+    /// [`Self::intent_recipe`].
     #[must_use]
-    pub const fn from_intent_recipe(recipe: GeometryRecipeKind) -> Self {
+    pub const fn construction_variant_for_intent_recipe(recipe: GeometryRecipeKind) -> Self {
         match recipe {
             GeometryRecipeKind::SketchPoint => Self::SketchPoint,
             GeometryRecipeKind::Segment => Self::Segment,
@@ -400,6 +407,30 @@ mod tests {
     fn every_variant_has_a_non_select_legacy_projection() {
         for variant in GeometryToolVariant::ALL {
             assert_ne!(variant.editor_tool(), EditorTool::Select);
+        }
+    }
+
+    #[test]
+    fn intent_recipe_construction_adapter_declares_its_only_lossy_pairs() {
+        for recipe in GeometryRecipeKind::ALL {
+            let variant = GeometryToolVariant::construction_variant_for_intent_recipe(recipe);
+            match recipe {
+                GeometryRecipeKind::OpenControlBSpline => {
+                    assert_eq!(variant, GeometryToolVariant::OpenControlNurbs);
+                    assert_eq!(
+                        variant.intent_recipe(),
+                        GeometryRecipeKind::OpenControlNurbs
+                    );
+                }
+                GeometryRecipeKind::PeriodicControlBSpline => {
+                    assert_eq!(variant, GeometryToolVariant::PeriodicControlNurbs);
+                    assert_eq!(
+                        variant.intent_recipe(),
+                        GeometryRecipeKind::PeriodicControlNurbs
+                    );
+                }
+                _ => assert_eq!(variant.intent_recipe(), recipe),
+            }
         }
     }
 
