@@ -120,9 +120,12 @@ const maximumReleaseWasmBytes = 20 * 1024 * 1024;
 if ((fileSizes.get(wasmFile) ?? 0) > maximumReleaseWasmBytes) {
   throw new Error(`${wasmFile} exceeds the 20 MiB optimized-release ceiling`);
 }
-const maximumDistributionBytes = 24 * 1024 * 1024;
+// M91's TypeScript language service is a separate, lazy Web Worker so its
+// compiler payload never blocks the primary design shell. Keep a hard overall
+// ceiling while admitting the pinned compiler and SDK declarations once.
+const maximumDistributionBytes = 30 * 1024 * 1024;
 if (totalBytes > maximumDistributionBytes) {
-  throw new Error("distribution exceeds the 24 MiB optimized-release ceiling");
+  throw new Error("distribution exceeds the 30 MiB optimized-release ceiling");
 }
 const scripts = await Promise.all(
   byExtension(".js").map((file) => readFile(resolve(distribution, file), "utf8")),
