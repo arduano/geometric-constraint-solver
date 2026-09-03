@@ -8345,7 +8345,7 @@ mod tests {
         ("contextual-constraint-annotations", 112, 112),
         ("dense-constraint-junction", 1, 1),
         ("construction-reference-geometry", 0, 0),
-        ("curve-family-gallery", 172, 164),
+        ("curve-family-gallery", 166, 158),
         ("periodic-nurbs-specimen", 13, 12),
         ("fillet-workshop", 16, 16),
         ("rounded-polyline", 12, 12),
@@ -8473,6 +8473,180 @@ mod tests {
             assert_eq!(
                 workbench.session.snapshot().accepted_editor_checkpoint,
                 encode_editor_checkpoint(&editor).unwrap(),
+            );
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive sample matrix keeps edit, publication, finite-scene validation and exact Undo adjacent"
+    )]
+    fn all_thirty_seven_samples_accept_one_semantic_seed_edit_and_exact_undo() {
+        let demos = bundled_code_projects();
+        assert_eq!(demos.len(), 37);
+        for (index, demo) in demos.into_iter().enumerate() {
+            let (mut workbench, _editor) = open_with_editor(demo.key());
+            let before = workbench.session.snapshot().clone();
+            assert_eq!(
+                before.interaction_overlay,
+                CodeInteractionOverlay::empty(),
+                "{} initial overlay",
+                demo.key(),
+            );
+            let materialized = workbench
+                .materialized
+                .as_deref()
+                .unwrap_or_else(|| panic!("{} warm materialization", demo.key()));
+            let point = materialized
+                .expansion
+                .writable_points
+                .iter()
+                .find(|point| !point.source.is_reference())
+                .or_else(|| materialized.expansion.writable_points.first())
+                .cloned()
+                .unwrap_or_else(|| panic!("{} writable semantic point", demo.key()));
+            let native_point = expanded_port_point(&materialized.editor, &point.handle)
+                .unwrap_or_else(|| panic!("{} writable native point", demo.key()));
+            let position = materialized
+                .editor
+                .coordinator()
+                .accepted_materialization()
+                .and_then(|accepted| {
+                    accepted
+                        .session
+                        .design_document()
+                        .point(native_point)
+                        .map(|point| point.position)
+                })
+                .unwrap_or_else(|| panic!("{} accepted writable position", demo.key()));
+            let scale = position[0].abs().max(position[1].abs()).max(1.0);
+            let direction = if index % 2 == 0 { 1.0 } else { -1.0 };
+            let target = [position[0] + direction * scale * 1.0e-8, position[1]];
+            assert!(target.into_iter().all(f64::is_finite), "{}", demo.key());
+            assert_ne!(pair_bits(target), pair_bits(position), "{}", demo.key());
+
+            let overlay = workbench
+                .session
+                .stage_point_drag(&point, target)
+                .unwrap_or_else(|error| panic!("{} stage point seed: {error}", demo.key()));
+            assert_ne!(
+                overlay,
+                before.interaction_overlay,
+                "{} edit must not qualify as a no-op",
+                demo.key(),
+            );
+            let next = materialize_code_project_incremental_with_overlay(
+                materialized,
+                &workbench.project,
+                &workbench.session.snapshot().generated,
+                &overlay,
+            )
+            .unwrap_or_else(|error| panic!("{} materialize point seed: {error}", demo.key()));
+            assert_ne!(
+                next.expansion.patch,
+                before
+                    .accepted_expansion
+                    .as_ref()
+                    .expect("accepted expansion")
+                    .patch,
+                "{} staged instance seed must change the expanded design",
+                demo.key(),
+            );
+            let accepted = next
+                .editor
+                .coordinator()
+                .accepted_materialization()
+                .unwrap_or_else(|| panic!("{} edited accepted materialization", demo.key()));
+            assert!(
+                accepted.validation.hard_residuals_validated,
+                "{} independent hard validation",
+                demo.key(),
+            );
+            assert!(
+                accepted.validation.all_active_features_current,
+                "{} current computed features",
+                demo.key(),
+            );
+            assert!(
+                accepted
+                    .validation
+                    .maximum_normalized_hard_residual
+                    .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
+                "{} normalized hard residual",
+                demo.key(),
+            );
+            assert!(
+                accepted
+                    .session
+                    .design_document()
+                    .points()
+                    .iter()
+                    .flat_map(|point| point.position)
+                    .chain(
+                        accepted
+                            .session
+                            .design_document()
+                            .scalars()
+                            .iter()
+                            .map(|scalar| scalar.value),
+                    )
+                    .all(f64::is_finite),
+                "{} edited accepted geometry is finite",
+                demo.key(),
+            );
+
+            let expansion = next.expansion.clone();
+            let checkpoint = encode_editor_checkpoint(&next.editor)
+                .unwrap_or_else(|error| panic!("{} edited checkpoint: {error}", demo.key()));
+            let prepared = workbench
+                .session
+                .prepare_project_overlay(
+                    workbench.session.identity(),
+                    overlay.clone(),
+                    expansion,
+                    checkpoint,
+                    "Qualify managed sample seed edit",
+                )
+                .unwrap_or_else(|error| panic!("{} prepare publication: {error}", demo.key()));
+            workbench
+                .session
+                .apply_prepared(prepared)
+                .unwrap_or_else(|error| panic!("{} publish point seed: {error}", demo.key()));
+            assert_eq!(
+                workbench.session.snapshot().interaction_overlay,
+                overlay,
+                "{} published overlay",
+                demo.key(),
+            );
+            assert_eq!(
+                workbench.session.snapshot().managed,
+                before.managed,
+                "{} instance edit leaves source, IR, and executed artifact unchanged",
+                demo.key(),
+            );
+            assert_eq!(
+                workbench.session.snapshot().code_project,
+                before.code_project,
+                "{} instance edit leaves pinned patch artifacts unchanged",
+                demo.key(),
+            );
+            workbench
+                .session
+                .undo()
+                .unwrap_or_else(|error| panic!("{} Undo: {error}", demo.key()))
+                .unwrap_or_else(|| panic!("{} Undo receipt", demo.key()));
+            assert_eq!(
+                workbench.session.snapshot(),
+                &before,
+                "{} Undo restores the exact prior session snapshot",
+                demo.key(),
+            );
+            assert_eq!(
+                workbench.session.snapshot().interaction_overlay,
+                CodeInteractionOverlay::empty(),
+                "{} Undo clears the representative edit",
+                demo.key(),
             );
         }
     }

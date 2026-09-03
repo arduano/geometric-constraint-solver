@@ -2658,6 +2658,10 @@ impl RetainedEditorCoordinator {
     /// document directly, rather than through a second retained coordinator. This
     /// helper keeps the action semantics shared with the flat coordinator without
     /// introducing another history authority.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one auditable scene boundary keeps stable Fillet branch actions aligned with the retained feature owner"
+    )]
     pub(crate) fn populate_stable_computed_fillet_actions(
         scene: &mut EditorScene,
         session: &RetainedSketchDocumentSession,
@@ -2693,18 +2697,19 @@ impl RetainedEditorCoordinator {
             else {
                 return Err(CoordinatorError::StaleComputedFeatureCandidate);
             };
-            let continuation = match snapshot.continue_fillet_corner(
+            let Ok(OperationOutcome::Completed {
+                value: continuation,
+                ..
+            }) = snapshot.continue_fillet_corner(
                 corner.without_id(),
                 fillet.radius,
                 fillet.radius,
                 ComputedFeatureEvaluationPolicy::default(),
                 bounded_geometry_control(),
-            ) {
-                Ok(OperationOutcome::Completed { value, .. }) => value,
-                Ok(_) | Err(_) => {
-                    scene.set_fillet_corner_actions(owner, Vec::new())?;
-                    continue;
-                }
+            )
+            else {
+                scene.set_fillet_corner_actions(owner, Vec::new())?;
+                continue;
             };
             let alternatives = match snapshot.local_fillet_corner_alternatives(
                 corner.without_id(),

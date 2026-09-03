@@ -200,6 +200,7 @@ export default sketch(($) => {
       position: point23BatchPolylineEnd.point,
     }],
     closed: false,
+    branchDirections: [[1, 0], [0, -1], [1, 0]],
     label: "Editable batch and sequential polyline",
     role: "profile",
   });
@@ -218,6 +219,7 @@ export default sketch(($) => {
       position: point27ConflictPolylineEnd.point,
     }],
     closed: false,
+    branchDirections: [[1, 0], [0, -1], [1, 0]],
     label: "Editable short-middle conflict polyline",
     role: "profile",
   });

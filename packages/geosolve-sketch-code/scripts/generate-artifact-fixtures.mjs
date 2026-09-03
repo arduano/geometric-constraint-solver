@@ -26,6 +26,54 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const check = process.argv.includes("--check");
+let qualifiedBundledSampleEdits = 0;
+
+/**
+ * Exercise one real source mutation and its exact inverse through the pinned
+ * parser, printer, runtime recorder and patch environment. This is deliberately
+ * done for every bundled sample instead of relying on one synthetic fixture.
+ */
+function qualifyBundledSampleEdit(name, compiled, options = {}) {
+  const declaration = compiled.artifact.declarations.find((candidate) =>
+    !compiled.artifact.suppressions.some((suppression) =>
+      suppression.target.declaration === candidate.declaration &&
+      suppression.target.path.length === 0
+    )
+  )?.declaration;
+  assert.ok(declaration, `${name} has a declaration to edit`);
+  const target = { target: "declaration", declaration };
+  const edited = applyManagedSketchMutation(compiled, {
+    mutation: "set_suppressed",
+    target,
+    suppressed: true,
+  }, options).compiled;
+  assert.notEqual(
+    edited.normalizedSource,
+    compiled.normalizedSource,
+    `${name} representative source edit changes canonical source`,
+  );
+  const undone = applyManagedSketchMutation(edited, {
+    mutation: "set_suppressed",
+    target,
+    suppressed: false,
+  }, options).compiled;
+  assert.equal(
+    undone.normalizedSource,
+    compiled.normalizedSource,
+    `${name} source edit restores exact canonical source`,
+  );
+  assert.deepEqual(
+    undone.ir,
+    compiled.ir,
+    `${name} source edit restores exact IR`,
+  );
+  assert.deepEqual(
+    undone.artifact,
+    compiled.artifact,
+    `${name} source edit restores exact artifact`,
+  );
+  qualifiedBundledSampleEdits += 1;
+}
 
 const fixtures = [
   {
@@ -611,6 +659,9 @@ for (const fixture of bundledManagedSketches) {
       cause: error,
     });
   }
+  qualifyBundledSampleEdit(fixture.name, compiled, {
+    patches: fixture.patches,
+  });
   const sourceDestination = resolve(
     packageRoot,
     `../../crates/geosolve-sketch-code/assets/demos/${fixture.name}.sketch.ts`,
@@ -656,6 +707,7 @@ for (const name of nativeReferenceSketches) {
       cause: error,
     });
   }
+  qualifyBundledSampleEdit(name, compiled);
   const canonicalEnvelope = JSON.stringify(compiled);
   if (check) {
     assert.equal(
@@ -673,3 +725,9 @@ for (const name of nativeReferenceSketches) {
     await writeFile(compiledDestination, canonicalEnvelope);
   }
 }
+
+assert.equal(
+  qualifiedBundledSampleEdits,
+  37,
+  "every bundled sample has representative source edit and exact Undo coverage",
+);

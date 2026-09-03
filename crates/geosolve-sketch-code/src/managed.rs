@@ -1489,6 +1489,10 @@ impl DirectDeclarationResultKeys {
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed result-key dispatcher keeps every keyed direct-declaration output family auditable"
+)]
 fn direct_declaration_keys(
     family: &str,
     arguments: &ManagedExpression,

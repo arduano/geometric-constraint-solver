@@ -784,7 +784,7 @@ impl SemanticIndex {
     fn capture(
         document: &SketchDocument,
         features: &ComputedFeatureDocument,
-    ) -> Result<Self, String> {
+    ) -> Self {
         let points = document
             .points()
             .iter()
@@ -805,12 +805,12 @@ impl SemanticIndex {
                 corners.insert(corner.id, (index, corner_index));
             }
         }
-        Ok(Self {
+        Self {
             points,
             curves,
             features: feature_index,
             corners,
-        })
+        }
     }
 
     fn curve(&self, span: geosolve_sketch::CurveSpan) -> Result<Value, String> {
@@ -872,12 +872,16 @@ impl SemanticIndex {
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive observation keeps the accepted-scene semantic DTO inventory auditable"
+)]
 fn scene_observation(
     authority: &WorkbenchDocumentAuthority,
     scene: &geosolve_constraint_editor::EditorScene,
 ) -> Result<Value, String> {
     let (document, features) = authority_documents(authority)?;
-    let index = SemanticIndex::capture(document, features)?;
+    let index = SemanticIndex::capture(document, features);
     let mut points = scene
         .points
         .iter()

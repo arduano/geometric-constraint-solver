@@ -5848,6 +5848,10 @@ fn point_seed_bits(point: [f64; 2]) -> [u64; 2] {
     [point[0].to_bits(), point[1].to_bits()]
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed Polyline parser keeps keyed vertices, representation, role, and explicit branch-state validation adjacent"
+)]
 fn keyed_polyline_definition(
     declaration: &AuthoringDeclaration,
 ) -> Result<KeyedPolylineDefinition, CodeExpansionError> {

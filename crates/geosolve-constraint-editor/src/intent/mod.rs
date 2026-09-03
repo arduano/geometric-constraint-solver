@@ -4630,6 +4630,10 @@ fn spline_topology(
     Ok((knots, span_ids, next_span_id))
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed spline lowering transaction keeps rational and non-rational topology and reservation ownership adjacent"
+)]
 fn lower_control_spline(
     candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,

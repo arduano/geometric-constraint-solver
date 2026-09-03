@@ -125,6 +125,7 @@ export default sketch(($) => {
       position: point5AffinePolylineEnd.point,
     }],
     closed: false,
+    branchDirections: [[0.8944271909999159, 0.4472135954999579], [0.8944271909999159, -0.4472135954999579]],
     label: "Affine reference polyline",
     role: "profile",
   });

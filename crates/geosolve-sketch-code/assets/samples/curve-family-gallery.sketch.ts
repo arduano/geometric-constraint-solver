@@ -334,6 +334,7 @@ export default sketch(($) => {
       position: point3ProfilePolylinePoint.point,
     }],
     closed: true,
+    branchDirections: [[1, 0], [-0.4472135954999579, 0.8944271909999159], [-0.4472135954999579, -0.8944271909999159]],
     label: "Profile closed polyline",
     role: "profile",
   });

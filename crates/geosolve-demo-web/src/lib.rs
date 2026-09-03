@@ -470,5 +470,155 @@ mod wasm {
                 );
             }
         }
+
+        #[wasm_bindgen_test]
+        #[allow(
+            clippy::too_many_lines,
+            reason = "one exhaustive adapter-boundary matrix keeps each production-frame parity invariant adjacent"
+        )]
+        fn actual_wasm_all_thirty_seven_samples_match_independently_composed_production_frames() {
+            const PRODUCTION_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
+
+            fn normalize_allocator_ids(frame: &str) -> String {
+                let mut aliases = std::collections::BTreeMap::<&str, usize>::new();
+                let mut normalized = String::with_capacity(frame.len());
+                let bytes = frame.as_bytes();
+                let mut cursor = 0;
+                while cursor < bytes.len() {
+                    if bytes[cursor].is_ascii_hexdigit() {
+                        let start = cursor;
+                        while cursor < bytes.len() && bytes[cursor].is_ascii_hexdigit() {
+                            cursor += 1;
+                        }
+                        let token = &frame[start..cursor];
+                        if token.len() == 32 {
+                            let next = aliases.len();
+                            let alias = *aliases.entry(token).or_insert(next);
+                            normalized.push_str("{backend-id-");
+                            normalized.push_str(&alias.to_string());
+                            normalized.push('}');
+                        } else {
+                            normalized.push_str(token);
+                        }
+                    } else {
+                        let start = cursor;
+                        cursor += 1;
+                        while cursor < bytes.len() && !bytes[cursor].is_ascii_hexdigit() {
+                            cursor += 1;
+                        }
+                        normalized.push_str(&frame[start..cursor]);
+                    }
+                }
+                normalized
+            }
+
+            let projects = geosolve_sketch_code::bundled_code_projects();
+            assert_eq!(projects.len(), 37);
+            for project in projects {
+                let key = project.key();
+                let mut handle = super::WorkbenchHandle::new(r#"{"version":1}"#)
+                    .unwrap_or_else(|error| panic!("{key} WASM workbench: {error:?}"));
+                let open = serde_json::json!({
+                    "version": 1,
+                    "command": "sample.open",
+                    "payload": { "key": key },
+                })
+                .to_string();
+                handle
+                    .dispatch(&open)
+                    .unwrap_or_else(|error| panic!("{key} WASM sample open: {error:?}"));
+                let snapshot: serde_json::Value = serde_json::from_str(
+                    &handle
+                        .snapshot()
+                        .unwrap_or_else(|error| panic!("{key} WASM snapshot: {error:?}")),
+                )
+                .unwrap_or_else(|error| panic!("{key} snapshot JSON: {error}"));
+                let actual_frame = snapshot["frame"]["svg"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{key} WASM frame SVG"))
+                    .to_owned();
+                let actual_source = snapshot["source"]["files"]
+                    .as_array()
+                    .and_then(|files| files.iter().find(|file| file["path"] == "sketch.ts"))
+                    .and_then(|file| file["contents"].as_str())
+                    .unwrap_or_else(|| panic!("{key} WASM managed source"))
+                    .to_owned();
+                drop(handle);
+
+                // Compose the expected scene directly through the accepted
+                // projectional owner and target-neutral renderer. This bypasses
+                // WorkbenchBridge, its frame cache, snapshot serialization and
+                // the exported WASM wrapper, so the equality below detects any
+                // adapter loss of native geometry, computed output, annotations,
+                // accepted authority stamps or renderer bytes.
+                let (code_project, editor) =
+                    crate::workbench::code_projects::CodeProjectWorkbench::open_key(key)
+                        .unwrap_or_else(|error| panic!("{key} direct code project: {error}"));
+                let mut camera = geosolve_sketch_render::CanvasCamera::default();
+                let initial_scene = editor
+                    .scene(camera.viewport(), PRODUCTION_CHORD_TOLERANCE_PIXELS)
+                    .unwrap_or_else(|error| panic!("{key} direct initial scene: {error}"));
+                camera.fit_scene_or_reset(Some(&initial_scene));
+                let viewport = camera.viewport();
+                let mut scene = editor
+                    .scene(viewport, PRODUCTION_CHORD_TOLERANCE_PIXELS)
+                    .unwrap_or_else(|error| panic!("{key} direct fitted scene: {error}"));
+                scene.set_annotations_visible(true);
+                scene.set_show_all_constraint_annotations(false);
+                let accepted = editor
+                    .presentation_session()
+                    .and_then(
+                        geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
+                    )
+                    .unwrap_or_else(|| panic!("{key} direct accepted authority"));
+                let markup = geosolve_sketch_render::svg_markup_with_computed_context_action_stamp_and_display(
+                    Some(&scene),
+                    Some(accepted),
+                    &[],
+                    editor.editor().selection(),
+                    &[],
+                    editor.editor().hover_state(),
+                    None,
+                    editor.editor().draft_inference_resolution(),
+                    None,
+                    None,
+                    None,
+                    editor.editor().geometry_interaction_policy(),
+                    geosolve_sketch_render::CanvasDisplayOptions {
+                        grid_visible: true,
+                        retain_contextual_annotations: true,
+                    },
+                    viewport,
+                );
+                let aria_label = format!("{} accepted sketch viewport", code_project.title());
+                let expected_frame = geosolve_sketch_render::interactive_scene_svg(
+                    &markup,
+                    viewport.screen_size,
+                    &aria_label,
+                )
+                .unwrap_or_else(|| panic!("{key} direct SVG frame"));
+
+                assert_eq!(
+                    normalize_allocator_ids(&actual_frame),
+                    normalize_allocator_ids(&expected_frame),
+                    "{key} actual-WASM frame and independently composed owner frame",
+                );
+                assert_eq!(
+                    actual_source,
+                    code_project.managed_draft(),
+                    "{key} actual-WASM managed-source projection",
+                );
+                assert_eq!(snapshot["project"]["sampleKey"], key, "{key}");
+                assert_eq!(snapshot["project"]["status"], "accepted", "{key}");
+                assert!(
+                    snapshot["problems"].as_array().is_some_and(Vec::is_empty),
+                    "{key} has no hidden production-adapter problem",
+                );
+                assert!(
+                    actual_frame.contains("wb-accepted-scene"),
+                    "{key} accepted frame"
+                );
+            }
+        }
     }
 }

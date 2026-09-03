@@ -4414,6 +4414,195 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive native/managed matrix keeps inventory, solve, feature and validity parity adjacent"
+    )]
+    fn every_direct_reference_and_managed_execution_have_the_same_accepted_semantics() {
+        for sample in SampleId::ALL {
+            let definition = super::definition(sample).expect("catalog sample definition");
+            let native = super::coordinator_from_source(definition.source)
+                .unwrap_or_else(|error| panic!("{} native reference: {error}", sample.key()));
+            let (_workbench, managed) =
+                super::super::code_projects::CodeProjectWorkbench::open_key(sample.key())
+                    .unwrap_or_else(|error| panic!("{} managed execution: {error}", sample.key()));
+            let native_accepted = native
+                .session()
+                .accepted_state_for_current_input()
+                .unwrap_or_else(|| panic!("{} native accepted state", sample.key()));
+            let managed_materialization = managed
+                .coordinator()
+                .accepted_materialization()
+                .unwrap_or_else(|| panic!("{} managed materialization", sample.key()));
+            let managed_accepted = managed_materialization
+                .session
+                .accepted_state_for_current_input()
+                .unwrap_or_else(|| panic!("{} managed accepted state", sample.key()));
+
+            let native_source = geosolve_sketch_code::export_sketch_document_to_managed_source(
+                native.session().design_document(),
+            )
+            .unwrap_or_else(|error| panic!("{} native semantic export: {error}", sample.key()));
+            let bundled_source = geosolve_sketch_code::bundled_code_projects()
+                .into_iter()
+                .find(|project| project.key() == sample.key())
+                .unwrap_or_else(|| panic!("{} bundled source", sample.key()))
+                .project()
+                .managed
+                .source;
+            assert_eq!(
+                bundled_source,
+                native_source,
+                "{} executed source describes the complete native design semantics",
+                sample.key(),
+            );
+
+            let native_document = native_accepted.document();
+            let managed_document = managed_accepted.document();
+            assert_eq!(
+                managed_document.points().len(),
+                native_document.points().len(),
+                "{} point inventory",
+                sample.key(),
+            );
+            let mut native_points = native_document
+                .points()
+                .iter()
+                .map(|point| point.position.map(f64::to_bits))
+                .collect::<Vec<_>>();
+            let mut managed_points = managed_document
+                .points()
+                .iter()
+                .map(|point| point.position.map(f64::to_bits))
+                .collect::<Vec<_>>();
+            native_points.sort_unstable();
+            managed_points.sort_unstable();
+            assert_eq!(
+                managed_points,
+                native_points,
+                "{} accepted point-position multiset",
+                sample.key(),
+            );
+            for (kind, native_count, managed_count) in [
+                (
+                    "curves",
+                    native_document.curves().len(),
+                    managed_document.curves().len(),
+                ),
+                (
+                    "contacts",
+                    native_document.contacts().len(),
+                    managed_document.contacts().len(),
+                ),
+                (
+                    "trim views",
+                    native_document.trim_views().len(),
+                    managed_document.trim_views().len(),
+                ),
+                (
+                    "constraints",
+                    native_document
+                        .constraints()
+                        .iter()
+                        .filter(|constraint| !constraint.suppressed)
+                        .count(),
+                    managed_document
+                        .constraints()
+                        .iter()
+                        .filter(|constraint| !constraint.suppressed)
+                        .count(),
+                ),
+                (
+                    "dimensions",
+                    native_document
+                        .dimensions()
+                        .iter()
+                        .filter(|dimension| !dimension.suppressed)
+                        .count(),
+                    managed_document
+                        .dimensions()
+                        .iter()
+                        .filter(|dimension| !dimension.suppressed)
+                        .count(),
+                ),
+                (
+                    "parameters",
+                    native_document.parameters().len(),
+                    managed_document.parameters().len(),
+                ),
+                (
+                    "external bindings",
+                    native_document.external_bindings().len(),
+                    managed_document.external_bindings().len(),
+                ),
+            ] {
+                assert_eq!(
+                    managed_count,
+                    native_count,
+                    "{} {kind} inventory",
+                    sample.key(),
+                );
+            }
+            assert_eq!(
+                managed_accepted.diagnostics().rank,
+                native_accepted.diagnostics().rank,
+                "{} numerical rank",
+                sample.key(),
+            );
+            assert_eq!(
+                managed_accepted.diagnostics().mobility,
+                native_accepted.diagnostics().mobility,
+                "{} mobility",
+                sample.key(),
+            );
+            assert!(
+                managed_materialization.validation.hard_residuals_validated,
+                "{} managed independent hard validation",
+                sample.key(),
+            );
+            assert!(
+                managed_materialization
+                    .validation
+                    .maximum_normalized_hard_residual
+                    .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9),
+                "{} managed normalized hard residual",
+                sample.key(),
+            );
+            assert!(
+                native_document
+                    .points()
+                    .iter()
+                    .flat_map(|point| point.position)
+                    .chain(native_document.scalars().iter().map(|scalar| scalar.value))
+                    .all(f64::is_finite),
+                "{} native accepted geometry is finite",
+                sample.key(),
+            );
+            assert!(
+                managed_document
+                    .points()
+                    .iter()
+                    .flat_map(|point| point.position)
+                    .chain(managed_document.scalars().iter().map(|scalar| scalar.value))
+                    .all(f64::is_finite),
+                "{} managed accepted geometry is finite",
+                sample.key(),
+            );
+            assert!(
+                native.feature_document().features().is_empty(),
+                "{} direct reference has no hidden computed sidecar",
+                sample.key(),
+            );
+            assert_eq!(
+                managed_materialization.features.features().len(),
+                native.feature_document().features().len(),
+                "{} computed-feature inventory",
+                sample.key(),
+            );
+        }
+    }
+
+    #[test]
     #[ignore = "writes reviewed native-reference projections; set GEOSOLVE_REGENERATE_CODE_SAMPLES=1"]
     fn regenerate_native_reference_managed_sources() {
         assert_eq!(
