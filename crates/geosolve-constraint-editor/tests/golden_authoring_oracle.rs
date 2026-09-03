@@ -11,6 +11,7 @@ use std::env;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::Path;
 
 use geosolve_constraint_editor::{
     AuthoringApplication, AuthoringMutation, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
@@ -37,6 +38,7 @@ const BASE_SEED: [u8; 32] = [
 const SEEDED_VARIANTS: u32 = 8;
 const MAX_SHRINK_ITERS: u32 = 512;
 const TSV_HEADER: &str = "case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint";
+const PARITY_MANIFEST_FORMAT: &str = "geosolve-golden-native-parity-v1";
 
 const CONSTRAINT_KINDS: [ResolvedConstraintKind; 24] = [
     ResolvedConstraintKind::FixedPoint,
@@ -337,6 +339,142 @@ struct SemanticDefect {
 }
 
 type OracleResult<T = ()> = Result<T, SemanticDefect>;
+
+#[derive(Clone, Debug)]
+struct ParityStage {
+    name: &'static str,
+    design_json: String,
+    accepted_json: String,
+    diagnostics: serde_json::Value,
+    history_len: usize,
+    history_cursor: usize,
+}
+
+impl ParityStage {
+    fn capture(name: &'static str, coordinator: &RetainedEditorCoordinator) -> OracleResult<Self> {
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .ok_or_else(|| {
+                defect(
+                    "parity.native-authority",
+                    format!("{name} has no exact-current accepted state"),
+                )
+            })?;
+        let diagnostics = coordinator.session().latest_attempt_diagnostics();
+        let solve = diagnostics.solve.ok_or_else(|| {
+            defect(
+                "parity.native-diagnostics",
+                format!("{name} has no solve diagnostics"),
+            )
+        })?;
+        let rank = diagnostics.rank.ok_or_else(|| {
+            defect(
+                "parity.native-diagnostics",
+                format!("{name} has no rank diagnostics"),
+            )
+        })?;
+        let mobility = diagnostics.mobility.ok_or_else(|| {
+            defect(
+                "parity.native-diagnostics",
+                format!("{name} has no mobility diagnostics"),
+            )
+        })?;
+        let mut bounds = diagnostics
+            .bounds
+            .iter()
+            .map(|bound| {
+                serde_json::json!({
+                    "status": format!("{:?}", bound.status),
+                    "lower": bound.lower,
+                    "upper": bound.upper,
+                    "value": bound.value,
+                })
+            })
+            .collect::<Vec<_>>();
+        bounds.sort_by_cached_key(|bound| serde_json::to_string(bound).unwrap_or_default());
+        Ok(Self {
+            name,
+            design_json: coordinator
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .map_err(|error| defect("parity.native-encoding", error.to_string()))?,
+            accepted_json: accepted
+                .document()
+                .to_draft_v5_json()
+                .map_err(|error| defect("parity.native-encoding", error.to_string()))?,
+            diagnostics: serde_json::json!({
+                "solve": {
+                    "accepted": solve.accepted,
+                    "hardValidity": format!("{:?}", solve.hard_validity),
+                    "termination": format!("{:?}", solve.termination),
+                    "hardResidualsValidated": solve.hard_residuals_validated,
+                    "maximumNormalizedHardResidual": solve.maximum_normalized_hard_residual,
+                    "normalizedHardResidualL2": solve.normalized_hard_residual_l2,
+                },
+                "rank": {
+                    "numericalValid": rank.numerical_valid,
+                    "numericalRank": rank.numerical_rank,
+                    "numericalLeftNullity": rank.numerical_left_nullity,
+                    "numericalRightNullity": rank.numerical_right_nullity,
+                    "singular": rank.singular,
+                    "nearSingular": rank.near_singular,
+                    "structuralRank": rank.structural_rank,
+                    "structuralLeftNullity": rank.structural_left_nullity,
+                    "structuralRightNullity": rank.structural_right_nullity,
+                    "structuralClassification": format!("{:?}", rank.structural_classification),
+                },
+                "mobility": {
+                    "equalityDegreesOfFreedom": mobility.equality_degrees_of_freedom,
+                    "bidirectionalBoundedDegreesOfFreedom": mobility.bidirectional_bounded_degrees_of_freedom,
+                    "oneSided": format!("{:?}", mobility.one_sided),
+                },
+                "bounds": bounds,
+            }),
+            history_len: coordinator.history_len(),
+            history_cursor: coordinator.history_cursor(),
+        })
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "name": self.name,
+            "designJson": self.design_json,
+            "acceptedJson": self.accepted_json,
+            "diagnostics": self.diagnostics,
+            "historyLen": self.history_len,
+            "historyCursor": self.history_cursor,
+        })
+    }
+}
+
+fn write_parity_manifest(family: &str, lifecycle: &str, stages: &[ParityStage]) -> OracleResult {
+    let Some(path) = env::var_os("GEOSOLVE_GOLDEN_ORACLE_PARITY_MANIFEST") else {
+        return Ok(());
+    };
+    let case_id = env::var("GEOSOLVE_GOLDEN_ORACLE_FAMILY")
+        .ok()
+        .zip(env::var("GEOSOLVE_GOLDEN_ORACLE_CASE").ok())
+        .map(|(family, case)| format!("{family}.{case}"))
+        .ok_or_else(|| {
+            defect(
+                "parity.harness",
+                "parity manifest requires the selected family and case",
+            )
+        })?;
+    let manifest = serde_json::json!({
+        "format": PARITY_MANIFEST_FORMAT,
+        "caseId": case_id,
+        "family": family,
+        "lifecycle": lifecycle,
+        "stages": stages.iter().map(ParityStage::to_json).collect::<Vec<_>>(),
+    });
+    let encoded = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| defect("parity.harness", error.to_string()))?;
+    std::fs::write(Path::new(&path), encoded)
+        .map_err(|error| defect("parity.harness", error.to_string()))
+}
 
 fn defect(class: &'static str, message: impl Into<String>) -> SemanticDefect {
     SemanticDefect {
@@ -1506,6 +1644,7 @@ fn survey_constraint(
         angle_orientation: DocumentAngleOrientation::CounterClockwise,
     };
     let mut coordinator = coordinator(fixture.document.clone());
+    let parity_base = ParityStage::capture("base", &coordinator)?;
     let application = authoring_application(
         coordinator.session().design_document(),
         AuthoringTool::Constraint(intent),
@@ -1566,7 +1705,26 @@ fn survey_constraint(
     validate_finite_geometry(accepted)?;
     validate_constraint_geometry(kind, accepted, outcome.value, fixture)?;
     validate_no_move_witness(fixture, accepted)?;
-    validate_protected_geometry(fixture, accepted, variant.scale)
+    validate_protected_geometry(fixture, accepted, variant.scale)?;
+    let parity_created = ParityStage::capture("created", &coordinator)?;
+    let mut parity_stages = vec![parity_base, parity_created];
+    if env::var_os("GEOSOLVE_GOLDEN_ORACLE_PARITY_MANIFEST").is_some() {
+        coordinator
+            .undo()
+            .map_err(|error| defect("constraint.undo", error.to_string()))?;
+        validate_current_acceptance(&coordinator)?;
+        parity_stages.push(ParityStage::capture("undo", &coordinator)?);
+        coordinator
+            .redo()
+            .map_err(|error| defect("constraint.redo", error.to_string()))?;
+        validate_current_acceptance(&coordinator)?;
+        parity_stages.push(ParityStage::capture("redo", &coordinator)?);
+    }
+    write_parity_manifest(
+        constraint_family_id(kind),
+        "create-undo-redo",
+        &parity_stages,
+    )
 }
 
 fn survey_dimension(
@@ -1581,6 +1739,7 @@ fn survey_dimension(
         ..AuthoringOptions::default()
     };
     let mut coordinator = coordinator(fixture.document.clone());
+    let parity_base = ParityStage::capture("base", &coordinator)?;
     let precreate_document = coordinator
         .session()
         .accepted_state_for_current_input()
@@ -1661,6 +1820,7 @@ fn survey_dimension(
     validate_finite_geometry(accepted_created)?;
     validate_dimension_geometry(kind, dimension, accepted_created, original_metadata.value)?;
     validate_no_move_witness(fixture, accepted_created)?;
+    let parity_created = ParityStage::capture("created", &coordinator)?;
 
     let edited_display = if kind == DimensionKind::OrientedAngle {
         (original_metadata.display_value - 12.0).max(15.0)
@@ -1713,6 +1873,7 @@ fn survey_dimension(
         .document();
     validate_finite_geometry(accepted_edited)?;
     validate_dimension_geometry(kind, dimension, accepted_edited, edited_metadata.value)?;
+    let parity_edited = ParityStage::capture("edited", &coordinator)?;
     coordinator
         .undo()
         .map_err(|error| defect("dimension.undo", error.to_string()))?;
@@ -1745,6 +1906,7 @@ fn survey_dimension(
         .document();
     validate_finite_geometry(accepted_undo)?;
     validate_dimension_geometry(kind, dimension, accepted_undo, undo_metadata.value)?;
+    let parity_undo = ParityStage::capture("undo", &coordinator)?;
     coordinator
         .redo()
         .map_err(|error| defect("dimension.redo", error.to_string()))?;
@@ -1785,7 +1947,19 @@ fn survey_dimension(
         .document();
     validate_finite_geometry(accepted)?;
     validate_dimension_geometry(kind, dimension, accepted, redo_metadata.value)?;
-    validate_protected_geometry(fixture, accepted, variant.scale)
+    validate_protected_geometry(fixture, accepted, variant.scale)?;
+    let parity_redo = ParityStage::capture("redo", &coordinator)?;
+    write_parity_manifest(
+        dimension_family_id(kind),
+        "create-edit-undo-redo",
+        &[
+            parity_base,
+            parity_created,
+            parity_edited,
+            parity_undo,
+            parity_redo,
+        ],
+    )
 }
 
 fn validate_dimension_metadata(

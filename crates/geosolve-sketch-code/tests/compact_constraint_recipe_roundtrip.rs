@@ -677,7 +677,8 @@ fn coverage_case(kind: ConstraintKind) -> CoverageCase {
             span_pair(),
             [
                 ("continuity", IntentLiteral::Enum(key("parametric_c2"))),
-                ("parameter_ratio", parameter(2.0)),
+                ("first_rate", parameter(2.0)),
+                ("second_rate", parameter(1.0)),
                 ("first_contact_parameter", parameter(1.0)),
                 (
                     "first_contact_neighborhood",
@@ -1193,6 +1194,20 @@ fn every_standalone_constraint_reverse_projects_and_host_external_kinds_remain_i
                     assert!(
                         !source_declaration.contains("period"),
                         "periodic intrinsic topology leaked into source: {source_declaration}",
+                    );
+                }
+                if kind == ConstraintKind::EndpointContinuity {
+                    assert!(
+                        source_declaration.contains("\"firstRate\":2"),
+                        "first parametric rate was not reverse-projected exactly: {source_declaration}",
+                    );
+                    assert!(
+                        source_declaration.contains("\"secondRate\":1"),
+                        "second parametric rate was not reverse-projected exactly: {source_declaration}",
+                    );
+                    assert!(
+                        !source_declaration.contains("parameterRatio"),
+                        "lossy rate-ratio API survived the clean break: {source_declaration}",
                     );
                 }
                 for forbidden in [

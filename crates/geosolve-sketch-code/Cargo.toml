@@ -18,6 +18,7 @@ include = ["/src/**", "/assets/**", "/tests/golden/**", "/README.md", "/LICENSE"
 [dependencies]
 geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
 geosolve-sketch-intent = { version = "0.2.0", path = "../geosolve-sketch-intent" }
 serde.workspace = true
 serde_json.workspace = true

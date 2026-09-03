@@ -1629,7 +1629,10 @@ fn named_numeric_schema_override(
 
     match descriptor.declaration {
         CodeAuthoringDeclarationKind::Geometry(
-            GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs,
+            GeometryRecipeKind::OpenControlBSpline
+            | GeometryRecipeKind::PeriodicControlBSpline
+            | GeometryRecipeKind::OpenControlNurbs
+            | GeometryRecipeKind::PeriodicControlNurbs,
         ) if path_is_field(property, "degree") => scalar_schema(
             value,
             ManagedControlNumberKind::Natural,

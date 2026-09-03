@@ -1327,6 +1327,40 @@ export const DECLARATION_RESULT_CATALOG = {
       }
     }
   },
+  "geometry.openControlBSpline": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "controls": {
+          "shape": "dynamic_keyed",
+          "source": "spline_controls",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "object",
+            "fields": {
+              "position": {
+                "shape": "leaf",
+                "kind": "point"
+              }
+            }
+          }
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "spans": {
+          "shape": "dynamic_keyed",
+          "source": "spline_spans",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "native_span"
+          }
+        }
+      }
+    }
+  },
   "geometry.openControlNurbs": {
     "feature_kind": "feature",
     "outputs": {
@@ -1392,6 +1426,40 @@ export const DECLARATION_RESULT_CATALOG = {
         "vertex": {
           "shape": "leaf",
           "kind": "point"
+        }
+      }
+    }
+  },
+  "geometry.periodicControlBSpline": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "controls": {
+          "shape": "dynamic_keyed",
+          "source": "spline_controls",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "object",
+            "fields": {
+              "position": {
+                "shape": "leaf",
+                "kind": "point"
+              }
+            }
+          }
+        },
+        "curve": {
+          "shape": "leaf",
+          "kind": "curve"
+        },
+        "spans": {
+          "shape": "dynamic_keyed",
+          "source": "spline_spans",
+          "derived_from_owner": false,
+          "member": {
+            "shape": "native_span"
+          }
         }
       }
     }
@@ -2535,8 +2603,10 @@ export const AUTHORING_METHOD_CATALOG = {
   "geometry.cubicBezier": "public",
   "geometry.hyperbola": "public",
   "geometry.midpointLine": "public",
+  "geometry.openControlBSpline": "public",
   "geometry.openControlNurbs": "public",
   "geometry.parabola": "public",
+  "geometry.periodicControlBSpline": "public",
   "geometry.periodicControlNurbs": "public",
   "geometry.polyline": "public",
   "geometry.quadraticBezier": "public",

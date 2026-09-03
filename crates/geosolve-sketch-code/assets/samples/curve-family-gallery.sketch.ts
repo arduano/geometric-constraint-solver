@@ -486,22 +486,18 @@ export default sketch(($) => {
     label: "Profile hyperbola closure",
     role: "profile",
   });
-  const curve22ProfileBSpline = $.geometry.openControlNurbs("curve22ProfileBSpline", {
+  const curve22ProfileBSpline = $.geometry.openControlBSpline("curve22ProfileBSpline", {
     controls: [{
       key: "control1",
       position: point35ProfileSplineControl.point,
-      weight: 1,
     }, {
       key: "control2",
       position: point36ProfileSplineControl.point,
-      weight: 1,
     }, {
       key: "control3",
       position: point37ProfileSplineControl.point,
-      weight: 1,
     }],
     degree: 2,
-    gauge: "control1",
     label: "Profile B-spline",
     role: "profile",
   });
@@ -512,30 +508,24 @@ export default sketch(($) => {
     label: "Profile spline closure",
     role: "profile",
   });
-  const curve24ProfileBSpline = $.geometry.periodicControlNurbs("curve24ProfileBSpline", {
+  const curve24ProfileBSpline = $.geometry.periodicControlBSpline("curve24ProfileBSpline", {
     controls: [{
       key: "control1",
       position: point38ProfileSplineControl.point,
-      weight: 1,
     }, {
       key: "control2",
       position: point39ProfileSplineControl.point,
-      weight: 1,
     }, {
       key: "control3",
       position: point40ProfileSplineControl.point,
-      weight: 1,
     }, {
       key: "control4",
       position: point41ProfileSplineControl.point,
-      weight: 1,
     }, {
       key: "control5",
       position: point42ProfileSplineControl.point,
-      weight: 1,
     }],
     degree: 2,
-    gauge: "control1",
     label: "Profile B-spline",
     role: "profile",
   });

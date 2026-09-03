@@ -75,7 +75,7 @@ test("runtime authoring rejects unknown, retired, and host-gated methods", () =>
   );
 });
 
-test("NURBS gauge is a stable child key and patch declarations compose under application IDs", () => {
+test("B-spline and NURBS methods enforce distinct control and gauge contracts", () => {
   assert.throws(() => sketch((s) => s.geometry.openControlNurbs("badGauge", {
     controls: [
       { key: "a", position: [0, 0], weight: 1 },
@@ -85,6 +85,98 @@ test("NURBS gauge is a stable child key and patch declarations compose under app
     degree: 2,
     gauge: "missing" as "a" | "b" | "c",
   })), /gauge must name a control key/u);
+
+  assert.throws(() => sketch((s) => s.geometry.openControlNurbs("badWeight", {
+    controls: [
+      { key: "a", position: [0, 0], weight: 1 },
+      { key: "b", position: [1, 0], weight: 0 },
+      { key: "c", position: [2, 0], weight: 1 },
+    ],
+    degree: 2,
+    gauge: "a",
+  })), /weight must be positive/u);
+
+  const bspline = sketch((s) => s.geometry.openControlBSpline("bspline", {
+    controls: [
+      { key: "a", position: [0, 0] },
+      { key: "b", position: [1, 1] },
+      { key: "c", position: [2, 0] },
+    ],
+    degree: 2,
+  }));
+  assert.ok(bspline.output.controls.byKey.b.position);
+  assert.equal("weight" in bspline.output.controls.byKey.b, false);
+
+  type UnsafeSpline = (
+    id: string,
+    values: Readonly<Record<string, unknown>>,
+  ) => unknown;
+  const callSpline = (
+    method: UnsafeSpline,
+    id: string,
+    values: Readonly<Record<string, unknown>>,
+  ) => method(id, values);
+  assert.throws(
+    () => sketch((s) => callSpline(
+      s.geometry.openControlBSpline as unknown as UnsafeSpline,
+      "invalidDegreeBSpline",
+      {
+        controls: [
+          { key: "a", position: [0, 0] },
+          { key: "b", position: [1, 1] },
+        ],
+        degree: 0,
+      },
+    )),
+    /spline degree must be a positive integer/u,
+  );
+  assert.throws(
+    () => sketch((s) => callSpline(
+      s.geometry.openControlBSpline as unknown as UnsafeSpline,
+      "weightedBSpline",
+      {
+        controls: [
+          { key: "a", position: [0, 0], weight: 1 },
+          { key: "b", position: [1, 1], weight: 1 },
+          { key: "c", position: [2, 0], weight: 1 },
+        ],
+        degree: 2,
+      },
+    )),
+    /B-spline controls cannot declare a weight/u,
+  );
+  assert.throws(
+    () => sketch((s) => callSpline(
+      s.geometry.openControlBSpline as unknown as UnsafeSpline,
+      "gaugedBSpline",
+      {
+        controls: [
+          { key: "a", position: [0, 0] },
+          { key: "b", position: [1, 1] },
+          { key: "c", position: [2, 0] },
+        ],
+        degree: 2,
+        gauge: "a",
+      },
+    )),
+    /B-spline cannot declare a weight gauge/u,
+  );
+  assert.throws(
+    () => sketch((s) => callSpline(
+      s.geometry.openControlNurbs as unknown as UnsafeSpline,
+      "weightlessNurbs",
+      {
+        controls: [
+          { key: "a", position: [0, 0] },
+          { key: "b", position: [1, 1] },
+          { key: "c", position: [2, 0] },
+        ],
+        degree: 2,
+        gauge: "a",
+      },
+    )),
+    /NURBS controls require a weight/u,
+  );
 
   const edge = definePatch(
     { start: t.point(), end: t.point() },

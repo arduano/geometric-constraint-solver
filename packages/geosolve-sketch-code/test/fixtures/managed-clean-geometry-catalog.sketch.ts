@@ -158,6 +158,27 @@ export default sketch(($) => {
     trimEnd: 1,
     branch: "positive",
   });
+  const openControlBSpline = $.geometry.openControlBSpline("openControlBSpline", {
+    controls: [
+      { key: "a", position: [30, 56] },
+      { key: "b", position: [33, 60] },
+      { key: "c", position: [37, 60] },
+      { key: "d", position: [40, 56] },
+    ],
+    degree: 3,
+  });
+  const periodicControlBSpline = $.geometry.periodicControlBSpline(
+    "periodicControlBSpline",
+    {
+      controls: [
+        { key: "north", position: [50, 60] },
+        { key: "east", position: [54, 56] },
+        { key: "south", position: [50, 52] },
+        { key: "west", position: [46, 56] },
+      ],
+      degree: 2,
+    },
+  );
   const openControlNurbs = $.geometry.openControlNurbs("openControlNurbs", {
     controls: [
       { key: "a", position: [0, 56], weight: 1 },
@@ -206,6 +227,8 @@ export default sketch(($) => {
     rationalQuadraticConic,
     parabola,
     hyperbola,
+    openControlBSpline,
+    periodicControlBSpline,
     openControlNurbs,
     periodicControlNurbs,
   };

@@ -857,7 +857,7 @@ fn canvas_segment_preserves_its_named_construction_arguments() {
 )]
 fn exact_native_canvas_polyline_reverse_projects_to_keyed_named_source() {
     assert_eq!(GeometryToolVariant::ALL.len(), 25);
-    assert_eq!(GeometryRecipeKind::ALL.len(), 25);
+    assert_eq!(GeometryRecipeKind::ALL.len(), 27);
     let (project, expansion, accepted) = accepted_empty_code_project();
     let mut candidate = accepted
         .fork_accepted_authority()

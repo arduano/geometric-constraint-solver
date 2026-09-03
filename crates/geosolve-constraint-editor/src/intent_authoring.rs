@@ -758,13 +758,20 @@ fn application_relation_draft(
                         second_rate,
                     } = continuity
                     {
-                        let ratio = first_rate / second_rate;
-                        if !ratio.is_finite() || ratio <= 0.0 {
+                        if !first_rate.is_finite()
+                            || first_rate <= 0.0
+                            || !second_rate.is_finite()
+                            || second_rate <= 0.0
+                        {
                             return Err(ProjectionalAuthoringError::InvalidGeometry);
                         }
                         draft = draft.with_field(
-                            IntentFieldKey(IntentKey::new("parameter_ratio")?),
-                            dimensionless(ratio),
+                            IntentFieldKey(IntentKey::new("first_rate")?),
+                            dimensionless(first_rate),
+                        );
+                        draft = draft.with_field(
+                            IntentFieldKey(IntentKey::new("second_rate")?),
+                            dimensionless(second_rate),
                         );
                     }
                 }

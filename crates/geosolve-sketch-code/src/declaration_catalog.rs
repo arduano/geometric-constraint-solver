@@ -124,15 +124,15 @@ macro_rules! authoring_family {
 
 /// Complete clean-break authoring inventory.
 ///
-/// The 81 public entries comprise 25 geometry recipes, 33 standalone
+/// The 83 public entries comprise 27 geometry recipes, 33 standalone
 /// constraints, eight dimensions, twelve operations, two aggregates and
 /// computed `FilletSet`. The two remaining native external constraints stay
-/// present but explicitly gated, for 83 entries in total.
+/// present but explicitly gated, for 85 entries in total.
 #[allow(
     clippy::too_many_lines,
     reason = "one closed table keeps every public authoring name reviewable beside its Rust identity"
 )]
-pub const CODE_AUTHORING_FAMILIES: [CodeAuthoringFamilyDescriptor; 83] = [
+pub const CODE_AUTHORING_FAMILIES: [CodeAuthoringFamilyDescriptor; 85] = [
     authoring_family!(
         "geometry",
         "sketchPoint",
@@ -262,6 +262,22 @@ pub const CODE_AUTHORING_FAMILIES: [CodeAuthoringFamilyDescriptor; 83] = [
         "geometry",
         "hyperbola",
         CodeAuthoringDeclarationKind::Geometry(GeometryRecipeKind::Hyperbola)
+    ),
+    authoring_family!(
+        "geometry",
+        "openControlBSpline",
+        CodeAuthoringDeclarationKind::Geometry(GeometryRecipeKind::OpenControlBSpline),
+        CodeAuthoringAvailability::Public,
+        CodeAuthoringDynamicChildren::SplineControls,
+        CodeAuthoringResultPolicy::KeyedSpline
+    ),
+    authoring_family!(
+        "geometry",
+        "periodicControlBSpline",
+        CodeAuthoringDeclarationKind::Geometry(GeometryRecipeKind::PeriodicControlBSpline),
+        CodeAuthoringAvailability::Public,
+        CodeAuthoringDynamicChildren::SplineControls,
+        CodeAuthoringResultPolicy::KeyedSpline
     ),
     authoring_family!(
         "geometry",
@@ -832,7 +848,11 @@ const fn dynamic_children_kind(kind: &IntentNodeKind) -> CodeAuthoringDynamicChi
             recipe: GeometryRecipeKind::Polyline,
         } => CodeAuthoringDynamicChildren::PolylineVertices,
         IntentNodeKind::Geometry {
-            recipe: GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs,
+            recipe:
+                GeometryRecipeKind::OpenControlBSpline
+                | GeometryRecipeKind::PeriodicControlBSpline
+                | GeometryRecipeKind::OpenControlNurbs
+                | GeometryRecipeKind::PeriodicControlNurbs,
         } => CodeAuthoringDynamicChildren::SplineControls,
         IntentNodeKind::ComputedFeature {
             feature: ComputedFeatureKind::FilletSet,
@@ -912,7 +932,10 @@ fn geometry_authoring_inputs(
             schema.minimum_children,
             schema.maximum_children,
         )],
-        G::OpenControlNurbs | G::PeriodicControlNurbs => vec![dynamic_collection(
+        G::OpenControlBSpline
+        | G::PeriodicControlBSpline
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => vec![dynamic_collection(
             "controls",
             CodeAuthoringCollectionMember::SplineControl,
             IntentChildSchema::SplineControl,
@@ -979,7 +1002,11 @@ const fn geometry_point_names(recipe: GeometryRecipeKind) -> &'static [&'static 
         G::CubicBezier => &["start", "firstControl", "secondControl", "end"],
         G::Parabola => &["vertex", "focus"],
         G::Hyperbola => &["center", "transverseAxisPoint"],
-        G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs => &[],
+        G::Polyline
+        | G::OpenControlBSpline
+        | G::PeriodicControlBSpline
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => &[],
     }
 }
 
@@ -1676,6 +1703,21 @@ fn clean_authoring_result_descriptor(
                 ("trimStart", leaf(FeatureKind::Scalar)),
                 ("trimEnd", leaf(FeatureKind::Scalar)),
             ]),
+            G::OpenControlBSpline | G::PeriodicControlBSpline => object([
+                ("curve", leaf(FeatureKind::Curve)),
+                (
+                    "controls",
+                    dynamic_keyed(
+                        CodeResultKeySource::SplineControls,
+                        object([("position", leaf(FeatureKind::Point))]),
+                        false,
+                    ),
+                ),
+                (
+                    "spans",
+                    dynamic_keyed(CodeResultKeySource::SplineSpans, native_span(), false),
+                ),
+            ]),
             G::OpenControlNurbs | G::PeriodicControlNurbs => object([
                 ("curve", leaf(FeatureKind::Curve)),
                 (
@@ -2135,7 +2177,10 @@ mod tests {
             (CodeAuthoringDynamicChildren::None, _) => 0,
             (
                 CodeAuthoringDynamicChildren::SplineControls,
-                CodeAuthoringDeclarationKind::Geometry(GeometryRecipeKind::PeriodicControlNurbs),
+                CodeAuthoringDeclarationKind::Geometry(
+                    GeometryRecipeKind::PeriodicControlBSpline
+                    | GeometryRecipeKind::PeriodicControlNurbs,
+                ),
             ) => 3,
             (
                 CodeAuthoringDynamicChildren::PolylineVertices
@@ -2152,8 +2197,8 @@ mod tests {
 
     #[test]
     fn clean_authoring_inventory_is_exhaustive_unique_and_explicitly_gated() {
-        assert_eq!(CODE_AUTHORING_FAMILIES.len(), 83);
-        assert_eq!(public_code_authoring_families().count(), 81);
+        assert_eq!(CODE_AUTHORING_FAMILIES.len(), 85);
+        assert_eq!(public_code_authoring_families().count(), 83);
 
         let mut names = BTreeSet::new();
         let mut geometry = BTreeSet::new();

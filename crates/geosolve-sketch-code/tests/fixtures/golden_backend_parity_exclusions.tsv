@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+case_pattern	boundary	owning_contract	reason
+constraint.external-line-collinear.*	host-input	CodeAuthoringAvailability::RequiresHostSnapshot	The relation requires an immutable host topology snapshot and binding; standalone managed source must not fabricate it.
+constraint.external-point-coincident.*	host-input	CodeAuthoringAvailability::RequiresHostSnapshot	The relation requires an immutable host topology snapshot and binding; standalone managed source must not fabricate it.
+dimension.profile-offset.*	native-document-projection	ManagedSketchExportError::ProfileOffsetDimension	Profile Offset owns a multi-object aggregate/helper closure that cannot be recovered truthfully from one flattened SketchDocument.
+spline.noncanonical-knot-topology.*	native-document-projection	ManagedSketchExportError::UnsupportedSplineTopology	Knot-inserted native spline topology cannot be reproduced by the current typed source recipe without changing its authored control structure.

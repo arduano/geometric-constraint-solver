@@ -1521,6 +1521,47 @@ fn midpoint_line_cold_materialization_preserves_its_explicit_branch() {
 }
 
 #[test]
+fn segment_cold_materialization_preserves_a_non_collinear_explicit_branch_bit_exactly() {
+    let branch = [0.8, 0.6];
+    let draft = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("segment"),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Start),
+        LeafField::X,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Start),
+        LeafField::Y,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(3.0))
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(4.0))
+    .with_field(
+        IntentFieldKey(key("branch_direction")),
+        IntentLiteral::Point(branch),
+    );
+    let output = cold_materialize_ops(0x9100_0001, vec![create("segment", draft)]);
+    let document = output
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    let CurveDefinition::Line {
+        branch_direction, ..
+    } = document.curves()[0].definition
+    else {
+        panic!("Segment must materialize one native line");
+    };
+    assert_eq!(branch_direction.map(f64::to_bits), branch.map(f64::to_bits));
+    assert_independently_validated(&output);
+}
+
+#[test]
 fn geometry_role_is_exact_for_profile_and_construction_recipes() {
     for (index, role) in [GeometryRole::Profile, GeometryRole::Construction]
         .into_iter()
@@ -2592,6 +2633,69 @@ fn closed_polyline_and_non_default_nurbs_publish_every_logical_span() {
 }
 
 #[test]
+fn non_rational_control_splines_reserve_no_weight_scalars_and_keep_exact_raw_dof() {
+    let cases = [
+        (
+            GeometryRecipeKind::OpenControlBSpline,
+            3_u16,
+            5_usize,
+            6_usize,
+        ),
+        (
+            GeometryRecipeKind::PeriodicControlBSpline,
+            5_u16,
+            11_usize,
+            10_usize,
+        ),
+    ];
+    for (index, (recipe, controls, expected_ports, expected_dof)) in cases.into_iter().enumerate() {
+        let spline = IntentNodeDraft::new(IntentNodeKind::Geometry { recipe }, key("spline"))
+            .with_dynamic_children(controls)
+            .with_field(IntentFieldKey(key("degree")), IntentLiteral::Natural(2));
+        assert_eq!(
+            spline.schema_generated_port_count(),
+            Some(expected_ports),
+            "{recipe:?} must reserve controls, one curve, and its logical spans only",
+        );
+        let output = cold_materialize_ops(
+            0x8300_2003 + u128::try_from(index).unwrap(),
+            vec![create("spline", spline)],
+        );
+        assert_independently_validated(&output);
+        let accepted = output
+            .session
+            .accepted_state_for_current_input()
+            .expect("accepted non-rational spline");
+        let document = accepted.document();
+        assert_eq!(document.points().len(), usize::from(controls));
+        assert!(
+            document.scalars().is_empty(),
+            "{recipe:?} fabricated weights"
+        );
+        assert!(matches!(
+            document.curves()[0].definition,
+            CurveDefinition::BSpline { .. }
+        ));
+        assert_eq!(
+            accepted
+                .diagnostics()
+                .mobility
+                .expect("non-rational spline mobility")
+                .equality_degrees_of_freedom,
+            Some(expected_dof),
+            "{recipe:?} raw DOF must contain positions only",
+        );
+        assert!(
+            output
+                .ownership
+                .ports
+                .iter()
+                .all(|(_, binding)| { !matches!(binding, IntentNativeBinding::Scalar(_)) })
+        );
+    }
+}
+
+#[test]
 #[allow(
     clippy::too_many_lines,
     reason = "one table-driven relation inventory keeps every supported exact lowering visible"
@@ -3357,7 +3461,8 @@ fn curve_pair_and_differential_relations_preserve_their_explicit_branch_state() 
                     ],
                     [
                         ("continuity", IntentLiteral::Enum(key("parametric_c2"))),
-                        ("parameter_ratio", parameter(2.0)),
+                        ("first_rate", parameter(2.0)),
+                        ("second_rate", parameter(1.0)),
                         ("first_contact_parameter", parameter(1.0)),
                         (
                             "first_contact_neighborhood",

@@ -22,6 +22,9 @@ use geosolve_sketch::{
     DocumentLineOffsetOrientation, DocumentLineSide, FeatureEndpoint, GeometryRole, ScalarUnit,
     SketchDocument, TangentOrientation,
 };
+use geosolve_sketch_features::{
+    ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFilletParent,
+};
 use thiserror::Error;
 
 use crate::MANAGED_SOURCE_LIMIT;
@@ -35,6 +38,10 @@ pub enum ManagedSketchExportError {
     InvalidDocument(String),
     #[error("the source document contains host-owned parameter or external-binding authority")]
     HostAuthority,
+    #[error("the computed-feature document is invalid: {0}")]
+    InvalidFeatureDocument(String),
+    #[error("the computed-feature document belongs to a different sketch document")]
+    FeatureDocumentNamespace,
     #[error("document {kind} `{id}` is missing")]
     MissingObject { kind: &'static str, id: String },
     #[error("document {kind} `{id}` contains a non-finite value")]
@@ -68,6 +75,39 @@ pub enum ManagedSketchExportError {
 pub fn export_sketch_document_to_managed_source(
     document: &SketchDocument,
 ) -> Result<String, ManagedSketchExportError> {
+    export_document(document, None)
+}
+
+/// Projects one valid ordinary document and its native-parent computed
+/// features into deterministic typed managed V3 source.
+///
+/// Computed Fillets remain direct `computed.filletSet` declarations with
+/// complete parent/contact branch state. They are never flattened into
+/// ordinary arcs or solver-owned Fillet constraints.
+///
+/// # Errors
+///
+/// Returns the ordinary document projection failures, plus a typed refusal
+/// when the feature sidecar is invalid, belongs to another sketch namespace,
+/// references a missing native span, contains a non-finite value, or makes the
+/// combined source exceed the managed-source bound.
+pub fn export_sketch_document_with_features_to_managed_source(
+    document: &SketchDocument,
+    features: &ComputedFeatureDocument,
+) -> Result<String, ManagedSketchExportError> {
+    features
+        .validate()
+        .map_err(|error| ManagedSketchExportError::InvalidFeatureDocument(error.to_string()))?;
+    if features.sketch_document() != document.id() {
+        return Err(ManagedSketchExportError::FeatureDocumentNamespace);
+    }
+    export_document(document, Some(features))
+}
+
+fn export_document(
+    document: &SketchDocument,
+    features: Option<&ComputedFeatureDocument>,
+) -> Result<String, ManagedSketchExportError> {
     document
         .validate()
         .map_err(|error| ManagedSketchExportError::InvalidDocument(error.to_string()))?;
@@ -80,7 +120,7 @@ pub fn export_sketch_document_to_managed_source(
         return Err(ManagedSketchExportError::HostAuthority);
     }
 
-    let mut exporter = DocumentExporter::new(document);
+    let mut exporter = DocumentExporter::new(document, features);
     exporter.emit()?;
     if exporter.source.len() > MANAGED_SOURCE_LIMIT {
         return Err(ManagedSketchExportError::ResourceLimit {
@@ -93,16 +133,18 @@ pub fn export_sketch_document_to_managed_source(
 
 struct DocumentExporter<'a> {
     document: &'a SketchDocument,
+    features: Option<&'a ComputedFeatureDocument>,
     source: String,
     point_symbols: BTreeMap<DesignPointId, String>,
     curve_symbols: BTreeMap<CurveId, String>,
     constraint_symbols: BTreeMap<geosolve_sketch::DocumentConstraintId, String>,
     dimension_symbols: BTreeMap<geosolve_sketch::DocumentDimensionId, String>,
+    feature_symbols: Vec<String>,
     inactive: BTreeSet<DocumentElementId>,
 }
 
 impl<'a> DocumentExporter<'a> {
-    fn new(document: &'a SketchDocument) -> Self {
+    fn new(document: &'a SketchDocument, features: Option<&'a ComputedFeatureDocument>) -> Self {
         let point_symbols = document
             .points()
             .iter()
@@ -147,13 +189,21 @@ impl<'a> DocumentExporter<'a> {
                 )
             })
             .collect();
+        let feature_symbols = features
+            .into_iter()
+            .flat_map(ComputedFeatureDocument::features)
+            .enumerate()
+            .map(|(index, feature)| source_identifier("feature", index + 1, &feature.label))
+            .collect();
         Self {
             document,
+            features,
             source: String::new(),
             point_symbols,
             curve_symbols,
             constraint_symbols,
             dimension_symbols,
+            feature_symbols,
             inactive: document.user_inactive_elements().collect(),
         }
     }
@@ -165,6 +215,7 @@ impl<'a> DocumentExporter<'a> {
         self.emit_points()?;
         self.emit_curves()?;
         self.emit_sources()?;
+        self.emit_features()?;
         self.emit_groups();
         self.source.push_str("  return {};\n});\n");
         Ok(())
@@ -269,6 +320,14 @@ impl<'a> DocumentExporter<'a> {
                 }
                 fields.push_str("    }],\n");
                 field(&mut fields, "closed", bool_literal(*closed));
+                fields.push_str("    branchDirections: [");
+                for (index, direction) in branch_directions.iter().enumerate() {
+                    if index > 0 {
+                        fields.push_str(", ");
+                    }
+                    fields.push_str(&point_literal(*direction));
+                }
+                fields.push_str("],\n");
                 presentation_fields(&mut fields, label, role);
                 "polyline"
             }
@@ -479,9 +538,9 @@ impl<'a> DocumentExporter<'a> {
                     knots,
                     span_ids,
                 )?;
-                self.spline_fields(&mut fields, controls, &vec![1.0; controls.len()], *degree)?;
+                self.bspline_fields(&mut fields, controls, *degree)?;
                 presentation_fields(&mut fields, label, role);
-                nurbs_method(*form)
+                spline_method(*form, false)
             }
             CurveDefinition::Nurbs {
                 form,
@@ -514,7 +573,7 @@ impl<'a> DocumentExporter<'a> {
                     })?;
                 self.spline_fields_with_gauge(&mut fields, controls, &values, *degree, gauge)?;
                 presentation_fields(&mut fields, label, role);
-                nurbs_method(*form)
+                spline_method(*form, true)
             }
         };
         Ok((method, fields))
@@ -540,7 +599,7 @@ impl<'a> DocumentExporter<'a> {
         if expected_spans != Some(span_ids.len()) {
             return Err(ManagedSketchExportError::UnsupportedSplineTopology { id });
         }
-        // The named control-NURBS builders own canonical uniform knots. Knot
+        // The named control-spline builders own canonical uniform knots. Knot
         // insertion is a separate operation and must not be silently erased.
         let expected_knots = canonical_knots(form, degree, controls)
             .ok_or(ManagedSketchExportError::UnsupportedSplineTopology { id })?;
@@ -556,14 +615,28 @@ impl<'a> DocumentExporter<'a> {
         }
     }
 
-    fn spline_fields(
+    fn bspline_fields(
         &self,
         fields: &mut String,
         controls: &[DesignPointId],
-        weights: &[f64],
         degree: u32,
     ) -> Result<(), ManagedSketchExportError> {
-        self.spline_fields_with_gauge(fields, controls, weights, degree, 0)
+        fields.push_str("    controls: [{\n");
+        for (index, point) in controls.iter().enumerate() {
+            if index > 0 {
+                fields.push_str("    }, {\n");
+            }
+            writeln!(
+                fields,
+                "      key: {},\n      position: {},",
+                json_string(&spline_key(index)),
+                self.point_ref(*point)?,
+            )
+            .expect("writing managed source to a String cannot fail");
+        }
+        fields.push_str("    }],\n");
+        field(fields, "degree", degree.to_string());
+        Ok(())
     }
 
     fn spline_fields_with_gauge(
@@ -622,6 +695,110 @@ impl<'a> DocumentExporter<'a> {
                     self.emit_dimension(dimension)?;
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn emit_features(&mut self) -> Result<(), ManagedSketchExportError> {
+        let Some(features) = self.features else {
+            return Ok(());
+        };
+        for (feature_index, feature) in features.features().iter().enumerate() {
+            let symbol = self.feature_symbols[feature_index].clone();
+            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+            if !fillet.radius.is_finite() || fillet.radius <= 0.0 {
+                return Err(ManagedSketchExportError::NonFinite {
+                    kind: "computed Fillet radius",
+                    id: feature.id.to_string(),
+                });
+            }
+            writeln!(
+                self.source,
+                "  const {symbol} = $.computed.filletSet({symbol_json}, {{\n    radius: mm({radius}),\n    corners: [{{",
+                symbol_json = json_string(&symbol),
+                radius = number(fillet.radius),
+            )
+            .expect("writing managed source to a String cannot fail");
+            for (corner_index, corner) in fillet.corners.iter().enumerate() {
+                if corner_index > 0 {
+                    self.source.push_str("    }, {\n");
+                }
+                writeln!(
+                    self.source,
+                    "      key: {},\n      parents: [{{",
+                    json_string(&format!("corner{}", corner_index + 1)),
+                )
+                .expect("writing managed source to a String cannot fail");
+                self.emit_fillet_parent(&corner.first)?;
+                self.source.push_str("      }, {\n");
+                self.emit_fillet_parent(&corner.second)?;
+                writeln!(
+                    self.source,
+                    "      }}],\n      endpointOrder: {},\n      sweep: {},",
+                    json_string(match corner.endpoint_order {
+                        DocumentFilletEndpointOrder::FirstThenSecond => "firstThenSecond",
+                        DocumentFilletEndpointOrder::SecondThenFirst => "secondThenFirst",
+                    }),
+                    json_string(sweep_name(corner.sweep)),
+                )
+                .expect("writing managed source to a String cannot fail");
+            }
+            writeln!(
+                self.source,
+                "    }}],\n    label: {},\n  }});",
+                json_string(&feature.label),
+            )
+            .expect("writing managed source to a String cannot fail");
+            if feature.suppressed {
+                writeln!(self.source, "  $.suppress({symbol});")
+                    .expect("writing managed source to a String cannot fail");
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_fillet_parent(
+        &mut self,
+        parent: &ComputedFilletParent,
+    ) -> Result<(), ManagedSketchExportError> {
+        if !parent.picked_parameter.is_finite()
+            || parent
+                .periodic_anchor
+                .is_some_and(|anchor| !anchor.parameter.is_finite())
+        {
+            return Err(ManagedSketchExportError::NonFinite {
+                kind: "computed Fillet parent",
+                id: format!("{:?}", parent.source.span),
+            });
+        }
+        writeln!(
+            self.source,
+            "        span: {},\n        parameter: {},\n        winding: {},\n        neighborhood: {},\n        normalSide: {},\n        trimEndpoint: {},",
+            self.span_ref(parent.source.span)?,
+            number(parent.picked_parameter),
+            parent.winding,
+            neighborhood_literal(parent.neighborhood, 8),
+            json_string(match parent.normal_side {
+                DocumentCurveNormalSide::Left => "left",
+                DocumentCurveNormalSide::Right => "right",
+            }),
+            json_string(match parent.retained_endpoint {
+                DocumentFilletTrimEndpoint::Start => "start",
+                DocumentFilletTrimEndpoint::End => "end",
+            }),
+        )
+        .expect("writing managed source to a String cannot fail");
+        match parent.periodic_anchor {
+            None => self.source.push_str(
+                "        periodicAnchor: {\n          kind: \"none\",\n        },\n",
+            ),
+            Some(anchor) => writeln!(
+                self.source,
+                "        periodicAnchor: {{\n          kind: \"anchor\",\n          parameter: {},\n          winding: {},\n        }},",
+                number(anchor.parameter),
+                anchor.winding,
+            )
+            .expect("writing managed source to a String cannot fail"),
         }
         Ok(())
     }
@@ -935,19 +1112,29 @@ impl<'a> DocumentExporter<'a> {
             } => {
                 contact_span_pair(self, &mut fields, *first_contact, *second_contact)?;
                 paired_contacts(self, &mut fields, *first_contact, *second_contact)?;
-                let (name, ratio) = match continuity {
+                let (name, rates) = match continuity {
                     DocumentCurveContinuity::G0 => ("g0", None),
                     DocumentCurveContinuity::G1 => ("g1", None),
                     DocumentCurveContinuity::G2 => ("g2", None),
                     DocumentCurveContinuity::ParametricC2 {
                         first_rate,
                         second_rate,
-                    } => ("parametricC2", Some(first_rate / second_rate)),
+                    } => ("parametricC2", Some((*first_rate, *second_rate))),
                 };
                 field(&mut fields, "continuity", json_string(name));
-                if let Some(ratio) = ratio {
-                    finite_number(ratio, "constraint", constraint.id.to_string())?;
-                    field(&mut fields, "parameterRatio", number(ratio));
+                if let Some((first_rate, second_rate)) = rates {
+                    if !first_rate.is_finite()
+                        || first_rate <= 0.0
+                        || !second_rate.is_finite()
+                        || second_rate <= 0.0
+                    {
+                        return Err(ManagedSketchExportError::NonFinite {
+                            kind: "parametric C2 rate",
+                            id: constraint.id.to_string(),
+                        });
+                    }
+                    field(&mut fields, "firstRate", number(first_rate));
+                    field(&mut fields, "secondRate", number(second_rate));
                 }
                 "endpointContinuity"
             }
@@ -1157,6 +1344,7 @@ impl<'a> DocumentExporter<'a> {
         emit_group(&mut self.source, "Geometry", &curves);
         emit_group(&mut self.source, "Constraints", &constraints);
         emit_group(&mut self.source, "Dimensions", &dimensions);
+        emit_group(&mut self.source, "Features", &self.feature_symbols);
     }
 
     fn point_ref(&self, id: DesignPointId) -> Result<String, ManagedSketchExportError> {
@@ -1684,10 +1872,12 @@ fn neighborhood_literal(neighborhood: ContactNeighborhood, indent: usize) -> Str
     }
 }
 
-const fn nurbs_method(form: DocumentBSplineForm) -> &'static str {
-    match form {
-        DocumentBSplineForm::Clamped => "openControlNurbs",
-        DocumentBSplineForm::Periodic => "periodicControlNurbs",
+const fn spline_method(form: DocumentBSplineForm, rational: bool) -> &'static str {
+    match (form, rational) {
+        (DocumentBSplineForm::Clamped, false) => "openControlBSpline",
+        (DocumentBSplineForm::Periodic, false) => "periodicControlBSpline",
+        (DocumentBSplineForm::Clamped, true) => "openControlNurbs",
+        (DocumentBSplineForm::Periodic, true) => "periodicControlNurbs",
     }
 }
 
@@ -1724,12 +1914,19 @@ fn canonical_knots(form: DocumentBSplineForm, degree: usize, controls: usize) ->
 #[cfg(test)]
 mod tests {
     use geosolve_sketch::{
-        ContactAdmissibleRange, ContactAdmissibleRangeEdit, CurveDefinition, CurveSpan,
-        DocumentConstraintDefinition, DocumentElementId, DocumentParameterKind, GeometryRole,
-        SketchDocument,
+        ContactAdmissibleRange, ContactAdmissibleRangeEdit, ContactNeighborhood, CurveDefinition,
+        CurveSpan, DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveContinuity,
+        DocumentElementId, DocumentParameterKind, GeometryRole, SketchDocument,
+    };
+    use geosolve_sketch_features::{
+        ComputedFeatureDocument, ComputedFilletParent, NativeCurveSpanSource,
+        NewComputedFilletCorner,
     };
 
-    use super::{ManagedSketchExportError, export_sketch_document_to_managed_source};
+    use super::{
+        ManagedSketchExportError, export_sketch_document_to_managed_source,
+        export_sketch_document_with_features_to_managed_source,
+    };
 
     #[test]
     fn projection_is_deterministic_and_keeps_shared_topology_contact_range_role_and_suppression() {
@@ -1811,6 +2008,210 @@ mod tests {
         assert_eq!(
             export_sketch_document_to_managed_source(&document),
             Err(ManagedSketchExportError::HostAuthority),
+        );
+    }
+
+    #[test]
+    fn projection_keeps_both_parametric_c2_rates_without_ratio_collapse() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let first_start = document.add_point("first start", [0.0, 0.0]).unwrap();
+        let join = document.add_point("join", [2.0, 0.0]).unwrap();
+        let second_end = document.add_point("second end", [6.0, 0.0]).unwrap();
+        let first = document
+            .add_curve(
+                "first",
+                CurveDefinition::Line {
+                    start: first_start,
+                    end: join,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let second = document
+            .add_curve(
+                "second",
+                CurveDefinition::Line {
+                    start: join,
+                    end: second_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let first_contact = document
+            .add_curve_contact(
+                "first end",
+                CurveSpan::line(first),
+                1.0,
+                0,
+                ContactNeighborhood::End,
+                None,
+            )
+            .unwrap();
+        let second_contact = document
+            .add_curve_contact(
+                "second start",
+                CurveSpan::line(second),
+                0.0,
+                0,
+                ContactNeighborhood::Start,
+                None,
+            )
+            .unwrap();
+        document
+            .add_constraint(
+                "C2 join",
+                DocumentConstraintDefinition::EndpointContinuity {
+                    first_contact,
+                    second_contact,
+                    continuity: DocumentCurveContinuity::ParametricC2 {
+                        first_rate: 2.0,
+                        second_rate: 1.0,
+                    },
+                },
+            )
+            .unwrap();
+
+        let source = export_sketch_document_to_managed_source(&document).unwrap();
+        assert!(source.contains("continuity: \"parametricC2\","));
+        assert!(source.contains("firstRate: 2,"));
+        assert!(source.contains("secondRate: 1,"));
+        assert!(!source.contains("parameterRatio"));
+    }
+
+    #[test]
+    fn projection_keeps_clamped_and_periodic_bspline_controls_weightless() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let controls = [[0.0, 0.0], [1.0, 2.0], [3.0, 0.0]]
+            .into_iter()
+            .enumerate()
+            .map(|(index, point)| document.add_point(format!("open {index}"), point).unwrap())
+            .collect::<Vec<_>>();
+        document
+            .add_curve(
+                "open spline",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 2,
+                    controls,
+                    knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                    span_ids: vec![1],
+                    next_span_id: 2,
+                },
+            )
+            .unwrap();
+        let controls = [[5.0, 0.0], [6.0, 2.0], [8.0, 2.0], [9.0, 0.0], [7.0, -1.0]]
+            .into_iter()
+            .enumerate()
+            .map(|(index, point)| {
+                document
+                    .add_point(format!("periodic {index}"), point)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        document
+            .add_curve(
+                "periodic spline",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Periodic,
+                    degree: 2,
+                    controls,
+                    knots: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+                    span_ids: vec![1, 2, 3, 4, 5],
+                    next_span_id: 6,
+                },
+            )
+            .unwrap();
+
+        let source = export_sketch_document_to_managed_source(&document).unwrap();
+        assert!(source.contains("$.geometry.openControlBSpline"));
+        assert!(source.contains("$.geometry.periodicControlBSpline"));
+        assert!(!source.contains("rational:"));
+        assert!(!source.contains("weight:"));
+        assert!(!source.contains("gauge:"));
+    }
+
+    #[test]
+    fn projection_keeps_polyline_branches_and_complete_computed_fillet_intent() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("first");
+        let corner = document.add_point("corner", [4.0, 0.0]).expect("corner");
+        let last = document.add_point("last", [4.0, 4.0]).expect("last");
+        let polyline = document
+            .add_curve(
+                "path",
+                CurveDefinition::Polyline {
+                    points: vec![first, corner, last],
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+                },
+            )
+            .expect("polyline");
+        let mut features = ComputedFeatureDocument::new(document.id());
+        features
+            .create_fillet_set(
+                "round",
+                0.5,
+                vec![NewComputedFilletCorner {
+                    first: ComputedFilletParent {
+                        source: NativeCurveSpanSource {
+                            span: CurveSpan {
+                                curve: polyline,
+                                segment: 0,
+                            },
+                        },
+                        picked_parameter: 0.8,
+                        winding: 0,
+                        neighborhood: geosolve_sketch::ContactNeighborhood::Interior,
+                        normal_side: geosolve_sketch::DocumentCurveNormalSide::Left,
+                        retained_endpoint: geosolve_sketch::DocumentFilletTrimEndpoint::End,
+                        periodic_anchor: None,
+                    },
+                    second: ComputedFilletParent {
+                        source: NativeCurveSpanSource {
+                            span: CurveSpan {
+                                curve: polyline,
+                                segment: 1,
+                            },
+                        },
+                        picked_parameter: 0.2,
+                        winding: 0,
+                        neighborhood: geosolve_sketch::ContactNeighborhood::Local {
+                            lower: 0.0,
+                            upper: 1.0,
+                        },
+                        normal_side: geosolve_sketch::DocumentCurveNormalSide::Left,
+                        retained_endpoint: geosolve_sketch::DocumentFilletTrimEndpoint::Start,
+                        periodic_anchor: Some(geosolve_sketch::DocumentTrimParameter {
+                            parameter: 0.0,
+                            winding: 0,
+                        }),
+                    },
+                    endpoint_order: geosolve_sketch::DocumentFilletEndpointOrder::FirstThenSecond,
+                    sweep: geosolve_sketch::DocumentArcSweep::CounterClockwise,
+                }],
+            )
+            .expect("Fillet");
+
+        let source = export_sketch_document_with_features_to_managed_source(&document, &features)
+            .expect("feature export");
+        assert!(source.contains("branchDirections: [[1, 0], [0, 1]],"));
+        assert!(source.contains("$.computed.filletSet"));
+        assert!(source.contains("curve1Path.segments.byKey[\"vertex1\"]"));
+        assert!(source.contains("curve1Path.segments.byKey[\"vertex2\"]"));
+        assert!(source.contains("endpointOrder: \"firstThenSecond\""));
+        assert!(source.contains("sweep: \"counterClockwise\""));
+        assert!(source.contains("kind: \"anchor\""));
+        assert!(source.contains("$.group(\"Features\", [feature1Round])"));
+    }
+
+    #[test]
+    fn feature_projection_rejects_a_different_sketch_namespace() {
+        let document = SketchDocument::new(1.0).expect("document");
+        let other = SketchDocument::new(1.0).expect("other");
+        let features = ComputedFeatureDocument::new(other.id());
+        assert_eq!(
+            export_sketch_document_with_features_to_managed_source(&document, &features),
+            Err(ManagedSketchExportError::FeatureDocumentNamespace),
         );
     }
 }

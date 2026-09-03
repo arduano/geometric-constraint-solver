@@ -685,7 +685,10 @@ function dynamicResultKeys(
       if (!Number.isSafeInteger(degree) || (degree as number) < 1) {
         throw new TypeError(`${family} requires a positive integer degree`);
       }
-      const count = family === "geometry.periodicControlNurbs"
+      const count = (
+          family === "geometry.periodicControlBSpline" ||
+          family === "geometry.periodicControlNurbs"
+        )
         ? keys.length
         : Math.max(0, keys.length - (degree as number));
       return keys.slice(0, count);
@@ -883,6 +886,7 @@ function featureSchemaFamily(feature: string): string {
     conic: "geometry.rationalQuadraticConic",
     parabola: "geometry.parabola",
     hyperbola: "geometry.hyperbola",
+    bspline: "geometry.openControlBSpline",
     nurbs: "geometry.openControlNurbs",
     fillet: "computed.fillet",
     filletSet: "computed.filletSet",

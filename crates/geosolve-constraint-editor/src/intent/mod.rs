@@ -2614,6 +2614,8 @@ fn preflight_supported(
                     | GeometryRecipeKind::CenterRectangle
                     | GeometryRecipeKind::ThreePointCenterRectangle
                     | GeometryRecipeKind::TangentArc
+                    | GeometryRecipeKind::OpenControlBSpline
+                    | GeometryRecipeKind::PeriodicControlBSpline
                     | GeometryRecipeKind::OpenControlNurbs
                     | GeometryRecipeKind::PeriodicControlNurbs
             ),
@@ -2773,7 +2775,10 @@ fn reserve_spline_span_cursor(
     if node.suppressed
         || !matches!(
             recipe,
-            GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+            GeometryRecipeKind::OpenControlBSpline
+                | GeometryRecipeKind::PeriodicControlBSpline
+                | GeometryRecipeKind::OpenControlNurbs
+                | GeometryRecipeKind::PeriodicControlNurbs
         )
     {
         return Ok(());
@@ -2783,7 +2788,7 @@ fn reserve_spline_span_cursor(
     let degree =
         usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
             node: node.id,
-            reason: "NURBS degree exceeds platform limits",
+            reason: "spline degree exceeds platform limits",
         })?;
     if degree == 0 || control_count <= degree {
         return Ok(());
@@ -2796,16 +2801,20 @@ fn reserve_spline_span_cursor(
         return Err(IntentMaterializationError::MissingReservation { reservation });
     };
     let span_count = match recipe {
-        GeometryRecipeKind::OpenControlNurbs => control_count - degree,
-        GeometryRecipeKind::PeriodicControlNurbs => control_count,
-        _ => unreachable!("guarded NURBS recipe"),
+        GeometryRecipeKind::OpenControlBSpline | GeometryRecipeKind::OpenControlNurbs => {
+            control_count - degree
+        }
+        GeometryRecipeKind::PeriodicControlBSpline | GeometryRecipeKind::PeriodicControlNurbs => {
+            control_count
+        }
+        _ => unreachable!("guarded spline recipe"),
     };
     let next_span_id = u32::try_from(span_count)
         .ok()
         .and_then(|count| count.checked_add(1))
         .ok_or(IntentMaterializationError::InvalidGeometry {
             node: node.id,
-            reason: "NURBS span identity high-water overflow",
+            reason: "spline span identity high-water overflow",
         })?;
     allocator.reserve_spline_span_cursor(curve, next_span_id)?;
     Ok(())
@@ -3264,9 +3273,10 @@ fn lower_geometry(
         | G::CenterRectangle
         | G::ThreePointCenterRectangle => lower_rectangle(candidate, node, recipe, batch, state),
         G::TangentArc => lower_tangent_arc(candidate, node, batch, state),
-        G::OpenControlNurbs | G::PeriodicControlNurbs => {
-            lower_control_nurbs(candidate, node, recipe, batch, state)
-        }
+        G::OpenControlBSpline
+        | G::PeriodicControlBSpline
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => lower_control_spline(candidate, node, recipe, batch, state),
         G::CenterRadiusCircle | G::TwoPointDiameterCircle | G::ThreePointCircle => {
             let (center, _) = materialize_point(
                 candidate,
@@ -3905,7 +3915,25 @@ fn lower_polyline(
     let closed = field_boolean(node, "closed", false)?;
     let span_count = count - 1 + usize::from(closed);
     let branch_directions = (0..span_count)
-        .map(|index| finite_direction(node.id, positions[index], positions[(index + 1) % count]))
+        .map(|index| {
+            point_field(node, &format!("branch_direction_{index:04}"))?.map_or_else(
+                || finite_direction(node.id, positions[index], positions[(index + 1) % count]),
+                |direction| {
+                    let magnitude = direction[0].hypot(direction[1]);
+                    if magnitude.is_finite()
+                        && magnitude > 0.0
+                        && (magnitude - 1.0).abs() <= 64.0 * f64::EPSILON
+                    {
+                        Ok(direction)
+                    } else {
+                        Err(IntentMaterializationError::InvalidGeometry {
+                            node: node.id,
+                            reason: "polyline branch direction must be finite, nonzero, and normalized",
+                        })
+                    }
+                },
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     materialize_curve(
         node,
@@ -4557,7 +4585,7 @@ fn materialize_recipe_contact(
     Ok(contact)
 }
 
-fn nurbs_topology(
+fn spline_topology(
     node: NodeId,
     form: DocumentBSplineForm,
     degree: u32,
@@ -4566,7 +4594,7 @@ fn nurbs_topology(
     let degree =
         usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
             node,
-            reason: "NURBS degree exceeds platform limits",
+            reason: "spline degree exceeds platform limits",
         })?;
     let span_count = match form {
         DocumentBSplineForm::Clamped => control_count.checked_sub(degree),
@@ -4575,12 +4603,12 @@ fn nurbs_topology(
     .filter(|count| *count > 0)
     .ok_or(IntentMaterializationError::InvalidGeometry {
         node,
-        reason: "NURBS control count must exceed its positive degree",
+        reason: "spline control count must exceed its positive degree",
     })?;
     let span_count_u32 =
         u32::try_from(span_count).map_err(|_| IntentMaterializationError::InvalidGeometry {
             node,
-            reason: "NURBS span count exceeds persistent limits",
+            reason: "spline span count exceeds persistent limits",
         })?;
     let span_ids = (1..=span_count_u32).collect::<Vec<_>>();
     let next_span_id =
@@ -4588,7 +4616,7 @@ fn nurbs_topology(
             .checked_add(1)
             .ok_or(IntentMaterializationError::InvalidGeometry {
                 node,
-                reason: "NURBS span identity high-water overflow",
+                reason: "spline span identity high-water overflow",
             })?;
     let knots = match form {
         DocumentBSplineForm::Clamped => {
@@ -4602,7 +4630,7 @@ fn nurbs_topology(
     Ok((knots, span_ids, next_span_id))
 }
 
-fn lower_control_nurbs(
+fn lower_control_spline(
     candidate: &dyn IntentMaterializationSource,
     node: &IntentNode,
     recipe: GeometryRecipeKind,
@@ -4613,34 +4641,44 @@ fn lower_control_nurbs(
     let degree = u32::try_from(field_natural(node, "degree", 3)?).map_err(|_| {
         IntentMaterializationError::InvalidGeometry {
             node: node.id,
-            reason: "NURBS degree exceeds persistent limits",
+            reason: "spline degree exceeds persistent limits",
         }
     })?;
     let degree_usize =
         usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
             node: node.id,
-            reason: "NURBS degree exceeds platform limits",
+            reason: "spline degree exceeds platform limits",
         })?;
     if degree == 0 || count <= degree_usize {
         return Err(IntentMaterializationError::InvalidGeometry {
             node: node.id,
-            reason: "NURBS control count must exceed its positive degree",
+            reason: "spline control count must exceed its positive degree",
         });
     }
-    let gauge_index = usize::try_from(field_natural(node, "gauge_index", 0)?).map_err(|_| {
-        IntentMaterializationError::InvalidGeometry {
-            node: node.id,
-            reason: "NURBS gauge index exceeds platform limits",
+    let rational = matches!(
+        recipe,
+        GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+    );
+    let gauge_index = if rational {
+        let gauge_index =
+            usize::try_from(field_natural(node, "gauge_index", 0)?).map_err(|_| {
+                IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "NURBS gauge index exceeds platform limits",
+                }
+            })?;
+        if gauge_index >= count {
+            return Err(IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "NURBS gauge index is outside the control list",
+            });
         }
-    })?;
-    if gauge_index >= count {
-        return Err(IntentMaterializationError::InvalidGeometry {
-            node: node.id,
-            reason: "NURBS gauge index is outside the control list",
-        });
-    }
+        Some(gauge_index)
+    } else {
+        None
+    };
     let mut controls = Vec::with_capacity(count);
-    let mut weights = Vec::with_capacity(count);
+    let mut weights = rational.then(|| Vec::with_capacity(count));
     for index in 0..count {
         let ordinal = u32::try_from(index).map_or(f64::MAX, f64::from);
         let point_port = child_port(node, index, IntentPortRole::Control)?;
@@ -4654,44 +4692,49 @@ fn lower_control_nurbs(
             state,
         )?;
         controls.push(point);
-        let weight_port = child_port(node, index, IntentPortRole::Target)?;
-        let (weight, value) = materialize_scalar_port(
-            candidate,
-            node,
-            weight_port,
-            LeafField::Weight,
-            1.0,
-            IntentUnit::Dimensionless,
-            ScalarUnit::Parameter,
-            ScalarDomain::Positive,
-            &format!("weight{}", index + 1),
-            batch,
-            state,
-        )?;
-        if !(value.is_finite() && value > 0.0) {
-            return Err(IntentMaterializationError::InvalidGeometry {
-                node: node.id,
-                reason: "NURBS weights must be finite and positive",
-            });
+        if let Some(weights) = weights.as_mut() {
+            let weight_port = child_port(node, index, IntentPortRole::Target)?;
+            let (weight, value) = materialize_scalar_port(
+                candidate,
+                node,
+                weight_port,
+                LeafField::Weight,
+                1.0,
+                IntentUnit::Dimensionless,
+                ScalarUnit::Parameter,
+                ScalarDomain::Positive,
+                &format!("weight{}", index + 1),
+                batch,
+                state,
+            )?;
+            if !(value.is_finite() && value > 0.0) {
+                return Err(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "NURBS weights must be finite and positive",
+                });
+            }
+            if Some(index) == gauge_index && value.to_bits() != 1.0_f64.to_bits() {
+                return Err(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "the selected NURBS gauge weight must be exactly one",
+                });
+            }
+            weights.push(weight);
         }
-        if index == gauge_index && value.to_bits() != 1.0_f64.to_bits() {
-            return Err(IntentMaterializationError::InvalidGeometry {
-                node: node.id,
-                reason: "the selected NURBS gauge weight must be exactly one",
-            });
-        }
-        weights.push(weight);
     }
     let form = match recipe {
-        GeometryRecipeKind::OpenControlNurbs => DocumentBSplineForm::Clamped,
-        GeometryRecipeKind::PeriodicControlNurbs => DocumentBSplineForm::Periodic,
-        _ => unreachable!("NURBS lowering called with non-NURBS recipe"),
+        GeometryRecipeKind::OpenControlBSpline | GeometryRecipeKind::OpenControlNurbs => {
+            DocumentBSplineForm::Clamped
+        }
+        GeometryRecipeKind::PeriodicControlBSpline | GeometryRecipeKind::PeriodicControlNurbs => {
+            DocumentBSplineForm::Periodic
+        }
+        _ => unreachable!("spline lowering called with non-spline recipe"),
     };
-    let (knots, span_ids, next_span_id) = nurbs_topology(node.id, form, degree, count)?;
-    let gauge_weight = weights[gauge_index];
+    let (knots, span_ids, next_span_id) = spline_topology(node.id, form, degree, count)?;
     let logical_span_ids = span_ids.clone();
-    materialize_spline_curve(
-        node,
+    let definition = if let Some(weights) = weights {
+        let gauge_weight = weights[gauge_index.expect("rational spline has a gauge")];
         CurveDefinition::Nurbs {
             form,
             degree,
@@ -4701,11 +4744,18 @@ fn lower_control_nurbs(
             knots,
             span_ids,
             next_span_id,
-        },
-        &logical_span_ids,
-        batch,
-        state,
-    )
+        }
+    } else {
+        CurveDefinition::BSpline {
+            form,
+            degree,
+            controls,
+            knots,
+            span_ids,
+            next_span_id,
+        }
+    };
+    materialize_spline_curve(node, definition, &logical_span_ids, batch, state)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4854,7 +4904,7 @@ fn materialize_spline_curve(
         let index =
             u16::try_from(index).map_err(|_| IntentMaterializationError::InvalidGeometry {
                 node: node.id,
-                reason: "NURBS logical span index exceeds persistent limits",
+                reason: "spline logical span index exceeds persistent limits",
             })?;
         let port = require_port(node, IntentPortRole::Span, index)?;
         state.port_bindings.insert(
@@ -7942,11 +7992,21 @@ fn curve_continuity(
         Some("g1") => Ok(DocumentCurveContinuity::G1),
         Some("g2") => Ok(DocumentCurveContinuity::G2),
         Some("parametric_c2") => {
-            let ratio =
-                field_quantity(node, "parameter_ratio", IntentUnit::Dimensionless)?.unwrap_or(1.0);
+            let first_rate = field_quantity(node, "first_rate", IntentUnit::Dimensionless)?
+                .filter(|value| *value > 0.0)
+                .ok_or(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "parametric C2 first rate must be finite and positive",
+                })?;
+            let second_rate = field_quantity(node, "second_rate", IntentUnit::Dimensionless)?
+                .filter(|value| *value > 0.0)
+                .ok_or(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "parametric C2 second rate must be finite and positive",
+                })?;
             Ok(DocumentCurveContinuity::ParametricC2 {
-                first_rate: ratio,
-                second_rate: 1.0,
+                first_rate,
+                second_rate,
             })
         }
         Some(_) => Err(IntentMaterializationError::InvalidGeometry {
@@ -8028,7 +8088,13 @@ fn branch_direction(
         .find(|(field, _)| field.0.as_str() == "branch_direction")
         .map(|(_, value)| value);
     let direction = match explicit {
-        Some(IntentLiteral::Point(direction)) => *direction,
+        Some(IntentLiteral::Point(direction)) => {
+            let length = direction[0].hypot(direction[1]);
+            if length.is_finite() && length > 0.0 && (length - 1.0).abs() <= 64.0 * f64::EPSILON {
+                return Ok(*direction);
+            }
+            return Err(IntentMaterializationError::InvalidBranchDirection { node: node.id });
+        }
         Some(_) => {
             return Err(IntentMaterializationError::InvalidBranchDirection { node: node.id });
         }

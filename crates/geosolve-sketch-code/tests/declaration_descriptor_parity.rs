@@ -95,8 +95,8 @@ fn result_catalog_contains_only_clean_methods_and_patch_private_composites() {
 
 #[test]
 fn clean_authoring_catalog_is_publicly_consumable_and_exhaustive() {
-    assert_eq!(CODE_AUTHORING_FAMILIES.len(), 83);
-    assert_eq!(public_code_authoring_families().count(), 81);
+    assert_eq!(CODE_AUTHORING_FAMILIES.len(), 85);
+    assert_eq!(public_code_authoring_families().count(), 83);
     assert_eq!(
         CODE_AUTHORING_FAMILIES
             .iter()
@@ -107,6 +107,8 @@ fn clean_authoring_catalog_is_publicly_consumable_and_exhaustive() {
         2
     );
     assert!(code_authoring_family("geometry", "quadraticBezier").is_some());
+    assert!(code_authoring_family("geometry", "openControlBSpline").is_some());
+    assert!(code_authoring_family("geometry", "openControlNurbs").is_some());
     let bezier = resolve_code_authoring_declaration("geometry", "quadraticBezier", 0).unwrap();
     assert_eq!(
         bezier

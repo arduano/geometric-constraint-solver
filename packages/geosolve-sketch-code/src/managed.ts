@@ -4567,6 +4567,8 @@ function declarationKeys(family: string, argumentsValue: unknown): DeclarationRe
     };
   }
   if (
+    family === "geometry.openControlBSpline" ||
+    family === "geometry.periodicControlBSpline" ||
     family === "geometry.openControlNurbs" ||
     family === "geometry.periodicControlNurbs"
   ) {
@@ -4576,7 +4578,10 @@ function declarationKeys(family: string, argumentsValue: unknown): DeclarationRe
       controls === undefined || typeof degree !== "number" ||
       !Number.isSafeInteger(degree) || degree < 1
     ) return empty;
-    const spanCount = family === "geometry.periodicControlNurbs"
+    const spanCount = (
+        family === "geometry.periodicControlBSpline" ||
+        family === "geometry.periodicControlNurbs"
+      )
       ? controls.length
       : Math.max(0, controls.length - degree);
     return { ...empty, controls, spans: controls.slice(0, spanCount) };

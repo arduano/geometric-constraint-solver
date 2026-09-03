@@ -402,7 +402,11 @@ fn reverse_project_declarations(
                 if namespace == "geometry"
                     && matches!(
                         method.as_str(),
-                        "polyline" | "openControlNurbs" | "periodicControlNurbs"
+                        "polyline"
+                            | "openControlBSpline"
+                            | "periodicControlBSpline"
+                            | "openControlNurbs"
+                            | "periodicControlNurbs"
                     )
         ) {
             keyed_geometry_declarations.insert(node.id);
@@ -1488,7 +1492,7 @@ fn clean_geometry_arguments(
             );
         }
         CodeAuthoringDynamicChildren::SplineControls => {
-            let (controls, gauge) = clean_nurbs_controls(
+            let (controls, gauge) = clean_spline_controls(
                 editor,
                 declaration,
                 node,
@@ -1497,7 +1501,9 @@ fn clean_geometry_arguments(
                 keyed_geometry_declarations,
             )?;
             arguments.insert("controls".into(), ManagedValue::Array(controls));
-            arguments.insert("gauge".into(), ManagedValue::String(gauge));
+            if let Some(gauge) = gauge {
+                arguments.insert("gauge".into(), ManagedValue::String(gauge));
+            }
         }
         CodeAuthoringDynamicChildren::None => {
             for input in &descriptor.inputs {
@@ -1561,7 +1567,10 @@ fn clean_geometry_arguments(
     insert_clean_definition_fields(declaration, node, &mut arguments)?;
     if matches!(
         recipe,
-        GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+        GeometryRecipeKind::OpenControlBSpline
+            | GeometryRecipeKind::PeriodicControlBSpline
+            | GeometryRecipeKind::OpenControlNurbs
+            | GeometryRecipeKind::PeriodicControlNurbs
     ) {
         arguments.remove("gaugeIndex");
     }
@@ -2063,26 +2072,32 @@ fn clean_polyline_vertices(
 #[allow(
     clippy::too_many_arguments,
     clippy::too_many_lines,
-    reason = "each keyed NURBS control authenticates its point alias and accepted scalar together"
+    reason = "each keyed spline control authenticates its point alias and optional accepted weight together"
 )]
-fn clean_nurbs_controls(
+fn clean_spline_controls(
     editor: &ProjectionalEditorSession,
     declaration: &EditorBootstrapDeclaration,
     node: &IntentNode,
     selected: &BTreeMap<NodeId, ExistingSourceOwner>,
     existing: &BTreeMap<NodeId, ExistingSourceOwner>,
     keyed_geometry_declarations: &BTreeSet<NodeId>,
-) -> Result<(Vec<ManagedValue>, String), EditorDeclarationInsertionError> {
+) -> Result<(Vec<ManagedValue>, Option<String>), EditorDeclarationInsertionError> {
     let accepted = editor
         .coordinator()
         .accepted_materialization()
         .ok_or(EditorDeclarationInsertionError::MissingAcceptedAuthority { which: "candidate" })?;
+    let rational = matches!(
+        node.kind,
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+        }
+    );
     let mut controls = Vec::with_capacity(node.child_order.len());
     for ordinal in 0..node.child_order.len() {
         let ordinal = u16::try_from(ordinal).map_err(|_| {
             EditorDeclarationInsertionError::UnsupportedRecipe {
                 symbol: declaration.symbol.0.clone(),
-                recipe: "NURBS control count exceeds source limits".into(),
+                recipe: "spline control count exceeds source limits".into(),
             }
         })?;
         let position = if let Some(reference) = lexical_input_reference(
@@ -2110,53 +2125,59 @@ fn clean_nurbs_controls(
                 .ok_or_else(|| {
                     EditorDeclarationInsertionError::MissingNativePoint {
                         symbol: declaration.symbol.0.clone(),
-                        output: "NURBS control",
+                        output: "spline control",
                     }
                 })?,
             )?
         };
-        let weight_port = node
-            .port_by_selector(IntentPortSelector::InitialChild {
-                ordinal,
-                role: IntentPortRole::Target,
-                index: 0,
-            })
-            .ok_or_else(|| EditorDeclarationInsertionError::UnsupportedRecipe {
-                symbol: declaration.symbol.0.clone(),
-                recipe: "NURBS control has no weight output".into(),
-            })?;
-        let IntentNativeBinding::Scalar(weight) = accepted
-            .ownership
-            .port(weight_port.as_ref(node.id))
-            .ok_or_else(|| EditorDeclarationInsertionError::UnsupportedRecipe {
-                symbol: declaration.symbol.0.clone(),
-                recipe: "NURBS control weight has no accepted scalar".into(),
-            })?
-        else {
-            return unsupported_clean_shape(declaration, "NURBS weight output is not scalar");
-        };
-        let weight = accepted
-            .session
-            .design_document()
-            .scalar(weight)
-            .ok_or_else(|| EditorDeclarationInsertionError::UnsupportedRecipe {
-                symbol: declaration.symbol.0.clone(),
-                recipe: "NURBS accepted weight scalar disappeared".into(),
-            })?
-            .value;
-        if !weight.is_finite() {
-            return Err(EditorDeclarationInsertionError::NonFiniteGeometry {
-                symbol: declaration.symbol.0.clone(),
-            });
-        }
-        controls.push(ManagedValue::Object(BTreeMap::from([
+        let mut control = BTreeMap::from([
             (
                 "key".into(),
                 ManagedValue::String(polyline_vertex_key(ordinal)),
             ),
             ("position".into(), position),
-            ("weight".into(), ManagedValue::Number(weight)),
-        ])));
+        ]);
+        if rational {
+            let weight_port = node
+                .port_by_selector(IntentPortSelector::InitialChild {
+                    ordinal,
+                    role: IntentPortRole::Target,
+                    index: 0,
+                })
+                .ok_or_else(|| EditorDeclarationInsertionError::UnsupportedRecipe {
+                    symbol: declaration.symbol.0.clone(),
+                    recipe: "NURBS control has no weight output".into(),
+                })?;
+            let IntentNativeBinding::Scalar(weight) = accepted
+                .ownership
+                .port(weight_port.as_ref(node.id))
+                .ok_or_else(|| EditorDeclarationInsertionError::UnsupportedRecipe {
+                    symbol: declaration.symbol.0.clone(),
+                    recipe: "NURBS control weight has no accepted scalar".into(),
+                })?
+            else {
+                return unsupported_clean_shape(declaration, "NURBS weight output is not scalar");
+            };
+            let weight = accepted
+                .session
+                .design_document()
+                .scalar(weight)
+                .ok_or_else(|| EditorDeclarationInsertionError::UnsupportedRecipe {
+                    symbol: declaration.symbol.0.clone(),
+                    recipe: "NURBS accepted weight scalar disappeared".into(),
+                })?
+                .value;
+            if !weight.is_finite() {
+                return Err(EditorDeclarationInsertionError::NonFiniteGeometry {
+                    symbol: declaration.symbol.0.clone(),
+                });
+            }
+            control.insert("weight".into(), ManagedValue::Number(weight));
+        }
+        controls.push(ManagedValue::Object(control));
+    }
+    if !rational {
+        return Ok((controls, None));
     }
     let gauge_index = match intent_field(node, "gauge_index") {
         Some(IntentLiteral::Natural(index)) => usize::try_from(*index).ok(),
@@ -2174,7 +2195,7 @@ fn clean_nurbs_controls(
             recipe: "NURBS gauge index exceeds source limits".into(),
         }
     })?;
-    Ok((controls, polyline_vertex_key(gauge_index)))
+    Ok((controls, Some(polyline_vertex_key(gauge_index))))
 }
 
 fn insert_clean_definition_fields(
@@ -3459,7 +3480,7 @@ fn direct_polyline_span_path(selector: IntentPortSelector) -> Option<SemanticOut
 /// Maps one just-emitted keyed geometry result through the public clean API.
 ///
 /// Candidate graph descriptors necessarily use native ordinal paths, while
-/// clean Polyline/NURBS source exposes stable authored keys. Existing source
+/// clean Polyline/spline source exposes stable authored keys. Existing source
 /// declarations are refined through executed semantic outputs; declarations
 /// created by this same gesture need this equivalent mapping before the
 /// candidate source has been executed.
@@ -3509,7 +3530,11 @@ fn clean_keyed_geometry_path(
         }),
         (
             IntentNodeKind::Geometry {
-                recipe: G::OpenControlNurbs | G::PeriodicControlNurbs,
+                recipe:
+                    G::OpenControlBSpline
+                    | G::PeriodicControlBSpline
+                    | G::OpenControlNurbs
+                    | G::PeriodicControlNurbs,
             },
             IntentPortSelector::InitialChild {
                 ordinal,
@@ -3539,7 +3564,11 @@ fn clean_keyed_geometry_path(
         ])),
         (
             IntentNodeKind::Geometry {
-                recipe: G::OpenControlNurbs | G::PeriodicControlNurbs,
+                recipe:
+                    G::OpenControlBSpline
+                    | G::PeriodicControlBSpline
+                    | G::OpenControlNurbs
+                    | G::PeriodicControlNurbs,
             },
             IntentPortSelector::Node {
                 role: R::Span,

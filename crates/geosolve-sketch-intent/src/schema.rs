@@ -446,6 +446,17 @@ fn definition_projection_path(
     let name = field.0.as_str();
     if matches!(
         kind,
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Polyline
+        }
+    ) && let Some(ordinal) = name
+        .strip_prefix("branch_direction_")
+        .and_then(|value| value.parse::<u16>().ok())
+    {
+        return indexed_projection_path("branchDirections", ordinal);
+    }
+    if matches!(
+        kind,
         IntentNodeKind::ComputedFeature {
             feature: ComputedFeatureKind::FilletSet
         }
@@ -663,7 +674,11 @@ fn geometry_point_input_projection_path(
         G::CubicBezier => ["start", "firstControl", "secondControl", "end", "point"],
         G::Parabola => ["vertex", "focus", "point", "point", "point"],
         G::Hyperbola => ["center", "transverseAxisPoint", "point", "point", "point"],
-        G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs => {
+        G::Polyline
+        | G::OpenControlBSpline
+        | G::PeriodicControlBSpline
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => {
             return indexed_projection_path(
                 if recipe == G::Polyline {
                     "vertices"
@@ -1157,7 +1172,10 @@ fn geometry_field_default(
         ) => Some(enum_literal("counter_clockwise")),
         (GeometryRecipeKind::Hyperbola, "branch") => Some(enum_literal("positive")),
         (
-            GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs,
+            GeometryRecipeKind::OpenControlBSpline
+            | GeometryRecipeKind::PeriodicControlBSpline
+            | GeometryRecipeKind::OpenControlNurbs
+            | GeometryRecipeKind::PeriodicControlNurbs,
             "degree",
         ) if dynamic_children > 3 => Some(IntentLiteral::Natural(3)),
         (
@@ -1199,9 +1217,6 @@ fn constraint_field_default(constraint: ConstraintKind, name: &str) -> Option<In
         (ConstraintKind::CurveDirection, "orientation") => Some(enum_literal("aligned")),
         (ConstraintKind::EqualCurvature, "relation") => Some(enum_literal("signed")),
         (ConstraintKind::EndpointContinuity, "continuity") => Some(enum_literal("g0")),
-        (ConstraintKind::EndpointContinuity, "parameter_ratio") => {
-            Some(quantity_literal(1.0, IntentUnit::Dimensionless))
-        }
         _ => constraint_contact_field_default(constraint, name),
     }
 }
@@ -1668,10 +1683,16 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
         | G::QuadraticBezier => 3,
         G::CubicBezier => 4,
         G::CenterAxesEllipticalArc | G::AxisEndpointsEllipticalArc => 5,
-        G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs => dynamic_children,
+        G::Polyline
+        | G::OpenControlBSpline
+        | G::PeriodicControlBSpline
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => dynamic_children,
     };
     let child_bounds = match recipe.child_schema() {
-        IntentChildSchema::SplineControl if recipe == G::PeriodicControlNurbs => {
+        IntentChildSchema::SplineControl
+            if matches!(recipe, G::PeriodicControlBSpline | G::PeriodicControlNurbs) =>
+        {
             (3, MAX_SCHEMA_CHILDREN)
         }
         IntentChildSchema::PolylineVertex | IntentChildSchema::SplineControl => {
@@ -1689,6 +1710,13 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
     }
     if recipe == G::Polyline {
         fields.push(field("closed", IntentLiteralSchema::Boolean, false));
+        for ordinal in 0..dynamic_children {
+            fields.push(field(
+                &format!("branch_direction_{ordinal:04}"),
+                IntentLiteralSchema::Point,
+                false,
+            ));
+        }
     }
     if matches!(
         recipe,
@@ -1757,18 +1785,24 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
             field("orientation", IntentLiteralSchema::Enum, false),
         ]);
     }
-    if matches!(recipe, G::OpenControlNurbs | G::PeriodicControlNurbs) {
-        fields.extend([
-            // Cubic is the ordinary fallback, but two- and three-control
-            // declarations cannot admit it. Require an explicit admissible
-            // degree for those exact declaration instances.
-            field(
-                "degree",
-                IntentLiteralSchema::Natural,
-                dynamic_children <= 3,
-            ),
-            field("gauge_index", IntentLiteralSchema::Natural, false),
-        ]);
+    if matches!(
+        recipe,
+        G::OpenControlBSpline
+            | G::PeriodicControlBSpline
+            | G::OpenControlNurbs
+            | G::PeriodicControlNurbs
+    ) {
+        // Cubic is the ordinary fallback, but two- and three-control
+        // declarations cannot admit it. Require an explicit admissible
+        // degree for those exact declaration instances.
+        fields.push(field(
+            "degree",
+            IntentLiteralSchema::Natural,
+            dynamic_children <= 3,
+        ));
+        if matches!(recipe, G::OpenControlNurbs | G::PeriodicControlNurbs) {
+            fields.push(field("gauge_index", IntentLiteralSchema::Natural, false));
+        }
     }
     // Every geometry recipe may declare its persistent sketch role. Omitting
     // the field preserves the ordinary profile default; the materializer owns
@@ -1888,7 +1922,12 @@ fn constraint_schema(kind: ConstraintKind) -> IntentNodeSchema {
             fields.extend([
                 field("continuity", IntentLiteralSchema::Enum, true),
                 field(
-                    "parameter_ratio",
+                    "first_rate",
+                    IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                    false,
+                ),
+                field(
+                    "second_rate",
                     IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
                     false,
                 ),

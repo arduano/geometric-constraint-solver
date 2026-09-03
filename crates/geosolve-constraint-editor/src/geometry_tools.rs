@@ -339,8 +339,11 @@ impl GeometryToolVariant {
             GeometryRecipeKind::RationalQuadraticConic => Self::RationalQuadraticConic,
             GeometryRecipeKind::Parabola => Self::Parabola,
             GeometryRecipeKind::Hyperbola => Self::Hyperbola,
-            GeometryRecipeKind::OpenControlNurbs => Self::OpenControlNurbs,
-            GeometryRecipeKind::PeriodicControlNurbs => Self::PeriodicControlNurbs,
+            GeometryRecipeKind::OpenControlBSpline | GeometryRecipeKind::OpenControlNurbs => {
+                Self::OpenControlNurbs
+            }
+            GeometryRecipeKind::PeriodicControlBSpline
+            | GeometryRecipeKind::PeriodicControlNurbs => Self::PeriodicControlNurbs,
         }
     }
 

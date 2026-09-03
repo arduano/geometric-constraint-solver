@@ -126,12 +126,14 @@ pub enum GeometryRecipeKind {
     RationalQuadraticConic,
     Parabola,
     Hyperbola,
+    OpenControlBSpline,
+    PeriodicControlBSpline,
     OpenControlNurbs,
     PeriodicControlNurbs,
 }
 
 impl GeometryRecipeKind {
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 27] = [
         Self::SketchPoint,
         Self::Segment,
         Self::Polyline,
@@ -155,6 +157,8 @@ impl GeometryRecipeKind {
         Self::RationalQuadraticConic,
         Self::Parabola,
         Self::Hyperbola,
+        Self::OpenControlBSpline,
+        Self::PeriodicControlBSpline,
         Self::OpenControlNurbs,
         Self::PeriodicControlNurbs,
     ];
@@ -163,7 +167,10 @@ impl GeometryRecipeKind {
     pub const fn child_schema(self) -> IntentChildSchema {
         match self {
             Self::Polyline => IntentChildSchema::PolylineVertex,
-            Self::OpenControlNurbs | Self::PeriodicControlNurbs => IntentChildSchema::SplineControl,
+            Self::OpenControlBSpline
+            | Self::PeriodicControlBSpline
+            | Self::OpenControlNurbs
+            | Self::PeriodicControlNurbs => IntentChildSchema::SplineControl,
             _ => IntentChildSchema::None,
         }
     }
@@ -1577,13 +1584,26 @@ fn schema_generated_child_port_count(
             let minimum = usize::from(matches!(
                 kind,
                 IntentNodeKind::Geometry {
-                    recipe: GeometryRecipeKind::PeriodicControlNurbs
+                    recipe: GeometryRecipeKind::PeriodicControlBSpline
+                        | GeometryRecipeKind::PeriodicControlNurbs
                 }
             )) + 2;
             if !(minimum..=MAX_INTENT_NODE_CHILDREN).contains(&children) {
                 return None;
             }
-            children.checked_mul(2)
+            children.checked_mul(
+                if matches!(
+                    kind,
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::OpenControlNurbs
+                            | GeometryRecipeKind::PeriodicControlNurbs
+                    }
+                ) {
+                    2
+                } else {
+                    1
+                },
+            )
         }
         IntentChildSchema::FilletCorner => {
             let maximum = (MAX_INTENT_NODE_FIELDS - 1) / COMPUTED_FILLET_FIELDS_PER_CORNER;
@@ -1649,7 +1669,11 @@ fn schema_generated_geometry_node_port_count(
     let authored: usize = match recipe {
         G::SketchPoint => 1,
         G::Segment => 2,
-        G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs => 0,
+        G::Polyline
+        | G::OpenControlBSpline
+        | G::PeriodicControlBSpline
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => 0,
         G::MidpointLine | G::CenterRadiusCircle | G::QuadraticBezier => 3,
         G::TwoPointAlignedRectangle
         | G::ThreePointCornerRectangle
@@ -1672,11 +1696,11 @@ fn schema_generated_geometry_node_port_count(
     };
     let spans: usize = match recipe {
         G::SketchPoint | G::Polyline => 0,
-        G::OpenControlNurbs => {
+        G::OpenControlBSpline | G::OpenControlNurbs => {
             let degree = definition_natural(fields, "degree").unwrap_or(3);
             usize::try_from(u64::from(dynamic_children).saturating_sub(degree)).ok()?
         }
-        G::PeriodicControlNurbs => usize::from(dynamic_children),
+        G::PeriodicControlBSpline | G::PeriodicControlNurbs => usize::from(dynamic_children),
         _ => curves,
     };
     let regularized = definition_boolean(fields, "regularized").unwrap_or(false);
@@ -2343,7 +2367,7 @@ pub(crate) fn node_port_specs(
 }
 
 pub(crate) fn child_port_specs(
-    _kind: &IntentNodeKind,
+    kind: &IntentNodeKind,
     schema: IntentChildSchema,
     ordinal: u16,
     dynamic_children: u16,
@@ -2382,22 +2406,31 @@ pub(crate) fn child_port_specs(
             }
             specs
         }
-        IntentChildSchema::SplineControl => vec![
-            make(
+        IntentChildSchema::SplineControl => {
+            let mut specs = vec![make(
                 IntentPortRole::Control,
                 IntentPortKind::Point,
                 POINT_LEAVES,
                 Some(IntentNativeReservationKind::Point),
                 Some(InputSlot::new(InputRole::Point, ordinal)),
-            ),
-            make(
-                IntentPortRole::Target,
-                IntentPortKind::Scalar,
-                WEIGHT_LEAF,
-                Some(IntentNativeReservationKind::Scalar),
-                None,
-            ),
-        ],
+            )];
+            if matches!(
+                kind,
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::OpenControlNurbs
+                        | GeometryRecipeKind::PeriodicControlNurbs
+                }
+            ) {
+                specs.push(make(
+                    IntentPortRole::Target,
+                    IntentPortKind::Scalar,
+                    WEIGHT_LEAF,
+                    Some(IntentNativeReservationKind::Scalar),
+                    None,
+                ));
+            }
+            specs
+        }
         IntentChildSchema::FilletCorner => vec![make(
             IntentPortRole::FeatureCorner,
             IntentPortKind::FeatureCorner,
@@ -2417,7 +2450,7 @@ pub(crate) fn child_port_specs(
 
 #[allow(
     clippy::too_many_lines,
-    reason = "one exhaustive table audits persistent native storage for all 25 authoring recipes"
+    reason = "one exhaustive table audits persistent native storage for all 27 authoring recipes"
 )]
 fn geometry_port_specs(
     recipe: GeometryRecipeKind,
@@ -2465,7 +2498,11 @@ fn geometry_port_specs(
             point(R::Start, 0, Some(0));
             point(R::End, 0, Some(1));
         }
-        G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs => {}
+        G::Polyline
+        | G::OpenControlBSpline
+        | G::PeriodicControlBSpline
+        | G::OpenControlNurbs
+        | G::PeriodicControlNurbs => {}
         G::MidpointLine => {
             point(R::Start, 0, None);
             point(R::End, 0, Some(1));
@@ -2620,7 +2657,11 @@ fn geometry_port_specs(
         });
         if !matches!(
             recipe,
-            G::Polyline | G::OpenControlNurbs | G::PeriodicControlNurbs
+            G::Polyline
+                | G::OpenControlBSpline
+                | G::PeriodicControlBSpline
+                | G::OpenControlNurbs
+                | G::PeriodicControlNurbs
         ) {
             specs.push(PortSpec {
                 selector: IntentPortSelector::Node {
@@ -2634,12 +2675,20 @@ fn geometry_port_specs(
             });
         }
     }
-    if matches!(recipe, G::OpenControlNurbs | G::PeriodicControlNurbs) {
+    if matches!(
+        recipe,
+        G::OpenControlBSpline
+            | G::PeriodicControlBSpline
+            | G::OpenControlNurbs
+            | G::PeriodicControlNurbs
+    ) {
         let degree = definition_natural(fields, "degree").unwrap_or(3);
         let span_count = match recipe {
-            G::OpenControlNurbs => u64::from(dynamic_children).saturating_sub(degree),
-            G::PeriodicControlNurbs => u64::from(dynamic_children),
-            _ => unreachable!("guarded NURBS recipe"),
+            G::OpenControlBSpline | G::OpenControlNurbs => {
+                u64::from(dynamic_children).saturating_sub(degree)
+            }
+            G::PeriodicControlBSpline | G::PeriodicControlNurbs => u64::from(dynamic_children),
+            _ => unreachable!("guarded spline recipe"),
         };
         for index in 0..u16::try_from(span_count).unwrap_or(u16::MAX) {
             specs.push(PortSpec {

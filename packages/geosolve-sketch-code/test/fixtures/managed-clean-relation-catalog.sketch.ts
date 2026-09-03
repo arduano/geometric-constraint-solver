@@ -213,7 +213,6 @@ export default sketch(($) => {
       first: horizontalLine.span,
       second: offsetLine.span,
       continuity: "g1",
-      parameterRatio: 1,
       suppressed: true,
     },
   );

@@ -5,6 +5,7 @@
     reason = "the five reviewed Fillet permutations remain one process-isolated golden family"
 )]
 
+use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::env;
 use std::fs::File;
@@ -34,6 +35,7 @@ use geosolve_sketch_features::{
 
 const FAMILY: &str = "feature.fillet";
 const TSV_HEADER: &str = "case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint";
+const FILLET_PARITY_MANIFEST_FORMAT: &str = "geosolve-golden-fillet-parity-v1";
 const CASE_IDS: [&str; 6] = [
     "feature.fillet.authoring.coincident-closure.curve-pair",
     "feature.fillet.authoring.coincident-closure.point",
@@ -69,6 +71,66 @@ struct SemanticDefect {
 }
 
 type OracleResult = Result<(), SemanticDefect>;
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FilletParityCase {
+    name: String,
+    design_json: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    feature_json: Option<String>,
+}
+
+thread_local! {
+    static FILLET_PARITY_CASES: RefCell<Vec<FilletParityCase>> = const { RefCell::new(Vec::new()) };
+}
+
+fn clear_fillet_parity_cases() {
+    FILLET_PARITY_CASES.with(|cases| cases.borrow_mut().clear());
+}
+
+fn record_fillet_parity_case(
+    name: impl Into<String>,
+    session: &RetainedSketchDocumentSession,
+    features: Option<&ComputedFeatureDocument>,
+) -> OracleResult {
+    assert_current_accepted(session);
+    let case = FilletParityCase {
+        name: name.into(),
+        design_json: session
+            .design_document()
+            .to_draft_v5_json()
+            .map_err(|error| defect("fillet.parity.encoding", error.to_string()))?,
+        feature_json: features
+            .map(ComputedFeatureDocument::to_json)
+            .transpose()
+            .map_err(|error| defect("fillet.parity.encoding", error.to_string()))?,
+    };
+    FILLET_PARITY_CASES.with(|cases| cases.borrow_mut().push(case));
+    Ok(())
+}
+
+fn write_fillet_parity_manifest(case_id: &str) -> OracleResult {
+    let Some(path) = env::var_os("GEOSOLVE_GOLDEN_ORACLE_PARITY_MANIFEST") else {
+        return Ok(());
+    };
+    let cases = FILLET_PARITY_CASES.with(|cases| cases.borrow().clone());
+    if cases.is_empty() {
+        return Err(defect(
+            "fillet.parity.harness",
+            "successful native row did not retain a managed parity input",
+        ));
+    }
+    let manifest = serde_json::json!({
+        "format": FILLET_PARITY_MANIFEST_FORMAT,
+        "caseId": case_id,
+        "cases": cases,
+    });
+    let encoded = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| defect("fillet.parity.encoding", error.to_string()))?;
+    std::fs::write(path, encoded)
+        .map_err(|error| defect("fillet.parity.encoding", error.to_string()))
+}
 
 fn defect(class: &'static str, message: impl Into<String>) -> SemanticDefect {
     SemanticDefect {
@@ -159,9 +221,13 @@ fn golden_fillet_oracle_survey() {
         "unknown Fillet oracle case"
     );
 
+    clear_fillet_parity_cases();
     let row = match catch_unwind(AssertUnwindSafe(|| observe(&selected))) {
         Ok(observation) => match observation.outcome.clone() {
-            Ok(()) => SurveyRow::pass(&selected, observation.input_fingerprint),
+            Ok(()) => match write_fillet_parity_manifest(&selected) {
+                Ok(()) => SurveyRow::pass(&selected, observation.input_fingerprint),
+                Err(failure) => SurveyRow::failed(&selected, &observation, &failure),
+            },
             Err(failure) => SurveyRow::failed(&selected, &observation, &failure),
         },
         Err(payload) => SurveyRow::panicked(&selected, &panic_payload(&payload)),
@@ -418,13 +484,21 @@ fn observe_coincident_closure(route: ClosureRoute) -> Observation {
             .map(|contact| contact.source.span)
             .collect::<BTreeSet<_>>()
     });
+    let parity = record_fillet_parity_case(
+        match route {
+            ClosureRoute::Point => "coincident-closure-point",
+            ClosureRoute::CurvePair => "coincident-closure-curve-pair",
+        },
+        fixture.coordinator.session(),
+        Some(fixture.coordinator.feature_document()),
+    );
     Observation {
         input_fingerprint: fixture.input_fingerprint,
         outcome: if current_corners == 1
             && arcs.len() == 1
             && published_sources.as_ref() == Some(&expected_sources)
         {
-            Ok(())
+            parity
         } else {
             Err(defect(
                 "fillet.authoring.publication",
@@ -800,6 +874,11 @@ fn validate_native_profile_variant(variant: NativeProfileVariant) -> OracleResul
             format!("{}: Redo did not restore native identities", variant.tag),
         ));
     }
+    record_fillet_parity_case(
+        format!("native-profile-{}", variant.tag),
+        coordinator.session(),
+        None,
+    )?;
     Ok(())
 }
 
@@ -941,6 +1020,20 @@ fn line_circle_fixture(row: LineCircleRow) -> LineCircleFixture {
 
 fn observe_line_circle(row: LineCircleRow) -> Observation {
     let fixture = line_circle_fixture(row);
+    if let Err(failure) = record_fillet_parity_case(
+        if row.line_start == LineCircleRow::LOWER.line_start {
+            "line-circle-lower"
+        } else {
+            "line-circle-seam"
+        },
+        &fixture.session,
+        Some(&fixture.features),
+    ) {
+        return Observation {
+            input_fingerprint: fixture.input_fingerprint,
+            outcome: Err(failure),
+        };
+    }
     let snapshot = evaluate(&fixture.session, &fixture.features);
     let evaluation = snapshot
         .feature_evaluations()
@@ -1092,6 +1185,12 @@ fn observe_source_rotation() -> Observation {
     let prepared_input = session.prepared_input();
     let feature_identity = features.identity();
     let feature_json = features.to_json().expect("source-rotation feature JSON");
+    if let Err(failure) = record_fillet_parity_case("source-rotation", &session, Some(&features)) {
+        return Observation {
+            input_fingerprint,
+            outcome: Err(failure),
+        };
+    }
 
     let snapshot = evaluate(&session, &features);
     let outcome = validate_source_rotation_snapshot(

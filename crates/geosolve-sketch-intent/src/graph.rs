@@ -1906,9 +1906,9 @@ mod tests {
     }
 
     #[test]
-    fn allocation_free_port_count_matches_all_109_declaration_allocations() {
+    fn allocation_free_port_count_matches_all_111_declaration_allocations() {
         let kinds = declaration_kinds();
-        assert_eq!(kinds.len(), 109);
+        assert_eq!(kinds.len(), 111);
         for (index, kind) in kinds.into_iter().enumerate() {
             let dynamic_children = kind.schema(0).minimum_children;
             let label = format!("declaration-{index:03}-{kind:?}");
@@ -1927,7 +1927,7 @@ mod tests {
     )]
     fn all_declaration_projection_paths_are_total_bijective_and_tree_safe() {
         let kinds = declaration_kinds();
-        assert_eq!(kinds.len(), 109);
+        assert_eq!(kinds.len(), 111);
         for (index, kind) in kinds.into_iter().enumerate() {
             let dynamic_children = kind.schema(0).minimum_children;
             let label = format!("declaration-{index:03}-{kind:?}-minimal");
@@ -1949,6 +1949,8 @@ mod tests {
 
         for recipe in [
             GeometryRecipeKind::Polyline,
+            GeometryRecipeKind::OpenControlBSpline,
+            GeometryRecipeKind::PeriodicControlBSpline,
             GeometryRecipeKind::OpenControlNurbs,
             GeometryRecipeKind::PeriodicControlNurbs,
         ] {
@@ -1961,7 +1963,10 @@ mod tests {
             );
             if matches!(
                 recipe,
-                GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+                GeometryRecipeKind::OpenControlBSpline
+                    | GeometryRecipeKind::PeriodicControlBSpline
+                    | GeometryRecipeKind::OpenControlNurbs
+                    | GeometryRecipeKind::PeriodicControlNurbs
             ) {
                 draft
                     .fields
@@ -2286,6 +2291,16 @@ mod tests {
                 Some(("closed", IntentLiteral::Boolean(true))),
             ),
             (
+                "maximum-open-bspline",
+                GeometryRecipeKind::OpenControlBSpline,
+                Some(("degree", IntentLiteral::Natural(1))),
+            ),
+            (
+                "maximum-periodic-bspline",
+                GeometryRecipeKind::PeriodicControlBSpline,
+                Some(("degree", IntentLiteral::Natural(1))),
+            ),
+            (
                 "maximum-open-nurbs",
                 GeometryRecipeKind::OpenControlNurbs,
                 Some(("degree", IntentLiteral::Natural(1))),
@@ -2406,6 +2421,12 @@ mod tests {
                     recipe: GeometryRecipeKind::Polyline,
                 },
                 1,
+            ),
+            (
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::PeriodicControlBSpline,
+                },
+                2,
             ),
             (
                 IntentNodeKind::Geometry {

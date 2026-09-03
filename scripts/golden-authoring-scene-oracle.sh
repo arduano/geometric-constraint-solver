@@ -7,6 +7,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 golden="$root/crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv"
 header=$'case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint'
 timeout_seconds=30
+parity_timeout_seconds=60
 
 usage() {
   printf '%s\n' \
@@ -102,8 +103,24 @@ append_harness_result() {
   local status="$3"
   local failure_class="$4"
   local fingerprint="$5"
-  printf '%s\t%s\t%s\t-\t%s\t%s\n' \
-    "$case_id" "$family" "$status" "$failure_class" "$fingerprint" >>"$rows"
+  append_result_row \
+    "$case_id" "$family" "$status" '-' "$failure_class" "$fingerprint"
+}
+
+append_result_row() {
+  local case_id="$1"
+  local family="$2"
+  local status="$3"
+  local finding_id="$4"
+  local failure_class="$5"
+  local fingerprint="$6"
+  if awk -F '\t' -v case_id="$case_id" '$1 == case_id { found = 1 } END { exit !found }' \
+    "$rows"; then
+    printf 'oracle attempted to classify %s more than once\n' "$case_id" >&2
+    return 1
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$case_id" "$family" "$status" "$finding_id" "$failure_class" "$fingerprint" >>"$rows"
 }
 
 append_complete_output() {
@@ -118,7 +135,202 @@ append_complete_output() {
     NR == 1 { next }
     NF != 6 || $2 != family || (case_id != "" && $1 != case_id) { exit 1 }
   ' "$output" || return 1
-  tail -n +2 "$output" >>"$rows"
+  local row_case_id row_family row_status row_finding row_failure row_fingerprint extra
+  IFS=$'\t' read -r \
+    row_case_id row_family row_status row_finding row_failure row_fingerprint extra \
+    < <(tail -n +2 "$output") || return 1
+  [[ -z "${extra:-}" ]] || return 1
+  append_result_row \
+    "$row_case_id" "$row_family" "$row_status" "$row_finding" "$row_failure" "$row_fingerprint"
+}
+
+append_parity_result() {
+  local case_id="$1"
+  local family="$2"
+  local result="$3"
+  [[ -f "$result" ]] || return 1
+  local status failure_class fingerprint extra
+  IFS=$'\t' read -r status failure_class fingerprint extra <"$result" || return 1
+  [[ -z "${extra:-}" ]] || return 1
+  case "$status" in
+    PASS)
+      [[ "$failure_class" == '-' && "$fingerprint" == 'ok' ]] || return 1
+      return 0
+      ;;
+    DEFECT | PANIC | TIMEOUT | HARNESS_ERROR)
+      [[ -n "$failure_class" && "$failure_class" != '-' && -n "$fingerprint" ]] || return 1
+      append_harness_result "$case_id" "$family" "$status" "$failure_class" "$fingerprint"
+      return 2
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+run_authoring_parity() {
+  local case_id="$1"
+  local family="$2"
+  local manifest="$3"
+  local directory="$4"
+  local result="$5"
+  local log="$6"
+  local export_test="${7:-golden_backend_parity_export}"
+  local validate_test="${8:-golden_backend_parity_validate}"
+  rm -f "$result"
+  set +e
+  timeout -k 5s "${parity_timeout_seconds}s" env \
+    GEOSOLVE_GOLDEN_PARITY_MANIFEST="$manifest" \
+    GEOSOLVE_GOLDEN_PARITY_DIRECTORY="$directory" \
+    GEOSOLVE_GOLDEN_PARITY_RESULT="$result" \
+    cargo test --locked -p geosolve-sketch-code \
+      --test golden_backend_parity "$export_test" -- --exact --nocapture \
+      >"$log" 2>&1
+  local exit_code=$?
+  set -e
+  if [[ "$exit_code" -ne 0 ]]; then
+    classify_failed_process "$case_id" "$family" "$exit_code" "$log"
+    return 1
+  fi
+  set +e
+  append_parity_result "$case_id" "$family" "$result"
+  local parity_status=$?
+  set -e
+  if [[ "$parity_status" -eq 2 ]]; then
+    return 1
+  elif [[ "$parity_status" -ne 0 ]]; then
+    append_harness_result "$case_id" "$family" HARNESS_ERROR parity-export malformed-result
+    return 1
+  fi
+
+  local request="$directory/compile-batch.request.json"
+  local compiled="$directory/compile-batch.output.json"
+  if [[ ! -s "$request" ]]; then
+    append_harness_result "$case_id" "$family" HARNESS_ERROR parity-export missing-compile-batch
+    return 1
+  fi
+  set +e
+  timeout -k 5s "${parity_timeout_seconds}s" npm \
+    --prefix packages/geosolve-sketch-code run --silent compile:managed:batch:deno \
+    <"$request" >"$compiled" 2>"$log.compile"
+  exit_code=$?
+  set -e
+  if [[ "$exit_code" -ne 0 || ! -s "$compiled" ]]; then
+    local detail="batch-exit-$exit_code"
+    if [[ -s "$log.compile" ]]; then
+      detail="$(tr '\t\r\n' '   ' <"$log.compile" | cut -c1-512)"
+    fi
+    append_harness_result "$case_id" "$family" DEFECT managed-compile "$detail"
+    return 1
+  fi
+
+  rm -f "$result"
+  set +e
+  timeout -k 5s "${parity_timeout_seconds}s" env \
+    GEOSOLVE_GOLDEN_PARITY_MANIFEST="$manifest" \
+    GEOSOLVE_GOLDEN_PARITY_DIRECTORY="$directory" \
+    GEOSOLVE_GOLDEN_PARITY_RESULT="$result" \
+    cargo test --locked -p geosolve-sketch-code \
+      --test golden_backend_parity "$validate_test" -- --exact --nocapture \
+      >>"$log" 2>&1
+  exit_code=$?
+  set -e
+  if [[ "$exit_code" -ne 0 ]]; then
+    classify_failed_process "$case_id" "$family" "$exit_code" "$log"
+    return 1
+  fi
+  set +e
+  append_parity_result "$case_id" "$family" "$result"
+  parity_status=$?
+  set -e
+  if [[ "$parity_status" -eq 0 ]]; then
+    return 0
+  elif [[ "$parity_status" -eq 2 ]]; then
+    return 1
+  fi
+  append_harness_result "$case_id" "$family" HARNESS_ERROR parity-validate malformed-result
+  return 1
+}
+
+run_scene_parity() {
+  local case_id="$1"
+  local directory="$2"
+  local result="$3"
+  local log="$4"
+  rm -f "$result"
+  set +e
+  timeout -k 5s "${parity_timeout_seconds}s" env \
+    GEOSOLVE_GOLDEN_ORACLE_CASE="$case_id" \
+    GEOSOLVE_GOLDEN_PARITY_DIRECTORY="$directory" \
+    GEOSOLVE_GOLDEN_PARITY_RESULT="$result" \
+    cargo test --locked -p geosolve-demo-web --lib \
+      workbench::tests::golden_scene_backend_parity::golden_scene_backend_parity_export \
+      -- --exact --nocapture >"$log" 2>&1
+  local exit_code=$?
+  set -e
+  if [[ "$exit_code" -ne 0 ]]; then
+    classify_failed_process "$case_id" scene-authority "$exit_code" "$log"
+    return 1
+  fi
+  set +e
+  append_parity_result "$case_id" scene-authority "$result"
+  local parity_status=$?
+  set -e
+  if [[ "$parity_status" -eq 2 ]]; then
+    return 1
+  elif [[ "$parity_status" -ne 0 ]]; then
+    append_harness_result \
+      "$case_id" scene-authority HARNESS_ERROR scene-parity-export malformed-result
+    return 1
+  fi
+
+  local request="$directory/compile-batch.request.json"
+  local compiled="$directory/compile-batch.output.json"
+  if [[ ! -s "$request" ]]; then
+    append_harness_result \
+      "$case_id" scene-authority HARNESS_ERROR scene-parity-export missing-compile-batch
+    return 1
+  fi
+  set +e
+  timeout -k 5s "${parity_timeout_seconds}s" npm \
+    --prefix packages/geosolve-sketch-code run --silent compile:managed:batch:deno \
+    <"$request" >"$compiled" 2>"$log.compile"
+  exit_code=$?
+  set -e
+  if [[ "$exit_code" -ne 0 || ! -s "$compiled" ]]; then
+    local detail="batch-exit-$exit_code"
+    if [[ -s "$log.compile" ]]; then
+      detail="$(tr '\t\r\n' '   ' <"$log.compile" | cut -c1-512)"
+    fi
+    append_harness_result "$case_id" scene-authority DEFECT managed-compile "$detail"
+    return 1
+  fi
+
+  rm -f "$result"
+  set +e
+  timeout -k 5s "${parity_timeout_seconds}s" env \
+    GEOSOLVE_GOLDEN_ORACLE_CASE="$case_id" \
+    GEOSOLVE_GOLDEN_PARITY_DIRECTORY="$directory" \
+    GEOSOLVE_GOLDEN_PARITY_RESULT="$result" \
+    cargo test --locked -p geosolve-demo-web --lib \
+      workbench::tests::golden_scene_backend_parity::golden_scene_backend_parity_validate \
+      -- --exact --nocapture >>"$log" 2>&1
+  exit_code=$?
+  set -e
+  if [[ "$exit_code" -ne 0 ]]; then
+    classify_failed_process "$case_id" scene-authority "$exit_code" "$log"
+    return 1
+  fi
+  set +e
+  append_parity_result "$case_id" scene-authority "$result"
+  parity_status=$?
+  set -e
+  if [[ "$parity_status" -eq 0 ]]; then
+    return 0
+  elif [[ "$parity_status" -eq 2 ]]; then
+    return 1
+  fi
+  append_harness_result \
+    "$case_id" scene-authority HARNESS_ERROR scene-parity-validate malformed-result
+  return 1
 }
 
 classify_failed_process() {
@@ -157,6 +369,26 @@ if ! timeout -k 5s 300s cargo test --locked -p geosolve-demo-web --lib --no-run 
   cat "$preflight_log" >&2
   exit 1
 fi
+if ! timeout -k 5s 300s cargo test --locked -p geosolve-sketch-code \
+  --test golden_backend_parity \
+  golden_backend_parity_exclusion_ledger_is_explicit_and_reviewable -- --exact \
+  >"$preflight_log" 2>&1; then
+  printf '%s\n' 'dual-backend parity compile preflight failed' >&2
+  cat "$preflight_log" >&2
+  exit 1
+fi
+if ! timeout -k 5s 300s npm --prefix packages/geosolve-intent ci --ignore-scripts \
+  >"$preflight_log" 2>&1 || \
+  ! timeout -k 5s 300s npm --prefix packages/geosolve-intent run build \
+  >>"$preflight_log" 2>&1 || \
+  ! timeout -k 5s 300s npm --prefix packages/geosolve-sketch-code ci --ignore-scripts \
+  >"$preflight_log" 2>&1 || \
+  ! timeout -k 5s 300s npm --prefix packages/geosolve-sketch-code run build \
+  >>"$preflight_log" 2>&1; then
+  printf '%s\n' 'pinned managed TypeScript compiler preflight failed' >&2
+  cat "$preflight_log" >&2
+  exit 1
+fi
 
 for family in "${families[@]}"; do
   for oracle_case in "${authoring_cases[@]}"; do
@@ -164,18 +396,29 @@ for family in "${families[@]}"; do
     stem="${case_id//./_}"
     output="$scratch/$stem.tsv"
     log="$scratch/$stem.log"
+    parity_manifest="$scratch/$stem.parity.json"
+    parity_directory="$scratch/$stem.parity"
+    parity_result="$scratch/$stem.parity-result.tsv"
     set +e
     timeout -k 5s "${timeout_seconds}s" env \
       GEOSOLVE_GOLDEN_ORACLE_FAMILY="$family" \
       GEOSOLVE_GOLDEN_ORACLE_CASE="$oracle_case" \
       GEOSOLVE_GOLDEN_ORACLE_OUTPUT="$output" \
+      GEOSOLVE_GOLDEN_ORACLE_PARITY_MANIFEST="$parity_manifest" \
       cargo test --locked -p geosolve-constraint-editor \
         --test golden_authoring_oracle golden_oracle_family_survey -- --exact --nocapture \
         >"$log" 2>&1
     exit_code=$?
     set -e
-    if [[ "$exit_code" -eq 0 ]] && \
-      append_complete_output "$output" 1 "$family" "$case_id"; then
+    if [[ "$exit_code" -eq 0 ]] && [[ -f "$parity_manifest" ]]; then
+      if run_authoring_parity \
+        "$case_id" "$family" "$parity_manifest" "$parity_directory" \
+        "$parity_result" "$log.parity"; then
+        if append_complete_output "$output" 1 "$family" "$case_id"; then
+          continue
+        fi
+        append_harness_result "$case_id" "$family" HARNESS_ERROR native-output malformed-output
+      fi
       continue
     fi
     classify_failed_process "$case_id" "$family" "$exit_code" "$log"
@@ -186,17 +429,29 @@ for case_id in "${fillet_cases[@]}"; do
   stem="${case_id//./_}"
   output="$scratch/$stem.tsv"
   log="$scratch/$stem.log"
+  parity_manifest="$scratch/$stem.parity.json"
+  parity_directory="$scratch/$stem.parity"
+  parity_result="$scratch/$stem.parity-result.tsv"
   set +e
   timeout -k 5s "${timeout_seconds}s" env \
     GEOSOLVE_GOLDEN_ORACLE_CASE="$case_id" \
     GEOSOLVE_GOLDEN_ORACLE_OUTPUT="$output" \
+    GEOSOLVE_GOLDEN_ORACLE_PARITY_MANIFEST="$parity_manifest" \
     cargo test --locked -p geosolve-constraint-editor \
       --test golden_fillet_oracle golden_fillet_oracle_survey -- --exact --nocapture \
       >"$log" 2>&1
   exit_code=$?
   set -e
-  if [[ "$exit_code" -eq 0 ]] && \
-    append_complete_output "$output" 1 feature.fillet "$case_id"; then
+  if [[ "$exit_code" -eq 0 ]] && [[ -f "$parity_manifest" ]]; then
+    if run_authoring_parity \
+      "$case_id" feature.fillet "$parity_manifest" "$parity_directory" \
+      "$parity_result" "$log.parity" \
+      golden_fillet_backend_parity_export golden_fillet_backend_parity_validate; then
+      if append_complete_output "$output" 1 feature.fillet "$case_id"; then
+        continue
+      fi
+      append_harness_result "$case_id" feature.fillet HARNESS_ERROR native-output malformed-output
+    fi
     continue
   fi
   classify_failed_process "$case_id" feature.fillet "$exit_code" "$log"
@@ -206,6 +461,8 @@ for case_id in "${scene_cases[@]}"; do
   stem="${case_id//./_}"
   scene_output="$scratch/$stem.tsv"
   scene_log="$scratch/$stem.log"
+  parity_directory="$scratch/$stem.parity"
+  parity_result="$scratch/$stem.parity-result.tsv"
   set +e
   timeout -k 5s "${timeout_seconds}s" env \
     GEOSOLVE_GOLDEN_ORACLE_CASE="$case_id" \
@@ -216,7 +473,16 @@ for case_id in "${scene_cases[@]}"; do
   scene_exit_code=$?
   set -e
   if [[ "$scene_exit_code" -eq 0 ]] && \
-    append_complete_output "$scene_output" 1 scene-authority "$case_id"; then
+    run_scene_parity "$case_id" "$parity_directory" "$parity_result" "$scene_log.parity"; then
+    if append_complete_output "$scene_output" 1 scene-authority "$case_id"; then
+      continue
+    fi
+    append_harness_result \
+      "$case_id" scene-authority HARNESS_ERROR native-output malformed-output
+    continue
+  fi
+  if awk -F '\t' -v case_id="$case_id" '$1 == case_id { found = 1 } END { exit !found }' \
+    "$rows"; then
     continue
   fi
   classify_failed_process "$case_id" scene-authority "$scene_exit_code" "$scene_log"

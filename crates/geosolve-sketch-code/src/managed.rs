@@ -1552,7 +1552,10 @@ fn direct_declaration_keys(
                 ..DirectDeclarationResultKeys::default()
             }
         }
-        "geometry.openControlNurbs" | "geometry.periodicControlNurbs" => {
+        "geometry.openControlBSpline"
+        | "geometry.periodicControlBSpline"
+        | "geometry.openControlNurbs"
+        | "geometry.periodicControlNurbs" => {
             let Some(controls) = keyed_argument("controls") else {
                 return DirectDeclarationResultKeys::default();
             };
@@ -1575,7 +1578,10 @@ fn direct_declaration_keys(
                     _ => None,
                 })
                 .unwrap_or(0);
-            let span_count = if family == "geometry.periodicControlNurbs" {
+            let span_count = if matches!(
+                family,
+                "geometry.periodicControlBSpline" | "geometry.periodicControlNurbs"
+            ) {
                 controls.len()
             } else {
                 controls.len().saturating_sub(degree)

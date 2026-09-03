@@ -4328,6 +4328,10 @@ fn flat_effects_are_retained_hover_only(
 
 #[cfg(test)]
 mod tests {
+    mod golden_scene_backend_parity {
+        include!("golden_scene_backend_parity.rs");
+    }
+
     use geosolve_constraint_editor::{
         ActivePointerGesture, ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome,
         AuthoringState, AuthoringTool, ColdIntentMaterializer, ComputedSceneState,

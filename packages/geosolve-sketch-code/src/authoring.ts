@@ -327,17 +327,31 @@ export type PolylineFeature<Project, Key extends PropertyKey> = FeatureRef<Proje
   >;
 }>;
 
-export interface NurbsControl<Project, Key extends PropertyKey> {
+export interface BSplineControl<Project, Key extends PropertyKey> {
   readonly key: Key;
   readonly position: PointInput<Project>;
+}
+
+export interface NurbsControl<Project, Key extends PropertyKey>
+  extends BSplineControl<Project, Key> {
   /** Dimensionless and finite. */
   readonly weight: number;
+}
+
+export interface BSplineControlOutputs<Project> {
+  readonly position: PointRef<Project>;
 }
 
 export interface NurbsControlOutputs<Project> {
   readonly position: PointRef<Project>;
   readonly weight: ScalarRef<Project>;
 }
+
+export type BSplineFeature<Project, Key extends PropertyKey> = FeatureRef<Project, "feature", {
+  readonly curve: CurveRef<Project>;
+  readonly controls: KeyedFeatureCollection<Key, BSplineControlOutputs<Project>>;
+  readonly spans: KeyedFeatureCollection<Key, NativeCurveSpanRef<Project>>;
+}>;
 
 export type NurbsFeature<Project, Key extends PropertyKey> = FeatureRef<Project, "feature", {
   readonly curve: CurveRef<Project>;
@@ -574,6 +588,8 @@ export interface SegmentValues<Project> extends PresentationOptions {
 export interface PolylineValues<Project, Key extends PropertyKey> extends PresentationOptions {
   readonly vertices: readonly PolylineVertex<Project, Key>[];
   readonly closed?: boolean;
+  /** Explicit retained direction for each outgoing span, in vertex order. */
+  readonly branchDirections?: readonly Point2[];
   readonly role?: GeometryRole;
 }
 
@@ -582,6 +598,13 @@ export interface NurbsValues<Project, Key extends PropertyKey> extends Presentat
   readonly degree: number;
   /** Stable child key, never an ordinal gauge index. */
   readonly gauge: Key;
+  readonly role?: GeometryRole;
+}
+
+export interface BSplineValues<Project, Key extends PropertyKey> extends PresentationOptions {
+  readonly controls: readonly BSplineControl<Project, Key>[];
+  readonly degree: number;
+  readonly gauge?: never;
   readonly role?: GeometryRole;
 }
 
@@ -735,6 +758,14 @@ export interface GeometryBuilder<Project> {
     readonly branch?: "positive" | "negative";
     readonly role?: GeometryRole;
   }): HyperbolaFeature<Project>;
+  openControlBSpline<const Key extends string>(
+    id: string,
+    values: BSplineValues<Project, Key>,
+  ): BSplineFeature<Project, Key>;
+  periodicControlBSpline<const Key extends string>(
+    id: string,
+    values: BSplineValues<Project, Key>,
+  ): BSplineFeature<Project, Key>;
   openControlNurbs<const Key extends string>(
     id: string,
     values: NurbsValues<Project, Key>,
@@ -884,12 +915,19 @@ export interface ConstraintBuilder<Project> {
     readonly second: SpanLike<Project>;
     readonly relation: "signed" | "magnitudeSameSign" | "magnitudeOppositeSign";
   }): PairedContactConstraintFeature<Project>;
-  endpointContinuity(id: string, values: PairedContactValues & {
+  endpointContinuity(id: string, values: PairedContactValues & ({
     readonly first: SpanLike<Project>;
     readonly second: SpanLike<Project>;
-    readonly continuity: "g0" | "g1" | "g2" | "parametricC2";
-    readonly parameterRatio?: number;
-  }): PairedContactConstraintFeature<Project>;
+    readonly continuity: "g0" | "g1" | "g2";
+    readonly firstRate?: never;
+    readonly secondRate?: never;
+  } | {
+    readonly first: SpanLike<Project>;
+    readonly second: SpanLike<Project>;
+    readonly continuity: "parametricC2";
+    readonly firstRate: number;
+    readonly secondRate: number;
+  })): PairedContactConstraintFeature<Project>;
   lineLineFillet(id: string, values: PairedContactValues & {
     readonly fillet: CurveLike<Project>;
     readonly first: SpanLike<Project>;
@@ -1141,6 +1179,7 @@ export type FeatureSchemaName =
   | "conic"
   | "parabola"
   | "hyperbola"
+  | "bspline"
   | "nurbs"
   | "fillet"
   | "filletSet";
@@ -1159,6 +1198,7 @@ type FeatureSchemaValue<Name extends FeatureSchemaName> =
     : Name extends "conic" ? ConicFeature<unknown>
     : Name extends "parabola" ? ParabolaFeature<unknown>
     : Name extends "hyperbola" ? HyperbolaFeature<unknown>
+    : Name extends "bspline" ? BSplineFeature<unknown, string>
     : Name extends "nurbs" ? NurbsFeature<unknown, string>
     : Name extends "fillet" ? FilletFeature<unknown>
     : FilletSetFeature<unknown, string>;
@@ -1380,7 +1420,7 @@ function runtimeShape(shape: CatalogRuntimeShape): RuntimeShape {
     );
     case "tuple": return shape.items.map(runtimeShape);
     // Concrete keyed children are materialized by the dedicated Polyline,
-    // NURBS and FilletSet paths. Other plan-dependent collections retain a
+    // Spline and FilletSet paths. Other plan-dependent collections retain a
     // typed lazy namespace until native preparation supplies exact keys.
     case "dynamic_keyed": return {};
   }
@@ -1489,32 +1529,54 @@ function managedPolyline<Project, Key extends string>(
   }) as PolylineFeature<Project, Key>;
 }
 
-function managedNurbs<Project, Key extends string>(
+function managedSpline<Project, Key extends string>(
   runtime: ReferenceRuntime,
-  values: NurbsValues<Project, Key>,
+  values: BSplineValues<Project, Key> | NurbsValues<Project, Key>,
   periodic: boolean,
-): NurbsFeature<Project, Key> {
+  rational: boolean,
+): NurbsFeature<Project, Key> | BSplineFeature<Project, Key> {
   const minimum = periodic ? 3 : 2;
   if (values.controls.length < minimum) {
     throw new TypeError(`${runtime.method} requires at least ${minimum} controls`);
   }
   if (!Number.isInteger(values.degree) || values.degree < 1) {
-    throw new TypeError("NURBS degree must be a positive integer");
+    throw new TypeError("spline degree must be a positive integer");
   }
   const keys = values.controls.map((control) => control.key);
-  if (!keys.includes(values.gauge)) throw new TypeError("NURBS gauge must name a control key");
-  for (const control of values.controls) requireFinite(control.weight, "NURBS control weight");
+  if ("rational" in values) {
+    throw new TypeError(
+      "spline declarations do not accept a rational flag; use a B-spline or NURBS method",
+    );
+  }
+  if (rational) {
+    const nurbs = values as NurbsValues<Project, Key>;
+    if (!keys.includes(nurbs.gauge)) throw new TypeError("NURBS gauge must name a control key");
+    for (const control of nurbs.controls) {
+      if (!("weight" in control)) throw new TypeError("NURBS controls require a weight");
+      requireFinite(control.weight, "NURBS control weight");
+      if (control.weight <= 0) throw new TypeError("NURBS control weight must be positive");
+    }
+  } else {
+    if ((values as { readonly gauge?: unknown }).gauge !== undefined) {
+      throw new TypeError("a B-spline cannot declare a weight gauge");
+    }
+    for (const control of values.controls) {
+      if ("weight" in control) throw new TypeError("B-spline controls cannot declare a weight");
+    }
+  }
   const controls = keyedCollection(keys, (key) => Object.freeze({
     position: makeReference<Project, "point">({
       ...runtime,
       path: ["controls", { member: key }, "position"],
       kind: "point",
     }),
-    weight: makeReference<Project, "scalar">({
-      ...runtime,
-      path: ["controls", { member: key }, "weight"],
-      kind: "scalar",
-    }),
+    ...(rational ? {
+      weight: makeReference<Project, "scalar">({
+        ...runtime,
+        path: ["controls", { member: key }, "weight"],
+        kind: "scalar",
+      }),
+    } : {}),
   }));
   const spanCount = periodic ? keys.length : Math.max(0, keys.length - values.degree);
   const spanKeys = keys.slice(0, spanCount);
@@ -1527,7 +1589,7 @@ function managedNurbs<Project, Key extends string>(
     curve: makeReference<Project, "curve">({ ...runtime, path: ["curve"], kind: "curve" }),
     controls,
     spans,
-  }) as NurbsFeature<Project, Key>;
+  }) as NurbsFeature<Project, Key> | BSplineFeature<Project, Key>;
 }
 
 const HOST_ONLY_AUTHORING_FAMILIES = new Set([
@@ -1591,11 +1653,37 @@ function namespaceProxy<Project>(
         if (namespace === "geometry" && property === "polyline") {
           return managedPolyline(runtime, values as unknown as PolylineValues<Project, string>);
         }
+        if (namespace === "geometry" && property === "openControlBSpline") {
+          return managedSpline(
+            runtime,
+            values as unknown as BSplineValues<Project, string>,
+            false,
+            false,
+          );
+        }
+        if (namespace === "geometry" && property === "periodicControlBSpline") {
+          return managedSpline(
+            runtime,
+            values as unknown as BSplineValues<Project, string>,
+            true,
+            false,
+          );
+        }
         if (namespace === "geometry" && property === "openControlNurbs") {
-          return managedNurbs(runtime, values as unknown as NurbsValues<Project, string>, false);
+          return managedSpline(
+            runtime,
+            values as unknown as NurbsValues<Project, string>,
+            false,
+            true,
+          );
         }
         if (namespace === "geometry" && property === "periodicControlNurbs") {
-          return managedNurbs(runtime, values as unknown as NurbsValues<Project, string>, true);
+          return managedSpline(
+            runtime,
+            values as unknown as NurbsValues<Project, string>,
+            true,
+            true,
+          );
         }
         if (namespace === "computed" && property === "filletSet") {
           const corners = (values.corners ?? []) as readonly FilletCorner<Project, string>[];
@@ -1728,6 +1816,20 @@ function validateAuthoringValues(
   method: string,
   values: Readonly<Record<string, unknown>>,
 ): void {
+  if (namespace === "constraint" && method === "endpointContinuity") {
+    if (values.continuity === "parametricC2") {
+      for (const field of ["firstRate", "secondRate"] as const) {
+        const value = values[field];
+        if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+          throw new TypeError(`endpointContinuity.${field} must be finite and positive`);
+        }
+      }
+    } else if (values.firstRate !== undefined || values.secondRate !== undefined) {
+      throw new TypeError(
+        "endpointContinuity rates are valid only for parametricC2 continuity",
+      );
+    }
+  }
   const requiredFinite = namespace === "geometry" && method === "rationalQuadraticConic"
     ? ["middleWeight"]
     : namespace === "geometry" && (method === "parabola" || method === "hyperbola")

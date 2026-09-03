@@ -36,12 +36,12 @@ use geosolve_sketch::{
 use geosolve_sketch_features::{
     ComputedCornerRef, ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
     ComputedEvaluationAllocatorHighWater, ComputedFeatureAuthoringError,
-    ComputedFeatureAuthoringSnapshot, ComputedFeatureCornerId, ComputedFeatureDocument,
-    ComputedFeatureDocumentError, ComputedFeatureDocumentIdentity, ComputedFeatureEvaluationError,
-    ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
-    ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureId,
-    ComputedFeatureLifecycleHighWater, ComputedFeatureReanchorError, ComputedFeatureSnapshot,
-    ComputedFeatureSnapshotError, ComputedFilletContactReseedRequest,
+    ComputedFeatureAuthoringSnapshot, ComputedFeatureCornerId, ComputedFeatureDefinition,
+    ComputedFeatureDocument, ComputedFeatureDocumentError, ComputedFeatureDocumentIdentity,
+    ComputedFeatureEvaluationError, ComputedFeatureEvaluationPolicy,
+    ComputedFeatureEvaluationSnapshot, ComputedFeatureEvaluationState, ComputedFeatureFailure,
+    ComputedFeatureId, ComputedFeatureLifecycleHighWater, ComputedFeatureReanchorError,
+    ComputedFeatureSnapshot, ComputedFeatureSnapshotError, ComputedFilletContactReseedRequest,
     ComputedFilletCornerAlternative, ComputedFilletCornerAlternativeKind,
     ComputedFilletParentIndex, ContinuedComputedFilletCorner, NativeCurveSpanSource,
     NewComputedFilletCorner,
@@ -2591,6 +2591,142 @@ impl RetainedEditorCoordinator {
                 };
                 if !computed_fillet_alternative_is_current(
                     source,
+                    features,
+                    owner,
+                    fillet.radius,
+                    &current_corners,
+                    alternative.resolved.corner,
+                ) {
+                    continue;
+                }
+                let (label, control_geometry) = match id {
+                    SceneFilletActionId::ReverseFirstRetainedDirection => (
+                        "Reverse first retained direction".into(),
+                        computed_fillet_retained_control_geometry(
+                            scene,
+                            &snapshot,
+                            &continuation,
+                            ComputedFilletParentIndex::First,
+                        ),
+                    ),
+                    SceneFilletActionId::ReverseSecondRetainedDirection => (
+                        "Reverse second retained direction".into(),
+                        computed_fillet_retained_control_geometry(
+                            scene,
+                            &snapshot,
+                            &continuation,
+                            ComputedFilletParentIndex::Second,
+                        ),
+                    ),
+                    SceneFilletActionId::ComplementaryArc => (
+                        "Use complementary arc".into(),
+                        computed_fillet_alternative_control_geometry(
+                            scene,
+                            &alternative.resolved.arc,
+                        ),
+                    ),
+                    SceneFilletActionId::LocalAlternative { first, second } => (
+                        format!("Use local side branch {first:?}/{second:?}"),
+                        computed_fillet_alternative_control_geometry(
+                            scene,
+                            &alternative.resolved.arc,
+                        ),
+                    ),
+                };
+                let polyline = scene.tessellate_computed_fillet_arc(
+                    &alternative.resolved.arc,
+                    chord_tolerance_pixels,
+                )?;
+                actions.push(SceneFilletAction {
+                    id,
+                    owner,
+                    label,
+                    availability: SceneFilletActionAvailability::Applicable,
+                    control_geometry,
+                    dashed_alternative_arc: Some(polyline),
+                });
+            }
+            scene.set_fillet_corner_actions(owner, actions)?;
+        }
+        Ok(())
+    }
+
+    /// Adds explicit branch/retention actions to the already attached stable
+    /// Fillet rails of a projectional scene.
+    ///
+    /// Projectional materialization owns the accepted session and feature
+    /// document directly, rather than through a second retained coordinator. This
+    /// helper keeps the action semantics shared with the flat coordinator without
+    /// introducing another history authority.
+    pub(crate) fn populate_stable_computed_fillet_actions(
+        scene: &mut EditorScene,
+        session: &RetainedSketchDocumentSession,
+        features: &ComputedFeatureDocument,
+        action_items: &[SelectionItem],
+        chord_tolerance_pixels: f64,
+    ) -> Result<(), CoordinatorError> {
+        if features.features().is_empty() {
+            return Ok(());
+        }
+        let snapshot = ComputedFeatureAuthoringSnapshot::capture(session)?;
+        let owners = scene
+            .computed_curves
+            .iter()
+            .map(|curve| curve.owner)
+            .collect::<Vec<_>>();
+        for owner in owners {
+            let selected = action_items.iter().any(|item| {
+                matches!(item, SelectionItem::FeatureCorner(current) if *current == owner)
+                    || matches!(item, SelectionItem::Feature(current) if *current == owner.feature)
+            });
+            if !selected {
+                continue;
+            }
+            let Some(feature) = features.feature(owner.feature) else {
+                return Err(CoordinatorError::StaleComputedFeatureCandidate);
+            };
+            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+            let Some(corner) = fillet
+                .corners
+                .iter()
+                .find(|corner| corner.id == owner.corner)
+            else {
+                return Err(CoordinatorError::StaleComputedFeatureCandidate);
+            };
+            let continuation = match snapshot.continue_fillet_corner(
+                corner.without_id(),
+                fillet.radius,
+                fillet.radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => value,
+                Ok(_) | Err(_) => {
+                    scene.set_fillet_corner_actions(owner, Vec::new())?;
+                    continue;
+                }
+            };
+            let alternatives = match snapshot.local_fillet_corner_alternatives(
+                corner.without_id(),
+                fillet.radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                computed_feature_authoring_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => value,
+                Ok(_) | Err(_) => Vec::new(),
+            };
+            let current_corners = fillet
+                .corners
+                .iter()
+                .map(|corner| (corner.id, corner.without_id()))
+                .collect::<Vec<_>>();
+            let mut actions = Vec::new();
+            for alternative in alternatives {
+                let Some(id) = computed_fillet_alternative_action_id(alternative.kind) else {
+                    continue;
+                };
+                if !computed_fillet_alternative_is_current(
+                    session,
                     features,
                     owner,
                     fillet.radius,

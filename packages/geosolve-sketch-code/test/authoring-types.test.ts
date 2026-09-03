@@ -57,6 +57,8 @@ const geometryMethods = [
   "rationalQuadraticConic",
   "parabola",
   "hyperbola",
+  "openControlBSpline",
+  "periodicControlBSpline",
   "openControlNurbs",
   "periodicControlNurbs",
 ] as const;
@@ -205,13 +207,27 @@ const ordinaryOutput = sketch((s) => {
     degree: 2,
     gauge: "b",
   });
-  return { curve, keyed, nurbs };
+  const bspline = s.geometry.periodicControlBSpline("nonRationalSpline", {
+    controls: [
+      { key: "a", position: keyed.vertices.byKey.start },
+      { key: "b", position: keyed.vertices.byKey.corner },
+      { key: "c", position: keyed.vertices.byKey.end },
+    ],
+    degree: 2,
+  });
+  return { curve, keyed, nurbs, bspline };
 });
 ordinaryOutput.output.curve.end;
 ordinaryOutput.output.keyed.segments.byKey.start;
 ordinaryOutput.output.nurbs.controls.byKey.b.weight;
+ordinaryOutput.output.bspline.controls.byKey.b.position;
+// @ts-expect-error Non-rational controls expose no fabricated weight scalar.
+ordinaryOutput.output.bspline.controls.byKey.b.weight;
 // @ts-expect-error Exact keyed children reject unknown keys.
 ordinaryOutput.output.nurbs.controls.byKey.missing;
+
+const splineInputSchema = t.feature("bspline");
+splineInputSchema;
 
 const generated = definePatch(
   { start: t.point(), end: t.point() },

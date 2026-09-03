@@ -1000,6 +1000,7 @@ struct ExpansionBuilder {
 struct KeyedPolylineDefinition {
     vertices: Vec<(String, ManagedValue)>,
     closed: bool,
+    branch_directions: Option<Vec<[f64; 2]>>,
     representation: DirectPolylineRepresentation,
     role: Option<String>,
 }
@@ -2014,7 +2015,7 @@ fn named_dynamic_children(
         .len(),
         CodeAuthoringDynamicChildren::SplineControls => array(
             required(arguments, "controls", &declaration.symbol.0)?,
-            "NURBS controls",
+            "spline controls",
         )?
         .len(),
         CodeAuthoringDynamicChildren::FilletCorners => array(
@@ -2232,8 +2233,11 @@ fn lower_named_geometry(
         GeometryRecipeKind::TangentArc => {
             lower_named_tangent_arc(builder, declaration, reconciliation, overlay)
         }
-        GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs => {
-            lower_named_nurbs(builder, declaration, descriptor, reconciliation, overlay)
+        GeometryRecipeKind::OpenControlBSpline
+        | GeometryRecipeKind::PeriodicControlBSpline
+        | GeometryRecipeKind::OpenControlNurbs
+        | GeometryRecipeKind::PeriodicControlNurbs => {
+            lower_named_spline(builder, declaration, descriptor, reconciliation, overlay)
         }
         _ => {
             lower_named_geometry_generic(builder, declaration, descriptor, reconciliation, overlay)
@@ -2880,7 +2884,7 @@ fn tangent_contact_neighborhood(
 }
 
 #[derive(Clone, Debug)]
-struct ResolvedNurbsControl {
+struct ResolvedSplineControl {
     key: String,
     position: [f64; 2],
     resolved: SemanticValue,
@@ -2892,7 +2896,7 @@ struct ResolvedNurbsControl {
     clippy::too_many_lines,
     reason = "one family-owned lowering keeps keyed controls, projective gauge normalization, native topology, and result paths together"
 )]
-fn lower_named_nurbs(
+fn lower_named_spline(
     builder: &mut ExpansionBuilder,
     declaration: &AuthoringDeclaration,
     _descriptor: &CodeAuthoringDeclarationDescriptor,
@@ -2900,27 +2904,50 @@ fn lower_named_nurbs(
     overlay: &CodeInteractionOverlay,
 ) -> Result<(), CodeExpansionError> {
     let arguments = object(&declaration.arguments, &declaration.symbol.0)?;
+    let recipe = match declaration.builder_path.get(1).map(String::as_str) {
+        Some("openControlBSpline") => GeometryRecipeKind::OpenControlBSpline,
+        Some("periodicControlBSpline") => GeometryRecipeKind::PeriodicControlBSpline,
+        Some("openControlNurbs") => GeometryRecipeKind::OpenControlNurbs,
+        Some("periodicControlNurbs") => GeometryRecipeKind::PeriodicControlNurbs,
+        _ => unreachable!("spline lowering receives one closed named family"),
+    };
+    let rational = matches!(
+        recipe,
+        GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+    );
     let controls = array(
         required(arguments, "controls", &declaration.symbol.0)?,
-        "NURBS controls",
+        "spline controls",
     )?;
     let mut resolved_controls = Vec::with_capacity(controls.len());
     let mut authored_weights = Vec::with_capacity(controls.len());
     let mut seen_keys = BTreeSet::new();
     for (ordinal, control) in controls.iter().enumerate() {
-        let control = object(control, "NURBS control")?;
-        exact_object_keys(control, &["key", "position", "weight"], "NURBS control")?;
+        let control = object(control, "spline control")?;
+        exact_object_keys(
+            control,
+            if rational {
+                &["key", "position", "weight"]
+            } else {
+                &["key", "position"]
+            },
+            if rational {
+                "NURBS control"
+            } else {
+                "B-spline control"
+            },
+        )?;
         let key = string(
-            required(control, "key", "NURBS control")?,
-            "NURBS control key",
+            required(control, "key", "spline control")?,
+            "spline control key",
         )?;
         if key.is_empty() || !seen_keys.insert(key.to_owned()) {
             return invalid_declaration(
                 declaration,
-                format!("NURBS control key `{key}` is empty or duplicated"),
+                format!("spline control key `{key}` is empty or duplicated"),
             );
         }
-        let source = required(control, "position", "NURBS control")?;
+        let source = required(control, "position", "spline control")?;
         let label = format!("{}.controls[{ordinal}].position", declaration.symbol.0);
         let output = member_path(&["controls"], key, &["position"]);
         let address = builder.lowering_point_address(
@@ -2940,20 +2967,23 @@ fn lower_named_nurbs(
         let position = builder.point_seed(&resolved).ok_or_else(|| {
             CodeExpansionError::InvalidDeclaration {
                 declaration: declaration.symbol.0.clone(),
-                message: format!("NURBS control `{key}` has no deterministic point seed"),
+                message: format!("spline control `{key}` has no deterministic point seed"),
             }
         })?;
-        let weight = finite_number(
-            required(control, "weight", "NURBS control")?,
-            "NURBS control weight",
-        )?;
-        if weight <= 0.0 {
-            return invalid_declaration(
-                declaration,
-                format!("NURBS control `{key}` weight must be positive"),
-            );
+        if rational {
+            let weight = finite_number(
+                required(control, "weight", "NURBS control")?,
+                "NURBS control weight",
+            )?;
+            if weight <= 0.0 {
+                return invalid_declaration(
+                    declaration,
+                    format!("NURBS control `{key}` weight must be positive"),
+                );
+            }
+            authored_weights.push(weight);
         }
-        resolved_controls.push(ResolvedNurbsControl {
+        resolved_controls.push(ResolvedSplineControl {
             key: key.to_owned(),
             position,
             resolved,
@@ -2966,16 +2996,15 @@ fn lower_named_nurbs(
             },
             address,
         });
-        authored_weights.push(weight);
     }
     let degree_value = finite_number(
         required(arguments, "degree", &declaration.symbol.0)?,
-        "NURBS degree",
+        "spline degree",
     )?;
     if degree_value.fract() != 0.0 || !(1.0..=f64::from(u32::MAX)).contains(&degree_value) {
         return invalid_declaration(
             declaration,
-            "NURBS degree must be a positive u32 integer".into(),
+            "spline degree must be a positive u32 integer".into(),
         );
     }
     #[allow(
@@ -2984,44 +3013,54 @@ fn lower_named_nurbs(
         reason = "the exact positive u32 range and integrality are checked immediately above"
     )]
     let degree = degree_value as u32;
-    let gauge = string(
-        required(arguments, "gauge", &declaration.symbol.0)?,
-        "NURBS gauge",
-    )?;
-    let gauge_index = resolved_controls
-        .iter()
-        .position(|control| control.key == gauge)
-        .ok_or_else(|| CodeExpansionError::InvalidDeclaration {
-            declaration: declaration.symbol.0.clone(),
-            message: format!("NURBS gauge `{gauge}` does not name one control"),
-        })?;
-    let gauge_weight = authored_weights[gauge_index];
-    let weights = authored_weights
-        .iter()
-        .map(|weight| weight / gauge_weight)
-        .collect::<Vec<_>>();
-    if weights
-        .iter()
-        .any(|weight| !weight.is_finite() || *weight <= 0.0)
-    {
-        return invalid_declaration(
-            declaration,
-            "NURBS projective gauge normalization produced an invalid weight".into(),
-        );
-    }
-    let recipe = match declaration.builder_path.get(1).map(String::as_str) {
-        Some("openControlNurbs") => GeometryRecipeKind::OpenControlNurbs,
-        Some("periodicControlNurbs") => GeometryRecipeKind::PeriodicControlNurbs,
-        _ => unreachable!("NURBS lowering receives one closed named family"),
-    };
-    let form = if recipe == GeometryRecipeKind::OpenControlNurbs {
-        DocumentBSplineForm::Clamped
+    let (weights, gauge_index) = if rational {
+        let gauge = string(
+            required(arguments, "gauge", &declaration.symbol.0)?,
+            "NURBS gauge",
+        )?;
+        let gauge_index = resolved_controls
+            .iter()
+            .position(|control| control.key == gauge)
+            .ok_or_else(|| CodeExpansionError::InvalidDeclaration {
+                declaration: declaration.symbol.0.clone(),
+                message: format!("NURBS gauge `{gauge}` does not name one control"),
+            })?;
+        let gauge_weight = authored_weights[gauge_index];
+        let weights = authored_weights
+            .iter()
+            .map(|weight| weight / gauge_weight)
+            .collect::<Vec<_>>();
+        if weights
+            .iter()
+            .any(|weight| !weight.is_finite() || *weight <= 0.0)
+        {
+            return invalid_declaration(
+                declaration,
+                "NURBS projective gauge normalization produced an invalid weight".into(),
+            );
+        }
+        (weights, gauge_index)
     } else {
-        DocumentBSplineForm::Periodic
+        if arguments.contains_key("gauge") {
+            return invalid_declaration(
+                declaration,
+                "a B-spline cannot declare a weight gauge".into(),
+            );
+        }
+        (vec![1.0; resolved_controls.len()], 0)
+    };
+    let form = match recipe {
+        GeometryRecipeKind::OpenControlBSpline | GeometryRecipeKind::OpenControlNurbs => {
+            DocumentBSplineForm::Clamped
+        }
+        GeometryRecipeKind::PeriodicControlBSpline | GeometryRecipeKind::PeriodicControlNurbs => {
+            DocumentBSplineForm::Periodic
+        }
+        _ => unreachable!("spline recipe is one of the four public spline families"),
     };
     let role = arguments
         .get("role")
-        .map(|value| geometry_role(value, "NURBS role"))
+        .map(|value| geometry_role(value, "spline role"))
         .transpose()?
         .unwrap_or(GeometryRole::Profile);
     let variant = GeometryToolVariant::from_intent_recipe(recipe);
@@ -3044,7 +3083,7 @@ fn lower_named_nurbs(
     let plan = projectional_geometry_plan_from_samples(variant, &samples).map_err(|error| {
         CodeExpansionError::InvalidDeclaration {
             declaration: declaration.symbol.0.clone(),
-            message: format!("NURBS construction controls are invalid: {error}"),
+            message: format!("spline construction controls are invalid: {error}"),
         }
     })?;
     let alias = builder.lowering_alias("geometry", &declaration.symbol, &[])?;
@@ -3052,18 +3091,33 @@ fn lower_named_nurbs(
         projectional_geometry_draft_from_plan(alias.clone(), variant, &plan).map_err(|error| {
             CodeExpansionError::InvalidDeclaration {
                 declaration: declaration.symbol.0.clone(),
-                message: format!("NURBS native recipe state is invalid: {error}"),
+                message: format!("spline native recipe state is invalid: {error}"),
             }
         })?;
     let mut draft = projected.draft;
+    if !rational {
+        draft.kind = IntentNodeKind::Geometry { recipe };
+        draft
+            .fields
+            .remove(&IntentFieldKey(IntentKey::new("gauge_index")?));
+        draft.initial_instance.retain(|selector, _| {
+            !matches!(
+                selector,
+                IntentPortSelector::InitialChild {
+                    role: IntentPortRole::Target,
+                    ..
+                }
+            )
+        });
+    }
     if let Some(label) = arguments.get("label") {
-        draft = draft.with_display_name(IntentKey::new(string(label, "NURBS label")?)?);
+        draft = draft.with_display_name(IntentKey::new(string(label, "spline label")?)?);
     }
     for (ordinal, control) in resolved_controls.iter().enumerate() {
         let ordinal =
             u16::try_from(ordinal).map_err(|_| CodeExpansionError::InvalidDeclaration {
                 declaration: declaration.symbol.0.clone(),
-                message: "NURBS control count exceeds the native child bound".into(),
+                message: "spline control count exceeds the native child bound".into(),
             })?;
         let selector = child_selector(ordinal, IntentPortRole::Control);
         if let SemanticValue::Port(source) = &control.resolved
@@ -3089,21 +3143,16 @@ fn lower_named_nurbs(
             .cloned()
             .ok_or_else(|| CodeExpansionError::InvalidDeclaration {
                 declaration: declaration.symbol.0.clone(),
-                message: "NURBS recipe has no native curve output".into(),
+                message: "spline recipe has no native curve output".into(),
             })?,
     );
     let mut control_members = BTreeMap::new();
     for (ordinal, control) in resolved_controls.iter().enumerate() {
-        let ordinal = u16::try_from(ordinal).expect("NURBS child count checked above");
+        let ordinal = u16::try_from(ordinal).expect("spline child count checked above");
         let position = port(
             &alias,
             child_selector(ordinal, IntentPortRole::Control),
             IntentPortKind::Point,
-        );
-        let weight = port(
-            &alias,
-            child_selector(ordinal, IntentPortRole::Target),
-            IntentPortKind::Scalar,
         );
         builder.add_point_seed(&position, control.position)?;
         if let Some(address) = &control.address {
@@ -3123,21 +3172,24 @@ fn lower_named_nurbs(
             fields_path(&["controls", "byKey", &control.key, "position"]),
             SemanticValue::Port(position.clone()),
         );
-        paths.insert(
-            member_path(&["controls"], &control.key, &["weight"]),
-            SemanticValue::Port(weight.clone()),
-        );
-        paths.insert(
-            fields_path(&["controls", "byKey", &control.key, "weight"]),
-            SemanticValue::Port(weight.clone()),
-        );
-        control_members.insert(
-            control.key.clone(),
-            SemanticValue::Collection(BTreeMap::from([
-                ("position".into(), SemanticValue::Port(position)),
-                ("weight".into(), SemanticValue::Port(weight)),
-            ])),
-        );
+        let mut outputs = BTreeMap::from([("position".into(), SemanticValue::Port(position))]);
+        if rational {
+            let weight = port(
+                &alias,
+                child_selector(ordinal, IntentPortRole::Target),
+                IntentPortKind::Scalar,
+            );
+            paths.insert(
+                member_path(&["controls"], &control.key, &["weight"]),
+                SemanticValue::Port(weight.clone()),
+            );
+            paths.insert(
+                fields_path(&["controls", "byKey", &control.key, "weight"]),
+                SemanticValue::Port(weight.clone()),
+            );
+            outputs.insert("weight".into(), SemanticValue::Port(weight));
+        }
+        control_members.insert(control.key.clone(), SemanticValue::Collection(outputs));
     }
     paths.insert(
         fields_path(&["controls"]),
@@ -3145,14 +3197,14 @@ fn lower_named_nurbs(
     );
     let degree = usize::try_from(degree).map_err(|_| CodeExpansionError::InvalidDeclaration {
         declaration: declaration.symbol.0.clone(),
-        message: "NURBS degree does not fit this platform".into(),
+        message: "spline degree does not fit this platform".into(),
     })?;
     let span_count = match form {
         DocumentBSplineForm::Clamped => {
             resolved_controls.len().checked_sub(degree).ok_or_else(|| {
                 CodeExpansionError::InvalidDeclaration {
                     declaration: declaration.symbol.0.clone(),
-                    message: "NURBS degree exceeds its control count".into(),
+                    message: "spline degree exceeds its control count".into(),
                 }
             })?
         }
@@ -3164,7 +3216,7 @@ fn lower_named_nurbs(
             &alias,
             node_selector(
                 IntentPortRole::Span,
-                u16::try_from(ordinal).expect("NURBS span count is child-bounded"),
+                u16::try_from(ordinal).expect("spline span count is child-bounded"),
             ),
             IntentPortKind::CurveSpan,
         );
@@ -4853,11 +4905,25 @@ fn lower_direct_line(
             declaration.symbol.0
         )));
     };
-    let direction =
+    let direction = if let Some(value) = arguments.get("branchDirection") {
+        let direction = point(value, "line branchDirection")?;
+        let magnitude = direction[0].hypot(direction[1]);
+        if !(magnitude.is_finite()
+            && magnitude > 0.0
+            && (magnitude - 1.0).abs() <= 64.0 * f64::EPSILON)
+        {
+            return invalid_declaration(
+                declaration,
+                "line branchDirection must be finite, nonzero, and normalized".into(),
+            );
+        }
+        direction
+    } else {
         unit_direction(start, end).ok_or_else(|| CodeExpansionError::InvalidDeclaration {
             declaration: declaration.symbol.0.clone(),
             message: "line endpoints must be finite and distinct".into(),
-        })?;
+        })?
+    };
     draft = draft.with_field(
         field_key("branch_direction")?,
         IntentLiteral::Point(direction),
@@ -5143,12 +5209,15 @@ fn lower_direct_polyline(
         let end_position = effective_vertices[end_index].1;
         let address = direct_polyline_address(&declaration.symbol, "segment", key, "span");
         let (alias, identity) = direct_generated_alias(&address, reconciliation)?;
-        let direction = unit_direction(*start_position, end_position).ok_or_else(|| {
-            CodeExpansionError::InvalidDeclaration {
+        let direction = definition
+            .branch_directions
+            .as_ref()
+            .map(|directions| directions[index])
+            .or_else(|| unit_direction(*start_position, end_position))
+            .ok_or_else(|| CodeExpansionError::InvalidDeclaration {
                 declaration: declaration.symbol.0.clone(),
                 message: format!("Polyline segment starting at `{key}` must be finite and nonzero"),
-            }
-        })?;
+            })?;
         let draft = IntentNodeDraft::new(
             IntentNodeKind::Geometry {
                 recipe: GeometryRecipeKind::Segment,
@@ -5344,6 +5413,14 @@ fn lower_direct_single_curve_polyline(
         field_key("closed")?,
         IntentLiteral::Boolean(definition.closed),
     );
+    if let Some(directions) = &definition.branch_directions {
+        for (ordinal, direction) in directions.iter().copied().enumerate() {
+            draft = draft.with_field(
+                field_key(&format!("branch_direction_{ordinal:04}"))?,
+                IntentLiteral::Point(direction),
+            );
+        }
+    }
     if let Some(role) = &definition.role {
         draft = draft.with_field(field_key("role")?, enum_value(role)?);
     }
@@ -5829,6 +5906,43 @@ fn keyed_polyline_definition(
             "Polyline role requires `representation: \"singleCurve\"`".into(),
         );
     }
+    let segment_count = vertices.len() - 1 + usize::from(closed);
+    let branch_directions = arguments
+        .get("branchDirections")
+        .map(|value| {
+            let values = array(value, "Polyline branchDirections")?;
+            if values.len() != segment_count {
+                return invalid_declaration(
+                    declaration,
+                    format!(
+                        "Polyline branchDirections count {} does not match span count {segment_count}",
+                        values.len()
+                    ),
+                );
+            }
+            values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    let direction = point(value, "Polyline branch direction")?;
+                    let magnitude = direction[0].hypot(direction[1]);
+                    if magnitude.is_finite()
+                        && magnitude > 0.0
+                        && (magnitude - 1.0).abs() <= 64.0 * f64::EPSILON
+                    {
+                        Ok(direction)
+                    } else {
+                        Err(CodeExpansionError::InvalidDeclaration {
+                            declaration: declaration.symbol.0.clone(),
+                            message: format!(
+                                "Polyline branch direction {index} must be finite, nonzero, and normalized"
+                            ),
+                        })
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
     let mut keyed = Vec::with_capacity(vertices.len());
     for vertex in vertices {
         let value = object(vertex, "Polyline vertex")?;
@@ -5847,6 +5961,7 @@ fn keyed_polyline_definition(
     Ok(KeyedPolylineDefinition {
         vertices: keyed,
         closed,
+        branch_directions,
         representation,
         role,
     })
@@ -7984,7 +8099,10 @@ mod tests {
         (builder, alias)
     }
 
-    fn single_curve_polyline_declaration() -> AuthoringDeclaration {
+    fn single_curve_polyline_declaration_with_branches(
+        closed: bool,
+        branch_directions: Option<Vec<[f64; 2]>>,
+    ) -> AuthoringDeclaration {
         let vertex = |key: &str, position: [f64; 2]| {
             ManagedValue::Object(BTreeMap::from([
                 ("key".into(), ManagedValue::String(key.into())),
@@ -7994,31 +8112,51 @@ mod tests {
                 ),
             ]))
         };
+        let mut arguments = BTreeMap::from([
+            ("closed".into(), ManagedValue::Bool(closed)),
+            (
+                "representation".into(),
+                ManagedValue::String("singleCurve".into()),
+            ),
+            ("role".into(), ManagedValue::String("profile".into())),
+            (
+                "vertices".into(),
+                ManagedValue::Array(vec![
+                    vertex("v0", [0.0, 0.0]),
+                    vertex("v1", [20.0, 0.0]),
+                    vertex("v2", [20.0, 10.0]),
+                ]),
+            ),
+        ]);
+        if let Some(branch_directions) = branch_directions {
+            arguments.insert(
+                "branchDirections".into(),
+                ManagedValue::Array(
+                    branch_directions
+                        .into_iter()
+                        .map(|direction| {
+                            ManagedValue::Array(
+                                direction.into_iter().map(ManagedValue::Number).collect(),
+                            )
+                        })
+                        .collect(),
+                ),
+            );
+        }
         AuthoringDeclaration {
             variable: "geometry1".into(),
             symbol: SemanticSymbol("geometry1".into()),
             builder_path: vec!["geometry".into(), "polyline".into()],
-            arguments: ManagedValue::Object(BTreeMap::from([
-                ("closed".into(), ManagedValue::Bool(false)),
-                (
-                    "representation".into(),
-                    ManagedValue::String("singleCurve".into()),
-                ),
-                ("role".into(), ManagedValue::String("profile".into())),
-                (
-                    "vertices".into(),
-                    ManagedValue::Array(vec![
-                        vertex("v0", [0.0, 0.0]),
-                        vertex("v1", [20.0, 0.0]),
-                        vertex("v2", [20.0, 10.0]),
-                    ]),
-                ),
-            ])),
+            arguments: ManagedValue::Object(arguments),
             patch: None,
             statement_span: crate::ManagedSpan::new(0, 1),
             symbol_span: crate::ManagedSpan::new(0, 1),
             arguments_span: crate::ManagedSpan::new(0, 1),
         }
+    }
+
+    fn single_curve_polyline_declaration() -> AuthoringDeclaration {
+        single_curve_polyline_declaration_with_branches(false, None)
     }
 
     #[test]
@@ -8124,6 +8262,148 @@ mod tests {
             assert_eq!(span.alias, *alias);
             assert_eq!(span.selector, child_selector(ordinal, IntentPortRole::Span));
             assert_eq!(span.kind, IntentPortKind::CurveSpan);
+        }
+    }
+
+    #[test]
+    fn direct_segment_retains_an_explicit_non_collinear_branch_and_rejects_invalid_directions() {
+        let segment = |direction: [f64; 2]| {
+            declaration(
+                "segment",
+                &["geometry", "segment"],
+                ManagedValue::Object(BTreeMap::from([
+                    (
+                        "start".into(),
+                        ManagedValue::Array(vec![
+                            ManagedValue::Number(0.0),
+                            ManagedValue::Number(0.0),
+                        ]),
+                    ),
+                    (
+                        "end".into(),
+                        ManagedValue::Array(vec![
+                            ManagedValue::Number(3.0),
+                            ManagedValue::Number(4.0),
+                        ]),
+                    ),
+                    (
+                        "branchDirection".into(),
+                        ManagedValue::Array(
+                            direction.into_iter().map(ManagedValue::Number).collect(),
+                        ),
+                    ),
+                ])),
+            )
+        };
+        let explicit = [0.8, 0.6];
+        let mut builder = ExpansionBuilder::new(
+            ProjectKey("explicit-segment-branch-test".into()),
+            ManagedSuppressionProjection::default(),
+        );
+        lower_direct_line(
+            &mut builder,
+            &segment(explicit),
+            None,
+            &CodeInteractionOverlay::empty(),
+        )
+        .expect("finite normalized branch direction");
+        let [IntentPatchOperation::CreateNode { draft, .. }] = builder.operations.as_slice() else {
+            panic!("direct Segment must lower to one node")
+        };
+        assert_eq!(
+            draft.fields.get(&field_key("branch_direction").unwrap()),
+            Some(&IntentLiteral::Point(explicit)),
+            "the authored branch is semantic state, not a direction recomputed from the chord",
+        );
+
+        for invalid in [
+            [0.0, 0.0],
+            [2.0, 0.0],
+            [f64::NAN, 0.0],
+            [f64::INFINITY, 0.0],
+        ] {
+            let mut builder = ExpansionBuilder::new(
+                ProjectKey("invalid-segment-branch-test".into()),
+                ManagedSuppressionProjection::default(),
+            );
+            assert!(
+                lower_direct_line(
+                    &mut builder,
+                    &segment(invalid),
+                    None,
+                    &CodeInteractionOverlay::empty(),
+                )
+                .is_err(),
+                "invalid branch direction {invalid:?} must fail closed",
+            );
+            assert!(builder.operations.is_empty());
+        }
+    }
+
+    #[test]
+    fn direct_polyline_requires_one_exact_branch_per_open_or_closed_span() {
+        let open = [[0.8, 0.6], [0.0, 1.0]];
+        let closed = [[0.8, 0.6], [0.0, 1.0], [-1.0, 0.0]];
+        for (is_closed, directions) in [(false, open.as_slice()), (true, closed.as_slice())] {
+            let declaration = single_curve_polyline_declaration_with_branches(
+                is_closed,
+                Some(directions.to_vec()),
+            );
+            let mut builder = ExpansionBuilder::new(
+                ProjectKey(format!("explicit-polyline-branch-{is_closed}")),
+                ManagedSuppressionProjection::default(),
+            );
+            lower_direct_polyline(
+                &mut builder,
+                &declaration,
+                None,
+                &CodeInteractionOverlay::empty(),
+            )
+            .expect("exact Polyline branch vector");
+            let [IntentPatchOperation::CreateNode { draft, .. }] = builder.operations.as_slice()
+            else {
+                panic!("single-curve Polyline must lower to one node")
+            };
+            for (ordinal, direction) in directions.iter().copied().enumerate() {
+                assert_eq!(
+                    draft
+                        .fields
+                        .get(&field_key(&format!("branch_direction_{ordinal:04}")).unwrap()),
+                    Some(&IntentLiteral::Point(direction)),
+                );
+            }
+            assert_eq!(
+                draft
+                    .fields
+                    .keys()
+                    .filter(|field| field.0.as_str().starts_with("branch_direction_"))
+                    .count(),
+                directions.len(),
+            );
+        }
+
+        for (is_closed, directions) in [
+            (false, vec![[1.0, 0.0]]),
+            (false, vec![[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0]]),
+            (true, vec![[1.0, 0.0], [0.0, 1.0]]),
+        ] {
+            let declaration =
+                single_curve_polyline_declaration_with_branches(is_closed, Some(directions));
+            let mut builder = ExpansionBuilder::new(
+                ProjectKey("invalid-polyline-branch-count".into()),
+                ManagedSuppressionProjection::default(),
+            );
+            assert!(
+                lower_direct_polyline(
+                    &mut builder,
+                    &declaration,
+                    None,
+                    &CodeInteractionOverlay::empty(),
+                )
+                .is_err(),
+                "Polyline branch count must match its exact span count",
+            );
+            assert!(builder.operations.is_empty());
         }
     }
 

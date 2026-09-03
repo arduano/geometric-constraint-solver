@@ -801,6 +801,14 @@ impl ProjectionalEditorSession {
         self.editor.populate_curve_controls(&mut scene)?;
         if !property_preview_active {
             self.attach_computed_fillet_radius_rails(&mut scene, session, materialization, work)?;
+            crate::RetainedEditorCoordinator::populate_stable_computed_fillet_actions(
+                &mut scene,
+                session,
+                &materialization.features,
+                self.editor.selection(),
+                chord_tolerance_pixels,
+            )
+            .map_err(|error| ProjectionalEditorError::ComputedScene(error.to_string()))?;
         }
         if property_preview_active && let Some(drag) = self.fillet_radius_drag.as_ref() {
             scene.set_computed_fillet_interaction_origin(drag.expected)?;

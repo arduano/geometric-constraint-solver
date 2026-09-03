@@ -89,6 +89,55 @@ test("named geometry executes and cold-replays its ordinary output", () => {
   assert.equal(replayed.canonicalArtifactJson, compiled.canonicalArtifactJson);
 });
 
+test("explicit Segment and Polyline branches survive compiler normalization and replay", () => {
+  const source = `"use geosolve sketch";
+import { sketch } from "@geosolve/sketch-code";
+
+export default sketch(($) => {
+  const segment = $.geometry.segment("segment", {
+    start: [0, 0],
+    end: [3, 4],
+    branchDirection: [0.8, 0.6],
+  });
+  const open = $.geometry.polyline("open", {
+    vertices: [
+      { key: "a", position: [0, 0] },
+      { key: "b", position: [2, 0] },
+      { key: "c", position: [2, 2] },
+    ],
+    branchDirections: [[0.8, 0.6], [0, 1]],
+  });
+  const closed = $.geometry.polyline("closed", {
+    vertices: [
+      { key: "a", position: [0, 0] },
+      { key: "b", position: [2, 0] },
+      { key: "c", position: [2, 2] },
+    ],
+    closed: true,
+    branchDirections: [[1, 0], [0, 1], [-1, 0]],
+  });
+  return { segment, open, closed };
+});
+`;
+  const compiled = compileManagedSource(source);
+  const declarations = compiled.ir.statements.filter((statement) =>
+    statement.statement === "declaration"
+  );
+  assert.equal(declarations.length, 3);
+  assert.match(compiled.normalizedSource, /branchDirection: \[0\.8, 0\.6\]/u);
+  assert.match(
+    compiled.normalizedSource,
+    /branchDirections: \[\[0\.8, 0\.6\], \[0, 1\]\]/u,
+  );
+  assert.match(
+    compiled.normalizedSource,
+    /branchDirections: \[\[1, 0\], \[0, 1\], \[-1, 0\]\]/u,
+  );
+  const replayed = compileManagedSource(compiled.normalizedSource);
+  assert.equal(replayed.canonicalIrJson, compiled.canonicalIrJson);
+  assert.equal(replayed.canonicalArtifactJson, compiled.canonicalArtifactJson);
+});
+
 test("canvas circle insertion closes its generated mm import exactly once", () => {
   const initial = compileManagedSource(emptySketchSource);
   const inserted = applyManagedSketchMutation(initial, {

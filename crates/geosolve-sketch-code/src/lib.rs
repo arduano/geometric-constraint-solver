@@ -49,7 +49,10 @@ pub use demos::{
     BundledCodeProject, CodeProjectDemo, CodeProjectDemoId, bundled_code_project_demos,
     bundled_code_projects, rounded_polyline_member_addresses,
 };
-pub use document_export::{ManagedSketchExportError, export_sketch_document_to_managed_source};
+pub use document_export::{
+    ManagedSketchExportError, export_sketch_document_to_managed_source,
+    export_sketch_document_with_features_to_managed_source,
+};
 pub use editor_insertion::{
     CANVAS_ADDITIONS_GROUP, EditorBootstrapDeclaration, EditorDeclarationInsertionError,
     EditorDeclarationInsertionPlan, EditorSourceDeclarationClosure,

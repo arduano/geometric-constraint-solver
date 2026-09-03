@@ -603,14 +603,14 @@ fn multi_root_delete_rejects_unauthenticated_root_sets_atomically() {
 }
 
 #[test]
-fn closed_geometry_catalog_has_all_twenty_five_recipes() {
-    assert_eq!(GeometryRecipeKind::ALL.len(), 25);
+fn closed_geometry_catalog_has_all_twenty_seven_recipes() {
+    assert_eq!(GeometryRecipeKind::ALL.len(), 27);
     assert_eq!(
         GeometryRecipeKind::ALL
             .into_iter()
             .collect::<BTreeSet<_>>()
             .len(),
-        25
+        27
     );
 }
 
@@ -852,7 +852,7 @@ fn ordered_span_aggregates_supply_typed_chain_and_profile_offset_operands() {
     reason = "one table-driven oracle reviews every closed declaration schema"
 )]
 fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
-    assert_eq!(GeometryRecipeKind::ALL.len(), 25);
+    assert_eq!(GeometryRecipeKind::ALL.len(), 27);
     assert_eq!(ConstraintKind::ALL.len(), 35);
     assert_eq!(DimensionKind::ALL.len(), 8);
     assert_eq!(OperationKind::ALL.len(), 12);
@@ -863,7 +863,7 @@ fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
     assert_eq!(BootstrapNativeKind::ALL.len(), 17);
 
     let cases = declaration_schema_cases();
-    assert_eq!(cases.len(), 109);
+    assert_eq!(cases.len(), 111);
     assert_eq!(
         cases
             .iter()
@@ -1085,9 +1085,13 @@ fn descriptor_omission_categories_are_an_explicit_closed_inventory() {
         contextual,
         [
             "geometry.Segment.branch_direction",
+            "geometry.Polyline.branch_direction_0000",
+            "geometry.Polyline.branch_direction_0001",
             "geometry.MidpointLine.branch_direction",
             "geometry.ThreePointCenterRectangle.side_midpoint",
             "constraint.FixedPoint.target",
+            "constraint.EndpointContinuity.first_rate",
+            "constraint.EndpointContinuity.second_rate",
             "computed_feature.FilletSet.name",
             "annotation.offset",
         ]
@@ -1252,17 +1256,6 @@ fn descriptor_static_defaults_match_the_native_declaration_fallbacks() {
             0,
             "orientation",
             IntentLiteral::Enum(key("same")),
-        ),
-        (
-            IntentNodeKind::Constraint {
-                constraint: ConstraintKind::EndpointContinuity,
-            },
-            0,
-            "parameter_ratio",
-            IntentLiteral::Quantity {
-                value: 1.0,
-                unit: IntentUnit::Dimensionless,
-            },
         ),
     ];
     for (kind, dynamic_children, field, expected) in defaults {
@@ -1818,7 +1811,7 @@ fn every_closed_declaration_rejects_malformed_operands_and_children_atomically()
     assert!(choice_underflows > 0);
     assert!(choice_overflows > 0);
     assert!(sparse_geometry_point_aliases > 0);
-    assert_eq!(child_underflows, 5);
+    assert_eq!(child_underflows, 7);
 }
 
 #[test]
@@ -3759,7 +3752,7 @@ fn semantic_source_bootstrap_requires_its_typed_catalog_before_materialization()
 #[test]
 #[allow(
     clippy::too_many_lines,
-    reason = "the explicit 25-recipe table is the reviewed native-storage inventory"
+    reason = "the explicit 27-recipe table is the reviewed native-storage inventory"
 )]
 fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory() {
     // recipe, dynamic children, native points, native scalars, native curves,
@@ -3828,6 +3821,8 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
         (GeometryRecipeKind::RationalQuadraticConic, 0, 2, 1, 1, 0, 1),
         (GeometryRecipeKind::Parabola, 0, 2, 2, 1, 0, 0),
         (GeometryRecipeKind::Hyperbola, 0, 2, 3, 1, 0, 0),
+        (GeometryRecipeKind::OpenControlBSpline, 4, 4, 0, 1, 0, 0),
+        (GeometryRecipeKind::PeriodicControlBSpline, 4, 4, 0, 1, 0, 0),
         (GeometryRecipeKind::OpenControlNurbs, 4, 4, 4, 1, 0, 0),
         (GeometryRecipeKind::PeriodicControlNurbs, 4, 4, 4, 1, 0, 0),
     ];

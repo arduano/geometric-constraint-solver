@@ -23,7 +23,7 @@ const GEOMETRY_CATALOG_ENVELOPE: &str = include_str!(
     clippy::too_many_lines,
     reason = "one end-to-end gate keeps the closed geometry catalog, executed result paths, and finite cold authority together"
 )]
-fn compiled_v3_named_geometry_catalog_cold_materializes_all_25_variants() {
+fn compiled_v3_named_geometry_catalog_cold_materializes_all_27_variants() {
     let unchecked: CompiledManagedSource = serde_json::from_str(GEOMETRY_CATALOG_ENVELOPE)
         .expect("named-geometry compiler-envelope JSON");
     let rust_artifact = serde_json::to_string(&unchecked.artifact).expect("Rust artifact JSON");
@@ -62,7 +62,7 @@ fn compiled_v3_named_geometry_catalog_cold_materializes_all_25_variants() {
         })
         .map(|family| format!("{}.{}", family.namespace, family.method))
         .collect::<BTreeSet<_>>();
-    assert_eq!(GeometryRecipeKind::ALL.len(), 25);
+    assert_eq!(GeometryRecipeKind::ALL.len(), 27);
     assert_eq!(expected_families.len(), GeometryRecipeKind::ALL.len());
 
     let ir_declarations = compiled
@@ -171,15 +171,21 @@ fn compiled_v3_named_geometry_catalog_cold_materializes_all_25_variants() {
             matches!(
                 &point.edit.writable_addresses()[0].owner.address,
                 CodeOwnerAddress::DirectDeclaration { declaration }
-                    if ["tangentArc", "openControlNurbs", "periodicControlNurbs"]
-                        .contains(&declaration.0.as_str())
+                    if [
+                        "tangentArc",
+                        "openControlBSpline",
+                        "periodicControlBSpline",
+                        "openControlNurbs",
+                        "periodicControlNurbs",
+                    ]
+                    .contains(&declaration.0.as_str())
             )
         })
         .collect::<Vec<_>>();
     assert_eq!(
         newly_writable.len(),
-        11,
-        "Tangent Arc and both keyed NURBS families must publish every source-backed point",
+        19,
+        "Tangent Arc and all four keyed spline families must publish every source-backed point",
     );
     let tangent_start = newly_writable
         .iter()
@@ -235,7 +241,12 @@ fn compiled_v3_named_geometry_catalog_cold_materializes_all_25_variants() {
         .into_iter()
         .map(|field| ("tangentArc", vec![ManagedPathSegment::Field(field.into())]))
         .collect::<BTreeSet<_>>();
-    for declaration in ["openControlNurbs", "periodicControlNurbs"] {
+    for declaration in [
+        "openControlBSpline",
+        "periodicControlBSpline",
+        "openControlNurbs",
+        "periodicControlNurbs",
+    ] {
         for index in 0..4 {
             expected_mutation_paths.insert((
                 declaration,
