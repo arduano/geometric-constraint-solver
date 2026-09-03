@@ -1846,8 +1846,11 @@ impl IntentSession {
     /// digest-authenticated, every other declaration field remains subject to
     /// the current closed schema, and only exact legacy defaults are removed.
     /// Explicit supporting-line intent is translated to the current
-    /// `*_support` field. Non-default bounds, periods, hybrid old/new fields,
-    /// and unrelated unknown fields fail closed.
+    /// `*_support` field. Explicit line and Polyline branch directions are
+    /// normalized exactly once to preserve the historical materializer's
+    /// accepted native meaning now that current source retains their bits.
+    /// Non-default bounds, periods, hybrid old/new fields, and unrelated
+    /// unknown fields fail closed.
     ///
     /// # Errors
     ///
@@ -2233,8 +2236,10 @@ fn migrate_historical_contact_checkpoint(
     migrated_fields: &mut usize,
 ) -> Result<(), IntentSessionError> {
     migrate_historical_contact_graph(&mut checkpoint.graph, migrated_fields)?;
+    normalize_historical_branch_directions(&mut checkpoint.graph);
     let accepted_materialization_digest = if let Some(accepted) = &mut checkpoint.accepted {
         migrate_historical_contact_graph(&mut accepted.graph, migrated_fields)?;
+        normalize_historical_branch_directions(&mut accepted.graph);
         accepted.target = semantic_identity(
             &accepted.graph,
             &accepted.instance,
@@ -2260,6 +2265,38 @@ fn migrate_historical_contact_checkpoint(
         };
     }
     Ok(())
+}
+
+fn normalize_historical_branch_directions(graph: &mut IntentGraph) {
+    for node in graph.nodes.values_mut() {
+        let accepts_field = |name: &str| match node.kind {
+            crate::IntentNodeKind::Geometry {
+                recipe: crate::GeometryRecipeKind::Segment | crate::GeometryRecipeKind::MidpointLine,
+            } => name == "branch_direction",
+            crate::IntentNodeKind::Geometry {
+                recipe: crate::GeometryRecipeKind::Polyline,
+            } => name
+                .strip_prefix("branch_direction_")
+                .is_some_and(|ordinal| {
+                    ordinal.len() == 4 && ordinal.bytes().all(|byte| byte.is_ascii_digit())
+                }),
+            _ => false,
+        };
+        for (field, value) in &mut node.fields {
+            if !accepts_field(field.0.as_str()) {
+                continue;
+            }
+            let crate::IntentLiteral::Point(direction) = value else {
+                continue;
+            };
+            let length = direction[0].hypot(direction[1]);
+            *direction = if length <= f64::EPSILON {
+                [1.0, 0.0]
+            } else {
+                [direction[0] / length, direction[1] / length]
+            };
+        }
+    }
 }
 
 fn validate_historical_contact_wire_authority(
@@ -4035,6 +4072,19 @@ mod tests {
             .expect("historical fixture contact declaration")
     }
 
+    fn historical_line_node_mut(
+        checkpoint: &mut SessionCheckpoint,
+    ) -> Option<&mut crate::IntentNode> {
+        checkpoint.graph.nodes.values_mut().find(|node| {
+            matches!(
+                node.kind,
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Segment
+                }
+            )
+        })
+    }
+
     fn reauthenticate_historical_checkpoint(checkpoint: &mut SessionCheckpoint) {
         if let Some(accepted) = &mut checkpoint.accepted {
             accepted.graph.clone_from(&checkpoint.graph);
@@ -4150,6 +4200,64 @@ mod tests {
             IntentSession::from_historical_contact_domain_json(&ordinary),
             Err(IntentSessionError::HistoricalContactDomainMigrationNotApplicable)
         ));
+    }
+
+    #[test]
+    fn historical_contact_domain_migration_preserves_legacy_branch_normalization_semantics() {
+        let raw: [f64; 2] = [0.737_788_637_523_594_1, 0.675_031_796_540_784];
+        let length = raw[0].hypot(raw[1]);
+        let expected = [raw[0] / length, raw[1] / length];
+        assert_ne!(
+            raw, expected,
+            "fixture must expose the one-ulp migration seam"
+        );
+
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&authenticated_historical_contact_json()).unwrap();
+        for checkpoint in std::iter::once(&mut wire.current)
+            .chain(wire.undo.iter_mut().map(|entry| &mut entry.checkpoint))
+            .chain(wire.redo.iter_mut().map(|entry| &mut entry.checkpoint))
+        {
+            if let Some(line) = historical_line_node_mut(checkpoint) {
+                line.fields.insert(
+                    IntentFieldKey(key("branch_direction")),
+                    IntentLiteral::Point(raw),
+                );
+            }
+            reauthenticate_historical_checkpoint(checkpoint);
+        }
+        bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+
+        let migrated =
+            IntentSession::from_historical_contact_domain_json(&authenticated_wire_json(wire))
+                .expect("historical materializer branch meaning migrates");
+        let migrated_wire: IntentSessionWire =
+            serde_json::from_str(&migrated.to_canonical_json().unwrap()).unwrap();
+        for checkpoint in std::iter::once(&migrated_wire.current)
+            .chain(migrated_wire.undo.iter().map(|entry| &entry.checkpoint))
+            .chain(migrated_wire.redo.iter().map(|entry| &entry.checkpoint))
+        {
+            let require_expected = |graph: &IntentGraph| {
+                let Some(line) = graph.nodes.values().find(|node| {
+                    matches!(
+                        node.kind,
+                        IntentNodeKind::Geometry {
+                            recipe: GeometryRecipeKind::Segment
+                        }
+                    )
+                }) else {
+                    return;
+                };
+                assert_eq!(
+                    line.fields.get(&IntentFieldKey(key("branch_direction"))),
+                    Some(&IntentLiteral::Point(expected)),
+                );
+            };
+            require_expected(&checkpoint.graph);
+            if let Some(accepted) = &checkpoint.accepted {
+                require_expected(&accepted.graph);
+            }
+        }
     }
 
     #[test]
