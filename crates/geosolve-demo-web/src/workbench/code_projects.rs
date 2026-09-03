@@ -27,19 +27,19 @@ use geosolve_sketch::{
     OperationOutcome, PersistentId, RetainedSketchDocumentSession, SketchHardValidity,
 };
 use geosolve_sketch_code::{
-    CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOwnerAddress, CodePointEdit,
-    CodeProject, CodeProjectDemo, CodeProjectDemoId, CodeRectangleCorner, CodeSessionIdentity,
-    CodeSessionReceipt, CodeWritableAddress, CompiledManagedSource, EditorBootstrapDeclaration,
-    ExpandedCodeProject, ExpandedPort, ExpandedSemanticTarget, ExpandedWritablePoint,
-    GeneratedMemberAddress, GeneratedMemberIdentity, KeyedReconcileState, ManagedControl,
-    ManagedControlAccess, ManagedControlConsumerTarget, ManagedControlEdit,
-    ManagedControlEditBatch, ManagedControlId, ManagedControlManifest,
-    ManagedControlReadOnlyReason, ManagedControlSchema, ManagedControlToken,
-    ManagedDeclarationDraft, ManagedDiagnostic, ManagedDiagnosticCode, ManagedMutationAuthority,
-    ManagedPathSegment, ManagedSketchMutation, ManagedSpan, ManagedValue, MaterializedCodeProject,
-    PatchModuleArtifact, PreparedManagedMutationReceipt, PreparedManagedMutationRequest,
-    PreparedManagedSourceRequest, ProjectKey, SemanticOutputPath, SemanticSymbol,
-    SketchCodeSession, UnitLiteral, bundled_code_project_demos, direct_declaration_intent_symbol,
+    BundledCodeProject, CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOwnerAddress,
+    CodePointEdit, CodeProject, CodeRectangleCorner, CodeSessionIdentity, CodeSessionReceipt,
+    CodeWritableAddress, CompiledManagedSource, EditorBootstrapDeclaration, ExpandedCodeProject,
+    ExpandedPort, ExpandedSemanticTarget, ExpandedWritablePoint, GeneratedMemberAddress,
+    GeneratedMemberIdentity, KeyedReconcileState, ManagedControl, ManagedControlAccess,
+    ManagedControlConsumerTarget, ManagedControlEdit, ManagedControlEditBatch, ManagedControlId,
+    ManagedControlManifest, ManagedControlReadOnlyReason, ManagedControlSchema,
+    ManagedControlToken, ManagedDeclarationDraft, ManagedDiagnostic, ManagedDiagnosticCode,
+    ManagedMutationAuthority, ManagedPathSegment, ManagedSketchMutation, ManagedSpan, ManagedValue,
+    MaterializedCodeProject, PatchModuleArtifact, PreparedManagedMutationReceipt,
+    PreparedManagedMutationRequest, PreparedManagedSourceRequest, ProjectKey, SemanticOutputPath,
+    SemanticSymbol, SketchCodeSession, UnitLiteral, bundled_code_project_demos,
+    bundled_code_projects, direct_declaration_intent_symbol,
     expand_code_project_for_structural_edit, managed_control_authority, managed_control_manifest,
     materialize_code_project_cold, materialize_code_project_incremental_for_structural_edit,
     materialize_code_project_incremental_with_overlay,
@@ -924,29 +924,29 @@ struct ManagedControlManifestCache {
 /// sample key.
 #[derive(Clone, Debug)]
 enum CodeProjectOrigin {
-    Bundled(CodeProjectDemo),
+    Bundled(BundledCodeProject),
     Authored,
 }
 
 impl CodeProjectOrigin {
     fn title(&self) -> &'static str {
         match self {
-            Self::Bundled(demo) => demo.title,
+            Self::Bundled(project) => project.title(),
             Self::Authored => "Untitled code sketch",
         }
     }
 
     fn demo_key(&self) -> Option<&'static str> {
         match self {
-            Self::Bundled(demo) => Some(demo.id.key()),
+            Self::Bundled(project) => Some(project.key()),
             Self::Authored => None,
         }
     }
 
     fn to_wire(&self) -> CodeProjectOriginWire {
         match self {
-            Self::Bundled(demo) => CodeProjectOriginWire::Bundled {
-                demo: demo.id.key().into(),
+            Self::Bundled(project) => CodeProjectOriginWire::Bundled {
+                demo: project.key().into(),
             },
             Self::Authored => CodeProjectOriginWire::Authored,
         }
@@ -975,9 +975,9 @@ struct CodeProjectWorkbenchWire {
 
 fn restore_code_project_origin(origin: CodeProjectOriginWire) -> Result<CodeProjectOrigin, String> {
     let bundled = |key: &str| {
-        bundled_code_project_demos()
+        bundled_code_projects()
             .into_iter()
-            .find(|demo| demo.id.key() == key)
+            .find(|project| project.key() == key)
             .map(CodeProjectOrigin::Bundled)
             .ok_or_else(|| format!("unknown code project `{key}`"))
     };
@@ -1596,12 +1596,12 @@ impl CodeProjectWorkbench {
     }
 
     pub(crate) fn open_key(key: &str) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
-        let demo = bundled_code_project_demos()
+        let bundled = bundled_code_projects()
             .into_iter()
-            .find(|demo| demo.id.key() == key)
+            .find(|project| project.key() == key)
             .ok_or_else(|| format!("unknown code project `{key}`"))?;
-        let project = demo.project();
-        Self::open_project(CodeProjectOrigin::Bundled(demo), project)
+        let project = bundled.project();
+        Self::open_project(CodeProjectOrigin::Bundled(bundled), project)
     }
 
     #[cfg(test)]
@@ -4380,7 +4380,7 @@ fn canvas_declaration_label_projections(
         .collect()
 }
 
-pub(crate) fn sample_group_markup(selected: Option<CodeProjectDemoId>) -> String {
+pub(crate) fn sample_group_markup(selected: Option<&str>) -> String {
     let mut markup = String::from(
         "<li class=\"wb-sample-branch\"><button type=\"button\" data-sample-group-trigger aria-haspopup=\"menu\" aria-expanded=\"false\">Code &amp; reusable patches<span aria-hidden=\"true\">›</span></button><ul class=\"wb-sample-flyout\">",
     );
@@ -4389,7 +4389,7 @@ pub(crate) fn sample_group_markup(selected: Option<CodeProjectDemoId>) -> String
             markup,
             "<li><button type=\"button\" data-code-sample-id=\"{}\"{}><span class=\"wb-code-sample-mark\" aria-hidden=\"true\">TS</span>{}</button></li>",
             demo.id.key(),
-            if selected == Some(demo.id) {
+            if selected == Some(demo.id.key()) {
                 " aria-current=\"true\""
             } else {
                 ""
@@ -8055,15 +8055,15 @@ mod tests {
     }
 
     #[test]
-    fn all_twelve_samples_open_with_nonempty_independently_validated_native_canvases() {
-        let demos = bundled_code_project_demos();
+    fn all_thirty_seven_samples_open_with_nonempty_independently_validated_native_canvases() {
+        let demos = bundled_code_projects();
         assert_eq!(
             demos.len(),
-            12,
-            "the additive code catalog includes the routing and manufacturing dogfood demonstrations"
+            37,
+            "every user-visible sample must have source and executed code authority"
         );
         for demo in demos {
-            let (workbench, editor) = open_with_editor(demo.id.key());
+            let (workbench, editor) = open_with_editor(demo.key());
             let accepted = editor
                 .coordinator()
                 .accepted_materialization()
@@ -8072,7 +8072,7 @@ mod tests {
             assert!(
                 !design.points().is_empty() && !design.curves().is_empty(),
                 "{} opened an empty native canvas",
-                demo.id.key(),
+                demo.key(),
             );
             assert!(accepted.validation.hard_residuals_validated);
             assert!(accepted.validation.all_active_features_current);

@@ -296,14 +296,14 @@ const fn sample(id: SampleId, title: &'static str, kind: AlphaScenarioKind) -> S
 #[derive(Default)]
 pub(crate) struct SampleCatalogState {
     selected: Option<SampleId>,
-    selected_code: Option<geosolve_sketch_code::CodeProjectDemoId>,
+    selected_code: Option<String>,
 }
 
 impl SampleCatalogState {
-    pub(crate) const fn selected_key(&self) -> Option<&'static str> {
-        match (self.selected, self.selected_code) {
+    pub(crate) fn selected_key(&self) -> Option<&str> {
+        match (self.selected, self.selected_code.as_deref()) {
             (Some(id), None) => Some(id.key()),
-            (None, Some(id)) => Some(id.key()),
+            (None, Some(key)) => Some(key),
             (None, None) | (Some(_), Some(_)) => None,
         }
     }
@@ -312,11 +312,11 @@ impl SampleCatalogState {
         if let Some(selected) = self.selected {
             return definition(selected).map(|definition| definition.title);
         }
-        let selected = self.selected_code?;
-        geosolve_sketch_code::bundled_code_project_demos()
+        let selected = self.selected_code.as_deref()?;
+        geosolve_sketch_code::bundled_code_projects()
             .into_iter()
-            .find(|demo| demo.id == selected)
-            .map(|demo| demo.title)
+            .find(|project| project.key() == selected)
+            .map(|project| project.title())
     }
 
     pub(crate) fn open_key(&mut self, key: &str) -> Result<RetainedEditorCoordinator, String> {
@@ -328,18 +328,15 @@ impl SampleCatalogState {
         Ok(coordinator)
     }
 
-    pub(crate) fn select_code_key(
-        &mut self,
-        key: &str,
-    ) -> Result<geosolve_sketch_code::CodeProjectDemoId, String> {
-        let id = geosolve_sketch_code::bundled_code_project_demos()
+    pub(crate) fn select_code_key(&mut self, key: &str) -> Result<String, String> {
+        let key = geosolve_sketch_code::bundled_code_projects()
             .into_iter()
-            .find(|demo| demo.id.key() == key)
-            .map(|demo| demo.id)
+            .find(|project| project.key() == key)
+            .map(|project| project.key().to_owned())
             .ok_or_else(|| format!("code project `{key}` is unavailable"))?;
         self.selected = None;
-        self.selected_code = Some(id);
-        Ok(id)
+        self.selected_code = Some(key.clone());
+        Ok(key)
     }
 
     pub(crate) fn menu_markup(&self) -> String {
@@ -353,7 +350,9 @@ impl SampleCatalogState {
                 group.title
             );
             for definition in group.samples {
-                let selected = if self.selected == Some(definition.id) {
+                let selected = if self.selected == Some(definition.id)
+                    || self.selected_code.as_deref() == Some(definition.id.key())
+                {
                     " aria-current=\"true\""
                 } else {
                     ""
@@ -368,7 +367,7 @@ impl SampleCatalogState {
             markup.push_str("</ul></li>");
         }
         markup.push_str(&super::code_projects::sample_group_markup(
-            self.selected_code,
+            self.selected_code.as_deref(),
         ));
         markup
     }
@@ -383,22 +382,28 @@ fn definition(id: SampleId) -> Option<SampleDefinition> {
 }
 
 fn coordinator_from_source(source: SampleSource) -> Result<RetainedEditorCoordinator, String> {
-    let (document, request) = match source {
-        SampleSource::Alpha(kind) => {
-            let fixture = alpha_scenario(kind, 1.0).map_err(|error| error.to_string())?;
-            (fixture.document, fixture.request)
-        }
-        SampleSource::ConstraintDimensionSampler => constraint_dimension_sampler_document()?,
-        SampleSource::ContextualAnnotations => contextual_annotations_document()?,
-        SampleSource::ConstructionReference => construction_reference_document()?,
-        SampleSource::AutoConstraintDrafting => auto_constraint_drafting_document()?,
-        SampleSource::RetainedDraftingRelations => retained_drafting_relations_document()?,
-        SampleSource::TangentRadialNormal => tangent_radial_normal_document()?,
-        SampleSource::FilletWorkshop => fillet_workshop_document()?,
-    };
+    let (document, request) = document_from_source(source)?;
     let session = RetainedSketchDocumentSession::new(document, request, SolverConfig::default())
         .map_err(|error| error.to_string())?;
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+fn document_from_source(
+    source: SampleSource,
+) -> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    match source {
+        SampleSource::Alpha(kind) => {
+            let fixture = alpha_scenario(kind, 1.0).map_err(|error| error.to_string())?;
+            Ok((fixture.document, fixture.request))
+        }
+        SampleSource::ConstraintDimensionSampler => constraint_dimension_sampler_document(),
+        SampleSource::ContextualAnnotations => contextual_annotations_document(),
+        SampleSource::ConstructionReference => construction_reference_document(),
+        SampleSource::AutoConstraintDrafting => auto_constraint_drafting_document(),
+        SampleSource::RetainedDraftingRelations => retained_drafting_relations_document(),
+        SampleSource::TangentRadialNormal => tangent_radial_normal_document(),
+        SampleSource::FilletWorkshop => fillet_workshop_document(),
+    }
 }
 
 #[allow(
@@ -4360,6 +4365,50 @@ mod tests {
                 .constraint(fixed)
                 .is_some()
         );
+    }
+
+    fn exported_source(sample: SampleId) -> String {
+        let definition = super::definition(sample).expect("catalog sample definition");
+        let (document, _) = super::document_from_source(definition.source)
+            .unwrap_or_else(|error| panic!("{} reference document: {error}", sample.key()));
+        geosolve_sketch_code::export_sketch_document_to_managed_source(&document)
+            .unwrap_or_else(|error| panic!("{} managed source projection: {error}", sample.key()))
+    }
+
+    #[test]
+    fn every_native_reference_sample_projects_to_deterministic_managed_source() {
+        for sample in SampleId::ALL {
+            let first = exported_source(sample);
+            let second = exported_source(sample);
+            assert_eq!(
+                first,
+                second,
+                "{} projection is deterministic",
+                sample.key()
+            );
+            assert!(first.starts_with("\"use geosolve sketch\";"));
+            assert!(first.ends_with("  return {};\n});\n"));
+        }
+    }
+
+    #[test]
+    #[ignore = "writes reviewed native-reference projections; set GEOSOLVE_REGENERATE_CODE_SAMPLES=1"]
+    fn regenerate_native_reference_managed_sources() {
+        assert_eq!(
+            std::env::var("GEOSOLVE_REGENERATE_CODE_SAMPLES").as_deref(),
+            Ok("1"),
+            "regeneration requires explicit opt-in",
+        );
+        let destination = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../geosolve-sketch-code/assets/samples");
+        std::fs::create_dir_all(&destination).expect("create managed sample asset directory");
+        for sample in SampleId::ALL {
+            std::fs::write(
+                destination.join(format!("{}.sketch.ts", sample.key())),
+                exported_source(sample),
+            )
+            .unwrap_or_else(|error| panic!("write {} managed source: {error}", sample.key()));
+        }
     }
 
     #[test]

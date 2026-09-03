@@ -235,6 +235,231 @@ pub fn bundled_code_project_demos() -> Vec<CodeProjectDemo> {
     ]
 }
 
+/// One user-visible, source-authoritative bundled sketch. The original twelve
+/// curated projects may own reusable patch modules; the converted reference
+/// corpus deliberately owns only its typed managed source and executed V3
+/// envelope.
+#[derive(Clone, Debug)]
+pub struct BundledCodeProject {
+    key: &'static str,
+    title: &'static str,
+    summary: &'static str,
+    source: BundledCodeProjectSource,
+}
+
+#[derive(Clone, Debug)]
+enum BundledCodeProjectSource {
+    Curated(CodeProjectDemo),
+    Managed {
+        source: &'static str,
+        compiled: &'static str,
+    },
+}
+
+impl BundledCodeProject {
+    #[must_use]
+    pub const fn key(&self) -> &'static str {
+        self.key
+    }
+
+    #[must_use]
+    pub const fn title(&self) -> &'static str {
+        self.title
+    }
+
+    #[must_use]
+    pub const fn summary(&self) -> &'static str {
+        self.summary
+    }
+
+    /// Builds the exact offline project authenticated by the checked-in
+    /// TypeScript compiler envelope.
+    ///
+    /// # Panics
+    ///
+    /// Panics only when a source-controlled bundled envelope violates the
+    /// same public compiler/project contract covered by the catalog tests.
+    #[must_use]
+    pub fn project(&self) -> CodeProject {
+        match &self.source {
+            BundledCodeProjectSource::Curated(demo) => demo.project(),
+            BundledCodeProjectSource::Managed { source, compiled } => {
+                let compiled = CompiledManagedSource::from_json(compiled).unwrap_or_else(|error| {
+                    panic!("bundled managed sketch `{}` is valid: {error:?}", self.key)
+                });
+                assert_eq!(
+                    compiled.normalized_source, *source,
+                    "bundled managed source must match its compiler envelope"
+                );
+                CodeProject::managed(
+                    ProjectKey(format!("geosolve-sample-{}", self.key)),
+                    compiled,
+                )
+                .expect("bundled managed sketch forms a valid code project")
+            }
+        }
+    }
+}
+
+macro_rules! managed_sample {
+    ($key:literal, $title:literal, $summary:literal) => {
+        BundledCodeProject {
+            key: $key,
+            title: $title,
+            summary: $summary,
+            source: BundledCodeProjectSource::Managed {
+                source: include_str!(concat!("../assets/samples/", $key, ".sketch.ts")),
+                compiled: include_str!(concat!("../assets/samples/", $key, ".compiled.json")),
+            },
+        }
+    };
+}
+
+/// Complete source-authoritative sample inventory used by the workbench.
+/// Direct-native constructors remain only as independently comparable
+/// reference/oracle fixtures.
+#[must_use]
+pub fn bundled_code_projects() -> Vec<BundledCodeProject> {
+    let mut projects = vec![
+        managed_sample!(
+            "drafting-compass",
+            "Drafting compass · 1 DOF",
+            "A constrained one-DOF drafting compass with editable typed source."
+        ),
+        managed_sample!(
+            "bezier-continuity-bridge",
+            "Bezier continuity bridge · 1 DOF",
+            "A movable continuity mechanism backed by explicit curve/contact state."
+        ),
+        managed_sample!(
+            "twin-roller-cam",
+            "Twin-roller cam · 2 DOF",
+            "Two independently mobile roller contacts around one driven cam."
+        ),
+        managed_sample!(
+            "tangent-orbit",
+            "Tangent orbit · 1 DOF",
+            "A branch-explicit one-DOF tangent orbit."
+        ),
+        managed_sample!(
+            "elliptic-trammel",
+            "Elliptic trammel · 1 DOF",
+            "A one-DOF trammel expressed with ordinary points, spans and dimensions."
+        ),
+        managed_sample!(
+            "scotch-yoke",
+            "Scotch yoke · 1 DOF",
+            "A one-DOF crank and guided yoke with shared source-defined topology."
+        ),
+        managed_sample!(
+            "rotating-constraint-square",
+            "Rotating constraint square · 1 DOF",
+            "A constrained square retaining one intended rotational degree of freedom."
+        ),
+        managed_sample!(
+            "scissor-jack",
+            "Scissor jack · 1 DOF",
+            "A one-stage one-DOF scissor mechanism with deterministic source controls."
+        ),
+        managed_sample!(
+            "five-stage-scissor-tower",
+            "Five-stage scissor tower · 1 DOF",
+            "A coupled five-stage one-DOF scissor tower."
+        ),
+        managed_sample!(
+            "peaucellier-inversor",
+            "Peaucellier inversor · 1 DOF",
+            "An ordinary constrained Peaucellier linkage retaining its intended motion."
+        ),
+        managed_sample!(
+            "four-bar-coupler",
+            "Four-bar coupler · 1 DOF",
+            "A one-DOF four-bar coupler with explicit length constraints."
+        ),
+        managed_sample!(
+            "pantograph-linkage",
+            "Pantograph linkage · 2 DOF",
+            "A two-DOF pantograph expressed entirely through typed declarations."
+        ),
+        managed_sample!(
+            "three-link-drawing-arm",
+            "Three-link drawing arm · 3 DOF",
+            "A three-link, three-DOF drawing arm with ordinary source-backed dimensions."
+        ),
+        managed_sample!(
+            "constraint-dimension-sampler",
+            "Constraint and dimension sampler",
+            "A readable catalog of ordinary constraint and dimension declarations."
+        ),
+        managed_sample!(
+            "auto-constraint-drafting",
+            "Auto-constraint drafting playground",
+            "A source-defined playground for retained drafting inference."
+        ),
+        managed_sample!(
+            "retained-drafting-relations",
+            "Retained drafting relations",
+            "Examples of remembered drafting relations as ordinary source declarations."
+        ),
+        managed_sample!(
+            "tangent-radial-normal",
+            "Tangent and radial-normal construction",
+            "Tangent and radial-normal relations with explicit contact state."
+        ),
+        managed_sample!(
+            "contact-branch-specimen",
+            "Contact branch specimen",
+            "A branch-explicit line/circle contact specimen."
+        ),
+        managed_sample!(
+            "angle-dimension-annotations",
+            "Angle and dimension annotations",
+            "Driving and reference annotations backed by typed dimensions."
+        ),
+        managed_sample!(
+            "contextual-constraint-annotations",
+            "Contextual constraint annotations",
+            "The complete contextual constraint-glyph specimen in editable source."
+        ),
+        managed_sample!(
+            "dense-constraint-junction",
+            "Dense constraint junction",
+            "A dense overlapping junction for picking and annotation review."
+        ),
+        managed_sample!(
+            "construction-reference-geometry",
+            "Construction and reference geometry",
+            "Profile, construction and reference geometry sharing ordinary topology."
+        ),
+        managed_sample!(
+            "curve-family-gallery",
+            "Curve family gallery",
+            "The full supported curve-family gallery in typed source."
+        ),
+        managed_sample!(
+            "periodic-nurbs-specimen",
+            "Periodic NURBS specimen",
+            "A keyed periodic NURBS with explicit projective gauge."
+        ),
+        managed_sample!(
+            "fillet-workshop",
+            "2D Fillet playground",
+            "A source-defined collection of ordinary Fillet input constructions."
+        ),
+    ];
+    projects.extend(
+        bundled_code_project_demos()
+            .into_iter()
+            .map(|demo| BundledCodeProject {
+                key: demo.id.key(),
+                title: demo.title,
+                summary: demo.summary(),
+                source: BundledCodeProjectSource::Curated(demo),
+            }),
+    );
+    projects
+}
+
 /// Semantic generated identities for one keyed Polyline. A directed span is
 /// owned by its starting vertex key; an open Polyline Fillet is owned by each
 /// interior vertex key.

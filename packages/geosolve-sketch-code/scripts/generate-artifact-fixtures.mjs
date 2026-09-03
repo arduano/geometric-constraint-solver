@@ -481,6 +481,37 @@ const bundledManagedSketches = [
   },
 ];
 
+// These sources are projected from the 25 direct-native catalog references by
+// the Rust regeneration owner. TypeScript remains the sole compiler authority:
+// this list only pins their normalized V3 source/IR/artifact envelopes.
+const nativeReferenceSketches = [
+  "drafting-compass",
+  "bezier-continuity-bridge",
+  "twin-roller-cam",
+  "tangent-orbit",
+  "elliptic-trammel",
+  "scotch-yoke",
+  "rotating-constraint-square",
+  "scissor-jack",
+  "five-stage-scissor-tower",
+  "peaucellier-inversor",
+  "four-bar-coupler",
+  "pantograph-linkage",
+  "three-link-drawing-arm",
+  "constraint-dimension-sampler",
+  "auto-constraint-drafting",
+  "retained-drafting-relations",
+  "tangent-radial-normal",
+  "contact-branch-specimen",
+  "angle-dimension-annotations",
+  "contextual-constraint-annotations",
+  "dense-constraint-junction",
+  "construction-reference-geometry",
+  "curve-family-gallery",
+  "periodic-nurbs-specimen",
+  "fillet-workshop",
+];
+
 for (const fixture of fixtures) {
   const source = await readFile(resolve(packageRoot, fixture.source));
   const compiled = compilePatchArtifact({
@@ -580,6 +611,42 @@ for (const fixture of bundledManagedSketches) {
     );
   } else {
     await mkdir(dirname(sourceDestination), { recursive: true });
+    await writeFile(sourceDestination, compiled.normalizedSource);
+    await writeFile(compiledDestination, canonicalEnvelope);
+  }
+}
+
+for (const name of nativeReferenceSketches) {
+  const sourceDestination = resolve(
+    packageRoot,
+    `../../crates/geosolve-sketch-code/assets/samples/${name}.sketch.ts`,
+  );
+  const compiledDestination = resolve(
+    packageRoot,
+    `../../crates/geosolve-sketch-code/assets/samples/${name}.compiled.json`,
+  );
+  const source = await readFile(sourceDestination, "utf8");
+  let compiled;
+  try {
+    compiled = compileManagedSource(source);
+  } catch (error) {
+    throw new Error(`failed to compile native-reference sketch ${name}`, {
+      cause: error,
+    });
+  }
+  const canonicalEnvelope = JSON.stringify(compiled);
+  if (check) {
+    assert.equal(
+      source,
+      compiled.normalizedSource,
+      `${name}.sketch.ts is stale; run npm run generate:fixtures`,
+    );
+    assert.equal(
+      await readFile(compiledDestination, "utf8"),
+      canonicalEnvelope,
+      `${name}.compiled.json is stale; run npm run generate:fixtures`,
+    );
+  } else {
     await writeFile(sourceDestination, compiled.normalizedSource);
     await writeFile(compiledDestination, canonicalEnvelope);
   }

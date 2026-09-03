@@ -1465,18 +1465,19 @@ pub(crate) struct SampleManifestEntry {
     pub(crate) reachability: CommandReachability,
 }
 
-/// The 25 native and 12 managed-code examples in their authoritative order.
+/// All 37 user-visible examples in their source-authoritative order. The first
+/// 25 retain direct-native constructors only as reference/oracle fixtures.
 pub(crate) fn sample_manifest() -> Vec<SampleManifestEntry> {
     let mut samples = Vec::with_capacity(37);
     for group in super::samples::GROUPS {
         for definition in group.samples {
             samples.push(SampleManifestEntry {
-                stable_id: format!("sample.native.{}", definition.id.key()),
+                stable_id: format!("sample.code.{}", definition.id.key()),
                 key: definition.id.key(),
                 title: definition.title,
                 group: group.title,
-                summary: "Editable native sketch sample",
-                kind: SampleKind::Native,
+                summary: "Editable typed code-defined sketch sample",
+                kind: SampleKind::Code,
                 reachability: CommandReachability::two_actions(),
             });
         }
@@ -1600,20 +1601,22 @@ mod tests {
                 .iter()
                 .filter(|sample| sample.kind == SampleKind::Native)
                 .count(),
-            25
+            0
         );
         assert_eq!(
             samples
                 .iter()
                 .filter(|sample| sample.kind == SampleKind::Code)
                 .count(),
-            12
+            37
         );
         assert_eq!(samples.len(), 37);
         assert_eq!(
             samples
                 .iter()
-                .filter(|sample| sample.kind == SampleKind::Native)
+                .filter(|sample| {
+                    super::super::samples::SampleId::from_key(sample.key).is_some()
+                })
                 .map(|sample| sample.key)
                 .collect::<Vec<_>>(),
             super::super::samples::SampleId::ALL.map(super::super::samples::SampleId::key)
@@ -1621,7 +1624,7 @@ mod tests {
         assert_eq!(
             samples
                 .iter()
-                .filter(|sample| sample.kind == SampleKind::Code)
+                .skip(super::super::samples::SampleId::ALL.len())
                 .map(|sample| sample.key)
                 .collect::<Vec<_>>(),
             geosolve_sketch_code::bundled_code_project_demos()

@@ -12,8 +12,8 @@ const manifestSource = await readFile(new URL("../../src/workbench/command_manif
 
 const native = samples.filter(({ kind }) => kind === "native");
 const code = samples.filter(({ kind }) => kind === "code");
-if (samples.length !== 37 || native.length !== 25 || code.length !== 12) {
-  throw new Error(`sample inventory must remain 25 native + 12 code; received ${native.length} + ${code.length}`);
+if (samples.length !== 37 || native.length !== 0 || code.length !== 37) {
+  throw new Error(`all 37 samples must be code-authoritative; received ${native.length} native + ${code.length} code`);
 }
 const identities = new Set(samples.map(({ stableId }) => stableId));
 if (identities.size !== samples.length) throw new Error("sample stable IDs must be unique");
@@ -28,14 +28,14 @@ for (const sample of samples) {
   }
 }
 
-for (const sample of native) {
-  if (!nativeSource.includes(`"${sample.key}"`) || !nativeSource.includes(`"${sample.title}"`)) {
-    throw new Error(`native sample drift: ${sample.stableId}`);
-  }
-}
 for (const sample of code) {
   if (!codeSource.includes(`"${sample.key}"`) || !codeSource.includes(`"${sample.title}"`)) {
     throw new Error(`code sample drift: ${sample.stableId}`);
+  }
+}
+for (const sample of samples.slice(0, 25)) {
+  if (!nativeSource.includes(`"${sample.key}"`) || !nativeSource.includes(`"${sample.title}"`)) {
+    throw new Error(`native reference drift: ${sample.stableId}`);
   }
 }
 if (commands.geometry.length !== 25 || new Set(commands.geometry.map(({ group }) => group)).size !== 9 || commands.constraints.length !== 13 || commands.dimensions.length !== 5 || commands.modify.length !== 2 || commands.context.length !== 1 || commands.canvas.length !== 3) {
@@ -61,4 +61,4 @@ for (const entry of [...commands.modify, ...commands.context, ...commands.canvas
   const keyFound = actionSource.includes(`"${entry.id}"`) || manifestSource.includes(`"${entry.id}"`);
   if (!keyFound || !(manifestSource.includes(`"${entry.label}"`) || actionSource.includes(`"${entry.label}"`))) throw new Error(`feature/display command drift: ${entry.id}`);
 }
-console.log("frontend manifests match Rust authority: 37 samples + complete primary command inventory");
+console.log("frontend manifests match Rust authority: 37 code-defined samples + complete primary command inventory");
