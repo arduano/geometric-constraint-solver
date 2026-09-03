@@ -3120,7 +3120,15 @@ fn lower_named_nurbs(
             SemanticValue::Port(position.clone()),
         );
         paths.insert(
+            fields_path(&["controls", "byKey", &control.key, "position"]),
+            SemanticValue::Port(position.clone()),
+        );
+        paths.insert(
             member_path(&["controls"], &control.key, &["weight"]),
+            SemanticValue::Port(weight.clone()),
+        );
+        paths.insert(
+            fields_path(&["controls", "byKey", &control.key, "weight"]),
             SemanticValue::Port(weight.clone()),
         );
         control_members.insert(
@@ -3162,6 +3170,10 @@ fn lower_named_nurbs(
         );
         paths.insert(
             member_path(&["spans"], &control.key, &[]),
+            SemanticValue::Port(span.clone()),
+        );
+        paths.insert(
+            fields_path(&["spans", "byKey", &control.key]),
             SemanticValue::Port(span.clone()),
         );
         span_members.insert(control.key.clone(), SemanticValue::Port(span));

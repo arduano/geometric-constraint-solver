@@ -9,6 +9,7 @@ mod artifact;
 mod composition;
 mod declaration_catalog;
 mod demos;
+mod document_export;
 mod editor_insertion;
 mod expansion;
 mod managed;
@@ -48,6 +49,7 @@ pub use demos::{
     CodeProjectDemo, CodeProjectDemoId, bundled_code_project_demos,
     rounded_polyline_member_addresses,
 };
+pub use document_export::{ManagedSketchExportError, export_sketch_document_to_managed_source};
 pub use editor_insertion::{
     CANVAS_ADDITIONS_GROUP, EditorBootstrapDeclaration, EditorDeclarationInsertionError,
     EditorDeclarationInsertionPlan, EditorSourceDeclarationClosure,
