@@ -212,6 +212,10 @@ const managedSketchFixtures = [
     fixture: "test/fixtures/managed-contact-range-limited.json",
   },
   {
+    source: "test/fixtures/managed-contact-supporting-line.sketch.ts",
+    fixture: "test/fixtures/managed-contact-supporting-line.json",
+  },
+  {
     source: "test/fixtures/managed-clean-operation-catalog.sketch.ts",
     fixture: "test/fixtures/managed-clean-operation-catalog.json",
   },

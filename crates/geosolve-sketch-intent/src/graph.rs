@@ -998,6 +998,26 @@ impl IntentGraph {
         Ok(true)
     }
 
+    pub(crate) fn unset_field(
+        &mut self,
+        node: NodeId,
+        field: IntentFieldKey,
+    ) -> Result<bool, IntentGraphError> {
+        let node = self
+            .nodes
+            .get_mut(&node)
+            .ok_or(IntentGraphError::UnknownNode(node))?;
+        let dynamic_children = u16::try_from(node.children.len())
+            .map_err(|_| IntentGraphError::InvalidPortSchema { node: node.id })?;
+        if node.kind.schema(dynamic_children).field(&field).is_none() {
+            return Err(IntentGraphError::UnknownDefinitionField {
+                node: node.id,
+                field,
+            });
+        }
+        Ok(node.fields.remove(&field).is_some())
+    }
+
     pub(crate) fn rebind_input(
         &mut self,
         node: NodeId,

@@ -445,6 +445,7 @@ fn ensure_patch_response_bound(
             IntentPatchOperation::DeleteNode { .. }
             | IntentPatchOperation::SetSuppressed { .. }
             | IntentPatchOperation::SetDefinitionField { .. }
+            | IntentPatchOperation::UnsetDefinitionField { .. }
             | IntentPatchOperation::SetInstanceLeaf { .. }
             | IntentPatchOperation::RebindInput { .. }
             | IntentPatchOperation::EjectBootstrapPoint { .. }

@@ -41,6 +41,7 @@ import {
   stableCellTarget,
   stableNode,
   stablePort,
+  unsetDefinitionField,
 } from "../src/index.js";
 
 const fixtureText = readFileSync(
@@ -277,6 +278,28 @@ test("bootstrap Point ejection uses the closed Rust operation shape", () => {
   assert.deepEqual(decoded.operations, [{
     operation: "eject_bootstrap_point",
     node: "0000000000000048",
+  }]);
+});
+
+test("optional definition removal uses the closed Rust operation shape", () => {
+  const owner = session(fixture.expected.session);
+  const operation = unsetDefinitionField(
+    owner,
+    stableNode(owner, "0000000000000049"),
+    "contact_support",
+  );
+  const encoded = encodeIntentPatch(patch(
+    owner,
+    sessionIdentity(owner, fixture.expected),
+    "require_accepted",
+    [operation],
+  ));
+  const decoded = JSON.parse(encoded) as { operations: unknown[] };
+
+  assert.deepEqual(decoded.operations, [{
+    operation: "unset_definition_field",
+    node: "0000000000000049",
+    field: "contact_support",
   }]);
 });
 

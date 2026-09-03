@@ -640,20 +640,21 @@ fn history_operation_kinds(
         }
         let current_fields = reachable_graph.node(*node_id)?.fields.clone();
         if current_fields != after_node.fields {
-            if current_fields
+            for field in current_fields
                 .keys()
-                .any(|field| !after_node.fields.contains_key(field))
+                .filter(|field| !after_node.fields.contains_key(*field))
             {
-                return None;
+                reachable_graph.unset_field(*node_id, field.clone()).ok()?;
+                expected.insert(IntentPatchOperationKind::UnsetDefinitionField);
             }
             for (field, value) in &after_node.fields {
                 if current_fields.get(field) != Some(value) {
                     reachable_graph
                         .set_field(*node_id, field.clone(), value.clone())
                         .ok()?;
+                    expected.insert(IntentPatchOperationKind::SetDefinitionField);
                 }
             }
-            expected.insert(IntentPatchOperationKind::SetDefinitionField);
         }
         let current_inputs = reachable_graph.node(*node_id)?.inputs.clone();
         if current_inputs != after_node.inputs {
@@ -2842,6 +2843,12 @@ fn apply_patch_operations(
                     diff.graph_changed = true;
                 }
             }
+            IntentPatchOperation::UnsetDefinitionField { node, field } => {
+                if staged.graph.unset_field(node, field)? {
+                    diff.definition_nodes.insert(node);
+                    diff.graph_changed = true;
+                }
+            }
             IntentPatchOperation::SetInstanceLeaf { leaf, value } => {
                 staged.graph.writable_leaf(leaf)?;
                 if !literal_matches_leaf(&value, leaf.field) {
@@ -3040,7 +3047,8 @@ fn validate_patch_conflicts(operations: &[IntentPatchOperation]) -> Result<(), I
             IntentPatchOperation::SetSuppressed { node, .. } => {
                 (format!("suppressed:{node}"), Some(*node))
             }
-            IntentPatchOperation::SetDefinitionField { node, field, .. } => {
+            IntentPatchOperation::SetDefinitionField { node, field, .. }
+            | IntentPatchOperation::UnsetDefinitionField { node, field } => {
                 (format!("field:{node}:{}", field.0), Some(*node))
             }
             IntentPatchOperation::SetInstanceLeaf { leaf, .. } => {
@@ -3089,6 +3097,7 @@ fn operation_targets_node(operation: &IntentPatchOperation, expected: NodeId) ->
         IntentPatchOperation::DeleteNode { node, .. }
         | IntentPatchOperation::SetSuppressed { node, .. }
         | IntentPatchOperation::SetDefinitionField { node, .. }
+        | IntentPatchOperation::UnsetDefinitionField { node, .. }
         | IntentPatchOperation::RebindInput { node, .. }
         | IntentPatchOperation::EjectBootstrapPoint { node }
         | IntentPatchOperation::RenameNode { node, .. }
@@ -3491,9 +3500,9 @@ pub enum IntentSessionError {
 mod tests {
     use super::*;
     use crate::{
-        ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentLiteral, IntentNodeDraft,
-        IntentNodeKind, IntentPatchOperationKind, IntentPortRef, IntentReservationState, LeafField,
-        LeafRef,
+        ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey, IntentLiteral,
+        IntentNodeDraft, IntentNodeKind, IntentPatchOperationKind, IntentPortRef,
+        IntentReservationState, LeafField, LeafRef, ParameterIntentKind,
     };
 
     fn key(value: &str) -> IntentKey {
@@ -3529,6 +3538,164 @@ mod tests {
         );
         let plan = session.plan_patch(patch, accepted).unwrap();
         session.commit_plan(plan).unwrap();
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one owning transaction regression keeps optional removal, fail-closed schema checks, conflicts, history, and canonical reload together"
+    )]
+    fn unset_definition_field_removes_optional_state_and_rejects_required_or_unknown_fields() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x91_0c02)).unwrap();
+        let role = IntentFieldKey(key("role"));
+        let kind = IntentFieldKey(key("kind"));
+        let create = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("point"),
+                    draft: Box::new(
+                        IntentNodeDraft::new(
+                            IntentNodeKind::Geometry {
+                                recipe: GeometryRecipeKind::SketchPoint,
+                            },
+                            key("unset.point"),
+                        )
+                        .with_field(role.clone(), IntentLiteral::Enum(key("construction"))),
+                    ),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("parameter"),
+                    draft: Box::new(
+                        IntentNodeDraft::new(
+                            IntentNodeKind::Parameter {
+                                parameter: ParameterIntentKind::Parameter,
+                            },
+                            key("unset.parameter"),
+                        )
+                        .with_field(kind.clone(), IntentLiteral::Enum(key("length"))),
+                    ),
+                    cell: None,
+                },
+            ],
+        );
+        let create_plan = session.plan_patch(create, accepted).unwrap();
+        let point = create_plan.aliases().node(&key("point")).unwrap();
+        let parameter = create_plan.aliases().node(&key("parameter")).unwrap();
+        session.commit_plan(create_plan).unwrap();
+
+        let unset_optional = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::UnsetDefinitionField {
+                node: point,
+                field: role.clone(),
+            }],
+        );
+        let unset_plan = session.plan_patch(unset_optional, accepted).unwrap();
+        assert_eq!(
+            unset_plan.descriptor().operation_kinds,
+            vec![IntentPatchOperationKind::UnsetDefinitionField]
+        );
+        session.commit_plan(unset_plan).unwrap();
+        assert!(
+            !session
+                .graph()
+                .node(point)
+                .unwrap()
+                .fields
+                .contains_key(&role)
+        );
+        session.validate().unwrap();
+
+        let accepted_json = session.to_canonical_json().unwrap();
+        let required = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::UnsetDefinitionField {
+                node: parameter,
+                field: kind,
+            }],
+        );
+        assert!(matches!(
+            session.plan_patch(required, accepted),
+            Err(IntentPlanError::Graph(
+                IntentGraphError::MissingRequiredDefinitionField { node, .. }
+            )) if node == parameter
+        ));
+        assert_eq!(session.to_canonical_json().unwrap(), accepted_json);
+
+        let unknown = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::UnsetDefinitionField {
+                node: point,
+                field: IntentFieldKey(key("not_a_schema_field")),
+            }],
+        );
+        assert!(matches!(
+            session.plan_patch(unknown, accepted),
+            Err(IntentPlanError::Graph(
+                IntentGraphError::UnknownDefinitionField { node, .. }
+            )) if node == point
+        ));
+        assert_eq!(session.to_canonical_json().unwrap(), accepted_json);
+
+        let repeated = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::UnsetDefinitionField {
+                node: point,
+                field: role.clone(),
+            }],
+        );
+        assert!(matches!(
+            session.plan_patch(repeated, accepted),
+            Err(IntentPlanError::NoChanges)
+        ));
+
+        let conflicting = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::SetDefinitionField {
+                    node: point,
+                    field: role.clone(),
+                    value: IntentLiteral::Enum(key("profile")),
+                },
+                IntentPatchOperation::UnsetDefinitionField {
+                    node: point,
+                    field: role.clone(),
+                },
+            ],
+        );
+        assert!(matches!(
+            session.plan_patch(conflicting, accepted),
+            Err(IntentPlanError::ConflictingOperations { target })
+                if target == format!("field:{point}:role")
+        ));
+        assert_eq!(session.to_canonical_json().unwrap(), accepted_json);
+
+        session
+            .undo()
+            .unwrap()
+            .expect("optional unset enters history");
+        assert_eq!(
+            session.graph().node(point).unwrap().fields.get(&role),
+            Some(&IntentLiteral::Enum(key("construction")))
+        );
+        session.redo().unwrap().expect("optional unset replays");
+        assert!(
+            !session
+                .graph()
+                .node(point)
+                .unwrap()
+                .fields
+                .contains_key(&role)
+        );
+        IntentSession::from_json(&session.to_canonical_json().unwrap()).unwrap();
     }
 
     fn session_with_undo_and_redo() -> IntentSession {

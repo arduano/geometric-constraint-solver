@@ -1872,14 +1872,9 @@ fn retained_schema_compatible(node: &IntentNode, draft: &IntentNodeDraft) -> boo
     node.kind == draft.kind
         && node.operation_outputs == draft.operation_outputs
         && node.child_order.len() == usize::from(draft.dynamic_children)
+        && draft.schema_generated_port_count() == Some(node.ports.len())
         && node.inputs.keys().copied().collect::<BTreeSet<_>>()
             == draft.inputs.keys().copied().collect()
-        // Optional definition fields can be authored after a declaration was
-        // first published. `SetDefinitionField` is the exact retained update
-        // for that additive schema transition; removing an authored field is
-        // deliberately not admitted here because Intent has no unset-field
-        // operation and silently retaining it would preserve stale authority.
-        && node.fields.keys().all(|field| draft.fields.contains_key(field))
 }
 
 fn append_retained_edits(
@@ -1896,6 +1891,16 @@ fn append_retained_edits(
             .ok_or_else(|| CodeCompositionError::IncrementalSchemaChange {
                 symbol: draft.symbol.to_string(),
             })?;
+    for field in node
+        .fields
+        .keys()
+        .filter(|field| !draft.fields.contains_key(*field))
+    {
+        operations.push(IntentPatchOperation::UnsetDefinitionField {
+            node: node_id,
+            field: field.clone(),
+        });
+    }
     for (field, value) in &draft.fields {
         if node.fields.get(field) != Some(value) {
             operations.push(IntentPatchOperation::SetDefinitionField {

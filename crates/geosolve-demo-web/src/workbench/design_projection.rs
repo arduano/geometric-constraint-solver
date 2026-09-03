@@ -1282,6 +1282,7 @@ fn operation_label(kind: IntentPatchOperationKind) -> &'static str {
         IntentPatchOperationKind::DeleteNode => "Delete",
         IntentPatchOperationKind::SetSuppressed => "Suppress",
         IntentPatchOperationKind::SetDefinitionField => "Edit definition",
+        IntentPatchOperationKind::UnsetDefinitionField => "Remove definition",
         IntentPatchOperationKind::SetInstanceLeaf => "Move / edit value",
         IntentPatchOperationKind::EjectBootstrapPoint => "Eject bootstrap Point",
         IntentPatchOperationKind::RebindInput => "Reconnect",

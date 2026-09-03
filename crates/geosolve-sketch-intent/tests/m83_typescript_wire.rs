@@ -28,7 +28,7 @@ fn port(value: u64) -> PortId {
 
 #[allow(
     clippy::too_many_lines,
-    reason = "one exhaustive wire fixture keeps all twelve closed patch variants reviewable together"
+    reason = "one exhaustive wire fixture keeps the representative closed patch variants reviewable together"
 )]
 fn representative_patch() -> IntentPatch {
     let session = IntentSession::with_id(IntentSessionId::from_raw(
@@ -228,6 +228,23 @@ fn bootstrap_point_ejection_matches_the_closed_typescript_operation_shape() {
     assert_eq!(
         actual,
         r#"{"operation":"eject_bootstrap_point","node":"0000000000000048"}"#,
+    );
+    let decoded: IntentPatchOperation =
+        serde_json::from_str(&actual).expect("TypeScript operation shape is Rust-decodable");
+    assert_eq!(decoded, operation);
+}
+
+#[test]
+fn optional_definition_removal_matches_the_closed_typescript_operation_shape() {
+    let operation = IntentPatchOperation::UnsetDefinitionField {
+        node: node(0x49),
+        field: field("contact_support"),
+    };
+    let actual = serde_json::to_string(&operation).expect("definition unset serializes");
+
+    assert_eq!(
+        actual,
+        r#"{"operation":"unset_definition_field","node":"0000000000000049","field":"contact_support"}"#,
     );
     let decoded: IntentPatchOperation =
         serde_json::from_str(&actual).expect("TypeScript operation shape is Rust-decodable");

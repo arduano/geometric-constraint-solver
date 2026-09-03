@@ -70,6 +70,10 @@ pub enum IntentPatchOperation {
         field: IntentFieldKey,
         value: IntentLiteral,
     },
+    UnsetDefinitionField {
+        node: NodeId,
+        field: IntentFieldKey,
+    },
     SetInstanceLeaf {
         leaf: LeafRef,
         value: IntentLiteral,
@@ -119,6 +123,7 @@ pub enum IntentPatchOperationKind {
     DeleteNode,
     SetSuppressed,
     SetDefinitionField,
+    UnsetDefinitionField,
     SetInstanceLeaf,
     RebindInput,
     EjectBootstrapPoint,
@@ -138,6 +143,7 @@ impl IntentPatchOperation {
             Self::DeleteNode { .. } => IntentPatchOperationKind::DeleteNode,
             Self::SetSuppressed { .. } => IntentPatchOperationKind::SetSuppressed,
             Self::SetDefinitionField { .. } => IntentPatchOperationKind::SetDefinitionField,
+            Self::UnsetDefinitionField { .. } => IntentPatchOperationKind::UnsetDefinitionField,
             Self::SetInstanceLeaf { .. } => IntentPatchOperationKind::SetInstanceLeaf,
             Self::RebindInput { .. } => IntentPatchOperationKind::RebindInput,
             Self::EjectBootstrapPoint { .. } => IntentPatchOperationKind::EjectBootstrapPoint,

@@ -440,6 +440,12 @@ export type IntentOperation<S extends string> =
       readonly [operationBrand]: S;
     }
   | {
+      readonly operation: "unset_definition_field";
+      readonly node: string;
+      readonly field: string;
+      readonly [operationBrand]: S;
+    }
+  | {
       readonly operation: "set_instance_leaf";
       readonly leaf: string;
       readonly value: QuantityLiteral;
@@ -819,6 +825,7 @@ export type IntentPatchOperationKind =
   | "delete_node"
   | "set_suppressed"
   | "set_definition_field"
+  | "unset_definition_field"
   | "set_instance_leaf"
   | "rebind_input"
   | "eject_bootstrap_point"
@@ -1294,6 +1301,16 @@ export function setDefinitionField<S extends string>(
   requireKey(field, "definition field");
   validateLiteral(value);
   return operation(owner, { operation: "set_definition_field", node: node.id, field, value });
+}
+
+export function unsetDefinitionField<S extends string>(
+  owner: SessionRef<S>,
+  node: NodeRef<NoInfer<S>>,
+  field: string,
+): IntentOperation<S> {
+  requireOwner(owner, node);
+  requireKey(field, "definition field");
+  return operation(owner, { operation: "unset_definition_field", node: node.id, field });
 }
 
 export function setInstanceLeaf<S extends string, K extends "point" | "handle_point" | "scalar">(
@@ -3329,6 +3346,8 @@ function encodeOperation(value: IntentOperation<string>): string {
       return `{"operation":"set_suppressed","node":${quote(value.node)},"suppressed":${String(value.suppressed)}}`;
     case "set_definition_field":
       return `{"operation":"set_definition_field","node":${quote(value.node)},"field":${quote(value.field)},"value":${encodeLiteral(value.value)}}`;
+    case "unset_definition_field":
+      return `{"operation":"unset_definition_field","node":${quote(value.node)},"field":${quote(value.field)}}`;
     case "set_instance_leaf":
       return `{"operation":"set_instance_leaf","leaf":${quote(value.leaf)},"value":${encodeLiteral(value.value)}}`;
     case "rebind_input":
@@ -3639,6 +3658,7 @@ const PATCH_OPERATION_KINDS = [
   "delete_node",
   "set_suppressed",
   "set_definition_field",
+  "unset_definition_field",
   "set_instance_leaf",
   "rebind_input",
   "eject_bootstrap_point",

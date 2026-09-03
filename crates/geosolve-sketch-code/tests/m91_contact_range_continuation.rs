@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use geosolve_constraint_editor::{IntentNativeBinding, IntentNativeWritableLeaf};
 use geosolve_sketch::{
-    ContactAdmissibleRange, DocumentElementId, DocumentId, PersistentId,
+    ContactAdmissibleRange, ContactDomain, DocumentElementId, DocumentId, PersistentId,
     SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchBoundStatus,
 };
 use geosolve_sketch_code::{
@@ -19,6 +19,9 @@ const BASE: &str = include_str!(
 );
 const LIMITED: &str = include_str!(
     "../../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-limited.json"
+);
+const SUPPORTING_LINE: &str = include_str!(
+    "../../../packages/geosolve-sketch-code/test/fixtures/managed-contact-supporting-line.json"
 );
 
 fn project(envelope: &str) -> CodeProject {
@@ -68,6 +71,31 @@ fn binding(
         .ownership
         .port(port)
         .expect("native binding")
+}
+
+fn assert_current_authority_is_independently_valid(
+    materialized: &geosolve_sketch_code::MaterializedCodeProject,
+) {
+    let authority = materialized
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .expect("accepted materialization authority");
+    let accepted = authority
+        .session
+        .accepted_state_for_current_input()
+        .expect("accepted state belongs to the current input");
+    let diagnostics = accepted.diagnostics();
+    let solve = diagnostics
+        .solve
+        .as_ref()
+        .expect("accepted solve diagnostics");
+    assert!(solve.accepted && solve.hard_residuals_validated);
+    assert!(
+        solve
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value <= SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE)
+    );
 }
 
 #[test]
@@ -199,4 +227,195 @@ fn managed_range_source_edit_continues_to_the_bound_and_preserves_unrelated_geom
             })
             .is_some()
     );
+}
+
+#[test]
+fn managed_range_removal_restores_intrinsic_bounded_topology() {
+    let limited_project = project(LIMITED);
+    let reconciliation = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&limited_project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let before = materialize_code_project_cold(
+        &limited_project,
+        &reconciliation,
+        IntentSessionId::from_raw(0x91_0c03),
+        DocumentId(PersistentId::from_u128(0x91_0c03)),
+        1.0,
+    )
+    .expect("limited project accepted");
+    let IntentNativeBinding::Contact(contact_id) =
+        binding(&before, "contact", IntentPortRole::Contact)
+    else {
+        panic!("point-on-curve owns one contact");
+    };
+    let IntentNativeBinding::Point(unrelated_id) =
+        binding(&before, "unrelated", IntentPortRole::Primary)
+    else {
+        panic!("unrelated sketch point owns one point");
+    };
+    let accepted_before = before
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let contact_before = accepted_before.contact(contact_id).unwrap();
+    assert_eq!(
+        contact_before.admissible_range,
+        Some(ContactAdmissibleRange {
+            lower: 0.0,
+            upper: 0.5,
+        })
+    );
+    assert_eq!(
+        contact_before.domain,
+        ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0,
+        }
+    );
+    let unrelated_before = accepted_before.point(unrelated_id).unwrap().position;
+
+    let base_project = project(BASE);
+    let base_reconciliation = reconciliation
+        .plan(
+            required_generated_members(&base_project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let (after, retained_overlay) = materialize_code_project_incremental_for_structural_edit(
+        &before,
+        &base_project,
+        &base_reconciliation,
+        &CodeInteractionOverlay::empty(),
+    )
+    .expect("range removal accepted as an incremental managed edit");
+    assert_eq!(retained_overlay, CodeInteractionOverlay::empty());
+
+    let accepted = after
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let contact = accepted.document().contact(contact_id).unwrap();
+    assert_eq!(contact.admissible_range, None);
+    assert_eq!(
+        contact.domain,
+        ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0,
+        }
+    );
+    assert_eq!(
+        accepted
+            .document()
+            .point(unrelated_id)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        unrelated_before.map(f64::to_bits)
+    );
+    assert_current_authority_is_independently_valid(&after);
+}
+
+#[test]
+fn managed_support_removal_restores_intrinsic_line_topology() {
+    let supporting_project = project(SUPPORTING_LINE);
+    let reconciliation = KeyedReconcileState::empty()
+        .plan(
+            required_generated_members(&supporting_project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let before = materialize_code_project_cold(
+        &supporting_project,
+        &reconciliation,
+        IntentSessionId::from_raw(0x91_0c04),
+        DocumentId(PersistentId::from_u128(0x91_0c04)),
+        1.0,
+    )
+    .expect("supporting-line project accepted");
+    let IntentNativeBinding::Contact(contact_id) =
+        binding(&before, "contact", IntentPortRole::Contact)
+    else {
+        panic!("point-on-curve owns one contact");
+    };
+    let IntentNativeBinding::Point(unrelated_id) =
+        binding(&before, "unrelated", IntentPortRole::Primary)
+    else {
+        panic!("unrelated sketch point owns one point");
+    };
+    let accepted_before = before
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    assert_eq!(
+        accepted_before.contact(contact_id).unwrap().domain,
+        ContactDomain::SupportingLine
+    );
+    let unrelated_before = accepted_before.point(unrelated_id).unwrap().position;
+
+    let base_project = project(BASE);
+    let base_reconciliation = reconciliation
+        .plan(
+            required_generated_members(&base_project).unwrap(),
+            &BTreeSet::new(),
+        )
+        .unwrap()
+        .into_staged();
+    let (after, retained_overlay) = materialize_code_project_incremental_for_structural_edit(
+        &before,
+        &base_project,
+        &base_reconciliation,
+        &CodeInteractionOverlay::empty(),
+    )
+    .expect("support removal accepted as an incremental managed edit");
+    assert_eq!(retained_overlay, CodeInteractionOverlay::empty());
+
+    let accepted = after
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let contact = accepted.document().contact(contact_id).unwrap();
+    assert_eq!(contact.admissible_range, None);
+    assert_eq!(
+        contact.domain,
+        ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0,
+        }
+    );
+    assert_eq!(
+        accepted
+            .document()
+            .point(unrelated_id)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        unrelated_before.map(f64::to_bits)
+    );
+    assert_current_authority_is_independently_valid(&after);
 }
