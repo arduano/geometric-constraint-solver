@@ -832,6 +832,7 @@ dependencies = [
  "geosolve-sketch",
  "geosolve-sketch-features",
  "geosolve-sketch-intent",
+ "miniz_oxide 0.9.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

@@ -1,14 +1,121 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::OnceLock};
 
 use geosolve_sketch_intent::{intent_content_digest, intent_content_digest as digest};
+use miniz_oxide::{
+    DataFormat, MZFlush, MZStatus,
+    inflate::stream::{InflateState, inflate},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     CodeProject, CodeProjectFile, CompiledManagedSource, FeatureKind, GeneratedMemberAddress,
-    PatchModuleArtifact, ProjectKey,
+    MANAGED_WIRE_LIMIT, PatchModuleArtifact, ProjectKey,
 };
+
+#[derive(Debug)]
+struct BundledCompilerEnvelope {
+    compressed: &'static [u8],
+    decompressed_len: usize,
+    text: OnceLock<String>,
+}
+
+impl BundledCompilerEnvelope {
+    const fn new(compressed: &'static [u8], decompressed_len: usize) -> Self {
+        Self {
+            compressed,
+            decompressed_len,
+            text: OnceLock::new(),
+        }
+    }
+
+    fn text(&'static self) -> &'static str {
+        self.text
+            .get_or_init(|| {
+                decompress_bundled_compiler_envelope(self.compressed, self.decompressed_len)
+                    .unwrap_or_else(|error| panic!("bundled compiler envelope is valid: {error:?}"))
+            })
+            .as_str()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BundledEnvelopeError {
+    CompressedLimitExceeded { actual: usize, limit: usize },
+    DecompressedLimitExceeded { declared: usize, limit: usize },
+    DecompressionFailed,
+    TrailingInput { consumed: usize, available: usize },
+    LengthMismatch { declared: usize, actual: usize },
+    InvalidUtf8,
+}
+
+fn decompress_bundled_compiler_envelope(
+    compressed: &[u8],
+    decompressed_len: usize,
+) -> Result<String, BundledEnvelopeError> {
+    if compressed.len() > MANAGED_WIRE_LIMIT {
+        return Err(BundledEnvelopeError::CompressedLimitExceeded {
+            actual: compressed.len(),
+            limit: MANAGED_WIRE_LIMIT,
+        });
+    }
+    if decompressed_len > MANAGED_WIRE_LIMIT {
+        return Err(BundledEnvelopeError::DecompressedLimitExceeded {
+            declared: decompressed_len,
+            limit: MANAGED_WIRE_LIMIT,
+        });
+    }
+
+    let mut output = vec![0; decompressed_len];
+    let mut state = InflateState::new_boxed(DataFormat::Zlib);
+    let result = inflate(&mut state, compressed, &mut output, MZFlush::Finish);
+    if result.status != Ok(MZStatus::StreamEnd) {
+        return Err(BundledEnvelopeError::DecompressionFailed);
+    }
+    if result.bytes_consumed != compressed.len() {
+        return Err(BundledEnvelopeError::TrailingInput {
+            consumed: result.bytes_consumed,
+            available: compressed.len(),
+        });
+    }
+    if result.bytes_written != decompressed_len {
+        return Err(BundledEnvelopeError::LengthMismatch {
+            declared: decompressed_len,
+            actual: result.bytes_written,
+        });
+    }
+
+    String::from_utf8(output).map_err(|_| BundledEnvelopeError::InvalidUtf8)
+}
+
+macro_rules! bundled_compiler_envelope {
+    ($category:literal, $key:literal) => {{
+        static ENVELOPE: BundledCompilerEnvelope = BundledCompilerEnvelope::new(
+            include_bytes!(concat!(
+                env!("OUT_DIR"),
+                "/bundled-compiler-envelopes/",
+                $category,
+                "/",
+                $key,
+                ".compiled.json.zlib"
+            )),
+            include!(concat!(
+                env!("OUT_DIR"),
+                "/bundled-compiler-envelopes/",
+                $category,
+                "/",
+                $key,
+                ".compiled.json.len.rs"
+            )),
+        );
+        &ENVELOPE
+    }};
+}
+
+pub(crate) fn authored_empty_compiled_source() -> &'static str {
+    bundled_compiler_envelope!("demos", "authored-empty").text()
+}
 
 /// Stable bundled demonstration identity.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -271,7 +378,7 @@ enum BundledCodeProjectSource {
     Curated(CodeProjectDemo),
     Managed {
         source: &'static str,
-        compiled: &'static str,
+        compiled: &'static BundledCompilerEnvelope,
     },
 }
 
@@ -303,9 +410,10 @@ impl BundledCodeProject {
         match &self.source {
             BundledCodeProjectSource::Curated(demo) => demo.project(),
             BundledCodeProjectSource::Managed { source, compiled } => {
-                let compiled = CompiledManagedSource::from_json(compiled).unwrap_or_else(|error| {
-                    panic!("bundled managed sketch `{}` is valid: {error:?}", self.key)
-                });
+                let compiled =
+                    CompiledManagedSource::from_json(compiled.text()).unwrap_or_else(|error| {
+                        panic!("bundled managed sketch `{}` is valid: {error:?}", self.key)
+                    });
                 assert_eq!(
                     compiled.normalized_source, *source,
                     "bundled managed source must match its compiler envelope"
@@ -328,7 +436,7 @@ macro_rules! managed_sample {
             summary: $summary,
             source: BundledCodeProjectSource::Managed {
                 source: include_str!(concat!("../assets/samples/", $key, ".sketch.ts")),
-                compiled: include_str!(concat!("../assets/samples/", $key, ".compiled.json")),
+                compiled: bundled_compiler_envelope!("samples", $key),
             },
         }
     };
@@ -524,13 +632,12 @@ pub fn rounded_polyline_member_addresses(
 fn rounded_polyline_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/rounded-polyline.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/rounded-polyline.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/rounded-polyline.compiled.json");
     let artifact = round_every_corner_artifact(PATCH);
     CodeProjectDemo {
         id: CodeProjectDemoId::RoundedPolyline,
         title: "Rounded polyline · dynamic corners",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "rounded-polyline").text(),
         custom_files: BTreeMap::from([("patches/round-every-corner.patch.ts", PATCH)]),
         artifacts: vec![artifact],
         output_kinds: BTreeMap::from([
@@ -549,7 +656,6 @@ fn rounded_polyline_demo() -> CodeProjectDemo {
 fn adaptive_lanterns_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/adaptive-lanterns.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/adaptive-lanterns.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/adaptive-lanterns.compiled.json");
     let keys = ["plug", "amber", "coral", "gold", "mint", "violet", "tail"];
     let mut generated_members = rounded_polyline_member_addresses("wire", "unused", &keys, false);
     generated_members.retain(|address| address.invocation != "unused");
@@ -566,7 +672,7 @@ fn adaptive_lanterns_demo() -> CodeProjectDemo {
         id: CodeProjectDemoId::AdaptiveLanterns,
         title: "Lantern garland · adaptive decorations",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "adaptive-lanterns").text(),
         custom_files: BTreeMap::from([("patches/adaptive-lanterns.patch.ts", PATCH)]),
         artifacts: vec![adaptive_lanterns_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -581,7 +687,6 @@ fn adaptive_lanterns_demo() -> CodeProjectDemo {
 fn suspension_bridge_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/bridge-cables.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/suspension-bridge.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/suspension-bridge.compiled.json");
     let generated_members = [
         ["mainCable", "left"],
         ["mainCable", "crown"],
@@ -596,7 +701,7 @@ fn suspension_bridge_demo() -> CodeProjectDemo {
         id: CodeProjectDemoId::SuspensionBridge,
         title: "Suspension bridge · cable-and-stay layout",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "suspension-bridge").text(),
         custom_files: BTreeMap::from([("patches/bridge-cables.patch.ts", PATCH)]),
         artifacts: vec![bridge_cables_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -616,7 +721,6 @@ fn suspension_bridge_demo() -> CodeProjectDemo {
 fn compass_rose_demo() -> CodeProjectDemo {
     const CORE_PATCH: &str = include_str!("../assets/patches/compass-core.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/compass-rose.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/compass-rose.compiled.json");
     let mut generated_members = ["northEast", "southEast", "southWest", "northWest"]
         .into_iter()
         .map(|name| GeneratedMemberAddress::new("core", ["ring", name], ["self"], ["span"]))
@@ -630,7 +734,7 @@ fn compass_rose_demo() -> CodeProjectDemo {
         id: CodeProjectDemoId::CompassRose,
         title: "Compass rose · generated compass pattern",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "compass-rose").text(),
         custom_files: BTreeMap::from([("patches/compass-core.patch.ts", CORE_PATCH)]),
         artifacts: vec![compass_core_artifact(CORE_PATCH)],
         output_kinds: BTreeMap::from([
@@ -655,12 +759,11 @@ fn compass_rose_demo() -> CodeProjectDemo {
 
 fn neon_manifold_demo() -> CodeProjectDemo {
     const SOURCE: &str = include_str!("../assets/demos/neon-manifold.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/neon-manifold.compiled.json");
     CodeProjectDemo {
         id: CodeProjectDemoId::NeonManifold,
         title: "Neon manifold · explicit bend routing",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "neon-manifold").text(),
         custom_files: BTreeMap::new(),
         artifacts: Vec::new(),
         output_kinds: BTreeMap::from([
@@ -681,12 +784,11 @@ fn neon_manifold_demo() -> CodeProjectDemo {
 fn pc_water_manifold_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/water-channel.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/pc-water-manifold.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/pc-water-manifold.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::PcWaterManifold,
         title: "PC water manifold · constrained channel layout",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "pc-water-manifold").text(),
         custom_files: BTreeMap::from([("patches/water-channel.patch.ts", PATCH)]),
         artifacts: vec![water_channel_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -721,12 +823,11 @@ fn pc_water_manifold_demo() -> CodeProjectDemo {
 fn robotic_routing_board_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/harness-route.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/robotic-routing-board.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/robotic-routing-board.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::RoboticRoutingBoard,
         title: "Robotic cable-harness routing board · adaptive cable routes",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "robotic-routing-board").text(),
         custom_files: BTreeMap::from([("patches/harness-route.patch.ts", PATCH)]),
         artifacts: vec![harness_route_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -767,12 +868,11 @@ fn cnc_joinery_fit_coupon_demo() -> CodeProjectDemo {
     const RELIEF_PATCH: &str = include_str!("../assets/patches/corner-reliefs.patch.ts");
     const FILLET_PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/cnc-joinery-fit-coupon.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/cnc-joinery-fit-coupon.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::CncJoineryFitCoupon,
         title: "CNC joinery fit coupon · keyed corner reliefs",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "cnc-joinery-fit-coupon").text(),
         custom_files: BTreeMap::from([
             ("patches/corner-reliefs.patch.ts", RELIEF_PATCH),
             ("patches/fillet-record.patch.ts", FILLET_PATCH),
@@ -807,12 +907,11 @@ fn cnc_joinery_fit_coupon_demo() -> CodeProjectDemo {
 fn gridfinity_bin_section_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/gridfinity-1x1x3-section.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/gridfinity-1x1x3-section.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::GridfinityBinSection,
         title: "Gridfinity 1×1×3U section · keyed standard profile",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "gridfinity-1x1x3-section").text(),
         custom_files: BTreeMap::from([("patches/fillet-record.patch.ts", PATCH)]),
         artifacts: vec![fillet_record_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -830,7 +929,6 @@ fn gridfinity_bin_section_demo() -> CodeProjectDemo {
 fn typed_panel_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/typed-panel.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/typed-panel.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/typed-panel.compiled.json");
     let artifact = fillet_record_artifact(PATCH);
     let generated_members = ["lowerLeft", "upperRight"]
         .into_iter()
@@ -840,7 +938,7 @@ fn typed_panel_demo() -> CodeProjectDemo {
         id: CodeProjectDemoId::TypedPanel,
         title: "Typed panel · keyed Fillets",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "typed-panel").text(),
         custom_files: BTreeMap::from([("patches/fillet-record.patch.ts", PATCH)]),
         artifacts: vec![artifact],
         output_kinds: BTreeMap::from([
@@ -855,12 +953,11 @@ fn typed_panel_demo() -> CodeProjectDemo {
 fn braced_frame_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/braced-frame.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/braced-frame.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/braced-frame.compiled.json");
     CodeProjectDemo {
         id: CodeProjectDemoId::BracedFrame,
         title: "Braced frame · reusable cross-bracing",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "braced-frame").text(),
         custom_files: BTreeMap::from([("patches/cross-brace.patch.ts", PATCH)]),
         artifacts: vec![cross_brace_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -879,7 +976,6 @@ fn braced_frame_demo() -> CodeProjectDemo {
 fn mounting_plate_demo() -> CodeProjectDemo {
     const PATCH: &str = include_str!("../assets/patches/mounting-plate.patch.ts");
     const SOURCE: &str = include_str!("../assets/demos/mounting-plate.sketch.ts");
-    const COMPILED: &str = include_str!("../assets/demos/mounting-plate.compiled.json");
     let generated_members =
         ["profile", "nw", "ne", "se", "sw"]
             .into_iter()
@@ -892,7 +988,7 @@ fn mounting_plate_demo() -> CodeProjectDemo {
         id: CodeProjectDemoId::MountingPlate,
         title: "Mounting plate · reusable hole pattern",
         managed_source: SOURCE,
-        compiled_source: COMPILED,
+        compiled_source: bundled_compiler_envelope!("demos", "mounting-plate").text(),
         custom_files: BTreeMap::from([("patches/mounting-plate.patch.ts", PATCH)]),
         artifacts: vec![mounting_plate_artifact(PATCH)],
         output_kinds: BTreeMap::from([
@@ -993,8 +1089,199 @@ fn compiled_typescript_artifact(source: &str, canonical_json: &str) -> PatchModu
 mod tests {
     use std::collections::BTreeSet;
 
+    use miniz_oxide::deflate::compress_to_vec_zlib;
+
     use super::*;
     use crate::{KeyedReconcileState, ManagedPathSegment};
+
+    macro_rules! original_compiled {
+        ($category:literal, $key:literal) => {
+            include_bytes!(concat!(
+                "../assets/",
+                $category,
+                "/",
+                $key,
+                ".compiled.json"
+            )) as &'static [u8]
+        };
+    }
+
+    #[allow(
+        clippy::match_same_arms,
+        reason = "the exhaustive reviewed catalog includes two byte-identical compiler envelopes"
+    )]
+    fn original_compiled_source(key: &str) -> &'static [u8] {
+        match key {
+            "drafting-compass" => original_compiled!("samples", "drafting-compass"),
+            "bezier-continuity-bridge" => {
+                original_compiled!("samples", "bezier-continuity-bridge")
+            }
+            "twin-roller-cam" => original_compiled!("samples", "twin-roller-cam"),
+            "tangent-orbit" => original_compiled!("samples", "tangent-orbit"),
+            "elliptic-trammel" => original_compiled!("samples", "elliptic-trammel"),
+            "scotch-yoke" => original_compiled!("samples", "scotch-yoke"),
+            "rotating-constraint-square" => {
+                original_compiled!("samples", "rotating-constraint-square")
+            }
+            "scissor-jack" => original_compiled!("samples", "scissor-jack"),
+            "five-stage-scissor-tower" => {
+                original_compiled!("samples", "five-stage-scissor-tower")
+            }
+            "peaucellier-inversor" => {
+                original_compiled!("samples", "peaucellier-inversor")
+            }
+            "four-bar-coupler" => original_compiled!("samples", "four-bar-coupler"),
+            "pantograph-linkage" => original_compiled!("samples", "pantograph-linkage"),
+            "three-link-drawing-arm" => {
+                original_compiled!("samples", "three-link-drawing-arm")
+            }
+            "constraint-dimension-sampler" => {
+                original_compiled!("samples", "constraint-dimension-sampler")
+            }
+            "auto-constraint-drafting" => {
+                original_compiled!("samples", "auto-constraint-drafting")
+            }
+            "retained-drafting-relations" => {
+                original_compiled!("samples", "retained-drafting-relations")
+            }
+            "tangent-radial-normal" => {
+                original_compiled!("samples", "tangent-radial-normal")
+            }
+            "contact-branch-specimen" => {
+                original_compiled!("samples", "contact-branch-specimen")
+            }
+            "angle-dimension-annotations" => {
+                original_compiled!("samples", "angle-dimension-annotations")
+            }
+            "contextual-constraint-annotations" => {
+                original_compiled!("samples", "contextual-constraint-annotations")
+            }
+            "dense-constraint-junction" => {
+                original_compiled!("samples", "dense-constraint-junction")
+            }
+            "construction-reference-geometry" => {
+                original_compiled!("samples", "construction-reference-geometry")
+            }
+            "curve-family-gallery" => {
+                original_compiled!("samples", "curve-family-gallery")
+            }
+            "periodic-nurbs-specimen" => {
+                original_compiled!("samples", "periodic-nurbs-specimen")
+            }
+            "fillet-workshop" => original_compiled!("samples", "fillet-workshop"),
+            "rounded-polyline" => original_compiled!("demos", "rounded-polyline"),
+            "typed-panel" => original_compiled!("demos", "typed-panel"),
+            "braced-frame" => original_compiled!("demos", "braced-frame"),
+            "mounting-plate" => original_compiled!("demos", "mounting-plate"),
+            "adaptive-lanterns" => original_compiled!("demos", "adaptive-lanterns"),
+            "suspension-bridge" => original_compiled!("demos", "suspension-bridge"),
+            "compass-rose" => original_compiled!("demos", "compass-rose"),
+            "neon-manifold" => original_compiled!("demos", "neon-manifold"),
+            "pc-water-manifold" => original_compiled!("demos", "pc-water-manifold"),
+            "robotic-routing-board" => {
+                original_compiled!("demos", "robotic-routing-board")
+            }
+            "cnc-joinery-fit-coupon" => {
+                original_compiled!("demos", "cnc-joinery-fit-coupon")
+            }
+            "gridfinity-1x1x3-section" => {
+                original_compiled!("demos", "gridfinity-1x1x3-section")
+            }
+            _ => panic!("unreviewed bundled compiler-envelope key `{key}`"),
+        }
+    }
+
+    #[test]
+    fn bundled_compiler_envelopes_reconstruct_all_catalog_bytes_exactly() {
+        let projects = bundled_code_projects();
+        assert_eq!(projects.len(), 37);
+
+        let mut catalog_keys = BTreeSet::new();
+        for project in &projects {
+            assert!(catalog_keys.insert(project.key()));
+            let reconstructed = match &project.source {
+                BundledCodeProjectSource::Curated(demo) => demo.compiled_source,
+                BundledCodeProjectSource::Managed { compiled, .. } => compiled.text(),
+            };
+            assert_eq!(
+                reconstructed.as_bytes(),
+                original_compiled_source(project.key()),
+                "{} compiler envelope must reconstruct byte-for-byte",
+                project.key()
+            );
+        }
+        assert_eq!(catalog_keys.len(), 37);
+    }
+
+    #[test]
+    fn authored_empty_compiler_envelope_reconstructs_bytes_exactly() {
+        assert_eq!(
+            authored_empty_compiled_source().as_bytes(),
+            original_compiled!("demos", "authored-empty")
+        );
+    }
+
+    #[test]
+    fn bundled_compiler_envelope_decompression_is_strict_and_bounded() {
+        let payload = br#"{"format":"fixture","value":42}"#;
+        let compressed = compress_to_vec_zlib(payload, 10);
+        assert_eq!(
+            decompress_bundled_compiler_envelope(&compressed, payload.len()).unwrap(),
+            std::str::from_utf8(payload).unwrap()
+        );
+
+        assert_eq!(
+            decompress_bundled_compiler_envelope(&compressed, MANAGED_WIRE_LIMIT + 1),
+            Err(BundledEnvelopeError::DecompressedLimitExceeded {
+                declared: MANAGED_WIRE_LIMIT + 1,
+                limit: MANAGED_WIRE_LIMIT,
+            })
+        );
+        assert_eq!(
+            decompress_bundled_compiler_envelope(&vec![0; MANAGED_WIRE_LIMIT + 1], payload.len(),),
+            Err(BundledEnvelopeError::CompressedLimitExceeded {
+                actual: MANAGED_WIRE_LIMIT + 1,
+                limit: MANAGED_WIRE_LIMIT,
+            })
+        );
+
+        assert!(decompress_bundled_compiler_envelope(&compressed, payload.len() - 1).is_err());
+        assert_eq!(
+            decompress_bundled_compiler_envelope(&compressed, payload.len() + 1),
+            Err(BundledEnvelopeError::LengthMismatch {
+                declared: payload.len() + 1,
+                actual: payload.len(),
+            })
+        );
+
+        let truncated = &compressed[..compressed.len() - 1];
+        assert_eq!(
+            decompress_bundled_compiler_envelope(truncated, payload.len()),
+            Err(BundledEnvelopeError::DecompressionFailed)
+        );
+        let mut corrupt = compressed.clone();
+        *corrupt.last_mut().unwrap() ^= 1;
+        assert_eq!(
+            decompress_bundled_compiler_envelope(&corrupt, payload.len()),
+            Err(BundledEnvelopeError::DecompressionFailed)
+        );
+
+        let mut trailing = compressed.clone();
+        trailing.extend_from_slice(b"trailing");
+        assert_eq!(
+            decompress_bundled_compiler_envelope(&trailing, payload.len()),
+            Err(BundledEnvelopeError::TrailingInput {
+                consumed: compressed.len(),
+                available: trailing.len(),
+            })
+        );
+
+        let invalid_utf8 = compress_to_vec_zlib(&[0xff], 10);
+        assert_eq!(
+            decompress_bundled_compiler_envelope(&invalid_utf8, 1),
+            Err(BundledEnvelopeError::InvalidUtf8)
+        );
+    }
 
     #[test]
     fn all_bundled_projects_are_offline_parseable_and_artifact_valid() {

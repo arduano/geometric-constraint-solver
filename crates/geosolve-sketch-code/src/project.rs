@@ -58,9 +58,8 @@ impl CodeProject {
     /// Returns a managed authority or project-validation error before native
     /// materialization.
     pub fn empty(project: ProjectKey) -> Result<Self, CodeProjectError> {
-        let compiled = CompiledManagedSource::from_json(include_str!(
-            "../assets/demos/authored-empty.compiled.json"
-        ))?;
+        let compiled =
+            CompiledManagedSource::from_json(crate::demos::authored_empty_compiled_source())?;
         Self::managed(project, compiled)
     }
 
