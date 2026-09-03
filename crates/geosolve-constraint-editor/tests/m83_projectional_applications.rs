@@ -9,14 +9,15 @@ use geosolve_constraint_editor::{
     SelectionItem, projectional_application_patch,
 };
 use geosolve_sketch::{
-    CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentId,
-    OperationControl, PersistentId, ScalarUnit,
+    ContactAdmissibleRange, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
+    DocumentElementId, DocumentId, OperationControl, PersistentId,
+    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarUnit, SketchBoundStatus,
 };
 use geosolve_sketch_intent::{
-    ConstraintKind, DimensionKind as IntentDimensionKind, GeometryRecipeKind, IntentAliasMap,
-    IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
-    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
+    ConstraintKind, DimensionKind as IntentDimensionKind, GeometryRecipeKind, InputRole, InputSlot,
+    IntentAliasMap, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+    IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
+    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField, PatchPortRef,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -978,11 +979,10 @@ fn point_curve_application_preserves_picked_contact_metadata() {
         })
     );
     assert!(
-        draft
+        !draft
             .fields
-            .contains_key(&geosolve_sketch_intent::IntentFieldKey(key(
-                "contact_domain"
-            )))
+            .keys()
+            .any(|field| field.0.as_str().contains("domain"))
     );
     assert!(
         draft
@@ -1008,6 +1008,146 @@ fn point_curve_application_preserves_picked_contact_metadata() {
     };
     assert_eq!(actual, point);
     assert_eq!(document.contact(contact).unwrap().curve, edge);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one retained-coordinator regression keeps the structural range edit, accepted-scene continuation, locality, and bound evidence together"
+)]
+fn structural_contact_range_edit_continues_the_accepted_scene_to_the_new_bound() {
+    let mut coordinator = coordinator(0x8300_7203);
+    let contact = IntentNodeDraft::new(
+        IntentNodeKind::Constraint {
+            constraint: ConstraintKind::PointOnCurve,
+        },
+        key("contact"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 0),
+        PatchPortRef::Alias {
+            node: key("contact_point"),
+            selector: selector(IntentPortRole::Primary, 0),
+        },
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        PatchPortRef::Alias {
+            node: key("line"),
+            selector: selector(IntentPortRole::Span, 0),
+        },
+    )
+    .with_field(
+        IntentFieldKey(key("contact_parameter")),
+        IntentLiteral::Quantity {
+            value: 0.8,
+            unit: IntentUnit::Dimensionless,
+        },
+    );
+    let aliases = create(
+        &mut coordinator,
+        [
+            ("line", segment("line", [0.0, 0.0], [10.0, 0.0])),
+            ("contact_point", point("contact_point", [8.0, 0.0])),
+            ("unrelated", point("unrelated", [17.0, -9.0])),
+            ("contact", contact),
+        ],
+    );
+    let relation_node = aliases.node(&key("contact")).unwrap();
+    let IntentNativeBinding::Contact(contact_id) =
+        alias_binding(&coordinator, &aliases, "contact", IntentPortRole::Contact)
+    else {
+        panic!("point-on-curve relation must own its contact");
+    };
+    let IntentNativeBinding::Point(unrelated_id) =
+        alias_binding(&coordinator, &aliases, "unrelated", IntentPortRole::Primary)
+    else {
+        panic!("unrelated declaration must own its point");
+    };
+    let before = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .clone();
+    let before_contact = before.contact(contact_id).unwrap();
+    assert!(before.scalar(before_contact.parameter).unwrap().value > 0.5);
+    let unrelated_before = before.point(unrelated_id).unwrap().position;
+
+    let outcome = coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::SetDefinitionField {
+                    node: relation_node,
+                    field: IntentFieldKey(key("contact_range_lower")),
+                    value: IntentLiteral::Quantity {
+                        value: 0.0,
+                        unit: IntentUnit::Dimensionless,
+                    },
+                },
+                IntentPatchOperation::SetDefinitionField {
+                    node: relation_node,
+                    field: IntentFieldKey(key("contact_range_upper")),
+                    value: IntentLiteral::Quantity {
+                        value: 0.5,
+                        unit: IntentUnit::Dimensionless,
+                    },
+                },
+            ],
+        ))
+        .expect("range-only source edit must publish");
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+
+    let accepted = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let contact = accepted.document().contact(contact_id).unwrap();
+    assert_eq!(
+        contact.admissible_range,
+        Some(ContactAdmissibleRange {
+            lower: 0.0,
+            upper: 0.5,
+        })
+    );
+    assert_eq!(
+        accepted
+            .document()
+            .scalar(contact.parameter)
+            .unwrap()
+            .value
+            .to_bits(),
+        0.5_f64.to_bits()
+    );
+    assert_eq!(
+        accepted
+            .document()
+            .point(unrelated_id)
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        unrelated_before.map(f64::to_bits)
+    );
+    let diagnostics = accepted.diagnostics();
+    let solve = diagnostics.solve.as_ref().unwrap();
+    assert!(solve.accepted && solve.hard_residuals_validated);
+    assert!(
+        solve
+            .maximum_normalized_hard_residual
+            .is_none_or(|value| value <= SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE)
+    );
+    let bound = diagnostics
+        .bounds
+        .iter()
+        .find(|bound| bound.target == DocumentElementId::Contact(contact_id))
+        .unwrap();
+    assert_eq!(bound.status, SketchBoundStatus::ActiveUpper);
 }
 
 #[test]

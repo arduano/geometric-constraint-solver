@@ -1059,6 +1059,10 @@ fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive omission inventory keeps every contextual and conditional declaration field visibly reviewed"
+)]
 fn descriptor_omission_categories_are_an_explicit_closed_inventory() {
     let mut contextual = BTreeSet::new();
     let mut conditional = BTreeSet::new();
@@ -1107,6 +1111,66 @@ fn descriptor_omission_categories_are_an_explicit_closed_inventory() {
             "operation.ProfileOffset.direction",
             "operation.ProfileOffset.side",
             "operation.ProfileOffset.first_traversal",
+            "geometry.TangentArc.source_support",
+            "geometry.TangentArc.source_range_lower",
+            "geometry.TangentArc.source_range_upper",
+            "constraint.PointOnCurve.contact_support",
+            "constraint.PointOnCurve.contact_range_lower",
+            "constraint.PointOnCurve.contact_range_upper",
+            "constraint.LineCurveTangency.contact_support",
+            "constraint.LineCurveTangency.contact_range_lower",
+            "constraint.LineCurveTangency.contact_range_upper",
+            "constraint.CurveDirection.contact_support",
+            "constraint.CurveDirection.contact_range_lower",
+            "constraint.CurveDirection.contact_range_upper",
+            "constraint.LineCircleTangency.first_contact_support",
+            "constraint.LineCircleTangency.first_contact_range_lower",
+            "constraint.LineCircleTangency.first_contact_range_upper",
+            "constraint.LineCircleTangency.second_contact_support",
+            "constraint.LineCircleTangency.second_contact_range_lower",
+            "constraint.LineCircleTangency.second_contact_range_upper",
+            "constraint.CircleArcTangency.first_contact_support",
+            "constraint.CircleArcTangency.first_contact_range_lower",
+            "constraint.CircleArcTangency.first_contact_range_upper",
+            "constraint.CircleArcTangency.second_contact_support",
+            "constraint.CircleArcTangency.second_contact_range_lower",
+            "constraint.CircleArcTangency.second_contact_range_upper",
+            "constraint.CurveCurveContact.first_contact_support",
+            "constraint.CurveCurveContact.first_contact_range_lower",
+            "constraint.CurveCurveContact.first_contact_range_upper",
+            "constraint.CurveCurveContact.second_contact_support",
+            "constraint.CurveCurveContact.second_contact_range_lower",
+            "constraint.CurveCurveContact.second_contact_range_upper",
+            "constraint.CurveCurveTangency.first_contact_support",
+            "constraint.CurveCurveTangency.first_contact_range_lower",
+            "constraint.CurveCurveTangency.first_contact_range_upper",
+            "constraint.CurveCurveTangency.second_contact_support",
+            "constraint.CurveCurveTangency.second_contact_range_lower",
+            "constraint.CurveCurveTangency.second_contact_range_upper",
+            "constraint.EqualCurvature.first_contact_support",
+            "constraint.EqualCurvature.first_contact_range_lower",
+            "constraint.EqualCurvature.first_contact_range_upper",
+            "constraint.EqualCurvature.second_contact_support",
+            "constraint.EqualCurvature.second_contact_range_lower",
+            "constraint.EqualCurvature.second_contact_range_upper",
+            "constraint.EndpointContinuity.first_contact_support",
+            "constraint.EndpointContinuity.first_contact_range_lower",
+            "constraint.EndpointContinuity.first_contact_range_upper",
+            "constraint.EndpointContinuity.second_contact_support",
+            "constraint.EndpointContinuity.second_contact_range_lower",
+            "constraint.EndpointContinuity.second_contact_range_upper",
+            "constraint.LineLineFillet.first_contact_support",
+            "constraint.LineLineFillet.first_contact_range_lower",
+            "constraint.LineLineFillet.first_contact_range_upper",
+            "constraint.LineLineFillet.second_contact_support",
+            "constraint.LineLineFillet.second_contact_range_lower",
+            "constraint.LineLineFillet.second_contact_range_upper",
+            "constraint.CurveCurveFillet.first_contact_support",
+            "constraint.CurveCurveFillet.first_contact_range_lower",
+            "constraint.CurveCurveFillet.first_contact_range_upper",
+            "constraint.CurveCurveFillet.second_contact_support",
+            "constraint.CurveCurveFillet.second_contact_range_lower",
+            "constraint.CurveCurveFillet.second_contact_range_upper",
             "computed_feature.FilletSet.corner_0000_first_local_lower",
             "computed_feature.FilletSet.corner_0000_first_local_upper",
             "computed_feature.FilletSet.corner_0000_first_anchor_parameter",
@@ -1363,7 +1427,7 @@ fn descriptor_static_defaults_match_the_native_declaration_fallbacks() {
             "none",
         ),
     ];
-    for (constraint, prefix, parameter, domain, neighborhood, orientation) in contact_defaults {
+    for (constraint, prefix, parameter, _domain, neighborhood, orientation) in contact_defaults {
         let kind = IntentNodeKind::Constraint { constraint };
         assert_eq!(
             field_descriptor(&kind, 0, &format!("{prefix}_parameter")).default,
@@ -1378,24 +1442,14 @@ fn descriptor_static_defaults_match_the_native_declaration_fallbacks() {
             IntentFieldDefault::Literal(IntentLiteral::Integer(0)),
             "{constraint:?}.{prefix}.winding"
         );
-        for (suffix, expected) in [
-            ("domain", domain),
-            ("neighborhood", neighborhood),
-            ("orientation", orientation),
-        ] {
+        for (suffix, expected) in [("neighborhood", neighborhood), ("orientation", orientation)] {
             assert_eq!(
                 field_descriptor(&kind, 0, &format!("{prefix}_{suffix}")).default,
                 IntentFieldDefault::Literal(IntentLiteral::Enum(key(expected))),
                 "{constraint:?}.{prefix}.{suffix}"
             );
         }
-        for (suffix, value) in [
-            ("domain_lower", 0.0),
-            ("domain_upper", 1.0),
-            ("domain_period", std::f64::consts::TAU),
-            ("neighborhood_lower", 0.0),
-            ("neighborhood_upper", 1.0),
-        ] {
+        for (suffix, value) in [("neighborhood_lower", 0.0), ("neighborhood_upper", 1.0)] {
             assert_eq!(
                 field_descriptor(&kind, 0, &format!("{prefix}_{suffix}")).default,
                 IntentFieldDefault::Literal(IntentLiteral::Quantity {
@@ -4049,10 +4103,9 @@ fn contact_bearing_relations_retain_complete_explicit_contact_cell_fields() {
             for suffix in [
                 "parameter",
                 "winding",
-                "domain",
-                "domain_lower",
-                "domain_upper",
-                "domain_period",
+                "support",
+                "range_lower",
+                "range_upper",
                 "neighborhood",
                 "neighborhood_lower",
                 "neighborhood_upper",

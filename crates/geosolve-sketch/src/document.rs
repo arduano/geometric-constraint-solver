@@ -1006,6 +1006,18 @@ pub enum ContactDomain {
     Periodic { period: f64 },
 }
 
+/// Optional inclusive authored limits inside one contact's intrinsic parameter topology.
+///
+/// Unlike [`ContactDomain`], this range does not define the referenced curve or select a
+/// supporting-line topology. It only limits the otherwise valid parameter values which a solve
+/// may accept. Periodic ranges use the contact's total (unwrapped) parameter coordinate.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContactAdmissibleRange {
+    pub lower: f64,
+    pub upper: f64,
+}
+
 /// Explicit selected neighborhood on a bounded curve.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1077,6 +1089,8 @@ pub struct ContactSlot {
     pub curve: CurveSpan,
     pub parameter: DesignScalarId,
     pub domain: ContactDomain,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admissible_range: Option<ContactAdmissibleRange>,
     pub winding: i32,
     pub neighborhood: ContactNeighborhood,
     pub tangent_orientation: Option<TangentOrientation>,
@@ -1091,6 +1105,13 @@ pub struct ContactDefinition {
     pub winding: i32,
     pub neighborhood: ContactNeighborhood,
     pub tangent_orientation: Option<TangentOrientation>,
+}
+
+/// One atomic authored admissible-range update retaining contact topology and branch state.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ContactAdmissibleRangeEdit {
+    pub contact: ContactId,
+    pub range: Option<ContactAdmissibleRange>,
 }
 
 /// One atomic accepted-state update for a persistent contact slot.
@@ -8072,6 +8093,7 @@ impl SketchDocument {
             curve: definition.curve,
             parameter: definition.parameter,
             domain: definition.domain,
+            admissible_range: None,
             winding: definition.winding,
             neighborhood: definition.neighborhood,
             tangent_orientation: definition.tangent_orientation,
@@ -8182,6 +8204,47 @@ impl SketchDocument {
         )?;
         *self = candidate;
         Ok(contact)
+    }
+
+    /// Atomically replaces authored inclusive admissible ranges without changing curve topology,
+    /// parameter identity, winding, locality, or tangent orientation.
+    ///
+    /// A changed range may deliberately exclude the retained parameter seed. That state remains a
+    /// valid unsolved design: the next solve projects the numerical seed into the new closed range
+    /// and must independently validate the resulting geometry before publication.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an empty edit set, duplicate or missing contacts, non-finite or
+    /// reversed limits, or a range incompatible with the contact's intrinsic topology/locality.
+    pub fn set_contact_admissible_ranges(
+        &mut self,
+        edits: &[ContactAdmissibleRangeEdit],
+    ) -> Result<(), DocumentError> {
+        if edits.is_empty() {
+            return invalid(
+                "contact admissible ranges",
+                "at least one contact is required",
+            );
+        }
+        let requested = edits
+            .iter()
+            .map(|edit| edit.contact)
+            .collect::<BTreeSet<_>>();
+        if requested.len() != edits.len() {
+            return invalid("contact admissible ranges", "contact IDs must be distinct");
+        }
+        self.ordered_source_contacts(&requested.iter().copied().collect::<Vec<_>>())?;
+        let mut candidate = self.clone();
+        for edit in edits {
+            candidate
+                .contact_mut(edit.contact)
+                .ok_or_else(|| unknown("contact", edit.contact.0))?
+                .admissible_range = edit.range;
+        }
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
     }
 
     /// Returns every parameter-domain topology supported by one semantic curve span.
@@ -13822,6 +13885,7 @@ fn validate_contact_curve(
             );
         }
     }
+    validate_contact_admissible_range(contact)?;
     match (contact.domain, contact.neighborhood) {
         (
             ContactDomain::SupportingLine | ContactDomain::Periodic { .. },
@@ -13858,6 +13922,48 @@ fn validate_contact_curve(
                 "selection does not match the contact parameter",
             );
         }
+    }
+    Ok(())
+}
+
+fn validate_contact_admissible_range(contact: &ContactSlot) -> Result<(), DocumentError> {
+    let Some(range) = contact.admissible_range else {
+        return Ok(());
+    };
+    if !range.lower.is_finite() || !range.upper.is_finite() || range.lower > range.upper {
+        return invalid(
+            "contact.admissible_range",
+            "authored contact limits must be finite and ordered",
+        );
+    }
+    if let ContactDomain::Bounded { lower, upper } = contact.domain
+        && (range.lower < lower || range.upper > upper)
+    {
+        return invalid(
+            "contact.admissible_range",
+            "authored contact limits must lie inside the intrinsic bounded topology",
+        );
+    }
+    let intersects_locality = match contact.neighborhood {
+        ContactNeighborhood::Start => match contact.domain {
+            ContactDomain::Bounded { lower, .. } => range.lower <= lower && lower <= range.upper,
+            ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => false,
+        },
+        ContactNeighborhood::End => match contact.domain {
+            ContactDomain::Bounded { upper, .. } => range.lower <= upper && upper <= range.upper,
+            ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => false,
+        },
+        ContactNeighborhood::Interior => match contact.domain {
+            ContactDomain::Bounded { lower, upper } => range.upper > lower && range.lower < upper,
+            ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => true,
+        },
+        ContactNeighborhood::Local { lower, upper } => range.upper > lower && range.lower < upper,
+    };
+    if !intersects_locality {
+        return invalid(
+            "contact.admissible_range",
+            "authored contact limits have no value in the selected contact locality",
+        );
     }
     Ok(())
 }

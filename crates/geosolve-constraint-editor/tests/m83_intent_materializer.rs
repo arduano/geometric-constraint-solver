@@ -8,8 +8,8 @@ use geosolve_constraint_editor::{
     IntentNativeWritableLeaf,
 };
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan,
-    DocumentArcTangencySide, DocumentConstraintDefinition, DocumentCurveContinuity,
+    ContactAdmissibleRange, ContactDomain, ContactNeighborhood, CurveDefinition, CurveId,
+    CurveSpan, DocumentArcTangencySide, DocumentConstraintDefinition, DocumentCurveContinuity,
     DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveNormalSide,
     DocumentDimensionDefinition, DocumentExternalBindingId, DocumentFilletEndpointOrder,
     DocumentFilletTrimEndpoint, DocumentId, DocumentLineSide, DocumentParameterId,
@@ -2861,7 +2861,8 @@ fn contact_relations_materialize_exact_parameters_domains_and_orientations() {
                     ],
                     [
                         ("contact_parameter", parameter(0.5)),
-                        ("contact_domain", IntentLiteral::Enum(key("bounded"))),
+                        ("contact_range_lower", parameter(0.0)),
+                        ("contact_range_upper", parameter(0.5)),
                         ("contact_neighborhood", IntentLiteral::Enum(key("local"))),
                         ("contact_neighborhood_lower", parameter(0.25)),
                         ("contact_neighborhood_upper", parameter(0.75)),
@@ -2887,6 +2888,13 @@ fn contact_relations_materialize_exact_parameters_domains_and_orientations() {
             lower: 0.0,
             upper: 1.0
         }
+    );
+    assert_eq!(
+        document.contacts()[0].admissible_range,
+        Some(ContactAdmissibleRange {
+            lower: 0.0,
+            upper: 0.5,
+        })
     );
     assert_eq!(
         document.contacts()[0].neighborhood,
@@ -2933,7 +2941,7 @@ fn contact_relations_materialize_exact_parameters_domains_and_orientations() {
                         ("side", IntentLiteral::Enum(key("left"))),
                         ("first_contact_parameter", parameter(0.5)),
                         (
-                            "first_contact_domain",
+                            "first_contact_support",
                             IntentLiteral::Enum(key("supporting_line")),
                         ),
                         (
@@ -2943,14 +2951,6 @@ fn contact_relations_materialize_exact_parameters_domains_and_orientations() {
                         (
                             "second_contact_parameter",
                             parameter(3.0 * std::f64::consts::FRAC_PI_2),
-                        ),
-                        (
-                            "second_contact_domain",
-                            IntentLiteral::Enum(key("periodic")),
-                        ),
-                        (
-                            "second_contact_domain_period",
-                            parameter(std::f64::consts::TAU),
                         ),
                         ("second_contact_winding", IntentLiteral::Integer(2)),
                         (
@@ -3414,13 +3414,11 @@ fn fillet_fixture(kind: ConstraintKind) -> ColdIntentMaterialization {
             IntentLiteral::Enum(key("first_then_second")),
         ),
         ("first_contact_parameter", parameter(0.75)),
-        ("first_contact_domain", IntentLiteral::Enum(key("bounded"))),
         (
             "first_contact_neighborhood",
             IntentLiteral::Enum(key("interior")),
         ),
         ("second_contact_parameter", parameter(0.25)),
-        ("second_contact_domain", IntentLiteral::Enum(key("bounded"))),
         (
             "second_contact_neighborhood",
             IntentLiteral::Enum(key("interior")),
@@ -3573,6 +3571,140 @@ fn malformed_contact_branch_rejects_without_graph_or_accepted_publication() {
     assert!(session.accepted().is_none());
     assert_eq!(session.undo_len(), 0);
     assert_eq!(session.redo_len(), 0);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one table-driven contract test keeps every invalid support and range shape paired with its focused diagnostic"
+)]
+fn contact_support_and_range_rejections_identify_the_failed_contract() {
+    fn materialization_error(
+        raw: u128,
+        curve: IntentNodeDraft,
+        fields: impl IntoIterator<Item = (&'static str, IntentLiteral)>,
+    ) -> String {
+        let session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+        let materializer = ColdIntentMaterializer::with_default_policy(
+            DocumentId(PersistentId::from_u128(raw << 32)),
+            1.0,
+        )
+        .unwrap();
+        let relation = relation(
+            ConstraintKind::PointOnCurve,
+            [
+                (
+                    InputSlot::new(InputRole::Point, 0),
+                    alias("point", IntentPortRole::Primary),
+                ),
+                (
+                    InputSlot::new(InputRole::Span, 0),
+                    alias("curve", IntentPortRole::Span),
+                ),
+            ],
+            fields,
+        );
+        let error = RefCell::new(None);
+        session
+            .plan_patch(
+                IntentPatch::new(
+                    session.identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![
+                        create("point", point("point", [1.0, 0.0])),
+                        create("curve", curve),
+                        create("relation", relation),
+                    ],
+                ),
+                |candidate| {
+                    error.replace(
+                        materializer
+                            .materialize(candidate)
+                            .err()
+                            .map(|error| error.to_string()),
+                    );
+                    synthetic_acceptance(candidate)
+                },
+            )
+            .expect("synthetic plan reaches the materializer");
+        error
+            .into_inner()
+            .expect("invalid contact contract must be rejected by materialization")
+    }
+
+    let unsupported = materialization_error(
+        0x8300_3831,
+        circle("curve", [0.0, 0.0], 1.0),
+        [
+            ("contact_parameter", parameter(0.0)),
+            (
+                "contact_support",
+                IntentLiteral::Enum(key("supporting_line")),
+            ),
+        ],
+    );
+    assert!(
+        unsupported.contains("supporting-line contact is valid only for a line or polyline span"),
+        "{unsupported}"
+    );
+
+    let partial = materialization_error(
+        0x8300_3832,
+        segment("curve", [0.0, 0.0], [2.0, 0.0]),
+        [("contact_range_lower", parameter(0.0))],
+    );
+    assert!(
+        partial.contains("contact admissible range requires both lower and upper limits"),
+        "{partial}"
+    );
+
+    let reversed = materialization_error(
+        0x8300_3833,
+        segment("curve", [0.0, 0.0], [2.0, 0.0]),
+        [
+            ("contact_range_lower", parameter(0.8)),
+            ("contact_range_upper", parameter(0.2)),
+        ],
+    );
+    assert!(
+        reversed.contains("contact admissible range must be finite and ordered"),
+        "{reversed}"
+    );
+
+    let non_finite_session =
+        IntentSession::with_id(IntentSessionId::from_raw(0x8300_3834)).unwrap();
+    let invalid = relation(
+        ConstraintKind::PointOnCurve,
+        [
+            (
+                InputSlot::new(InputRole::Point, 0),
+                alias("point", IntentPortRole::Primary),
+            ),
+            (
+                InputSlot::new(InputRole::Span, 0),
+                alias("curve", IntentPortRole::Span),
+            ),
+        ],
+        [
+            ("contact_range_lower", parameter(f64::NAN)),
+            ("contact_range_upper", parameter(0.5)),
+        ],
+    );
+    let error = non_finite_session
+        .plan_patch(
+            IntentPatch::new(
+                non_finite_session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![
+                    create("point", point("point", [1.0, 0.0])),
+                    create("curve", segment("curve", [0.0, 0.0], [2.0, 0.0])),
+                    create("relation", invalid),
+                ],
+            ),
+            synthetic_acceptance,
+        )
+        .expect_err("non-finite range must fail before materialization");
+    assert!(error.to_string().contains("finite"), "{error}");
 }
 
 #[test]

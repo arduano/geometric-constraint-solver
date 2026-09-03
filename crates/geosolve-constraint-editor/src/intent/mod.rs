@@ -11,21 +11,21 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use geosolve_sketch::{
-    ContactDomain, ContactId, ContactNeighborhood, ContactSlot, CurveCurveFilletRequest,
-    CurveDefinition, CurveFilletParentRequest, CurveId, CurveSpan, DesignCurve, DesignPoint,
-    DesignPointId, DesignScalar, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
-    DocumentArcTangencySide, DocumentBSplineForm, DocumentCenterRef, DocumentCircleContainment,
-    DocumentCircleTangencyMode, DocumentConstraint, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentCoordinateAxis, DocumentCurveContinuity,
-    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveNormalSide,
-    DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentDirectedProfileOffsetCurve, DocumentDirectionSense,
-    DocumentElementId, DocumentError, DocumentExternalBinding, DocumentExternalBindingId,
-    DocumentExternalLineSupportRef, DocumentExternalPointRef, DocumentFaceOffsetDirection,
-    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId,
-    DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef,
-    DocumentOffsetTraversal, DocumentParameter, DocumentParameterBinding, DocumentParameterId,
-    DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget,
+    ContactAdmissibleRange, ContactDomain, ContactId, ContactNeighborhood, ContactSlot,
+    CurveCurveFilletRequest, CurveDefinition, CurveFilletParentRequest, CurveId, CurveSpan,
+    DesignCurve, DesignPoint, DesignPointId, DesignScalar, DesignScalarId,
+    DocumentAngleOrientation, DocumentArcSweep, DocumentArcTangencySide, DocumentBSplineForm,
+    DocumentCenterRef, DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
+    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentDimensionMode, DocumentDirectedProfileOffsetCurve,
+    DocumentDirectionSense, DocumentElementId, DocumentError, DocumentExternalBinding,
+    DocumentExternalBindingId, DocumentExternalLineSupportRef, DocumentExternalPointRef,
+    DocumentFaceOffsetDirection, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+    DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation, DocumentLineSide,
+    DocumentLineSupportRef, DocumentOffsetTraversal, DocumentParameter, DocumentParameterBinding,
+    DocumentParameterId, DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget,
     DocumentProfileOffsetChain, DocumentProfileOffsetEdgePair, DocumentProfileOffsetJunctionOwner,
     DocumentProfileOffsetLoop, DocumentProfileOffsetOperand, DocumentProfileOffsetTerminalPolicy,
     DocumentScalarBranch, DocumentScalarPropertyRef, DocumentScalarUnit, DocumentSessionError,
@@ -1724,6 +1724,7 @@ impl ColdIntentMaterializer {
         let output = self.materialize_source_with_accepted_continuation_and_work(
             authority,
             Some(&continuation),
+            None,
             &mut crate::InteractionWorkReceipt::default(),
         )?;
         if output.evidence != authority.evidence {
@@ -1752,7 +1753,7 @@ impl ColdIntentMaterializer {
         candidate: &dyn IntentMaterializationSource,
         work: &mut crate::InteractionWorkReceipt,
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
-        self.materialize_source_with_accepted_continuation_and_work(candidate, None, work)
+        self.materialize_source_with_accepted_continuation_and_work(candidate, None, None, work)
     }
 
     #[allow(
@@ -1763,6 +1764,10 @@ impl ColdIntentMaterializer {
         &self,
         candidate: &dyn IntentMaterializationSource,
         accepted_continuation: Option<&geosolve_sketch::SketchDocument>,
+        structural_continuation: Option<(
+            &geosolve_sketch::SketchDocument,
+            &geosolve_sketch::SketchDocument,
+        )>,
         work: &mut crate::InteractionWorkReceipt,
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         candidate.graph().validate()?;
@@ -1828,6 +1833,7 @@ impl ColdIntentMaterializer {
                 allocated,
                 &desired_parameters,
                 &desired_snapshots,
+                structural_continuation,
             )?
         } else {
             self.lower_declarative_graph(
@@ -1839,6 +1845,7 @@ impl ColdIntentMaterializer {
                 allocated,
                 &desired_parameters,
                 &desired_snapshots,
+                structural_continuation,
             )?
         };
         if let Some(accepted_continuation) = accepted_continuation {
@@ -1959,6 +1966,10 @@ impl ColdIntentMaterializer {
         allocated: AllocatedReservationStage,
         desired_parameters: &ParameterBatch,
         desired_snapshots: &ExternalSnapshotSet,
+        structural_continuation: Option<(
+            &geosolve_sketch::SketchDocument,
+            &geosolve_sketch::SketchDocument,
+        )>,
     ) -> Result<(RetainedSketchDocumentSession, LoweringState), IntentMaterializationError> {
         let initial_parameters = self
             .bootstrap
@@ -1968,13 +1979,26 @@ impl ColdIntentMaterializer {
             .bootstrap
             .as_ref()
             .map_or_else(ExternalSnapshotSet::default, |_| desired_snapshots.clone());
-        let mut session = RetainedSketchDocumentSession::new_with_inputs(
-            document,
-            initial_parameters,
-            initial_snapshots,
-            self.request,
-            self.config,
-        )?;
+        let mut session =
+            if let Some((upstream_design, upstream_accepted)) = structural_continuation {
+                RetainedSketchDocumentSession::new_with_inputs_from_numerical_continuation(
+                    document,
+                    upstream_design,
+                    upstream_accepted,
+                    initial_parameters,
+                    initial_snapshots,
+                    self.request,
+                    self.config,
+                )?
+            } else {
+                RetainedSketchDocumentSession::new_with_inputs(
+                    document,
+                    initial_parameters,
+                    initial_snapshots,
+                    self.request,
+                    self.config,
+                )?
+            };
         require_current_acceptance(&session)?;
         for reservations in &allocated.stages {
             apply_materialization_stage(
@@ -2049,6 +2073,17 @@ impl ColdIntentMaterializer {
         if !owner_reservations.is_empty() {
             return Err(IntentMaterializationError::InvalidReservationOrder);
         }
+        if let Some((upstream_design, upstream_accepted)) = structural_continuation {
+            session = RetainedSketchDocumentSession::new_with_inputs_from_numerical_continuation(
+                session.design_document().clone(),
+                upstream_design,
+                upstream_accepted,
+                desired_parameters.clone(),
+                desired_snapshots.clone(),
+                self.request,
+                self.config,
+            )?;
+        }
         require_exact_host_inputs(&session, desired_parameters, desired_snapshots)?;
         Ok((session, state))
     }
@@ -2067,6 +2102,10 @@ impl ColdIntentMaterializer {
         allocated: AllocatedReservationStage,
         desired_parameters: &ParameterBatch,
         desired_snapshots: &ExternalSnapshotSet,
+        structural_continuation: Option<(
+            &geosolve_sketch::SketchDocument,
+            &geosolve_sketch::SketchDocument,
+        )>,
     ) -> Result<(RetainedSketchDocumentSession, LoweringState), IntentMaterializationError> {
         for reservations in &allocated.stages {
             document.apply_materialization_batch(
@@ -2108,13 +2147,25 @@ impl ColdIntentMaterializer {
         if !owner_reservations.is_empty() {
             return Err(IntentMaterializationError::InvalidReservationOrder);
         }
-        let session = RetainedSketchDocumentSession::new_with_inputs(
-            document,
-            desired_parameters.clone(),
-            desired_snapshots.clone(),
-            self.request,
-            self.config,
-        )?;
+        let session = if let Some((upstream_design, upstream_accepted)) = structural_continuation {
+            RetainedSketchDocumentSession::new_with_inputs_from_numerical_continuation(
+                document,
+                upstream_design,
+                upstream_accepted,
+                desired_parameters.clone(),
+                desired_snapshots.clone(),
+                self.request,
+                self.config,
+            )?
+        } else {
+            RetainedSketchDocumentSession::new_with_inputs(
+                document,
+                desired_parameters.clone(),
+                desired_snapshots.clone(),
+                self.request,
+                self.config,
+            )?
+        };
         require_exact_host_inputs(&session, desired_parameters, desired_snapshots)?;
         Ok((session, state))
     }
@@ -2154,7 +2205,7 @@ impl ColdIntentMaterializer {
         Option<ColdIntentMaterialization>,
         crate::InteractionWorkReceipt,
     ) {
-        self.evaluate_with_materialization_and_accepted_continuation_audited(candidate, None)
+        self.evaluate_with_materialization_and_continuation_audited(candidate, None, None)
     }
 
     /// Evaluates one delegated semantic candidate while certifying a complete
@@ -2171,16 +2222,42 @@ impl ColdIntentMaterializer {
         Option<ColdIntentMaterialization>,
         crate::InteractionWorkReceipt,
     ) {
-        self.evaluate_with_materialization_and_accepted_continuation_audited(
+        self.evaluate_with_materialization_and_continuation_audited(
             candidate,
             Some(accepted_continuation),
+            None,
         )
     }
 
-    fn evaluate_with_materialization_and_accepted_continuation_audited(
+    /// Evaluates a structurally changed candidate while carrying forward only
+    /// matching numerical values from the previous retained/accepted pair.
+    /// The candidate remains the sole source of topology, branches, ranges,
+    /// and host inputs.
+    pub(crate) fn evaluate_with_materialization_from_structural_continuation_audited(
+        &self,
+        candidate: &IntentCandidate,
+        upstream_design: &geosolve_sketch::SketchDocument,
+        upstream_accepted: &geosolve_sketch::SketchDocument,
+    ) -> (
+        IntentEvaluation,
+        Option<ColdIntentMaterialization>,
+        crate::InteractionWorkReceipt,
+    ) {
+        self.evaluate_with_materialization_and_continuation_audited(
+            candidate,
+            None,
+            Some((upstream_design, upstream_accepted)),
+        )
+    }
+
+    fn evaluate_with_materialization_and_continuation_audited(
         &self,
         candidate: &IntentCandidate,
         accepted_continuation: Option<&geosolve_sketch::SketchDocument>,
+        structural_continuation: Option<(
+            &geosolve_sketch::SketchDocument,
+            &geosolve_sketch::SketchDocument,
+        )>,
     ) -> (
         IntentEvaluation,
         Option<ColdIntentMaterialization>,
@@ -2191,6 +2268,7 @@ impl ColdIntentMaterializer {
         match self.materialize_source_with_accepted_continuation_and_work(
             candidate,
             accepted_continuation,
+            structural_continuation,
             &mut work,
         ) {
             Ok(materialized) => {
@@ -2874,6 +2952,7 @@ struct LoweringState {
     reverse_leaves: BTreeMap<IntentNativeWritableLeaf, LeafRef>,
     point_positions: BTreeMap<DesignPointId, [f64; 2]>,
     scalar_domains: BTreeMap<DesignScalarId, ScalarDomain>,
+    curve_definitions: BTreeMap<CurveId, CurveDefinition>,
     parameter_kinds: BTreeMap<DocumentParameterId, DocumentParameterKind>,
     aggregate_bindings: BTreeMap<IntentPortRef, IntentAggregateMaterialization>,
     contact_states: BTreeMap<ContactId, (CurveSpan, i32, ContactDomain)>,
@@ -2928,6 +3007,11 @@ impl LoweringState {
                 .scalars()
                 .iter()
                 .map(|scalar| (scalar.id, scalar.domain))
+                .collect(),
+            curve_definitions: document
+                .curves()
+                .iter()
+                .map(|curve| (curve.id, curve.definition.clone()))
                 .collect(),
             parameter_kinds: document
                 .parameters()
@@ -4335,7 +4419,8 @@ fn materialize_tangent_arc_relation(
             });
         }
     };
-    let source_domain = tangent_source_domain(node)?;
+    let source_domain = inferred_contact_domain(node, "source", source, state)?;
+    let source_range = relation_contact_range(node, "source")?;
     let source_neighborhood = tangent_source_neighborhood(node)?;
     let source_winding =
         i32::try_from(field_integer(node, "source_winding", 0)?).map_err(|_| {
@@ -4354,6 +4439,7 @@ fn materialize_tangent_arc_relation(
         source,
         source_parameter,
         source_domain,
+        source_range,
         source_winding,
         source_neighborhood,
         Some(orientation),
@@ -4370,6 +4456,7 @@ fn materialize_tangent_arc_relation(
             lower: 0.0,
             upper: 1.0,
         },
+        None,
         0,
         ContactNeighborhood::Start,
         Some(orientation),
@@ -4386,27 +4473,6 @@ fn materialize_tangent_arc_relation(
         batch,
         state,
     )
-}
-
-fn tangent_source_domain(node: &IntentNode) -> Result<ContactDomain, IntentMaterializationError> {
-    match enum_field(node, "source_domain")? {
-        None | Some("bounded") => {
-            let lower = field_quantity(node, "source_domain_lower", IntentUnit::Dimensionless)?
-                .unwrap_or(0.0);
-            let upper = field_quantity(node, "source_domain_upper", IntentUnit::Dimensionless)?
-                .unwrap_or(1.0);
-            Ok(ContactDomain::Bounded { lower, upper })
-        }
-        Some("supporting_line") => Ok(ContactDomain::SupportingLine),
-        Some("periodic") => Ok(ContactDomain::Periodic {
-            period: field_quantity(node, "source_domain_period", IntentUnit::Dimensionless)?
-                .unwrap_or(std::f64::consts::TAU),
-        }),
-        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
-            node: node.id,
-            reason: "tangent source domain is invalid",
-        }),
-    }
 }
 
 fn tangent_source_neighborhood(
@@ -4437,6 +4503,7 @@ fn materialize_recipe_contact(
     curve: CurveSpan,
     parameter_value: f64,
     domain: ContactDomain,
+    admissible_range: Option<ContactAdmissibleRange>,
     winding: i32,
     neighborhood: ContactNeighborhood,
     orientation: Option<TangentOrientation>,
@@ -4478,6 +4545,7 @@ fn materialize_recipe_contact(
         curve,
         parameter,
         domain,
+        admissible_range,
         winding,
         neighborhood,
         tangent_orientation: orientation,
@@ -4751,8 +4819,9 @@ fn materialize_curve_with_role(
         } else {
             format!("{}.curve{}", node.symbol.as_str(), index + 1)
         },
-        definition,
+        definition: definition.clone(),
     });
+    state.curve_definitions.insert(curve, definition);
     if role == GeometryRole::Construction {
         batch.push_geometry_role(GeometryRoleEdit::new(curve, role));
     }
@@ -4832,15 +4901,17 @@ fn lower_segment(
         _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
     };
     let branch_direction = branch_direction(node, start_position, end_position)?;
+    let definition = CurveDefinition::Line {
+        start,
+        end,
+        branch_direction,
+    };
     batch.push_curve(DesignCurve {
         id: curve,
         label: node.symbol.as_str().to_owned(),
-        definition: CurveDefinition::Line {
-            start,
-            end,
-            branch_direction,
-        },
+        definition: definition.clone(),
     });
+    state.curve_definitions.insert(curve, definition);
     let role = geometry_role(node)?;
     if role == GeometryRole::Construction {
         batch.push_geometry_role(GeometryRoleEdit::new(curve, role));
@@ -5644,9 +5715,10 @@ fn bind_operation_outputs(
                 state.scalar_domains.insert(id, scalar.domain);
             }
             (IntentOperationOutputKind::Curve, IntentNativeBinding::Curve(id)) => {
-                document.curve(id).ok_or_else(|| {
+                let curve = document.curve(id).ok_or_else(|| {
                     invalid_operation(node, "reserved curve output was not materialized")
                 })?;
+                state.curve_definitions.insert(id, curve.definition.clone());
                 let spans = document.curve_spans(id)?;
                 if spans.len() != usize::from(output.curve_span_count) {
                     return Err(invalid_operation(
@@ -6039,7 +6111,6 @@ fn lower_horizontal(
 #[derive(Clone, Copy)]
 struct RelationContactDefaults {
     parameter: f64,
-    domain: ContactDomain,
     winding: i32,
     neighborhood: ContactNeighborhood,
     orientation: Option<TangentOrientation>,
@@ -6049,10 +6120,6 @@ impl RelationContactDefaults {
     const fn bounded(parameter: f64) -> Self {
         Self {
             parameter,
-            domain: ContactDomain::Bounded {
-                lower: 0.0,
-                upper: 1.0,
-            },
             winding: 0,
             neighborhood: ContactNeighborhood::Interior,
             orientation: None,
@@ -6062,9 +6129,6 @@ impl RelationContactDefaults {
     const fn periodic(parameter: f64) -> Self {
         Self {
             parameter,
-            domain: ContactDomain::Periodic {
-                period: std::f64::consts::TAU,
-            },
             winding: 0,
             neighborhood: ContactNeighborhood::Interior,
             orientation: None,
@@ -6082,52 +6146,91 @@ impl RelationContactDefaults {
     }
 }
 
-fn relation_contact_domain(
+fn inferred_contact_domain(
     node: &IntentNode,
     prefix: &str,
-    default: ContactDomain,
+    curve: CurveSpan,
+    state: &LoweringState,
 ) -> Result<ContactDomain, IntentMaterializationError> {
-    let domain_field = format!("{prefix}_domain");
-    match enum_field(node, &domain_field)? {
-        None => Ok(default),
-        Some("supporting_line") => Ok(ContactDomain::SupportingLine),
-        Some("bounded") => {
-            let (default_lower, default_upper) = match default {
-                ContactDomain::Bounded { lower, upper } => (lower, upper),
-                ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => (0.0, 1.0),
-            };
-            let lower = field_quantity(
-                node,
-                &format!("{prefix}_domain_lower"),
-                IntentUnit::Dimensionless,
-            )?
-            .unwrap_or(default_lower);
-            let upper = field_quantity(
-                node,
-                &format!("{prefix}_domain_upper"),
-                IntentUnit::Dimensionless,
-            )?
-            .unwrap_or(default_upper);
-            Ok(ContactDomain::Bounded { lower, upper })
-        }
-        Some("periodic") => {
-            let default_period = match default {
-                ContactDomain::Periodic { period } => period,
-                ContactDomain::SupportingLine | ContactDomain::Bounded { .. } => {
-                    std::f64::consts::TAU
-                }
-            };
-            let period = field_quantity(
-                node,
-                &format!("{prefix}_domain_period"),
-                IntentUnit::Dimensionless,
-            )?
-            .unwrap_or(default_period);
-            Ok(ContactDomain::Periodic { period })
-        }
-        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+    let definition = state.curve_definitions.get(&curve.curve).ok_or(
+        IntentMaterializationError::InvalidGeometry {
             node: node.id,
-            reason: "contact domain is invalid",
+            reason: "contact curve topology is unavailable",
+        },
+    )?;
+    let valid_span = match definition {
+        CurveDefinition::Polyline {
+            branch_directions, ..
+        } => usize::try_from(curve.segment).is_ok_and(|index| index < branch_directions.len()),
+        CurveDefinition::BSpline { span_ids, .. } | CurveDefinition::Nurbs { span_ids, .. } => {
+            span_ids.contains(&curve.segment)
+        }
+        _ => curve.segment == 0,
+    };
+    if !valid_span {
+        return Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "contact curve span is outside its intrinsic topology",
+        });
+    }
+    let support = enum_field(node, &format!("{prefix}_support"))?;
+    if let Some(value) = support {
+        if value != "supporting_line"
+            || !matches!(
+                definition,
+                CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
+            )
+        {
+            return Err(IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "supporting-line contact is valid only for a line or polyline span",
+            });
+        }
+        return Ok(ContactDomain::SupportingLine);
+    }
+    Ok(
+        if matches!(
+            definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+        ) {
+            ContactDomain::Periodic {
+                period: std::f64::consts::TAU,
+            }
+        } else {
+            ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            }
+        },
+    )
+}
+
+fn relation_contact_range(
+    node: &IntentNode,
+    prefix: &str,
+) -> Result<Option<ContactAdmissibleRange>, IntentMaterializationError> {
+    let lower = field_quantity(
+        node,
+        &format!("{prefix}_range_lower"),
+        IntentUnit::Dimensionless,
+    )?;
+    let upper = field_quantity(
+        node,
+        &format!("{prefix}_range_upper"),
+        IntentUnit::Dimensionless,
+    )?;
+    match (lower, upper) {
+        (None, None) => Ok(None),
+        (Some(lower), Some(upper)) if lower.is_finite() && upper.is_finite() && lower <= upper => {
+            Ok(Some(ContactAdmissibleRange { lower, upper }))
+        }
+        (Some(_), Some(_)) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "contact admissible range must be finite and ordered",
+        }),
+        (Some(_), None) | (None, Some(_)) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "contact admissible range requires both lower and upper limits",
         }),
     }
 }
@@ -6214,7 +6317,8 @@ fn materialize_relation_contact(
         node: node.id,
         reason: "contact winding exceeds persistent limits",
     })?;
-    let domain = relation_contact_domain(node, prefix, defaults.domain)?;
+    let domain = inferred_contact_domain(node, prefix, curve, state)?;
+    let range = relation_contact_range(node, prefix)?;
     let neighborhood = relation_contact_neighborhood(node, prefix, defaults.neighborhood)?;
     let orientation = relation_contact_orientation(node, prefix, defaults.orientation)?;
     materialize_recipe_contact(
@@ -6224,6 +6328,7 @@ fn materialize_relation_contact(
         curve,
         parameter,
         domain,
+        range,
         winding,
         neighborhood,
         orientation,

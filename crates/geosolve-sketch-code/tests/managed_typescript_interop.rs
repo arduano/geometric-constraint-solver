@@ -394,7 +394,14 @@ fn named_curve_tangency_typescript_envelope_authenticates_and_cold_materializes(
         })
         .expect("authenticated CurveCurveTangency intent node");
     assert_eq!(tangent_node.inputs.len(), 2);
-    assert_eq!(tangent_node.fields.len(), 20);
+    assert_eq!(tangent_node.fields.len(), 12);
+    assert!(
+        tangent_node
+            .fields
+            .keys()
+            .all(|field| !field.0.as_str().contains("domain")),
+        "intrinsic curve topology must not be serialized as authored contact state",
+    );
 
     let manifest = managed_control_manifest(&project, &materialized.expansion)
         .expect("named constraint managed controls");
@@ -702,12 +709,6 @@ fn named_geometry_controls_use_semantic_inspector_paths_and_exact_lexical_mutati
         ManagedPathSegment::Field("contact".into()),
         ManagedPathSegment::Field("parameter".into()),
     ];
-    let domain_kind_path = [
-        ManagedPathSegment::Field("source".into()),
-        ManagedPathSegment::Field("contact".into()),
-        ManagedPathSegment::Field("domain".into()),
-        ManagedPathSegment::Field("kind".into()),
-    ];
     let weight_path = [
         ManagedPathSegment::Field("controls".into()),
         ManagedPathSegment::Index(1),
@@ -720,14 +721,12 @@ fn named_geometry_controls_use_semantic_inspector_paths_and_exact_lexical_mutati
         ManagedPathSegment::Index(0),
     ];
     let parameter = named_control(&manifest, "tangent", &parameter_path);
-    let domain_kind = named_control(&manifest, "tangent", &domain_kind_path);
     let weight = named_control(&manifest, "periodic", &weight_path);
     let degree = named_control(&manifest, "periodic", &degree_path);
     let gauge = named_control(&manifest, "periodic", &gauge_path);
     let point_x = named_control(&manifest, "cubic", &point_x_path);
     for (control, declaration, property) in [
         (parameter, "tangent", "source/contact/parameter"),
-        (domain_kind, "tangent", "source/contact/domain/kind"),
         (weight, "periodic", "controls/1/weight"),
         (degree, "periodic", "degree"),
         (gauge, "periodic", "gauge"),
@@ -779,13 +778,11 @@ fn named_geometry_controls_use_semantic_inspector_paths_and_exact_lexical_mutati
             }),
         ) if minimum.value == 0.0 && !minimum.inclusive
     ));
-    assert!(matches!(
-        (&domain_kind.access, &domain_kind.schema),
-        (
-            ManagedControlAccess::Editable { .. },
-            Some(ManagedControlSchema::Choice { choices }),
-        ) if choices == &["bounded", "supportingLine", "periodic"]
-    ));
+    assert!(manifest.controls.iter().all(|control| {
+        control.source.path.0.iter().all(
+            |segment| !matches!(segment, ManagedPathSegment::Field(field) if field == "domain"),
+        )
+    }));
     assert!(matches!(
         (&gauge.access, &gauge.schema),
         (

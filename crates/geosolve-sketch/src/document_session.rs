@@ -3825,6 +3825,72 @@ impl RetainedSketchDocumentSession {
         )
     }
 
+    /// Starts a lifecycle for a structurally changed design using one authenticated upstream
+    /// retained/accepted pair solely as its numerical continuation seed.
+    ///
+    /// This is intended for semantic edits such as authored contact-limit changes: topology and
+    /// branch state come exclusively from `document`, while matching points/scalars may begin from
+    /// the upstream accepted solution. Solver bounds project an excluded old value into the new
+    /// feasible box before the ordinary solve and independent validation gates run.
+    ///
+    /// # Errors
+    ///
+    /// Rejects foreign namespaces, malformed designs, invalid policy, or invalid continuation
+    /// evidence. Numerical infeasibility remains a retained rejected first attempt.
+    pub fn new_from_numerical_continuation(
+        document: SketchDocument,
+        upstream_design: &SketchDocument,
+        upstream_accepted: &SketchDocument,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        Self::new_with_inputs_from_numerical_continuation(
+            document,
+            upstream_design,
+            upstream_accepted,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
+            request,
+            config,
+        )
+    }
+
+    /// Starts a lifecycle under exact host inputs while using one authenticated upstream
+    /// retained/accepted pair solely as its numerical continuation seed.
+    ///
+    /// This is the host-input-preserving counterpart to
+    /// [`Self::new_from_numerical_continuation`]. The downstream document remains the sole design
+    /// authority; matching values from the upstream accepted document only initialize its solve.
+    ///
+    /// # Errors
+    ///
+    /// Rejects foreign namespaces, malformed designs or host inputs, invalid policy, or invalid
+    /// continuation evidence. Numerical infeasibility remains a retained rejected first attempt.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_inputs_from_numerical_continuation(
+        document: SketchDocument,
+        upstream_design: &SketchDocument,
+        upstream_accepted: &SketchDocument,
+        parameter_batch: ParameterBatch,
+        external_snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        let seed = document.prepare_continuation_seed(upstream_design, upstream_accepted)?;
+        Self::new_at_with_seed(
+            document,
+            &seed,
+            parameter_batch,
+            external_snapshots,
+            request,
+            config,
+            0,
+            0,
+            None,
+            0,
+        )
+    }
+
     /// Starts a retained-design lifecycle under operation control.
     ///
     /// All identities, attempts, and accepted state are constructed on scratch
@@ -4008,6 +4074,89 @@ impl RetainedSketchDocumentSession {
         );
         let execution = run_retained_attempt(
             &document,
+            &parameter_batch,
+            &external_snapshots,
+            request,
+            None,
+            config,
+            None,
+        );
+        let (last_attempt, accepted) = publish_retained_attempt(
+            &document,
+            &input,
+            attempt_identity,
+            None,
+            Some(accepted_revision),
+            execution,
+        );
+        let accepted_revision_high_water = accepted
+            .as_ref()
+            .map(|accepted| accepted.identity.revision)
+            .or(prior_accepted_high_water);
+        let accepted_parameter_batch = accepted.as_ref().map(|_| parameter_batch.clone());
+        let accepted_external_snapshots = accepted.as_ref().map(|_| external_snapshots.clone());
+        let prepared_state_epoch = next_prepared_state_epoch()?;
+        Ok(Self {
+            design: document,
+            design_identity,
+            last_attempt,
+            accepted,
+            accepted_revision_high_water,
+            request,
+            config,
+            parameter_batch,
+            external_snapshots,
+            external_snapshot_attempt_candidate: None,
+            accepted_parameter_batch,
+            accepted_external_snapshots,
+            persistent_identity_high_water,
+            prepared_state_epoch,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_at_with_seed(
+        document: SketchDocument,
+        seed: &SketchDocument,
+        parameter_batch: ParameterBatch,
+        external_snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+        design_revision: u64,
+        attempt_revision: u64,
+        prior_accepted_high_water: Option<SketchAcceptedRevision>,
+        accepted_revision: u64,
+    ) -> Result<Self, DocumentSessionError> {
+        document.validate()?;
+        seed.validate()?;
+        if document.id() != seed.id() {
+            return Err(DocumentSessionError::ForeignDesign {
+                expected: document.id(),
+                actual: seed.id(),
+            });
+        }
+        let persistent_identity_high_water = document.persistent_identity_high_water();
+        let config = crate::compiler::acceptance_solver_config(config);
+        config.validate().map_err(crate::SketchError::from)?;
+        let design_identity = SketchDesignIdentity {
+            document: document.id(),
+            revision: SketchDesignRevision(design_revision),
+        };
+        let attempt_identity = SketchAttemptIdentity {
+            document: document.id(),
+            revision: SketchAttemptRevision(attempt_revision),
+        };
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &document,
+            design_identity,
+            request,
+            request,
+            config,
+            &parameter_batch,
+            &external_snapshots,
+        );
+        let execution = run_retained_attempt(
+            seed,
             &parameter_batch,
             &external_snapshots,
             request,

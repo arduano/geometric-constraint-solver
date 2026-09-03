@@ -2736,6 +2736,12 @@ impl Sketch {
                 }
             })?;
         }
+        for (constraint_id, role, [lower, upper]) in &self.contact_admissible_ranges {
+            let parameter = latent_value(&candidate.latents, *constraint_id, *role)?;
+            if parameter < *lower || parameter > *upper {
+                return Err(SolveRejection::ContactParameterOutOfDomain(*constraint_id));
+            }
+        }
         for (constraint_id, constraint) in self.constraints.iter() {
             match constraint.kind() {
                 SketchConstraintKind::PointOnLine {
@@ -4613,6 +4619,7 @@ fn compile_curve_constraint(
             let (start, end, line) = segment_points(sketch, segment)?;
             let point_name = sketch.point_name(point)?;
             let parameter_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -4658,6 +4665,7 @@ fn compile_curve_constraint(
             let circle_value = sketch.circle_value(circle)?;
             let point_name = sketch.point_name(point)?;
             let angle_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -4703,6 +4711,7 @@ fn compile_curve_constraint(
             let arc_value = sketch.arc_value(arc)?;
             let point_name = sketch.point_name(point)?;
             let parameter_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -4762,6 +4771,7 @@ fn compile_curve_constraint(
                 .ok_or(SketchError::UnknownBezier(bezier))?;
             let point_name = sketch.point_name(point)?;
             let parameter_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -5435,6 +5445,7 @@ fn compile_curve_constraint(
             let (line_start, line_end, line_value) = segment_points(sketch, line)?;
             let circle_value = sketch.circle_value(circle)?;
             let line_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -5444,6 +5455,7 @@ fn compile_curve_constraint(
                 bound_mappings,
             )?;
             let circle_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -5509,6 +5521,7 @@ fn compile_curve_constraint(
                 .bezier(bezier)
                 .ok_or(SketchError::UnknownBezier(bezier))?;
             let parameter_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -6162,6 +6175,7 @@ fn compile_curve_constraint(
             let circle_value = sketch.circle_value(circle)?;
             let arc_value = sketch.arc_value(arc)?;
             let circle_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -6171,6 +6185,7 @@ fn compile_curve_constraint(
                 bound_mappings,
             )?;
             let arc_variable = add_latent(
+                sketch,
                 problem,
                 latent_variables,
                 constraint_id,
@@ -7740,6 +7755,7 @@ fn add_curve_contact_latent(
         _ => None,
     };
     add_latent(
+        sketch,
         problem,
         mappings,
         constraint_id,
@@ -7798,16 +7814,45 @@ fn generic_curve_pair_audit_rows(
     rows
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one latent allocation keeps its semantic owner, intrinsic/authored bounds, solver mapping, and bound diagnostics together"
+)]
 fn add_latent(
+    sketch: &Sketch,
     problem: &mut Problem,
     mappings: &mut Vec<LatentVariableMapping>,
     constraint_id: SketchConstraintId,
     role: LatentVariableRole,
     value: f64,
-    bounds: Option<(f64, f64)>,
+    intrinsic_bounds: Option<(f64, f64)>,
     bound_mappings: &mut Vec<SketchBoundMapping>,
 ) -> Result<VariableId, SketchError> {
     validate_point(Point2::new(value, 0.0), "latent parameter")?;
+    let authored =
+        sketch
+            .contact_admissible_ranges
+            .iter()
+            .find_map(|(candidate, candidate_role, range)| {
+                (*candidate == constraint_id && *candidate_role == role)
+                    .then_some((range[0], range[1]))
+            });
+    let bounds = match (intrinsic_bounds, authored) {
+        (Some((intrinsic_lower, intrinsic_upper)), Some((authored_lower, authored_upper))) => {
+            Some((
+                intrinsic_lower.max(authored_lower),
+                intrinsic_upper.min(authored_upper),
+            ))
+        }
+        (None, Some(authored)) => Some(authored),
+        (intrinsic, None) => intrinsic,
+    };
+    if bounds.is_some_and(|(lower, upper)| lower > upper) {
+        return Err(SketchError::ParameterOutOfDomain {
+            parameter: value,
+            domain: "the intersection of intrinsic topology, authored admissible range, and contact locality",
+        });
+    }
     let variable_id = problem.add_variable(VariableBlock::scalar(value, 1.0)?);
     mappings.push(LatentVariableMapping {
         constraint_id,
@@ -7831,6 +7876,35 @@ fn add_latent(
         });
     }
     Ok(variable_id)
+}
+
+impl Sketch {
+    pub(crate) fn set_contact_admissible_range(
+        &mut self,
+        constraint: SketchConstraintId,
+        role: LatentVariableRole,
+        range: [f64; 2],
+    ) -> Result<(), SketchError> {
+        if self.constraint(constraint).is_none()
+            || !range[0].is_finite()
+            || !range[1].is_finite()
+            || range[0] > range[1]
+            || self
+                .contact_admissible_ranges
+                .iter()
+                .any(|(candidate, candidate_role, _)| {
+                    *candidate == constraint && *candidate_role == role
+                })
+        {
+            return Err(SketchError::ParameterOutOfDomain {
+                parameter: range[0],
+                domain: "one finite ordered authored range per contact latent",
+            });
+        }
+        self.contact_admissible_ranges
+            .push((constraint, role, range));
+        Ok(())
+    }
 }
 
 fn circle_radius_variable(

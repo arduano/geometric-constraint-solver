@@ -159,10 +159,6 @@ const canvasDeclaration = (variable, builder_path, value) => ({
   suppressed: false,
 });
 const periodicContact = (parameter) => managedObject({
-  domain: managedObject({
-    kind: managedString("periodic"),
-    period: managedNumber(2 * Math.PI),
-  }),
   neighborhood: managedObject({ kind: managedString("interior") }),
   orientation: managedString("none"),
   parameter: managedNumber(parameter),
@@ -207,6 +203,14 @@ const twoCircleSnappedSegment = {
 };
 
 const managedSketchFixtures = [
+  {
+    source: "test/fixtures/managed-contact-range-base.sketch.ts",
+    fixture: "test/fixtures/managed-contact-range-base.json",
+  },
+  {
+    source: "test/fixtures/managed-contact-range-limited.sketch.ts",
+    fixture: "test/fixtures/managed-contact-range-limited.json",
+  },
   {
     source: "test/fixtures/managed-clean-operation-catalog.sketch.ts",
     fixture: "test/fixtures/managed-clean-operation-catalog.json",

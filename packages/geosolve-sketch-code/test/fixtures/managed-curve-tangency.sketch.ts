@@ -21,14 +21,12 @@ export default sketch(($) => {
       first: {
         parameter: 0,
         winding: 0,
-        domain: { kind: "bounded", lower: 0, upper: 1 },
         neighborhood: { kind: "start" },
         orientation: "aligned",
       },
       second: {
         parameter: 0,
         winding: 0,
-        domain: { kind: "bounded", lower: 0, upper: 1 },
         neighborhood: { kind: "start" },
         orientation: "aligned",
       },

@@ -869,6 +869,9 @@ pub struct Sketch {
     pub(crate) nurbs: StableStore<NurbsId, crate::nurbs::NurbsCurve>,
     pub(crate) constraints: StableStore<SketchConstraintId, SketchConstraint>,
     pub(crate) dimensions: StableStore<SketchDimensionId, SketchDimension>,
+    /// Document-authored inclusive contact bounds keyed by runtime latent ownership.
+    pub(crate) contact_admissible_ranges:
+        Vec<(SketchConstraintId, crate::LatentVariableRole, [f64; 2])>,
     pub(crate) profile_offsets: StableStore<ProfileOffsetId, crate::ProfileOffsetAssociation>,
     pub(crate) source_order: Vec<PersistentSource>,
 }
@@ -893,6 +896,7 @@ impl Sketch {
             nurbs: StableStore::new(),
             constraints: StableStore::new(),
             dimensions: StableStore::new(),
+            contact_admissible_ranges: Vec::new(),
             profile_offsets: StableStore::new(),
             source_order: Vec::new(),
         })

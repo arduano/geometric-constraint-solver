@@ -530,18 +530,13 @@ fn contact_projection_path(name: &str) -> Option<IntentProjectionPath> {
 
 fn nested_contact_component(base: IntentProjectionPath, suffix: &str) -> IntentProjectionPath {
     match suffix {
-        "domain" => base
-            .with_field(projection_key("domain"))
-            .with_field(projection_key("kind")),
-        "domain_lower" => base
-            .with_field(projection_key("domain"))
+        "support" => base.with_field(projection_key("support")),
+        "range_lower" => base
+            .with_field(projection_key("range"))
             .with_field(projection_key("lower")),
-        "domain_upper" => base
-            .with_field(projection_key("domain"))
+        "range_upper" => base
+            .with_field(projection_key("range"))
             .with_field(projection_key("upper")),
-        "domain_period" => base
-            .with_field(projection_key("domain"))
-            .with_field(projection_key("period")),
         "neighborhood" => base
             .with_field(projection_key("neighborhood"))
             .with_field(projection_key("kind")),
@@ -1172,19 +1167,13 @@ fn geometry_field_default(
         (GeometryRecipeKind::RationalQuadraticConic, "weighted_middle") => {
             Some(IntentLiteral::Point([1.0, 1.0]))
         }
-        (
-            GeometryRecipeKind::TangentArc,
-            "source_parameter" | "source_domain_upper" | "source_neighborhood_upper",
-        ) => Some(quantity_literal(1.0, IntentUnit::Dimensionless)),
+        (GeometryRecipeKind::TangentArc, "source_parameter" | "source_neighborhood_upper") => {
+            Some(quantity_literal(1.0, IntentUnit::Dimensionless))
+        }
         (GeometryRecipeKind::TangentArc, "source_winding") => Some(IntentLiteral::Integer(0)),
-        (GeometryRecipeKind::TangentArc, "source_domain") => Some(enum_literal("bounded")),
-        (GeometryRecipeKind::TangentArc, "source_domain_lower" | "source_neighborhood_lower") => {
+        (GeometryRecipeKind::TangentArc, "source_neighborhood_lower") => {
             Some(quantity_literal(0.0, IntentUnit::Dimensionless))
         }
-        (GeometryRecipeKind::TangentArc, "source_domain_period") => Some(quantity_literal(
-            std::f64::consts::TAU,
-            IntentUnit::Dimensionless,
-        )),
         (GeometryRecipeKind::TangentArc, "source_neighborhood") => Some(enum_literal("end")),
         (GeometryRecipeKind::TangentArc, "orientation") => Some(enum_literal("aligned")),
         _ => None,
@@ -1236,7 +1225,6 @@ fn dimension_field_default(dimension: DimensionKind, name: &str) -> Option<Inten
 #[derive(Clone, Copy)]
 struct ContactFieldDefaults {
     parameter: f64,
-    domain: &'static str,
     neighborhood: &'static str,
     orientation: &'static str,
 }
@@ -1259,17 +1247,8 @@ fn constraint_contact_field_default(
             IntentUnit::Dimensionless,
         )),
         "winding" => Some(IntentLiteral::Integer(0)),
-        "domain" => Some(enum_literal(defaults.domain)),
-        "domain_lower" | "neighborhood_lower" => {
-            Some(quantity_literal(0.0, IntentUnit::Dimensionless))
-        }
-        "domain_upper" | "neighborhood_upper" => {
-            Some(quantity_literal(1.0, IntentUnit::Dimensionless))
-        }
-        "domain_period" => Some(quantity_literal(
-            std::f64::consts::TAU,
-            IntentUnit::Dimensionless,
-        )),
+        "neighborhood_lower" => Some(quantity_literal(0.0, IntentUnit::Dimensionless)),
+        "neighborhood_upper" => Some(quantity_literal(1.0, IntentUnit::Dimensionless)),
         "neighborhood" => Some(enum_literal(defaults.neighborhood)),
         "orientation" => Some(enum_literal(defaults.orientation)),
         _ => None,
@@ -1284,13 +1263,11 @@ fn constraint_contact_defaults(
 
     let bounded = |parameter, neighborhood, orientation| ContactFieldDefaults {
         parameter,
-        domain: "bounded",
         neighborhood,
         orientation,
     };
     let periodic = |parameter, orientation| ContactFieldDefaults {
         parameter,
-        domain: "periodic",
         neighborhood: "interior",
         orientation,
     };
@@ -1316,6 +1293,12 @@ fn constraint_contact_defaults(
 }
 
 fn conditional_field_default(kind: &IntentNodeKind, name: &str) -> bool {
+    if name.ends_with("_support")
+        || name.ends_with("_range_lower")
+        || name.ends_with("_range_upper")
+    {
+        return true;
+    }
     match kind {
         IntentNodeKind::Dimension {
             dimension: DimensionKind::ProfileOffset,
@@ -1395,9 +1378,7 @@ fn geometry_field_choices(
         (_, "sweep") => Some(&["counter_clockwise", "clockwise"]),
         (GeometryRecipeKind::Hyperbola, "branch") => Some(&["positive", "negative"]),
         (GeometryRecipeKind::TangentArc, "orientation") => Some(&["aligned", "opposed"]),
-        (GeometryRecipeKind::TangentArc, "source_domain") => {
-            Some(&["bounded", "supporting_line", "periodic"])
-        }
+        (GeometryRecipeKind::TangentArc, "source_support") => Some(&["supporting_line"]),
         (GeometryRecipeKind::TangentArc, "source_neighborhood") => {
             Some(&["start", "end", "interior", "local"])
         }
@@ -1436,7 +1417,7 @@ fn constraint_field_choices(
         (ConstraintKind::CurveCurveFillet, "first_trim_endpoint" | "second_trim_endpoint") => {
             Some(&["start", "end"])
         }
-        (_, name) if name.ends_with("_domain") => Some(&["supporting_line", "bounded", "periodic"]),
+        (_, name) if name.ends_with("_support") => Some(&["supporting_line"]),
         (_, name) if name.ends_with("_neighborhood") => {
             Some(&["interior", "start", "end", "local"])
         }
@@ -1751,19 +1732,14 @@ fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentN
                 false,
             ),
             field("source_winding", IntentLiteralSchema::Integer, false),
-            field("source_domain", IntentLiteralSchema::Enum, false),
+            field("source_support", IntentLiteralSchema::Enum, false),
             field(
-                "source_domain_lower",
+                "source_range_lower",
                 IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
                 false,
             ),
             field(
-                "source_domain_upper",
-                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
-                false,
-            ),
-            field(
-                "source_domain_period",
+                "source_range_upper",
                 IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
                 false,
             ),
@@ -1964,22 +1940,17 @@ fn constraint_schema(kind: ConstraintKind) -> IntentNodeSchema {
                 false,
             ),
             field(
-                &format!("{prefix}_domain"),
+                &format!("{prefix}_support"),
                 IntentLiteralSchema::Enum,
                 false,
             ),
             field(
-                &format!("{prefix}_domain_lower"),
+                &format!("{prefix}_range_lower"),
                 IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
                 false,
             ),
             field(
-                &format!("{prefix}_domain_upper"),
-                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
-                false,
-            ),
-            field(
-                &format!("{prefix}_domain_period"),
+                &format!("{prefix}_range_upper"),
                 IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
                 false,
             ),

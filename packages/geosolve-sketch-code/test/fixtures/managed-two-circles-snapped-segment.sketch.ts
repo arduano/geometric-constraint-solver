@@ -25,7 +25,6 @@ export default sketch(($) => {
   });
   const constraint5 = $.constraint.pointOnCurve("constraint5", {
     contact: {
-      domain: { kind: "periodic", period: 6.283185307179586 },
       neighborhood: { kind: "interior" },
       orientation: "none",
       parameter: 6.283184096163701,
@@ -37,7 +36,6 @@ export default sketch(($) => {
   });
   const constraint6 = $.constraint.pointOnCurve("constraint6", {
     contact: {
-      domain: { kind: "periodic", period: 6.283185307179586 },
       neighborhood: { kind: "interior" },
       orientation: "none",
       parameter: 3.141593864604212,

@@ -15,6 +15,7 @@ import type {
   AggregateBuilder,
   Angle,
   ComputedBuilder,
+  ContactState,
   ConstraintBuilder,
   DimensionBuilder,
   GeometryBuilder,
@@ -158,6 +159,26 @@ const lengths: readonly Length[] = [mm(1), cm(1), m(1), inch(1)];
 const angles: readonly Angle[] = [deg(1), rad(1)];
 lengths;
 angles;
+
+const explicitContactState: ContactState = {
+  parameter: 0.5,
+  winding: 0,
+  support: "supportingLine",
+  range: { lower: 0.25, upper: 0.75 },
+  neighborhood: { kind: "interior" },
+  orientation: "none",
+};
+explicitContactState;
+
+const legacyDomainContact: ContactState = {
+  parameter: 0.5,
+  winding: 0,
+  // @ts-expect-error intrinsic contact topology is inferred from the referenced curve
+  domain: { kind: "bounded", lower: 0, upper: 1 },
+  neighborhood: { kind: "interior" },
+  orientation: "none",
+};
+legacyDomainContact;
 
 const ordinaryOutput = sketch((s) => {
   const west = s.geometry.segment("west", { start: [0, 0], end: [2, 0] });

@@ -52,9 +52,9 @@ use crate::{
     CircleContainment, CircleId, CircleTangencyMode, ConicId, ConicKind, ContactState,
     CoordinateAxis, CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation,
     CurveDirectionRelation, CurveNormalSide, CurveTangentOrientation, DimensionMode,
-    FilletEndpointOrder, LineOffsetOrientation, LineParameterDomain, LineSide, NurbsId, PointId,
-    SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraintId, SketchConstraintKind,
-    SketchCurve, SketchCurveContact, SketchDimensionId,
+    FilletEndpointOrder, LatentVariableRole, LineOffsetOrientation, LineParameterDomain, LineSide,
+    NurbsId, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraintId,
+    SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimensionId,
 };
 
 /// Runtime entities generated for one persistent curve.
@@ -1643,7 +1643,54 @@ fn lower_constraint(
             id
         }
     };
+    for mapping in &contacts {
+        let Some(range) = document
+            .contact(mapping.persistent)
+            .ok_or_else(|| unknown_runtime("contact", mapping.persistent.0))?
+            .admissible_range
+        else {
+            continue;
+        };
+        let role = runtime_contact_latent_role(sketch, *mapping)?;
+        sketch.set_contact_admissible_range(runtime, role, [range.lower, range.upper])?;
+    }
     Ok((runtime, contacts))
+}
+
+fn runtime_contact_latent_role(
+    sketch: &Sketch,
+    mapping: ContactRuntimeMapping,
+) -> Result<LatentVariableRole, DocumentError> {
+    let kind = sketch
+        .constraint(mapping.constraint)
+        .ok_or_else(|| unknown_runtime("runtime constraint", mapping.persistent.0))?
+        .kind();
+    Ok(match kind {
+        SketchConstraintKind::PointOnCurve { .. }
+        | SketchConstraintKind::LineCurveTangency { .. }
+        | SketchConstraintKind::CurveDirection { .. } => LatentVariableRole::CurveParameter,
+        SketchConstraintKind::CurveCurveContact { .. }
+        | SketchConstraintKind::CurveCurveTangency { .. }
+        | SketchConstraintKind::EqualCurvature { .. }
+        | SketchConstraintKind::EndpointContinuity { .. }
+        | SketchConstraintKind::CurveCurveFillet { .. } => match mapping.role {
+            DocumentContactRole::FirstCurveParameter => LatentVariableRole::FirstCurveParameter,
+            DocumentContactRole::SecondCurveParameter => LatentVariableRole::SecondCurveParameter,
+            _ => return invalid_runtime("paired contact has an incompatible runtime role"),
+        },
+        _ => match mapping.role {
+            DocumentContactRole::LineParameter => LatentVariableRole::LineParameter,
+            DocumentContactRole::CircleAngle => LatentVariableRole::CircleAngle,
+            DocumentContactRole::ArcSpanParameter => LatentVariableRole::ArcSpanParameter,
+            DocumentContactRole::BezierParameter => LatentVariableRole::BezierParameter,
+            DocumentContactRole::ConicParameter
+            | DocumentContactRole::BSplineParameter
+            | DocumentContactRole::NurbsParameter
+            | DocumentContactRole::CurveParameter => LatentVariableRole::CurveParameter,
+            DocumentContactRole::FirstCurveParameter => LatentVariableRole::FirstCurveParameter,
+            DocumentContactRole::SecondCurveParameter => LatentVariableRole::SecondCurveParameter,
+        },
+    })
 }
 
 #[allow(

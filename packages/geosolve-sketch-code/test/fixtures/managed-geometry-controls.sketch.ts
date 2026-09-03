@@ -23,7 +23,6 @@ export default sketch(($) => {
       contact: {
         parameter: 1,
         winding: 0,
-        domain: { kind: "bounded", lower: 0, upper: 1 },
         neighborhood: { kind: "end" },
         orientation: "aligned",
       },

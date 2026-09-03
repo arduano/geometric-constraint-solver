@@ -418,7 +418,8 @@ fn coverage_case(kind: ConstraintKind) -> CoverageCase {
             ],
             [
                 ("contact_parameter", parameter(0.5)),
-                ("contact_domain", IntentLiteral::Enum(key("bounded"))),
+                ("contact_range_lower", parameter(0.25)),
+                ("contact_range_upper", parameter(0.75)),
                 ("contact_neighborhood", IntentLiteral::Enum(key("local"))),
                 ("contact_neighborhood_lower", parameter(0.25)),
                 ("contact_neighborhood_upper", parameter(0.75)),
@@ -518,7 +519,7 @@ fn coverage_case(kind: ConstraintKind) -> CoverageCase {
                 ("side", IntentLiteral::Enum(key("left"))),
                 ("first_contact_parameter", parameter(0.5)),
                 (
-                    "first_contact_domain",
+                    "first_contact_support",
                     IntentLiteral::Enum(key("supporting_line")),
                 ),
                 (
@@ -528,14 +529,6 @@ fn coverage_case(kind: ConstraintKind) -> CoverageCase {
                 (
                     "second_contact_parameter",
                     parameter(3.0 * std::f64::consts::FRAC_PI_2),
-                ),
-                (
-                    "second_contact_domain",
-                    IntentLiteral::Enum(key("periodic")),
-                ),
-                (
-                    "second_contact_domain_period",
-                    parameter(std::f64::consts::TAU),
                 ),
                 ("second_contact_winding", IntentLiteral::Integer(2)),
                 (
@@ -706,13 +699,11 @@ fn coverage_case(kind: ConstraintKind) -> CoverageCase {
                     IntentLiteral::Enum(key("first_then_second")),
                 ),
                 ("first_contact_parameter", parameter(0.75)),
-                ("first_contact_domain", IntentLiteral::Enum(key("bounded"))),
                 (
                     "first_contact_neighborhood",
                     IntentLiteral::Enum(key("interior")),
                 ),
                 ("second_contact_parameter", parameter(0.25)),
-                ("second_contact_domain", IntentLiteral::Enum(key("bounded"))),
                 (
                     "second_contact_neighborhood",
                     IntentLiteral::Enum(key("interior")),
@@ -1184,6 +1175,26 @@ fn every_standalone_constraint_reverse_projects_and_host_external_kinds_remain_i
                     .expect("candidate relation node");
                 assert_named_constraint_arguments(kind, node, arguments);
                 let source_declaration = declaration_source(declaration);
+                assert!(
+                    !source_declaration.contains("\"domain\""),
+                    "{kind:?} leaked intrinsic topology: {source_declaration}",
+                );
+                if kind == ConstraintKind::PointOnCurve {
+                    assert!(
+                        source_declaration.contains("\"range\":{\"lower\":0.25,\"upper\":0.75}"),
+                        "authored admissible range was not reverse-projected: {source_declaration}",
+                    );
+                }
+                if kind == ConstraintKind::LineCircleTangency {
+                    assert!(
+                        source_declaration.contains("\"support\":\"supportingLine\""),
+                        "explicit supporting-line choice was not reverse-projected: {source_declaration}",
+                    );
+                    assert!(
+                        !source_declaration.contains("period"),
+                        "periodic intrinsic topology leaked into source: {source_declaration}",
+                    );
+                }
                 for forbidden in [
                     ".recipe",
                     "geosolve-intent-recipe-v1",

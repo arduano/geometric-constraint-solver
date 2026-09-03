@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
+    ContactAdmissibleRange, ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
     DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentCenterRef,
     DocumentCoordinateAxis, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
     DocumentDimensionMode, DocumentDirectionSense, SketchDatum, SketchDocument, TangentOrientation,
@@ -87,7 +87,8 @@ pub struct ProjectionalTangentArc {
     pub start: [f64; 2],
     pub end: [f64; 2],
     pub source: PatchPortRef,
-    pub source_domain: ContactDomain,
+    pub source_supporting_line: bool,
+    pub source_range: Option<ContactAdmissibleRange>,
     pub source_parameter: f64,
     pub source_winding: i32,
     pub source_neighborhood: ContactNeighborhood,
@@ -319,7 +320,7 @@ pub fn projectional_tangent_arc_draft(
         InputSlot::new(InputRole::Span, 0),
         definition.source.clone(),
     );
-    draft = contact_fields_without_orientation(
+    draft = contact_fields_without_orientation_with_range(
         draft,
         "source",
         DraftContactDescriptor {
@@ -329,11 +330,19 @@ pub fn projectional_tangent_arc_draft(
                 curve_index: 0,
                 segment: 0,
             },
-            domain: definition.source_domain,
+            domain: if definition.source_supporting_line {
+                ContactDomain::SupportingLine
+            } else {
+                ContactDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                }
+            },
             parameter: definition.source_parameter,
             winding: definition.source_winding,
             neighborhood: definition.source_neighborhood,
         },
+        definition.source_range,
     )?;
     draft = enum_field(
         draft,
@@ -356,23 +365,13 @@ fn validate_projectional_contact(
     if !definition.source_parameter.is_finite() {
         return Err(ProjectionalAuthoringError::InvalidGeometry);
     }
-    match definition.source_domain {
-        ContactDomain::SupportingLine if definition.source_winding == 0 => {}
-        ContactDomain::Bounded { lower, upper }
-            if lower.is_finite()
-                && upper.is_finite()
-                && lower < upper
-                && (lower..=upper).contains(&definition.source_parameter)
-                && definition.source_winding == 0 => {}
-        ContactDomain::Periodic { period }
-            if period.is_finite()
-                && period > 0.0
-                && (0.0..period).contains(&definition.source_parameter) => {}
-        ContactDomain::SupportingLine
-        | ContactDomain::Bounded { .. }
-        | ContactDomain::Periodic { .. } => {
-            return Err(ProjectionalAuthoringError::InvalidGeometry);
-        }
+    if definition.source_supporting_line && definition.source_winding != 0 {
+        return Err(ProjectionalAuthoringError::InvalidGeometry);
+    }
+    if definition.source_range.is_some_and(|range| {
+        !range.lower.is_finite() || !range.upper.is_finite() || range.lower > range.upper
+    }) {
+        return Err(ProjectionalAuthoringError::InvalidGeometry);
     }
     if let ContactNeighborhood::Local { lower, upper } = definition.source_neighborhood
         && (!lower.is_finite() || !upper.is_finite() || lower >= upper)
@@ -2348,12 +2347,21 @@ fn enum_literal(value: &str) -> Result<IntentLiteral, ProjectionalAuthoringError
 }
 
 fn contact_fields_without_orientation(
-    mut draft: IntentNodeDraft,
+    draft: IntentNodeDraft,
     prefix: &str,
     contact: DraftContactDescriptor,
 ) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    contact_fields_without_orientation_with_range(draft, prefix, contact, None)
+}
+
+fn contact_fields_without_orientation_with_range(
+    mut draft: IntentNodeDraft,
+    prefix: &str,
+    contact: DraftContactDescriptor,
+    range: Option<ContactAdmissibleRange>,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
     let orientation_field = format!("{prefix}_orientation");
-    for (name, value) in contact_field_values(prefix, contact, None)? {
+    for (name, value) in contact_field_values_with_range(prefix, contact, range, None)? {
         if name == orientation_field {
             continue;
         }
@@ -2365,6 +2373,15 @@ fn contact_fields_without_orientation(
 fn contact_field_values(
     prefix: &str,
     contact: DraftContactDescriptor,
+    orientation: Option<TangentOrientation>,
+) -> Result<Vec<(String, IntentLiteral)>, ProjectionalAuthoringError> {
+    contact_field_values_with_range(prefix, contact, None, orientation)
+}
+
+fn contact_field_values_with_range(
+    prefix: &str,
+    contact: DraftContactDescriptor,
+    range: Option<ContactAdmissibleRange>,
     orientation: Option<TangentOrientation>,
 ) -> Result<Vec<(String, IntentLiteral)>, ProjectionalAuthoringError> {
     let mut values = vec![
@@ -2382,17 +2399,16 @@ fn contact_field_values(
     ];
     match contact.domain {
         ContactDomain::SupportingLine => {
-            values.push((format!("{prefix}_domain"), enum_literal("supporting_line")?));
+            values.push((
+                format!("{prefix}_support"),
+                enum_literal("supporting_line")?,
+            ));
         }
-        ContactDomain::Bounded { lower, upper } => {
-            values.push((format!("{prefix}_domain"), enum_literal("bounded")?));
-            values.push((format!("{prefix}_domain_lower"), dimensionless(lower)));
-            values.push((format!("{prefix}_domain_upper"), dimensionless(upper)));
-        }
-        ContactDomain::Periodic { period } => {
-            values.push((format!("{prefix}_domain"), enum_literal("periodic")?));
-            values.push((format!("{prefix}_domain_period"), dimensionless(period)));
-        }
+        ContactDomain::Bounded { .. } | ContactDomain::Periodic { .. } => {}
+    }
+    if let Some(range) = range {
+        values.push((format!("{prefix}_range_lower"), dimensionless(range.lower)));
+        values.push((format!("{prefix}_range_upper"), dimensionless(range.upper)));
     }
     match contact.neighborhood {
         ContactNeighborhood::Interior => {

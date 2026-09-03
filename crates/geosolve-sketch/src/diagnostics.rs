@@ -1032,7 +1032,14 @@ fn contact_role_matches(
             | (P::ArcSpanParameter, R::ArcSpanParameter)
             | (P::BezierParameter, R::BezierParameter)
             | (
-                P::ConicParameter | P::BSplineParameter | P::NurbsParameter | P::CurveParameter,
+                P::LineParameter
+                    | P::CircleAngle
+                    | P::ArcSpanParameter
+                    | P::BezierParameter
+                    | P::ConicParameter
+                    | P::BSplineParameter
+                    | P::NurbsParameter
+                    | P::CurveParameter,
                 R::CurveParameter
             )
             | (P::FirstCurveParameter, R::FirstCurveParameter)

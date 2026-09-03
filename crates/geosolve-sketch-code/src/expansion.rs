@@ -13,8 +13,8 @@ use geosolve_constraint_editor::{
     projectional_geometry_plan_from_samples, projectional_tangent_arc_draft,
 };
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, DocumentArcSweep, DocumentBSplineForm, GeometryRole,
-    TangentOrientation,
+    ContactAdmissibleRange, ContactNeighborhood, DocumentArcSweep, DocumentBSplineForm,
+    GeometryRole, TangentOrientation,
 };
 use geosolve_sketch_intent::{
     AggregateKind, ComputedFeatureKind, GeometryRecipeKind, InputRole, InputSlot,
@@ -2634,57 +2634,73 @@ fn lower_named_tangent_arc(
         .map(|value| tangent_orientation(value, "Tangent Arc orientation"))
         .transpose()?
         .unwrap_or(TangentOrientation::Aligned);
-    let (source_parameter, source_winding, source_domain, source_neighborhood) =
-        if let Some(contact) = source.get("contact") {
-            let contact = object(contact, "Tangent Arc source contact")?;
-            exact_object_keys(
-                contact,
-                &[
-                    "parameter",
-                    "winding",
-                    "domain",
-                    "neighborhood",
-                    "orientation",
-                ],
-                "Tangent Arc source contact",
-            )?;
-            let contact_orientation = tangent_orientation(
-                required(contact, "orientation", "Tangent Arc source contact")?,
-                "Tangent Arc source contact orientation",
-            )?;
-            if contact_orientation != orientation {
-                return invalid_declaration(
+    let (
+        source_parameter,
+        source_winding,
+        source_supporting_line,
+        source_range,
+        source_neighborhood,
+    ) = if let Some(contact) = source.get("contact") {
+        let contact = object(contact, "Tangent Arc source contact")?;
+        if contact.keys().any(|key| {
+            !matches!(
+                key.as_str(),
+                "parameter" | "winding" | "support" | "range" | "neighborhood" | "orientation"
+            )
+        }) || !["parameter", "winding", "neighborhood", "orientation"]
+            .into_iter()
+            .all(|key| contact.contains_key(key))
+        {
+            return invalid_declaration(
                     declaration,
-                    "Tangent Arc source-contact orientation must match `orientation`".into(),
+                    "Tangent Arc source contact requires `parameter`, `winding`, `neighborhood`, and `orientation`, and accepts only optional `support` and `range`".into(),
                 );
-            }
-            (
-                finite_number(
-                    required(contact, "parameter", "Tangent Arc source contact")?,
-                    "Tangent Arc source parameter",
-                )?,
-                integer_value(
-                    required(contact, "winding", "Tangent Arc source contact")?,
-                    "Tangent Arc source winding",
-                )?,
-                tangent_contact_domain(required(contact, "domain", "Tangent Arc source contact")?)?,
-                tangent_contact_neighborhood(required(
-                    contact,
-                    "neighborhood",
-                    "Tangent Arc source contact",
-                )?)?,
-            )
-        } else {
-            (
-                1.0,
-                0,
-                ContactDomain::Bounded {
-                    lower: 0.0,
-                    upper: 1.0,
-                },
-                ContactNeighborhood::End,
-            )
-        };
+        }
+        let contact_orientation = tangent_orientation(
+            required(contact, "orientation", "Tangent Arc source contact")?,
+            "Tangent Arc source contact orientation",
+        )?;
+        if contact_orientation != orientation {
+            return invalid_declaration(
+                declaration,
+                "Tangent Arc source-contact orientation must match `orientation`".into(),
+            );
+        }
+        (
+            finite_number(
+                required(contact, "parameter", "Tangent Arc source contact")?,
+                "Tangent Arc source parameter",
+            )?,
+            integer_value(
+                required(contact, "winding", "Tangent Arc source contact")?,
+                "Tangent Arc source winding",
+            )?,
+            contact
+                .get("support")
+                .map(|value| {
+                    if string(value, "Tangent Arc source support")? == "supportingLine" {
+                        Ok(true)
+                    } else {
+                        Err(CodeExpansionError::Unsupported(
+                            "Tangent Arc source support must be `supportingLine`".into(),
+                        ))
+                    }
+                })
+                .transpose()?
+                .unwrap_or(false),
+            contact
+                .get("range")
+                .map(tangent_contact_range)
+                .transpose()?,
+            tangent_contact_neighborhood(required(
+                contact,
+                "neighborhood",
+                "Tangent Arc source contact",
+            )?)?,
+        )
+    } else {
+        (1.0, 0, false, None, ContactNeighborhood::End)
+    };
     let sweep = arguments
         .get("sweep")
         .map(|value| document_arc_sweep(value, "Tangent Arc sweep"))
@@ -2700,7 +2716,8 @@ fn lower_named_tangent_arc(
         start,
         end,
         source: source_span.patch_ref(),
-        source_domain,
+        source_supporting_line,
+        source_range,
         source_parameter,
         source_winding,
         source_neighborhood,
@@ -2798,46 +2815,25 @@ fn geometry_role(value: &ManagedValue, label: &str) -> Result<GeometryRole, Code
     }
 }
 
-fn tangent_contact_domain(value: &ManagedValue) -> Result<ContactDomain, CodeExpansionError> {
-    let values = object(value, "Tangent Arc source domain")?;
-    match string(
-        required(values, "kind", "Tangent Arc source domain")?,
-        "Tangent Arc source domain kind",
-    )? {
-        "supportingLine" => {
-            exact_object_keys(values, &["kind"], "Tangent Arc source domain")?;
-            Ok(ContactDomain::SupportingLine)
-        }
-        "bounded" => {
-            exact_object_keys(
-                values,
-                &["kind", "lower", "upper"],
-                "Tangent Arc source domain",
-            )?;
-            Ok(ContactDomain::Bounded {
-                lower: finite_number(
-                    required(values, "lower", "Tangent Arc source domain")?,
-                    "Tangent Arc source domain lower",
-                )?,
-                upper: finite_number(
-                    required(values, "upper", "Tangent Arc source domain")?,
-                    "Tangent Arc source domain upper",
-                )?,
-            })
-        }
-        "periodic" => {
-            exact_object_keys(values, &["kind", "period"], "Tangent Arc source domain")?;
-            Ok(ContactDomain::Periodic {
-                period: finite_number(
-                    required(values, "period", "Tangent Arc source domain")?,
-                    "Tangent Arc source domain period",
-                )?,
-            })
-        }
-        _ => Err(CodeExpansionError::Unsupported(
-            "Tangent Arc source domain kind is invalid".into(),
-        )),
+fn tangent_contact_range(
+    value: &ManagedValue,
+) -> Result<ContactAdmissibleRange, CodeExpansionError> {
+    let values = object(value, "Tangent Arc source range")?;
+    exact_object_keys(values, &["lower", "upper"], "Tangent Arc source range")?;
+    let lower = finite_number(
+        required(values, "lower", "Tangent Arc source range")?,
+        "Tangent Arc source range lower",
+    )?;
+    let upper = finite_number(
+        required(values, "upper", "Tangent Arc source range")?,
+        "Tangent Arc source range upper",
+    )?;
+    if lower > upper {
+        return Err(CodeExpansionError::Unsupported(
+            "Tangent Arc source range must be ordered".into(),
+        ));
     }
+    Ok(ContactAdmissibleRange { lower, upper })
 }
 
 fn tangent_contact_neighborhood(

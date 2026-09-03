@@ -2651,30 +2651,21 @@ fn accepted_contact_state(
             symbol: declaration.symbol.0.clone(),
         });
     }
-    let domain = match contact.domain {
-        ContactDomain::SupportingLine => ManagedValue::Object(BTreeMap::from([(
-            "kind".into(),
-            ManagedValue::String("supportingLine".into()),
-        )])),
-        ContactDomain::Bounded { lower, upper } if lower.is_finite() && upper.is_finite() => {
-            ManagedValue::Object(BTreeMap::from([
-                ("kind".into(), ManagedValue::String("bounded".into())),
-                ("lower".into(), ManagedValue::Number(lower)),
-                ("upper".into(), ManagedValue::Number(upper)),
-            ]))
-        }
-        ContactDomain::Periodic { period } if period.is_finite() => {
-            ManagedValue::Object(BTreeMap::from([
-                ("kind".into(), ManagedValue::String("periodic".into())),
-                ("period".into(), ManagedValue::Number(period)),
-            ]))
-        }
-        ContactDomain::Bounded { .. } | ContactDomain::Periodic { .. } => {
+    match contact.domain {
+        ContactDomain::Bounded { lower, upper } if !lower.is_finite() || !upper.is_finite() => {
             return Err(EditorDeclarationInsertionError::NonFiniteGeometry {
                 symbol: declaration.symbol.0.clone(),
             });
         }
-    };
+        ContactDomain::Periodic { period } if !period.is_finite() => {
+            return Err(EditorDeclarationInsertionError::NonFiniteGeometry {
+                symbol: declaration.symbol.0.clone(),
+            });
+        }
+        ContactDomain::SupportingLine
+        | ContactDomain::Bounded { .. }
+        | ContactDomain::Periodic { .. } => {}
+    }
     let neighborhood = match contact.neighborhood {
         ContactNeighborhood::Interior => "interior",
         ContactNeighborhood::Start => "start",
@@ -2715,8 +2706,7 @@ fn accepted_contact_state(
         None if retained_unoriented => "unoriented",
         None => "none",
     };
-    Ok(ManagedValue::Object(BTreeMap::from([
-        ("domain".into(), domain),
+    let mut state = BTreeMap::from([
         (
             "neighborhood".into(),
             ManagedValue::Object(neighborhood_fields),
@@ -2730,7 +2720,28 @@ fn accepted_contact_state(
             "winding".into(),
             ManagedValue::Number(f64::from(contact.winding)),
         ),
-    ])))
+    ]);
+    if matches!(contact.domain, ContactDomain::SupportingLine) {
+        state.insert(
+            "support".into(),
+            ManagedValue::String("supportingLine".into()),
+        );
+    }
+    if let Some(range) = contact.admissible_range {
+        if !range.lower.is_finite() || !range.upper.is_finite() {
+            return Err(EditorDeclarationInsertionError::NonFiniteGeometry {
+                symbol: declaration.symbol.0.clone(),
+            });
+        }
+        state.insert(
+            "range".into(),
+            ManagedValue::Object(BTreeMap::from([
+                ("lower".into(), ManagedValue::Number(range.lower)),
+                ("upper".into(), ManagedValue::Number(range.upper)),
+            ])),
+        );
+    }
+    Ok(ManagedValue::Object(state))
 }
 
 #[allow(

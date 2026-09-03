@@ -151,10 +151,13 @@ export interface SuppressibleOptions extends PresentationOptions {
 
 export type PointInput<Project> = PointLikeRef<NoInfer<Project>> | Point2;
 
-export type ContactDomain =
-  | { readonly kind: "supportingLine" }
-  | { readonly kind: "bounded"; readonly lower: number; readonly upper: number }
-  | { readonly kind: "periodic"; readonly period: number };
+export type ContactSupport = "supportingLine";
+
+/** Optional inclusive authored limits inside the referenced curve's intrinsic topology. */
+export interface ContactRange {
+  readonly lower: number;
+  readonly upper: number;
+}
 
 export type ContactNeighborhood =
   | { readonly kind: "interior" | "start" | "end" }
@@ -162,11 +165,14 @@ export type ContactNeighborhood =
 
 export type ContactOrientation = "none" | "unoriented" | "aligned" | "opposed";
 
-/** Complete explicit curve-contact branch state. */
+/** Explicit authored curve-contact state; intrinsic topology comes from the referenced curve. */
 export interface ContactState {
   readonly parameter: number;
   readonly winding: number;
-  readonly domain: ContactDomain;
+  /** Selects an unbounded supporting line for a line/polyline span. */
+  readonly support?: ContactSupport;
+  /** Restricts the otherwise-valid intrinsic/support parameter topology. */
+  readonly range?: ContactRange;
   readonly neighborhood: ContactNeighborhood;
   readonly orientation: ContactOrientation;
 }

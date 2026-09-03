@@ -622,6 +622,15 @@ impl ProjectionalIntentCoordinator {
     ) -> Result<PlannedProjectionalTransaction, ProjectionalCoordinatorError> {
         #[cfg(test)]
         PLAN_PATCH_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let structural_continuation = accepted_continuation.is_none().then(|| {
+            self.accepted.as_deref().and_then(|materialized| {
+                materialized
+                    .session
+                    .accepted_state_for_current_input()
+                    .map(|accepted| (materialized.session.design_document(), accepted.document()))
+            })
+        });
+        let structural_continuation = structural_continuation.flatten();
         let mut captured = None;
         let evaluate = |candidate: &geosolve_sketch_intent::IntentCandidate| {
             let (evaluation, materialized, materialization_work) =
@@ -630,6 +639,13 @@ impl ProjectionalIntentCoordinator {
                         .evaluate_with_materialization_from_accepted_continuation_audited(
                             candidate,
                             accepted_continuation,
+                        )
+                } else if let Some((upstream_design, upstream_accepted)) = structural_continuation {
+                    self.materializer
+                        .evaluate_with_materialization_from_structural_continuation_audited(
+                            candidate,
+                            upstream_design,
+                            upstream_accepted,
                         )
                 } else {
                     self.materializer
