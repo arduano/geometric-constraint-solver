@@ -384,6 +384,16 @@ const managedSketchFixtures = [
     }],
   },
   {
+    source: "test/managed/managed-lifecycle-renamed.sketch.ts",
+    fixture: "test/fixtures/managed-lifecycle-renamed.json",
+    options: { patches: { fillets: recordPatchArtifact(fillets) } },
+  },
+  {
+    source: "test/managed/managed-lifecycle-group-removed.sketch.ts",
+    fixture: "test/fixtures/managed-lifecycle-group-removed.json",
+    options: { patches: { fillets: recordPatchArtifact(fillets) } },
+  },
+  {
     source: "test/managed/managed-profile-offset-closure.sketch.ts",
     fixture: "test/fixtures/managed-profile-offset-closure-base.json",
   },

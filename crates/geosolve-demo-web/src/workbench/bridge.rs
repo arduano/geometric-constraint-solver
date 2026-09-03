@@ -605,6 +605,7 @@ impl WorkbenchBridge {
                 hidden_rows,
                 isolate_restore,
             };
+            bridge.reconcile_explorer_visibility();
             let visibility = GeometryVisibility {
                 explicit_construction: envelope.presentation.construction_visible,
                 implicit_construction: envelope.presentation.construction_visible,
@@ -931,6 +932,7 @@ impl WorkbenchBridge {
     }
 
     fn persistence_contents(&self) -> Result<String, String> {
+        let explorer_visibility = self.reconciled_explorer_visibility();
         let project = self.code_project.as_ref().map_or_else(
             || {
                 self.authority
@@ -948,14 +950,8 @@ impl WorkbenchBridge {
             format: WORKBENCH_PERSISTENCE_FORMAT.into(),
             project,
             presentation: WorkbenchPresentationPersistence {
-                hidden_rows: self
-                    .explorer_visibility
-                    .hidden_rows
-                    .iter()
-                    .cloned()
-                    .collect(),
-                isolate_restore: self
-                    .explorer_visibility
+                hidden_rows: explorer_visibility.hidden_rows.iter().cloned().collect(),
+                isolate_restore: explorer_visibility
                     .isolate_restore
                     .as_ref()
                     .map(|rows| rows.iter().cloned().collect()),
@@ -1004,6 +1000,7 @@ impl WorkbenchBridge {
         let response =
             geosolve_constraint_editor::apply_intent_rpc_json_to_editor(self.editor_mut(), request);
         if self.editor().coordinator().intent().identity() != before {
+            self.reconcile_explorer_visibility();
             self.bump_revision();
             self.retained_scene = None;
             self.notice = "Design intent updated through RPC".into();
@@ -1047,6 +1044,7 @@ impl WorkbenchBridge {
             }
         }
         if application.identity_changed {
+            self.reconcile_explorer_visibility();
             self.bump_revision();
             self.notice = "Managed code history updated".into();
         }
@@ -1257,6 +1255,7 @@ impl WorkbenchBridge {
             self.authority.step_history(undo)?
         };
         if moved {
+            self.reconcile_explorer_visibility();
             self.retained_scene = None;
             self.bump_revision();
             self.notice = if undo {
@@ -1883,6 +1882,22 @@ impl WorkbenchBridge {
                 ..current
             });
         self.invalidate_visibility_presentation();
+    }
+
+    fn reconcile_explorer_visibility(&mut self) {
+        self.explorer_visibility = self.reconciled_explorer_visibility();
+    }
+
+    fn reconciled_explorer_visibility(&self) -> ExplorerVisibilityState {
+        let rows = self.base_explorer_snapshot();
+        let mut current = std::collections::BTreeSet::new();
+        collect_explorer_row_ids(&rows, &mut current);
+        let mut reconciled = self.explorer_visibility.clone();
+        reconciled.hidden_rows.retain(|id| current.contains(id));
+        if let Some(restore) = reconciled.isolate_restore.as_mut() {
+            restore.retain(|id| current.contains(id));
+        }
+        reconciled
     }
 
     fn invalidate_visibility_presentation(&mut self) {
@@ -3042,6 +3057,7 @@ impl WorkbenchBridge {
         self.pending_managed_mutation = None;
         self.authority = accepted_authority;
         self.code_project = Some(candidate);
+        self.reconcile_explorer_visibility();
         self.retained_scene = None;
         self.last_error = None;
         self.preserve_frame_once = false;
@@ -3326,6 +3342,7 @@ impl WorkbenchBridge {
     }
 
     fn snapshot(&mut self) -> Result<BridgeSnapshot, String> {
+        self.reconcile_explorer_visibility();
         let frame = self.frame_snapshot();
         let source = self.source_snapshot()?;
         let explorer = self.explorer_snapshot();
@@ -3527,19 +3544,16 @@ impl WorkbenchBridge {
         let blocked = projection.blocked_reason.as_deref();
         let declaration_count = projection.declarations.len();
         let mut groups = Vec::<ExplorerSnapshot>::new();
-        let mut run_index = 0usize;
-        let mut current_group: Option<String> = None;
+        let mut group_indices = std::collections::BTreeMap::<Option<String>, usize>::new();
         for (index, declaration) in projection.declarations.into_iter().enumerate() {
-            let group = declaration
-                .group
-                .clone()
-                .unwrap_or_else(|| "Declarations".into());
-            if current_group.as_deref() != Some(&group) {
-                run_index += 1;
-                current_group = Some(group.clone());
+            let group = declaration.group.clone();
+            let group_index = if let Some(group_index) = group_indices.get(&group) {
+                *group_index
+            } else {
+                let group_index = groups.len();
                 groups.push(ExplorerSnapshot {
-                    id: format!("managed-group:{run_index}:{group}"),
-                    label: group,
+                    id: managed_group_row_id(group.as_deref()),
+                    label: group.clone().unwrap_or_else(|| "Declarations".into()),
                     kind: "Group".into(),
                     row_kind: ExplorerRowKind::Group,
                     selected: false,
@@ -3551,10 +3565,10 @@ impl WorkbenchBridge {
                     children: Vec::new(),
                     capabilities: group_capabilities(),
                 });
-            }
-            groups
-                .last_mut()
-                .expect("one group is installed before its declaration")
+                group_indices.insert(group, group_index);
+                group_index
+            };
+            groups[group_index]
                 .children
                 .push(managed_declaration_explorer_snapshot(
                     declaration,
@@ -3785,6 +3799,29 @@ fn source_language(path: &str) -> &'static str {
 
 fn intent_panel_row_id(symbol: &IntentKey) -> String {
     format!("intent:{symbol}")
+}
+
+fn managed_group_row_id(group: Option<&str>) -> String {
+    group.map_or_else(
+        || "managed-group:ungrouped".into(),
+        |label| {
+            format!(
+                "managed-group:label:{}",
+                geosolve_sketch_intent::intent_content_digest(label.as_bytes()),
+            )
+        },
+    )
+}
+
+fn collect_explorer_row_ids(
+    rows: &[ExplorerSnapshot],
+    ids: &mut std::collections::BTreeSet<String>,
+) {
+    for row in rows {
+        let unique = ids.insert(row.id.clone());
+        debug_assert!(unique, "Explorer row IDs must be unique");
+        collect_explorer_row_ids(&row.children, ids);
+    }
 }
 
 fn apply_explorer_visibility(
@@ -4210,8 +4247,9 @@ mod tests {
     };
 
     use super::{
-        MAX_REQUEST_BYTES, ManagedMutationAbortPayload, PendingManagedMutation, WorkbenchBridge,
-        WorkbenchDocumentAuthority,
+        MAX_REQUEST_BYTES, MAX_VISIBILITY_ROWS, ManagedMutationAbortPayload,
+        PendingManagedMutation, WORKBENCH_PERSISTENCE_FORMAT, WorkbenchBridge,
+        WorkbenchDocumentAuthority, WorkbenchPersistenceEnvelope, WorkbenchPresentationPersistence,
     };
     use crate::workbench::code_projects::CodeProjectWorkbench;
 
@@ -4287,6 +4325,14 @@ mod tests {
             "both-suppressed" => include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../packages/geosolve-sketch-code/test/fixtures/managed-lifecycle-both-suppressed.json"
+            )),
+            "renamed" => include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/fixtures/managed-lifecycle-renamed.json"
+            )),
+            "group-removed" => include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/fixtures/managed-lifecycle-group-removed.json"
             )),
             unknown => panic!("unknown managed lifecycle fixture `{unknown}`"),
         };
@@ -4453,6 +4499,57 @@ mod tests {
             .and_then(|row| row["id"].as_str())
             .unwrap_or_else(|| panic!("managed declaration row `{label}`"))
             .to_owned()
+    }
+
+    fn explorer_row_ids(snapshot: &serde_json::Value) -> std::collections::BTreeSet<String> {
+        fn collect(rows: &[serde_json::Value], ids: &mut std::collections::BTreeSet<String>) {
+            for row in rows {
+                let id = row["id"].as_str().expect("Explorer row identity");
+                assert!(ids.insert(id.to_owned()), "duplicate Explorer row `{id}`");
+                collect(
+                    row["children"].as_array().expect("Explorer row children"),
+                    ids,
+                );
+            }
+        }
+
+        let mut ids = std::collections::BTreeSet::new();
+        collect(
+            snapshot["explorer"]
+                .as_array()
+                .expect("snapshot Explorer rows"),
+            &mut ids,
+        );
+        ids
+    }
+
+    fn apply_compiled_source(
+        bridge: &mut WorkbenchBridge,
+        candidate_source: &str,
+        candidate: CompiledManagedSource,
+    ) {
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "source.prepare",
+                    "payload": {
+                        "path": "sketch.ts",
+                        "contents": candidate_source,
+                    },
+                })
+                .to_string(),
+            )
+            .expect("managed source candidate prepares");
+        let receipt = pending_source_receipt(bridge, candidate);
+        bridge
+            .resolve_pending_managed_mutation(receipt)
+            .expect("managed source candidate resolves");
+        assert!(
+            bridge.last_error.is_none(),
+            "managed source publication failed: {:?}",
+            bridge.last_error,
+        );
     }
 
     fn nested_explorer_row(snapshot: &serde_json::Value, label: &str) -> serde_json::Value {
@@ -8511,6 +8608,291 @@ export default sketch(($) => {
     }
 
     #[test]
+    fn m91_managed_group_visibility_identity_survives_declaration_reorder() {
+        let mut bridge = managed_lifecycle_bridge();
+        let before: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let lifecycle = nested_explorer_row(&before, "Lifecycle");
+        let lifecycle_id = lifecycle["id"].as_str().unwrap().to_owned();
+        assert_eq!(
+            before["explorer"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|row| row["label"] == "Lifecycle")
+                .count(),
+            1,
+        );
+
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "explorer.visibility.set",
+                    "payload": { "id": lifecycle_id, "visible": false },
+                })
+                .to_string(),
+            )
+            .expect("managed group hides before reorder");
+        let candidate = managed_lifecycle_fixture("reordered");
+        let source = candidate.normalized_source.clone();
+        apply_compiled_source(&mut bridge, &source, candidate);
+
+        let after: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let matching = after["explorer"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| row["label"] == "Lifecycle")
+            .collect::<Vec<_>>();
+        assert_eq!(
+            matching.len(),
+            1,
+            "one semantic group must not split into runs"
+        );
+        assert_eq!(matching[0]["id"], lifecycle_id);
+        assert_eq!(
+            nested_explorer_row(&after, "panel")["effectiveVisible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&after, "guide")["effectiveVisible"],
+            false
+        );
+        explorer_row_ids(&after);
+    }
+
+    #[test]
+    fn m91_accepted_reprojection_prunes_renamed_removed_and_generated_visibility_ids() {
+        let mut bridge = managed_lifecycle_bridge();
+        let base: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let old_group = nested_explorer_row(&base, "Lifecycle")["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let old_guide = managed_row_id(&base, "guide");
+        let old_panel = managed_row_id(&base, "panel");
+        let old_generated = nested_explorer_row(&base, "lowerLeft")["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        for id in [&old_group, &old_guide, &old_panel, &old_generated] {
+            bridge
+                .set_explorer_row_visible(id, false)
+                .expect("current row hides");
+        }
+
+        apply_compiled_source(
+            &mut bridge,
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/managed/managed-lifecycle-renamed.sketch.ts"
+            )),
+            managed_lifecycle_fixture("renamed"),
+        );
+        assert!(bridge.explorer_visibility.hidden_rows.is_empty());
+        assert!(bridge.explorer_visibility.isolate_restore.is_none());
+        let renamed: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            nested_explorer_row(&renamed, "Lifecycle renamed")["visible"],
+            true
+        );
+        assert_eq!(
+            nested_explorer_row(&renamed, "guideRenamed")["visible"],
+            true
+        );
+        assert_eq!(
+            nested_explorer_row(&renamed, "panelRenamed")["visible"],
+            true
+        );
+        assert_eq!(nested_explorer_row(&renamed, "westCorner")["visible"], true);
+
+        let renamed_group = nested_explorer_row(&renamed, "Lifecycle renamed")["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let renamed_guide = managed_row_id(&renamed, "guideRenamed");
+        let surviving_panel = managed_row_id(&renamed, "panelRenamed");
+        let removed_generated = nested_explorer_row(&renamed, "westCorner")["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        for id in [
+            &renamed_group,
+            &renamed_guide,
+            &surviving_panel,
+            &removed_generated,
+        ] {
+            bridge
+                .set_explorer_row_visible(id, false)
+                .expect("current renamed row hides");
+        }
+
+        apply_compiled_source(
+            &mut bridge,
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/managed/managed-lifecycle-group-removed.sketch.ts"
+            )),
+            managed_lifecycle_fixture("group-removed"),
+        );
+        assert_eq!(
+            bridge.explorer_visibility.hidden_rows,
+            std::collections::BTreeSet::from([surviving_panel.clone()]),
+        );
+        let removed: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert!(
+            removed["explorer"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|row| row["label"] != "Lifecycle renamed")
+        );
+        assert_eq!(
+            nested_explorer_row(&removed, "panelRenamed")["visible"],
+            false
+        );
+        assert_eq!(nested_explorer_row(&removed, "upperRight")["visible"], true);
+        explorer_row_ids(&removed);
+    }
+
+    #[test]
+    fn m91_reprojected_isolate_restores_surviving_child_visibility_after_reload() {
+        let mut bridge = managed_lifecycle_bridge();
+        let base: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let declarations = nested_explorer_row(&base, "Declarations")["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let guide = managed_row_id(&base, "guide");
+        let upper_right = nested_explorer_row(&base, "upperRight")["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        for id in [&guide, &upper_right] {
+            bridge
+                .set_explorer_row_visible(id, false)
+                .expect("child visibility baseline hides");
+        }
+        bridge
+            .isolate_explorer_group(&declarations)
+            .expect("ungrouped declarations isolate");
+
+        let candidate = managed_lifecycle_fixture("reordered");
+        let source = candidate.normalized_source.clone();
+        apply_compiled_source(&mut bridge, &source, candidate);
+        let persistence: serde_json::Value =
+            serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
+        let mut restored = WorkbenchBridge::construct_json(
+            &serde_json::json!({
+                "version": 1,
+                "persistedProject": persistence["contents"],
+            })
+            .to_string(),
+        )
+        .expect("reprojected isolate persistence restores");
+        let isolated: serde_json::Value =
+            serde_json::from_str(&restored.snapshot_json().unwrap()).unwrap();
+        assert_eq!(isolated["presentation"]["visibilityRestoreAvailable"], true);
+        assert_eq!(
+            nested_explorer_row(&isolated, "Lifecycle")["effectiveVisible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&isolated, "Declarations")["effectiveVisible"],
+            true
+        );
+
+        restored
+            .restore_explorer_visibility()
+            .expect("surviving isolate baseline restores");
+        let restored_snapshot: serde_json::Value =
+            serde_json::from_str(&restored.snapshot_json().unwrap()).unwrap();
+        assert_eq!(
+            nested_explorer_row(&restored_snapshot, "Lifecycle")["visible"],
+            true
+        );
+        assert_eq!(
+            nested_explorer_row(&restored_snapshot, "guide")["visible"],
+            false
+        );
+        assert_eq!(
+            nested_explorer_row(&restored_snapshot, "upperRight")["visible"],
+            false
+        );
+    }
+
+    #[test]
+    fn m91_restored_visibility_is_bounded_and_pruned_to_complete_explorer_ids() {
+        let bridge = managed_lifecycle_bridge();
+        let project = bridge
+            .code_project
+            .as_ref()
+            .expect("managed code project")
+            .to_persistence_json()
+            .unwrap();
+        let stale = (0..MAX_VISIBILITY_ROWS)
+            .map(|index| format!("managed:removed-{index}"))
+            .collect::<Vec<_>>();
+        let encoded = serde_json::to_string(&WorkbenchPersistenceEnvelope {
+            format: WORKBENCH_PERSISTENCE_FORMAT.into(),
+            project: project.clone(),
+            presentation: WorkbenchPresentationPersistence {
+                hidden_rows: stale.clone(),
+                isolate_restore: Some(stale),
+                construction_visible: true,
+            },
+        })
+        .unwrap();
+        let mut restored = WorkbenchBridge::construct_json(
+            &serde_json::json!({ "version": 1, "persistedProject": encoded }).to_string(),
+        )
+        .expect("bounded stale presentation state restores");
+        assert!(restored.explorer_visibility.hidden_rows.is_empty());
+        assert_eq!(
+            restored.explorer_visibility.isolate_restore,
+            Some(std::collections::BTreeSet::new()),
+        );
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&restored.snapshot_json().unwrap()).unwrap();
+        assert!(explorer_row_ids(&snapshot).len() < MAX_VISIBILITY_ROWS);
+        let persisted: serde_json::Value =
+            serde_json::from_str(&restored.persistence_contents().unwrap()).unwrap();
+        assert_eq!(
+            persisted["presentation"]["hiddenRows"],
+            serde_json::json!([])
+        );
+        assert_eq!(
+            persisted["presentation"]["isolateRestore"],
+            serde_json::json!([])
+        );
+
+        let oversized = serde_json::to_string(&WorkbenchPersistenceEnvelope {
+            format: WORKBENCH_PERSISTENCE_FORMAT.into(),
+            project,
+            presentation: WorkbenchPresentationPersistence {
+                hidden_rows: (0..=MAX_VISIBILITY_ROWS)
+                    .map(|index| format!("managed:removed-{index}"))
+                    .collect(),
+                isolate_restore: None,
+                construction_visible: true,
+            },
+        })
+        .unwrap();
+        let Err(error) = WorkbenchBridge::construct_json(
+            &serde_json::json!({ "version": 1, "persistedProject": oversized }).to_string(),
+        ) else {
+            panic!("oversized Explorer visibility must reject");
+        };
+        assert!(error.contains("visibility exceeds"));
+    }
+
+    #[test]
     #[allow(
         clippy::too_many_lines,
         reason = "one public-workbench regression keeps M89 reorder, both suppression kinds, accepted scene, history, persistence, and cold headless inspection in one authority chain"
@@ -8675,7 +9057,8 @@ export default sketch(($) => {
                 .flat_map(|group| group["children"].as_array().unwrap())
                 .map(|row| row["label"].as_str().unwrap())
                 .collect::<Vec<_>>(),
-            ["panel", "cornerFillets", "guide"]
+            ["panel", "guide", "cornerFillets"],
+            "Explorer preserves semantic grouping while source order remains independently asserted above",
         );
         assert_eq!(
             final_snapshot["explorer"]
