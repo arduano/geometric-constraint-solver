@@ -2,11 +2,17 @@
 
 # M88 — Workflow-led authoring workbench redesign
 
-Status: **audit/contract complete; implementation has not started and no M88 acceptance is
-claimed**. M87 closed on clean-qualified source
-`32c72892772ee09f8b904153484b02fd9923dc25`, tree
-`38f7175f93c87d11422f5de00e78208f8cf315bb`.
-`docs/M88_AUDIT.md` owns the current evidence and workflow diagnosis.
+Status: **complete and accepted on 2026-09-01**. The supervising user's milestone-level close
+decision accepts M88-U1 through M88-U10 without claiming a separately logged row-by-row replay.
+The accepted immutable F004 candidate is `/tmp/geosolve-m88-react-uat.KGhA7s`, served at
+`http://100.94.63.83:18088/`; its eight-file manifest aggregate is
+`700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071` and its optimized release-WASM
+SHA-256 is `22944f00ddf8c327e943d055a8224a1948efce42ec2896c9326891a45bfdf2ff`.
+The former port-`8080` Rust-DOM candidate remains historical rollback evidence only, and its
+compatibility host is retired from source after acceptance. No Pages/public deployment or accepted
+service retirement is inferred.
+`docs/M88_AUDIT.md` remains the historical pre-redesign diagnosis and
+`docs/M88_IMPLEMENTATION.md` owns current implementation and qualification evidence.
 
 ## Outcome
 

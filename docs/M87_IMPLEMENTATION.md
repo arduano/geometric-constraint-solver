@@ -33,8 +33,8 @@ is inferred.
   or implicit branch rule and adds no TypeScript runtime to Rust/WASM/headless execution.
 - The CNC and Gridfinity additions are 2D/2.5D design sketches only. They add no CAM, toolpath,
   cutter-compensation, boolean, solid, print-fit or manufacturing-validation authority.
-- Diagnosed performance/stack work is not retroactive M87 scope; it is an ordered prerequisite in
-  active M88.
+- Diagnosed performance/stack work is not retroactive M87 scope; it became an ordered prerequisite
+  in the subsequently completed M88.
 
 ## Component ledger
 
@@ -667,4 +667,4 @@ The following mutable review bundles predate F003 and cannot review the revised 
 Neither historical bundle is current, immutable or accepted. Fresh post-F003 mutable replacements
 are at `/tmp/geosolve-m87-post-f003.FPHP3b/{cnc,gridfinity}`. The user's 2026-08-31 milestone-level
 close decision accepts U9/U10 without a separate replay; exact source `32c7289` passes the complete
-clean gate. M87 is closed, and M88 is active.
+clean gate. M87 is closed; M88 followed and is now complete.

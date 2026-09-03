@@ -2,12 +2,14 @@
 
 # M88 audit — Workflow-led authoring workbench redesign
 
-Status: **audit/contract complete; M88 implementation and qualification are pending**.
+Status: **historical pre-redesign audit complete; M88 closed and was accepted on 2026-09-01**.
 M87 closed on clean-qualified source
 `32c72892772ee09f8b904153484b02fd9923dc25`, tree
 `38f7175f93c87d11422f5de00e78208f8cf315bb`. This audit turns the accumulated sketch, managed-code
 and headless capabilities into a workflow-led information architecture before presentation code is
-changed.
+changed. `docs/M88_IMPLEMENTATION.md` owns the completed implementation, compatibility-retirement
+and qualification evidence;
+the measurements below remain the incoming diagnosis, not a description of the current candidate.
 
 ## Audit method and current evidence
 

@@ -5,7 +5,8 @@
 Status: **accepted and closed on 2026-08-31**. The supervising user's explicit “Close off this
 milestone” decision accepts M87-U9/U10 at milestone level without claiming a separately logged
 row-by-row visual replay. The earlier U1-U8 scoped disposition remains historical. The retained
-sound work and complete adaptive-detail/LOD removal are unchanged. M88 is active.
+sound work and complete adaptive-detail/LOD removal are unchanged. M88 followed and is now
+complete.
 
 ## Candidate identity
 

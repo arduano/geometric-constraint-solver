@@ -1,11 +1,13 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M87 browser-free authoring loop
+# Browser-free authoring loop
 
 `geosolve-headless` runs managed-code expansion, the native solver, independent acceptance checks,
 scene fitting, SVG composition and PNG rasterization without a browser, web server, DOM, network,
-Node or TypeScript runtime. It is suitable for an AI agent or native host that needs exact semantic
-controls and visual evidence from the same accepted design authority.
+Node or TypeScript runtime. These pure-Rust `inspect` and `render` paths are suitable for an AI
+agent or native host that needs exact semantic controls and visual evidence from the same accepted
+design authority. Source mutation remains browser-free, but deliberately invokes the pinned Deno
+compiler between Rust-owned prepare and resolve phases.
 
 M87 is accepted and closed. The supervising user's 2026-08-31 milestone-level close decision accepts
 U9/U10 without a separate row replay; the earlier U1-U8 disposition remains historical. This
@@ -14,21 +16,23 @@ retained. Exact source `32c7289`, tree `38f7175`, passes the complete clean rele
 immutable artifact is frozen, no release is published and the mutable Tailscale development
 listener is not retired.
 
-After M87-F003, the focused manufacturing owner suite passes 3/3, native composition passes 13/13,
-the reviewed-ledger check passes 1/1 and the all-demo headless/deterministic-product suite passes
-10/10. Fresh manufacturing review renders remain available; the pre-F003 products below remain
-historical only.
+M90 supersedes the historical M87 raw-source input and one-phase edit APIs. The current clean-break
+contract admits only executed V3 compiler authority (`geosolve-managed-sketch-ir-v3` plus
+`geosolve-executed-sketch-artifact-v3`) and uses `prepare-edit` followed by the pinned Deno mutation
+sidecar and `resolve-edit`. There is no `--managed`, `--project-key`, or synchronous `edit` command.
 
 ## Inputs
 
 Choose exactly one input for each command:
 
-- `--managed sketch.ts --project-key KEY` accepts artifact-free managed-v1 source;
-- `--project project.json` accepts a complete pinned `CodeProject`, including data-only artifacts;
+- `--project project.json` accepts a complete compiled V3 `CodeProject`, including pinned data-only
+  artifacts;
 - `--demo KEY` selects one of the twelve checked-in offline projects listed by `demos`.
 
-Custom patch TypeScript is never executed. A project that uses a custom patch must already contain
-its canonical digest-pinned artifact, normally by using `project.json` or a bundled demo.
+Raw `sketch.ts` is not an admitted native input because Rust does not pretend to execute TypeScript.
+A custom patch remains a compiled, pinned extension point: its TypeScript source is never executed
+by the headless solver, and its canonical data-only artifact must already be in `project.json` or a
+bundled demo.
 
 ## Inspect
 
@@ -45,7 +49,7 @@ structural identity, a solver-instance/DoF value or another deliberately unsuppo
 Tokens authenticate the exact project, source bytes, expected typed value and generated consumer
 identities. Do not synthesize or reuse a token after any source or project edit; inspect again.
 
-## Exact-CAS edit
+## Two-phase exact-CAS edit
 
 Copy one or more complete `access.token` objects from the inspection into a batch. The replacement
 uses the tagged `ManagedValue` wire shape. For example, a length change is:
@@ -68,15 +72,46 @@ The `token` placeholder above is explanatory, not valid input: replace it with t
 object verbatim. Number, boolean, choice and text replacements respectively use `number`, `bool`
 and `string` tagged values. A unit replacement must retain the schema's exact unit.
 
+First ask Rust to authenticate the current compiled project, source token, expected value and exact
+permitted semantic delta. The command writes a compiler request to stdout and changes no project:
+
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  edit --demo typed-panel --edit batch.json --out /tmp/geosolve-typed-panel-r2
+  prepare-edit --demo typed-panel --edit batch.json > /tmp/geosolve-prepared.json
 ```
 
-The batch validates completely before one source rewrite and reparse. The candidate is then cold
-expanded, solved and independently validated before publication. A stale token, wrong type/unit,
-non-finite value, invalid source, failed materialization or failed acceptance publishes no output
-directory. Shared controls edit their one source token and update every disclosed consumer.
+Build the pinned TypeScript package, then pass the complete prepared request to the Deno mutation
+sidecar. The checked-in sidecar requires Deno `2.9.4` and the package pins TypeScript `5.9.2`; the
+repository Nix shell provides the intended toolchain. It emits a candidate compiler receipt but
+has no solver or publication authority:
+
+```bash
+(
+  cd packages/geosolve-sketch-code
+  npm ci --ignore-scripts
+  npm run build
+  deno run --no-config --no-lock --no-prompt --cached-only --no-remote \
+    --node-modules-dir=manual --ignore-env scripts/mutate-managed-deno.mjs \
+    < /tmp/geosolve-prepared.json > /tmp/geosolve-receipt.json
+)
+```
+
+Finally give both unchanged exchange files to Rust against the same input authority. Rust verifies
+the ticket and complete compiler envelope, rejects any unrelated semantic change, cold-materializes
+native Intent, solves, independently validates, and only then atomically publishes the candidate:
+
+```bash
+cargo run --locked -p geosolve-headless -- \
+  resolve-edit --demo typed-panel \
+  --prepared /tmp/geosolve-prepared.json \
+  --receipt /tmp/geosolve-receipt.json \
+  --out /tmp/geosolve-typed-panel-r2
+```
+
+A stale token, mismatched input, tampered request or receipt, wrong type/unit, non-finite value,
+failed materialization or failed acceptance publishes no output directory. Shared controls edit one
+source value and update every runtime-authenticated consumer. Neither preparation nor a rejected
+resolution mutates the input project.
 
 For the next stateless iteration, inspect the emitted `project.json`, then use its new tokens:
 
@@ -126,12 +161,12 @@ cargo run --locked -p geosolve-headless -- \
   render --demo robotic-routing-board --out /tmp/geosolve-routing-board-new
 ```
 
-Its accepted inventory is 104 points, 176 curves, 41 constraints, two dimensions, 64 Current
-features and 136 computed edges. The source contains eight keyed ten-vertex open routes; the pinned
-artifact derives 80 clip circles and 64 Fillets. Repeating the exact render must reproduce the
-pretty-encoded report and controls, logical scene markup, standalone SVG and PNG bytes for the
-pinned build. PNG equality remains a deterministic build regression, not cross-platform solver
-authority.
+Its current normalized V3 inventory is 104 points, 112 native curves, 41 constraints, two
+dimensions, 64 Current features and 136 computed edges. The source contains eight keyed ten-vertex
+open routes; the pinned artifact derives 80 clip circles and 64 Fillets. Repeating the exact render
+must reproduce the pretty-encoded report and controls, logical scene markup, standalone SVG and PNG
+bytes for the pinned build. PNG equality remains a deterministic build regression, not
+cross-platform solver authority.
 
 ## CNC and Gridfinity dogfood
 
@@ -147,31 +182,22 @@ cargo run --locked -p geosolve-headless -- \
 
 The CNC report must describe the fully constrained 120 x 140 mm blank, three 70 mm-wide mortises with
 loose/nominal/press heights of 18.4/18.0/17.6 mm, three 95 x 18 mm tabs, twelve shared cutter-radius
-circles and ten handling Fillets. Its accepted inventory is 29 points, 47 curves, 36 constraints,
-33 dimensions, 10 Current features and 23 computed edges. Exactly one `FixedPoint`, no
-`FixedCoordinate` and seven relational construction datums locate the components.
+circles and ten handling Fillets. Its current normalized V3 inventory is 29 points, 26 native
+curves, 20 constraints, 33 dimensions, 10 Current features and 23 computed edges. Exactly one
+`FixedPoint`, no `FixedCoordinate` and seven relational construction datums locate the components.
 
 The Gridfinity report must retain one fully constrained symmetric closed 26-point
 material contour with the reviewed 41.5/35.6 mm widths, 4.75/7 mm base levels, 21 mm body, 0.95 mm
-walls, 4.4 mm nominal lip rise and two floor plus two lip Fillets. Its accepted inventory is 31
-points, 36 curves, 31 constraints, 18 dimensions, four Current features and 11 computed edges.
-Thirteen datum-axis symmetry relations and ten orthogonal construction spans govern the contour
-from one Y `FixedCoordinate` and no `FixedPoint`. Both reports must expose numerical and structural
-left/right nullity zero plus equality and bidirectional bounded DOF zero.
+walls, 4.4 mm nominal lip rise and two floor plus two lip Fillets. Its current normalized V3
+inventory is 31 points, 11 native curves, 31 constraints, 18 dimensions, four Current features and
+11 computed edges. Thirteen datum-axis symmetry relations and ten orthogonal construction spans
+govern the contour from one Y `FixedCoordinate` and no `FixedPoint`. Both reports must expose
+numerical and structural left/right nullity zero plus equality and bidirectional bounded DOF zero.
 
-Repeated report/control/logical-scene/SVG/PNG products pass the post-F003 regression. Fresh mutable
-review bundles are:
-
-- M87-U9 evidence: `/tmp/geosolve-m87-post-f003.FPHP3b/cnc`;
-- M87-U10 evidence: `/tmp/geosolve-m87-post-f003.FPHP3b/gridfinity`.
-
-The prior bundles below were generated from the pre-F003 sources and are historical only:
-
-- pre-F003 M87-U9 evidence: `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/cnc`;
-- pre-F003 M87-U10 evidence: `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/gridfinity`.
-
-Regenerate into new non-existing directories if these mutable `/tmp` products are unavailable.
+Repeated report/control/logical-scene/SVG/PNG products remain covered by the current headless
+regressions. Generate review products into new, non-existing directories rather than relying on
+historical mutable `/tmp` evidence.
 
 These outputs are 2D/2.5D design evidence. They do not create CAM, toolpath, cutter-compensation,
 boolean, solid, printer-fit or manufacturing authority. Diagnosed performance/stack work is carried
-into active M88's ordered stability prerequisite.
+into M88's subsequently completed ordered stability prerequisite.

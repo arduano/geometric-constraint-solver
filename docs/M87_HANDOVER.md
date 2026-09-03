@@ -7,7 +7,8 @@ Status: **M87 accepted and closed on 2026-08-31; this former pause handover is s
 `32c72892772ee09f8b904153484b02fd9923dc25`, tree
 `38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. The user's
 milestone-level close decision accepts M87-U9/U10 without claiming a separately logged row-by-row
-visual replay. No immutable candidate, publication or service retirement is claimed. M88 is active.
+visual replay. No immutable candidate, publication or service retirement is claimed. M88 followed
+and is now complete.
 The remaining dirty-tree material below is retained only as historical pre-close provenance.
 
 ## Brief supervising-user consolidation — 2026-08-30
@@ -77,7 +78,7 @@ current-tree oracle.
 7. At the pause, resume with M87-U9 and M87-U10 when the supervising user is available for visual
    review.
 8. This procedure is now historical: the later milestone-level close decision and clean gate own
-   final disposition. Resume active work from `docs/M88_HANDOVER.md`.
+   final disposition. `docs/M88_HANDOVER.md` records the subsequently completed milestone.
 
 ## Authority boundary to preserve
 
@@ -91,7 +92,7 @@ current-tree oracle.
 - `geosolve-sketch-render` consumes independently accepted scene authority. It owns no solver,
   persistence, managed-control, selection or hit-ranking state.
 - The entire experimental adaptive-detail/LOD prototype remains deleted. Camera navigation always
-  retains the complete scene paint. Active M88 must not restore LOD.
+  retains the complete scene paint; completed M88 did not restore LOD.
 - The CNC and Gridfinity entries are 2D/2.5D design sketches only. They claim no CAM, toolpath,
   automatic cutter compensation, boolean, solid, print-fit, machinability or production-
   manufacturing authority.
@@ -201,7 +202,7 @@ Record any new paths as mutable dirty-UAT evidence only.
 The post-F003 focused rank/DOF, inventory, ledger and headless qualification is complete and fresh
 mutable review bundles exist. The 2026-08-31 supervising-user close decision accepts both rows at
 milestone level without claiming a separately executed visual replay. M87 is closed; use
-`docs/M88_HANDOVER.md` for active work.
+`docs/M88_HANDOVER.md` for M88's completed closeout record.
 
 ## Historical dirty-tree verification
 

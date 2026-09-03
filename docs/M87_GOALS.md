@@ -148,4 +148,4 @@ inference, general expression inversion, custom-TypeScript runtime, point-source
 browser/server dependency, linkage renderer, stateful agent service, route solver, route-specific
 renderer, CAM, toolpath, automatic cutter compensation, boolean/solid authority, or PNG
 mathematical oracle. The diagnosed performance/stack work is not retroactively part of M87; it is
-an ordered prerequisite in active M88.
+an ordered prerequisite in the subsequently completed M88.

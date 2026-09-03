@@ -11,7 +11,8 @@ cargo test --locked --workspace --all-features
 cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
 ```
 
-Run `(cd crates/geosolve-demo-web && trunk build --release)` when a shared public API or the WASM consumer changes.
+Run `(cd crates/geosolve-demo-web/frontend && npm ci --ignore-scripts && npm run build)` when a
+shared public API or the WASM/React consumer changes.
 
 Every milestone also requires:
 
@@ -4202,7 +4203,7 @@ explicit milestone-close decision accepts M87-U9/M87-U10 without claiming a sepa
 row-by-row visual replay. Exact source `32c72892772ee09f8b904153484b02fd9923dc25`, tree
 `38f7175f93c87d11422f5de00e78208f8cf315bb`, passes the complete clean release gate. No immutable
 freeze, public deployment or service retirement is inferred; the mutable Tailscale listener
-remains development infrastructure. M88 is active below.
+remains development infrastructure. M88 followed and is complete below.
 
 The implemented M87 behavioral contract is:
 
@@ -4390,13 +4391,17 @@ historical only. Fresh post-F003 review renders are at
 M87 adds no primitive, constraint, dimension, equation, residual, Jacobian, solver priority,
 tolerance, implicit branch inference, arbitrary expression inverter, custom-TypeScript runtime,
 linkage renderer, stateful agent service or solved-value source write-back path. Performance work
-is carried into active M88's explicit stability prerequisite.
+is carried into M88's explicit stability prerequisite.
 
 ### M88: workflow-led authoring workbench redesign
 
-Status: **ACTIVE; audit and acceptance contract defined, implementation pending**. M88 changes the
-desktop presentation and workflow hierarchy while retaining all M87 domain, managed-source,
-headless and no-LOD authority boundaries.
+Status: **complete and accepted on 2026-09-01**. The immutable M88-F004 React replacement remains
+live as the accepted UAT identity. The supervising user's milestone-level close decision accepts
+M88-U1 through M88-U10 without claiming a separately logged row-by-row replay. The frozen Rust-DOM snapshot formerly served on
+port `8080` is preserved unchanged as rollback evidence after reboot and does not qualify the
+current React tree. Its obsolete browser compatibility host is retired from source after acceptance.
+M88 changes the desktop presentation and workflow hierarchy while retaining all M87 domain,
+managed-source, headless and no-LOD authority boundaries.
 
 - At `1440 x 900`, Split mode exposes at least `520 x 500` CSS px of editable source while retaining
   a useful canvas. At `1024 x 720`, Code mode exposes at least `720 x 500` CSS px of usable editor and
@@ -4411,12 +4416,20 @@ headless and no-LOD authority boundaries.
   Design/Split/Code, Export and overflow. Reproduction, trace and low-frequency diagnostics live
   under Diagnostics/Advanced and remain keyboard reachable.
 - The always-visible rail contains Select plus primary Sketch, Constraint, Dimension and Modify
-  entry points and the last-used variant. Every advanced geometry/relation/feature variant remains
-  reachable through click, keyboard and search without a hover-only dependency.
+  entry points and the last-used variant, using recognizable CAD icons from the Rust-owned renderer
+  vocabulary. Sketch exposes all 25 geometry variants by owning family; Constraint exposes all 13
+  by placement/orientation/equality/curve-join semantics; Dimension exposes all five by
+  linear/circular/angular semantics; Modify contains only Fillet and Offset. Profile/Construction
+  is contextual tool state and Grid/Fit/Origin are canvas-local controls. Every advanced variant
+  remains reachable through click and keyboard without a hover-only dependency, and canvas/role
+  commands never replace the active authoring tool.
 - Explorer consolidates Objects and Outline. Intent IR and detailed History remain available under
   Advanced. The right side exposes Inspector, Parameters and Problems as distinct tabs rather than
   vertically competing with the code editor. Parameters and Problems each have one logical state
   model rehosted into Code mode, not independently stateful duplicate views.
+- Explorer and Inspector expose compact semantic node-family language, never Rust `Debug` names or
+  payloads. Explorer rows omit redundant type/detail suffixes, Inspector retains one semantic kind,
+  and row/group icons do not collapse under long labels.
 - The code workspace fills its central surface, keeps Apply/Revert and dirty/accepted/error status
   visible, and separates Source, Parameters, Problems, Generated and Artifacts. Durable scene or
   selection rendering must not replace the live editor DOM or lose its transient editing state.
@@ -4426,12 +4439,22 @@ headless and no-LOD authority boundaries.
 - Invalid source preserves the prior independently accepted canvas and creates exactly one durable,
   source-positioned problem for the current attempt. Correcting or reverting the source clears that
   problem only after ordinary parse/materialize/independent-validation acceptance.
+- Browser-local presentation, canonical project persistence and unapplied source drafts remain
+  distinct. Every React-owned storage read/write/remove, including third-party pane-layout storage,
+  handles access denial, quota and removal failure without crashing render; unavailable reads are
+  safe absence and actionable write/remove failures remain visible in a dismissible durable alert.
 - The start/open surface provides New sketch, Start from code, all 37 current bundled samples,
   canonical project import, repro import and recent workspaces. Every sample is text-searchable and
   keyboard-openable without nested hover flyouts.
 - A frozen pre-redesign manifest names every command and variant. The redesigned pointer and
   keyboard inventory matches it one for one; no advanced command requires hover or silently
   disappears.
+- Ordinary point-and-click geometry authoring survives the browser's normal
+  `pointerup -> lostpointercapture` sequence. Two ordinary clicks commit a Segment and a
+  Center–Radius Circle through the same staged Rust owner as direct bridge input. The expected
+  post-release capture-loss notification is a no-op; genuine `pointercancel` or unexpected capture
+  loss cancels exactly once and dispatches every editor cleanup effect, including
+  `ClearConstructionPreview`, so no canceled draft remains painted.
 - Browser-exported canonical `project.json` plus `sketch.ts` round-trips through
   `geosolve-headless`; the browser and native host report the same managed controls, accepted scene
   and independently validated Hard residual/Current-feature authority. A dirty or invalid draft
@@ -4451,8 +4474,683 @@ headless and no-LOD authority boundaries.
 - M88 retains complete full-detail painting. No adaptive-detail, reduced-paint or LOD policy is
   reintroduced. Resize/maximize must not strand the accepted viewport or suppress later frames.
 - Focused native/WASM/layout/accessibility tests, the unchanged applicable golden, format, warnings-
-  denied Clippy, all-feature workspace tests, release Trunk build and the scorecard in
-  `docs/M88_UAT.md` pass before M88 closure.
+  denied Clippy, all-feature workspace tests, release WASM plus React/Vite assembly and the
+  scorecard in `docs/M88_UAT.md` pass before M88 closure.
+
+Historical pre-React evidence (2026-08-31): formatting, diff checks, warnings-denied workspace
+Clippy, the all-feature workspace suite, native demo-web `372/372`, one-MiB native Gridfinity, the
+focused full-row-rank core regression, locked WASM check and actual-WASM `4/4` passed. The optimized
+five-run Gridfinity cold-open median/max were `1.562/1.796` s and edit median/max were
+`0.897/1.314` s, with independently validated maximum normalized Hard residuals `2.8866e-15` and
+`4.8486e-12`. Read-only snapshot `/tmp/geosolve-m88-uat.nmhcRj` remains byte-verified and untouched;
+it was historically served at `http://100.94.63.83:8080/`, aggregate
+`6c4af7e96e30687654d691b577954c22b051fb3ad37e9472c51e16c9c002a274`. It is rollback evidence,
+not the current candidate.
+
+Historical initial React checkpoint evidence: the thin JSON/WASM adapter keeps Rust authoritative; the live
+CodeMirror workspace, renderer-owned accepted SVG presentation, source navigation, browser/headless
+export surfaces, light-dismiss interaction and guarded browser persistence are present.
+Middle-button pan bypasses semantic selection/drag, and the bounded Recent surface preserves only
+canonical sample identity in guarded presentation storage. The initial full checkpoint passed
+bridge `11/11`, renderer `25/25`, frontend `17/17`, actual-WASM `4/4` and real-WASM Playwright
+`6/6`, together with formatting/diff hygiene, warnings-denied workspace Clippy, locked all-feature
+workspace tests (including demo-web `383/383`), locked WASM, golden survey/check/require-clean and
+the clean-install React check/build. Its no-rebuild snapshot
+`/tmp/geosolve-m88-react-uat.TAMXyz` has eight regular files, zero symlinks, aggregate
+`91c3a2349f1466a64720cb1cfba8a4f7d18aed0be03e9eec256ccf8c4eb0f9de` and WASM SHA-256
+`9032a07bc6ac465816b3b3f3bb44c3881f815f290e39eece88890589f2cdfe5f`. Every frozen file plus `/`
+and `/index.html` passes HTTP 200 exact-byte/digest/length/media verification at
+`http://100.94.63.83:18088/`; root and both index sources are identical. M88-F001 supersedes those
+preserved bytes for UAT after the default document exposed Rust `Debug` strings
+`IntentBootstrapMetadata` and `Bootstrap { ... }` in Explorer and Inspector.
+
+The M88-F001 bridge now reuses the semantic node-family label, Explorer removes type/detail
+suffixes entirely, Inspector keeps one compact semantic kind, and Explorer row/group icons remain
+non-shrinking. The exact leak regression failed before the fix and passes after it. Replacement
+qualification passes bridge `12/12`, full demo-web `384/384`, frontend `17/17`, real release-WASM
+Playwright `6/6`, focused all-feature demo-web library Clippy, `npm run check`, distribution
+validation, format and diff checks. Browser coverage rejects both leaked Rust forms and asserts the
+row/icon/Inspector contract. The WASM remains a Cargo `--release` plus wasm-bindgen plus
+`wasm-opt -Oz` artifact; no debug candidate exists.
+
+M88-F001 snapshot `/tmp/geosolve-m88-react-uat.nGkL4i` contains eight regular files, zero
+symlinks, directories `0555` and files `0444`. Its aggregate is
+`0bd35f3dba50c592c6eea34ed18afed1b6f908803d75feb9ca3bbb620a1572c4` and WASM SHA-256 is
+`beb76d47889055f9d8344ac4cdc8a01fc06a1dbd797979f636927031d3383996`. Its dist, frozen files and
+served files matched exactly at historical `http://100.94.63.83:18089/`; all files plus root/index
+returned HTTP 200. The transient listener and recorded earlier PIDs disappeared after reboot, while
+all snapshots remain preserved. At that historical F001 checkpoint all supervising-human rows
+remained pending, and the Rust-DOM compatibility surface could not yet be deleted before explicit
+parity acceptance.
+
+M88-F002 supersedes that live candidate after the supervising user identified the migrated
+scissors-like miscellaneous bucket, loss of CAD icons/semantic families and authoring-toolbar
+placement of display actions. The implementation now consumes one bounded static Rust tool catalog,
+keeps it out of hot snapshots and realizes the exact rail/canvas hierarchy above. Bridge 14/14,
+complete demo-web 386/386, frontend 18/18 and final real release-WASM Playwright 7/7 pass, together
+with `npm run check`, distribution validation, focused warnings-denied Clippy, formatting and diff
+hygiene. Both required desktop sizes pass long-label/scroll, active-state, canvas placement,
+outside-dismiss and focus-restoration inspection.
+
+Reboot removed all prior transient listeners without deleting their frozen snapshots. The current
+eight-file no-rebuild snapshot is `/tmp/geosolve-m88-react-uat.kdSCUU`, with zero symlinks,
+directory/file modes `0555`/`0444`, ordered-manifest aggregate
+`d328fdded4ae963230eef2c64c5fb22459dec7a55467e0a7c051bed739b2cd47` and release-WASM SHA-256
+`7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0`. Transient user unit
+`geosolve-m88-react-uat-current.service`, PID `139684`, serves it Tailscale-only at
+`http://100.94.63.83:18088/`; root/index/all eight files byte-match the snapshot with HTTP 200 and
+the frozen-endpoint toolbar browser smoke passes. M88-F003 withdraws these bytes from continuing
+UAT; they remain exact pre-fix reproduction evidence rather than human acceptance, clean-source
+nomination, public authority or M88 closure.
+
+M88-F003 was independently reproduced on that frozen snapshot, whose release-WASM SHA-256 is
+`7a3376f1e0895dd7773ec2eabaa704414eac9263f7b05bc7b611b9b0ef6bd7c0` and whose source basis is
+`71a51ee534f034e2328a07e0d80f9a9ee5e0fc62`. The browser normally emits `pointerup` followed by
+`lostpointercapture`. The React viewport unconditionally converted the second event into a cancel,
+discarding every staged click; the bridge's separate cancellation adapter also ignored returned
+effects and could retain stale construction-preview paint. Direct Rust bridge reproduction proved
+that Segment and Center–Radius Circle click-click staging itself already committed correctly.
+
+The repair tracks the exact captured pointer, retires frontend ownership synchronously on
+`pointerup` before awaiting native dispatch, ignores only the resulting stale expected loss and
+cancels a genuine pointer cancel/loss exactly once. Bridge cancellation now dispatches the editor's
+effects. Provisional Fillet and Profile Offset cancellation uses the owning restoration routes, and
+their cleanup acknowledgements cannot create a false durable Problem. The failing-before-fix React
+normal-release/genuine-loss regression, direct Segment/Circle click-click parity, staged cleanup,
+live Fillet/Profile Offset cancellation and real release-WASM authoring test all pass. Proportional
+qualification reports bridge `19/19`, full demo-web `391/391`, frontend `19/19` and Playwright
+`8/8`; `npm run check`, focused all-feature demo-web Clippy, formatting, the locked WASM check and
+distribution validation pass.
+
+Corrected immutable snapshot `/tmp/geosolve-m88-react-uat.QkVU1k` has eight regular files, zero
+symlinks, directory/file modes `0555`/`0444`, ordered-manifest aggregate
+`e44bd8c22ccb67e542a8c73b58f62ed8ab236ab728b2d1bc2ae1aff1895ac167` and optimized release-WASM
+SHA-256 `5f49f49a880dd8529982bfbcf68a3f1a92c79ee96f256ed56931254ca884b22a`. Final dist, frozen bytes,
+local HTTP and `http://100.94.63.83:18088/` match exactly. Service PID `518679` serves only that
+snapshot; a real Chrome frozen-endpoint smoke commits Segment and Center–Radius Circle with no
+runtime, console, network or HTTP error. At that historical F003 checkpoint every
+supervising-human row remained pending.
+
+M88-F004 requires canvas chrome to expose capability rather than decoration. The geometry-role
+control is absent unless the active authoring tool or selected curves make it applicable, and its
+label distinguishes “New curves” from “Selected curves”. Finish and canvas-scoped Enter are
+unavailable until the retained owner can publish the exact painted candidate. Polyline/NURBS use
+the retained draft readiness contract; Fillet/Profile Offset require preview/candidate identity.
+Premature completion changes no revision, history, project or draft. Action feedback is a bounded
+fixed overlay and must not change canvas bounds. Undo/Redo use ordinary Intent or outer code-session
+history authority and are blocked with a reason while either local or managed source is dirty.
+
+The adjacent false-affordance audit also requires complete preselection relation/dimension actions
+to return to Select, camera/first-Escape cancellation to preserve the current authoring collector,
+Code-only layout to omit canvas tools, Ctrl-O/Ctrl-S labels to have real routes, dirty drafts to
+block project replacement and exact-reproduction export, and secondary click to remain browser
+input. Bridge `23/23`, full demo-web `395/395`, frontend `26/26`, real release-WASM Playwright
+`10/10`, focused warnings-denied Clippy, locked WASM check, distribution validation, formatting and
+diff hygiene pass. No equation, residual, branch, tolerance, persistence format or accepted-scene
+validation changed.
+
+Immutable snapshot `/tmp/geosolve-m88-react-uat.KGhA7s` has eight regular files, zero symlinks,
+`0555`/`0444` modes, manifest aggregate
+`700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071` and release-WASM SHA-256
+`22944f00ddf8c327e943d055a8224a1948efce42ec2896c9326891a45bfdf2ff`. Build, frozen, staging
+HTTP and live HTTP manifests are identical; evidence
+`/tmp/geosolve-m88-f004-freeze-evidence.ijud9T` records identical staging/live ledger SHA-256
+`e838461921907cfe1252423f5a9ccf7db056dd62370698d90d6e47e0e7428531`. Service PID `1021511`
+serves only this snapshot at `http://100.94.63.83:18088/`; live Chrome proves right-click
+neutrality, false → false → true → false Polyline Finish readiness, one accepted curve, hidden
+Code-only canvas tools and zero runtime errors. The user's 2026-09-01 close decision accepts this
+F004 identity and M88-U1 through M88-U10 at milestone scope without inventing individual replay
+observations. The accepted Tailscale service remains live; no Pages/public deployment or service
+retirement is inferred. The obsolete Rust-DOM browser host and its DOM-only dependencies/tests are
+retired from source, leaving the instance-scoped React-to-`WorkbenchHandle` bridge as the sole
+browser presentation path.
+
+## M89 executed, reversible managed-sketch acceptance
+
+Status: **Superseded by M90's closed clean-break contract. M89-F004/F005 implementation, final
+provisional dirty-tree mechanical qualification and immutable F005 nomination completed, but the
+Compass Rose retest, targeted F004/F005 preflight and M89-U1 through M89-U8 were not run and are not
+retrospectively passed or waived.** F005 and every earlier M89 snapshot are historical rather than
+current product candidates. This is not clean-source qualification or standalone M89 human
+acceptance; M90 owns the replacement product authority.
+
+- `source -> ManagedSketchIrV2 -> normalized source -> ManagedSketchIrV2` is stable for every
+  supported expression, declaration order, group, explicit suppression and attached comment;
+  Unicode identifiers/comments retain exact Rust UTF-8-byte to CodeMirror UTF-16 navigation.
+- Every unsupported managed construct rejects before execution with a bounded positioned
+  diagnostic. The recorder executes the callback and emits every top-level declaration result,
+  generated patch member, source-site and value consumer; no semantic edit target is inferred from
+  a raw stack trace.
+- Browser and pinned-Deno compilation produce byte-identical normalized source, IR, executed
+  artifact and digest envelopes. An already compiled canonical project inspects, materializes,
+  solves and renders twice in pure Rust with deterministic products and no browser or Deno.
+- Typed Panel fan-out works with `edit_lenses: []`. V2 source contains neither `p.editLens` nor a
+  final `return $.outputs(...)`; legacy v1 continues to load through its isolated compatibility
+  path.
+- Every enabled geometry, every standalone-replayable constraint, dimension and operation
+  authoring family inserts exactly one user-facing source declaration closure and no GUI-owned
+  duplicate. Most closures contain one declaration; Profile Offset may contain its operation root
+  plus the exact authenticated aggregate helper required to express its operand. A completed
+  gesture publishes source, IR, artifact, finite independently accepted scene and one outer
+  history entry atomically; preview, cancel, stale tickets and failure are source/history neutral.
+- The complete 25-variant geometry catalog has a compact lossless source form: Segment uses direct
+  `$.geometry.line(...)`, exact native Polyline uses direct `$.geometry.polyline(...)`, and the
+  remaining 23 use descriptor-authenticated `$.geometry.recipe(...)`. Rust independently derives
+  and authenticates canonical inputs, fields, writable values and the exact semantic result tree
+  from central Intent descriptors. TypeScript owns no geometry equation or copied result schema,
+  and canvas-authored geometry never needs a transport-level `$.intent.recipe(...)` dump.
+- Of all 35 persistent `ConstraintKind` variants, exactly 33 cold-replay from standalone managed
+  source. Horizontal and Vertical use direct builders; the other 31 use descriptor-authenticated
+  `$.constraint.recipe(...)`. `ExternalPointCoincident` and `ExternalLineCollinear` remain gated
+  because `sketch.ts` has no immutable external snapshot/binding authority. Their wire schemas are
+  audited, but they are not counted as standalone replay passes. Every accepted row has finite
+  state, explicit semantic metadata and independently validated normalized Hard residual at most
+  `1e-9`.
+- A canvas-authored computed Fillet emits one direct `$.computed.filletSet(...)` declaration with
+  lexical native-span parents, exact parameter/winding/neighborhood/normal-side/retained-endpoint/
+  periodic-anchor/endpoint-order/sweep state, radius, display name and explicit source-owned
+  suppression. Cold replay retains computed ownership and branch state; selection navigates to the
+  whole authenticated declaration; radius edits retain selection; suppress/restore and delete/Undo
+  reproduce exact source, finite accepted geometry and independently validated Hard residual at
+  most `1e-9`.
+- F004/F005 add no Offset work. The accepted Profile Offset closure contract remains unchanged and
+  no broader Offset claim is introduced.
+- New declarations are visibly grouped under `Canvas additions` and use a persisted monotonic name
+  allocator. Undo/delete never reuse names. Reordering changes actual source order and refuses
+  dependency-invalid moves without partial mutation. Top-level and generated-member suppression
+  survive normalized round-trip, Undo/Redo, persistence and headless inspection.
+- A private Profile Offset helper stays selectable, editable and source-navigable beneath its root,
+  but cannot independently reorder, suppress or delete. Root reorder/delete owns the complete
+  authenticated closure. An aggregate with another semantic consumer is not captured and keeps an
+  independent declaration lifecycle.
+- Checked-in legacy sample bytes remain unchanged. The first structured edit normalizes only the
+  active copy to v2. Persisted projects containing unrepresentable GUI-only hybrid additions reject
+  as a whole with the previous accepted authority retained. M90 is planned to normalize the legacy
+  sample corpus and remove v1 support; that clean break is not part of M89.
+- Every success-like candidate has finite geometry, explicit branch/domain/orientation state and
+  independently recomputed normalized hard residual at most `1e-9`; invalid/non-finite geometry
+  cannot become convergence.
+
+M89-F001 acceptance record: on the withdrawn Compass Rose candidate, Sketch → Polyline followed by
+three right-angle points and Finish left `sketch.ts` unchanged. The deterministic browser
+reproducer clicks normalized canvas positions `(0.35, 0.40)`, `(0.60, 0.40)`, `(0.60, 0.65)` and
+expects one source-backed geometry declaration plus the inferred horizontal and vertical
+constraint declarations. Candidate expansion instead retained
+``semantic reference `core.markers` cannot be resolved``, so the managed-v1 accepted source and scene
+correctly remained authoritative but the requested publication never occurred.
+
+The owner was patch-invocation expansion in `geosolve-sketch-code`: multiple collection outputs
+were lowered internally without publishing every authenticated named output path. The repair
+publishes and kind-checks both Compass outputs (`core.markers` and `core.ring`), preserves the
+accepted-v1/current-v2 retained-failure state without admitting clean or inverse version mismatch,
+surfaces its Rust diagnostic through the frontend pending-mutation boundary and atomically
+publishes a successful active-copy upgrade.
+
+Focused regressions cover cold multi-collection materialization, Compass Rose managed-v1 canvas
+upgrade, retained v1→v2 failure authority, forbidden clean/inverse version mismatches, retained
+diagnostic surfacing and the exact optimized-browser Polyline Finish flow. Historical F001
+checkpoint
+qualification passes the complete `geosolve-sketch-code` crate, demo-web `357/357`, frontend
+`54/54`, warnings-denied Clippy, locked WASM check, unchanged clean golden qualification and
+optimized release-WASM Playwright `13/13`.
+
+The withdrawn nine-file snapshot `/tmp/geosolve-m89-uat.TIPyWl`, aggregate
+`5b842c6541261a9386c6a060475350712326a467137f166b4c02d8782635ff6a`, release-WASM SHA-256
+`04a8b6504db1e8ce68f9c8cec864d293d95e07394dff302bc877782b4ef4ce04` and its old PID `825513`
+are historical M89-F001 evidence. Its replacement
+`/tmp/geosolve-m89-f001-replacement-uat.IwvrBh8x`, aggregate
+`7d40c31c0eba5aae0d1b6e7febf16a0b5fa44a541c82a9ddbbb0125cd8707424`, was subsequently withdrawn
+by F002. Neither is current acceptance authority.
+
+M89-F002 acceptance record: the correct Compass Polyline publication still generated
+`172`/`199` lines and `4,238`/`4,943` bytes for one/two inferred axes because Polyline and its axis
+constraints used transport-level source. Exact native Polyline now uses direct
+`$.geometry.polyline(...)` with deterministic keyed vertices/spans and
+`representation: "singleCurve"`; Horizontal/Vertical consumers use direct keyed span references.
+The complete Compass source is `64` lines/`1,841` bytes and its isolated three-declaration fixture
+is `24` lines/`722` bytes. Frozen F002 snapshot
+`/tmp/geosolve-m89-f002-uat.bSM6Nn59`, aggregate
+`0b9a4ed357a452edd79953679e5bbb68c0cb5b1261a8ba5478a1dbaa597ab433`, release-WASM SHA-256
+`77e5739cb81565d5a0bc400507e1a35f2f63ba22c1d821442b16baedcb24b72a` remains preserved but is no
+longer served and is superseded for continuing UAT.
+
+M89-F003 acceptance record: compactness is systemic across all 25 geometry variants. Direct
+Segment and Polyline retain their ergonomic builders. The other 23—Sketch Point, Midpoint Line,
+four rectangles, three circles, three arcs, two ellipses, two elliptical arcs, Quadratic/Cubic
+Bezier, Rational Quadratic Conic, Parabola, Hyperbola and Open/Periodic-Control NURBS—use one
+lossless `$.geometry.recipe(...)` declaration each. Focused regressions perform real canvas
+construction, reverse projection, cold Rust replay, exact descriptor result-path comparison,
+finite-geometry checks and independent Hard-residual validation for the complete catalog. Every
+single declaration is at most `1,024` bytes; exact Cubic Bezier/Tangent Arc/Periodic NURBS examples
+are `387`/`921`/`872` bytes and their full normalized sketch is `3,087` bytes.
+
+Focused F003 commands pass sketch-code all-feature (`109` unit tests plus all integrations/docs),
+compact round-trip `3/3`, editor insertion `13/13`, sketch-code warnings-denied Clippy, TypeScript
+runtime `27/27`, mutation `18/18`, pinned-Deno `2/2`, frontend `54/54`, diff hygiene and the exact
+post-repair Compass integration regression. Final qualification also passes demo-web `357/357`,
+formatting, affected warnings-denied Clippy, the locked WASM check, optimized nine-file
+distribution validation, release-WASM Playwright `14/14`, and the unchanged normal product
+`13/13` before freezing and on both frozen endpoints. Snapshot
+`/tmp/geosolve-m89-f003-uat.uF6Yjsc3`, aggregate
+`c37d832a6dc076982e3fda8f2ffbcc8b2f26ed99ad6ffd0da0b7ba4f96d705ed`, optimized release-WASM
+SHA-256 `99eeaa5668276282201cb1971b042d3d0904a13b7a75d40e2357ce08a34c748a` and evidence
+`/tmp/geosolve-m89-f003-freeze-evidence.5TcRPlem` own the historical F003 candidate. Its
+staging/live strict
+HTTP ledgers are identical at SHA-256
+`c5efab20409773cc7f43cecdd9c6fca5b961402611d073f6bf0e8f40cca0ce1e`. Unit
+`geosolve-m89-react-uat-current.service`, PID `3637680`, invocation
+`73bdb82cf2a64436ab6f65fe76b08ccf`, served those bytes at the historical F003 checkpoint and has
+since been replaced by F005 at `http://100.94.63.83:18089/`. This is preserved proportional dirty-
+tree qualification and rollback evidence, not current UAT authority, a clean-source claim or
+human-UAT acceptance.
+
+M89-F004 acceptance record: the persistent constraint source contract is exhaustive at the
+standalone boundary. A non-axis relation such as Parallel previously fell through to
+transport-level `$.intent.recipe(...)`; the repaired path emits descriptor-authenticated
+`$.constraint.recipe(...)`. The focused catalog matrix reviews all 35 persistent
+`ConstraintKind` variants. Horizontal and Vertical remain direct, while the other 31 standalone
+variants cold-replay through the compact recipe, preserving exact semantic signatures, finite
+accepted state and independently validated normalized Hard residual at most `1e-9`.
+
+`ExternalPointCoincident` and `ExternalLineCollinear` are the exact two exceptions. They require
+host-external snapshot/binding authority that managed `sketch.ts` cannot yet encode, so reverse
+projection fails closed. Their wire schemas are audited; they are not passed replay rows and do not
+reduce the stated 33-of-35 standalone coverage boundary. The focused constraint matrix passes
+`1/1`; the final provisional dirty-tree mechanical qualification and immutable F005 replacement
+nomination recorded below also pass.
+
+All 25 canvas geometry variants and all 33 standalone persistent constraint kinds reverse-project to compact, cold-replayable managed source. The two host-external schema variants remain compile-visible and schema-authenticated, but require separately supplied host snapshots.
+Those variants are `ExternalPointCoincident` and `ExternalLineCollinear`. F004/F005 implement no
+standalone host-snapshot execution path, so absent that host authority both remain gated and
+neither is counted among the 33 standalone replay rows.
+
+M89-F005 acceptance record: a canvas-authored computed Fillet now emits one direct
+`$.computed.filletSet(...)` declaration rather than a transport recipe. It records lexical native-
+span parents, exact parameter/winding/neighborhood/normal-side/retained-endpoint/periodic-anchor/
+endpoint-order/sweep state, radius, display name and explicit source-owned suppression. Cold Rust
+replay retains computed ownership and exact branch/contact metadata; same-gesture Polyline parents
+use keyed segment paths; computed-host parents, non-lexical references, wrong kinds and malformed
+state reject before publication.
+
+Focused ownership and lifecycle coverage requires whole-declaration source navigation,
+selection-preserving radius edits, suppress/restore, delete/Undo, persistence and reload. Every
+accepted result is finite and independently Hard-residual validated at most `1e-9`. Direct Fillet
+lowering passes `7/7`, and `m89_editor_insertion` passes `19/19`; focused bridge and release-WASM
+Fillet ownership/lifecycle regressions pass, including the release-WASM case `1/1`. TypeScript
+runtime `28/28`, mutation `19/19`, pinned-Deno parity `2/2` and frontend `55/55` are focused
+collateral. F005 adds no Offset work and leaves the existing Profile Offset closure unchanged.
+
+Final F004/F005 qualification record: exact gate
+`nix-shell shell.nix --run 'GEOSOLVE_ALLOW_DIRTY=1 ./scripts/release-gate.sh'` passes in the pinned
+shell with `wasm-bindgen-test-runner 0.2.121`. Final counts are sketch-code unit `114`, compact
+geometry `4/4`, constraint matrix `1/1`, direct Fillet `7/7`, `m89_editor_insertion` `19/19`, demo-
+web `358/358`, TypeScript runtime `28/28`, mutation `19/19`, pinned-Deno parity `2/2` and frontend
+`55/55`. The ambient attempt had already built through workspace and golden checks when the first
+WASM parity leg returned `HARNESS_ERROR` because `wasm-bindgen-test-runner` was absent after
+reboot. The pinned rerun proves that was a harness/environment failure, not a product defect.
+
+The fresh immutable F005 replacement is `/tmp/geosolve-m89-f005-uat.hzNuDxF0`; manifest
+`/tmp/geosolve-m89-f005-uat.hzNuDxF0.sha256`; evidence directory
+`/tmp/geosolve-m89-f005-freeze-evidence.VAoQDl8n`; aggregate
+`fb488ad2bf29e8897cf9811c002b748693e5d211bae4bb54c83ed060db5db668`. Its nine regular files
+include three JavaScript files, one CSS and one WASM; it has two directories and no symlinks/other
+entries. The `16,333,537`-byte `assets/geosolve_demo_web_bg-52ybei8k.wasm` has SHA-256
+`3e6f515ff1e5de0f668c13e86c02d280c0dc085bbd89b314bf9ece6c82aae575`. Strict staging/live ten-
+route HTTP ledgers are byte-identical at SHA-256
+`4de184eb1eb237f98997b70702567a2b110b40d96df5d0d9653f024ac5f23e8d`; focused Fillet lifecycle
+passes `1/1` and the normal frozen product passes `15/15` on each endpoint. The normal product
+intentionally excludes the compiler-parity-only harness test.
+
+Unit `geosolve-m89-react-uat-current.service`, PID `1007459`, invocation
+`a3fea6dddb59438795e52c6a8fab136f`, started `Wed 2026-09-02 20:21:15 AEST` with
+`WorkingDirectory=/tmp/geosolve-m89-f005-uat.hzNuDxF0` and was recorded exact-serving the M89 F005
+nomination at
+`http://100.94.63.83:18089/`. Staging PID `995137`, invocation
+`efe4de2264774f68bf5852284fa69887`, is retired. F003 remains historical rollback evidence and is
+not current. This qualification is **provisional dirty-tree**, not clean-source qualification or a
+row-by-row M89 human acceptance. The Compass retest, targeted preflight and all M89-U1 through
+M89-U8 rows were not run and are not retrospectively passed or waived. M90's closed clean break
+supersedes this compatibility-stage nomination.
+
+## M90 typed executed sketch clean-break acceptance
+
+Status: **Closed by explicit scoped supervising-user approval on 2026-09-04. M90-F005/F006 repair,
+collateral qualification, the complete dirty-tree release gate, optimized release-WASM build and
+immutable Tailscale nomination pass at `http://100.94.63.83:18090/`. M90-U1 through M90-U10 are
+transferred/deferred, not passed or waived, into M91's composite UAT. Publication is Tailscale-only;
+no GitHub Pages deployment or public push was authorized or made.** No criterion below is marked
+passed merely by its presence here. `docs/M90_GOALS.md`,
+`docs/M90_IMPLEMENTATION.md` and `docs/M90_UAT.md` own the current scope and interaction scorecard;
+`PLAN.md` owns implementation and evidence progress.
+
+The historical pre-F001 pinned dirty-tree release gate exited `0`; its log has SHA-256
+`2dd3663430c730eea84303954598f3a0696868aa4d433f3e32836a42024b250b`. The unchanged 271-row
+milestone-neutral golden passes `--survey`, `--check` and `--require-clean`; those unchanged golden
+bytes do not turn this into clean-source qualification. Historical candidate snapshot
+`/tmp/geosolve-m90-uat.vuI7sBKt`, manifest `/tmp/geosolve-m90-uat.vuI7sBKt.sha256` and aggregate
+`b5bae1aca28787f026a11100c94e425d1c5e057ce3539170f4399b7cd8b05dc2` preserve the withdrawn
+immutable nomination as exact reproduction evidence.
+Its `20,007,307`-byte `assets/geosolve_demo_web_bg-BAUG7n7P.wasm` has SHA-256
+`51fc04d4129dd73791afb20b4403efe1f4fb95af6d607037b2a95956865fe7f5`. Local/Tailscale HTTP ledgers
+matched at SHA-256 `17477e87e897b5ac080547df41b528bc16c252d4c67a4634ad21a384f4ccd29b`.
+Historical unit `geosolve-m90-uat-18090.service`, PID `2747435`, invocation
+`767e65048ece4573834acf8f580f87bc`, used the snapshot as its working directory and served it at
+`http://100.94.63.83:18090/`. M90-F001 withdraws those bytes from continuing UAT. The unit is now
+inactive/dead with no PID; the endpoint is now reused only by the replacement identity below. At
+that historical checkpoint no UAT row was accepted and M90 remained open.
+
+M90-F001 reproduces by opening **Compass Rose**, dragging a point and observing the complete canvas
+blocked by `pointer input is unavailable while a managed-source mutation is compiling`. It is a
+code-workbench/Rust-bridge ownership regression, not a solver, rank/DOF or equation failure.
+Pointer-up wrongly prepared a `SetValues` source mutation. Cold rematerialization of the
+underconstrained sample then chose a different valid configuration from the native continuation
+accepted during preview; exact parity rejected the mismatch, but the retained pending ticket
+globally blocked later pointer input.
+
+- Managed source accepts only the exact `"use geosolve sketch"` directive. Compiler input and
+  publication accept only `geosolve-managed-sketch-ir-v3` and
+  `geosolve-executed-sketch-artifact-v3`; managed-v1/v2 parsing, upgrade and compatibility paths
+  reject rather than silently rewriting a project.
+- Every public geometry, standalone constraint, dimension, operation and aggregate is expressed by
+  a named method with a typed named-argument object. Computed Fillet uses
+  `computed.filletSet` with explicit parent and branch/contact state. Public generic recipes,
+  `[name, kind, value]` input tables, edit lenses, result manifests and operation-output transport
+  payloads are absent and not admitted through another V3 route.
+- The lexical IR preserves identifiers, attached comments, declaration/group order, expressions,
+  suppression and exact source spans. Instrumented execution records the complete declaration
+  result tree plus value-consumer provenance. Stable source-site identities join the two, and Rust
+  rejects any source/IR/artifact mismatch before Intent materialization. Stack traces may diagnose
+  a failure but never select the value or declaration to edit.
+- Every accepted canvas-authored geometry, constraint, dimension, operation or Fillet inserts a
+  compact named declaration into `sketch.ts` using the monotonic non-reusing generated-name
+  allocator. A managed project cannot publish a GUI-only addition. Reload, Undo and Redo reproduce
+  the same complete standalone-authoritative sketch from source, IR and executed artifact.
+- Value editing, insertion, reorder, suppression and deletion use a digest-bound Rust-prepared
+  mutation. Browser or pinned-Deno compilation returns a candidate receipt; Rust authenticates the
+  exact permitted semantic delta, cold-materializes, solves and independently validates before
+  publishing source, IR, artifact, accepted scene and exactly one outer history entry atomically.
+  Preview, cancel, stale work and rejected candidates publish none of those products.
+- Ordinary movement of an existing code-owned point is not a source value edit. It stages and
+  publishes synchronously through persistent `CodeInteractionOverlay`, retaining accepted native
+  continuation and producing exactly one outer/native history action while source, lexical IR,
+  executed artifact and compiler identity remain exact. It invokes no compiler and leaves no
+  pending managed mutation. Selected-reference detachment follows this same overlay contract.
+- Focused M90-F001 bridge coverage must exercise normal pointer-down/move/up, require finite
+  accepted movement and independently validated Hard residual, exact source/IR/artifact/compiler
+  identity retention, a persistent overlay and exactly one native history action, and prove no
+  browser compiler request, no `pending_managed_mutation` and an immediately usable next pointer
+  gesture. Explicit source/scalar edits, declaration insertion/reorder/suppression/deletion and
+  computed-Fillet radius edits must remain managed compiler transactions. These focused bridge and
+  sketch-code regressions pass `5/5` at `1/1` each. The forced selected-reference rejection also
+  proves that a failed or mismatched delegated terminal clears its semantic route, restores exact
+  accepted editor/selection/project/source/code-session/persistence/history authority and admits
+  the immediately following gesture.
+- M90-F001 changes no solver equation, rank/DOF rule, tolerance or explicit branch state. Full
+  demo-web `--lib` passes `282/282`; sketch-code all-feature and affected multi-crate suites pass;
+  frontend Vitest passes `56/56`; TypeScript runtime passes `31/31` with types, managed checks and
+  production build; release-WASM exact two-drag Compass passes `1/1`; locked WASM parity,
+  `actual_wasm`, WASM check, format, diff and warnings-denied workspace Clippy pass. After one
+  transient combined golden exit `101`, both affected scene rows pass exact rerun and complete
+  unchanged `--check`/`--require-clean` pass. The monolithic dirty release gate was harness-
+  terminated at exit `143` and is not accepted as a pass.
+- Provisional dirty-tree replacement snapshot `/tmp/geosolve-m90-uat.xk0AGnz0` and external
+  manifest `/tmp/geosolve-m90-uat.xk0AGnz0.sha256` have ordered aggregate
+  `030e9f4aa98690b8cd35cdbb51a29220674f1bfcfba310192afc467f5afc38a4`, nine mode-`0444` files,
+  two mode-`0555` directories and no symlinks. Its `19,958,913`-byte
+  `assets/geosolve_demo_web_bg-B6mOdH7K.wasm` has SHA-256
+  `9607cfd48f1ec23b2c29e120704277bbb70247bdbed6a67945c5cc64b7af8761`. Freeze evidence is
+  `/tmp/geosolve-m90-f001-replacement-freeze-evidence.UpMqFyrm`.
+- All ten staging/live routes byte-match with correct MIME, no redirects/compression and ledger
+  SHA-256 `56a5aff7b23000e1b009f2eb479b9545fcfb17dbe5d1a4f9721f7c3951a761ae`; optimized
+  release-WASM two-drag Compass passes `1/1` against both. Tailscale-only unit
+  `geosolve-m90-f001-replacement-uat-18090.service` historically served the frozen snapshot with
+  PID `3332035`, invocation `258e6d4da4b14661bd6d8e44856c64a5`, on `100.94.63.83` at
+  `http://100.94.63.83:18090/`. This is historical pre-F002 provisional dirty-tree evidence, not a
+  current candidate, passing normal release gate, clean-source qualification or human acceptance;
+  the unit is now inactive/dead.
+- M90-F002 reproduces after four Compass Rose drags: exact workspace history reaches about
+  `5.24 MiB`, and the former `geosolve.project.v1` write exceeds Chromium's approximately `5 MiB`
+  Web Storage quota. This is a browser persistence defect, not a solver, rank/DOF, branch or
+  M90-F001 overlay defect. The F001 replacement snapshot remains preserved but its service is
+  retired and those bytes are withdrawn from continuing UAT.
+- Canonical saved-project authority is raw and exact in IndexedDB database
+  `geosolve.browser-projects.v1`, store `projects`, key `current`. Writes are serialized so an older
+  completion cannot replace a newer requested revision. Restore prefers IndexedDB; legacy
+  `localStorage` bytes are removed only after the same project commits to IndexedDB, while failed
+  migration retains and restores them. An uncertain read fences automatic saving until explicit
+  user Save, and all read/write/removal/cleanup failures remain visible rather than authorizing a
+  destructive fallback.
+- Persistence compression is deliberately absent. Synchronous release-WASM zlib measurement rose
+  from about `27 ms` for the initial `1.18 MiB` Compass project to `117 ms` at `5.24 MiB`, `195 ms`
+  at `9.30 MiB` and `415 ms` at `21.49 MiB`; a valid project with a `6 MiB` high-entropy patch also
+  exceeded the reused reproduction limit (`14,329,357 > 12,582,912` compressed bytes). Raw
+  serialization plus IndexedDB measured about `49 + 13 ms` at four drags and `138 + 59 ms` at
+  twenty drags. Reproduction export remains compressed; saved projects do not reuse its limits.
+- M90-F002 focused project-store/application coverage, frontend Vitest `73/73`, production
+  release-WASM build and nine-file distribution validation, full demo-web native `282/282`, focused
+  sketch-code collateral, format, warnings-denied Clippy and diff hygiene pass. The release-WASM
+  Chromium regression passes `1/1`: five drags persist more than `5 MiB` in IndexedDB with no quota
+  alert, no legacy project
+  key, exact reload and working Undo. This accepts no human UAT row and changes no solver equation,
+  rank/DOF rule, tolerance or explicit branch state.
+- Post-F002 provisional dirty-tree replacement snapshot `/tmp/geosolve-m90-uat.TN2NP9eF` and
+  external manifest `/tmp/geosolve-m90-uat.TN2NP9eF.sha256` have ordered aggregate
+  `06fb7b77e64cf1ead91b14accded0191a65a9b344fc538139e7a8eeb10b7c35f`, nine mode-`0444` files,
+  two mode-`0555` directories and no symlinks. Its `19,958,865`-byte
+  `assets/geosolve_demo_web_bg-D0927Gtv.wasm` has SHA-256
+  `b949a8ed46a39693e8f39132ce8eaae1bb0b29d07ead9b01603706ea8bef2a6a`. Freeze evidence is
+  `/tmp/geosolve-m90-f002-freeze-evidence.wZMAFe3d`.
+- All ten post-F002 staging/live routes byte-match with correct MIME, no redirects/compression and
+  ledger SHA-256 `5247ef967f0a5f701181d08fa2fa9eb94a6302e17e5731ec8eacdefa3fb52ae6`; the exact frozen
+  five-drag quota regression passes `1/1` against both. Tailscale-only unit
+  `geosolve-m90-f002-replacement-uat-18090.service` historically served only that snapshot with PID
+  `3839015`, invocation `0f6fca0683fa4ceead74c1355709b019`, at
+  `http://100.94.63.83:18090/`. M90-F003 withdraws those bytes from continuing UAT; the service is
+  now inactive/dead.
+- M90-F003 reproduces from the exact empty coded starter. A two-click Center-Radius Circle emits a
+  finite named `centerRadiusCircle` with optional `label`/`role` and `radius: mm(...)`, but the
+  printer retained `import { sketch } from "@geosolve/sketch-code";`; candidate compilation then
+  failed with `managed sketch mutation is invalid: unsupported managed sketch value expression`.
+  This is a managed mutation/receipt defect, not a solver or circle-equation defect.
+- Every insertion recursively derives its required generated unit helpers. Only missing `mm` and
+  `rad` may be appended, once each and in canonical order, to the existing SDK named import that
+  contains `sketch`. Existing import declaration and binding order remains exact; an already
+  imported helper is not moved; unit-free insertion and every non-insertion mutation change no
+  import. Unsupported generated units or absence of the owning import reject before compilation.
+- Rust independently derives the same expected imports and includes them in candidate semantic-
+  digest and receipt authority. The exact helper delta may validate; a missing/extra/reordered
+  helper, removed existing binding, changed custom import or added unrelated import must reject
+  without changing source, accepted scene or history.
+- Direct native `centerRadiusCircle` lowering requires `center` and `radius`, admits only optional
+  `label` and `role`, preserves those as native display name/geometry role and rejects any other
+  field. This closes the second cold-materialization blocker exposed after `mm` was imported while
+  changing no residual, equation, radius seed, rank/DOF rule, tolerance or branch state.
+- Focused TypeScript coverage uses the byte-exact sketch-only authored-empty source, inserts the
+  circle, cold-recompiles `import { sketch, mm }`, and retains its runtime radius consumer. It must
+  also cover repeated/batched and existing-helper idempotence, unit-free stability, recursive
+  `rad` synthesis, unsupported-unit refusal and unrelated-import preservation. Rust prepared-
+  mutation and direct-lowering tests own exact import authority, forged receipts and presentation
+  fields.
+- The retained bridge regression performs the exact two-click empty-source gesture, proves no
+  early publication, resolve the authenticated compiler receipt and require exactly one source/
+  history publication, one imported `mm`, one finite accepted circle with Current features and
+  independently validated normalized Hard residual at most `1e-9`, no pending mutation, immediate
+  next-pointer availability and Undo to the byte-exact starter. The optimized release-WASM browser
+  regression proves the equivalent source-backed flow before candidate nomination. TypeScript
+  package checks pass with `34` runtime tests; Rust prepared-mutation passes `34/34`, all-feature
+  sketch-code and the exact bridge pass; frontend Vitest passes `73/73`; format, warnings-denied
+  Clippy, diff hygiene, golden `--check`/`--require-clean`, TypeScript/frontend build checks and
+  nine-file distribution validation pass. The optimized release-WASM F003 and carried F001/F002
+  browser rows pass `1/1` each on staging and live.
+- Post-F003 provisional snapshot `/tmp/geosolve-m90-uat.yIPVNICT` and external manifest
+  `/tmp/geosolve-m90-uat.yIPVNICT.sha256` have ordered aggregate
+  `d31e311c4e0e69974690d299819df6a33b7ae13b7eff5d037406e602c033f33a`, nine mode-`0444` files,
+  two mode-`0555` directories and no symlinks. Its `19,967,322`-byte
+  `assets/geosolve_demo_web_bg-DuuevZyx.wasm` has SHA-256
+  `c3160d7f8f6fc49db6294588cedd38ba5b520a80743d3977039957074fa8ca31`.
+- All ten post-F003 staging/live routes byte-match with correct MIME, no redirects/compression and
+  ledger SHA-256 `47a0229dbf46ea0549f4e424a6ce7ccd452810eb24161db61c4cb33436107726`.
+  Freeze evidence is `/tmp/geosolve-m90-f003-freeze-evidence.Y4jLQxD3`. Tailscale-only unit
+  `geosolve-m90-f003-replacement-uat-18090.service`, PID `305121`, invocation
+  `f456b1c8cea044638bae1119709b94d9`, historically served only that snapshot at
+  `http://100.94.63.83:18090/`. M90-F004 withdraws it from continuing UAT; the unit is inactive/dead
+  and the immutable snapshot remains historical pre-F004 evidence.
+- M90-F004 reproduces from two accepted Center-Radius Circles by drawing one Segment whose endpoints
+  snap to the two circumferences. The headless candidate stages the Segment, two Point-on-Curve
+  relations and inferred Horizontal in one managed batch, but the pre-repair receipt rejects
+  terminal parity with `declaration relabel witness is not owned by its allocated source
+  declaration`; the retained ticket then falsely blocks later pointer input as compiling.
+- The cause is declaration/native ownership order, not compilation latency or solver behavior.
+  Simultaneously ready same-family constraints received monotonic `constraintN` names in GUI
+  insertion order while the unordered Intent patch and cold source replay allocated them by durable
+  native symbol. The two Point-on-Curve declarations consequently exchanged source names and owned
+  contact/source objects across the terminal and cold authorities, so the strict relabel witness
+  correctly failed closed.
+- Canvas insertion must assign already reserved names within each managed namespace/name family in
+  the deterministic durable native-symbol order used by materialization. Exact declaration order
+  and high-water remain authoritative, and terminal/cold persistent nodes, aliases and owned native
+  objects must agree. The frontend may consume only an unchanged authenticated terminal native
+  rejection; the `declaration relabel witness ...` case must abort that exact ticket and admit the
+  next gesture, while stale/authentication failures remain pending and retryable.
+- Exact bridge regression
+  `m90_f004_two_circles_snapped_segment_publishes_one_managed_batch` passes `1/1`. It requires no
+  early publication, one four-declaration compiler batch, exactly one accepted source/history
+  revision, two explicit periodic Point-on-Curve contacts with retained parameter/domain/winding/
+  neighbourhood/orientation, one inferred Horizontal, finite native geometry, Current features,
+  independently validated normalized Hard residual at most `1e-9`, immediate next-pointer
+  availability and exact Undo to the two-circle source. Focused frontend coverage separately proves
+  terminal relabel rejection consumes the pending ticket.
+- F004 qualification passes full demo-web `284/284`, sketch-code `--all-features`, TypeScript
+  fixture/runtime/type/managed checks with `34` runtime tests, frontend Vitest `74/74`, warnings-
+  denied locked workspace all-target/all-feature Clippy, format and diff checks, the final
+  pinned/Nix optimized release-WASM build, manifest/licence/build-contract checks and nine-file
+  distribution validation. The carried F001/F002 combined, F003 and F004 browser bundle passes
+  `3/3` against both frozen staging and live Tailscale bytes.
+- The exact golden inventory, `--check` and `--require-clean` remain 271 rows at SHA-256
+  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`. This is a focused
+  declaration-ownership/lifecycle defect covered at the lowest public Rust boundary plus a thin
+  frontend recovery test; it reveals no missing systemic golden dimension, so no golden row is
+  added.
+- Post-F004 provisional snapshot `/tmp/geosolve-m90-uat.O4xZJBxg` and external manifest
+  `/tmp/geosolve-m90-uat.O4xZJBxg.sha256` have ordered aggregate
+  `fd0a4635edcc6bd24d36eeca831a57bbb62cdf1d67589c6245af9e7b88bf52be`, nine mode-`0444` files,
+  two mode-`0555` directories and no symlinks. Its `19,987,485`-byte
+  `assets/geosolve_demo_web_bg-CoONmEL1.wasm` has SHA-256
+  `e61ff5e9183883c1872293ad5d4c38c06175bc12575668f3f770282387bcf457`. Freeze evidence is
+  `/tmp/geosolve-m90-f004-freeze-evidence.F0HdfUMF`.
+- All ten post-F004 staging/live routes byte-match with correct MIME, no redirects/compression and
+  ledger SHA-256 `47589602797db38fb23a70da0d1cc31c7b032b7ab0907f3688d2a39886ebe921`.
+  Tailscale-only unit `geosolve-m90-f004-replacement-uat-18090.service` historically served only
+  that snapshot with PID `792138`, invocation `ff367dd5f5bb4f24a8661dd83a26168b`, at
+  `http://100.94.63.83:18090/`. It stopped after the supervising user's reboot; M90-F005 withdraws
+  those bytes from continuing UAT while retaining their exact historical identity.
+- M90-F004 changes no solver equation, rank/DOF rule, tolerance or explicit branch state. Its
+  focused/optimized/browser qualification and immutable provisional publication accept no human
+  UAT row. At that historical checkpoint the replacement release gate remained pending and M90
+  remained open.
+- M90-F005 reproduces from `/home/arduano/Downloads/project (1).json`, exactly `956,305` bytes with
+  SHA-256 `c5f748d31c90f8fd575ab2acaddfb8b7d20bbc9f31189dc0716995ad05a46ee7`. Checked-in capsule
+  `crates/geosolve-demo-web/tests/fixtures/m90_f005_native_drag_repro.txt` is exactly `86,736` bytes
+  with SHA-256 `1b1dba9d039ee8756030174731ab3a03e7f77a8554853a96c29e4b10f8c49cf7` and must decode byte-
+  exactly through the ordinary reproduction/workbench path. A constrained point must not move in
+  preview and then revert on release.
+- Authored scalar intent units follow leaf semantics rather than native storage alone. A periodic
+  curve contact may store its scalar as native `Angle`, but an owned `Parameter` leaf is
+  dimensionless. One shared mapping must govern writable ownership, bootstrap application,
+  point-drag projection and curve-control projection; invalid field/storage combinations remain
+  fail-closed.
+- An accepted point or curve-control terminal may supply its exact finite accepted document as the
+  numerical continuation for the patched candidate. The candidate's independently reconstructed
+  native design must authenticate and certify that continuation before publication. The
+  continuation grants no source declaration, Intent operation, drag request, branch, history or
+  solver-success authority; a mismatched topology/object/source must still reject atomically.
+- Undo/Redo evidence refresh must use the stored authenticated accepted materialization at the
+  target history position as its continuation. It may reconcile only the candidate-owned retained
+  allocator high-water before exact projection. Undo restores the pre-drag accepted document and
+  Redo restores the exact terminal accepted document; whole-workspace byte equality after Undo is
+  not required because CAS revision advances and Redo history is deliberately retained.
+- Exact bridge regression
+  `m90_f005_supplied_native_workspace_constrained_drags_publish_and_undo` passes `1/1` across
+  connected point IDs ending `066d`, `0670`, `0673`, `0674`, `067e`, `0685` and `0686`. Every case
+  requires a moved finite preview, exact terminal publication, no managed compilation, one
+  revision/history action, independent hard-residual validation, unchanged contact identity/
+  curve/parameter/domain/winding/neighbourhood/orientation, exact accepted-document Undo, exact
+  terminal Redo and persistence/reload retention. Point `...067f` remains an unconstrained control,
+  not one of the seven required connected cases.
+- Focused projectional applications pass `12/12`, including the closed authored/native scalar-unit
+  matrix, Point-on-Curve, mixed line/circle tangency and disconnected contact-rich terminal
+  continuation. No equation, rank/DOF rule, tolerance or explicit branch state changes.
+- F005 collateral passes constraint-editor all-features (unit layer `439/439` plus all integration
+  suites), demo-web `286/286`, warnings-denied workspace and targeted demo-web Clippy, format/diff,
+  unchanged reviewed 271-row golden `--check`/`--require-clean`, frontend manifest `37`, runtime
+  licences `71`, build contract, Vitest `74/74`, optimized release-WASM build and nine-file
+  distribution validation.
+- M90-F006 repairs a thin presentation-host defect found during frozen browser preflight. Atomic
+  `project.import` had replaced live host size/pixel ratio with defaults while the unchanged DOM box
+  generated no new `ResizeObserver` sample, so SVG letterboxing and pointer normalization diverged.
+  Successful import now retains the authenticated live `host_size` and `pixel_ratio`; failed restore
+  remains atomic. `successful_project_import_retains_live_viewport_and_pointer_alignment` proves a
+  non-default letterboxed viewport and semantic point hover remain aligned.
+- The first post-F006 four-row browser attempt's reload comparison was a `HARNESS_ERROR`: it compared
+  drag-camera SVG coordinates with a deliberately fresh fitted camera, while exact project and
+  accepted authority remained unchanged. Fitting both presentation sides makes the row deterministic;
+  it passes `5/5` repeated while retaining persistence and Undo checks. The separate Rust F005
+  owner regression proves both Undo and Redo.
+- Current immutable snapshot `/tmp/geosolve-m90-uat.EtWyWQlt`, manifest
+  `/tmp/geosolve-m90-uat.EtWyWQlt.sha256` and evidence
+  `/tmp/geosolve-m90-f006-freeze-evidence.HqyaA7Qp` have aggregate
+  `b3fd72b9ec98d318d7bfa7bf8c09d0fcbd3856ea0723d81e01e64945e301debe`, nine mode-`0444` files,
+  two mode-`0555` directories and no symlinks. Its `19,990,463`-byte
+  `assets/geosolve_demo_web_bg-Dc5MH04n.wasm` has SHA-256
+  `bad16242c2ec0fa0c6c0ba6882428372c1bf0b7dd1a70235467b5febdfc80712`.
+- Staging and live ten-route ledgers byte-match at SHA-256
+  `41d11e1c56bad8dcc57edf229f0bfec20d8f5e602b3c385e5e68d54dd42c816a`; optimized release-WASM
+  browser rows pass `4/4` on both. Unit `geosolve-m90-f006-replacement-uat-18090.service`, PID
+  `462021`, invocation `4a17e69e926446eba21439ac4dd6f4e6`, exact-serves the immutable snapshot
+  at `http://100.94.63.83:18090/`.
+- Cold replay covers all 25 geometry variants, all 33 standalone constraints, all eight dimensions,
+  every ordinary operation, both aggregates and computed `FilletSet`, including keyed members and
+  non-default branch/contact state. `ExternalPointCoincident` and `ExternalLineCollinear` remain
+  explicitly host-input-gated rather than acquiring fabricated standalone authority. Profile
+  Offset may retain only its existing authenticated aggregate-helper/root closure.
+- All twelve bundled samples are checked-in V3 source/envelope pairs. Each cold-materializes with
+  finite native state, Current active computed features and independently validated normalized
+  Hard residual at most `1e-9`; no sample prompts for or performs a legacy upgrade.
+- A canonical compiled project can be inspected, solved and rendered without a browser,
+  JavaScript runtime or web server. Raw-source native editing uses the documented
+  `prepare-edit` → pinned-Deno mutation → `resolve-edit` protocol and the same receipt semantics as
+  the browser. Publication writes a new output directory and never overwrites an existing one.
+- Unsupported syntax, unauthenticated structure, a stale receipt, a semantic-delta mismatch,
+  invalid geometry, NaN/Inf, failed branch/domain validation or excessive normalized Hard residual
+  retains the complete prior accepted source/project/scene/history authority and reports a bounded
+  positioned diagnostic.
+- Closure requires formatting and diff hygiene, warnings-denied workspace Clippy, locked
+  all-feature workspace tests, TypeScript and frontend checks, locked WASM, the unchanged 271-row
+  golden `--survey`/`--check`/`--require-clean`, the release gate, a byte-verified release-WASM
+  candidate and explicit disposition of all ten `docs/M90_UAT.md` rows by the supervising human.
+  The former mechanical gate has provisional dirty-tree historical evidence, but M90-F001 withdrew
+  its first nomination, M90-F002 withdraws the F001 replacement because it predates the
+  persistence repair, and M90-F003 withdraws the post-F002 replacement because it predates helper-
+  import closure and direct-circle presentation lowering. M90-F004 withdraws the post-F003
+  replacement because it predates deterministic same-family declaration ownership. F004 focused/
+  browser qualification and its post-F004 immutable provisional publication remain historical;
+  F005 withdraws those bytes because they predate scalar-leaf semantics and exact accepted-terminal
+  continuation. F005/F006 collateral qualification and the fresh immutable post-F006 candidate
+  pass, and that candidate is live at `http://100.94.63.83:18090/`.
+- The final full dirty-tree gate command
+  `env GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
+  ran from `23:20:45` through `23:47:22 AEST` on 2026-09-03 and exited `0` after `1,596,726 ms`.
+  Its `573,421`-byte log
+  `/tmp/geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` has SHA-256
+  `bda7f5f92f15a5f0a0cf26ed93cb514943d9a9d1ad49bf0ba0e148c9239b205d`. The complete gate retains
+  the reviewed 271-row golden unchanged, passes the release-only 256-moving-body performance row in
+  `137.82 s`, frontend Vitest `74/74`, and optimized nine-file distribution validation. This is
+  complete dirty-tree qualification, not clean-source qualification.
+- The supervising user explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
+  remain unexecuted and are transferred/deferred—not passed and not waived—into M91's one composite
+  UAT. Automated qualification accepts no human row. The immutable F006 snapshot and Tailscale-only
+  service remain closing publication authority; no GitHub Pages deployment or public push was
+  authorized or made. M90 is closed.
 
 ## Regression and oracle policy
 

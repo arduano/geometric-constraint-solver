@@ -180,7 +180,7 @@ qualify the revised sources. The reviewed twelve-row code-project ledger has SHA
 `/tmp/geosolve-m87-manufacturing-uat.K7YRaV/` are historical pre-F003 evidence and must be replaced
 for current source review. Exact post-F003 source `32c7289` passes the complete clean gate, and the
 user's milestone-level decision accepts both rows without a separate replay. Diagnosed Gridfinity
-performance/stack work is carried into active M88's stability prerequisite.
+performance/stack work was carried into M88's completed stability prerequisite.
 
 ## Prior scoped-disposition graphics audit and M87-F002
 

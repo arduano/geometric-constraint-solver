@@ -24,7 +24,15 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M87. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval; M77 completes CAD curve controls, spatial elliptical-arc authoring and exact public verification; M78 completes exact CAD geometry variants, semantic recipe stages and atomic construction publication; M79 completes stable inference cycling, recovery and exact public verification; M80 completes native topology-preserving Profile Offset, native line-line Fillet publication and ordinary line-arc angle propagation; M81 completes behavior-preserving private architecture consolidation and allocator-neutral rejection; M83 completes accepted projectional design intent, F001-F010 hardening and exact public verification; M84 completes optional hybrid code/GUI authoring, F001-F012 hardening and exact public verification; M85 completes semantic-neutral retained-presentation performance hardening; M86 completes the accepted managed-dimension, Fillet hit-priority, Typed Panel terminal-parity and bounded-trace repairs with exact public verification; M87 completes cohesive managed controls, shared rendering, browser-free authoring and twelve-project dogfood. M1-M7 remain the frozen regression baseline.
+- **Baseline:** implemented and accepted behavior through M88 plus the scoped-approved M90 clean
+  break. M89 is retained below as a superseded compatibility-stage record; its row-by-row UAT was
+  not run, but M90's completed replacement contract now owns the product boundary. M90 is **closed
+  by explicit scoped supervising-user approval on 2026-09-04** after F005/F006 repair, collateral
+  qualification, the complete dirty-tree release gate and immutable Tailscale nomination. M90-U1
+  through M90-U10 transfer/defer—not pass or waive—into M91's composite UAT. The exact closing
+  candidate remains Tailscale-only at `http://100.94.63.83:18090/`; no GitHub Pages deployment or
+  public push was authorized or made. M44
+  completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval; M77 completes CAD curve controls, spatial elliptical-arc authoring and exact public verification; M78 completes exact CAD geometry variants, semantic recipe stages and atomic construction publication; M79 completes stable inference cycling, recovery and exact public verification; M80 completes native topology-preserving Profile Offset, native line-line Fillet publication and ordinary line-arc angle propagation; M81 completes behavior-preserving private architecture consolidation and allocator-neutral rejection; M83 completes accepted projectional design intent, F001-F010 hardening and exact public verification; M84 completes optional hybrid code/GUI authoring, F001-F012 hardening and exact public verification; M85 completes semantic-neutral retained-presentation performance hardening; M86 completes the accepted managed-dimension, Fillet hit-priority, Typed Panel terminal-parity and bounded-trace repairs with exact public verification; M87 completes cohesive managed controls, shared rendering, browser-free authoring and twelve-project dogfood; M88 completes the accepted workflow-led React workbench redesign and retires the obsolete Rust-DOM compatibility host. M1-M7 remain the frozen regression baseline.
 - **Closed design exploration:** M82 attempted a computed all-family Offset architecture but is not
   accepted product behavior. Exact rollback `fa54f30` restores the M81 tree; local and remote branch
   `archive/m82-certified-computed-offset-2026-08-21` at `d1e2613` preserves its kernel, feature
@@ -243,8 +251,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   U9/U10 at milestone level without claiming a separate row-by-row replay. No immutable artifact is
   frozen, and no public deployment or service retirement is performed; the mutable Tailscale
   listener remains development infrastructure.
-- **Open, not-yet-accepted target:** M88 is a presentation/workflow redesign over the unchanged M87
-  domain and authoring authority. `geosolve-demo-web` owns a presentation-only workspace shell with
+- **Completed target (accepted 2026-09-01):** M88 is a presentation/
+  workflow redesign over the unchanged M87 domain and authoring authority. `geosolve-demo-web` owns
+  a presentation-only workspace shell with
   central Design/Split/Code modes, resizable panes, compact app bar, primary tool rail, searchable
   start/open surface, collapsible Explorer and Inspector/Parameters/Problems tabs. Layout state may
   select presentation surfaces and sizes but cannot solve, expand, publish history, save semantic
@@ -265,9 +274,41 @@ construction/NURBS UAT and certified all-family visual profiles.
   release-mode UAT and WASM stack contract; one-MiB edit reproduction/regression and reduced stack
   use; removal of duplicate checkpoint restoration/validation and no-op post-open encoding; then a
   core full-row-rank redundancy shortcut only when numerical rank already equals all Hard rows.
-  Independent residual, domain and branch validation remains mandatory. `docs/M88_AUDIT.md`,
+  Independent residual, domain and branch validation remains mandatory. The native one-MiB stack
+  regression, actual-WASM Gridfinity contract, full-row-rank core regression, all-feature workspace
+  suite and optimized five-run budgets pass. Historical read-only Rust-DOM snapshot
+  `/tmp/geosolve-m88-uat.nmhcRj`, aggregate
+  `6c4af7e96e30687654d691b577954c22b051fb3ad37e9472c51e16c9c002a274`, remains preserved after its
+  transient listener disappeared.
+
+  React UAT resolved semantic-label M88-F001 and toolbar-hierarchy M88-F002, then M88-F003 exposed
+  an adapter lifecycle error: normal browser `pointerup -> lostpointercapture` canceled every staged
+  click-click geometry interaction even though the direct Rust bridge authoring owner committed it.
+  The viewport now retires exact pointer ownership synchronously before awaited release dispatch,
+  genuine cancel/loss cancels once, and the bridge routes cancellation cleanup so construction
+  paint clears and provisional Fillet/Profile Offset state restores without false Problems. Bridge
+  `19/19`, demo-web `391/391`, frontend `19/19` and real release-WASM Playwright `8/8` pass.
+  Immutable release-WASM snapshot `/tmp/geosolve-m88-react-uat.QkVU1k`, aggregate
+  `e44bd8c22ccb67e542a8c73b58f62ed8ab236ab728b2d1bc2ae1aff1895ac167`, is byte-verified at
+  `http://100.94.63.83:18088/` and remains preserved as F003 evidence.
+
+  M88-F004 makes canvas chrome a projection of retained capability. The bridge owns exact Finish
+  and history readiness; completion for computed tools requires preview/candidate identity; React
+  owns only contextual labels, disabled presentation and a fixed feedback overlay. New-curve role
+  and selected-curve role use distinct commands. Camera/first-Escape cancellation restores gesture
+  state without silently deactivating its authoring collector, one-shot preselection returns to
+  Select, and Code-only/dirty-draft/secondary-click routes no longer advertise or invoke unavailable
+  semantic work. Bridge `23/23`, demo-web `395/395`, frontend `26/26` and release-WASM Playwright
+  `10/10` pass. Snapshot `/tmp/geosolve-m88-react-uat.KGhA7s`, aggregate
+  `700ebae4aec13ce20ab8786b63254e2c5b6239204c38bdc6e9d35f11c4159071`, is exact-served at the
+  unchanged URL. The supervising user's milestone-level close decision accepts M88-U1 through
+  M88-U10 without claiming a separately logged row replay. The obsolete Rust-DOM browser host,
+  global installed callback registries and DOM-only dependencies/tests are retired from source;
+  React now reaches Rust only through an instance-scoped `WorkbenchHandle`/`WorkbenchBridge`.
+  The accepted F004 service remains live and no public deployment or service retirement is
+  inferred. `docs/M88_AUDIT.md`,
   `docs/M88_GOALS.md`, `docs/M88_IMPLEMENTATION.md`, `docs/M88_UAT.md` and
-  `docs/M88_HANDOVER.md` own the active contract.
+  `docs/M88_HANDOVER.md` own the closed contract.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -1308,11 +1349,15 @@ The frozen baseline is planar `Pose2` linkage kinematics. M17 migrated it to per
 
 ### `geosolve-demo-web`
 
-Is a separate, non-authoritative WASM workbench and compatibility/audit consumer whose
+Is a separate, non-authoritative WASM workbench and public audit/API consumer whose
 primary purpose is interactive sanity checking:
 
 - it uses public sketch document, session, command, history, serialization and audit APIs;
-- rendering, accessibility, browser event translation and browser `localStorage` exist only here;
+- React is the sole browser presentation host and owns rendering placement, accessibility, browser
+  event translation and guarded browser `localStorage`; it calls an instance-scoped
+  `WorkbenchHandle`/`WorkbenchBridge` rather than an installed Rust-DOM singleton;
+- the retired Rust-DOM installer, global callback registries, Trunk host and classic HTML/CSS assets
+  are not a compatibility fallback;
 - it contains no residual, curve, measurement, inference-commit or document-validation equations;
 - auto-constraint candidates remain uncommitted until the placement click explicitly confirms the
   currently displayed headless plan; candidate generation, wake/reference memory, ranking,
@@ -2226,3 +2271,305 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   and its endpoint refuses connections; the snapshot remains preserved. F011 PID `1485656` is
   retired and its snapshot remains historical rollback evidence. Combined source `ff2e142` is
   withdrawn. Pages is final M84 public-byte authority.
+
+## M89 executed, reversible managed source
+
+Status: **Superseded by M90's closed clean-break contract. M89-F004/F005 implementation, final
+provisional dirty-tree mechanical qualification and immutable F005 nomination completed, but its
+Compass Rose retest, targeted F004/F005 preflight and row-by-row human UAT were not run and are not
+retrospectively passed or waived.** F005 and M89-F003 are historical rather than current product
+candidates; M90 owns replacement product authority.
+ADR 0043 and the M89 goal, implementation and UAT documents own the exact candidate contract and
+evidence. M89 adds no solver equation, tolerance, branch inference or browser-owned acceptance
+authority.
+
+M89 makes managed `sketch.ts` one reversible authority rather than a parser-shaped seed plus
+GUI-owned exceptions. A closed-subset parser captures imports, attached comments, declaration
+names, groups, order, expressions and explicit suppression in versioned `ManagedSketchIrV2`; a
+canonical printer normalizes that IR back to source. Unsupported control flow, helpers, mutation,
+async, dynamic imports and ambient I/O reject before execution. `.patch.ts` remains the separately
+pinned liberal extension point and is not reversible managed source.
+
+Pinned compilation injects stable source-site IDs into supported SDK calls. Deterministic recorder
+execution emits `ExecutedSketchArtifactV2`: the complete declaration/result tree, generated patch
+members and value-consumer provenance. Durable edits use those injected IDs rather than stack
+traces; stacks/source maps are diagnostic only. Browser and pinned-Deno source hosts must emit the
+same normalized source, IR, artifact and digests. Canonical compiled projects continue to expand,
+solve, independently validate and render through pure Rust without either host.
+
+Every structured code, panel or completed canvas edit is a digest-bound two-phase transaction.
+Rust prepares the exact permitted mutation, a compiler host mutates IR/prints/executes the
+candidate, then Rust validates the ticket and semantic delta before cold materialization and
+independent native acceptance. Source, IR, artifact, scene and one outer history row publish
+together. Preview, cancellation, stale input, unsupported syntax, non-finite state and failed
+validation publish none of them. Code projects have no GUI-owned fallback.
+
+Newly drawn recipes become user-facing declaration closures under a visible `Canvas additions`
+group with a persisted non-reusing high-water name. Most closures contain one declaration. Profile
+Offset retains one explicit aggregate helper plus its operation root; closure ownership is admitted
+only from exact authenticated IR semantics. The helper remains selectable, editable and source-
+navigable, but cannot independently reorder, suppress or delete. Root reorder/delete operates on
+the complete closure, while an aggregate with another semantic consumer remains an independent
+root. Top-level declaration order is real source order; generated members nested in the declaration
+panel retain their owner; both top-level and generated suppression are explicit source/IR state. V2
+needs neither a terminal `$.outputs(...)` nor `p.editLens`: declarations materialize independently
+and executed/template provenance owns parameter fan-out.
+
+Geometry source projection is complete across the M78 25-variant catalog without embedding native
+transport details. Segment uses direct `$.geometry.line(...)`; an exactly proven one-native-curve
+Polyline uses direct `$.geometry.polyline(...)`; the remaining 23 variants use one compact
+lossless `$.geometry.recipe(...)`. That compact object contains semantic paths and authored data,
+not selectors/equations. Rust derives input slots, definition-field schemas, writable leaves and
+the complete result path/kind tree from the central `IntentNodeKind` descriptors and rejects any
+source declaration that differs. TypeScript provides parser/printer/recorder ergonomics and dynamic
+lexical result references, but it neither copies geometry equations nor becomes a second recipe
+schema authority. Transport-level `$.intent.recipe(...)` remains available for other explicitly
+authenticated non-geometry fallbacks; it is no longer the canvas-authored geometry surface.
+
+The persistent constraint catalog uses an equally explicit split. Of 35 persistent
+`ConstraintKind` variants, 33 cold-replay from standalone managed source. Horizontal and Vertical
+retain direct SDK builders; the other 31 use one descriptor-authenticated
+`$.constraint.recipe(...)` declaration whose canonical inputs, fields, writable values and exact
+result tree are re-derived by Rust. Transport-level `$.intent.recipe(...)` is not emitted for any
+of those 33 variants. `ExternalPointCoincident` and `ExternalLineCollinear` remain fail-closed:
+they remain compile-visible and schema-authenticated, but require separately supplied host
+snapshots. F004/F005 implement no standalone host-snapshot execution path, so they are gated rather
+than serialized as if that authority existed.
+
+Computed Fillet has a direct reversible source contract rather than a transport fallback. One
+canvas gesture emits one `$.computed.filletSet(...)` declaration with lexical native-span parents,
+exact parameter/winding/neighborhood/normal-side/retained-endpoint/periodic-anchor/endpoint-order/
+sweep state, radius, display name and explicit source-owned suppression. Cold materialization
+reconstructs the same computed owner and explicit branch/contact metadata. Selection resolves to
+the whole authenticated declaration; radius edits preserve selection; suppress/restore and delete/
+Undo reproduce exact source and accepted authority. A computed host arc cannot silently become a
+native parent, and non-lexical, wrong-kind or malformed state rejects before publication.
+
+F004/F005 add no Offset architecture. The previously implemented Profile Offset declaration
+closure and its helper ownership remain unchanged; no broader Offset family or source claim is
+introduced.
+
+Untouched managed-v1 projects and checked-in samples retain an isolated compatibility path in M89.
+The first structured source-aware edit upgrades only the active copy; unrepresentable persisted
+GUI/source hybrids reject entirely. ADR 0043 owns the complete boundary. M90 is planned to
+normalize the sample corpus before deleting legacy support; M89 neither rewrites bundled legacy
+bytes nor removes the v1 path.
+
+Final mechanical evidence is deliberately provisional dirty-tree evidence, not a clean-source
+claim. Exact gate
+`nix-shell shell.nix --run 'GEOSOLVE_ALLOW_DIRTY=1 ./scripts/release-gate.sh'` passes in the pinned
+shell with `wasm-bindgen-test-runner 0.2.121`; its final counts include sketch-code unit `114`,
+compact geometry `4/4`, constraint matrix `1/1`, direct Fillet `7/7`, editor insertion `19/19`,
+demo-web `358/358`, TypeScript runtime `28/28`, mutation `19/19`, Deno parity `2/2` and frontend
+`55/55`. The preceding ambient-shell WASM-parity `HARNESS_ERROR` was caused only by the runner
+being absent after reboot and is not a product defect.
+
+Immutable snapshot `/tmp/geosolve-m89-f005-uat.hzNuDxF0`, manifest
+`/tmp/geosolve-m89-f005-uat.hzNuDxF0.sha256` and aggregate
+`fb488ad2bf29e8897cf9811c002b748693e5d211bae4bb54c83ed060db5db668` preserve the historical M89
+F005 nomination. Its `16,333,537`-byte `assets/geosolve_demo_web_bg-52ybei8k.wasm` has SHA-256
+`3e6f515ff1e5de0f668c13e86c02d280c0dc085bbd89b314bf9ece6c82aae575`; staging and live ten-route
+ledgers are byte-identical at SHA-256
+`4de184eb1eb237f98997b70702567a2b110b40d96df5d0d9653f024ac5f23e8d`. The focused Fillet browser
+case passes `1/1` and the normal frozen product passes `15/15` on both endpoints. Unit
+`geosolve-m89-react-uat-current.service`, PID `1007459`, invocation
+`a3fea6dddb59438795e52c6a8fab136f`, was recorded serving only that snapshot at
+`http://100.94.63.83:18089/`; automated evidence accepts no human row.
+
+## M90 typed executed sketch clean break
+
+Status: **Closed by explicit scoped supervising-user approval on 2026-09-04. M90-F005/F006 repairs,
+collateral qualification, the complete dirty-tree release gate, optimized release-WASM build and
+immutable Tailscale nomination pass. M90-U1 through M90-U10 transfer/defer, without passing or
+waiver, into M91's composite UAT. The exact closing candidate remains Tailscale-only at
+`http://100.94.63.83:18090/`; no GitHub Pages deployment or public push was authorized or made.**
+`docs/M90_GOALS.md`, `docs/M90_IMPLEMENTATION.md` and `docs/M90_UAT.md` own the current contract.
+The M89 section above remains its historical compatibility-stage record and does not describe
+current managed-source authority.
+
+The historical pre-F001 pinned dirty-tree release gate exited `0`; its log has SHA-256
+`2dd3663430c730eea84303954598f3a0696868aa4d433f3e32836a42024b250b`. The unchanged 271-row
+milestone-neutral golden passes `--survey`, `--check` and `--require-clean`; this is unchanged oracle
+evidence, not clean-source qualification. The historical frozen release output is
+`/tmp/geosolve-m90-uat.vuI7sBKt`, with manifest `/tmp/geosolve-m90-uat.vuI7sBKt.sha256` and aggregate
+`b5bae1aca28787f026a11100c94e425d1c5e057ce3539170f4399b7cd8b05dc2`. Its `20,007,307`-byte
+`assets/geosolve_demo_web_bg-BAUG7n7P.wasm` has SHA-256
+`51fc04d4129dd73791afb20b4403efe1f4fb95af6d607037b2a95956865fe7f5`. Local and Tailscale HTTP
+ledgers matched at SHA-256 `17477e87e897b5ac080547df41b528bc16c252d4c67a4634ad21a384f4ccd29b`.
+Historical unit `geosolve-m90-uat-18090.service`, PID `2747435`, invocation
+`767e65048ece4573834acf8f580f87bc`, used the frozen snapshot as its working directory and served it
+at `http://100.94.63.83:18090/`. M90-F001 withdraws those bytes from continuing UAT while preserving
+all hashes and identities above as exact reproduction evidence. The unit is inactive/dead with no
+PID; the endpoint is now reused only by the separately identified replacement below. At that
+historical checkpoint no M90-UAT row had been accepted and the milestone remained open.
+
+M90 admits one managed directive, `"use geosolve sketch"`, and one compiler-envelope pair:
+`geosolve-managed-sketch-ir-v3` plus `geosolve-executed-sketch-artifact-v3`. Parsing owns lexical
+names, comments, order, groups, expressions and UTF-8 source spans. Instrumented execution owns
+declaration results and source-value consumer provenance. Stable source-site identities join those
+views, while Rust authenticates their complete source/IR/artifact envelope before materializing
+Intent. Stack traces remain diagnostic evidence and never choose an edit target.
+
+The public TypeScript surface consists only of named, typed builders under `geometry`,
+`constraint`, `dimension`, `operation`, `aggregate` and `computed`. Named argument objects expose
+semantic roles such as `start`, `control`, `firstControl`, `secondControl`, `end`, `first` and
+`second`. Public tuple-key input tables, generic recipe declarations, edit lenses, result manifests
+and operation-output transport payloads are removed. Patch modules remain separately compiled,
+pinned extension points; their private transport representation is not a public managed-language
+escape hatch and need not reverse into managed lexical IR.
+
+Every accepted canvas declaration returns to `sketch.ts` under a monotonic generated name. Value
+edits, insertion, reorder, suppression and deletion begin as digest-bound Rust-prepared mutations.
+A browser or pinned Deno host applies the candidate and emits a compiler receipt; Rust validates
+the permitted semantic delta, cold-materializes it, solves and independently validates it before
+source, IR, artifact, accepted scene and exactly one outer history row publish together. Stale,
+unsupported, non-finite or invalid candidates retain the complete previous accepted authority.
+There is no GUI-only fallback for a managed source project.
+
+An insertion's semantic closure includes generated SDK helpers. TypeScript recursively derives the
+closed generated unit set (`mm`, `rad`) from authenticated draft values and appends each missing
+binding once to the existing `@geosolve/sketch-code` named import that owns `sketch`. It preserves
+all existing import declarations and binding order. Rust independently derives the same expected
+imports before calculating candidate semantic authority, so receipt validation admits exactly this
+delta and rejects missing, extra, reordered or unrelated import edits. Unit-free insertion and all
+non-insertion mutations leave imports exact.
+
+Ordinary movement of an existing code-owned point is deliberately outside that compiler route. It
+is a persistent solver-instance edit: pointer preview and release stage the semantic point set into
+`CodeInteractionOverlay`, incrementally materialize from accepted continuation, validate terminal
+parity and synchronously publish the prepared project overlay with exactly one outer/native history
+action. Source, lexical IR, executed artifact and compiler identity remain unchanged; no managed
+ticket or browser compilation is admitted. Explicit source/scalar edits, declaration insertion,
+reorder, suppression, deletion and computed-Fillet radius edits retain the compiler transaction.
+
+M90-F001 confirms a code-workbench/Rust-bridge ownership regression in this boundary. Exact user
+reproduction is to open **Compass Rose**, drag a point and observe the entire canvas blocked by
+`pointer input is unavailable while a managed-source mutation is compiling`. Pointer-up wrongly
+converted the drag into `ManagedSketchMutation::SetValues`. Cold replay of the underconstrained
+sketch selected a different valid configuration from the native continuation accepted during
+preview; parity correctly rejected the mismatch, but the rejected ticket remained in
+`pending_managed_mutation` and the global bridge guard disabled all subsequent input. This is not a
+solver, rank/DOF, branch or equation defect.
+
+The implemented repair covers ordinary pointer-down/move/up and selected-reference detachment:
+finite independently valid accepted movement, persistent overlay publication, exact source/IR/
+artifact/compiler identity retention, exactly one native history action, no browser compiler
+request or pending managed mutation, and an immediately usable next pointer gesture. A failed or
+mismatched delegated terminal clears its semantic route and restores the exact accepted editor,
+selection, project, source, code-session, persistence and history authority. This changes no solver
+equation, rank/DOF rule, tolerance or explicit branch state.
+
+The five focused bridge/session commands pass `1/1` each; full demo-web `--lib` passes `282/282`,
+and sketch-code all-feature, affected multi-crate, frontend `56/56`, TypeScript runtime `31/31`
+plus types/managed/build, release-WASM two-drag Compass `1/1`, locked WASM parity/`actual_wasm`/
+check, format, diff and warnings-denied workspace Clippy pass. The generic golden survey is clean;
+two transiently failing scene rows pass exact rerun and the subsequent complete unchanged
+`--check`/`--require-clean` pass. The dirty monolithic release gate ended by harness termination at
+exit `143` and is not a pass.
+
+The historical pre-F002 provisional dirty-tree replacement is frozen read-only at
+`/tmp/geosolve-m90-uat.xk0AGnz0`, manifest `/tmp/geosolve-m90-uat.xk0AGnz0.sha256`, aggregate
+`030e9f4aa98690b8cd35cdbb51a29220674f1bfcfba310192afc467f5afc38a4`, with nine mode-`0444`
+files, two mode-`0555` directories and no symlinks. Its `19,958,913`-byte
+`assets/geosolve_demo_web_bg-B6mOdH7K.wasm` has SHA-256
+`9607cfd48f1ec23b2c29e120704277bbb70247bdbed6a67945c5cc64b7af8761`. All ten staging/live
+routes byte-match with correct MIME, no redirects/compression and ledger SHA-256
+`56a5aff7b23000e1b009f2eb479b9545fcfb17dbe5d1a4f9721f7c3951a761ae`; optimized release-WASM
+two-drag Compass passes `1/1` on both. Evidence is
+`/tmp/geosolve-m90-f001-replacement-freeze-evidence.UpMqFyrm`.
+`geosolve-m90-f001-replacement-uat-18090.service` historically served the snapshot with PID
+`3332035`, invocation `258e6d4da4b14661bd6d8e44856c64a5`, at
+`http://100.94.63.83:18090/` on `100.94.63.83`; M90-F002 retired the unit.
+
+This immutable publication is historical pre-F002 evidence, not a completed normal release gate or
+clean-source qualification. M90-F002 replaced quota-limited project persistence with serialized
+raw IndexedDB authority and froze `/tmp/geosolve-m90-uat.TN2NP9eF`; M90-F003 now withdraws those
+post-F002 bytes from continuing UAT as well.
+
+M90-F003 is owned jointly by the managed mutation printer and Rust prepared-mutation authority.
+From the exact empty coded starter, a two-click Center-Radius Circle produced `radius: mm(...)` but
+left the SDK import at `{ sketch }`, so parsing rejected the candidate as an unsupported managed
+value expression. The repair adds only the recursively required `mm`/`rad` helpers under the exact
+cross-language rule above. It does not hide the issue by preloading the empty starter. After the
+import compiled, cold materialization exposed a second contract mismatch: the reverse projector's
+optional `label` and `role` were not admitted by direct circle lowering. The lowerer now requires
+`center`/`radius`, admits only those two optional presentation fields, maps them to native display
+name/geometry role and rejects any other field.
+
+Exact TypeScript mutation, Rust receipt/native-lowering and retained-bridge regressions own the
+empty-starter candidate, helper idempotence and forgery rejection, one finite independently
+validated circle, one source/history action, Undo and immediate next-pointer availability; these
+focused checks pass. The equivalent optimized release-WASM browser flow passes against byte-
+verified staging and live bytes. Snapshot `/tmp/geosolve-m90-uat.yIPVNICT`, manifest
+`/tmp/geosolve-m90-uat.yIPVNICT.sha256`, aggregate
+`d31e311c4e0e69974690d299819df6a33b7ae13b7eff5d037406e602c033f33a` and historical Tailscale-only
+`geosolve-m90-f003-replacement-uat-18090.service` retain exact pre-F004 evidence. M90-F004
+withdrew those bytes from continuing UAT and retired the service; no human-UAT result was accepted.
+
+M90-F004 aligns generated names for simultaneously ready same-family declarations with the durable
+native-symbol allocation order used by cold materialization. This lets one Segment snapped to two
+circles publish its Segment, two Point-on-Curve relations and inferred Horizontal atomically without
+exchanging declaration/native ownership. Its post-F004 snapshot is historical because M90-F005
+superseded it.
+
+M90-F005 makes authored scalar units follow the owning Intent leaf rather than native storage alone:
+an angle-backed periodic contact `Parameter` remains dimensionless. Point and curve-control release
+then project the exact solver-accepted terminal onto the independently reconstructed candidate and
+certify that numerical continuation before publication. Undo and Redo use each target history
+position's authenticated accepted materialization, reconciling only candidate-owned allocator
+high-water. Continuation grants no source, declaration, operation, branch, history or success
+authority. Constraint-editor all-features passes with unit layer `439/439` plus every integration;
+demo-web passes `286/286`; frontend Vitest passes `74/74`; warnings-denied Clippy, format/diff, the
+unchanged 271-row golden, optimized release-WASM build and nine-file distribution validation pass.
+
+M90-F006 preserves authenticated presentation state across successful atomic `project.import`.
+Before repair, bridge replacement restored default host size/pixel ratio while the unchanged DOM box
+emitted no new `ResizeObserver` sample, leaving SVG letterboxing and pointer normalization in
+different spaces. Successful import now retains the live `host_size` and `pixel_ratio`; failed
+restore remains non-mutating. Exact regression
+`successful_project_import_retains_live_viewport_and_pointer_alignment` covers a non-default
+letterboxed viewport and semantic point hover. This changes no document, solver, branch, tolerance,
+history or persistence authority.
+
+The current immutable optimized snapshot `/tmp/geosolve-m90-uat.EtWyWQlt`, manifest
+`/tmp/geosolve-m90-uat.EtWyWQlt.sha256` and freeze evidence
+`/tmp/geosolve-m90-f006-freeze-evidence.HqyaA7Qp` have ordered aggregate
+`b3fd72b9ec98d318d7bfa7bf8c09d0fcbd3856ea0723d81e01e64945e301debe`. Its
+`19,990,463`-byte `assets/geosolve_demo_web_bg-Dc5MH04n.wasm` has SHA-256
+`bad16242c2ec0fa0c6c0ba6882428372c1bf0b7dd1a70235467b5febdfc80712`. Staging/live HTTP ledgers
+match at SHA-256 `41d11e1c56bad8dcc57edf229f0bfec20d8f5e602b3c385e5e68d54dd42c816a`, and the optimized
+release-WASM browser bundle passes `4/4` against each endpoint. Tailscale-only unit
+`geosolve-m90-f006-replacement-uat-18090.service`, PID `462021`, invocation
+`4a17e69e926446eba21439ac4dd6f4e6`, exact-serves that snapshot at
+`http://100.94.63.83:18090/`.
+
+The final full dirty-tree gate command
+`env GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
+ran from `23:20:45` through `23:47:22 AEST` on 2026-09-03 and exited `0` after `1,596,726 ms`.
+Its `573,421`-byte log `/tmp/geosolve-m90-f006-full-gate.hKSTh4/release-gate.log` has SHA-256
+`bda7f5f92f15a5f0a0cf26ed93cb514943d9a9d1ad49bf0ba0e148c9239b205d`. It preserves the reviewed
+271-row golden unchanged, passes the release-only 256-moving-body performance row in `137.82 s`,
+frontend Vitest `74/74`, and optimized nine-file distribution validation. This is complete dirty-
+tree qualification, not clean-source qualification.
+
+The supervising user explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
+remain unexecuted and transfer/defer—not pass or waive—into M91's composite UAT. The F006 snapshot
+and service remain Tailscale-only closing publication authority; no GitHub Pages deployment or public
+push was authorized or made. Automated qualification accepts no human row. M90 is closed; `PLAN.md`
+owns the complete evidence and M91 intake ledger.
+
+All twelve bundled samples are canonical V3 projects. There is no managed-v1/v2 parser, upgrade or
+compatibility route. The replay inventory covers all 25 geometry variants, 33 standalone
+constraints, all eight dimensions, every ordinary operation, both aggregates and computed
+`FilletSet`. `ExternalPointCoincident` and `ExternalLineCollinear` remain explicitly input-gated;
+M90 does not fabricate standalone host authority for them. Profile Offset may retain its explicit
+aggregate-helper/root closure, and custom patches remain the non-reversible extension boundary.
+
+Compiled projects can be inspected, solved and rendered through pure Rust without a browser,
+JavaScript runtime or web server. Raw-source headless editing is deliberately a three-stage
+Rust-prepare → pinned-Deno-mutate → Rust-resolve workflow using the same mutation receipt as the
+browser. Existing output directories are never overwritten. TypeScript records declarations but
+does not own equations, native materialization, convergence, branch/domain validation, accepted
+scene publication or history. Every success-like result still requires finite native state,
+Current active computed features and independent normalized Hard-residual validation at most
+`1e-9`.
