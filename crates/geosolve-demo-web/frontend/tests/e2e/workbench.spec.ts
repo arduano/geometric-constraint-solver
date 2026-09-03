@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
 const TYPED_PANEL_TITLE = "Typed panel · keyed Fillets";
-const COMPASS_ROSE_TITLE = "Compass rose · generated semantic lattice";
+const COMPASS_ROSE_TITLE = "Compass rose · generated compass pattern";
 
 function auditRuntime(page: Page) {
   const errors: string[] = [];

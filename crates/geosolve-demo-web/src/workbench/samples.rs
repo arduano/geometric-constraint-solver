@@ -4376,7 +4376,7 @@ mod tests {
     }
 
     #[test]
-    fn every_native_reference_sample_projects_to_deterministic_managed_source() {
+    fn every_direct_reference_matches_its_checked_in_managed_source_authority() {
         for sample in SampleId::ALL {
             let first = exported_source(sample);
             let second = exported_source(sample);
@@ -4388,6 +4388,28 @@ mod tests {
             );
             assert!(first.starts_with("\"use geosolve sketch\";"));
             assert!(first.ends_with("  return {};\n});\n"));
+            let bundled = geosolve_sketch_code::bundled_code_projects()
+                .into_iter()
+                .find(|project| project.key() == sample.key())
+                .unwrap_or_else(|| panic!("{} managed catalog entry", sample.key()));
+            let project = bundled.project();
+            assert_eq!(
+                project.managed.source,
+                first,
+                "{} checked-in source must remain the exact deterministic projection of its direct reference fixture",
+                sample.key(),
+            );
+            assert_eq!(
+                project
+                    .managed
+                    .compiled
+                    .as_deref()
+                    .expect("bundled source has executed compiler authority")
+                    .normalized_source,
+                first,
+                "{} compiler envelope must authenticate those exact projected bytes",
+                sample.key(),
+            );
         }
     }
 

@@ -6776,6 +6776,274 @@ export default sketch(($) => {
         );
     }
 
+    fn accepted_point_position(
+        bridge: &WorkbenchBridge,
+        point: geosolve_sketch::DesignPointId,
+    ) -> [f64; 2] {
+        bridge
+            .editor()
+            .coordinator()
+            .accepted_materialization()
+            .expect("managed sample retains accepted native authority")
+            .session
+            .accepted_state_for_current_input()
+            .expect("managed sample acceptance belongs to current input")
+            .document()
+            .point(point)
+            .expect("managed sample point remains in accepted document")
+            .position
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one reusable managed-sample regression keeps terminal movement, source isolation, persistence, validation, and Undo adjacent"
+    )]
+    fn require_managed_sample_point_drag(
+        sample: &str,
+        initial: [f64; 2],
+        screen_delta: [f64; 2],
+        pointer_id: u64,
+    ) {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 1,
+                    "command": "sample.open",
+                    "payload": { "key": sample },
+                })
+                .to_string(),
+            )
+            .unwrap_or_else(|error| panic!("{sample} opens through managed authority: {error}"));
+        let opened = bridge
+            .current_scene()
+            .unwrap_or_else(|| panic!("{sample} accepted scene"));
+        let point = opened
+            .points
+            .iter()
+            .find(|point| {
+                point
+                    .model_position
+                    .into_iter()
+                    .zip(initial)
+                    .all(|(actual, expected)| (actual - expected).abs() <= 1.0e-9)
+            })
+            .unwrap_or_else(|| panic!("{sample} draggable point at {initial:?}"));
+        let point_id = point.id;
+        let start = point.screen_position;
+        let target = ScreenPoint {
+            x: start.x + screen_delta[0],
+            y: start.y + screen_delta[1],
+        };
+        let origin = accepted_point_position(&bridge, point_id);
+        let project_before = accepted_compiled_project(&bridge);
+        let source_before = project_before.managed.source.clone();
+        let compiler_before = project_before
+            .managed
+            .compiled
+            .clone()
+            .expect("managed sample compiler authority");
+        let artifacts_before = project_before.artifacts.clone();
+        let revision_before = bridge.revision;
+        let code_revision_before = bridge
+            .code_project
+            .as_ref()
+            .expect("managed sample code authority")
+            .code_session_identity()
+            .revision;
+        assert!(
+            !bridge.code_project.as_ref().unwrap().can_undo(),
+            "{sample}"
+        );
+
+        bridge
+            .pointer_json(&pointer_request("down", pointer_id, start, 1))
+            .unwrap_or_else(|error| panic!("{sample} point press: {error}"));
+        assert_eq!(
+            bridge.captured_pointer,
+            Some(pointer_id),
+            "{sample} point press owns pointer capture",
+        );
+        assert_eq!(
+            bridge.editor().editor().selection(),
+            &[SelectionItem::Point(point_id)],
+            "{sample} point marker wins the authoring hit",
+        );
+        bridge
+            .pointer_json(&pointer_request("move", pointer_id, target, 1))
+            .unwrap_or_else(|error| panic!("{sample} point preview: {error}"));
+        let preview = bridge
+            .editor()
+            .coordinator()
+            .presentation_session()
+            .and_then(|session| session.accepted_state_for_current_input())
+            .and_then(|accepted| accepted.document().point(point_id))
+            .unwrap_or_else(|| panic!("{sample} accepted point preview"))
+            .position;
+        assert!(preview.into_iter().all(f64::is_finite), "{sample} preview");
+        assert_ne!(
+            preview.map(f64::to_bits),
+            origin.map(f64::to_bits),
+            "{sample} drag must move the requested point",
+        );
+
+        bridge
+            .pointer_json(&pointer_request("up", pointer_id, target, 0))
+            .unwrap_or_else(|error| panic!("{sample} point release: {error}"));
+        assert!(
+            bridge.last_error.is_none(),
+            "{sample}: {:?}",
+            bridge.last_error
+        );
+        assert!(
+            bridge.pending_managed_mutation.is_none(),
+            "{sample} solver-instance drag must not request source compilation",
+        );
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert!(
+            snapshot.get("pendingManagedMutation").is_none(),
+            "{sample} must publish no compilation ticket",
+        );
+        assert_eq!(bridge.revision, revision_before + 1, "{sample} revision");
+        assert_eq!(
+            bridge
+                .code_project
+                .as_ref()
+                .unwrap()
+                .code_session_identity()
+                .revision,
+            code_revision_before + 1,
+            "{sample} publishes one terminal code-session revision",
+        );
+        assert!(
+            bridge.code_project.as_ref().unwrap().can_undo(),
+            "{sample} publishes one undoable terminal",
+        );
+        assert_eq!(
+            accepted_point_position(&bridge, point_id).map(f64::to_bits),
+            preview.map(f64::to_bits),
+            "{sample} publication retains its exact accepted terminal",
+        );
+
+        let project_after = accepted_compiled_project(&bridge);
+        assert_eq!(
+            project_after.managed.source, source_before,
+            "{sample} source"
+        );
+        assert_eq!(
+            project_after.managed.compiled.as_deref(),
+            Some(compiler_before.as_ref()),
+            "{sample} IR and executed compiler artifact",
+        );
+        assert_eq!(
+            project_after.artifacts, artifacts_before,
+            "{sample} artifacts"
+        );
+        assert_eq!(project_after, project_before, "{sample} project authority");
+        assert!(
+            !bridge
+                .code_project
+                .as_ref()
+                .expect("managed sample code workbench")
+                .managed_test_overlay_is_empty(),
+            "{sample} terminal is retained as instance placement",
+        );
+
+        let accepted = bridge
+            .editor()
+            .coordinator()
+            .accepted_materialization()
+            .expect("managed sample terminal authority");
+        assert!(accepted.validation.hard_residuals_validated, "{sample}");
+        assert!(accepted.validation.all_active_features_current, "{sample}");
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9),
+            "{sample} independently validated hard residual",
+        );
+        let terminal = accepted
+            .session
+            .accepted_state_for_current_input()
+            .expect("managed sample accepted terminal")
+            .document();
+        assert!(
+            terminal
+                .points()
+                .iter()
+                .flat_map(|point| point.position)
+                .chain(terminal.scalars().iter().map(|scalar| scalar.value))
+                .all(f64::is_finite),
+            "{sample} terminal document is finite",
+        );
+
+        let persistence: serde_json::Value =
+            serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
+        let request = serde_json::json!({
+            "version": 1,
+            "persistedProject": persistence["contents"]
+                .as_str()
+                .expect("managed sample persistence contents"),
+        });
+        let restored = WorkbenchBridge::construct_json(&request.to_string())
+            .unwrap_or_else(|error| panic!("{sample} terminal persistence restores: {error}"));
+        assert_eq!(
+            accepted_point_position(&restored, point_id).map(f64::to_bits),
+            preview.map(f64::to_bits),
+            "{sample} persisted terminal position",
+        );
+        assert_eq!(
+            accepted_compiled_project(&restored),
+            project_before,
+            "{sample} persistence retains source/IR/artifact authority",
+        );
+        assert!(restored.pending_managed_mutation.is_none(), "{sample}");
+
+        bridge
+            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .unwrap_or_else(|error| panic!("{sample} terminal Undo: {error}"));
+        assert_eq!(
+            accepted_point_position(&bridge, point_id).map(f64::to_bits),
+            origin.map(f64::to_bits),
+            "{sample} Undo restores the exact origin",
+        );
+        assert_eq!(
+            accepted_compiled_project(&bridge),
+            project_before,
+            "{sample}"
+        );
+        assert!(
+            bridge
+                .code_project
+                .as_ref()
+                .expect("managed sample code workbench after Undo")
+                .managed_test_overlay_is_empty(),
+            "{sample} Undo removes the instance placement",
+        );
+    }
+
+    #[test]
+    fn converted_scotch_yoke_drag_uses_managed_authority_without_compilation() {
+        require_managed_sample_point_drag("scotch-yoke", [3.0, 4.0], [20.0, -14.0], 91_101);
+    }
+
+    #[test]
+    fn converted_scissor_jack_drag_uses_managed_authority_without_compilation() {
+        require_managed_sample_point_drag("scissor-jack", [4.0, 0.0], [-22.0, 0.0], 91_102);
+    }
+
+    #[test]
+    fn converted_five_stage_tower_drag_uses_managed_authority_without_compilation() {
+        require_managed_sample_point_drag(
+            "five-stage-scissor-tower",
+            [4.0, 0.0],
+            [-5.0, 0.0],
+            91_103,
+        );
+    }
+
     #[test]
     #[allow(
         clippy::too_many_lines,

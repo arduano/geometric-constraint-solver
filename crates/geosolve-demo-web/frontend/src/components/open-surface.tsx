@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useMemo, useRef, useState } from "react";
 import { FileCode2, FilePlus2, FolderOpen, Search } from "lucide-react";
-import { cn } from "../lib/cn";
 import { samples, type SampleEntry } from "../lib/sample-catalog";
 
 export type { SampleEntry } from "../lib/sample-catalog";
@@ -20,7 +19,7 @@ export function OpenSurface({ recents, onOpen, onNewSketch, onNewCode, onImport,
   const searchRef = useRef<HTMLInputElement>(null);
   const filtered = useMemo(() => {
     const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    return samples.filter((sample) => terms.every((term) => `${sample.key} ${sample.title} ${sample.group} ${sample.kind}`.toLowerCase().includes(term)));
+    return samples.filter((sample) => terms.every((term) => `${sample.key} ${sample.title} ${sample.group}`.toLowerCase().includes(term)));
   }, [query]);
   const grouped = filtered.reduce<Record<string, SampleEntry[]>>((groups, sample) => {
     (groups[sample.group] ??= []).push(sample);
@@ -65,7 +64,7 @@ export function OpenSurface({ recents, onOpen, onNewSketch, onNewCode, onImport,
 }
 
 function SampleButton({ sample, onOpen }: { sample: SampleEntry; onOpen: (sample: SampleEntry) => void }) {
-  return <button onClick={() => onOpen(sample)} className="group rounded-md border border-transparent px-3 py-2 text-left outline-none hover:border-border hover:bg-surface focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent"><span className="block text-sm text-foreground">{sample.title}</span><span className={cn("mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase", sample.kind === "code" ? "bg-amber-400/15 text-accent" : "bg-sky-400/10 text-sky-300")}>{sample.kind}</span></button>;
+  return <button onClick={() => onOpen(sample)} className="group rounded-md border border-transparent px-3 py-2 text-left outline-none hover:border-border hover:bg-surface focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent"><span className="block text-sm text-foreground">{sample.title}</span></button>;
 }
 
 function QuickStart({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {

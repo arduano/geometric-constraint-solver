@@ -61,4 +61,4 @@ for (const entry of [...commands.modify, ...commands.context, ...commands.canvas
   const keyFound = actionSource.includes(`"${entry.id}"`) || manifestSource.includes(`"${entry.id}"`);
   if (!keyFound || !(manifestSource.includes(`"${entry.label}"`) || actionSource.includes(`"${entry.label}"`))) throw new Error(`feature/display command drift: ${entry.id}`);
 }
-console.log("frontend manifests match Rust authority: 37 code-defined samples + complete primary command inventory");
+console.log("frontend manifests match Rust authority: 37 source-authoritative samples + complete primary command inventory");

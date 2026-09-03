@@ -47,6 +47,25 @@ impl CodeProjectDemoId {
         }
     }
 
+    /// User-facing catalog category based on what the sample demonstrates,
+    /// independent of whether its implementation uses a reusable module.
+    #[must_use]
+    pub const fn semantic_group(self) -> &'static str {
+        match self {
+            Self::RoundedPolyline
+            | Self::AdaptiveLanterns
+            | Self::CompassRose
+            | Self::NeonManifold => "Patterns & generated geometry",
+            Self::SuspensionBridge | Self::BracedFrame => "Structures",
+            Self::TypedPanel
+            | Self::MountingPlate
+            | Self::PcWaterManifold
+            | Self::RoboticRoutingBoard
+            | Self::CncJoineryFitCoupon
+            | Self::GridfinityBinSection => "Fabrication & products",
+        }
+    }
+
     /// Concise user-facing explanation of the architectural behavior this
     /// demonstration exercises.
     #[must_use]
@@ -59,7 +78,7 @@ impl CodeProjectDemoId {
                 "Named rectangle outputs feed a type-safe mapped record of selected Fillets."
             }
             Self::BracedFrame => {
-                "Direct geometry feeds a reusable cross-brace and an ordinary native relation."
+                "Frame geometry feeds a reusable cross-brace and an ordinary horizontal relation."
             }
             Self::MountingPlate => {
                 "One pinned helper expands a rounded profile and stable keyed mounting holes."
@@ -68,19 +87,19 @@ impl CodeProjectDemoId {
                 "One changing Polyline drives keyed bulbs and corner Fillets through two derived collections."
             }
             Self::SuspensionBridge => {
-                "A constrained native deck and towers feed a reusable typed cable-and-stay module."
+                "A constrained deck and towers feed a reusable cable-and-stay layout."
             }
             Self::CompassRose => {
-                "Four editable native spokes drive a generated diamond ring, keyed markers and ordinary axis relations."
+                "Four editable spokes drive a generated diamond ring, keyed markers and axis relations."
             }
             Self::NeonManifold => {
-                "Lexical native spans, ordinary axis relations and explicit multi-corner Fillet branches coexist in managed code."
+                "Profile spans, axis relations and explicit multi-corner Fillet branches form a routed manifold."
             }
             Self::PcWaterManifold => {
-                "A fully constrained acrylic distro plate combines managed mechanical dimensions with adaptive AI-authored water-channel patches."
+                "A fully constrained acrylic distro plate combines mechanical dimensions with adaptive water-channel patterns."
             }
             Self::RoboticRoutingBoard => {
-                "Eight keyed cable routes dogfood shared/local source controls, adaptive clips and Fillets, dense rendering, and one movable service loop."
+                "Eight keyed cable routes combine shared/local controls, adaptive clips and Fillets, dense rendering, and one movable service loop."
             }
             Self::CncJoineryFitCoupon => {
                 "Loose, nominal and press-fit router coupons compose constrained mortises, shared cutter reliefs and selected handling Fillets."
@@ -321,7 +340,7 @@ macro_rules! managed_sample {
 #[must_use]
 #[allow(
     clippy::too_many_lines,
-    reason = "one closed source-authoritative sample inventory is easier to audit for omissions"
+    reason = "the closed 37-sample catalog is intentionally reviewed in one stable user-visible order"
 )]
 pub fn bundled_code_projects() -> Vec<BundledCodeProject> {
     let mut projects = vec![
@@ -575,7 +594,7 @@ fn suspension_bridge_demo() -> CodeProjectDemo {
     .collect();
     CodeProjectDemo {
         id: CodeProjectDemoId::SuspensionBridge,
-        title: "Suspension bridge · typed structural graph",
+        title: "Suspension bridge · cable-and-stay layout",
         managed_source: SOURCE,
         compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/bridge-cables.patch.ts", PATCH)]),
@@ -609,7 +628,7 @@ fn compass_rose_demo() -> CodeProjectDemo {
     );
     CodeProjectDemo {
         id: CodeProjectDemoId::CompassRose,
-        title: "Compass rose · generated semantic lattice",
+        title: "Compass rose · generated compass pattern",
         managed_source: SOURCE,
         compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/compass-core.patch.ts", CORE_PATCH)]),
@@ -639,7 +658,7 @@ fn neon_manifold_demo() -> CodeProjectDemo {
     const COMPILED: &str = include_str!("../assets/demos/neon-manifold.compiled.json");
     CodeProjectDemo {
         id: CodeProjectDemoId::NeonManifold,
-        title: "Neon manifold · explicit native bends",
+        title: "Neon manifold · explicit bend routing",
         managed_source: SOURCE,
         compiled_source: COMPILED,
         custom_files: BTreeMap::new(),
@@ -665,7 +684,7 @@ fn pc_water_manifold_demo() -> CodeProjectDemo {
     const COMPILED: &str = include_str!("../assets/demos/pc-water-manifold.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::PcWaterManifold,
-        title: "PC water manifold · fully constrained dogfood",
+        title: "PC water manifold · constrained channel layout",
         managed_source: SOURCE,
         compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/water-channel.patch.ts", PATCH)]),
@@ -705,7 +724,7 @@ fn robotic_routing_board_demo() -> CodeProjectDemo {
     const COMPILED: &str = include_str!("../assets/demos/robotic-routing-board.compiled.json");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::RoboticRoutingBoard,
-        title: "Robotic cable-harness routing board · adaptive dogfood",
+        title: "Robotic cable-harness routing board · adaptive cable routes",
         managed_source: SOURCE,
         compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/harness-route.patch.ts", PATCH)]),
@@ -839,7 +858,7 @@ fn braced_frame_demo() -> CodeProjectDemo {
     const COMPILED: &str = include_str!("../assets/demos/braced-frame.compiled.json");
     CodeProjectDemo {
         id: CodeProjectDemoId::BracedFrame,
-        title: "Braced frame · GUI → code → GUI",
+        title: "Braced frame · reusable cross-bracing",
         managed_source: SOURCE,
         compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/cross-brace.patch.ts", PATCH)]),
@@ -871,7 +890,7 @@ fn mounting_plate_demo() -> CodeProjectDemo {
             .collect();
     CodeProjectDemo {
         id: CodeProjectDemoId::MountingPlate,
-        title: "Mounting plate · reusable AI-authored module",
+        title: "Mounting plate · reusable hole pattern",
         managed_source: SOURCE,
         compiled_source: COMPILED,
         custom_files: BTreeMap::from([("patches/mounting-plate.patch.ts", PATCH)]),
@@ -1047,5 +1066,38 @@ mod tests {
         let json = project.to_canonical_json().unwrap();
         let after = CodeProject::from_json(&json).unwrap();
         assert_eq!(after.custom_files, before);
+    }
+
+    #[test]
+    fn fillet_samples_describe_their_actual_feature_ownership() {
+        let projects = bundled_code_projects();
+        let workshop = projects
+            .iter()
+            .find(|project| project.key() == "fillet-workshop")
+            .expect("Fillet Workshop sample");
+        assert!(workshop.summary().contains("input constructions"));
+        assert!(
+            !workshop.project().managed.source.contains("$.computed."),
+            "Fillet Workshop contains source constructions, not an invented computed feature",
+        );
+
+        let contextual = projects
+            .iter()
+            .find(|project| project.key() == "contextual-constraint-annotations")
+            .expect("Contextual Annotations sample")
+            .project();
+        assert!(
+            contextual
+                .managed
+                .source
+                .contains("$.constraint.lineLineFillet("),
+            "the document-native Fillet association belongs to Contextual Annotations",
+        );
+        assert!(
+            bundled_code_project_demos()
+                .iter()
+                .any(|demo| demo.managed_source.contains("$.computed.filletSet(")),
+            "computed Fillet examples remain in the curated parametric projects",
+        );
     }
 }

@@ -4381,23 +4381,36 @@ fn canvas_declaration_label_projections(
 }
 
 pub(crate) fn sample_group_markup(selected: Option<&str>) -> String {
-    let mut markup = String::from(
-        "<li class=\"wb-sample-branch\"><button type=\"button\" data-sample-group-trigger aria-haspopup=\"menu\" aria-expanded=\"false\">Code &amp; reusable patches<span aria-hidden=\"true\">›</span></button><ul class=\"wb-sample-flyout\">",
-    );
-    for demo in bundled_code_project_demos() {
+    let demos = bundled_code_project_demos();
+    let mut markup = String::new();
+    for group in [
+        "Patterns & generated geometry",
+        "Structures",
+        "Fabrication & products",
+    ] {
         let _ = write!(
             markup,
-            "<li><button type=\"button\" data-code-sample-id=\"{}\"{}><span class=\"wb-code-sample-mark\" aria-hidden=\"true\">TS</span>{}</button></li>",
-            demo.id.key(),
-            if selected == Some(demo.id.key()) {
-                " aria-current=\"true\""
-            } else {
-                ""
-            },
-            escape_html(demo.title),
+            "<li class=\"wb-sample-branch\"><button type=\"button\" data-sample-group-trigger aria-haspopup=\"menu\" aria-expanded=\"false\">{}<span aria-hidden=\"true\">›</span></button><ul class=\"wb-sample-flyout\">",
+            escape_html(group),
         );
+        for demo in demos
+            .iter()
+            .filter(|demo| demo.id.semantic_group() == group)
+        {
+            let _ = write!(
+                markup,
+                "<li><button type=\"button\" data-code-sample-id=\"{}\"{}>{}</button></li>",
+                demo.id.key(),
+                if selected == Some(demo.id.key()) {
+                    " aria-current=\"true\""
+                } else {
+                    ""
+                },
+                escape_html(demo.title),
+            );
+        }
+        markup.push_str("</ul></li>");
     }
-    markup.push_str("</ul></li>");
     markup
 }
 
@@ -8054,7 +8067,51 @@ mod tests {
         (Box::new(workbench), editor)
     }
 
+    const EXPECTED_SAMPLE_DOF: [(&str, usize, usize); 37] = [
+        ("drafting-compass", 1, 1),
+        ("bezier-continuity-bridge", 3, 1),
+        ("twin-roller-cam", 2, 2),
+        ("tangent-orbit", 1, 1),
+        ("elliptic-trammel", 1, 1),
+        ("scotch-yoke", 1, 1),
+        ("rotating-constraint-square", 1, 1),
+        ("scissor-jack", 1, 1),
+        ("five-stage-scissor-tower", 1, 1),
+        ("peaucellier-inversor", 1, 1),
+        ("four-bar-coupler", 1, 1),
+        ("pantograph-linkage", 2, 2),
+        ("three-link-drawing-arm", 3, 3),
+        ("constraint-dimension-sampler", 28, 28),
+        ("auto-constraint-drafting", 12, 12),
+        ("retained-drafting-relations", 16, 16),
+        ("tangent-radial-normal", 6, 6),
+        ("contact-branch-specimen", 0, 0),
+        ("angle-dimension-annotations", 1, 1),
+        ("contextual-constraint-annotations", 112, 112),
+        ("dense-constraint-junction", 1, 1),
+        ("construction-reference-geometry", 0, 0),
+        ("curve-family-gallery", 172, 164),
+        ("periodic-nurbs-specimen", 13, 12),
+        ("fillet-workshop", 16, 16),
+        ("rounded-polyline", 12, 12),
+        ("typed-panel", 8, 8),
+        ("braced-frame", 4, 4),
+        ("mounting-plate", 16, 16),
+        ("adaptive-lanterns", 21, 21),
+        ("suspension-bridge", 7, 7),
+        ("compass-rose", 10, 10),
+        ("neon-manifold", 6, 6),
+        ("pc-water-manifold", 0, 0),
+        ("robotic-routing-board", 228, 228),
+        ("cnc-joinery-fit-coupon", 16, 16),
+        ("gridfinity-1x1x3-section", 0, 0),
+    ];
+
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one reviewed sample matrix keeps source, compiler, artifact, solve, DOF, and finite-scene parity adjacent"
+    )]
     fn all_thirty_seven_samples_open_with_nonempty_independently_validated_native_canvases() {
         let demos = bundled_code_projects();
         assert_eq!(
@@ -8062,12 +8119,85 @@ mod tests {
             37,
             "every user-visible sample must have source and executed code authority"
         );
-        for demo in demos {
+        for (demo, (expected_key, expected_raw_dof, expected_effective_dof)) in
+            demos.into_iter().zip(EXPECTED_SAMPLE_DOF)
+        {
+            assert_eq!(
+                demo.key(),
+                expected_key,
+                "the reviewed DOF ledger is ordered"
+            );
+            let project = demo.project();
+            let source_before = project.managed.source.clone();
+            let compiled_before = project
+                .managed
+                .compiled
+                .clone()
+                .expect("bundled sample owns compiler authority");
+            let artifacts_before = project.artifacts.clone();
+            let canonical = project
+                .to_canonical_json()
+                .unwrap_or_else(|error| panic!("{} canonical project: {error}", demo.key()));
+            let restored = CodeProject::from_json(&canonical)
+                .unwrap_or_else(|error| panic!("{} canonical round-trip: {error}", demo.key()));
+            assert_eq!(
+                restored.managed.source,
+                source_before,
+                "{} source",
+                demo.key()
+            );
+            assert_eq!(
+                restored.managed.compiled.as_deref(),
+                Some(compiled_before.as_ref()),
+                "{} executed IR and compiler artifact",
+                demo.key(),
+            );
+            assert_eq!(
+                restored.artifacts,
+                artifacts_before,
+                "{} patch artifacts",
+                demo.key()
+            );
+            assert_eq!(
+                restored.to_canonical_json().unwrap(),
+                canonical,
+                "{} canonical bytes",
+                demo.key(),
+            );
+
             let (workbench, editor) = open_with_editor(demo.key());
             let accepted = editor
                 .coordinator()
                 .accepted_materialization()
                 .expect("code sample owns accepted native authority");
+            let accepted_state = accepted
+                .session
+                .accepted_state_for_current_input()
+                .expect("sample acceptance belongs to current input");
+            let diagnostics = accepted_state.diagnostics();
+            assert_eq!(
+                diagnostics
+                    .rank
+                    .and_then(|rank| rank.numerical_right_nullity),
+                Some(expected_raw_dof),
+                "{} raw numerical right-nullity",
+                demo.key(),
+            );
+            let mobility = diagnostics
+                .mobility
+                .unwrap_or_else(|| panic!("{} mobility diagnostic", demo.key()));
+            assert_eq!(
+                mobility.equality_degrees_of_freedom,
+                Some(expected_raw_dof),
+                "{} equality DOF agrees with its numerical right-nullity",
+                demo.key(),
+            );
+            assert_eq!(
+                mobility.bidirectional_bounded_degrees_of_freedom,
+                Some(expected_effective_dof),
+                "{} effective bidirectional mobility",
+                demo.key(),
+            );
             let design = accepted.session.design_document();
             assert!(
                 !design.points().is_empty() && !design.curves().is_empty(),
@@ -8093,9 +8223,19 @@ mod tests {
     }
 
     #[test]
-    fn menu_owns_one_distinct_code_group_and_twelve_genuine_project_leaves() {
+    fn reusable_projects_use_semantic_groups_without_implementation_badges() {
         let markup = sample_group_markup(None);
-        assert!(markup.contains("Code &amp; reusable patches"));
+        assert!(!markup.contains("Code &amp; reusable patches"));
+        assert!(!markup.contains("Code projects"));
+        assert!(!markup.contains("wb-code-sample-mark"));
+        for group in [
+            "Patterns &amp; generated geometry",
+            "Structures",
+            "Fabrication &amp; products",
+        ] {
+            assert!(markup.contains(group), "missing semantic group {group}");
+        }
+        assert_eq!(markup.matches("data-sample-group-trigger").count(), 3);
         let demos = bundled_code_project_demos();
         assert_eq!(
             demos.len(),

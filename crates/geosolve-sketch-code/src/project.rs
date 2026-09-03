@@ -282,7 +282,7 @@ fn valid_patch_path(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::bundled_code_project_demos;
+    use crate::{bundled_code_project_demos, bundled_code_projects};
 
     use super::*;
 
@@ -300,17 +300,38 @@ mod tests {
     }
 
     #[test]
-    fn all_bundled_projects_round_trip_with_custom_source_byte_identity() {
-        for demo in bundled_code_project_demos() {
-            let project = demo.project();
+    fn all_thirty_seven_bundled_projects_round_trip_source_ir_and_artifacts() {
+        let bundled = bundled_code_projects();
+        assert_eq!(bundled.len(), 37);
+        for sample in bundled {
+            let project = sample.project();
+            let source_before = project.managed.source.clone();
+            let compiled_before = project
+                .managed
+                .compiled
+                .clone()
+                .expect("bundled project owns executed compiler authority");
+            let custom_before = project.custom_files.clone();
+            let artifacts_before = project.artifacts.clone();
             project.validate().unwrap();
             let json = project.to_canonical_json().unwrap();
             let restored = CodeProject::from_json(&json).unwrap();
-            assert_eq!(restored, project);
-            assert_eq!(restored.to_canonical_json().unwrap(), json);
-            for (path, source) in demo.custom_files {
-                assert_eq!(restored.custom_files[path].contents, source);
-            }
+            assert_eq!(restored.managed.source, source_before, "{}", sample.key());
+            assert_eq!(
+                restored.managed.compiled.as_deref(),
+                Some(compiled_before.as_ref()),
+                "{} IR and executed compiler artifact",
+                sample.key(),
+            );
+            assert_eq!(restored.custom_files, custom_before, "{}", sample.key());
+            assert_eq!(restored.artifacts, artifacts_before, "{}", sample.key());
+            assert_eq!(restored, project, "{}", sample.key());
+            assert_eq!(
+                restored.to_canonical_json().unwrap(),
+                json,
+                "{} canonical bytes",
+                sample.key(),
+            );
         }
     }
 

@@ -1476,7 +1476,7 @@ pub(crate) fn sample_manifest() -> Vec<SampleManifestEntry> {
                 key: definition.id.key(),
                 title: definition.title,
                 group: group.title,
-                summary: "Editable typed code-defined sketch sample",
+                summary: "Editable parametric sketch sample",
                 kind: SampleKind::Code,
                 reachability: CommandReachability::two_actions(),
             });
@@ -1487,7 +1487,7 @@ pub(crate) fn sample_manifest() -> Vec<SampleManifestEntry> {
             stable_id: format!("sample.code.{}", demo.id.key()),
             key: demo.id.key(),
             title: demo.title,
-            group: "Code projects",
+            group: demo.id.semantic_group(),
             summary: demo.summary(),
             kind: SampleKind::Code,
             reachability: CommandReachability::two_actions(),
