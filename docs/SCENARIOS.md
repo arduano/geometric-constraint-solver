@@ -6953,6 +6953,126 @@ evidence accepts no human row. The immutable F006 snapshot and service above rem
 Tailscale-only closing publication; no GitHub Pages deployment or public push was authorized or made.
 M90 is closed.
 
+## M91 cohesive code-driven-authoring fixtures
+
+Status: **Implementation complete; nomination evidence pending.** No candidate is nominated and all
+14 composite human UAT rows remain exactly Not run. These fixtures mechanically qualify the five
+integrated workstreams; they do not substitute for `docs/M91_UAT.md`.
+
+### M91-C1 — authored contact range reconciles from accepted continuation
+
+Start with a source-owned Point-on-Curve contact accepted at parameter `0.8`, then change only its
+optional admissible range to inclusive `[0, 0.5]`. Intrinsic topology remains owned by the referenced
+curve. The authenticated retained/accepted pair may seed the candidate numerically, but candidate
+source remains sole authority for objects, topology, range, winding, locality, orientation, host
+inputs and publication.
+
+The feasible case must publish exactly at `0.5`, report the active upper bound, preserve unrelated
+geometry and remain draggable within the new interval. Removing the authored range restores the
+intrinsic topology. Native and managed fixtures must agree. An impossible range/contact combination
+retains exact source, accepted document/scene and history authority; its bounded diagnostic names the
+contact, requested range and empty feasible intersection. Undo/Redo and later valid recovery must not
+erase the rejected attempt or fabricate success.
+
+### M91-C2 — advisory TypeScript language intelligence
+
+Create a syntax error, unknown builder/property and wrong argument type in `sketch.ts`. The dedicated
+TypeScript 5.9.2 Worker must return precise diagnostics plus contextual completion, hover and
+signature help from the generated pinned SDK declarations. Fixing the source clears the results.
+
+Language analysis never applies a mutation or changes accepted source/IR/artifact/native scene/
+history. Requests are generation-stamped and bounded by file count, UTF-8 bytes and result count.
+Stale replies, worker synchronization faults, project replacement and disposal settle pending UI
+state harmlessly. Declaration-drift qualification proves the Worker and compiler see one API.
+
+### M91-C3 — all 37 samples are source authoritative
+
+Enumerate the one visible catalog and require exactly 37 unique code projects: the 25 former native
+samples exported deterministically plus the 12 curated projects. Each has readable `sketch.ts` and a
+matching compiler envelope; no native/code UI split or automatic upgrade remains. Native
+constructors are test-only semantic references.
+
+For every entry require cold finite materialization, Current feature authority, independently
+validated normalized Hard residual at most `1e-9`, expected raw/effective DOF, one representative
+edit with exact Undo, parser/printer/runtime inverse mutation and release-WASM frame/source parity.
+Scotch Yoke, Scissor Jack and Five-stage Scissor Tower each execute one deterministic intended
+managed drag and retain its accepted terminal. Computed Fillets remain computed definitions rather
+than flattened ordinary curves.
+
+Current Segment, Midpoint Line and Polyline source preserves explicit branch direction. Only the
+authenticated historical contact-schema migration may normalize the legacy representation needed by
+the exact M90 supplied workspace. Spline construction is explicit across open/periodic control
+B-spline and open/periodic control NURBS; Parametric C2 preserves exact `firstRate`/`secondRate`.
+
+### M91-C4 — Explorer visibility composes without design mutation
+
+Toggle individual geometry and generated members, then their owning groups. A group bulk toggle
+must retain descendant choices; mixed and inherited states remain truthful. Isolate one group and
+restore the prior visibility vector. Toggle the pinned Construction filter, reload and repeat after a
+managed reprojection.
+
+Effective hidden entities do not paint, pick or expose controls/annotations. The operations must not
+change source, IR/artifact, compiler identity, native solve state, suppression or history. Stable
+semantic visibility keys, not row position, bind persisted choices after restore/reprojection.
+
+### M91-C5 — native/managed semantic golden parity
+
+For each applicable authoring, lifecycle, computed-Fillet and accepted-scene golden case, export the
+native semantic case to typed managed source, compile it through the pinned batch, cold-materialize
+through the ordinary managed path and compare canonical semantic snapshots. Require geometry and
+constraint meaning, dimensions, operations, explicit branch/contact state, rank/DOF, independent
+residual validation, history/lifecycle and accepted-scene authority. Do not compare backend IDs,
+serialization bytes or arbitrary underconstrained coordinates as semantic identity.
+
+The reviewed exclusion ledger contains exactly four reachable fail-closed cases:
+
+- `constraint.external-line-collinear.*` — no immutable external-line host snapshot/binding;
+- `constraint.external-point-coincident.*` — no immutable external-point host snapshot/binding;
+- `dimension.profile-offset.*` — a flattened document cannot recover the aggregate-helper/root
+  source closure;
+- `spline.noncanonical-knot-topology.*` — the typed recipe cannot reproduce knot-inserted native
+  control structure.
+
+Reject missing, duplicate or stale exclusions. Each exclusion counts as no parity result. Fillet
+cannot be excluded and must retain computed geometry/provenance and scene authority on both paths.
+
+### M91-F001 — raw compiler envelopes exceed release bundle ceilings
+
+The first integrated optimized build produced a `27,296,927`-byte WASM against a strict `< 20 MiB`
+limit and `36,085,444` distribution bytes against a strict `< 30 MiB` limit. The owner is
+`geosolve-sketch-code::demos`: all 37 source-authoritative compiler envelopes, about `10.96 MB` raw
+JSON, were embedded with `include_str!`. This is a release-bundle `DEFECT`, not a solver, equation,
+sample-semantics or server defect.
+
+The pending focused repair must deterministically zlib-compress only
+`assets/{samples,demos}/*.compiled.json` at build time using pure-Rust `miniz_oxide`. Runtime lazily
+inflates each exact envelope once. Before accepting it, enforce the existing `MANAGED_WIRE_LIMIT` on
+compressed and declared decompressed length, exact output length, complete input consumption, valid
+zlib checksum/terminal status and UTF-8. Preserve public `compiled_source: &'static str`, exact
+authenticated JSON bytes, catalog order and deterministic semantics.
+
+Focused owner coverage must compare all 37 reconstructions byte-for-byte with test-only raw assets
+and reject oversized input/output declarations, short/long lengths, truncation, corruption, trailing
+bytes and invalid UTF-8. The repair, final source and measured output remain pending in this document:
+`@M91_F001_COMMIT@`, `@M91_WASM_BYTES@`, `@M91_DIST_BYTES@`, `@M91_WASM_SHA@`.
+
+### M91-C6 — qualification and immutable nomination boundary
+
+From one clean commit run formatting, warnings-denied all-target/all-feature Clippy, locked
+all-feature workspace tests, TypeScript/package/frontend/declaration checks, the complete 271-row
+golden survey/check/clean sequence and full release gate. Freeze the already-built distribution
+without rebuilding, make regular files mode `0444` and directories `0555`, reject symlinks, write an
+external sorted SHA-256 manifest, verify local/live bytes plus MIME/redirect/compression behavior and
+serve only through a distinct transient M91 Tailscale service. Do not modify/restart M90 or publish
+GitHub Pages.
+
+Evidence placeholders are `@M91_FINAL_COMMIT@`, `@M91_FINAL_TREE@`, `@M91_RELEASE_LOG@`,
+`@M91_RELEASE_LOG_SHA@`, `@M91_SNAPSHOT@`, `@M91_MANIFEST@`, `@M91_SNAPSHOT_SHA@`,
+`@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`, `@M91_WASM_SHA@`, `@M91_HTTP_LEDGER_SHA@`,
+`@M91_SERVICE@`, `@M91_SERVICE_PID@`, `@M91_SERVICE_INVOCATION@` and `@M91_UAT_URL@`. Until they
+are all replaced with verified identities, status remains “Implementation complete; nomination
+evidence pending”. Automated evidence does not execute, pass or waive a human UAT row.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

@@ -5152,6 +5152,78 @@ globally blocked later pointer input.
   service remain closing publication authority; no GitHub Pages deployment or public push was
   authorized or made. M90 is closed.
 
+## M91 cohesive code-driven-authoring acceptance
+
+Status: **Implementation complete; nomination evidence pending.** No candidate is nominated. All 14
+rows in `docs/M91_UAT.md` remain exactly **Not run**, including the ten transferred M90 rows; no
+automated gate passes or waives them.
+
+The candidate must satisfy all five integrated workstream gates:
+
+- Contact topology derives from the referenced curve and is distinct from an optional inclusive
+  authored admissible range. Accepted-state continuation is numerical only; independently validated
+  finite candidate geometry may publish, while infeasible changes retain exact accepted authority
+  and report the affected contact, range and active/empty feasible interval.
+- The TypeScript 5.9.2 Worker supplies bounded diagnostics, completion, hover and signature help
+  against generated pinned declarations. Stale work, project replacement, disposal and UTF-8 budget
+  failures settle without source mutation or accepted-scene publication.
+- All 37 visible samples are managed-source authoritative. Each cold-materializes with finite state,
+  normalized Hard residual at most `1e-9`, truthful expected DOF, source/IR/artifact inverse
+  mutation, representative edit and exact Undo. Scotch Yoke, Scissor Jack and Five-stage Scissor
+  Tower each pass a deterministic intended drag; release-WASM frames and source match native
+  authority.
+- Explorer item/group visibility, isolate/restore and the global Construction filter persist and
+  compose by stable semantic identity. Hidden entities do not paint, pick or expose controls/
+  annotations. Visibility never changes source, IR/artifact, solve participation, suppression or
+  design history.
+- Every applicable golden authoring, lifecycle, computed-Fillet and accepted-scene row executes
+  through native and managed backends and matches canonical semantics: geometry/constraints,
+  dimensions/operations, explicit branch/contact state, rank/DOF, independent residual validation,
+  lifecycle/history and accepted scene. Backend IDs and serialized bytes are not compared as
+  meaning.
+
+The reviewed exclusion ledger must contain exactly these four reachable refusal boundaries, with no
+missing, duplicate or stale entry:
+
+- `constraint.external-line-collinear.*` — immutable external-line host snapshot/binding;
+- `constraint.external-point-coincident.*` — immutable external-point host snapshot/binding;
+- `dimension.profile-offset.*` — flattened native document cannot reproduce aggregate source
+  closure;
+- `spline.noncanonical-knot-topology.*` — typed recipe cannot preserve knot-inserted authored
+  control structure.
+
+An exclusion does not pass parity. Computed Fillet may never be excluded.
+
+M90 compatibility remains an acceptance gate: the exact M90-F005 capsule/workspace hashes remain
+unchanged; historical migration restores them; each constrained terminal drag publishes without
+managed compilation and retains exact Undo/Redo/reload behavior. Current source remains branch-
+lossless; normalization is confined to authenticated historical Segment, Midpoint Line and Polyline
+contact-schema migration.
+
+`M91-F001` blocks nomination until repaired. The pre-repair optimized release WASM is `27,296,927`
+bytes and the distribution is `36,085,444` bytes, exceeding strict `< 20 MiB` and `< 30 MiB`
+ceilings because 37 raw compiler envelopes (about `10.96 MB`) are embedded. The accepted repair may
+build-compress only those envelopes using pure-Rust zlib and lazily inflate exact bytes under the
+existing managed-wire ceiling, exact output length, complete input consumption, checksum/status and
+UTF-8 validation. All 37 raw/reconstructed byte comparisons plus oversized, short/long, truncated,
+corrupt, trailing and invalid-UTF-8 cases must pass; public `compiled_source` and semantic authority
+must not change.
+
+Before nomination, run the exact formatting, warnings-denied Clippy, locked all-feature workspace
+tests, package/frontend/declaration checks, golden `--survey`/`--check`/`--require-clean`, optimized
+release-WASM build/distribution validation and complete clean release gate recorded in
+`docs/M91_IMPLEMENTATION.md`. Freeze the unchanged distribution read-only with an external sorted
+manifest, verify local/live bytes, MIME, redirects and compression, and serve it only on the M91
+Tailscale endpoint without changing the protected M90 service.
+
+Evidence remains intentionally unresolved: `@M91_FINAL_COMMIT@`, `@M91_FINAL_TREE@`,
+`@M91_RELEASE_LOG@`, `@M91_RELEASE_LOG_SHA@`, `@M91_SNAPSHOT@`, `@M91_MANIFEST@`,
+`@M91_SNAPSHOT_SHA@`, `@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`, `@M91_WASM_SHA@`,
+`@M91_HTTP_LEDGER_SHA@`, `@M91_SERVICE@`, `@M91_SERVICE_PID@`,
+`@M91_SERVICE_INVOCATION@` and `@M91_UAT_URL@`. Status may become “Candidate nominated; awaiting
+composite human UAT” only after each value is verified and substituted from one clean source and its
+unchanged served bytes.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.

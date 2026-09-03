@@ -2,13 +2,34 @@
 
 # M91 UAT: cohesive code-driven authoring
 
-Status: **Not run. No candidate is nominated.** M90-U1 through M90-U10 are transferred unchanged,
-not passed or waived. Run this scorecard only against the immutable M91 candidate recorded here
-after clean qualification.
+Status: **Implementation complete; nomination evidence pending.** All 14 rows are Not run.
+M90-U1 through M90-U10 are transferred unchanged, not passed or waived. Run this scorecard only
+against the immutable M91 candidate recorded here after clean qualification.
 
 ## Candidate
 
-Pending implementation, clean release qualification, immutable freeze and Tailscale publication.
+No candidate is nominated. `M91-F001` release-bundle compression, clean qualification, immutable
+freeze and Tailscale publication remain pending. Fill every field below from one clean committed
+source and its exact unchanged served bytes, then change the milestone status to “Candidate
+nominated; awaiting composite human UAT”.
+
+- source commit/tree: `@M91_FINAL_COMMIT@`, `@M91_FINAL_TREE@`;
+- clean release command/result: `@M91_RELEASE_COMMAND@`, `@M91_RELEASE_RESULT@`;
+- release log/bytes/SHA-256: `@M91_RELEASE_LOG@`, `@M91_RELEASE_LOG_BYTES@`,
+  `@M91_RELEASE_LOG_SHA@`;
+- reviewed 271-row golden/result: `@M91_GOLDEN_RESULT@`, `@M91_GOLDEN_SHA@`;
+- dual-backend parity/exclusion-ledger result: `@M91_PARITY_RESULT@`,
+  `@M91_EXCLUSION_RESULT@`;
+- release WASM artifact/bytes/SHA-256: `@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`,
+  `@M91_WASM_SHA@`;
+- distribution files/bytes/result: `@M91_DIST_FILE_COUNT@`, `@M91_DIST_BYTES@`,
+  `@M91_DIST_RESULT@`;
+- immutable snapshot/manifest/aggregate: `@M91_SNAPSHOT@`, `@M91_MANIFEST@`,
+  `@M91_SNAPSHOT_SHA@`;
+- staging/live HTTP ledger and browser result: `@M91_HTTP_LEDGER_SHA@`,
+  `@M91_BROWSER_RESULT@`;
+- Tailscale service/PID/invocation/URL: `@M91_SERVICE@`, `@M91_SERVICE_PID@`,
+  `@M91_SERVICE_INVOCATION@`, `@M91_UAT_URL@`.
 
 ## Transferred M90 scorecard
 

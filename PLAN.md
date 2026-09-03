@@ -7997,27 +7997,27 @@ a browser; all accepted geometry is finite and independently validated at normal
 
 ## M91 — cohesive code-driven authoring
 
-Status: **Implementation in progress. Scope and integration order are frozen in
-`docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`; no candidate is nominated and no row in
-`docs/M91_UAT.md` has run.** M91 contains several bounded, independently owned workstreams running
-in parallel, followed by one integrated candidate and one composite human UAT. An individual
-workstream cannot nominate or close the milestone on its own.
+Status: **Implementation complete; nomination evidence pending.** Scope and integration order are
+frozen in `docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`; no candidate is nominated and all 14
+rows in `docs/M91_UAT.md` remain exactly **Not run**. The five bounded workstreams are integrated,
+but only one clean qualified source plus immutable byte-verified publication may enter the composite
+human UAT.
 
-- [ ] **Constraint-edit intent reconciliation.** Derive intrinsic curve parameter topology from the
+- [x] **Constraint-edit intent reconciliation.** Derive intrinsic curve parameter topology from the
   referenced curve instead of presenting it as ordinary editable range boilerplate; expose a
   distinct authored admissible parameter range; and carry the last accepted contact/geometry into
   the changed solve so an out-of-range contact can be deterministically projected and re-solved.
   Keep winding, orientation, endpoint/interior choice and active-bound state explicit. If no
   unambiguous feasible result exists, retain the exact prior accepted authority and report the
   specific range, contact and failed invariant rather than a generic publication-policy error.
-- [ ] **In-workbench TypeScript language service.** Give the code editor TypeScript Playground-like
+- [x] **In-workbench TypeScript language service.** Give the code editor TypeScript Playground-like
   authoring feedback against the exact pinned managed-sketch API: syntax and semantic diagnostics
   with precise source spans and readable messages, contextual completion suggestions, parameter
   and signature help, and hover/type information. Run analysis without publishing or mutating the
   accepted sketch, keep it responsive off the primary interaction path, distinguish language
   diagnostics from native materialization/solver failures, and prove editor feedback stays in sync
   as source, declarations and project state change.
-- [ ] **Complete code-defined sample overhaul.** Convert all 25 currently direct-native samples and
+- [x] **Complete code-defined sample overhaul.** Convert all 25 currently direct-native samples and
   review/rewrite all 12 existing code projects so every one of the 37 user-visible catalog entries
   has readable typed `sketch.ts` source as its sole authoring authority. Remove the native/code
   split from the user-facing sample experience for now; direct-native sample authoring is deferred,
@@ -8029,7 +8029,7 @@ workstream cannot nominate or close the milestone on its own.
   every sample headlessly for finite accepted geometry, normalized hard residual `<= 1e-9`,
   expected DOF, source/IR/artifact round-trip, edit/Undo behavior and browser/native scene parity
   before the single composite M91 UAT.
-- [ ] **Explorer visibility hierarchy and pinned display controls.** Add an explicit eye control to
+- [x] **Explorer visibility hierarchy and pinned display controls.** Add an explicit eye control to
   individual Explorer rows and exported groups, including mixed-state feedback, bulk show/hide and
   a convenient isolate/restore path for previewing one group. Compose effective visibility from
   item, ancestor-group and global-filter state so hiding a group does not erase its descendants'
@@ -8040,7 +8040,7 @@ workstream cannot nominate or close the milestone on its own.
   Show/Hide Construction Geometry, with unambiguous pressed states, tooltips and keyboard access.
   Prove group, child and global filter composition against generated rows and source-defined groups,
   and keep the canvas, Explorer and restored workspace synchronized.
-- [ ] **Dual-backend golden/oracle parity.** Expand every applicable golden authoring, retained-
+- [x] **Dual-backend golden/oracle parity.** Expand every applicable golden authoring, retained-
   interaction and accepted-scene row to execute through both the direct native-legacy backend and
   the managed-code backend. Compare semantic geometry, constraints, dimensions, operations,
   explicit branch/contact state, rank/DOF, independently validated residuals, lifecycle/history and
@@ -8050,6 +8050,37 @@ workstream cannot nominate or close the milestone on its own.
   paths; every exclusion must name its owning contract and must not silently count as parity. Keep
   focused defect regressions at their owning layer and make this dual execution a systemic oracle
   dimension before the single composite M91 UAT.
+
+Implemented integration includes intrinsic topology plus optional admissible ranges, retained-only
+numerical continuation and actionable infeasible-range history; the TypeScript 5.9.2 Worker;
+source-authoritative 37-sample catalog and three deterministic mechanism drags; persistent semantic
+Explorer visibility; and actual managed execution for applicable golden authoring, lifecycle,
+computed-Fillet and accepted-scene rows. The reviewed exclusion ledger has exactly four entries:
+external-line-collinear host snapshot, external-point-coincident host snapshot, flattened Profile
+Offset source projection and noncanonical spline knot topology. Fillet is never excluded.
+
+Cross-workstream qualification preserves the M90 supplied-workspace/capsule hashes and its
+no-compilation drag/Undo/Redo behavior. Current source retains branch direction losslessly; only the
+authenticated historical contact-schema migration normalizes Segment, Midpoint Line and Polyline
+branch directions. The stable golden remains 271 data rows at SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+
+`M91-F001` remains pending before nomination. The integrated release build embedded all 37 raw
+compiler envelopes and produced a `27,296,927`-byte optimized WASM and `36,085,444`-byte
+distribution, exceeding the strict `< 20 MiB`/`< 30 MiB` limits. The authorized focused repair must
+deterministically zlib-compress only those envelopes with pure Rust, reconstruct their exact bytes
+lazily under bounded length/input/checksum/UTF-8 validation and retain the public
+`compiled_source: &'static str` contract. Focused byte-identity/corruption tests, all final gates and
+immutable publication remain outstanding.
+
+Final nomination placeholders are deliberately unresolved: source `@M91_FINAL_COMMIT@`, tree
+`@M91_FINAL_TREE@`, release log `@M91_RELEASE_LOG@` at SHA-256 `@M91_RELEASE_LOG_SHA@`, snapshot
+`@M91_SNAPSHOT@`, manifest `@M91_MANIFEST@`, aggregate `@M91_SNAPSHOT_SHA@`, release WASM
+`@M91_WASM_ARTIFACT@` / `@M91_WASM_BYTES@` / `@M91_WASM_SHA@`, HTTP ledger
+`@M91_HTTP_LEDGER_SHA@`, service `@M91_SERVICE@` / PID `@M91_SERVICE_PID@` / invocation
+`@M91_SERVICE_INVOCATION@`, and URL `@M91_UAT_URL@`. Do not change status to “Candidate nominated;
+awaiting composite human UAT” until every placeholder is replaced from the same clean source and
+unchanged served bytes. Automated evidence does not execute, pass or waive any UAT row.
 
 ## Explicit non-goals
 

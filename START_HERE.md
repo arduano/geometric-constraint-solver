@@ -843,6 +843,49 @@ Post-close clean-source evidence now removes the remaining qualification caveat.
 distribution byte-matches `/tmp/geosolve-m90-uat.EtWyWQlt.sha256`, so no replacement service or
 candidate was needed. M90-U1 through M90-U10 remain transferred and unexecuted.
 
+## M91 integrated candidate preparation
+
+Status: **Implementation complete; nomination evidence pending.** No M91 candidate is nominated and
+all 14 rows in `docs/M91_UAT.md` remain exactly **Not run**. M90 remains closed; its ten unexecuted
+rows transfer unchanged into this composite scorecard and are neither passed nor waived.
+
+The five frozen M91 workstreams are integrated:
+
+1. contacts derive intrinsic topology from their referenced curves and separately admit an optional
+   authored range; authenticated prior state can seed the candidate numerically but cannot supply
+   topology, branch or publication authority, and infeasible changes retain history with specific
+   diagnostics;
+2. a bounded TypeScript 5.9.2 Worker supplies diagnostics, completion, hover and signature help from
+   generated pinned declarations without entering the mutation/publication path;
+3. all 37 visible samples are source-authoritative managed projects, with 25 native constructors
+   retained only as semantic references and deterministic managed drags for Scotch Yoke, Scissor
+   Jack and Five-stage Scissor Tower;
+4. Explorer item/group visibility, isolate/restore and the Construction filter compose as persistent
+   presentation-only state over paint, picking, controls and annotations;
+5. applicable golden authoring, lifecycle, computed-Fillet and accepted-scene cases execute through
+   both native and managed backends and compare canonical semantics rather than IDs or bytes.
+
+The reviewed parity exclusions are exactly external-line-collinear host snapshot,
+external-point-coincident host snapshot, flattened Profile Offset source projection and
+noncanonical spline knot topology. Each exclusion reaches its named fail-closed owner, counts as no
+parity pass and cannot cover Fillet.
+
+M91-F001 currently blocks nomination. Embedding the 37 raw compiler envelopes produced a
+`27,296,927`-byte optimized release WASM and `36,085,444`-byte distribution, above the strict
+`< 20 MiB` and `< 30 MiB` limits. The pending focused pure-Rust repair build-compresses only those
+JSON envelopes and lazily reconstructs their byte-identical authenticated UTF-8 under bounded
+length, complete-input, checksum/status and wire-limit checks. It changes no solver equation,
+sample semantics, service or public deployment.
+
+After that repair lands, run final gates from one clean commit and replace the evidence placeholders
+in the M91 documents: source `@M91_FINAL_COMMIT@`, tree `@M91_FINAL_TREE@`, release log
+`@M91_RELEASE_LOG@` / `@M91_RELEASE_LOG_SHA@`, frozen snapshot `@M91_SNAPSHOT@`, manifest
+`@M91_MANIFEST@`, aggregate `@M91_SNAPSHOT_SHA@`, WASM `@M91_WASM_ARTIFACT@` /
+`@M91_WASM_BYTES@` / `@M91_WASM_SHA@`, served ledger `@M91_HTTP_LEDGER_SHA@`, service
+`@M91_SERVICE@` / PID `@M91_SERVICE_PID@` / invocation `@M91_SERVICE_INVOCATION@`, and
+`@M91_UAT_URL@`. Only then may the status become “Candidate nominated; awaiting composite human
+UAT”. Public deployment and GitHub Pages remain outside M91.
+
 ## Read first
 
 1. `AGENTS.md`
@@ -910,6 +953,9 @@ candidate was needed. M90-U1 through M90-U10 remain transferred and unexecuted.
     qualification plus the complete dirty-tree gate pass; the immutable post-F006 candidate remains
     Tailscale-only, and scoped closure transfers/defers M90-U1 through M90-U10 into M91 without
     passing or waiving them.
+27. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — integrated five-
+    workstream contract, reviewed dual-backend exclusions, pending M91-F001 release-bundle repair,
+    nomination evidence template and 14-row composite scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -1514,6 +1560,10 @@ Durable milestone and cleanup records:
   solver-instance overlay ownership and implemented M90-F001-F006 repairs)
 - `docs/M90_UAT.md` (immutable post-F006 candidate exact-served on Tailscale; complete dirty-tree
   gate and scoped closure recorded, with M90-U1 through M90-U10 transferred/deferred into M91)
+- `docs/M91_GOALS.md` (integrated cohesive code-driven-authoring contract and nomination boundary)
+- `docs/M91_IMPLEMENTATION.md` (five workstreams, four reviewed exclusions, M91-F001 and final-gate
+  evidence template)
+- `docs/M91_UAT.md` (14-row composite scorecard; every row Not run pending immutable nomination)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
