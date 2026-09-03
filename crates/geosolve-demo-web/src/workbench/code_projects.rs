@@ -7282,6 +7282,30 @@ mod tests {
             .expect("checked infeasible contact-range compiler fixture")
     }
 
+    fn publish_managed_source_fixture(
+        workbench: &mut CodeProjectWorkbench,
+        source: &str,
+        compiled: CompiledManagedSource,
+    ) {
+        workbench.set_managed_draft(source.to_owned());
+        let prepared = workbench
+            .prepare_managed_source_apply()
+            .expect("fixture source differs from accepted source");
+        let receipt = PreparedManagedMutationReceipt {
+            ticket_digest: prepared.request.ticket.ticket_digest.clone(),
+            base_source_digest: prepared.request.current.ir.source_digest.clone(),
+            candidate_source_digest: compiled.ir.source_digest.clone(),
+            compiled,
+        };
+        let ResolvedManagedSourceApply::Accepted { candidate, .. } = workbench
+            .resolve_managed_source_apply(&prepared, receipt)
+            .expect("fixture compiler receipt is valid")
+        else {
+            panic!("history fixture source must materialize successfully")
+        };
+        *workbench = *candidate;
+    }
+
     #[test]
     #[allow(
         clippy::too_many_lines,
@@ -7391,6 +7415,110 @@ mod tests {
         assert_eq!(accepted_after.ownership, ownership_before);
         assert_eq!(accepted_after.validation, validation_before);
         assert_eq!(accepted_after.evidence, evidence_before);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one history regression keeps a rejected range edit, both history directions, accepted checkpoints, and replayability together"
+    )]
+    fn infeasible_contact_range_preserves_non_empty_undo_and_redo() {
+        let base = CompiledManagedSource::from_json(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-base.json"
+        )))
+        .expect("checked base compiler fixture");
+        let supporting = CompiledManagedSource::from_json(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-supporting-line.json"
+        )))
+        .expect("checked supporting-line compiler fixture");
+        let normalized_supporting_source = supporting.normalized_source.clone();
+        let limited = CompiledManagedSource::from_json(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-limited.json"
+        )))
+        .expect("checked limited-range compiler fixture");
+        let supporting_source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-supporting-line.sketch.ts"
+        ));
+        let limited_source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-limited.sketch.ts"
+        ));
+        let candidate = infeasible_contact_range_fixture(true);
+        let candidate_source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-infeasible-limited.sketch.ts"
+        ))
+        .to_owned();
+        let (mut workbench, _) =
+            CodeProjectWorkbench::open_managed_test_compiled("m91-contact-history", base)
+                .expect("base contact project materializes");
+
+        publish_managed_source_fixture(&mut workbench, supporting_source, supporting);
+        publish_managed_source_fixture(&mut workbench, limited_source, limited);
+        workbench
+            .step_history(true)
+            .expect("history fixture Undo succeeds")
+            .expect("second accepted source edit is undoable");
+        assert!(workbench.can_undo());
+        assert!(workbench.can_redo());
+        assert_eq!(workbench.managed_source(), normalized_supporting_source);
+
+        let accepted_before = workbench.to_persistence_json().unwrap();
+        let session_before = workbench.session.to_canonical_json().unwrap();
+        let project_before = workbench.project.to_canonical_json().unwrap();
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+
+        workbench.set_managed_draft(candidate_source.clone());
+        let prepared = workbench
+            .prepare_managed_source_apply()
+            .expect("Rust prepares the structurally valid range edit");
+        let receipt = PreparedManagedMutationReceipt {
+            ticket_digest: prepared.request.ticket.ticket_digest.clone(),
+            base_source_digest: prepared.request.current.ir.source_digest.clone(),
+            candidate_source_digest: candidate.ir.source_digest.clone(),
+            compiled: candidate,
+        };
+        let ResolvedManagedSourceApply::RetainedFailure { source, diagnostic } = workbench
+            .resolve_managed_source_apply(&prepared, receipt)
+            .expect("native rejection is a retained source outcome")
+        else {
+            panic!("numerically infeasible contact range must not publish")
+        };
+        assert_eq!(source, candidate_source);
+        assert!(diagnostic.contains("authored interval [0, 0.5] was rejected"));
+        assert_eq!(
+            workbench.session.to_canonical_json().unwrap(),
+            session_before
+        );
+        assert_eq!(
+            workbench.project.to_canonical_json().unwrap(),
+            project_before
+        );
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert!(workbench.can_undo());
+        assert!(workbench.can_redo());
+
+        assert!(workbench.revert_managed_draft());
+        assert_eq!(workbench.to_persistence_json().unwrap(), accepted_before);
+        let mut control = CodeProjectWorkbench::from_persistence_json(&accepted_before).unwrap();
+        for undo in [true, false] {
+            workbench
+                .step_history(undo)
+                .expect("preserved history direction succeeds")
+                .expect("preserved history direction has an entry");
+            control
+                .step_history(undo)
+                .expect("control history direction succeeds")
+                .expect("control history direction has an entry");
+            assert_eq!(
+                workbench.to_persistence_json().unwrap(),
+                control.to_persistence_json().unwrap(),
+            );
+        }
     }
 
     #[test]
