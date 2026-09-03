@@ -364,6 +364,47 @@ impl ProjectionalIntentCoordinator {
         })
     }
 
+    /// Restores one authenticated session after an owning persistence layer
+    /// has removed semantically redundant historical definition fields.
+    ///
+    /// The persisted native materialization is accepted only as numerical
+    /// continuation. The current graph and instance remain the sole semantic
+    /// authority, and the ordinary cold materializer must independently
+    /// rebuild and validate fresh evidence for that exact current identity
+    /// before anything is installed.
+    pub(crate) fn restore_after_authenticated_semantic_migration(
+        mut intent: IntentSession,
+        materializer: ColdIntentMaterializer,
+    ) -> Result<Self, ProjectionalCoordinatorError> {
+        let continuation = intent
+            .accepted()
+            .filter(|authority| authority.target == intent.semantic_identity())
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)
+            .and_then(|authority| {
+                let json = std::str::from_utf8(&authority.evidence.materialization)
+                    .map_err(|_| IntentMaterializationError::AcceptedAuthorityEvidenceMismatch)?;
+                SketchDocument::from_draft_v5_json(json)
+                    .map_err(IntentMaterializationError::from)
+                    .map_err(ProjectionalCoordinatorError::from)
+            })?;
+        let mut accepted = None;
+        let refreshed = intent.refresh_current_accepted_evidence(|candidate| {
+            let (evaluation, rebuilt, _) = materializer
+                .evaluate_with_materialization_from_accepted_continuation_audited(
+                    candidate,
+                    &continuation,
+                );
+            accepted = rebuilt;
+            evaluation
+        })?;
+        if !refreshed {
+            return Err(ProjectionalCoordinatorError::NoAcceptedAuthority);
+        }
+        let accepted =
+            accepted.ok_or(ProjectionalCoordinatorError::MissingAcceptedMaterialization)?;
+        Self::restore_authenticated_bootstrap(intent, materializer, accepted)
+    }
+
     /// Restores one exact pristine semantic session with independently
     /// materialized empty native acceptance and no manufactured history.
     ///

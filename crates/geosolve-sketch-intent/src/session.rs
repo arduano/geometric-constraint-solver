@@ -1833,44 +1833,44 @@ impl IntentSession {
     /// Returns an error for excessive, malformed, unsupported, digest-
     /// mismatched, or structurally invalid input.
     pub fn from_json(json: &str) -> Result<Self, IntentSessionError> {
-        if json.len() > MAX_INTENT_SESSION_JSON_BYTES {
-            return Err(IntentSessionError::JsonResourceLimit {
-                limit: MAX_INTENT_SESSION_JSON_BYTES,
-            });
+        Self::from_authenticated_wire(authenticated_session_wire(json)?)
+    }
+
+    /// Imports one already-authenticated pre-M91 session whose contact
+    /// declarations carry only the redundant topology defaults removed by
+    /// M91's intrinsic-contact schema.
+    ///
+    /// This is a deliberately narrow migration seam for historical
+    /// reproduction capsules. Ordinary session import remains strict through
+    /// [`Self::from_json`]. The source wire must still be canonical and
+    /// digest-authenticated, every other declaration field remains subject to
+    /// the current closed schema, and only exact legacy defaults are removed.
+    /// Explicit supporting-line intent is translated to the current
+    /// `*_support` field. Non-default bounds, periods, hybrid old/new fields,
+    /// and unrelated unknown fields fail closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary canonical/session validation errors, or a typed
+    /// historical-contact error when the authenticated wire is not within the
+    /// exact migration subset.
+    #[doc(hidden)]
+    pub fn from_historical_contact_domain_json(json: &str) -> Result<Self, IntentSessionError> {
+        let mut wire = authenticated_session_wire(json)?;
+        validate_historical_contact_wire_authority(&wire)?;
+        let mut migrated_fields = 0_usize;
+        migrate_historical_contact_checkpoint(&mut wire.current, &mut migrated_fields)?;
+        for entry in wire.undo.iter_mut().chain(&mut wire.redo) {
+            migrate_historical_contact_checkpoint(&mut entry.checkpoint, &mut migrated_fields)?;
         }
-        let mut wire: IntentSessionWire = serde_json::from_str(json)?;
-        if !matches!(
-            wire.version,
-            LEGACY_INTENT_SESSION_VERSION | INTENT_SESSION_VERSION
-        ) {
-            return Err(IntentSessionError::UnsupportedVersion {
-                expected: INTENT_SESSION_VERSION,
-                actual: wire.version,
-            });
+        if migrated_fields == 0 {
+            return Err(IntentSessionError::HistoricalContactDomainMigrationNotApplicable);
         }
-        let expected_digest = if wire.version == LEGACY_INTENT_SESSION_VERSION {
-            legacy_session_wire_digest(&wire)
-        } else {
-            session_wire_digest(&wire)
-        };
-        if wire.digest != expected_digest {
-            return Err(IntentSessionError::DigestMismatch);
-        }
-        if serde_json::to_string(&wire)? != json {
-            return Err(IntentSessionError::NonCanonicalJson);
-        }
-        let reservation_identity = if wire.version == LEGACY_INTENT_SESSION_VERSION {
-            wire.reservations.legacy_identity()
-        } else {
-            wire.reservations.identity()
-        };
-        if wire.current.reservation_identity != reservation_identity {
-            return Err(IntentSessionError::InvalidAuthority);
-        }
-        if wire.version == LEGACY_INTENT_SESSION_VERSION {
-            validate_legacy_wire_authority(&wire)?;
-            migrate_legacy_wire_identities(&mut wire)?;
-        }
+        bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+        Self::from_authenticated_wire(wire)
+    }
+
+    fn from_authenticated_wire(wire: IntentSessionWire) -> Result<Self, IntentSessionError> {
         if wire.current.reservation_high_water != Some(wire.allocator.next_reservation) {
             return Err(IntentSessionError::InvalidAuthority);
         }
@@ -2137,6 +2137,51 @@ impl IntentSession {
     }
 }
 
+fn authenticated_session_wire(json: &str) -> Result<IntentSessionWire, IntentSessionError> {
+    if json.len() > MAX_INTENT_SESSION_JSON_BYTES {
+        return Err(IntentSessionError::JsonResourceLimit {
+            limit: MAX_INTENT_SESSION_JSON_BYTES,
+        });
+    }
+    let mut wire: IntentSessionWire = serde_json::from_str(json)?;
+    if !matches!(
+        wire.version,
+        LEGACY_INTENT_SESSION_VERSION | INTENT_SESSION_VERSION
+    ) {
+        return Err(IntentSessionError::UnsupportedVersion {
+            expected: INTENT_SESSION_VERSION,
+            actual: wire.version,
+        });
+    }
+    let expected_digest = if wire.version == LEGACY_INTENT_SESSION_VERSION {
+        legacy_session_wire_digest(&wire)
+    } else {
+        session_wire_digest(&wire)
+    };
+    if wire.digest != expected_digest {
+        return Err(IntentSessionError::DigestMismatch);
+    }
+    if serde_json::to_string(&wire)? != json {
+        return Err(IntentSessionError::NonCanonicalJson);
+    }
+    let reservation_identity = if wire.version == LEGACY_INTENT_SESSION_VERSION {
+        wire.reservations.legacy_identity()
+    } else {
+        wire.reservations.identity()
+    };
+    if wire.current.reservation_identity != reservation_identity {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
+    if wire.version == LEGACY_INTENT_SESSION_VERSION {
+        validate_legacy_wire_authority(&wire)?;
+        migrate_legacy_wire_identities(&mut wire)?;
+    }
+    if wire.current.reservation_high_water != Some(wire.allocator.next_reservation) {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
+    Ok(wire)
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct IntentSessionWire {
@@ -2181,6 +2226,353 @@ fn legacy_session_wire_digest(wire: &IntentSessionWire) -> ContentDigest {
         ))
         .expect("session wire payload is infallibly serializable"),
     )
+}
+
+fn migrate_historical_contact_checkpoint(
+    checkpoint: &mut SessionCheckpoint,
+    migrated_fields: &mut usize,
+) -> Result<(), IntentSessionError> {
+    migrate_historical_contact_graph(&mut checkpoint.graph, migrated_fields)?;
+    let accepted_materialization_digest = if let Some(accepted) = &mut checkpoint.accepted {
+        migrate_historical_contact_graph(&mut accepted.graph, migrated_fields)?;
+        accepted.target = semantic_identity(
+            &accepted.graph,
+            &accepted.instance,
+            accepted.reservations.identity(),
+            &accepted.external_inputs,
+        );
+        Some(accepted.evidence.digest)
+    } else {
+        None
+    };
+    let target = semantic_identity(
+        &checkpoint.graph,
+        &checkpoint.instance,
+        checkpoint.reservation_identity,
+        &checkpoint.external_inputs,
+    );
+    if let Some(attempt) = &mut checkpoint.latest_attempt {
+        attempt.target = target;
+        attempt.materialization_digest = match attempt.disposition {
+            IntentAttemptDisposition::Accepted => accepted_materialization_digest,
+            IntentAttemptDisposition::RetainedFailed
+            | IntentAttemptDisposition::OrganizationOnly => None,
+        };
+    }
+    Ok(())
+}
+
+fn validate_historical_contact_wire_authority(
+    wire: &IntentSessionWire,
+) -> Result<(), IntentSessionError> {
+    if wire.undo.len() > MAX_INTENT_HISTORY_ENTRIES || wire.redo.len() > MAX_INTENT_HISTORY_ENTRIES
+    {
+        return Err(IntentSessionError::HistoryLimit);
+    }
+    if wire.undo.iter().chain(&wire.redo).any(|entry| {
+        entry.descriptor.target_revision.raw() == 0
+            || entry.descriptor.target_revision > wire.revision
+    }) || !wire
+        .undo
+        .windows(2)
+        .all(|pair| pair[0].descriptor.target_revision < pair[1].descriptor.target_revision)
+        || !wire
+            .redo
+            .windows(2)
+            .all(|pair| pair[0].descriptor.target_revision > pair[1].descriptor.target_revision)
+        || wire
+            .undo
+            .last()
+            .zip(wire.redo.last())
+            .is_some_and(|(undo, redo)| {
+                undo.descriptor.target_revision >= redo.descriptor.target_revision
+            })
+    {
+        return Err(IntentSessionError::InvalidHistoryDescriptor);
+    }
+    wire.reservations
+        .validate_against_graph(&wire.current.graph)?;
+    validate_historical_contact_checkpoint_authority(&wire.current, &wire.reservations, true)?;
+    for entry in wire.undo.iter().chain(&wire.redo) {
+        entry.descriptor.validate()?;
+        validate_historical_contact_checkpoint_authority(
+            &entry.checkpoint,
+            &wire.reservations,
+            false,
+        )?;
+    }
+    validate_history_edges(&wire.current, &wire.undo, &wire.redo)?;
+    validate_history_descriptors(&wire.current, &wire.undo, &wire.redo)?;
+    validate_allocator(
+        wire.allocator,
+        std::iter::once(&wire.current)
+            .chain(wire.undo.iter().map(|entry| &entry.checkpoint))
+            .chain(wire.redo.iter().map(|entry| &entry.checkpoint)),
+        &wire.reservations,
+    )
+}
+
+fn validate_historical_contact_checkpoint_authority(
+    checkpoint: &SessionCheckpoint,
+    reservations: &IntentReservationLedger,
+    current: bool,
+) -> Result<(), IntentSessionError> {
+    checkpoint.external_inputs.validate()?;
+    for (leaf, value) in checkpoint.instance.values() {
+        checkpoint.graph.writable_leaf(*leaf)?;
+        if !literal_matches_leaf(value, leaf.field) {
+            return Err(IntentSessionError::InvalidInstance);
+        }
+        value.validate()?;
+    }
+    validate_checkpoint_reservation_authority(checkpoint, reservations, current)?;
+    validate_organization(&checkpoint.graph, &checkpoint.organization)?;
+    let semantic = semantic_identity(
+        &checkpoint.graph,
+        &checkpoint.instance,
+        checkpoint.reservation_identity,
+        &checkpoint.external_inputs,
+    );
+    if checkpoint.latest_attempt.is_none()
+        && (checkpoint.accepted.is_some()
+            || !checkpoint.graph.nodes().is_empty()
+            || !checkpoint.instance.values().is_empty()
+            || checkpoint.external_inputs != IntentExternalInputs::default())
+    {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
+    if let Some(attempt) = &checkpoint.latest_attempt {
+        if attempt.target != semantic {
+            return Err(IntentSessionError::InvalidAuthority);
+        }
+        match attempt.disposition {
+            IntentAttemptDisposition::Accepted => {
+                let accepted = checkpoint
+                    .accepted
+                    .as_ref()
+                    .ok_or(IntentSessionError::InvalidAuthority)?;
+                if accepted.target != semantic
+                    || attempt.materialization_digest != Some(accepted.evidence.digest)
+                    || !attempt.failed_nodes.is_empty()
+                    || attempt.diagnostic.is_some()
+                {
+                    return Err(IntentSessionError::InvalidAuthority);
+                }
+            }
+            IntentAttemptDisposition::RetainedFailed => {
+                if attempt.failed_nodes.is_empty()
+                    || attempt.diagnostic.is_none()
+                    || attempt.materialization_digest.is_some()
+                    || checkpoint
+                        .accepted
+                        .as_ref()
+                        .is_some_and(|accepted| accepted.target == semantic)
+                    || attempt
+                        .failed_nodes
+                        .iter()
+                        .any(|node| !checkpoint.graph.nodes().contains_key(node))
+                {
+                    return Err(IntentSessionError::InvalidAuthority);
+                }
+            }
+            IntentAttemptDisposition::OrganizationOnly => {
+                return Err(IntentSessionError::InvalidAuthority);
+            }
+        }
+    }
+    if let Some(accepted) = &checkpoint.accepted {
+        accepted.external_inputs.validate()?;
+        for (leaf, value) in accepted.instance.values() {
+            accepted.graph.writable_leaf(*leaf)?;
+            if !literal_matches_leaf(value, leaf.field) {
+                return Err(IntentSessionError::InvalidInstance);
+            }
+            value.validate()?;
+        }
+        accepted
+            .reservations
+            .validate_against_graph(&accepted.graph)?;
+        accepted.evidence.validate()?;
+        if accepted.graph.identity() != accepted.target.graph
+            || accepted.instance.identity() != accepted.target.instance
+            || accepted.reservations.identity() != accepted.target.reservations
+            || accepted.external_inputs.identity() != accepted.target.external_inputs
+            || accepted.external_inputs.identity() != accepted.evidence.external_inputs
+            || accepted.target.external_inputs != accepted.evidence.external_inputs
+        {
+            return Err(IntentSessionError::InvalidAuthority);
+        }
+        reservations.validate_superset_of(&accepted.reservations)?;
+    }
+    Ok(())
+}
+
+fn migrate_historical_contact_graph(
+    graph: &mut IntentGraph,
+    migrated_fields: &mut usize,
+) -> Result<(), IntentSessionError> {
+    for node in graph.nodes.values_mut() {
+        for prefix in historical_contact_prefixes(&node.kind) {
+            *migrated_fields += migrate_historical_contact_fields(node, prefix)?;
+        }
+    }
+    Ok(())
+}
+
+fn historical_contact_prefixes(kind: &crate::IntentNodeKind) -> &'static [&'static str] {
+    use crate::ConstraintKind as C;
+
+    match kind {
+        crate::IntentNodeKind::Geometry {
+            recipe: crate::GeometryRecipeKind::TangentArc,
+        } => &["source"],
+        crate::IntentNodeKind::Constraint {
+            constraint: C::PointOnCurve | C::LineCurveTangency | C::CurveDirection,
+        } => &["contact"],
+        crate::IntentNodeKind::Constraint {
+            constraint:
+                C::LineCircleTangency
+                | C::CircleArcTangency
+                | C::CurveCurveContact
+                | C::CurveCurveTangency
+                | C::EqualCurvature
+                | C::EndpointContinuity
+                | C::LineLineFillet
+                | C::CurveCurveFillet,
+        } => &["first_contact", "second_contact"],
+        _ => &[],
+    }
+}
+
+fn historical_field_key(name: &str) -> crate::IntentFieldKey {
+    crate::IntentFieldKey(
+        IntentKey::new(name).expect("internal historical contact field keys are valid"),
+    )
+}
+
+fn migrate_historical_contact_fields(
+    node: &mut crate::IntentNode,
+    prefix: &str,
+) -> Result<usize, IntentSessionError> {
+    let domain_key = historical_field_key(&format!("{prefix}_domain"));
+    let lower_key = historical_field_key(&format!("{prefix}_domain_lower"));
+    let upper_key = historical_field_key(&format!("{prefix}_domain_upper"));
+    let period_key = historical_field_key(&format!("{prefix}_domain_period"));
+    let support_key = historical_field_key(&format!("{prefix}_support"));
+    let range_lower_key = historical_field_key(&format!("{prefix}_range_lower"));
+    let range_upper_key = historical_field_key(&format!("{prefix}_range_upper"));
+    let carries_legacy = [&domain_key, &lower_key, &upper_key, &period_key]
+        .into_iter()
+        .any(|field| node.fields.contains_key(field));
+    if !carries_legacy {
+        return Ok(0);
+    }
+    if node.fields.contains_key(&support_key)
+        || node.fields.contains_key(&range_lower_key)
+        || node.fields.contains_key(&range_upper_key)
+    {
+        return Err(historical_contact_rejection(
+            node.id,
+            "legacy and current contact topology fields are mixed",
+        ));
+    }
+
+    let domain = node.fields.remove(&domain_key).ok_or_else(|| {
+        historical_contact_rejection(node.id, "legacy contact auxiliaries have no domain kind")
+    })?;
+    let lower = node.fields.remove(&lower_key);
+    let upper = node.fields.remove(&upper_key);
+    let period = node.fields.remove(&period_key);
+    let removed = 1
+        + usize::from(lower.is_some())
+        + usize::from(upper.is_some())
+        + usize::from(period.is_some());
+    let crate::IntentLiteral::Enum(domain) = domain else {
+        return Err(historical_contact_rejection(
+            node.id,
+            "legacy contact domain kind is not an enum",
+        ));
+    };
+    let lower = historical_dimensionless_quantity(node.id, lower.as_ref(), "lower bound")?;
+    let upper = historical_dimensionless_quantity(node.id, upper.as_ref(), "upper bound")?;
+    let period = historical_dimensionless_quantity(node.id, period.as_ref(), "period")?;
+
+    match domain.as_str() {
+        "bounded"
+            if lower.unwrap_or(0.0).to_bits() == 0.0_f64.to_bits()
+                && upper.unwrap_or(1.0).to_bits() == 1.0_f64.to_bits()
+                && period.is_none() => {}
+        "periodic"
+            if lower.is_none()
+                && upper.is_none()
+                && period.unwrap_or(std::f64::consts::TAU).to_bits()
+                    == std::f64::consts::TAU.to_bits() => {}
+        "supporting_line" if lower.is_none() && upper.is_none() && period.is_none() => {
+            node.fields.insert(
+                support_key,
+                crate::IntentLiteral::Enum(
+                    IntentKey::new("supporting_line")
+                        .expect("internal supporting-line enum is valid"),
+                ),
+            );
+        }
+        "bounded" => {
+            return Err(historical_contact_rejection(
+                node.id,
+                "only the exact legacy bounded [0, 1] topology default is migratable",
+            ));
+        }
+        "periodic" => {
+            return Err(historical_contact_rejection(
+                node.id,
+                "only the exact legacy tau-period topology default is migratable",
+            ));
+        }
+        "supporting_line" => {
+            return Err(historical_contact_rejection(
+                node.id,
+                "legacy supporting-line contact carries incompatible bounds or period",
+            ));
+        }
+        _ => {
+            return Err(historical_contact_rejection(
+                node.id,
+                "legacy contact domain kind is unknown",
+            ));
+        }
+    }
+    Ok(removed)
+}
+
+fn historical_dimensionless_quantity(
+    node: NodeId,
+    literal: Option<&crate::IntentLiteral>,
+    component: &'static str,
+) -> Result<Option<f64>, IntentSessionError> {
+    match literal {
+        None => Ok(None),
+        Some(crate::IntentLiteral::Quantity {
+            value,
+            unit: crate::IntentUnit::Dimensionless,
+        }) if value.is_finite() => Ok(Some(*value)),
+        Some(_) => Err(historical_contact_rejection(
+            node,
+            match component {
+                "lower bound" => {
+                    "legacy contact lower bound is not a finite dimensionless quantity"
+                }
+                "upper bound" => {
+                    "legacy contact upper bound is not a finite dimensionless quantity"
+                }
+                "period" => "legacy contact period is not a finite dimensionless quantity",
+                _ => "legacy contact component is invalid",
+            },
+        )),
+    }
+}
+
+const fn historical_contact_rejection(node: NodeId, reason: &'static str) -> IntentSessionError {
+    IntentSessionError::HistoricalContactDomainMigrationRejected { node, reason }
 }
 
 fn legacy_graph_identity(graph: &IntentGraph) -> crate::IntentGraphIdentity {
@@ -3484,6 +3876,10 @@ pub enum IntentSessionError {
     DigestMismatch,
     #[error("intent session JSON is not canonical")]
     NonCanonicalJson,
+    #[error("authenticated session has no historical contact-domain fields to migrate")]
+    HistoricalContactDomainMigrationNotApplicable,
+    #[error("historical contact-domain migration rejected node {node}: {reason}")]
+    HistoricalContactDomainMigrationRejected { node: NodeId, reason: &'static str },
     #[error("delegated intent checkpoint contains nested Undo/Redo history")]
     DelegatedCheckpointContainsHistory,
     #[error(transparent)]
@@ -3519,6 +3915,383 @@ mod tests {
             )
             .unwrap(),
         }
+    }
+
+    fn session_with_historical_contact_domain() -> IntentSession {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x91_c0_1d)).unwrap();
+        let primary = crate::IntentPortSelector::Node {
+            role: crate::IntentPortRole::Primary,
+            index: 0,
+        };
+        let point = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            key("historical.contact.point"),
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::X,
+            IntentLiteral::Quantity {
+                value: 0.25,
+                unit: crate::IntentUnit::Length,
+            },
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::Y,
+            IntentLiteral::Quantity {
+                value: 0.0,
+                unit: crate::IntentUnit::Length,
+            },
+        );
+        let line = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            key("historical.contact.line"),
+        );
+        let contact = IntentNodeDraft::new(
+            IntentNodeKind::Constraint {
+                constraint: ConstraintKind::PointOnCurve,
+            },
+            key("historical.contact.constraint"),
+        )
+        .with_input(
+            InputSlot::new(InputRole::Point, 0),
+            PatchPortRef::Alias {
+                node: key("point"),
+                selector: primary,
+            },
+        )
+        .with_input(
+            InputSlot::new(InputRole::Span, 0),
+            PatchPortRef::Alias {
+                node: key("line"),
+                selector: crate::IntentPortSelector::Node {
+                    role: crate::IntentPortRole::Span,
+                    index: 0,
+                },
+            },
+        );
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("point"),
+                    draft: Box::new(point),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("line"),
+                    draft: Box::new(line),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("contact"),
+                    draft: Box::new(contact),
+                    cell: None,
+                },
+            ],
+        );
+        let plan = session.plan_patch(patch, accepted).unwrap();
+        session.commit_plan(plan).unwrap();
+        commit_point(
+            &mut session,
+            "post-contact",
+            "historical.contact.post-contact",
+        );
+        session
+            .undo()
+            .unwrap()
+            .expect("post-contact transaction is redoable");
+        session
+    }
+
+    fn inject_historical_contact_field(
+        checkpoint: &mut SessionCheckpoint,
+        field: &str,
+        value: IntentLiteral,
+    ) {
+        historical_contact_node_mut(checkpoint)
+            .fields
+            .insert(IntentFieldKey(key(field)), value);
+    }
+
+    fn historical_contact_node_mut(checkpoint: &mut SessionCheckpoint) -> &mut crate::IntentNode {
+        checkpoint
+            .graph
+            .nodes
+            .values_mut()
+            .find(|node| {
+                matches!(
+                    node.kind,
+                    IntentNodeKind::Constraint {
+                        constraint: ConstraintKind::PointOnCurve
+                    }
+                )
+            })
+            .expect("historical fixture contact declaration")
+    }
+
+    fn reauthenticate_historical_checkpoint(checkpoint: &mut SessionCheckpoint) {
+        if let Some(accepted) = &mut checkpoint.accepted {
+            accepted.graph.clone_from(&checkpoint.graph);
+            accepted.target = semantic_identity(
+                &accepted.graph,
+                &accepted.instance,
+                accepted.reservations.identity(),
+                &accepted.external_inputs,
+            );
+        }
+        let target = semantic_identity(
+            &checkpoint.graph,
+            &checkpoint.instance,
+            checkpoint.reservation_identity,
+            &checkpoint.external_inputs,
+        );
+        if let Some(attempt) = &mut checkpoint.latest_attempt {
+            attempt.target = target;
+            attempt.materialization_digest = checkpoint
+                .accepted
+                .as_ref()
+                .map(|accepted| accepted.evidence.digest);
+        }
+    }
+
+    fn authenticated_historical_contact_json() -> String {
+        let session = session_with_historical_contact_domain();
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&session.to_canonical_json().unwrap()).unwrap();
+        for checkpoint in std::iter::once(&mut wire.current)
+            .chain(wire.undo.iter_mut().map(|entry| &mut entry.checkpoint))
+            .chain(wire.redo.iter_mut().map(|entry| &mut entry.checkpoint))
+        {
+            if checkpoint.graph.nodes().values().any(|node| {
+                matches!(
+                    node.kind,
+                    IntentNodeKind::Constraint {
+                        constraint: ConstraintKind::PointOnCurve
+                    }
+                )
+            }) {
+                inject_historical_contact_field(
+                    checkpoint,
+                    "contact_domain",
+                    IntentLiteral::Enum(key("bounded")),
+                );
+                inject_historical_contact_field(
+                    checkpoint,
+                    "contact_domain_lower",
+                    IntentLiteral::Quantity {
+                        value: 0.0,
+                        unit: crate::IntentUnit::Dimensionless,
+                    },
+                );
+                inject_historical_contact_field(
+                    checkpoint,
+                    "contact_domain_upper",
+                    IntentLiteral::Quantity {
+                        value: 1.0,
+                        unit: crate::IntentUnit::Dimensionless,
+                    },
+                );
+                reauthenticate_historical_checkpoint(checkpoint);
+            }
+        }
+        bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+        authenticated_wire_json(wire)
+    }
+
+    #[test]
+    fn historical_contact_domain_migration_is_explicit_strict_and_canonical() {
+        let historical = authenticated_historical_contact_json();
+        assert!(matches!(
+            IntentSession::from_json(&historical),
+            Err(IntentSessionError::Graph(
+                IntentGraphError::UnknownDefinitionField { ref field, .. }
+            )) if field.0.as_str() == "contact_domain"
+        ));
+        let migrated = IntentSession::from_historical_contact_domain_json(&historical).unwrap();
+        let canonical = migrated.to_canonical_json().unwrap();
+        assert!(!canonical.contains("contact_domain"));
+        assert_eq!(
+            IntentSession::from_json(&canonical)
+                .unwrap()
+                .to_canonical_json()
+                .unwrap(),
+            canonical
+        );
+        assert!(migrated.undo_len() > 0);
+        assert!(migrated.redo_len() > 0);
+        let mut replayed = migrated;
+        replayed.redo().unwrap().expect("migrated Redo is valid");
+        replayed.undo().unwrap().expect("migrated Undo is valid");
+        replayed.validate().unwrap();
+
+        let mut tampered = historical.clone().into_bytes();
+        let index = tampered
+            .windows(b"bounded".len())
+            .position(|window| window == b"bounded")
+            .unwrap();
+        tampered[index] = b'B';
+        assert!(matches!(
+            IntentSession::from_historical_contact_domain_json(
+                std::str::from_utf8(&tampered).unwrap()
+            ),
+            Err(IntentSessionError::DigestMismatch)
+        ));
+
+        let ordinary = session_with_historical_contact_domain()
+            .to_canonical_json()
+            .unwrap();
+        assert!(matches!(
+            IntentSession::from_historical_contact_domain_json(&ordinary),
+            Err(IntentSessionError::HistoricalContactDomainMigrationNotApplicable)
+        ));
+    }
+
+    #[test]
+    fn historical_contact_domain_migration_rejects_nondefault_mixed_and_unrelated_fields() {
+        let base = authenticated_historical_contact_json();
+        for (label, mutate) in [
+            (
+                "non-default bound",
+                (|checkpoint: &mut SessionCheckpoint| {
+                    inject_historical_contact_field(
+                        checkpoint,
+                        "contact_domain_upper",
+                        IntentLiteral::Quantity {
+                            value: 0.5,
+                            unit: crate::IntentUnit::Dimensionless,
+                        },
+                    );
+                }) as fn(&mut SessionCheckpoint),
+            ),
+            (
+                "mixed current field",
+                |checkpoint: &mut SessionCheckpoint| {
+                    inject_historical_contact_field(
+                        checkpoint,
+                        "contact_range_upper",
+                        IntentLiteral::Quantity {
+                            value: 0.5,
+                            unit: crate::IntentUnit::Dimensionless,
+                        },
+                    );
+                },
+            ),
+            (
+                "non-enum domain literal",
+                |checkpoint: &mut SessionCheckpoint| {
+                    inject_historical_contact_field(
+                        checkpoint,
+                        "contact_domain",
+                        IntentLiteral::Boolean(true),
+                    );
+                },
+            ),
+            (
+                "auxiliary without domain",
+                |checkpoint: &mut SessionCheckpoint| {
+                    historical_contact_node_mut(checkpoint)
+                        .fields
+                        .remove(&IntentFieldKey(key("contact_domain")));
+                },
+            ),
+            (
+                "unrelated unknown field",
+                |checkpoint: &mut SessionCheckpoint| {
+                    inject_historical_contact_field(
+                        checkpoint,
+                        "unrelated_domain",
+                        IntentLiteral::Enum(key("bounded")),
+                    );
+                },
+            ),
+        ] {
+            let mut wire: IntentSessionWire = serde_json::from_str(&base).unwrap();
+            wire.undo.clear();
+            wire.redo.clear();
+            mutate(&mut wire.current);
+            reauthenticate_historical_checkpoint(&mut wire.current);
+            bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+            let result =
+                IntentSession::from_historical_contact_domain_json(&authenticated_wire_json(wire));
+            assert!(result.is_err(), "{label} must reject");
+        }
+
+        let mut periodic: IntentSessionWire = serde_json::from_str(&base).unwrap();
+        periodic.undo.clear();
+        periodic.redo.clear();
+        inject_historical_contact_field(
+            &mut periodic.current,
+            "contact_domain",
+            IntentLiteral::Enum(key("periodic")),
+        );
+        inject_historical_contact_field(
+            &mut periodic.current,
+            "contact_domain_period",
+            IntentLiteral::Quantity {
+                value: 6.0,
+                unit: crate::IntentUnit::Dimensionless,
+            },
+        );
+        reauthenticate_historical_checkpoint(&mut periodic.current);
+        bind_history_edges(&periodic.current, &mut periodic.undo, &mut periodic.redo);
+        assert!(matches!(
+            IntentSession::from_historical_contact_domain_json(&authenticated_wire_json(periodic)),
+            Err(IntentSessionError::HistoricalContactDomainMigrationRejected { .. })
+        ));
+    }
+
+    #[test]
+    fn historical_contact_domain_migration_preserves_explicit_supporting_line_intent() {
+        let mut wire: IntentSessionWire =
+            serde_json::from_str(&authenticated_historical_contact_json()).unwrap();
+        wire.undo.clear();
+        wire.redo.clear();
+        let node = historical_contact_node_mut(&mut wire.current);
+        node.fields.insert(
+            IntentFieldKey(key("contact_domain")),
+            IntentLiteral::Enum(key("supporting_line")),
+        );
+        node.fields
+            .remove(&IntentFieldKey(key("contact_domain_lower")));
+        node.fields
+            .remove(&IntentFieldKey(key("contact_domain_upper")));
+        reauthenticate_historical_checkpoint(&mut wire.current);
+        bind_history_edges(&wire.current, &mut wire.undo, &mut wire.redo);
+
+        let migrated =
+            IntentSession::from_historical_contact_domain_json(&authenticated_wire_json(wire))
+                .expect("exact supporting-line topology maps to current contact support");
+        let node = migrated
+            .graph()
+            .nodes()
+            .values()
+            .find(|node| {
+                matches!(
+                    node.kind,
+                    IntentNodeKind::Constraint {
+                        constraint: ConstraintKind::PointOnCurve
+                    }
+                )
+            })
+            .unwrap();
+        assert_eq!(
+            node.fields.get(&IntentFieldKey(key("contact_support"))),
+            Some(&IntentLiteral::Enum(key("supporting_line")))
+        );
+        assert!(
+            !node
+                .fields
+                .keys()
+                .any(|field| field.0.as_str().starts_with("contact_domain"))
+        );
+        IntentSession::from_json(&migrated.to_canonical_json().unwrap())
+            .expect("supporting-line migration emits an ordinary current-schema session");
     }
 
     fn commit_point(session: &mut IntentSession, alias: &str, symbol: &str) {

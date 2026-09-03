@@ -259,6 +259,34 @@ impl ProjectionalEditorSession {
         )?))
     }
 
+    /// Restores an authenticated current session after an owning historical
+    /// workspace migration changed only its semantic graph identity.
+    ///
+    /// Persisted accepted geometry is used solely as numerical continuation;
+    /// fresh native evidence must be cold-materialized and independently
+    /// validated against the migrated current graph before publication. This
+    /// seam is deliberately separate from ordinary strict restore.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed materialization, session, or accepted-authority error
+    /// without installing partial state.
+    #[doc(hidden)]
+    pub fn restore_after_authenticated_semantic_migration(
+        intent: IntentSession,
+        document: DocumentId,
+        model_scale: f64,
+    ) -> Result<Self, ProjectionalEditorError> {
+        let materializer = ColdIntentMaterializer::with_default_policy(document, model_scale)
+            .map_err(ProjectionalCoordinatorError::from)?;
+        Ok(Self::new(
+            ProjectionalIntentCoordinator::restore_after_authenticated_semantic_migration(
+                intent,
+                materializer,
+            )?,
+        ))
+    }
+
     /// Restores an exact revision-zero empty intent with independently
     /// validated empty native acceptance and no user-visible history entry.
     /// Ordinary empty patches remain invalid; callers use this only when an
@@ -451,6 +479,39 @@ impl ProjectionalEditorSession {
             intent,
             materializer,
         )?))
+    }
+
+    /// Restores a mixed authenticated bootstrap-prefix session after an
+    /// owning historical workspace migration changed only later declaration
+    /// semantics.
+    ///
+    /// The prefix is decoded and authenticated exactly as in
+    /// [`Self::restore_with_bootstrap_prefix`]. Its native bytes seed the cold
+    /// materializer, while the prior accepted document supplies numerical
+    /// continuation only. Fresh evidence for the migrated graph is mandatory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a strict prefix, materialization, or accepted-authority error
+    /// without installing partial state.
+    #[doc(hidden)]
+    pub fn restore_with_bootstrap_prefix_after_authenticated_semantic_migration(
+        intent: IntentSession,
+    ) -> Result<Self, ProjectionalEditorError> {
+        let decoded = decode_flat_intent_accepted_bootstrap_prefix(&intent)?;
+        let ownership = flat_intent_accepted_bootstrap_prefix_materialization_map(&intent)?;
+        let materializer = ColdIntentMaterializer::with_default_policy(
+            decoded.document.id(),
+            decoded.document.model_scale(),
+        )
+        .and_then(|materializer| materializer.with_authenticated_bootstrap(&decoded, ownership))
+        .map_err(ProjectionalCoordinatorError::from)?;
+        Ok(Self::new(
+            ProjectionalIntentCoordinator::restore_after_authenticated_semantic_migration(
+                intent,
+                materializer,
+            )?,
+        ))
     }
 
     /// Creates a session with explicit transient editor and solve-work policy.

@@ -67,6 +67,8 @@ pub(crate) struct WorkspaceSnapshot {
     intent_session_json: Option<String>,
     #[serde(skip)]
     origin: WorkspaceSnapshotOrigin,
+    #[serde(skip)]
+    migrated_historical_contact_domain: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -779,6 +781,7 @@ impl WorkspaceSnapshot {
                     .map_err(|error| error.to_string())?,
             ),
             origin: WorkspaceSnapshotOrigin::ProjectionalV8,
+            migrated_historical_contact_domain: false,
         }
         .validated()
     }
@@ -846,6 +849,7 @@ impl WorkspaceSnapshot {
             },
             intent_session_json: None,
             origin: WorkspaceSnapshotOrigin::FlatV6,
+            migrated_historical_contact_domain: false,
         }
     }
 
@@ -955,6 +959,7 @@ impl WorkspaceSnapshot {
                     revisions: legacy.revisions,
                     intent_session_json: None,
                     origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 1 },
+                    migrated_historical_contact_domain: false,
                 }
                 .validated()
             }
@@ -981,6 +986,7 @@ impl WorkspaceSnapshot {
                     revisions: legacy.revisions,
                     intent_session_json: None,
                     origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 2 },
+                    migrated_historical_contact_domain: false,
                 }
                 .validated()
             }
@@ -1012,6 +1018,7 @@ impl WorkspaceSnapshot {
                     revisions: legacy.revisions,
                     intent_session_json: None,
                     origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 3 },
+                    migrated_historical_contact_domain: false,
                 }
                 .validated()
             }
@@ -1036,6 +1043,7 @@ impl WorkspaceSnapshot {
                     revisions: legacy.revisions,
                     intent_session_json: None,
                     origin: WorkspaceSnapshotOrigin::LegacyBootstrap { source_version: 4 },
+                    migrated_historical_contact_domain: false,
                 }
                 .validated()
             }
@@ -1094,9 +1102,32 @@ impl WorkspaceSnapshot {
                 "legacy workspace-v8 digest requires a canonical legacy intent session".into(),
             );
         }
-        let intent = IntentSession::from_json(&wire.intent_session_json)
-            .map_err(|error| error.to_string())?;
-        let intent_session_json = if nested_version == 1 {
+        let (intent, migrated_contact_topology) =
+            match IntentSession::from_json(&wire.intent_session_json) {
+                Ok(intent) => (intent, false),
+                Err(geosolve_sketch_intent::IntentSessionError::Graph(
+                    geosolve_sketch_intent::IntentGraphError::UnknownDefinitionField {
+                        field, ..
+                    },
+                )) if matches!(
+                    field.0.as_str(),
+                    "source_domain"
+                        | "contact_domain"
+                        | "first_contact_domain"
+                        | "second_contact_domain"
+                ) =>
+                {
+                    (
+                        IntentSession::from_historical_contact_domain_json(
+                            &wire.intent_session_json,
+                        )
+                        .map_err(|error| error.to_string())?,
+                        true,
+                    )
+                }
+                Err(error) => return Err(error.to_string()),
+            };
+        let intent_session_json = if nested_version == 1 || migrated_contact_topology {
             intent
                 .to_canonical_json()
                 .map_err(|error| error.to_string())?
@@ -1119,6 +1150,7 @@ impl WorkspaceSnapshot {
             revisions: materialization.revisions,
             intent_session_json: Some(intent_session_json),
             origin: WorkspaceSnapshotOrigin::ProjectionalV8,
+            migrated_historical_contact_domain: migrated_contact_topology,
         };
         snapshot.validate_with_intent(&intent)?;
         Ok(snapshot)
@@ -1376,11 +1408,17 @@ pub(crate) fn projectional_editor_from_snapshot(
             let stored_accepted = snapshot.accepted_document()?;
             let retained_native = snapshot
                 .restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
-            let projectional = ProjectionalEditorSession::restore_retained_native_bootstrap(
-                intent.clone(),
-                retained_native,
-            )
-            .or_else(|_| ProjectionalEditorSession::restore_with_bootstrap_prefix(intent))
+            let projectional = if snapshot.migrated_historical_contact_domain {
+                ProjectionalEditorSession::restore_with_bootstrap_prefix_after_authenticated_semantic_migration(
+                    intent,
+                )
+            } else {
+                ProjectionalEditorSession::restore_retained_native_bootstrap(
+                    intent.clone(),
+                    retained_native,
+                )
+                .or_else(|_| ProjectionalEditorSession::restore_with_bootstrap_prefix(intent))
+            }
             .map_err(|error| error.to_string())?;
             let rebuilt = projectional
                 .coordinator()
@@ -1414,9 +1452,16 @@ pub(crate) fn projectional_editor_from_snapshot(
     }
     let stored_design = snapshot.design_document()?;
     let stored_accepted = snapshot.accepted_document()?;
-    let mut projectional =
+    let mut projectional = if snapshot.migrated_historical_contact_domain {
+        ProjectionalEditorSession::restore_after_authenticated_semantic_migration(
+            intent,
+            stored_design.id(),
+            stored_design.model_scale(),
+        )
+    } else {
         ProjectionalEditorSession::restore(intent, stored_design.id(), stored_design.model_scale())
-            .map_err(|error| error.to_string())?;
+    }
+    .map_err(|error| error.to_string())?;
 
     let rebuilt = projectional.coordinator().accepted_materialization();
     match (rebuilt, stored_accepted.as_ref()) {
@@ -3058,6 +3103,80 @@ mod tests {
             Some("0823d31f269300af"),
             "the checked-in fixture must retain the supplied checksum identity"
         );
+    }
+
+    #[test]
+    fn m91_historical_contact_workspace_migrates_without_changing_supplied_capsule_bytes() {
+        const PAYLOAD: &str = include_str!("../../tests/fixtures/m90_f005_native_drag_repro.txt");
+        const WORKSPACE_BYTES: usize = 956_305;
+        const WORKSPACE_SHA256: &str =
+            "c5f748d31c90f8fd575ab2acaddfb8b7d20bbc9f31189dc0716995ad05a46ee7";
+        let payload = PAYLOAD.trim_end();
+        let workspace = crate::reproduction::decode_workspace(payload)
+            .expect("exact M90-F005 reproduction transport");
+        assert_eq!(workspace.len(), WORKSPACE_BYTES);
+        assert_eq!(
+            geosolve_sketch_intent::intent_content_digest(workspace.as_bytes()).to_string(),
+            WORKSPACE_SHA256,
+        );
+        assert_eq!(
+            crate::reproduction::encode_workspace(&workspace).unwrap(),
+            payload,
+            "the checked-in historical capsule remains byte-exact",
+        );
+
+        let snapshot = WorkspaceSnapshot::decode(&workspace)
+            .expect("authenticated historical contact workspace migrates");
+        assert!(snapshot.migrated_historical_contact_domain);
+        let migrated_intent = snapshot
+            .intent_session_json
+            .as_deref()
+            .expect("projectional intent authority");
+        assert!(!migrated_intent.contains("_domain\""));
+        IntentSession::from_json(migrated_intent).expect("migrated intent uses the current schema");
+
+        let stored_accepted = snapshot
+            .accepted_document()
+            .unwrap()
+            .expect("stored flat accepted evidence");
+        let restored = projectional_editor_from_snapshot(&snapshot)
+            .expect("cold continuation refresh accepts the migrated authority");
+        let accepted = restored
+            .coordinator()
+            .accepted_materialization()
+            .expect("restored accepted materialization");
+        assert_eq!(
+            accepted
+                .session
+                .accepted_state_for_current_input()
+                .expect("accepted authority is current")
+                .document(),
+            &stored_accepted,
+        );
+        assert_eq!(
+            accepted.evidence,
+            restored
+                .coordinator()
+                .intent()
+                .accepted()
+                .expect("migrated accepted intent authority")
+                .evidence,
+        );
+
+        let resaved = WorkspaceSnapshot::from_projectional_editor(&restored)
+            .expect("capture current-schema workspace after migration");
+        assert!(!resaved.migrated_historical_contact_domain);
+        assert!(
+            !resaved
+                .intent_session_json
+                .as_deref()
+                .unwrap()
+                .contains("_domain\"")
+        );
+        let resaved_json = resaved.encode().expect("encode current-schema workspace");
+        let decoded = WorkspaceSnapshot::decode(&resaved_json)
+            .expect("re-saved workspace restores without historical migration");
+        assert!(!decoded.migrated_historical_contact_domain);
     }
 
     #[test]
