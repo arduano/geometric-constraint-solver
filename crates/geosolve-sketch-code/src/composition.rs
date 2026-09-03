@@ -14,10 +14,11 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, SketchDocument};
 use geosolve_sketch_intent::{
-    DeletePolicy, InputRole, InputSlot, IntentAliasMap, IntentKey, IntentKeyError, IntentNode,
-    IntentNodeDraft, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition,
-    IntentPortKind, IntentPortRef, IntentPortRole, IntentPortSelector, IntentSession,
-    IntentSessionId, IntentSessionIdentity, LeafRef, NodeId, PatchPortRef, intent_content_digest,
+    DeletePolicy, InputRole, InputSlot, IntentAliasMap, IntentKey, IntentKeyError, IntentLiteral,
+    IntentNode, IntentNodeDraft, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+    IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRef, IntentPortRole,
+    IntentPortSelector, IntentSession, IntentSessionId, IntentSessionIdentity, LeafRef, NodeId,
+    PatchPortRef, intent_content_digest,
 };
 use thiserror::Error;
 
@@ -843,6 +844,7 @@ pub fn materialize_code_project_incremental_with_overlay_and_accepted_continuati
 fn apply_incremental_project_patch(
     editor: &mut ProjectionalEditorSession,
     patch: IntentPatch,
+    expansion: &ExpandedCodeProject,
     accepted_continuation: Option<&SketchDocument>,
     mode: IncrementalPatchMode,
 ) -> Result<ProjectionalPatchOutcome, CodeCompositionError> {
@@ -853,6 +855,7 @@ fn apply_incremental_project_patch(
             aliases: IntentAliasMap::default(),
         });
     }
+    let contact_range_edits = authored_contact_range_edits(editor, &patch, expansion);
     let outcome = match (accepted_continuation, mode) {
         (Some(continuation), _) => {
             editor.apply_delegated_patch_with_accepted_continuation(patch, continuation)
@@ -860,7 +863,129 @@ fn apply_incremental_project_patch(
         (None, IncrementalPatchMode::Delegated) => editor.apply_delegated_patch(patch),
         (None, IncrementalPatchMode::Native) => editor.apply_patch(patch),
     };
-    outcome.map_err(|error| CodeCompositionError::BaseEditor(error.to_string()))
+    outcome.map_err(|error| {
+        let diagnostic = actionable_contact_range_rejection(&contact_range_edits, &error)
+            .unwrap_or_else(|| error.to_string());
+        CodeCompositionError::BaseEditor(diagnostic)
+    })
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct AuthoredContactRangeEdit {
+    node: NodeId,
+    contact: String,
+    lower: f64,
+    upper: f64,
+}
+
+fn authored_contact_range_edits(
+    editor: &ProjectionalEditorSession,
+    patch: &IntentPatch,
+    expansion: &ExpandedCodeProject,
+) -> Vec<AuthoredContactRangeEdit> {
+    let graph = editor.coordinator().intent().graph();
+    let mut changed = BTreeMap::<NodeId, BTreeSet<String>>::new();
+    for operation in patch.operations() {
+        let (node, field) = match operation {
+            IntentPatchOperation::SetDefinitionField { node, field, .. }
+            | IntentPatchOperation::UnsetDefinitionField { node, field } => (*node, field),
+            _ => continue,
+        };
+        if let Some(prefix) = field.0.as_str().strip_suffix("_range_lower") {
+            changed.entry(node).or_default().insert(prefix.to_owned());
+        }
+        if let Some(prefix) = field.0.as_str().strip_suffix("_range_upper") {
+            changed.entry(node).or_default().insert(prefix.to_owned());
+        }
+    }
+
+    let mut edits = Vec::new();
+    for (node_id, prefixes) in changed {
+        let Some(node) = graph.node(node_id) else {
+            continue;
+        };
+        for prefix in prefixes {
+            let lower_field = format!("{prefix}_range_lower");
+            let upper_field = format!("{prefix}_range_upper");
+            let lower = patched_definition_quantity(node, patch, &lower_field);
+            let upper = patched_definition_quantity(node, patch, &upper_field);
+            let (Some(lower), Some(upper)) = (lower, upper) else {
+                continue;
+            };
+            let declaration = expansion
+                .declaration_for_alias(&node.symbol)
+                .map_or_else(|| node.symbol.to_string(), |symbol| symbol.0.clone());
+            let contact = match prefix.as_str() {
+                "contact" => declaration,
+                "source" => format!("{declaration}.source"),
+                "first_contact" => format!("{declaration}.contacts[0]"),
+                "second_contact" => format!("{declaration}.contacts[1]"),
+                _ => format!("{declaration}.{prefix}"),
+            };
+            edits.push(AuthoredContactRangeEdit {
+                node: node_id,
+                contact,
+                lower,
+                upper,
+            });
+        }
+    }
+    edits
+}
+
+fn patched_definition_quantity(node: &IntentNode, patch: &IntentPatch, name: &str) -> Option<f64> {
+    let mut value = node
+        .fields
+        .iter()
+        .find_map(|(field, value)| (field.0.as_str() == name).then_some(value));
+    for operation in patch.operations() {
+        match operation {
+            IntentPatchOperation::SetDefinitionField {
+                node: target,
+                field,
+                value: replacement,
+            } if *target == node.id && field.0.as_str() == name => value = Some(replacement),
+            IntentPatchOperation::UnsetDefinitionField {
+                node: target,
+                field,
+            } if *target == node.id && field.0.as_str() == name => value = None,
+            _ => {}
+        }
+    }
+    match value {
+        Some(IntentLiteral::Quantity { value, .. }) if value.is_finite() => Some(*value),
+        _ => None,
+    }
+}
+
+fn actionable_contact_range_rejection(
+    edits: &[AuthoredContactRangeEdit],
+    error: &ProjectionalEditorError,
+) -> Option<String> {
+    let ProjectionalEditorError::Coordinator(
+        geosolve_constraint_editor::ProjectionalCoordinatorError::Plan(
+            IntentPlanError::EvaluationRejected { failure },
+        ),
+    ) = error
+    else {
+        return None;
+    };
+    let edit = edits
+        .iter()
+        .find(|edit| failure.failed_nodes.contains(&edit.node))?;
+    let invariant = match failure.diagnostic.as_str() {
+        "native-solver-rejected" => {
+            "all hard constraints must admit a finite independently validated solution"
+        }
+        "native-validation-rejected" => {
+            "the independently validated normalized hard residual must remain at most 1e-9"
+        }
+        _ => "the candidate must pass native materialization and independent validation",
+    };
+    Some(format!(
+        "managed contact `{}` authored interval [{}, {}] was rejected: {invariant} (native diagnostic `{}`)",
+        edit.contact, edit.lower, edit.upper, failure.diagnostic,
+    ))
 }
 
 #[allow(
@@ -951,6 +1076,7 @@ fn materialize_code_project_incremental_with_overlay_and_work(
     let mut base_outcome = apply_incremental_project_patch(
         &mut editor,
         patch,
+        &expansion,
         accepted_continuation,
         IncrementalPatchMode::Native,
     )?;
@@ -1023,6 +1149,7 @@ fn materialize_unchanged_host_project_incremental(
     let mut base_outcome = apply_incremental_project_patch(
         &mut editor,
         patch,
+        &expansion,
         accepted_continuation,
         IncrementalPatchMode::Delegated,
     )?;

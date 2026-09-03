@@ -212,6 +212,14 @@ const managedSketchFixtures = [
     fixture: "test/fixtures/managed-contact-range-limited.json",
   },
   {
+    source: "test/fixtures/managed-contact-range-infeasible-base.sketch.ts",
+    fixture: "test/fixtures/managed-contact-range-infeasible-base.json",
+  },
+  {
+    source: "test/fixtures/managed-contact-range-infeasible-limited.sketch.ts",
+    fixture: "test/fixtures/managed-contact-range-infeasible-limited.json",
+  },
+  {
     source: "test/fixtures/managed-contact-supporting-line.sketch.ts",
     fixture: "test/fixtures/managed-contact-supporting-line.json",
   },

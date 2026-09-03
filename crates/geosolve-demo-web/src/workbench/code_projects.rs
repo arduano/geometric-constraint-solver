@@ -7266,6 +7266,133 @@ fn escape_attribute(value: &str) -> String {
 mod tests {
     use super::*;
 
+    fn infeasible_contact_range_fixture(limited: bool) -> CompiledManagedSource {
+        let fixture = if limited {
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-infeasible-limited.json"
+            ))
+        } else {
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-infeasible-base.json"
+            ))
+        };
+        CompiledManagedSource::from_json(fixture)
+            .expect("checked infeasible contact-range compiler fixture")
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one transaction regression freezes every accepted code/editor/materialization/history authority across a rejected numerical candidate"
+    )]
+    fn infeasible_contact_range_retains_authority_with_actionable_diagnostic() {
+        let base = infeasible_contact_range_fixture(false);
+        let candidate = infeasible_contact_range_fixture(true);
+        let candidate_source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-infeasible-limited.sketch.ts"
+        ))
+        .to_owned();
+        let (mut workbench, editor) =
+            CodeProjectWorkbench::open_managed_test_compiled("m91-infeasible-contact-range", base)
+                .expect("feasible contact-range base materializes");
+
+        let project_before = workbench.project.to_canonical_json().unwrap();
+        let session_before = workbench.session.to_canonical_json().unwrap();
+        let identity_before = workbench.session.identity().clone();
+        let checkpoint_before = workbench.accepted_editor_checkpoint().clone();
+        let expansion_before = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .clone()
+            .expect("base expansion authority");
+        let accepted_before = editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("base native authority");
+        let document_before = accepted_before
+            .session
+            .accepted_state_for_current_input()
+            .expect("base accepted document")
+            .document()
+            .clone();
+        let ownership_before = accepted_before.ownership.clone();
+        let validation_before = accepted_before.validation.clone();
+        let evidence_before = accepted_before.evidence.clone();
+        assert!(!workbench.session.can_undo());
+        assert!(!workbench.session.can_redo());
+        assert!(workbench.last_receipt.is_none());
+
+        workbench.set_managed_draft(candidate_source.clone());
+        let prepared = workbench
+            .prepare_managed_source_apply()
+            .expect("Rust prepares the structurally valid range edit");
+        let receipt = PreparedManagedMutationReceipt {
+            ticket_digest: prepared.request.ticket.ticket_digest.clone(),
+            base_source_digest: prepared.request.current.ir.source_digest.clone(),
+            candidate_source_digest: candidate.ir.source_digest.clone(),
+            compiled: candidate,
+        };
+        let ResolvedManagedSourceApply::RetainedFailure { source, diagnostic } = workbench
+            .resolve_managed_source_apply(&prepared, receipt)
+            .expect("native rejection is a retained source outcome")
+        else {
+            panic!("numerically infeasible contact range must not publish")
+        };
+
+        assert_eq!(source, candidate_source);
+        assert_eq!(workbench.managed_draft, candidate_source);
+        assert_eq!(
+            diagnostic,
+            "base code patch rejected: managed contact `contact` authored interval [0, 0.5] was rejected: all hard constraints must admit a finite independently validated solution (native diagnostic `native-solver-rejected`)"
+        );
+        assert!(diagnostic.len() <= 256, "diagnostic must remain bounded");
+
+        assert_eq!(
+            workbench.project.to_canonical_json().unwrap(),
+            project_before
+        );
+        assert_eq!(
+            workbench.session.to_canonical_json().unwrap(),
+            session_before
+        );
+        assert_eq!(workbench.session.identity(), &identity_before);
+        assert_eq!(workbench.accepted_editor_checkpoint(), &checkpoint_before);
+        assert_eq!(
+            workbench.session.snapshot().accepted_expansion.as_ref(),
+            Some(&expansion_before),
+        );
+        assert!(!workbench.session.can_undo());
+        assert!(!workbench.session.can_redo());
+        assert!(workbench.last_receipt.is_none());
+
+        let restored = workbench
+            .restore_accepted_editor()
+            .expect("prior editor authority remains restorable");
+        assert_eq!(
+            encode_editor_checkpoint(&restored).unwrap(),
+            checkpoint_before
+        );
+        let accepted_after = restored
+            .coordinator()
+            .accepted_materialization()
+            .expect("prior materialization remains authoritative");
+        assert_eq!(
+            accepted_after
+                .session
+                .accepted_state_for_current_input()
+                .expect("retained accepted document")
+                .document(),
+            &document_before,
+        );
+        assert_eq!(accepted_after.ownership, ownership_before);
+        assert_eq!(accepted_after.validation, validation_before);
+        assert_eq!(accepted_after.evidence, evidence_before);
+    }
+
     #[test]
     fn canonical_export_is_exact_and_refuses_absent_dirty_or_invalid_draft_authority() {
         assert_eq!(
