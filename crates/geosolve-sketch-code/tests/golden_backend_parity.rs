@@ -1249,7 +1249,7 @@ fn reconciled(project: &CodeProject) -> Result<KeyedReconcileState, String> {
                 .map_err(|error| format!("generated inventory failed: {error}"))?,
             &BTreeSet::new(),
         )
-        .map(|plan| plan.into_staged())
+        .map(geosolve_sketch_code::KeyedReconcilePlan::into_staged)
         .map_err(|error| format!("generated reconciliation failed: {error}"))
 }
 
@@ -2291,7 +2291,7 @@ mod canonicalizer_tests {
         short_expected["document"]["model_scale"] = json!(1.0);
         short_expected["document"]["points"][1]["position"] = json!([0.01, 0.0]);
         let mut short_actual = short_expected.clone();
-        short_actual["document"]["scalars"][0]["value"] = json!(0.25000005);
+        short_actual["document"]["scalars"][0]["value"] = json!(0.250_000_05);
 
         assert!(
             compare_values(
@@ -2314,7 +2314,7 @@ mod canonicalizer_tests {
         let mut long_expected = short_expected;
         long_expected["document"]["points"][1]["position"] = json!([1.0, 0.0]);
         let mut long_actual = long_expected.clone();
-        long_actual["document"]["scalars"][0]["value"] = json!(0.25000005);
+        long_actual["document"]["scalars"][0]["value"] = json!(0.250_000_05);
         assert!(
             compare_values(
                 &accepted_canonical(&long_expected).expect("long expected contact evaluates"),

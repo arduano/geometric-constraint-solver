@@ -4208,7 +4208,8 @@ mod tests {
         let length = raw[0].hypot(raw[1]);
         let expected = [raw[0] / length, raw[1] / length];
         assert_ne!(
-            raw, expected,
+            raw.map(f64::to_bits),
+            expected.map(f64::to_bits),
             "fixture must expose the one-ulp migration seam"
         );
 
