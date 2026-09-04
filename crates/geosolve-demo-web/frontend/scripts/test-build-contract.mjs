@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,9 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "../../../..");
 const validator = resolve(scriptDirectory, "validate-dist.mjs");
 const temporaryRoot = await mkdtemp(resolve(tmpdir(), "geosolve-build-contract-"));
+const maximumReleaseWasmBytes = 20 * 1024 * 1024;
+const maximumDistributionBytes = 30 * 1024 * 1024;
+const wasmMagic = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
 
 async function fixture(name, publicBase) {
   const distribution = resolve(temporaryRoot, name);
@@ -52,6 +55,15 @@ function validate(distribution, publicBase, success) {
   }
 }
 
+async function distributionBytes(directory) {
+  let bytes = 0;
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    bytes += entry.isDirectory() ? await distributionBytes(path) : (await stat(path)).size;
+  }
+  return bytes;
+}
+
 try {
   validate(await fixture("geosolve-relative", "./"), "./", true);
   const pages = await fixture("geosolve-pages", "/geometric-constraint-solver/");
@@ -63,6 +75,18 @@ try {
   const invalidWasm = await fixture("geosolve-invalid-wasm", "./");
   await writeFile(resolve(invalidWasm, "assets/module-12345678.wasm"), "not wasm\n");
   validate(invalidWasm, "./", false);
+  const wasmAtCeiling = await fixture("geosolve-wasm-at-ceiling", "./");
+  const ceilingWasm = new Uint8Array(maximumReleaseWasmBytes);
+  ceilingWasm.set(wasmMagic);
+  await writeFile(resolve(wasmAtCeiling, "assets/module-12345678.wasm"), ceilingWasm);
+  validate(wasmAtCeiling, "./", false);
+  const distributionAtCeiling = await fixture("geosolve-distribution-at-ceiling", "./");
+  const fixtureBytes = await distributionBytes(distributionAtCeiling);
+  await writeFile(
+    resolve(distributionAtCeiling, "assets/padding-12345678.js"),
+    new Uint8Array(maximumDistributionBytes - fixtureBytes),
+  );
+  validate(distributionAtCeiling, "./", false);
   const tampered = await fixture("geosolve-tampered", "./");
   await writeFile(resolve(tampered, "LICENSE"), "tampered\n");
   validate(tampered, "./", false);

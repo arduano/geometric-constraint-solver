@@ -16,7 +16,7 @@
     "test:e2e": "playwright test",
     "test:e2e:language": "playwright test tests/e2e/language-service.spec.ts",
     "check": "npm run check:manifest && npm run check:licenses && npm run test:build && npm run test && npm run build",
-    "check:manifest": "node scripts/check-sample-manifest.mjs",
+    "check:manifest": "cargo run --locked -q -p geosolve-sketch-code --example generate_frontend_samples -- --check src/data/samples.json && node scripts/check-sample-manifest.mjs",
     "check:licenses": "node scripts/check-runtime-licenses.mjs",
     "check:language-sdk": "node scripts/sync-language-service-declarations.mjs --check",
     "generate:language-sdk": "node scripts/sync-language-service-declarations.mjs",
