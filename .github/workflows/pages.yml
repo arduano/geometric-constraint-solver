@@ -55,7 +55,13 @@ jobs:
           # Expand Pages variables in the inner Nix shell.
           # shellcheck disable=SC2016
           nix-shell shell.nix --run '
-            cd crates/geosolve-demo-web/frontend
+            cd packages/geosolve-intent
+            npm ci --ignore-scripts
+            npm run build
+            cd ../geosolve-sketch-code
+            npm ci --ignore-scripts
+            npm run build
+            cd ../../crates/geosolve-demo-web/frontend
             npm ci --ignore-scripts
             npm run check:manifest
             npm run check:licenses
