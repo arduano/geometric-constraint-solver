@@ -272,8 +272,10 @@ fn validate_sample_patches(
     compiled: &Value,
 ) -> Vec<ValidatedSamplePatch> {
     let patches_dir = directory.join("patches");
-    println!("cargo:rerun-if-changed={}", patches_dir.display());
     if !patches_dir.is_dir() {
+        // The existing registry-root directory watch observes a later optional directory being
+        // created. Advertising this missing path directly would keep the package perpetually
+        // dirty in Cargo's fingerprint graph.
         assert!(
             compiled
                 .pointer("/ir/imports")
@@ -286,6 +288,7 @@ fn validate_sample_patches(
         );
         return Vec::new();
     }
+    println!("cargo:rerun-if-changed={}", patches_dir.display());
 
     let mut sources = directory_paths(&patches_dir)
         .into_iter()
@@ -406,7 +409,11 @@ fn validate_provenance(manifest: &SampleManifest, directory: &Path) {
     }
 
     let notice_path = directory.join("NOTICE.md");
-    println!("cargo:rerun-if-changed={}", notice_path.display());
+    // The registry-root directory watch covers creation of an optional notice. Only advertise
+    // the concrete file once it exists so Cargo can keep unchanged registry builds fresh.
+    if notice_path.is_file() {
+        println!("cargo:rerun-if-changed={}", notice_path.display());
+    }
     if notice_required {
         let notice = fs::read_to_string(&notice_path).unwrap_or_else(|error| {
             panic!(
