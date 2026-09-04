@@ -2,7 +2,7 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 18,
   "key": "fabrication-operations-atlas",
-  "title": "Fabrication operations, constraints and dimensions atlas",
+  "title": "Fabrication operations, constraints, dimensions and annotations atlas",
   "summary": "Profile and topology operations, generated drilling, explicit constraint relations and a broad metrology annotation bench.",
   "category": "reference_lab",
   "expected": {

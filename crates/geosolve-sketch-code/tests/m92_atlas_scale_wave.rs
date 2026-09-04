@@ -47,6 +47,18 @@ const SAMPLES: [ExpectedSample; 4] = [
         exact_circles: None,
         exact_computed_curves: 0,
         required_families: &[
+            "operation.rectangle",
+            "operation.regularPolygon",
+            "operation.slot",
+            "operation.split",
+            "operation.break",
+            "operation.trim",
+            "operation.extend",
+            "operation.mirror",
+            "operation.chamfer",
+            "operation.associativeFillet",
+            "operation.profileOffset",
+            "operation.linearPattern",
             "constraint.fixedPoint",
             "constraint.horizontal",
             "constraint.vertical",
@@ -213,6 +225,31 @@ fn atlas_and_scale_samples_are_complete_native_scene_authorities() {
                 "{} is missing required atlas family {family}",
                 expected.key
             );
+        }
+        if expected.key == "fabrication-operations-atlas" {
+            let declaration_families = compiled
+                .artifact
+                .declarations
+                .iter()
+                .map(|declaration| {
+                    (
+                        declaration.declaration.as_str(),
+                        declaration.family.as_str(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            let annotations = compiled
+                .artifact
+                .groups
+                .iter()
+                .find(|group| group.name == "Fabrication annotations")
+                .expect("explicit fabrication annotation group");
+            assert_eq!(annotations.declarations.len(), 2);
+            assert!(annotations.declarations.iter().all(|member| {
+                declaration_families
+                    .get(member.declaration.as_str())
+                    .is_some_and(|family| family.starts_with("dimension."))
+            }));
         }
         let mut grouped = BTreeMap::<&str, usize>::new();
         for group in &compiled.artifact.groups {
