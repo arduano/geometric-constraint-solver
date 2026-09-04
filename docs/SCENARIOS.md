@@ -6955,9 +6955,10 @@ M90 is closed.
 
 ## M91 cohesive code-driven-authoring fixtures
 
-Status: **Implementation complete; nomination evidence pending.** No candidate is nominated and all
-14 composite human UAT rows remain exactly Not run. These fixtures mechanically qualify the five
-integrated workstreams; they do not substitute for `docs/M91_UAT.md`.
+Status: **Candidate nominated; awaiting composite human UAT.**
+
+All 14 composite human UAT rows remain exactly Not run. These fixtures mechanically qualify the
+five integrated workstreams; they do not substitute for `docs/M91_UAT.md`.
 
 ### M91-C1 — authored contact range reconciles from accepted continuation
 
@@ -7044,17 +7045,31 @@ limit and `36,085,444` distribution bytes against a strict `< 30 MiB` limit. The
 JSON, were embedded with `include_str!`. This is a release-bundle `DEFECT`, not a solver, equation,
 sample-semantics or server defect.
 
-The pending focused repair must deterministically zlib-compress only
+Commit `d2170c46775b412785b3a2f288c170aba9ac8155` deterministically zlib-compresses only
 `assets/{samples,demos}/*.compiled.json` at build time using pure-Rust `miniz_oxide`. Runtime lazily
-inflates each exact envelope once. Before accepting it, enforce the existing `MANAGED_WIRE_LIMIT` on
-compressed and declared decompressed length, exact output length, complete input consumption, valid
-zlib checksum/terminal status and UTF-8. Preserve public `compiled_source: &'static str`, exact
-authenticated JSON bytes, catalog order and deterministic semantics.
+inflates each exact envelope once. It enforces the existing `MANAGED_WIRE_LIMIT` on compressed and
+declared decompressed length, exact output length, complete input consumption, valid zlib checksum/
+terminal status and UTF-8. Public `compiled_source: &'static str`, exact authenticated JSON bytes,
+catalog order and deterministic semantics are preserved.
 
-Focused owner coverage must compare all 37 reconstructions byte-for-byte with test-only raw assets
-and reject oversized input/output declarations, short/long lengths, truncation, corruption, trailing
-bytes and invalid UTF-8. The repair, final source and measured output remain pending in this document:
-`@M91_F001_COMMIT@`, `@M91_WASM_BYTES@`, `@M91_DIST_BYTES@`, `@M91_WASM_SHA@`.
+Focused owner coverage compares all 37 reconstructions byte-for-byte with test-only raw assets and
+rejects oversized input/output declarations, short/long lengths, truncation, corruption, trailing
+bytes and invalid UTF-8. It passes, and the final release WASM is `18,368,160` bytes at SHA-256
+`6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`; the distribution is
+`27,158,025` bytes.
+
+### M91-F002 — package verifier omitted a direct unpublished dependency
+
+The first otherwise-complete clean gate reached package verification and failed at exit `101`:
+`geosolve-sketch-code` now directly depends on `geosolve-sketch-features`, but the verifier patched
+only its other three unpublished local dependencies and Cargo attempted a crates.io lookup. The
+focused verifier independently reproduced the same failure. This is a packaging-harness `DEFECT`,
+not a solver, equation, parity or artifact defect.
+
+Final implementation commit `6d0155151133ba2540fd1dc4b2b071f141b86064` patches all four direct
+local dependencies and compares that reviewed list against the manifest's direct path dependencies,
+failing closed if they drift. `bash -n`, the focused offline package/archive verifier and the
+subsequent complete clean release gate pass.
 
 ### M91-C6 — qualification and immutable nomination boundary
 
@@ -7066,12 +7081,20 @@ external sorted SHA-256 manifest, verify local/live bytes plus MIME/redirect/com
 serve only through a distinct transient M91 Tailscale service. Do not modify/restart M90 or publish
 GitHub Pages.
 
-Evidence placeholders are `@M91_FINAL_COMMIT@`, `@M91_FINAL_TREE@`, `@M91_RELEASE_LOG@`,
-`@M91_RELEASE_LOG_SHA@`, `@M91_SNAPSHOT@`, `@M91_MANIFEST@`, `@M91_SNAPSHOT_SHA@`,
-`@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`, `@M91_WASM_SHA@`, `@M91_HTTP_LEDGER_SHA@`,
-`@M91_SERVICE@`, `@M91_SERVICE_PID@`, `@M91_SERVICE_INVOCATION@` and `@M91_UAT_URL@`. Until they
-are all replaced with verified identities, status remains “Implementation complete; nomination
-evidence pending”. Automated evidence does not execute, pass or waive a human UAT row.
+The nominated source is `6d0155151133ba2540fd1dc4b2b071f141b86064`, tree
+`972ad507c2cdfad2c9cd664e49feaf79ae381c81`. Clean release log
+`/home/arduano/m91-gate.t8TTq0Bj/release-gate.log` is `706,478` bytes at SHA-256
+`cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`. The exact gate output is
+frozen without rebuilding at `/tmp/geosolve-m91-uat.17Q5LnSg`; manifest
+`/tmp/geosolve-m91-uat.17Q5LnSg.sha256` has ordered aggregate
+`b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`. Release WASM
+`assets/geosolve_demo_web_bg-tvc8MGYX.wasm` is `18,368,160` bytes at SHA-256
+`6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`. Staging/live HTTP ledgers
+match at SHA-256 `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`, and both frozen
+endpoints pass Chromium `20/20`. Unit `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
+`bf93a3f5dab84809a24fdc2db6f23f4f`, serves only that snapshot at
+`http://100.94.63.83:18091/`. M90 remained byte-identical; no GitHub Pages deployment or public push
+was made. Automated evidence does not execute, pass or waive a human UAT row.
 
 ## Frozen near-singular fixtures
 

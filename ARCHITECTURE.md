@@ -31,8 +31,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   qualification, the complete dirty-tree release gate and immutable Tailscale nomination. M90-U1
   through M90-U10 transfer/defer—not pass or waive—into M91's composite UAT. The exact closing
   candidate remains Tailscale-only at `http://100.94.63.83:18090/`; no GitHub Pages deployment or
-  public push was authorized or made. M91 implementation is complete but nomination evidence is
-  pending; no candidate is nominated and all 14 composite UAT rows remain Not run. M44
+  public push was authorized or made. M91's clean-qualified immutable candidate is now nominated;
+  all 14 composite UAT rows remain Not run. M44
   completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval; M77 completes CAD curve controls, spatial elliptical-arc authoring and exact public verification; M78 completes exact CAD geometry variants, semantic recipe stages and atomic construction publication; M79 completes stable inference cycling, recovery and exact public verification; M80 completes native topology-preserving Profile Offset, native line-line Fillet publication and ordinary line-arc angle propagation; M81 completes behavior-preserving private architecture consolidation and allocator-neutral rejection; M83 completes accepted projectional design intent, F001-F010 hardening and exact public verification; M84 completes optional hybrid code/GUI authoring, F001-F012 hardening and exact public verification; M85 completes semantic-neutral retained-presentation performance hardening; M86 completes the accepted managed-dimension, Fillet hit-priority, Typed Panel terminal-parity and bounded-trace repairs with exact public verification; M87 completes cohesive managed controls, shared rendering, browser-free authoring and twelve-project dogfood; M88 completes the accepted workflow-led React workbench redesign and retires the obsolete Rust-DOM compatibility host. M1-M7 remain the frozen regression baseline.
 - **Closed design exploration:** M82 attempted a computed all-family Offset architecture but is not
   accepted product behavior. Exact rollback `fa54f30` restores the M81 tree; local and remote branch
@@ -2577,9 +2577,10 @@ Current active computed features and independent normalized Hard-residual valida
 
 ## M91 cohesive code-driven-authoring architecture
 
-Status: **Implementation complete; nomination evidence pending.** The following architecture is
-integrated, but it is not nominated product authority until M91-F001, final clean qualification,
-immutable freeze and byte-verified Tailscale serving complete. All 14 human UAT rows remain Not run.
+Status: **Candidate nominated; awaiting composite human UAT.**
+
+The following architecture is implemented, clean-qualified, immutably frozen and byte-verified on
+its Tailscale-only service. All 14 human UAT rows remain Not run.
 
 ### Contact topology, authored limits and continuation
 
@@ -2652,17 +2653,31 @@ The ledger rejects missing, duplicate or stale classifications. An exclusion nev
 
 ### M91-F001 release-bundle boundary
 
-The pre-repair integrated build embeds about `10.96 MB` of raw compiler-envelope JSON for the 37
+The pre-repair integrated build embedded about `10.96 MB` of raw compiler-envelope JSON for the 37
 projects via `include_str!`, yielding a `27,296,927`-byte optimized WASM and `36,085,444`-byte
-distribution. Both exceed the strict release ceilings (`< 20 MiB`, `< 30 MiB`). The pending repair
-uses existing pure-Rust `miniz_oxide` at build time to deterministically zlib-compress only those
-envelopes, then lazily reconstructs exact bytes into `OnceLock<String>`. Before allocation/runtime
-acceptance it bounds compressed/decompressed lengths by `MANAGED_WIRE_LIMIT`, and it requires exact
-output length, complete input consumption, valid zlib status/checksum and UTF-8. The public
-`compiled_source: &'static str` and every authenticated envelope byte remain unchanged.
+distribution. Both exceeded the strict release ceilings (`< 20 MiB`, `< 30 MiB`). Commit
+`d2170c46775b412785b3a2f288c170aba9ac8155` resolves M91-F001 with existing pure-Rust
+`miniz_oxide`: the build deterministically zlib-compresses only those envelopes and runtime lazily
+reconstructs exact bytes into `OnceLock<String>`. Compressed/decompressed lengths remain bounded by
+`MANAGED_WIRE_LIMIT`; exact output length, complete input consumption, valid zlib status/checksum and
+UTF-8 are mandatory. The public `compiled_source: &'static str` and every authenticated envelope byte
+remain unchanged.
 
-Nomination remains pending at source `@M91_FINAL_COMMIT@`, tree `@M91_FINAL_TREE@`, release-log hash
-`@M91_RELEASE_LOG_SHA@`, snapshot `@M91_SNAPSHOT@`, snapshot aggregate `@M91_SNAPSHOT_SHA@`, WASM
-`@M91_WASM_ARTIFACT@` / `@M91_WASM_BYTES@` / `@M91_WASM_SHA@`, HTTP ledger
-`@M91_HTTP_LEDGER_SHA@` and Tailscale URL `@M91_UAT_URL@`. Those identifiers must come from one clean
-source and its unchanged immutable served bytes before nomination.
+### M91-F002 package-verifier boundary
+
+The first otherwise-complete clean gate exposed a packaging-harness defect: the package verifier
+patched three unpublished local crates but omitted the new direct `geosolve-sketch-features`
+dependency, so archive verification failed at the crates.io lookup. Commit
+`6d0155151133ba2540fd1dc4b2b071f141b86064` adds that dependency and a fail-closed comparison between
+the verifier patch list and direct path dependencies. The focused offline archive check and the
+subsequent full clean gate pass.
+
+The nominated implementation source is that commit at tree
+`972ad507c2cdfad2c9cd664e49feaf79ae381c81`. Its clean release-log SHA-256 is
+`cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`; immutable snapshot
+`/tmp/geosolve-m91-uat.17Q5LnSg` has external-manifest aggregate
+`b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`. The release WASM is
+`assets/geosolve_demo_web_bg-tvc8MGYX.wasm`, `18,368,160` bytes at SHA-256
+`6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`; staging/live HTTP ledger
+SHA-256 is `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4` and both frozen
+endpoints pass Chromium `20/20`. Tailscale URL `http://100.94.63.83:18091/` serves only those bytes.

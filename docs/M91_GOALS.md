@@ -4,8 +4,10 @@
 
 ## Outcome
 
-Status: **Implementation complete; nomination evidence pending.** No candidate is nominated and no
-human UAT row has run.
+Status: **Candidate nominated; awaiting composite human UAT.**
+
+The implementation is mechanically qualified and its immutable candidate is published on the
+Tailscale-only UAT endpoint below. No human UAT row has run.
 
 M91 combines five independently owned improvements into one code-authoritative workbench and one
 composite UAT. It makes authored contact-range changes behave like intentional design edits, adds
@@ -82,29 +84,37 @@ substitute, and computed Fillet is never excluded:
 
 ## Nomination boundary
 
-`M91-F001` remains a pending release-bundle repair. The pre-repair optimized WASM is `27,296,927`
-bytes against the strict `< 20 MiB` limit and the distribution is `36,085,444` bytes against the
-strict `< 30 MiB` limit because the 37 raw compiler envelopes contribute about `10.96 MB` of
-duplicate embedded JSON. The proposed pure-Rust repair deterministically zlib-compresses only the
-bundled compiler envelopes at build time and lazily reconstructs their exact authenticated UTF-8
-bytes under the existing managed-wire ceiling. It must land and pass focused corruption/bounds and
-byte-identity regressions before final qualification begins.
+`M91-F001` is resolved by `d2170c46775b412785b3a2f288c170aba9ac8155`. The pre-repair optimized
+WASM was `27,296,927` bytes and the distribution was `36,085,444` bytes, above the strict
+`< 20 MiB` and `< 30 MiB` limits. The pure-Rust repair deterministically zlib-compresses only the 37
+bundled compiler envelopes and lazily reconstructs their exact authenticated UTF-8 bytes. All
+byte-identity, declared-length, complete-input, checksum/status, wire-bound and invalid-UTF-8
+regressions pass. The nominated WASM is `18,368,160` bytes and the distribution is `27,158,025`
+bytes.
 
-Nomination evidence is deliberately unresolved in this drafting commit:
+`M91-F002` is resolved by `6d0155151133ba2540fd1dc4b2b071f141b86064`. The first post-F001 clean
+gate reached package verification and correctly failed because the package verifier did not patch
+the direct unpublished `geosolve-sketch-features` dependency. The repair patches all four direct
+local dependencies and adds a fail-closed manifest/list drift guard; its focused verifier and the
+complete final gate pass. This was packaging infrastructure, not a solver defect.
 
-- final source: `@M91_FINAL_COMMIT@`;
-- final tree: `@M91_FINAL_TREE@`;
-- clean release log: `@M91_RELEASE_LOG@`;
-- clean release log SHA-256: `@M91_RELEASE_LOG_SHA@`;
-- frozen snapshot: `@M91_SNAPSHOT@`;
-- external manifest: `@M91_MANIFEST@`;
-- ordered snapshot aggregate: `@M91_SNAPSHOT_SHA@`;
-- release WASM path/bytes/SHA-256: `@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`,
-  `@M91_WASM_SHA@`;
-- staging/live HTTP ledger SHA-256: `@M91_HTTP_LEDGER_SHA@`;
-- Tailscale service/PID/invocation/URL: `@M91_SERVICE@`, `@M91_SERVICE_PID@`,
-  `@M91_SERVICE_INVOCATION@`, `@M91_UAT_URL@`.
+Nomination evidence:
 
-Do not change this document to “Candidate nominated; awaiting composite human UAT” until every
-placeholder above is replaced with verified evidence from one clean committed source and its
-unchanged immutable served bytes.
+- source commit/tree: `6d0155151133ba2540fd1dc4b2b071f141b86064`,
+  `972ad507c2cdfad2c9cd664e49feaf79ae381c81`;
+- clean release log: `/home/arduano/m91-gate.t8TTq0Bj/release-gate.log`, SHA-256
+  `cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`;
+- frozen snapshot/manifest: `/tmp/geosolve-m91-uat.17Q5LnSg`,
+  `/tmp/geosolve-m91-uat.17Q5LnSg.sha256`, manifest SHA-256
+  `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`;
+- frozen WASM: `/tmp/geosolve-m91-uat.17Q5LnSg/assets/geosolve_demo_web_bg-tvc8MGYX.wasm`,
+  `18,368,160` bytes, SHA-256
+  `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`;
+- identical staging/live HTTP ledger SHA-256:
+  `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`;
+- Tailscale service `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
+  `bf93a3f5dab84809a24fdc2db6f23f4f`, URL `http://100.94.63.83:18091/`.
+
+The frozen candidate passed 20/20 Chromium checks on both staging and live endpoints. M90 remained
+byte-identical and was not restarted. Public deployment and GitHub Pages remain outside M91, and
+automated evidence accepts none of the 14 human UAT rows.

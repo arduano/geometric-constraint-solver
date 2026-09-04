@@ -845,8 +845,9 @@ candidate was needed. M90-U1 through M90-U10 remain transferred and unexecuted.
 
 ## M91 integrated candidate preparation
 
-Status: **Implementation complete; nomination evidence pending.** No M91 candidate is nominated and
-all 14 rows in `docs/M91_UAT.md` remain exactly **Not run**. M90 remains closed; its ten unexecuted
+Status: **Candidate nominated; awaiting composite human UAT.**
+
+All 14 rows in `docs/M91_UAT.md` remain exactly **Not run**. M90 remains closed; its ten unexecuted
 rows transfer unchanged into this composite scorecard and are neither passed nor waived.
 
 The five frozen M91 workstreams are integrated:
@@ -870,21 +871,30 @@ external-point-coincident host snapshot, flattened Profile Offset source project
 noncanonical spline knot topology. Each exclusion reaches its named fail-closed owner, counts as no
 parity pass and cannot cover Fillet.
 
-M91-F001 currently blocks nomination. Embedding the 37 raw compiler envelopes produced a
+M91-F001 was the release-bundle blocker. Embedding the 37 raw compiler envelopes produced a
 `27,296,927`-byte optimized release WASM and `36,085,444`-byte distribution, above the strict
-`< 20 MiB` and `< 30 MiB` limits. The pending focused pure-Rust repair build-compresses only those
-JSON envelopes and lazily reconstructs their byte-identical authenticated UTF-8 under bounded
-length, complete-input, checksum/status and wire-limit checks. It changes no solver equation,
-sample semantics, service or public deployment.
+`< 20 MiB` and `< 30 MiB` limits. Commit
+`d2170c46775b412785b3a2f288c170aba9ac8155` resolves it by build-compressing only those JSON
+envelopes and lazily reconstructing their byte-identical authenticated UTF-8 under bounded length,
+complete-input, checksum/status and wire-limit checks. M91-F002 then found that the package verifier
+did not patch the new direct `geosolve-sketch-features` dependency; the focused verifier reproduced
+the crates.io lookup failure, and final implementation commit
+`6d0155151133ba2540fd1dc4b2b071f141b86064` makes its patch list complete and fail closed.
 
-After that repair lands, run final gates from one clean commit and replace the evidence placeholders
-in the M91 documents: source `@M91_FINAL_COMMIT@`, tree `@M91_FINAL_TREE@`, release log
-`@M91_RELEASE_LOG@` / `@M91_RELEASE_LOG_SHA@`, frozen snapshot `@M91_SNAPSHOT@`, manifest
-`@M91_MANIFEST@`, aggregate `@M91_SNAPSHOT_SHA@`, WASM `@M91_WASM_ARTIFACT@` /
-`@M91_WASM_BYTES@` / `@M91_WASM_SHA@`, served ledger `@M91_HTTP_LEDGER_SHA@`, service
-`@M91_SERVICE@` / PID `@M91_SERVICE_PID@` / invocation `@M91_SERVICE_INVOCATION@`, and
-`@M91_UAT_URL@`. Only then may the status become “Candidate nominated; awaiting composite human
-UAT”. Public deployment and GitHub Pages remain outside M91.
+That final source, tree `972ad507c2cdfad2c9cd664e49feaf79ae381c81`, passes the complete clean
+release gate. Its `706,478`-byte log `/home/arduano/m91-gate.t8TTq0Bj/release-gate.log` has SHA-256
+`cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`. The exact no-rebuild
+ten-file, `27,158,025`-byte distribution is frozen at `/tmp/geosolve-m91-uat.17Q5LnSg`; external
+manifest `/tmp/geosolve-m91-uat.17Q5LnSg.sha256` has SHA-256
+`b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`. Its
+`18,368,160`-byte `assets/geosolve_demo_web_bg-tvc8MGYX.wasm` has SHA-256
+`6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`. Staging/live HTTP
+ledgers are byte-identical at SHA-256
+`35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`, and both frozen endpoints
+pass Chromium `20/20`. Tailscale-only unit `geosolve-m91-uat-18091.service`, PID `2142854`,
+invocation `bf93a3f5dab84809a24fdc2db6f23f4f`, exact-serves the snapshot at
+`http://100.94.63.83:18091/`. M90 remained byte-identical. Public deployment and GitHub Pages remain
+outside M91.
 
 ## Read first
 
@@ -954,8 +964,8 @@ UAT”. Public deployment and GitHub Pages remain outside M91.
     Tailscale-only, and scoped closure transfers/defers M90-U1 through M90-U10 into M91 without
     passing or waiving them.
 27. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — integrated five-
-    workstream contract, reviewed dual-backend exclusions, pending M91-F001 release-bundle repair,
-    nomination evidence template and 14-row composite scorecard.
+    workstream contract, reviewed dual-backend exclusions, resolved M91-F001/M91-F002 findings,
+    clean-qualified immutable nomination and 14-row composite scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -1561,9 +1571,9 @@ Durable milestone and cleanup records:
 - `docs/M90_UAT.md` (immutable post-F006 candidate exact-served on Tailscale; complete dirty-tree
   gate and scoped closure recorded, with M90-U1 through M90-U10 transferred/deferred into M91)
 - `docs/M91_GOALS.md` (integrated cohesive code-driven-authoring contract and nomination boundary)
-- `docs/M91_IMPLEMENTATION.md` (five workstreams, four reviewed exclusions, M91-F001 and final-gate
-  evidence template)
-- `docs/M91_UAT.md` (14-row composite scorecard; every row Not run pending immutable nomination)
+- `docs/M91_IMPLEMENTATION.md` (five workstreams, four reviewed exclusions, resolved M91-F001/F002
+  and clean-qualified immutable nomination)
+- `docs/M91_UAT.md` (14-row composite scorecard; every row Not run against the immutable candidate)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

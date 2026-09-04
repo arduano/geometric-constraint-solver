@@ -2,7 +2,7 @@
 
 # M91 implementation: parallel workstreams and integration
 
-Status: **Implementation complete; nomination evidence pending.**
+Status: **Candidate nominated; awaiting composite human UAT.**
 
 ## Integration order
 
@@ -120,7 +120,7 @@ history remain unchanged.
 
 ## M91-F001 — release bundle exceeds the accepted size envelope
 
-Status: pending until the focused repair lands and is integrated.
+Status: resolved by `d2170c46775b412785b3a2f288c170aba9ac8155`.
 
 The first integrated optimized release build exposed a release-bundle defect, not a solver or
 semantic-parity defect. Its WASM is `27,296,927` bytes against the strict `< 20 MiB` limit and its
@@ -128,17 +128,32 @@ distribution is `36,085,444` bytes against the strict `< 30 MiB` limit. All 37 c
 about `10.96 MB` of raw JSON, are embedded through `include_str!` in
 `geosolve-sketch-code::demos`.
 
-The bounded repair contract is pure Rust: deterministically zlib-compress only
+The bounded repair is pure Rust: deterministically zlib-compress only
 `assets/{samples,demos}/*.compiled.json` at build time via the existing `miniz_oxide`; lazily
 inflate each envelope once while enforcing the existing managed-wire ceiling before allocation,
 exact declared output length, complete compressed-input consumption, successful zlib checksum/
 terminal status and UTF-8 validity. Public `compiled_source: &'static str`, authenticated JSON bytes,
-catalog ordering and deterministic semantics must remain unchanged. Focused regressions compare all
-37 reconstructed envelopes byte-for-byte with test-only raw assets and reject oversized input or
+catalog ordering and deterministic semantics remain unchanged. Focused regressions compare all 37
+reconstructed envelopes byte-for-byte with test-only raw assets and reject oversized input or
 declared output, short/long lengths, truncation, corruption, trailing bytes and invalid UTF-8.
 
-No final evidence below may be filled until F001 is committed, integrated and all gates run from the
-same clean source.
+Those regressions and the complete release gate pass. The final release WASM is `18,368,160` bytes
+and the ten-file distribution is `27,158,025` bytes, both below their strict ceilings. The historical
+pre-repair sizes remain recorded above for defect provenance.
+
+## M91-F002 — package verifier omitted one unpublished direct dependency
+
+Status: resolved by `6d0155151133ba2540fd1dc4b2b071f141b86064`.
+
+The first post-F001 clean gate failed at package verification with exit `101`: the packaged
+`geosolve-sketch-code` crate directly depends on unpublished `geosolve-sketch-features`, but the
+verification harness patched only three of its four direct local dependencies. The package itself,
+solver behavior and semantic parity were not implicated.
+
+The repair adds `geosolve-sketch-features` to the isolated package patch set and compares that set
+against direct local dependencies extracted from the manifest, failing closed on future drift. A
+focused `bash -n scripts/verify-geosolve-sketch-code-package.sh` and full package verification pass;
+the final clean gate below is the qualification authority.
 
 ## Qualification
 
@@ -154,32 +169,55 @@ cargo test --locked --workspace --all-features
 NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
-Record exact commands, counts, artifact hashes and any limitations before nomination.
+The nominated source passed the complete clean gate. The `--survey` and `--check` runs from the
+pre-nomination audit also passed; the final gate's `--require-clean` reran the same 271-case inventory,
+required every row to pass and matched the unchanged reviewed bytes.
 
-### Final evidence template
+### Final evidence
 
-- source commit/tree: `@M91_FINAL_COMMIT@`, `@M91_FINAL_TREE@`;
-- `cargo fmt --all -- --check`: `@M91_FMT_RESULT@`;
+- source commit/tree: `6d0155151133ba2540fd1dc4b2b071f141b86064`,
+  `972ad507c2cdfad2c9cd664e49feaf79ae381c81`;
+- `cargo fmt --all -- --check`: passed;
 - `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`:
-  `@M91_CLIPPY_RESULT@`;
-- `cargo test --locked --workspace --all-features`: `@M91_WORKSPACE_TEST_RESULT@`;
-- golden `--survey`: `@M91_GOLDEN_SURVEY_RESULT@`;
-- golden `--check`: `@M91_GOLDEN_CHECK_RESULT@`;
-- golden `--require-clean`: `@M91_GOLDEN_CLEAN_RESULT@`;
-- full release command/result: `@M91_RELEASE_COMMAND@`, `@M91_RELEASE_RESULT@`;
-- release log/bytes/SHA-256: `@M91_RELEASE_LOG@`, `@M91_RELEASE_LOG_BYTES@`,
-  `@M91_RELEASE_LOG_SHA@`;
-- package/frontend/declaration/sample checks: `@M91_PACKAGE_RESULTS@`,
-  `@M91_FRONTEND_RESULTS@`, `@M91_DECLARATION_DRIFT_RESULT@`, `@M91_SAMPLE_RESULTS@`;
-- dual-backend parity and reviewed exclusions: `@M91_PARITY_RESULT@`,
-  `@M91_EXCLUSION_RESULT@`;
-- release WASM artifact/bytes/SHA-256: `@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`,
-  `@M91_WASM_SHA@`;
-- distribution file count/bytes/result: `@M91_DIST_FILE_COUNT@`, `@M91_DIST_BYTES@`,
-  `@M91_DIST_RESULT@`;
-- immutable snapshot/manifest/aggregate: `@M91_SNAPSHOT@`, `@M91_MANIFEST@`,
-  `@M91_SNAPSHOT_SHA@`;
-- staging/live ledger and browser checks: `@M91_HTTP_LEDGER_SHA@`,
-  `@M91_BROWSER_RESULT@`;
-- Tailscale service/PID/invocation/URL: `@M91_SERVICE@`, `@M91_SERVICE_PID@`,
-  `@M91_SERVICE_INVOCATION@`, `@M91_UAT_URL@`.
+  passed;
+- `cargo test --locked --workspace --all-features`: passed all workspace tests and doctests;
+- golden `--survey`: 271/271 `PASS`; golden `--check`: matched; golden `--require-clean`:
+  matched with no non-pass row. The 272-line fixture (header plus 271 rows) remains SHA-256
+  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`;
+- full release command:
+  `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'`;
+  result: exit `0` from the clean nominated source;
+- release log: `/home/arduano/m91-gate.t8TTq0Bj/release-gate.log`, `706,478` bytes,
+  SHA-256 `cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`;
+- package checks: all workspace package contents and the isolated `geosolve-sketch-code` package
+  verifier passed; frontend: language-service Chromium 1/1, Vitest 94/94, manifest/licence/build
+  contracts, production build and `validate:dist` passed;
+- declaration drift: TypeScript `5.9.2` declarations matched SHA-256
+  `32e84bbbfad1d9e3d704ab8a78c7df5b686e0315132018ff287abae55f3e9093`;
+- samples: all 37 source-authoritative entries passed native-reference, cold-materialization,
+  edit/Undo and source/IR/artifact checks; release-WASM transition/sample parity passed 2/2;
+- dual-backend parity: every applicable row passed. The reviewed ledger contains exactly
+  `constraint.external-line-collinear.*`, `constraint.external-point-coincident.*`,
+  `dimension.profile-offset.*` and `spline.noncanonical-knot-topology.*`; exclusions are not passes
+  and computed Fillet was exercised rather than excluded;
+- release WASM: `/tmp/geosolve-m91-uat.17Q5LnSg/assets/geosolve_demo_web_bg-tvc8MGYX.wasm`,
+  `18,368,160` bytes, SHA-256
+  `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`;
+- distribution: 10 files, 4 JavaScript, 1 CSS and 1 WASM, `27,158,025` total bytes;
+  `validate:dist` and the stricter freeze inventory passed, with no `compiler-parity.html`;
+- immutable snapshot/manifest: `/tmp/geosolve-m91-uat.17Q5LnSg`,
+  `/tmp/geosolve-m91-uat.17Q5LnSg.sha256`, manifest SHA-256
+  `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`;
+- staging/live HTTP ledger SHA-256:
+  `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`;
+  frozen Chromium qualification passed 20/20 on both endpoints;
+- Tailscale service/PID/invocation/URL: `geosolve-m91-uat-18091.service`, `2142854`,
+  `bf93a3f5dab84809a24fdc2db6f23f4f`, `http://100.94.63.83:18091/`.
+
+The first frozen staging-browser attempt selected Playwright's unwrapped bundled binary and exited
+before any test body because its host `libglib` was unavailable. The retained harness-error log is
+`/tmp/geosolve-m91-freeze-evidence.xQrNE9UJ/staging-browser-harness-error.log`; rerunning with the
+same system-Chrome wrapper used by the clean gate passed 20/20 on staging and live. This is harness
+evidence, not an M91 defect. The protected M90 unit, process identity, snapshot manifest, inventory
+and served root remained byte-identical before and after publication and were never restarted.
+No public push or GitHub Pages deployment was made. All 14 human UAT rows remain unrun.

@@ -7997,11 +7997,11 @@ a browser; all accepted geometry is finite and independently validated at normal
 
 ## M91 — cohesive code-driven authoring
 
-Status: **Implementation complete; nomination evidence pending.** Scope and integration order are
-frozen in `docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`; no candidate is nominated and all 14
-rows in `docs/M91_UAT.md` remain exactly **Not run**. The five bounded workstreams are integrated,
-but only one clean qualified source plus immutable byte-verified publication may enter the composite
-human UAT.
+Status: **Candidate nominated; awaiting composite human UAT.**
+
+Scope and integration order are frozen in `docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`; all
+14 rows in `docs/M91_UAT.md` remain exactly **Not run**. The five bounded workstreams, clean
+qualification and immutable byte-verified publication are complete.
 
 - [x] **Constraint-edit intent reconciliation.** Derive intrinsic curve parameter topology from the
   referenced curve instead of presenting it as ordinary editable range boilerplate; expose a
@@ -8065,22 +8065,35 @@ authenticated historical contact-schema migration normalizes Segment, Midpoint L
 branch directions. The stable golden remains 271 data rows at SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
 
-`M91-F001` remains pending before nomination. The integrated release build embedded all 37 raw
+`M91-F001` was reproduced when the integrated release build embedded all 37 raw
 compiler envelopes and produced a `27,296,927`-byte optimized WASM and `36,085,444`-byte
-distribution, exceeding the strict `< 20 MiB`/`< 30 MiB` limits. The authorized focused repair must
-deterministically zlib-compress only those envelopes with pure Rust, reconstruct their exact bytes
-lazily under bounded length/input/checksum/UTF-8 validation and retain the public
-`compiled_source: &'static str` contract. Focused byte-identity/corruption tests, all final gates and
-immutable publication remain outstanding.
+distribution, exceeding the strict `< 20 MiB`/`< 30 MiB` limits. Commit
+`d2170c46775b412785b3a2f288c170aba9ac8155` resolves it with deterministic pure-Rust zlib envelope
+compression, exact lazy reconstruction and bounded length/input/checksum/UTF-8 validation while
+retaining the public `compiled_source: &'static str` contract. Its byte-identity and adversarial
+focused regressions pass.
 
-Final nomination placeholders are deliberately unresolved: source `@M91_FINAL_COMMIT@`, tree
-`@M91_FINAL_TREE@`, release log `@M91_RELEASE_LOG@` at SHA-256 `@M91_RELEASE_LOG_SHA@`, snapshot
-`@M91_SNAPSHOT@`, manifest `@M91_MANIFEST@`, aggregate `@M91_SNAPSHOT_SHA@`, release WASM
-`@M91_WASM_ARTIFACT@` / `@M91_WASM_BYTES@` / `@M91_WASM_SHA@`, HTTP ledger
-`@M91_HTTP_LEDGER_SHA@`, service `@M91_SERVICE@` / PID `@M91_SERVICE_PID@` / invocation
-`@M91_SERVICE_INVOCATION@`, and URL `@M91_UAT_URL@`. Do not change status to “Candidate nominated;
-awaiting composite human UAT” until every placeholder is replaced from the same clean source and
-unchanged served bytes. Automated evidence does not execute, pass or waive any UAT row.
+`M91-F002` was a package-verifier defect, not a solver defect. The first otherwise-complete clean
+gate failed because the verifier did not patch the newly direct unpublished
+`geosolve-sketch-features` dependency. The focused verifier reproduced the crates.io lookup failure;
+commit `6d0155151133ba2540fd1dc4b2b071f141b86064` adds the missing patch and a fail-closed direct-local-
+dependency completeness guard. The focused offline archive verification and subsequent clean gate
+pass.
+
+Final nomination evidence: source `6d0155151133ba2540fd1dc4b2b071f141b86064`, tree
+`972ad507c2cdfad2c9cd664e49feaf79ae381c81`; clean release log
+`/home/arduano/m91-gate.t8TTq0Bj/release-gate.log`, `706,478` bytes, SHA-256
+`cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`; immutable snapshot
+`/tmp/geosolve-m91-uat.17Q5LnSg`, manifest `/tmp/geosolve-m91-uat.17Q5LnSg.sha256`, aggregate
+`b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`; release WASM
+`assets/geosolve_demo_web_bg-tvc8MGYX.wasm`, `18,368,160` bytes, SHA-256
+`6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`; HTTP ledger SHA-256
+`35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`; service
+`geosolve-m91-uat-18091.service`, PID `2142854`, invocation
+`bf93a3f5dab84809a24fdc2db6f23f4f`, URL `http://100.94.63.83:18091/`. The ten-file,
+`27,158,025`-byte distribution is the unchanged gate output; staging and live Chromium pass `20/20`,
+and M90's service and bytes remain identical. Automated evidence does not execute, pass or waive any
+UAT row. No public push or GitHub Pages deployment was made.
 
 ## Explicit non-goals
 

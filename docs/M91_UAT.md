@@ -2,34 +2,45 @@
 
 # M91 UAT: cohesive code-driven authoring
 
-Status: **Implementation complete; nomination evidence pending.** All 14 rows are Not run.
+Status: **Candidate nominated; awaiting composite human UAT.**
+
+All 14 rows are Not run.
 M90-U1 through M90-U10 are transferred unchanged, not passed or waived. Run this scorecard only
 against the immutable M91 candidate recorded here after clean qualification.
 
 ## Candidate
 
-No candidate is nominated. `M91-F001` release-bundle compression, clean qualification, immutable
-freeze and Tailscale publication remain pending. Fill every field below from one clean committed
-source and its exact unchanged served bytes, then change the milestone status to “Candidate
-nominated; awaiting composite human UAT”.
+The nominated implementation is commit `6d0155151133ba2540fd1dc4b2b071f141b86064`, tree
+`972ad507c2cdfad2c9cd664e49feaf79ae381c81`. `M91-F001` was resolved by `d2170c4` and the
+packaging-verifier finding `M91-F002` by `6d01551`.
 
-- source commit/tree: `@M91_FINAL_COMMIT@`, `@M91_FINAL_TREE@`;
-- clean release command/result: `@M91_RELEASE_COMMAND@`, `@M91_RELEASE_RESULT@`;
-- release log/bytes/SHA-256: `@M91_RELEASE_LOG@`, `@M91_RELEASE_LOG_BYTES@`,
-  `@M91_RELEASE_LOG_SHA@`;
-- reviewed 271-row golden/result: `@M91_GOLDEN_RESULT@`, `@M91_GOLDEN_SHA@`;
-- dual-backend parity/exclusion-ledger result: `@M91_PARITY_RESULT@`,
-  `@M91_EXCLUSION_RESULT@`;
-- release WASM artifact/bytes/SHA-256: `@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`,
-  `@M91_WASM_SHA@`;
-- distribution files/bytes/result: `@M91_DIST_FILE_COUNT@`, `@M91_DIST_BYTES@`,
-  `@M91_DIST_RESULT@`;
-- immutable snapshot/manifest/aggregate: `@M91_SNAPSHOT@`, `@M91_MANIFEST@`,
-  `@M91_SNAPSHOT_SHA@`;
-- staging/live HTTP ledger and browser result: `@M91_HTTP_LEDGER_SHA@`,
-  `@M91_BROWSER_RESULT@`;
-- Tailscale service/PID/invocation/URL: `@M91_SERVICE@`, `@M91_SERVICE_PID@`,
-  `@M91_SERVICE_INVOCATION@`, `@M91_UAT_URL@`.
+- clean release command:
+  `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'`;
+  result: exit `0`;
+- release log: `/home/arduano/m91-gate.t8TTq0Bj/release-gate.log`, `706,478` bytes,
+  SHA-256 `cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`;
+- reviewed golden: all 271 rows pass and `--survey`, `--check`, `--require-clean` pass; fixture
+  SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`;
+- dual-backend parity: every applicable row passes. The four reviewed non-pass exclusions remain
+  `constraint.external-line-collinear.*`, `constraint.external-point-coincident.*`,
+  `dimension.profile-offset.*` and `spline.noncanonical-knot-topology.*`; computed Fillet is not
+  excluded;
+- release WASM: `/tmp/geosolve-m91-uat.17Q5LnSg/assets/geosolve_demo_web_bg-tvc8MGYX.wasm`,
+  `18,368,160` bytes, SHA-256
+  `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`;
+- distribution: 10 files and `27,158,025` bytes; `validate:dist` and the stricter frozen inventory
+  pass;
+- immutable snapshot/manifest: `/tmp/geosolve-m91-uat.17Q5LnSg`,
+  `/tmp/geosolve-m91-uat.17Q5LnSg.sha256`, manifest SHA-256
+  `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`;
+- identical staging/live HTTP ledger SHA-256:
+  `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`;
+  system-Chrome qualification passes 20/20 on both endpoints;
+- Tailscale service/PID/invocation/URL: `geosolve-m91-uat-18091.service`, `2142854`,
+  `bf93a3f5dab84809a24fdc2db6f23f4f`, `http://100.94.63.83:18091/`.
+
+The protected M90 service and served bytes remained identical and were not restarted. Automated
+evidence accepts no scorecard row; public deployment and GitHub Pages remain out of scope.
 
 ## Transferred M90 scorecard
 

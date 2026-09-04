@@ -5154,9 +5154,10 @@ globally blocked later pointer input.
 
 ## M91 cohesive code-driven-authoring acceptance
 
-Status: **Implementation complete; nomination evidence pending.** No candidate is nominated. All 14
-rows in `docs/M91_UAT.md` remain exactly **Not run**, including the ten transferred M90 rows; no
-automated gate passes or waives them.
+Status: **Candidate nominated; awaiting composite human UAT.**
+
+All 14 rows in `docs/M91_UAT.md` remain exactly **Not run**, including the ten transferred M90
+rows; no automated gate passes or waives them.
 
 The candidate must satisfy all five integrated workstream gates:
 
@@ -5200,29 +5201,39 @@ managed compilation and retains exact Undo/Redo/reload behavior. Current source 
 lossless; normalization is confined to authenticated historical Segment, Midpoint Line and Polyline
 contact-schema migration.
 
-`M91-F001` blocks nomination until repaired. The pre-repair optimized release WASM is `27,296,927`
+`M91-F001` recorded that the pre-repair optimized release WASM was `27,296,927`
 bytes and the distribution is `36,085,444` bytes, exceeding strict `< 20 MiB` and `< 30 MiB`
 ceilings because 37 raw compiler envelopes (about `10.96 MB`) are embedded. The accepted repair may
 build-compress only those envelopes using pure-Rust zlib and lazily inflate exact bytes under the
 existing managed-wire ceiling, exact output length, complete input consumption, checksum/status and
-UTF-8 validation. All 37 raw/reconstructed byte comparisons plus oversized, short/long, truncated,
-corrupt, trailing and invalid-UTF-8 cases must pass; public `compiled_source` and semantic authority
-must not change.
+UTF-8 validation. Commit `d2170c46775b412785b3a2f288c170aba9ac8155` implements that bounded
+repair; all 37 raw/reconstructed byte comparisons plus oversized, short/long, truncated, corrupt,
+trailing and invalid-UTF-8 cases pass, and public `compiled_source` and semantic authority are
+unchanged.
 
-Before nomination, run the exact formatting, warnings-denied Clippy, locked all-feature workspace
-tests, package/frontend/declaration checks, golden `--survey`/`--check`/`--require-clean`, optimized
-release-WASM build/distribution validation and complete clean release gate recorded in
-`docs/M91_IMPLEMENTATION.md`. Freeze the unchanged distribution read-only with an external sorted
-manifest, verify local/live bytes, MIME, redirects and compression, and serve it only on the M91
-Tailscale endpoint without changing the protected M90 service.
+`M91-F002` records the packaging-verifier omission discovered by the first otherwise-complete clean
+gate: `geosolve-sketch-code` directly added unpublished `geosolve-sketch-features`, but its archive
+verifier patched only the other three local dependencies. The focused verifier reproduced exit
+`101`; final implementation commit `6d0155151133ba2540fd1dc4b2b071f141b86064` adds the missing patch
+and a fail-closed completeness guard. The focused offline archive check and full clean gate pass.
 
-Evidence remains intentionally unresolved: `@M91_FINAL_COMMIT@`, `@M91_FINAL_TREE@`,
-`@M91_RELEASE_LOG@`, `@M91_RELEASE_LOG_SHA@`, `@M91_SNAPSHOT@`, `@M91_MANIFEST@`,
-`@M91_SNAPSHOT_SHA@`, `@M91_WASM_ARTIFACT@`, `@M91_WASM_BYTES@`, `@M91_WASM_SHA@`,
-`@M91_HTTP_LEDGER_SHA@`, `@M91_SERVICE@`, `@M91_SERVICE_PID@`,
-`@M91_SERVICE_INVOCATION@` and `@M91_UAT_URL@`. Status may become “Candidate nominated; awaiting
-composite human UAT” only after each value is verified and substituted from one clean source and its
-unchanged served bytes.
+That final source has tree `972ad507c2cdfad2c9cd664e49feaf79ae381c81`. Formatting,
+warnings-denied Clippy, locked all-feature workspace tests, package/frontend/declaration checks,
+golden `--survey`/`--check`/`--require-clean`, optimized release-WASM build/distribution validation
+and the complete clean release gate all pass. The `706,478`-byte release log is
+`/home/arduano/m91-gate.t8TTq0Bj/release-gate.log` at SHA-256
+`cc4f4580a0637cfddad5d96d7510d4a5f4dc707d99010b300f1a43451a7cc8cd`.
+
+The unchanged ten-file, `27,158,025`-byte distribution is frozen read-only at
+`/tmp/geosolve-m91-uat.17Q5LnSg`; external manifest `/tmp/geosolve-m91-uat.17Q5LnSg.sha256` has
+aggregate SHA-256 `b1e95b608b465a545791e55cc762052704f2d7139b8e4c3a9f8a68b0411a009b`.
+Release WASM `assets/geosolve_demo_web_bg-tvc8MGYX.wasm` is `18,368,160` bytes at SHA-256
+`6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`. Local/live bytes, MIME,
+redirect and compression checks match at HTTP-ledger SHA-256
+`35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`; both frozen endpoints pass
+Chromium `20/20`. Tailscale-only unit `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
+`bf93a3f5dab84809a24fdc2db6f23f4f`, exact-serves it at `http://100.94.63.83:18091/`. The protected
+M90 service remained byte-identical. No public push or GitHub Pages deployment was made.
 
 ## Regression and oracle policy
 
