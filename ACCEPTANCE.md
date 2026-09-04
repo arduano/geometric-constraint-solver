@@ -5202,7 +5202,7 @@ lossless; normalization is confined to authenticated historical Segment, Midpoin
 contact-schema migration.
 
 `M91-F001` recorded that the pre-repair optimized release WASM was `27,296,927`
-bytes and the distribution is `36,085,444` bytes, exceeding strict `< 20 MiB` and `< 30 MiB`
+bytes and the distribution was `36,085,444` bytes, exceeding strict `< 20 MiB` and `< 30 MiB`
 ceilings because 37 raw compiler envelopes (about `10.96 MB`) are embedded. The accepted repair may
 build-compress only those envelopes using pure-Rust zlib and lazily inflate exact bytes under the
 existing managed-wire ceiling, exact output length, complete input consumption, checksum/status and
