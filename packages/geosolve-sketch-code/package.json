@@ -29,11 +29,13 @@
     "compile:managed:batch:deno": "deno run --no-config --no-lock --no-prompt --cached-only --no-remote --node-modules-dir=manual --ignore-env scripts/compile-managed-batch-deno.mjs",
     "mutate:managed:deno": "deno run --no-config --no-lock --no-prompt --cached-only --no-remote --node-modules-dir=manual --ignore-env scripts/mutate-managed-deno.mjs",
     "generate:fixtures": "npm run build && node scripts/generate-artifact-fixtures.mjs",
+    "generate:bundled-samples": "npm run build && node scripts/generate-bundled-samples.mjs --write",
     "test:fixtures": "node scripts/generate-artifact-fixtures.mjs --check",
+    "test:bundled-samples": "node scripts/generate-bundled-samples.mjs --check",
     "test:runtime": "node --test dist/test/authoring-runtime.test.js dist/test/control-runtime.test.js dist/test/deno-parity.test.js dist/test/managed-clean.test.js dist/test/patch-compiler.test.js",
     "test:types": "tsc -p tsconfig.json --noEmit",
     "test:managed": "tsc -p tsconfig.managed.json",
-    "test": "npm run build && npm run test:fixtures && npm run test:runtime && npm run test:types && npm run test:managed"
+    "test": "npm run build && npm run test:fixtures && npm run test:bundled-samples && npm run test:runtime && npm run test:types && npm run test:managed"
   },
   "dependencies": {
     "@geosolve/intent": "file:../geosolve-intent",

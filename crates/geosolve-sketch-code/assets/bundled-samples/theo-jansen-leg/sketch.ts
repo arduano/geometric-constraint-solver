@@ -28,7 +28,6 @@ export default sketch(($) => {
     point: [4, -5],
     label: "Foot path output",
   });
-
   const frame = $.geometry.segment("frame", {
     start: groundPivot.point,
     end: framePivot.point,
@@ -85,7 +84,6 @@ export default sketch(($) => {
     label: "Upper foot link",
     role: "profile",
   });
-
   const groundAnchor = $.constraint.fixedPoint("groundAnchor", {
     point: groundPivot.point,
     target: [-10, 0],
@@ -143,7 +141,6 @@ export default sketch(($) => {
     label: "Upper foot link length",
     mode: "driving",
   });
-
   $.group("Ground frame", [groundPivot, framePivot, frame, groundAnchor, frameAxis, frameLength]);
   $.group("Crank input", [crankPin, crank, crankLength]);
   $.group("Coupled leg", [upperKnee, lowerKnee, foot, crankCoupler, upperRocker, kneeLink, lowerRocker, lowerFootLink, upperFootLink, crankCouplerLength, upperRockerLength, kneeLength, lowerRockerLength, lowerFootLength, upperFootLength]);

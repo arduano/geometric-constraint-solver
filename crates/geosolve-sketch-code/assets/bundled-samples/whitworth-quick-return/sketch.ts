@@ -22,7 +22,6 @@ export default sketch(($) => {
     point: [4, 6],
     label: "Ram pin",
   });
-
   const frame = $.geometry.segment("frame", {
     start: crankPivot.point,
     end: rockerPivot.point,
@@ -51,7 +50,6 @@ export default sketch(($) => {
     label: "Return link",
     role: "profile",
   });
-
   const frameAnchor = $.constraint.fixedPoint("frameAnchor", {
     point: crankPivot.point,
     target: [0, 0],
@@ -85,7 +83,9 @@ export default sketch(($) => {
     contact: {
       parameter: 0.3333333333333333,
       winding: 0,
-      neighborhood: { kind: "interior" },
+      neighborhood: {
+        kind: "interior",
+      },
       orientation: "none",
     },
     label: "Crank pin slides in rocker slot",
@@ -109,7 +109,6 @@ export default sketch(($) => {
     label: "Current ram reach",
     mode: "reference",
   });
-
   $.group("Ground pivots", [crankPivot, rockerPivot, frame, frameAnchor, frameAxis, frameLength]);
   $.group("Crank and slot", [crankPin, rockerEnd, crank, slottedRocker, crankLength, rockerLength, crankPinInSlot]);
   $.group("Quick-return ram", [ramPin, returnLink, returnLinkLength, ramGuide, strokeReference]);
