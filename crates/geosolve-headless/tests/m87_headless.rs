@@ -258,7 +258,7 @@ fn inspect_edit_solve_and_static_render_share_one_exact_control_authority() {
             .project()
             .managed
             .source
-            .matches("radius: mm(2)")
+            .matches("const sharedRadius = mm(2);")
             .count(),
         1
     );
@@ -279,7 +279,14 @@ fn inspect_edit_solve_and_static_render_share_one_exact_control_authority() {
             .svg()
             .starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\"")
     );
-    assert!(edited.scene_markup().contains("wb-computed-fillet"));
+    assert_eq!(
+        edited
+            .scene_markup()
+            .matches("<path class=\"wb-curve\"")
+            .count(),
+        edited.report().validation.curve_count,
+        "the fixture's two native curves must both reach static scene markup",
+    );
     let png = edited.png();
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
     assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), 2_000);
@@ -1072,7 +1079,7 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
     assert!(
         fs::read_to_string(edited_output.join("sketch.ts"))
             .unwrap()
-            .contains("radius: mm(3)")
+            .contains("const sharedRadius = mm(3);")
     );
 
     let inspected_edited = Command::new(binary)
@@ -1172,7 +1179,7 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
     assert!(
         fs::read_to_string(next_output.join("sketch.ts"))
             .unwrap()
-            .contains("radius: mm(2)")
+            .contains("const sharedRadius = mm(2);")
     );
 
     let stale_output = root.join("stale");
