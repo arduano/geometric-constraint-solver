@@ -105,7 +105,7 @@
     "title": "HevORT HD9 and MGN9 datum study",
     "category": "product_fabrication",
     "group": "Products & fabrication",
-    "summary": "A scoped 2D reference study records mounting datums without claiming an imported solid."
+    "summary": "A 64.1 mm HD9 lower-body envelope aligns belt clearance with nominal MGN9 rail, carriage and 15 x 20 mm mounting datums."
   },
   {
     "ordinal": 13,
@@ -114,7 +114,7 @@
     "title": "Voron V0.2 motor panel",
     "category": "product_fabrication",
     "group": "Products & fabrication",
-    "summary": "A scoped 2D reference study makes the panel outline and interface datums inspectable."
+    "summary": "A simplified V0.2 motor-panel study pairs its published 122 x 37 mm bounds and 116 mm inner span with explicitly schematic central-passage and edge-notch references."
   },
   {
     "ordinal": 14,
@@ -123,7 +123,7 @@
     "title": "Prusa MINI and MINI+ X-carriage interface",
     "category": "product_fabrication",
     "group": "Products & fabrication",
-    "summary": "A scoped 2D reference study records selected X-carriage mounting relationships."
+    "summary": "A front-plane MINI X-carriage study combines the published 31.423 x 69.407 mm envelope with bearing and selected M3 interface datums."
   },
   {
     "ordinal": 15,
@@ -132,7 +132,7 @@
     "title": "Printers for Ants Micron CNC X-carriage",
     "category": "product_fabrication",
     "group": "Products & fabrication",
-    "summary": "A scoped 2D reference study exposes selected carriage interfaces and symmetry datums."
+    "summary": "An independently redrawn Micron carriage study relates its CNC body, nominal MGN9H 15 x 20 mm mounting pitch and toolhead interface."
   },
   {
     "ordinal": 16,
@@ -141,7 +141,7 @@
     "title": "Bondtech INDX tool-link interface",
     "category": "product_fabrication",
     "group": "Products & fabrication",
-    "summary": "A scoped 2D reference study records selected tool-link locating and mounting intent."
+    "summary": "A Bondtech INDX Link study pairs the published plan envelope with a schematic three-point Maxwell coupling and link-board service zone."
   },
   {
     "ordinal": 17,
@@ -150,16 +150,16 @@
     "title": "Curves, contact and continuity atlas",
     "category": "reference_lab",
     "group": "Reference labs",
-    "summary": "A broad source-defined reference lays out curve families and explicit contact state."
+    "summary": "Readable analytic and spline specimens frame explicit rolling contact and a parametric-C2 seam."
   },
   {
     "ordinal": 18,
     "stableId": "sample.fabrication-operations-atlas",
     "key": "fabrication-operations-atlas",
-    "title": "Fabrication operations and annotations atlas",
+    "title": "Fabrication operations, constraints, dimensions and annotations atlas",
     "category": "reference_lab",
     "group": "Reference labs",
-    "summary": "A readable source-defined atlas covers constraints, dimensions and fabrication-adjacent intent."
+    "summary": "Profile and topology operations, generated drilling, explicit constraint relations and a broad metrology annotation bench."
   },
   {
     "ordinal": 19,
@@ -168,7 +168,7 @@
     "title": "Parametric perforated fixture field",
     "category": "scale_study",
     "group": "Scale studies",
-    "summary": "A bounded mounting-cell field exercises generated geometry without reducing scene detail."
+    "summary": "Three keyed serpentine lattices generate 192 pilot/counterbore pairs across a complete fixture plate."
   },
   {
     "ordinal": 20,
@@ -177,6 +177,6 @@
     "title": "Dense robotic harness-routing backplane",
     "category": "scale_study",
     "group": "Scale studies",
-    "summary": "A dense source-defined routing board exercises complete retained presentation at scale."
+    "summary": "Eight readable harness trunks generate keyed clips and computed bend fillets across a complete robotic cell backplane."
   }
 ]
