@@ -8115,6 +8115,44 @@ types; `/` equals `index.html`. The public release-WASM workbench and language-s
 20/20. Only after those checks, `geosolve-m90-f006-replacement-uat-18090.service` and
 `geosolve-m91-uat-18091.service` were stopped. M91 is closed.
 
+## M92 — advanced sample showcase and scale corpus
+
+Status: **in progress**. Scope, clean breaks and integration order are frozen in
+`docs/M92_GOALS.md`; `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` owns the
+single composite human review.
+
+- [ ] Replace the duplicated 12/25/37-entry sample catalogs with one public, manifest-driven,
+  source-authoritative registry in `geosolve-sketch-code`. Exactly 20 visible samples are ordered as
+  five mechanisms, eleven products/fabrication studies, two capability atlases and two scale labs.
+- [ ] Make every entry mechanically complete: finite independently validated accepted geometry,
+  normalized Hard residual at most `1e-9`, truthful expected raw/effective mobility, minimal
+  anchoring, explicit branch/contact state, meaningful flat functional groups, and complete
+  source/IR/project inverse authority.
+- [ ] Deliver five advanced manipulable mechanisms: Theo Jansen-style walking leg, Whitworth
+  quick-return, twin-roller Bezier cam, Peaucellier straight-line linkage and generated five-stage
+  scissor lift. Each owns deterministic drag witnesses for its intended motion.
+- [ ] Deliver eleven recognizable fabrication/product studies: improved PC liquid-cooling
+  manifold, CNC dogbone fit coupon, CNC vacuum fixture plate, CNC router dust shoe/spindle clamp,
+  Gridfinity plan plus 3U section, NEMA 17 mounting face, HevORT HD9/MGN9 datum study, Voron V0.2
+  motor panel, Prusa MINI X-carriage interface, Micron CNC X-carriage and Bondtech INDX tool link.
+- [ ] Deliver two broad atlases and two honest scale cases: curves/contact/continuity; fabrication
+  operations/constraints/dimensions/annotations; a parametric perforated fixture field; and a dense
+  robotic harness-routing backplane.
+- [ ] Store exact external URL/revision/path/licence relationships and adjacent NOTICE text where
+  provenance requires it. These are 2D constraint studies, not imported solids or claims of exact
+  OEM manufacture.
+- [ ] Clean-break headless terminology from demos to samples and publish deterministic report v2
+  with numerical right nullity, equality DOF, bidirectional bounded DOF, and ordered source-group
+  names/counts. No compatibility aliases or wall-clock values remain.
+- [ ] Expand the stable oracle so every applicable common interaction executes through native and
+  code-driven backends, with reviewed explicit exclusions rather than silent parity claims.
+- [ ] Prove representative edit, Undo/Redo/reload, native/headless/release-WASM parity and exact
+  frontend-manifest generation for every entry; retain release WASM below 20 MiB and the complete
+  distribution below 30 MiB.
+- [ ] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
+  survey/check/require-clean, package/frontend tests and the clean release gate; then freeze one
+  byte-verified immutable M92 UAT without publishing Pages before human approval.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

@@ -2692,3 +2692,34 @@ Downloaded archive SHA-256 `7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118
 has exact ten-file aggregate
 `a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`. Eleven public routes and
 Chromium 20/20 pass before both accepted M90/M91 listeners were retired. M91 is closed.
+
+## M92 canonical bundled-sample architecture
+
+M92 replaces accumulated catalog variants with one manifest-driven registry owned by
+`geosolve-sketch-code`. `BundledSampleSpec` binds a stable ordinal/key/title/category/summary to its
+typed `sketch.ts`, authenticated compiler envelope, witnesses, expected mobility, ordered functional
+groups and provenance. `bundled_sample_catalog()` returns the exact 20-entry order and
+`bundled_sample(key)` resolves without a parallel enum. The frontend manifest is generated from the
+same registry; web and headless consumers do not curate independent lists.
+
+Assets live together under `assets/bundled-samples/<key>/`: `manifest.json`, `sketch.ts`,
+`sketch.compiled.json`, `witnesses.json`, and `NOTICE.md` where required. Registry validation rejects
+ordinal gaps, duplicate keys/titles, category-count drift, missing assets, source/compiler mismatch,
+invalid expected mobility, duplicate/missing functional-group ownership and incomplete provenance.
+The fixed distribution is five mechanisms, eleven fabrication/products, two atlases and two scale
+labs.
+
+All samples are source authoritative. TypeScript records equation-free declarations and groups;
+native materialization, solve, independent validation, rank/mobility, accepted scene and history
+remain Rust-owned. A manifest describes expected meaning but cannot override a failed solve. No new
+primitive, residual, solid, CAM, collision, LOD or optimization contract is introduced by a sample.
+
+Headless input is clean-broken from demo terminology to sample terminology. Deterministic report v2
+adds numerical right nullity, equality DOF, bidirectional bounded DOF and the exact ordered source
+group names/counts. It intentionally excludes wall-clock timing. Source, project and report outputs
+remain immutable/new-path publications.
+
+The systemic native/managed oracle dimension follows the owning-layer strategy in
+`.agents/skills/geosolve-harden-defect`: public Rust semantic authority is compared first; WASM is a
+thin adapter parity check; human UAT owns presentation and manipulation feel. Exclusions are
+explicit reviewed non-passes, never inferred from backend failure.

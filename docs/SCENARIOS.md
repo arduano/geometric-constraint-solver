@@ -7104,6 +7104,59 @@ ten-file aggregate `a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a215
 All eleven public routes exact-match with HTTP 200 and correct transport metadata; public Chromium
 passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M91 is closed.
 
+## M92 advanced showcase fixtures
+
+Status: **in progress**.
+
+### M92-C1 — canonical registry is complete and singular
+
+Load the public bundled-sample registry and require ordinals exactly `1..=20`, unique keys/titles,
+category counts `5/11/2/2`, all required colocated assets, byte-identical source/compiler authority,
+truthful expected mobility, exact ordered functional groups and complete provenance. Generate the
+frontend JSON and compare it byte-for-byte. No legacy 12/25/37 catalog type or native/code menu
+branch remains reachable.
+
+### M92-C2 — every sample is independently valid and reversible
+
+For each manifest entry cold-materialize through the normal managed path; require finite geometry,
+normalized Hard residual `<= 1e-9`, expected numerical right nullity/equality/bidirectional bounded
+DOF, explicit branch state and exactly-once functional-group membership. Round-trip source, IR and
+project, apply the declared representative edit, then prove exact Undo, Redo and reload.
+
+### M92-C3 — mechanisms retain intended motion
+
+For Theo Jansen, Whitworth, twin-roller Bezier cam, Peaucellier and the five-stage scissor lift,
+execute every declared drag witness through the retained coordinator. Require accepted finite
+terminal geometry, residual validation, unchanged explicit assembly/contact branch, expected
+mobility and exact Undo/Redo/reload. Unrelated components do not drift beyond the stated witness
+contract.
+
+### M92-C4 — product studies retain provenance and honest scope
+
+Validate every external relationship's exact URL, revision, path and licence, and require adjacent
+NOTICE metadata where declared. Each reference study identifies what dimensions/topology were
+interpreted and does not represent itself as an imported solid, CAM plan or manufacturing guarantee.
+
+### M92-C5 — headless report v2 is deterministic
+
+List with `samples`, open with `--sample`/`bundled_sample`, and inspect/render every entry. Require
+`geosolve-headless-report-v2`, right nullity, equality and bidirectional bounded DOF, and ordered
+group names/counts. Repeat reports byte-for-byte while excluding timing. Reject every removed demo
+spelling and unknown sample transactionally.
+
+### M92-C6 — native/code common interactions have systemic oracle parity
+
+Run every applicable golden authoring, edit, lifecycle, drag and accepted-scene row through native
+and managed backends. Compare semantic authority and independent invariants, not backend IDs or raw
+serialization. Reject missing, duplicate or stale exclusions and never count an exclusion as Pass.
+
+### M92-C7 — release scale and adapter parity remain bounded
+
+Exercise the perforated field and robotic backplane through native/headless/release-WASM scenes,
+including selection and one representative edit. Require deterministic complete frames, exact
+source authority, release WASM `<20 MiB`, distribution `<30 MiB`, and no LOD or timing field in
+semantic output.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:
