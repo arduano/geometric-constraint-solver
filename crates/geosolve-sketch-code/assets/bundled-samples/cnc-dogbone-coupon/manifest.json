@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 7,
+  "key": "cnc-dogbone-coupon",
+  "title": "CNC joinery and dogbone fit coupon",
+  "summary": "A planar router-fit coupon compares keyed clearances and explicit corner reliefs.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 16, "effective_dof": 16 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

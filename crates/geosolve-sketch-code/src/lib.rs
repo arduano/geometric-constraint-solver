@@ -6,6 +6,7 @@
 //! headless editor and low-level intent graph do not depend on it.
 
 mod artifact;
+mod bundled_samples;
 mod composition;
 mod declaration_catalog;
 mod demos;
@@ -26,6 +27,10 @@ pub use artifact::{
     ArtifactValidationError, CollectionRule, PATCH_ARTIFACT_FORMAT, PatchModuleArtifact,
     PatchTemplateNode, PatchTemplateOutput, TemplateArgument, TemplateBinding,
     ValidatedPatchModuleArtifact,
+};
+pub use bundled_samples::{
+    BundledSampleSpec, SampleCategory, SampleExpected, SampleProvenance,
+    SampleProvenanceRelationship, bundled_sample, bundled_sample_catalog,
 };
 pub use composition::{
     CodeCompositionError, MaterializedCodeProject, MaterializedFilletOutput,

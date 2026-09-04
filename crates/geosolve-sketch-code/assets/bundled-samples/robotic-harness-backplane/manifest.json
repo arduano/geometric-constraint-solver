@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 20,
+  "key": "robotic-harness-backplane",
+  "title": "Dense robotic harness-routing backplane",
+  "summary": "A dense source-defined routing board exercises complete retained presentation at scale.",
+  "category": "scale_study",
+  "expected": { "raw_dof": 112, "effective_dof": 112 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

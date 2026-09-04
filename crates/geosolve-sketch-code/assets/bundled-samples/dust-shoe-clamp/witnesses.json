@@ -1,0 +1,5 @@
+{
+  "format": "geosolve-sample-witnesses-v1",
+  "representative_edit": { "declaration": "point1RotatingSquareAnchorA", "path": ["point"], "replacement": [0, 0] },
+  "drags": []
+}

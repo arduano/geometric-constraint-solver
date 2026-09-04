@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 15,
+  "key": "micron-carriage",
+  "title": "Printers for Ants Micron CNC X-carriage",
+  "summary": "A scoped 2D reference study exposes selected carriage interfaces and symmetry datums.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

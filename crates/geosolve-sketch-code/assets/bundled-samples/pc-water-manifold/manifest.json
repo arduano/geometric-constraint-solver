@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 6,
+  "key": "pc-water-manifold",
+  "title": "PC liquid-cooling manifold",
+  "summary": "A constrained planar study of a distribution plate, ports and routed channels.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

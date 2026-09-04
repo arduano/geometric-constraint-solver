@@ -1,0 +1,5 @@
+{
+  "format": "geosolve-sample-witnesses-v1",
+  "representative_edit": { "declaration": "point1ProfilePolylinePoint", "path": ["point"], "replacement": [-10, 8] },
+  "drags": []
+}

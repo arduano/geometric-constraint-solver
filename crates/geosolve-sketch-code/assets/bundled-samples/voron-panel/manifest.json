@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 13,
+  "key": "voron-panel",
+  "title": "Voron V0.2 motor panel",
+  "summary": "A scoped 2D reference study makes the panel outline and interface datums inspectable.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

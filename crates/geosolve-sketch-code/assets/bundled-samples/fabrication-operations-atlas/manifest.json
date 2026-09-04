@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 18,
+  "key": "fabrication-operations-atlas",
+  "title": "Fabrication operations and annotations atlas",
+  "summary": "A readable source-defined atlas covers constraints, dimensions and fabrication-adjacent intent.",
+  "category": "reference_lab",
+  "expected": { "raw_dof": 28, "effective_dof": 28 },
+  "groups": ["Points", "Geometry", "Dimensions"],
+  "provenance": []
+}

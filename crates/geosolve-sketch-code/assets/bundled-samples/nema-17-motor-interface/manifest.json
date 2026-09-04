@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 11,
+  "key": "nema-17-motor-interface",
+  "title": "NEMA 17 mounting-face study",
+  "summary": "A dimensioned planar interface study exposes pilot, shaft and mounting-hole datums.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

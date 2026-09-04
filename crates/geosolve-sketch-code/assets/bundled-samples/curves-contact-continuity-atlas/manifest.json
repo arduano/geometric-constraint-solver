@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 17,
+  "key": "curves-contact-continuity-atlas",
+  "title": "Curves, contact and continuity atlas",
+  "summary": "A broad source-defined reference lays out curve families and explicit contact state.",
+  "category": "reference_lab",
+  "expected": { "raw_dof": 166, "effective_dof": 158 },
+  "groups": ["Points", "Geometry", "Constraints"],
+  "provenance": []
+}

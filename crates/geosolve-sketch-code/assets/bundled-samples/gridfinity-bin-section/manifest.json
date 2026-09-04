@@ -1,0 +1,22 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 10,
+  "key": "gridfinity-bin-section",
+  "title": "Gridfinity plan and 3U section",
+  "summary": "A standards-informed plan and central section expose base, cavity, wall and stacking intent.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": [
+    {
+      "relationship": "adapted",
+      "name": "gridfinity-rebuilt-openscad",
+      "url": "https://github.com/kennetek/gridfinity-rebuilt-openscad",
+      "revision": "910e22d8607fd7f5f51ad5e5cbc5287a76810bfd",
+      "path": "src/core/standard.scad",
+      "licence": "MIT",
+      "scope": "Dimensional constants and profile stages interpreted as a constrained 2D study; no imported solid or manufacturing guarantee.",
+      "notice_required": true
+    }
+  ]
+}

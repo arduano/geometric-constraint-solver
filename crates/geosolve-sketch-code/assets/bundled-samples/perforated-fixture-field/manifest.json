@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 19,
+  "key": "perforated-fixture-field",
+  "title": "Parametric perforated fixture field",
+  "summary": "A bounded mounting-cell field exercises generated geometry without reducing scene detail.",
+  "category": "scale_study",
+  "expected": { "raw_dof": 12, "effective_dof": 12 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

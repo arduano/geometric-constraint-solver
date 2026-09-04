@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 9,
+  "key": "dust-shoe-clamp",
+  "title": "CNC router dust shoe and spindle clamp",
+  "summary": "A planar clamp and dust-shoe interface study keeps concentric and mounting intent explicit.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 1, "effective_dof": 1 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

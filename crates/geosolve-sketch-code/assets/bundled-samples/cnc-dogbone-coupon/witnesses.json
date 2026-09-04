@@ -1,0 +1,5 @@
+{
+  "format": "geosolve-sample-witnesses-v1",
+  "representative_edit": { "declaration": "point1LineLineHorizontalStart", "path": ["point"], "replacement": [-6, 0] },
+  "drags": []
+}

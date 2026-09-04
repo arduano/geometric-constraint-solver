@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 14,
+  "key": "prusa-mini-interface",
+  "title": "Prusa MINI and MINI+ X-carriage interface",
+  "summary": "A scoped 2D reference study records selected X-carriage mounting relationships.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

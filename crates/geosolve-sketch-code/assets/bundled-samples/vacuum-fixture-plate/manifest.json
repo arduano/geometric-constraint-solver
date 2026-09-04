@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 8,
+  "key": "vacuum-fixture-plate",
+  "title": "CNC vacuum fixture and spoilboard plate",
+  "summary": "A dimensioned plate study organizes mounting, vacuum and workholding references.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}

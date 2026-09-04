@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 12,
+  "key": "hevort-datum-study",
+  "title": "HevORT HD9 and MGN9 datum study",
+  "summary": "A scoped 2D reference study records mounting datums without claiming an imported solid.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "provenance": []
+}
