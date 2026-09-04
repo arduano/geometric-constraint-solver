@@ -5154,10 +5154,12 @@ globally blocked later pointer input.
 
 ## M91 cohesive code-driven-authoring acceptance
 
-Status: **Candidate nominated; awaiting composite human UAT.**
+Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
+GitHub Pages closeout remains pending.**
 
-All 14 rows in `docs/M91_UAT.md` remain exactly **Not run**, including the ten transferred M90
-rows; no automated gate passes or waives them.
+The supervising user's blanket/composite approval of every part of the UAT accepts M91-U1 through
+M91-U14 as Pass without claiming a separately logged row-by-row replay. The ten transferred
+assertions remain historically unexecuted in M90; their acceptance here is an M91 disposition.
 
 The candidate must satisfy all five integrated workstream gates:
 
@@ -5234,6 +5236,10 @@ redirect and compression checks match at HTTP-ledger SHA-256
 Chromium `20/20`. Tailscale-only unit `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
 `bf93a3f5dab84809a24fdc2db6f23f4f`, exact-serves it at `http://100.94.63.83:18091/`. The protected
 M90 service remained byte-identical. No public push or GitHub Pages deployment was made.
+
+Human acceptance now passes. M91 remains open only for GitHub Pages publication, downloaded-artifact
+and hosted-byte verification, public release-WASM browser qualification, accepted-service retirement
+and the final evidence-only closeout record.
 
 ## Regression and oracle policy
 

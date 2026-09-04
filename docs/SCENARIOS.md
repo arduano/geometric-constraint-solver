@@ -6955,10 +6955,12 @@ M90 is closed.
 
 ## M91 cohesive code-driven-authoring fixtures
 
-Status: **Candidate nominated; awaiting composite human UAT.**
+Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
+GitHub Pages closeout remains pending.**
 
-All 14 composite human UAT rows remain exactly Not run. These fixtures mechanically qualify the
-five integrated workstreams; they do not substitute for `docs/M91_UAT.md`.
+These fixtures mechanically qualify the five integrated workstreams; they do not substitute for
+human acceptance. The supervising user's blanket/composite approval accepts M91-U1 through M91-U14
+as Pass at milestone level without claiming a separately logged row-by-row replay.
 
 ### M91-C1 — authored contact range reconciles from accepted continuation
 
@@ -7094,7 +7096,9 @@ match at SHA-256 `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86ba
 endpoints pass Chromium `20/20`. Unit `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
 `bf93a3f5dab84809a24fdc2db6f23f4f`, serves only that snapshot at
 `http://100.94.63.83:18091/`. M90 remained byte-identical; no GitHub Pages deployment or public push
-was made. Automated evidence does not execute, pass or waive a human UAT row.
+was made at nomination. Automated evidence did not execute, pass or waive a human UAT row. Human
+acceptance now passes separately; Pages publication, hosted-byte verification and accepted-service
+retirement remain pending.
 
 ## Frozen near-singular fixtures
 

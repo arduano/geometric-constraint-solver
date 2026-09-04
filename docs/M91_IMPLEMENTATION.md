@@ -2,7 +2,8 @@
 
 # M91 implementation: parallel workstreams and integration
 
-Status: **Candidate nominated; awaiting composite human UAT.**
+Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
+GitHub Pages closeout remains pending.**
 
 ## Integration order
 
@@ -220,4 +221,7 @@ before any test body because its host `libglib` was unavailable. The retained ha
 same system-Chrome wrapper used by the clean gate passed 20/20 on staging and live. This is harness
 evidence, not an M91 defect. The protected M90 unit, process identity, snapshot manifest, inventory
 and served root remained byte-identical before and after publication and were never restarted.
-No public push or GitHub Pages deployment was made. All 14 human UAT rows remain unrun.
+At nomination, no public push or GitHub Pages deployment was made and all 14 human UAT rows remained
+unrun. On 2026-09-04 the supervising user's explicit blanket/composite approval accepted M91-U1
+through M91-U14 as Pass at milestone level without claiming a separately logged row-by-row replay.
+Pages publication, hosted-byte verification and accepted-service retirement remain pending.

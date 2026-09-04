@@ -7997,11 +7997,13 @@ a browser; all accepted geometry is finite and independently validated at normal
 
 ## M91 — cohesive code-driven authoring
 
-Status: **Candidate nominated; awaiting composite human UAT.**
+Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
+GitHub Pages closeout remains pending.**
 
-Scope and integration order are frozen in `docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`; all
-14 rows in `docs/M91_UAT.md` remain exactly **Not run**. The five bounded workstreams, clean
-qualification and immutable byte-verified publication are complete.
+Scope and integration order are frozen in `docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`.
+The supervising user's blanket/composite approval of every part of the UAT accepts M91-U1 through
+M91-U14 as Pass without claiming a separately logged row-by-row replay. The five bounded
+workstreams, clean qualification and immutable byte-verified UAT publication are complete.
 
 - [x] **Constraint-edit intent reconciliation.** Derive intrinsic curve parameter topology from the
   referenced curve instead of presenting it as ordinary editable range boilerplate; expose a
@@ -8092,8 +8094,15 @@ Final nomination evidence: source `6d0155151133ba2540fd1dc4b2b071f141b86064`, tr
 `geosolve-m91-uat-18091.service`, PID `2142854`, invocation
 `bf93a3f5dab84809a24fdc2db6f23f4f`, URL `http://100.94.63.83:18091/`. The ten-file,
 `27,158,025`-byte distribution is the unchanged gate output; staging and live Chromium pass `20/20`,
-and M90's service and bytes remain identical. Automated evidence does not execute, pass or waive any
-UAT row. No public push or GitHub Pages deployment was made.
+and M90's service and bytes remain identical. At nomination, automated evidence did not execute,
+pass or waive any UAT row, and no public push or GitHub Pages deployment was made.
+
+- [x] Receive explicit supervising-user blanket/composite approval of M91-U1 through M91-U14 on
+  2026-09-04, recording every row as Pass at milestone level without claiming a separately logged
+  row-by-row replay.
+- [ ] Publish the approved descendant through GitHub Pages, exact-verify the downloaded artifact and
+  every hosted path, run the public release-WASM browser qualification, retire the accepted M90/M91
+  listeners only after verification, and record the final public closeout evidence.
 
 ## Explicit non-goals
 

@@ -4,10 +4,12 @@
 
 ## Outcome
 
-Status: **Candidate nominated; awaiting composite human UAT.**
+Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
+GitHub Pages closeout remains pending.**
 
 The implementation is mechanically qualified and its immutable candidate is published on the
-Tailscale-only UAT endpoint below. No human UAT row has run.
+Tailscale-only UAT endpoint below. The supervising user's blanket approval of every part of the UAT
+accepts M91-U1 through M91-U14 as Pass without claiming a separately logged row-by-row replay.
 
 M91 combines five independently owned improvements into one code-authoritative workbench and one
 composite UAT. It makes authored contact-range changes behave like intentional design edits, adds
@@ -47,7 +49,9 @@ Closure requires locked all-feature Rust tests, formatting, warnings-denied Clip
 frontend checks, fixture/declaration drift checks, dual-backend golden `--survey`, `--check` and
 `--require-clean`, optimized release WASM, distribution validation and the complete clean-source
 release gate. The nominated artifact must be an immutable byte-verified Tailscale-only snapshot.
-Automated evidence does not accept a human UAT row and public deployment is outside this milestone.
+Automated evidence does not accept a human UAT row. After explicit human acceptance, the approved
+descendant must publish through GitHub Pages, pass artifact and hosted-byte verification, and only
+then retire the accepted UAT services; those public closeout steps are still pending.
 
 ## Implemented workstreams
 
@@ -65,9 +69,11 @@ The integrated implementation now contains all five frozen workstreams:
    accepted-scene rows, with a reviewed fail-closed exclusion ledger.
 
 The implementation also retains the M90 clean-break guarantees: existing-point drags do not compile
-managed source; generated declaration/source mutations remain atomic; the exact M90-F005 workspace
-still restores through authenticated historical migration; and M90-U1 through M90-U10 remain
-transferred, unexecuted and neither passed nor waived.
+managed source; generated declaration/source mutations remain atomic; and the exact M90-F005
+workspace still restores through authenticated historical migration. At nomination, M90-U1 through
+M90-U10 remained transferred, unexecuted and neither passed nor waived. They are now accepted as
+M91-U1 through M91-U10 by composite M91 approval, without retroactively changing their historical
+M90 disposition.
 
 ## Reviewed parity exclusions
 
@@ -116,5 +122,8 @@ Nomination evidence:
   `bf93a3f5dab84809a24fdc2db6f23f4f`, URL `http://100.94.63.83:18091/`.
 
 The frozen candidate passed 20/20 Chromium checks on both staging and live endpoints. M90 remained
-byte-identical and was not restarted. Public deployment and GitHub Pages remain outside M91, and
-automated evidence accepts none of the 14 human UAT rows.
+byte-identical and was not restarted. At nomination, no public deployment or GitHub Pages
+publication had occurred, and automated evidence accepted none of the 14 human UAT rows. On
+2026-09-04 the supervising user separately accepted M91-U1 through M91-U14 by blanket/composite
+approval, without claiming a separately logged row-by-row replay. Public Pages closeout remains
+pending.

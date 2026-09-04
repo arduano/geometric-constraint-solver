@@ -2,11 +2,14 @@
 
 # M91 UAT: cohesive code-driven authoring
 
-Status: **Candidate nominated; awaiting composite human UAT.**
+Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
+GitHub Pages closeout remains pending.**
 
-All 14 rows are Not run.
-M90-U1 through M90-U10 are transferred unchanged, not passed or waived. Run this scorecard only
-against the immutable M91 candidate recorded here after clean qualification.
+The supervising user's explicit approval of every part of this UAT accepts M91-U1 through M91-U14
+as Pass at milestone level. This is blanket/composite approval of the clean-qualified immutable M91
+candidate, not a claim that a separate row-by-row replay was logged. M91-U1 through M91-U10 retain
+their origin in the transferred M90-U1 through M90-U10 assertions; this disposition does not
+retroactively record those historical M90 rows as executed or passed in M90.
 
 ## Candidate
 
@@ -39,35 +42,37 @@ packaging-verifier finding `M91-F002` by `6d01551`.
 - Tailscale service/PID/invocation/URL: `geosolve-m91-uat-18091.service`, `2142854`,
   `bf93a3f5dab84809a24fdc2db6f23f4f`, `http://100.94.63.83:18091/`.
 
-The protected M90 service and served bytes remained identical and were not restarted. Automated
-evidence accepts no scorecard row; public deployment and GitHub Pages remain out of scope.
+At nomination, the protected M90 service and served bytes remained identical and were not restarted.
+Automated evidence accepted no scorecard row, and no public deployment or GitHub Pages publication
+was made. Human acceptance is now recorded separately above; Pages publication, hosted-byte
+verification and accepted-service retirement remain pending.
 
 ## Transferred M90 scorecard
 
-1. **M90-U1 — Not run.** Start an empty coded sketch and draw one Center-Radius Circle with two
+1. **M91-U1 (transferred M90-U1) — Pass.** Start an empty coded sketch and draw one Center-Radius Circle with two
    clicks. Confirm one compact declaration, the exact needed SDK helper import, immediate continued
    interaction and exact Undo. In Compass Rose draw a three-vertex Polyline with an inferred
    constraint, then exercise repeated point drags, reload, Undo/Redo and the M90-F005 supplied
    workspace without compile-blocking, quota errors or release snapback.
-2. **M90-U2 — Not run.** Draw Quadratic and Cubic Beziers. Confirm readable named control arguments
+2. **M91-U2 (transferred M90-U2) — Pass.** Draw Quadratic and Cubic Beziers. Confirm readable named control arguments
    and source navigation.
-3. **M90-U3 — Not run.** Draw two circles and a Segment snapped to both circumferences. Confirm one
+3. **M91-U3 (transferred M90-U3) — Pass.** Draw two circles and a Segment snapped to both circumferences. Confirm one
    source transaction owns the Segment, two Point-on-Curve constraints and inferred relation; then
    author representative point, curve, datum, contact and curvature constraints and exercise
    reload/Undo/Redo.
-4. **M90-U4 — Not run.** Author and edit a dimension in the Inspector; confirm the exact source
+4. **M91-U4 (transferred M90-U4) — Pass.** Author and edit a dimension in the Inspector; confirm the exact source
    value changes and selection stays on the same declaration.
-5. **M90-U5 — Not run.** Create a Fillet, edit radius, suppress, restore, delete and Undo; confirm
+5. **M91-U5 (transferred M90-U5) — Pass.** Create a Fillet, edit radius, suppress, restore, delete and Undo; confirm
    one direct `computed.filletSet` declaration retains complete explicit branch state.
-6. **M90-U6 — Not run.** Reorder declarations and confirm source order changes; a dependency-invalid
+6. **M91-U6 (transferred M90-U6) — Pass.** Reorder declarations and confirm source order changes; a dependency-invalid
    move must retain exact accepted scene and history.
-7. **M90-U7 — Not run.** Edit a shared typed-panel radius and confirm every consumer changes with no
+7. **M91-U7 (transferred M90-U7) — Pass.** Edit a shared typed-panel radius and confirm every consumer changes with no
    edit-lens metadata.
-8. **M90-U8 — Not run.** Open every bundled sample and confirm finite accepted geometry, usable
+8. **M91-U8 (transferred M90-U8) — Pass.** Open every bundled sample and confirm finite accepted geometry, usable
    selection and no upgrade prompt or unsolicited source rewrite.
-9. **M90-U9 — Not run.** Exercise browser-free inspect/render and pinned-Deno prepare/resolve edit;
+9. **M91-U9 (transferred M90-U9) — Pass.** Exercise browser-free inspect/render and pinned-Deno prepare/resolve edit;
    confirm output project and image reflect exactly one value change.
-10. **M90-U10 — Not run.** Enter unsupported source and an invalid numeric edit; confirm positioned
+10. **M91-U10 (transferred M90-U10) — Pass.** Enter unsupported source and an invalid numeric edit; confirm positioned
     diagnostics and exact retention of prior canvas, source and history authority.
 
 The detailed original wording remains frozen in `docs/M90_UAT.md`; this compact copy does not narrow
@@ -75,21 +80,22 @@ any transferred assertion.
 
 ## M91 scorecard
 
-11. **M91-U11 — Not run.** Open a code sample with a Point-on-Curve contact initially beyond `0.5`.
+11. **M91-U11 — Pass.** Open a code sample with a Point-on-Curve contact initially beyond `0.5`.
     Change only its authored range to `{ lower: 0, upper: 0.5 }`. Confirm the edit publishes at the
     exact upper bound, reports an active upper bound, preserves unrelated geometry and remains
     draggable within the new range. Remove the range and confirm intrinsic curve topology remains.
-12. **M91-U12 — Not run.** In `sketch.ts`, create a syntax error, an unknown builder/property and a
+12. **M91-U12 — Pass.** In `sketch.ts`, create a syntax error, an unknown builder/property and a
     wrong argument type. Confirm precise underlines/messages, completion, hover and signature help;
     correct them and confirm feedback clears without ever changing the accepted canvas until Apply.
-13. **M91-U13 — Not run.** Open all 37 catalog entries and confirm each has editable typed source,
+13. **M91-U13 — Pass.** Open all 37 catalog entries and confirm each has editable typed source,
     no native/code category split, finite accepted geometry and responsive selection. Exercise the
     intended motion in Scotch Yoke, Scissor Jack and Five-stage Scissor Tower and confirm release
     retains the terminal pose with useful declared mobility.
-14. **M91-U14 — Not run.** Toggle individual and grouped Explorer eyes, observe mixed/inherited
+14. **M91-U14 — Pass.** Toggle individual and grouped Explorer eyes, observe mixed/inherited
     states, isolate a group and restore it. Confirm hidden objects cannot paint, pick or expose
     controls/annotations; source, solver state, history and suppression do not change. Toggle the
     pinned Construction filter, reload, and confirm presentation choices restore and recompose.
 
-Automated dual-backend oracle parity is a nomination gate, not a substitute for any row above. The
-supervising human must explicitly mark each row Pass, Fail or Waived before milestone closure.
+Automated dual-backend oracle parity remains nomination evidence rather than the source of these
+human dispositions. M91-U1 through M91-U14 are Pass by the explicit composite approval above; no
+separately logged row-by-row replay is claimed.

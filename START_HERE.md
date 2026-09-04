@@ -843,12 +843,15 @@ Post-close clean-source evidence now removes the remaining qualification caveat.
 distribution byte-matches `/tmp/geosolve-m90-uat.EtWyWQlt.sha256`, so no replacement service or
 candidate was needed. M90-U1 through M90-U10 remain transferred and unexecuted.
 
-## M91 integrated candidate preparation
+## M91 integrated candidate and approval
 
-Status: **Candidate nominated; awaiting composite human UAT.**
+Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
+GitHub Pages closeout remains pending.**
 
-All 14 rows in `docs/M91_UAT.md` remain exactly **Not run**. M90 remains closed; its ten unexecuted
-rows transfer unchanged into this composite scorecard and are neither passed nor waived.
+The supervising user's blanket/composite approval of every part of the UAT accepts M91-U1 through
+M91-U14 as Pass without claiming a separately logged row-by-row replay. M90 remains closed: its ten
+historically unexecuted rows were transferred as M91-U1 through M91-U10, but this M91 disposition
+does not retroactively pass or waive them in M90.
 
 The five frozen M91 workstreams are integrated:
 
@@ -893,8 +896,9 @@ ledgers are byte-identical at SHA-256
 `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`, and both frozen endpoints
 pass Chromium `20/20`. Tailscale-only unit `geosolve-m91-uat-18091.service`, PID `2142854`,
 invocation `bf93a3f5dab84809a24fdc2db6f23f4f`, exact-serves the snapshot at
-`http://100.94.63.83:18091/`. M90 remained byte-identical. Public deployment and GitHub Pages remain
-outside M91.
+`http://100.94.63.83:18091/`. M90 remained byte-identical. At nomination no public deployment or
+GitHub Pages publication had occurred. Human acceptance now passes; Pages publication, hosted-byte
+verification and accepted-service retirement remain pending.
 
 ## Read first
 
@@ -1570,10 +1574,11 @@ Durable milestone and cleanup records:
   solver-instance overlay ownership and implemented M90-F001-F006 repairs)
 - `docs/M90_UAT.md` (immutable post-F006 candidate exact-served on Tailscale; complete dirty-tree
   gate and scoped closure recorded, with M90-U1 through M90-U10 transferred/deferred into M91)
-- `docs/M91_GOALS.md` (integrated cohesive code-driven-authoring contract and nomination boundary)
+- `docs/M91_GOALS.md` (accepted cohesive code-driven-authoring contract and public-closeout boundary)
 - `docs/M91_IMPLEMENTATION.md` (five workstreams, four reviewed exclusions, resolved M91-F001/F002
   and clean-qualified immutable nomination)
-- `docs/M91_UAT.md` (14-row composite scorecard; every row Not run against the immutable candidate)
+- `docs/M91_UAT.md` (M91-U1 through M91-U14 accepted by explicit composite approval without a
+  separately logged row-by-row replay; Pages closeout pending)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

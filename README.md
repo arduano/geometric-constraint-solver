@@ -157,66 +157,21 @@ served at `http://100.94.63.83:18088/`. M88-U1 through M88-U10 are accepted at m
 without claiming a separate row-by-row replay. The obsolete Rust-DOM compatibility host is retired
 from source; no Pages/public deployment or accepted-service retirement is inferred.
 
-M89 established executed, reversible managed source and was superseded by the active M90 clean
-break before acceptance. M90 uses only `geosolve-managed-sketch-ir-v3`,
-`geosolve-executed-sketch-artifact-v3`, and the `"use geosolve sketch"` directive. All twelve
-bundled projects are normalized to that authority, named typed builders replace public tuple and
-generic-recipe transport, and the managed-v1/v2 compatibility path is removed. Instrumented
-browser/pinned-Deno execution emits the complete result and value-consumer provenance graph;
-canvas declaration insertion, panel and code changes use one prepared
-source/IR/artifact/scene/history transaction. Ordinary movement of an existing code-owned point is
-instead a synchronous persistent `CodeInteractionOverlay` solver-instance edit: it adds one
-outer/native history action without changing or compiling source, IR, artifact or compiler
-identity.
-Compiled V3 projects remain deterministic and pure Rust for browser-free inspect/solve/render,
-while raw-source mutation explicitly crosses the pinned compiler host between Rust preparation and
-Rust resolution.
+M89 established executed, reversible managed source and was superseded before acceptance by M90's
+clean V3-only named typed sketch language. M90 repaired the managed-drag, persistence, generated-
+import, multi-declaration, terminal-continuation and viewport-restoration defects, passed its final
+clean-source evidence and closed by explicit scoped approval on 2026-09-04. Its ten unexecuted human
+assertions transferred into M91 rather than being retroactively passed or waived in M90.
 
-Status: **Active — M90-F001 repair/focused qualification and a provisional dirty-tree replacement
-freeze, exact verification and Tailscale publication pass. The complete normal release gate is not
-passed; M90-U1 through M90-U10 and explicit closure remain pending/not run.** The
-historical pre-F001 pinned dirty-tree release gate exited `0`, with log SHA-256
-`2dd3663430c730eea84303954598f3a0696868aa4d433f3e32836a42024b250b`; the unchanged 271-row golden
-passes `--survey`, `--check` and `--require-clean`, which is not clean-source qualification.
-Withdrawn historical frozen snapshot `/tmp/geosolve-m90-uat.vuI7sBKt` has manifest
-`/tmp/geosolve-m90-uat.vuI7sBKt.sha256` and
-aggregate `b5bae1aca28787f026a11100c94e425d1c5e057ce3539170f4399b7cd8b05dc2`. Its `20,007,307`-byte
-`assets/geosolve_demo_web_bg-BAUG7n7P.wasm` has SHA-256
-`51fc04d4129dd73791afb20b4403efe1f4fb95af6d607037b2a95956865fe7f5`. Local/Tailscale HTTP ledgers
-matched at SHA-256 `17477e87e897b5ac080547df41b528bc16c252d4c67a4634ad21a384f4ccd29b`.
-Historical `geosolve-m90-uat-18090.service` (PID `2747435`, invocation
-`767e65048ece4573834acf8f580f87bc`) served that working-directory snapshot at
-`http://100.94.63.83:18090/`. M90-F001 preserves those bytes and hashes as reproduction evidence
-but withdraws them from continuing UAT. The unit is inactive/dead with no PID and port `18090` has
-been reassigned only to the separately identified replacement below.
-
-M90-F001 reproduces by opening **Compass Rose**, dragging a point and observing the canvas blocked
-by `pointer input is unavailable while a managed-source mutation is compiling`. This is a
-code-workbench bridge ownership regression, not a solver/DOF change: pointer-up wrongly used a
-`SetValues` source mutation; underconstrained cold replay diverged from accepted native
-continuation; parity rejected it; and the pending ticket globally gated later input. Focused repair
-now passes: ordinary code-owned point terminals publish a synchronous persistent overlay with no
-compile ticket, while failed or mismatched terminals clear their semantic route and exactly restore
-accepted editor/selection/project/source/session/persistence/history authority. The forced selected-
-reference rejection accepts its immediate next gesture. No solver equation, rank/DOF rule,
-tolerance or branch state changed. Full native/frontend/TypeScript/WASM/Clippy/format/diff and final
-unchanged golden checks pass as detailed in `PLAN.md`; the monolithic dirty release gate was
-harness-terminated at exit `143` and is not a pass.
-
-Current provisional dirty-tree replacement `/tmp/geosolve-m90-uat.xk0AGnz0` has external manifest
-`/tmp/geosolve-m90-uat.xk0AGnz0.sha256`, ordered aggregate
-`030e9f4aa98690b8cd35cdbb51a29220674f1bfcfba310192afc467f5afc38a4`, nine `0444` files, two
-`0555` directories and no symlinks. Its `19,958,913`-byte
-`assets/geosolve_demo_web_bg-B6mOdH7K.wasm` has SHA-256
-`9607cfd48f1ec23b2c29e120704277bbb70247bdbed6a67945c5cc64b7af8761`. Ten staging/live routes
-byte-match with correct MIME, no redirects/compression and ledger SHA-256
-`56a5aff7b23000e1b009f2eb479b9545fcfb17dbe5d1a4f9721f7c3951a761ae`; optimized release-WASM
-two-drag Compass passes `1/1` on staging and live. Evidence is
-`/tmp/geosolve-m90-f001-replacement-freeze-evidence.UpMqFyrm`. Tailscale-only unit
-`geosolve-m90-f001-replacement-uat-18090.service` is active/running at
-`http://100.94.63.83:18090/`, PID `3332035`, invocation
-`258e6d4da4b14661bd6d8e44856c64a5`, bound to `100.94.63.83`. This is not a passing normal release
-gate, clean-source qualification, human acceptance or closure; every M90-UAT row remains Not run.
+M91 integrates intrinsic contact topology plus authored ranges, advisory TypeScript language
+intelligence, one 37-entry managed-source sample catalog, persistent presentation-only Explorer
+visibility and native/managed semantic oracle parity. Exact source
+`6d0155151133ba2540fd1dc4b2b071f141b86064` passes the complete clean release gate; immutable
+snapshot `/tmp/geosolve-m91-uat.17Q5LnSg` is byte-verified at
+`http://100.94.63.83:18091/`. On 2026-09-04 the supervising user explicitly approved every part of
+the UAT, accepting M91-U1 through M91-U14 as Pass at milestone level without claiming a separately
+logged row-by-row replay. GitHub Pages publication, hosted-byte verification and accepted-service
+retirement remain pending; public Pages therefore still serves accepted M86 at this checkpoint.
 
 Physics, collision and a production rendering system remain out of scope.
 
@@ -261,10 +216,11 @@ Physics, collision and a production rendering system remain out of scope.
 22. ADR 0043, `docs/M89_GOALS.md`, `docs/M89_IMPLEMENTATION.md` and `docs/M89_UAT.md` — implemented
     executed/reversible managed source, source-backed authoring, declaration lifecycle and
     browser/Deno/headless parity; immutable-candidate human UAT remains pending.
-23. `docs/M90_GOALS.md`, `docs/M90_IMPLEMENTATION.md` and `docs/M90_UAT.md` — active typed V3 clean
-    break with implemented/focused-qualified M90-F001 and a provisional dirty-tree replacement
-    exact-served on Tailscale; the normal release gate, M90-U1 through M90-U10 and explicit closure
-    remain pending/not run.
+23. `docs/M90_GOALS.md`, `docs/M90_IMPLEMENTATION.md` and `docs/M90_UAT.md` — completed typed V3
+    clean break, F001-F006 repairs and scoped closure; M90-U1 through M90-U10 transferred into M91.
+24. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — clean-qualified,
+    immutable code-driven-authoring candidate accepted by explicit composite approval; public Pages
+    closeout remains pending.
 
 ## Workspace
 
@@ -315,12 +271,11 @@ accepted geometry authority; M84-M87 add optional code authoring, retained inter
 managed controls and browser-free design workflows. M88 completes the React workflow-led
 workbench redesign and post-acceptance Rust-DOM compatibility retirement. Its accepted F004
 snapshot remains live on Tailscale; no M88 public deployment or service retirement is inferred.
-M89 established executed, reversible managed source. M90 is the active clean break to one named,
-typed V3 sketch language and removes its temporary compatibility APIs. M90-F001 repair/focused
-qualification and provisional dirty-tree replacement freeze/publication pass, while the complete
-normal release gate, M90-U1 through M90-U10 and explicit closure remain pending/not run. It has no
-acceptance disposition yet.
-Public Pages remains on accepted M86. New
+M89 established executed, reversible managed source. M90 completed the clean break to one named,
+typed V3 sketch language and removed its temporary compatibility APIs. M91's five integrated
+workstreams are clean-qualified, immutably nominated and accepted by the supervising user's explicit
+composite approval; only public Pages closeout and service retirement remain pending.
+Public Pages remains on accepted M86 at this approval checkpoint. New
 milestones normally end in hands-on UAT after objective automation; M74 records an
 explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
