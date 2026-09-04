@@ -633,8 +633,8 @@ impl WorkbenchBridge {
             let editor = code_project.restore_accepted_editor()?;
             let authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
             let mut samples = super::samples::SampleCatalogState::default();
-            if let Some(key) = code_project.demo_key() {
-                samples.select_code_key(key)?;
+            if let Some(key) = code_project.sample_key() {
+                samples.select_key(key)?;
             }
             let title = code_project.title().to_owned();
             return Self::from_parts(
@@ -1230,7 +1230,12 @@ impl WorkbenchBridge {
         }
         let (code_project, editor) = open_managed(key)?;
         let mut samples = super::samples::SampleCatalogState::default();
-        samples.select_code_key(key)?;
+        if geosolve_sketch_code::bundled_sample(key).is_some() {
+            samples.select_key(key)?;
+        } else {
+            #[cfg(not(test))]
+            return Err(format!("bundled sample `{key}` is unavailable"));
+        }
         let title = code_project.title().into();
         let authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
 
@@ -4428,7 +4433,7 @@ mod tests {
     }
 
     fn managed_lifecycle_bridge() -> WorkbenchBridge {
-        let (code, editor) = CodeProjectWorkbench::open_managed_test_compiled_with_demo_pins(
+        let (code, editor) = CodeProjectWorkbench::open_managed_test_compiled_with_sample_pins(
             "bridge-managed-lifecycle-test",
             "typed-panel",
             managed_lifecycle_fixture("base"),

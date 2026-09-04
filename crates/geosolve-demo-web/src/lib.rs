@@ -512,10 +512,10 @@ mod wasm {
                 normalized
             }
 
-            let projects = geosolve_sketch_code::bundled_code_projects();
-            assert_eq!(projects.len(), 37);
-            for project in projects {
-                let key = project.key();
+            let samples = geosolve_sketch_code::bundled_sample_catalog();
+            assert_eq!(samples.len(), 20);
+            for sample in samples {
+                let key = sample.key;
                 let mut handle = super::WorkbenchHandle::new(r#"{"version":1}"#)
                     .unwrap_or_else(|error| panic!("{key} WASM workbench: {error:?}"));
                 let open = serde_json::json!({

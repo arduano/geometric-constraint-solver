@@ -1,39 +1,182 @@
 [
-  {"stableId":"sample.code.drafting-compass","key":"drafting-compass","title":"Drafting compass · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.bezier-continuity-bridge","key":"bezier-continuity-bridge","title":"Bezier continuity bridge · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.twin-roller-cam","key":"twin-roller-cam","title":"Twin-roller cam · 2 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.tangent-orbit","key":"tangent-orbit","title":"Tangent orbit · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.elliptic-trammel","key":"elliptic-trammel","title":"Elliptic trammel · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.scotch-yoke","key":"scotch-yoke","title":"Scotch yoke · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.rotating-constraint-square","key":"rotating-constraint-square","title":"Rotating constraint square · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.scissor-jack","key":"scissor-jack","title":"Scissor jack · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.five-stage-scissor-tower","key":"five-stage-scissor-tower","title":"Five-stage scissor tower · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.peaucellier-inversor","key":"peaucellier-inversor","title":"Peaucellier inversor · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.four-bar-coupler","key":"four-bar-coupler","title":"Four-bar coupler · 1 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.pantograph-linkage","key":"pantograph-linkage","title":"Pantograph linkage · 2 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.three-link-drawing-arm","key":"three-link-drawing-arm","title":"Three-link drawing arm · 3 DOF","group":"Mechanisms","kind":"code"},
-  {"stableId":"sample.code.constraint-dimension-sampler","key":"constraint-dimension-sampler","title":"Constraint and dimension sampler","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.auto-constraint-drafting","key":"auto-constraint-drafting","title":"Auto-constraint drafting playground","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.retained-drafting-relations","key":"retained-drafting-relations","title":"Retained drafting relations","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.tangent-radial-normal","key":"tangent-radial-normal","title":"Tangent and radial-normal construction","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.contact-branch-specimen","key":"contact-branch-specimen","title":"Contact branch specimen","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.angle-dimension-annotations","key":"angle-dimension-annotations","title":"Angle and dimension annotations","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.contextual-constraint-annotations","key":"contextual-constraint-annotations","title":"Contextual constraint annotations","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.dense-constraint-junction","key":"dense-constraint-junction","title":"Dense constraint junction","group":"Constraints & dimensions","kind":"code"},
-  {"stableId":"sample.code.construction-reference-geometry","key":"construction-reference-geometry","title":"Construction and reference geometry","group":"Curves & constructions","kind":"code"},
-  {"stableId":"sample.code.curve-family-gallery","key":"curve-family-gallery","title":"Curve family gallery","group":"Curves & constructions","kind":"code"},
-  {"stableId":"sample.code.periodic-nurbs-specimen","key":"periodic-nurbs-specimen","title":"Periodic NURBS specimen","group":"Curves & constructions","kind":"code"},
-  {"stableId":"sample.code.fillet-workshop","key":"fillet-workshop","title":"2D Fillet playground","group":"Curves & constructions","kind":"code"},
-  {"stableId":"sample.code.rounded-polyline","key":"rounded-polyline","title":"Rounded polyline · dynamic corners","group":"Patterns & generated geometry","kind":"code"},
-  {"stableId":"sample.code.adaptive-lanterns","key":"adaptive-lanterns","title":"Lantern garland · adaptive decorations","group":"Patterns & generated geometry","kind":"code"},
-  {"stableId":"sample.code.suspension-bridge","key":"suspension-bridge","title":"Suspension bridge · cable-and-stay layout","group":"Structures","kind":"code"},
-  {"stableId":"sample.code.compass-rose","key":"compass-rose","title":"Compass rose · generated compass pattern","group":"Patterns & generated geometry","kind":"code"},
-  {"stableId":"sample.code.neon-manifold","key":"neon-manifold","title":"Neon manifold · explicit bend routing","group":"Patterns & generated geometry","kind":"code"},
-  {"stableId":"sample.code.pc-water-manifold","key":"pc-water-manifold","title":"PC water manifold · constrained channel layout","group":"Fabrication & products","kind":"code"},
-  {"stableId":"sample.code.robotic-routing-board","key":"robotic-routing-board","title":"Robotic cable-harness routing board · adaptive cable routes","group":"Fabrication & products","kind":"code"},
-  {"stableId":"sample.code.cnc-joinery-fit-coupon","key":"cnc-joinery-fit-coupon","title":"CNC joinery fit coupon · keyed corner reliefs","group":"Fabrication & products","kind":"code"},
-  {"stableId":"sample.code.gridfinity-1x1x3-section","key":"gridfinity-1x1x3-section","title":"Gridfinity 1×1×3U section · keyed standard profile","group":"Fabrication & products","kind":"code"},
-  {"stableId":"sample.code.typed-panel","key":"typed-panel","title":"Typed panel · keyed Fillets","group":"Fabrication & products","kind":"code"},
-  {"stableId":"sample.code.braced-frame","key":"braced-frame","title":"Braced frame · reusable cross-bracing","group":"Structures","kind":"code"},
-  {"stableId":"sample.code.mounting-plate","key":"mounting-plate","title":"Mounting plate · reusable hole pattern","group":"Fabrication & products","kind":"code"}
+  {
+    "ordinal": 1,
+    "stableId": "sample.theo-jansen-leg",
+    "key": "theo-jansen-leg",
+    "title": "Theo Jansen-style walking leg · 1 DOF",
+    "category": "mechanism",
+    "group": "Mechanisms",
+    "summary": "An independently authored seven-bar walking-leg study driven by one crank."
+  },
+  {
+    "ordinal": 2,
+    "stableId": "sample.whitworth-quick-return",
+    "key": "whitworth-quick-return",
+    "title": "Whitworth quick-return · 1 DOF",
+    "category": "mechanism",
+    "group": "Mechanisms",
+    "summary": "A crank pin sliding in a branch-explicit rocker slot drives a guided return ram."
+  },
+  {
+    "ordinal": 3,
+    "stableId": "sample.twin-roller-bezier-cam",
+    "key": "twin-roller-bezier-cam",
+    "title": "Twin-roller Bézier cam · 2 DOF",
+    "category": "mechanism",
+    "group": "Mechanisms",
+    "summary": "Two independently movable equal-radius rollers retain explicit tangent contacts on a quadratic cam."
+  },
+  {
+    "ordinal": 4,
+    "stableId": "sample.peaucellier-linkage",
+    "key": "peaucellier-linkage",
+    "title": "Peaucellier straight-line linkage · 1 DOF",
+    "category": "mechanism",
+    "group": "Mechanisms",
+    "summary": "A dimensioned inversor cell converts a circular driver into exact straight-line motion."
+  },
+  {
+    "ordinal": 5,
+    "stableId": "sample.five-stage-scissor-lift",
+    "key": "five-stage-scissor-lift",
+    "title": "Generated five-stage scissor lift · 1 DOF",
+    "category": "mechanism",
+    "group": "Mechanisms",
+    "summary": "Five equal diagonal stages and six horizontal platforms share one guided extension mode."
+  },
+  {
+    "ordinal": 6,
+    "stableId": "sample.pc-water-manifold",
+    "key": "pc-water-manifold",
+    "title": "PC liquid-cooling manifold",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A constrained acrylic distribution-plate study combines three routed channels, O-ring grooves, reservoir bay and symmetric fastener stack."
+  },
+  {
+    "ordinal": 7,
+    "stableId": "sample.cnc-dogbone-coupon",
+    "key": "cnc-dogbone-coupon",
+    "title": "CNC joinery and dogbone fit coupon",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A fully constrained three-station router coupon compares press, nominal and loose mortises against common tabs and explicit cutter reliefs."
+  },
+  {
+    "ordinal": 8,
+    "stableId": "sample.vacuum-fixture-plate",
+    "key": "vacuum-fixture-plate",
+    "title": "CNC vacuum fixture and spoilboard plate",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A 200 x 120 mm datum-driven plate combines a gasket groove, six-port vacuum grid and symmetric workholding pattern."
+  },
+  {
+    "ordinal": 9,
+    "stableId": "sample.dust-shoe-clamp",
+    "key": "dust-shoe-clamp",
+    "title": "CNC router dust shoe and spindle clamp",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A fully constrained 65 mm spindle ring combines an extraction boss, split relief and symmetric clamp lug."
+  },
+  {
+    "ordinal": 10,
+    "stableId": "sample.gridfinity-bin-section",
+    "key": "gridfinity-bin-section",
+    "title": "Gridfinity plan and 3U section",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A standards-informed 1 x 1 plan and symmetric 3U section expose base, body, lip and cavity intent with one scalar section datum."
+  },
+  {
+    "ordinal": 11,
+    "stableId": "sample.nema-17-motor-interface",
+    "key": "nema-17-motor-interface",
+    "title": "NEMA 17 mounting-face study",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A datum-driven 42.3 mm face exposes the pilot, shaft and symmetric 31 mm mounting pattern."
+  },
+  {
+    "ordinal": 12,
+    "stableId": "sample.hevort-datum-study",
+    "key": "hevort-datum-study",
+    "title": "HevORT HD9 and MGN9 datum study",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A scoped 2D reference study records mounting datums without claiming an imported solid."
+  },
+  {
+    "ordinal": 13,
+    "stableId": "sample.voron-panel",
+    "key": "voron-panel",
+    "title": "Voron V0.2 motor panel",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A scoped 2D reference study makes the panel outline and interface datums inspectable."
+  },
+  {
+    "ordinal": 14,
+    "stableId": "sample.prusa-mini-interface",
+    "key": "prusa-mini-interface",
+    "title": "Prusa MINI and MINI+ X-carriage interface",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A scoped 2D reference study records selected X-carriage mounting relationships."
+  },
+  {
+    "ordinal": 15,
+    "stableId": "sample.micron-carriage",
+    "key": "micron-carriage",
+    "title": "Printers for Ants Micron CNC X-carriage",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A scoped 2D reference study exposes selected carriage interfaces and symmetry datums."
+  },
+  {
+    "ordinal": 16,
+    "stableId": "sample.bondtech-indx-link",
+    "key": "bondtech-indx-link",
+    "title": "Bondtech INDX tool-link interface",
+    "category": "product_fabrication",
+    "group": "Products & fabrication",
+    "summary": "A scoped 2D reference study records selected tool-link locating and mounting intent."
+  },
+  {
+    "ordinal": 17,
+    "stableId": "sample.curves-contact-continuity-atlas",
+    "key": "curves-contact-continuity-atlas",
+    "title": "Curves, contact and continuity atlas",
+    "category": "reference_lab",
+    "group": "Reference labs",
+    "summary": "A broad source-defined reference lays out curve families and explicit contact state."
+  },
+  {
+    "ordinal": 18,
+    "stableId": "sample.fabrication-operations-atlas",
+    "key": "fabrication-operations-atlas",
+    "title": "Fabrication operations and annotations atlas",
+    "category": "reference_lab",
+    "group": "Reference labs",
+    "summary": "A readable source-defined atlas covers constraints, dimensions and fabrication-adjacent intent."
+  },
+  {
+    "ordinal": 19,
+    "stableId": "sample.perforated-fixture-field",
+    "key": "perforated-fixture-field",
+    "title": "Parametric perforated fixture field",
+    "category": "scale_study",
+    "group": "Scale studies",
+    "summary": "A bounded mounting-cell field exercises generated geometry without reducing scene detail."
+  },
+  {
+    "ordinal": 20,
+    "stableId": "sample.robotic-harness-backplane",
+    "key": "robotic-harness-backplane",
+    "title": "Dense robotic harness-routing backplane",
+    "category": "scale_study",
+    "group": "Scale studies",
+    "summary": "A dense source-defined routing board exercises complete retained presentation at scale."
+  }
 ]

@@ -5144,7 +5144,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_and_sample_flat_inputs_activate_history_free_projectional_authority() {
+    fn fresh_and_bundled_sample_inputs_activate_projectional_authority() {
         run_projectional_test_with_large_stack("projectional-startup-and-sample-bootstrap", || {
             let document = SketchDocument::with_id(
                 10.0,
@@ -5166,29 +5166,11 @@ mod tests {
             assert!(fresh.coordinator().presentation_session().is_some());
             assert_eq!(fresh.coordinator().intent().undo_len(), 0);
 
-            let mut samples = super::samples::SampleCatalogState::default();
-            let sample = samples.open_key("constraint-dimension-sampler").unwrap();
-            let expected_document = sample.session().design_document().clone();
-            let authority = WorkbenchDocumentAuthority::from_flat_coordinator(&sample).unwrap();
-            let projectional = authority.projectional_ref().unwrap();
-            assert_eq!(
-                projectional
-                    .coordinator()
-                    .presentation_session()
-                    .unwrap()
-                    .design_document(),
-                &expected_document,
-            );
-            assert_eq!(projectional.coordinator().intent().undo_len(), 0);
-            assert!(
-                projectional
-                    .coordinator()
-                    .intent()
-                    .graph()
-                    .nodes()
-                    .values()
-                    .all(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
-            );
+            let (_, sample) =
+                super::code_projects::CodeProjectWorkbench::open_key("theo-jansen-leg").unwrap();
+            assert!(sample.coordinator().presentation_session().is_some());
+            assert_eq!(sample.coordinator().intent().undo_len(), 0);
+            assert!(sample.coordinator().accepted_materialization().is_some());
         });
     }
 

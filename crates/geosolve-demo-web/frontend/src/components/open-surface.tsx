@@ -33,7 +33,7 @@ export function OpenSurface({ recents, onOpen, onNewSketch, onNewCode, onImport,
         <p className="mt-1 text-sm text-muted">Start cleanly or inspect one of the complete bundled examples.</p>
         <div className="relative mt-4">
           <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted" />
-          <input ref={searchRef} autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search 37 samples…" className="h-9 w-full rounded-md border border-border bg-canvas pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent focus:ring-1 focus:ring-accent" />
+          <input ref={searchRef} autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search 20 samples…" className="h-9 w-full rounded-md border border-border bg-canvas pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent focus:ring-1 focus:ring-accent" />
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <QuickStart icon={<FilePlus2 />} label="New sketch" onClick={onNewSketch} />
@@ -64,7 +64,7 @@ export function OpenSurface({ recents, onOpen, onNewSketch, onNewCode, onImport,
 }
 
 function SampleButton({ sample, onOpen }: { sample: SampleEntry; onOpen: (sample: SampleEntry) => void }) {
-  return <button onClick={() => onOpen(sample)} className="group rounded-md border border-transparent px-3 py-2 text-left outline-none hover:border-border hover:bg-surface focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent"><span className="block text-sm text-foreground">{sample.title}</span></button>;
+  return <button onClick={() => onOpen(sample)} title={sample.summary} className="group rounded-md border border-transparent px-3 py-2 text-left outline-none hover:border-border hover:bg-surface focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent"><span className="block text-sm text-foreground">{sample.title}</span><span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-muted">{sample.summary}</span></button>;
 }
 
 function QuickStart({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {

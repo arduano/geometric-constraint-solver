@@ -2,11 +2,13 @@
 import samplesJson from "../data/samples.json";
 
 export interface SampleEntry {
+  ordinal: number;
   stableId: string;
   key: string;
   title: string;
+  category: "mechanism" | "product_fabrication" | "reference_lab" | "scale_study";
   group: string;
-  kind: "native" | "code";
+  summary: string;
 }
 
 export const samples = samplesJson as SampleEntry[];

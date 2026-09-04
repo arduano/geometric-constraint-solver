@@ -14,7 +14,7 @@
       "url": null,
       "revision": null,
       "path": null,
-      "license": "GPL-3.0-or-later",
+      "licence": "GPL-3.0-or-later",
       "scope": "Conceptual 2D interface geometry only; no airflow, clamp-load, collision or CAM claim.",
       "notice_required": false
     }

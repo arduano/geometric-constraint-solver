@@ -1465,35 +1465,20 @@ pub(crate) struct SampleManifestEntry {
     pub(crate) reachability: CommandReachability,
 }
 
-/// All 37 user-visible examples in their source-authoritative order. The first
-/// 25 retain direct-native constructors only as reference/oracle fixtures.
+/// All 20 user-visible examples in canonical manifest order.
 pub(crate) fn sample_manifest() -> Vec<SampleManifestEntry> {
-    let mut samples = Vec::with_capacity(37);
-    for group in super::samples::GROUPS {
-        for definition in group.samples {
-            samples.push(SampleManifestEntry {
-                stable_id: format!("sample.code.{}", definition.id.key()),
-                key: definition.id.key(),
-                title: definition.title,
-                group: group.title,
-                summary: "Editable parametric sketch sample",
-                kind: SampleKind::Code,
-                reachability: CommandReachability::two_actions(),
-            });
-        }
-    }
-    for id in geosolve_sketch_code::CodeProjectDemoId::ALL {
-        samples.push(SampleManifestEntry {
-            stable_id: format!("sample.code.{}", id.key()),
-            key: id.key(),
-            title: id.title(),
-            group: id.semantic_group(),
-            summary: id.summary(),
+    geosolve_sketch_code::bundled_sample_catalog()
+        .iter()
+        .map(|sample| SampleManifestEntry {
+            stable_id: format!("sample.{}", sample.key),
+            key: sample.key,
+            title: sample.title,
+            group: sample.category.label(),
+            summary: sample.summary,
             kind: SampleKind::Code,
             reachability: CommandReachability::two_actions(),
-        });
-    }
-    samples
+        })
+        .collect()
 }
 
 pub(crate) fn search_samples(query: &str) -> Vec<SampleManifestEntry> {
@@ -1608,29 +1593,15 @@ mod tests {
                 .iter()
                 .filter(|sample| sample.kind == SampleKind::Code)
                 .count(),
-            37
+            20
         );
-        assert_eq!(samples.len(), 37);
+        assert_eq!(samples.len(), 20);
         assert_eq!(
-            samples
+            samples.iter().map(|sample| sample.key).collect::<Vec<_>>(),
+            geosolve_sketch_code::bundled_sample_catalog()
                 .iter()
-                .filter(|sample| {
-                    super::super::samples::SampleId::from_key(sample.key).is_some()
-                })
                 .map(|sample| sample.key)
                 .collect::<Vec<_>>(),
-            super::super::samples::SampleId::ALL.map(super::super::samples::SampleId::key)
-        );
-        assert_eq!(
-            samples
-                .iter()
-                .skip(super::super::samples::SampleId::ALL.len())
-                .map(|sample| sample.key)
-                .collect::<Vec<_>>(),
-            geosolve_sketch_code::CodeProjectDemoId::ALL
-                .iter()
-                .map(|id| id.key())
-                .collect::<Vec<_>>()
         );
     }
 
@@ -1701,7 +1672,7 @@ mod tests {
     }
 
     #[test]
-    fn sample_search_is_case_insensitive_across_all_thirty_seven_entries() {
+    fn sample_search_is_case_insensitive_across_all_twenty_entries() {
         let samples = sample_manifest();
         assert_eq!(search_samples(""), samples);
         for sample in samples {
@@ -1723,8 +1694,8 @@ mod tests {
                 sample.stable_id
             );
         }
-        assert_eq!(search_samples("typed PANEL").len(), 1);
-        assert_eq!(search_samples("GRIDFINITY standard PROFILE").len(), 1);
+        assert_eq!(search_samples("theo JANSEN").len(), 1);
+        assert_eq!(search_samples("GRIDFINITY plan").len(), 1);
         assert!(search_samples("definitely-not-a-sample").is_empty());
     }
 }

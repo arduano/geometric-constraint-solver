@@ -14,7 +14,7 @@
       "url": null,
       "revision": null,
       "path": null,
-      "license": "GPL-3.0-or-later",
+      "licence": "GPL-3.0-or-later",
       "scope": "Planar calibration geometry only; relief circles are explicit design intent, not cutter compensation or CAM.",
       "notice_required": false
     }

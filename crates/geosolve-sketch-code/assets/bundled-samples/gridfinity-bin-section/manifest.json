@@ -14,7 +14,7 @@
       "url": "https://github.com/kennetek/gridfinity-rebuilt-openscad",
       "revision": "910e22d8607fd7f5f51ad5e5cbc5287a76810bfd",
       "path": "src/core/standard.scad",
-      "license": "MIT",
+      "licence": "MIT",
       "scope": "Selected public grid, height, base and stacking-lip dimensions were interpreted into an independently drawn 2D plan and centre section.",
       "notice_required": true
     }

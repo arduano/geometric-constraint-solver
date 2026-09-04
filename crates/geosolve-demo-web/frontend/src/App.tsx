@@ -316,7 +316,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       setRecentSamples(remembered.entries);
       if (remembered.issue) reportError(remembered.issue);
     }
-  }); setMode(sample.kind === "code" ? "split" : "design"); };
+  }); setMode("split"); };
   const replaceProject = (name: "project.new" | "project.new-code", nextMode: WorkspaceMode) => { if (replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); void command(name).then((next) => setDraft(next.source.files.find((file) => file.path === next.source.selectedPath)?.contents ?? "")); setMode(nextMode); };
   const importProject = () => { if (replacementBlocked) { reportReplacementBlocked(); return; } transient.close(false); importInputRef.current?.click(); };
   const importSelectedFile = (file?: File) => {

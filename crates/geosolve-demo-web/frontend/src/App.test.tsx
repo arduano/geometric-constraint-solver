@@ -321,28 +321,28 @@ describe("M88 workbench interaction contract", () => {
     expect(screen.getByText("Click the canvas to continue · Esc cancels")).toBeVisible();
   });
 
-  it("offers all 37 authoritative samples through semantic, searchable groups", async () => {
+  it("offers all 20 authoritative samples through semantic, searchable groups", async () => {
     const { user } = await ready();
     await user.click(screen.getByRole("button", { name: "File menu" }));
     await user.click(screen.getByRole("menuitem", { name: /Open/ }));
-    expect(screen.getByText("37 samples")).toBeVisible();
+    expect(screen.getByText("20 samples")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Mechanisms" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Mechanisms" })).not.toBeInTheDocument();
 
-    const search = screen.getByPlaceholderText("Search 37 samples…");
-    await user.type(search, "typed panel");
+    const search = screen.getByPlaceholderText("Search 20 samples…");
+    await user.type(search, "nema 17");
     expect(screen.getByText("1 samples")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /Typed panel · keyed Fillets/ }));
-    await screen.findByText("Typed panel · keyed Fillets");
+    await user.click(screen.getByRole("button", { name: /NEMA 17 mounting-face study/ }));
+    await screen.findByText("NEMA 17 mounting-face study");
     expect(screen.queryByLabelText("Open project")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "File menu" }));
     await user.click(screen.getByRole("menuitem", { name: /Open/ }));
     const recent = screen.getByRole("region", { name: "Recent" });
-    expect(within(recent).getByRole("button", { name: /Typed panel · keyed Fillets/ })).toBeVisible();
-    expect(JSON.parse(localStorage.getItem("geosolve-workbench-recents-v1") ?? "null")).toMatchObject({
-      version: 1,
-      entries: [{ kind: "code", key: "typed-panel" }],
+    expect(within(recent).getByRole("button", { name: /NEMA 17 mounting-face study/ })).toBeVisible();
+    expect(JSON.parse(localStorage.getItem("geosolve-workbench-recents-v2") ?? "null")).toMatchObject({
+      version: 2,
+      entries: [{ key: "nema-17-motor-interface" }],
     });
   });
 
@@ -417,7 +417,7 @@ describe("M88 workbench interaction contract", () => {
     await user.keyboard("{End}// keep this local draft");
 
     await user.keyboard("{Control>}o{/Control}");
-    await user.click(screen.getByRole("button", { name: /Typed panel · keyed Fillets/ }));
+    await user.click(screen.getByRole("button", { name: /NEMA 17 mounting-face study/ }));
     expect(screen.getByText("Untitled sketch")).toBeVisible();
     expect(await screen.findByRole("alert")).toHaveTextContent("Apply or Revert the current source draft before replacing this project");
 

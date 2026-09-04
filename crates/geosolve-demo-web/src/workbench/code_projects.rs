@@ -27,7 +27,7 @@ use geosolve_sketch::{
     OperationOutcome, PersistentId, RetainedSketchDocumentSession, SketchHardValidity,
 };
 use geosolve_sketch_code::{
-    BundledCodeProject, CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOwnerAddress,
+    BundledSampleSpec, CodeGeneratedChildAddress, CodeInteractionOverlay, CodeOwnerAddress,
     CodePointEdit, CodeProject, CodeRectangleCorner, CodeSessionIdentity, CodeSessionReceipt,
     CodeWritableAddress, CompiledManagedSource, EditorBootstrapDeclaration, ExpandedCodeProject,
     ExpandedPort, ExpandedSemanticTarget, ExpandedWritablePoint, GeneratedMemberAddress,
@@ -38,7 +38,7 @@ use geosolve_sketch_code::{
     ManagedMutationAuthority, ManagedPathSegment, ManagedSketchMutation, ManagedSpan, ManagedValue,
     MaterializedCodeProject, PatchModuleArtifact, PreparedManagedMutationReceipt,
     PreparedManagedMutationRequest, PreparedManagedSourceRequest, ProjectKey, SemanticOutputPath,
-    SemanticSymbol, SketchCodeSession, UnitLiteral, bundled_code_projects,
+    SemanticSymbol, SketchCodeSession, UnitLiteral, bundled_sample, bundled_sample_catalog,
     direct_declaration_intent_symbol, expand_code_project_for_structural_edit,
     managed_control_authority, managed_control_manifest, materialize_code_project_cold,
     materialize_code_project_incremental_for_structural_edit,
@@ -58,7 +58,7 @@ use geosolve_sketch_intent::{
 use serde::{Deserialize, Serialize};
 
 const MANAGED_FILE: &str = "sketch.ts";
-const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v3";
+const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v4";
 const CODE_PROJECT_MODEL_SCALE: f64 = 1.0;
 const MAX_MANAGED_DRAFT_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 static NEXT_CODE_MATERIALIZATION: AtomicU64 = AtomicU64::new(1);
@@ -924,29 +924,29 @@ struct ManagedControlManifestCache {
 /// sample key.
 #[derive(Clone, Debug)]
 enum CodeProjectOrigin {
-    Bundled(BundledCodeProject),
+    Bundled(&'static BundledSampleSpec),
     Authored,
 }
 
 impl CodeProjectOrigin {
     fn title(&self) -> &'static str {
         match self {
-            Self::Bundled(project) => project.title(),
+            Self::Bundled(sample) => sample.title,
             Self::Authored => "Untitled code sketch",
         }
     }
 
-    fn demo_key(&self) -> Option<&'static str> {
+    fn sample_key(&self) -> Option<&'static str> {
         match self {
-            Self::Bundled(project) => Some(project.key()),
+            Self::Bundled(sample) => Some(sample.key),
             Self::Authored => None,
         }
     }
 
     fn to_wire(&self) -> CodeProjectOriginWire {
         match self {
-            Self::Bundled(project) => CodeProjectOriginWire::Bundled {
-                demo: project.key().into(),
+            Self::Bundled(sample) => CodeProjectOriginWire::Bundled {
+                sample: sample.key.into(),
             },
             Self::Authored => CodeProjectOriginWire::Authored,
         }
@@ -956,7 +956,7 @@ impl CodeProjectOrigin {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum CodeProjectOriginWire {
-    Bundled { demo: String },
+    Bundled { sample: String },
     Authored,
 }
 
@@ -975,14 +975,12 @@ struct CodeProjectWorkbenchWire {
 
 fn restore_code_project_origin(origin: CodeProjectOriginWire) -> Result<CodeProjectOrigin, String> {
     let bundled = |key: &str| {
-        bundled_code_projects()
-            .into_iter()
-            .find(|project| project.key() == key)
+        bundled_sample(key)
             .map(CodeProjectOrigin::Bundled)
-            .ok_or_else(|| format!("unknown code project `{key}`"))
+            .ok_or_else(|| format!("unknown bundled sample `{key}`"))
     };
     match origin {
-        CodeProjectOriginWire::Bundled { demo } => bundled(&demo),
+        CodeProjectOriginWire::Bundled { sample } => bundled(&sample),
         CodeProjectOriginWire::Authored => Ok(CodeProjectOrigin::Authored),
     }
 }
@@ -1542,7 +1540,7 @@ impl CodeProjectWorkbench {
         format!(
             "project={:?} origin={} session={} revision={} digest={} pending_pointer={} pending_alias={} pending_selector={:?}",
             self.session.snapshot().project,
-            self.origin.demo_key().unwrap_or("non-bundled"),
+            self.origin.sample_key().unwrap_or("non-bundled"),
             identity.session,
             identity.revision,
             identity.digest,
@@ -1596,12 +1594,19 @@ impl CodeProjectWorkbench {
     }
 
     pub(crate) fn open_key(key: &str) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
-        let bundled = bundled_code_projects()
+        if let Some(sample) = bundled_sample(key) {
+            return Self::open_project(CodeProjectOrigin::Bundled(sample), sample.project());
+        }
+        #[cfg(test)]
+        if let Some(fixture) = geosolve_sketch_code::bundled_code_projects()
             .into_iter()
-            .find(|project| project.key() == key)
-            .ok_or_else(|| format!("unknown code project `{key}`"))?;
-        let project = bundled.project();
-        Self::open_project(CodeProjectOrigin::Bundled(bundled), project)
+            .find(|fixture| fixture.key() == key)
+        {
+            // Historical behavior tests retain their exact source fixtures, but
+            // these aliases are absent from production and from every catalog.
+            return Self::open_project(CodeProjectOrigin::Authored, fixture.project());
+        }
+        Err(format!("unknown bundled sample `{key}`"))
     }
 
     #[cfg(test)]
@@ -1628,16 +1633,21 @@ impl CodeProjectWorkbench {
     }
 
     #[cfg(test)]
-    pub(crate) fn open_managed_test_compiled_with_demo_pins(
+    pub(crate) fn open_managed_test_compiled_with_sample_pins(
         project_key: &str,
-        demo_key: &str,
+        sample_key: &str,
         compiled: CompiledManagedSource,
     ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
-        let mut project = bundled_code_projects()
+        let mut project = if let Some(sample) = bundled_sample(sample_key) {
+            sample.project()
+        } else if let Some(fixture) = geosolve_sketch_code::bundled_code_projects()
             .into_iter()
-            .find(|demo| demo.key() == demo_key)
-            .ok_or_else(|| format!("unknown code project `{demo_key}`"))?
-            .project();
+            .find(|fixture| fixture.key() == sample_key)
+        {
+            fixture.project()
+        } else {
+            return Err(format!("unknown bundled sample `{sample_key}`"));
+        };
         project.project = ProjectKey(project_key.into());
         project.managed = compiled
             .into_managed_document()
@@ -2474,8 +2484,8 @@ impl CodeProjectWorkbench {
         restore_editor_checkpoint(self.session.pointer_frame_checkpoint())
     }
 
-    pub(crate) fn demo_key(&self) -> Option<&'static str> {
-        self.origin.demo_key()
+    pub(crate) fn sample_key(&self) -> Option<&'static str> {
+        self.origin.sample_key()
     }
 
     /// Human-facing project title for presentation adapters.
@@ -4382,30 +4392,31 @@ fn canvas_declaration_label_projections(
 
 pub(crate) fn sample_group_markup(selected: Option<&str>) -> String {
     let mut markup = String::new();
-    for group in [
-        "Patterns & generated geometry",
-        "Structures",
-        "Fabrication & products",
+    for category in [
+        geosolve_sketch_code::SampleCategory::Mechanism,
+        geosolve_sketch_code::SampleCategory::ProductFabrication,
+        geosolve_sketch_code::SampleCategory::ReferenceLab,
+        geosolve_sketch_code::SampleCategory::ScaleStudy,
     ] {
         let _ = write!(
             markup,
             "<li class=\"wb-sample-branch\"><button type=\"button\" data-sample-group-trigger aria-haspopup=\"menu\" aria-expanded=\"false\">{}<span aria-hidden=\"true\">›</span></button><ul class=\"wb-sample-flyout\">",
-            escape_html(group),
+            escape_html(category.label()),
         );
-        for id in geosolve_sketch_code::CodeProjectDemoId::ALL
+        for sample in bundled_sample_catalog()
             .iter()
-            .filter(|id| id.semantic_group() == group)
+            .filter(|sample| sample.category == category)
         {
             let _ = write!(
                 markup,
-                "<li><button type=\"button\" data-code-sample-id=\"{}\"{}>{}</button></li>",
-                id.key(),
-                if selected == Some(id.key()) {
+                "<li><button type=\"button\" data-sample-id=\"{}\"{}>{}</button></li>",
+                sample.key,
+                if selected == Some(sample.key) {
                     " aria-current=\"true\""
                 } else {
                     ""
                 },
-                escape_html(id.title()),
+                escape_html(sample.title),
             );
         }
         markup.push_str("</ul></li>");
@@ -8321,67 +8332,18 @@ mod tests {
         (Box::new(workbench), editor)
     }
 
-    const EXPECTED_SAMPLE_DOF: [(&str, usize, usize); 37] = [
-        ("drafting-compass", 1, 1),
-        ("bezier-continuity-bridge", 3, 1),
-        ("twin-roller-cam", 2, 2),
-        ("tangent-orbit", 1, 1),
-        ("elliptic-trammel", 1, 1),
-        ("scotch-yoke", 1, 1),
-        ("rotating-constraint-square", 1, 1),
-        ("scissor-jack", 1, 1),
-        ("five-stage-scissor-tower", 1, 1),
-        ("peaucellier-inversor", 1, 1),
-        ("four-bar-coupler", 1, 1),
-        ("pantograph-linkage", 2, 2),
-        ("three-link-drawing-arm", 3, 3),
-        ("constraint-dimension-sampler", 28, 28),
-        ("auto-constraint-drafting", 12, 12),
-        ("retained-drafting-relations", 16, 16),
-        ("tangent-radial-normal", 6, 6),
-        ("contact-branch-specimen", 0, 0),
-        ("angle-dimension-annotations", 1, 1),
-        ("contextual-constraint-annotations", 112, 112),
-        ("dense-constraint-junction", 1, 1),
-        ("construction-reference-geometry", 0, 0),
-        ("curve-family-gallery", 166, 158),
-        ("periodic-nurbs-specimen", 13, 12),
-        ("fillet-workshop", 16, 16),
-        ("rounded-polyline", 12, 12),
-        ("typed-panel", 8, 8),
-        ("braced-frame", 4, 4),
-        ("mounting-plate", 16, 16),
-        ("adaptive-lanterns", 21, 21),
-        ("suspension-bridge", 7, 7),
-        ("compass-rose", 10, 10),
-        ("neon-manifold", 6, 6),
-        ("pc-water-manifold", 0, 0),
-        ("robotic-routing-board", 228, 228),
-        ("cnc-joinery-fit-coupon", 16, 16),
-        ("gridfinity-1x1x3-section", 0, 0),
-    ];
-
     #[test]
     #[allow(
         clippy::too_many_lines,
         reason = "one reviewed sample matrix keeps source, compiler, artifact, solve, DOF, and finite-scene parity adjacent"
     )]
-    fn all_thirty_seven_samples_open_with_nonempty_independently_validated_native_canvases() {
-        let demos = bundled_code_projects();
-        assert_eq!(
-            demos.len(),
-            37,
-            "every user-visible sample must have source and executed code authority"
-        );
-        for (demo, (expected_key, expected_raw_dof, expected_effective_dof)) in
-            demos.into_iter().zip(EXPECTED_SAMPLE_DOF)
-        {
-            assert_eq!(
-                demo.key(),
-                expected_key,
-                "the reviewed DOF ledger is ordered"
-            );
-            let project = demo.project();
+    fn all_twenty_samples_open_with_nonempty_independently_validated_native_canvases() {
+        let samples = bundled_sample_catalog();
+        assert_eq!(samples.len(), 20);
+        for sample in samples {
+            let expected_raw_dof = sample.expected.numerical_right_nullity();
+            let expected_effective_dof = sample.expected.bidirectional_bounded_degrees_of_freedom();
+            let project = sample.project();
             let source_before = project.managed.source.clone();
             let compiled_before = project
                 .managed
@@ -8391,35 +8353,33 @@ mod tests {
             let artifacts_before = project.artifacts.clone();
             let canonical = project
                 .to_canonical_json()
-                .unwrap_or_else(|error| panic!("{} canonical project: {error}", demo.key()));
+                .unwrap_or_else(|error| panic!("{} canonical project: {error}", sample.key));
             let restored = CodeProject::from_json(&canonical)
-                .unwrap_or_else(|error| panic!("{} canonical round-trip: {error}", demo.key()));
+                .unwrap_or_else(|error| panic!("{} canonical round-trip: {error}", sample.key));
             assert_eq!(
-                restored.managed.source,
-                source_before,
+                restored.managed.source, source_before,
                 "{} source",
-                demo.key()
+                sample.key
             );
             assert_eq!(
                 restored.managed.compiled.as_deref(),
                 Some(compiled_before.as_ref()),
                 "{} executed IR and compiler artifact",
-                demo.key(),
+                sample.key,
             );
             assert_eq!(
-                restored.artifacts,
-                artifacts_before,
+                restored.artifacts, artifacts_before,
                 "{} patch artifacts",
-                demo.key()
+                sample.key
             );
             assert_eq!(
                 restored.to_canonical_json().unwrap(),
                 canonical,
                 "{} canonical bytes",
-                demo.key(),
+                sample.key,
             );
 
-            let (workbench, editor) = open_with_editor(demo.key());
+            let (workbench, editor) = open_with_editor(sample.key);
             let accepted = editor
                 .coordinator()
                 .accepted_materialization()
@@ -8435,28 +8395,28 @@ mod tests {
                     .and_then(|rank| rank.numerical_right_nullity),
                 Some(expected_raw_dof),
                 "{} raw numerical right-nullity",
-                demo.key(),
+                sample.key,
             );
             let mobility = diagnostics
                 .mobility
-                .unwrap_or_else(|| panic!("{} mobility diagnostic", demo.key()));
+                .unwrap_or_else(|| panic!("{} mobility diagnostic", sample.key));
             assert_eq!(
                 mobility.equality_degrees_of_freedom,
                 Some(expected_raw_dof),
                 "{} equality DOF agrees with its numerical right-nullity",
-                demo.key(),
+                sample.key,
             );
             assert_eq!(
                 mobility.bidirectional_bounded_degrees_of_freedom,
                 Some(expected_effective_dof),
                 "{} effective bidirectional mobility",
-                demo.key(),
+                sample.key,
             );
             let design = accepted.session.design_document();
             assert!(
                 !design.points().is_empty() && !design.curves().is_empty(),
                 "{} opened an empty native canvas",
-                demo.key(),
+                sample.key,
             );
             assert!(accepted.validation.hard_residuals_validated);
             assert!(accepted.validation.all_active_features_current);
@@ -8481,22 +8441,22 @@ mod tests {
         clippy::too_many_lines,
         reason = "one exhaustive sample matrix keeps edit, publication, finite-scene validation and exact Undo adjacent"
     )]
-    fn all_thirty_seven_samples_accept_one_semantic_seed_edit_and_exact_undo() {
-        let demos = bundled_code_projects();
-        assert_eq!(demos.len(), 37);
-        for (index, demo) in demos.into_iter().enumerate() {
-            let (mut workbench, _editor) = open_with_editor(demo.key());
+    fn all_twenty_samples_accept_one_semantic_seed_edit_and_exact_undo() {
+        let samples = bundled_sample_catalog();
+        assert_eq!(samples.len(), 20);
+        for (index, sample) in samples.iter().enumerate() {
+            let (mut workbench, _editor) = open_with_editor(sample.key);
             let before = workbench.session.snapshot().clone();
             assert_eq!(
                 before.interaction_overlay,
                 CodeInteractionOverlay::empty(),
                 "{} initial overlay",
-                demo.key(),
+                sample.key,
             );
             let materialized = workbench
                 .materialized
                 .as_deref()
-                .unwrap_or_else(|| panic!("{} warm materialization", demo.key()));
+                .unwrap_or_else(|| panic!("{} warm materialization", sample.key));
             let point = materialized
                 .expansion
                 .writable_points
@@ -8504,9 +8464,9 @@ mod tests {
                 .find(|point| !point.source.is_reference())
                 .or_else(|| materialized.expansion.writable_points.first())
                 .cloned()
-                .unwrap_or_else(|| panic!("{} writable semantic point", demo.key()));
+                .unwrap_or_else(|| panic!("{} writable semantic point", sample.key));
             let native_point = expanded_port_point(&materialized.editor, &point.handle)
-                .unwrap_or_else(|| panic!("{} writable native point", demo.key()));
+                .unwrap_or_else(|| panic!("{} writable native point", sample.key));
             let position = materialized
                 .editor
                 .coordinator()
@@ -8518,22 +8478,21 @@ mod tests {
                         .point(native_point)
                         .map(|point| point.position)
                 })
-                .unwrap_or_else(|| panic!("{} accepted writable position", demo.key()));
+                .unwrap_or_else(|| panic!("{} accepted writable position", sample.key));
             let scale = position[0].abs().max(position[1].abs()).max(1.0);
             let direction = if index % 2 == 0 { 1.0 } else { -1.0 };
             let target = [position[0] + direction * scale * 1.0e-8, position[1]];
-            assert!(target.into_iter().all(f64::is_finite), "{}", demo.key());
-            assert_ne!(pair_bits(target), pair_bits(position), "{}", demo.key());
+            assert!(target.into_iter().all(f64::is_finite), "{}", sample.key);
+            assert_ne!(pair_bits(target), pair_bits(position), "{}", sample.key);
 
             let overlay = workbench
                 .session
                 .stage_point_drag(&point, target)
-                .unwrap_or_else(|error| panic!("{} stage point seed: {error}", demo.key()));
+                .unwrap_or_else(|error| panic!("{} stage point seed: {error}", sample.key));
             assert_ne!(
-                overlay,
-                before.interaction_overlay,
+                overlay, before.interaction_overlay,
                 "{} edit must not qualify as a no-op",
-                demo.key(),
+                sample.key,
             );
             let next = materialize_code_project_incremental_with_overlay(
                 materialized,
@@ -8541,7 +8500,7 @@ mod tests {
                 &workbench.session.snapshot().generated,
                 &overlay,
             )
-            .unwrap_or_else(|error| panic!("{} materialize point seed: {error}", demo.key()));
+            .unwrap_or_else(|error| panic!("{} materialize point seed: {error}", sample.key));
             assert_ne!(
                 next.expansion.patch,
                 before
@@ -8550,22 +8509,22 @@ mod tests {
                     .expect("accepted expansion")
                     .patch,
                 "{} staged instance seed must change the expanded design",
-                demo.key(),
+                sample.key,
             );
             let accepted = next
                 .editor
                 .coordinator()
                 .accepted_materialization()
-                .unwrap_or_else(|| panic!("{} edited accepted materialization", demo.key()));
+                .unwrap_or_else(|| panic!("{} edited accepted materialization", sample.key));
             assert!(
                 accepted.validation.hard_residuals_validated,
                 "{} independent hard validation",
-                demo.key(),
+                sample.key,
             );
             assert!(
                 accepted.validation.all_active_features_current,
                 "{} current computed features",
-                demo.key(),
+                sample.key,
             );
             assert!(
                 accepted
@@ -8573,7 +8532,7 @@ mod tests {
                     .maximum_normalized_hard_residual
                     .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
                 "{} normalized hard residual",
-                demo.key(),
+                sample.key,
             );
             assert!(
                 accepted
@@ -8592,12 +8551,12 @@ mod tests {
                     )
                     .all(f64::is_finite),
                 "{} edited accepted geometry is finite",
-                demo.key(),
+                sample.key,
             );
 
             let expansion = next.expansion.clone();
             let checkpoint = encode_editor_checkpoint(&next.editor)
-                .unwrap_or_else(|error| panic!("{} edited checkpoint: {error}", demo.key()));
+                .unwrap_or_else(|error| panic!("{} edited checkpoint: {error}", sample.key));
             let prepared = workbench
                 .session
                 .prepare_project_overlay(
@@ -8607,84 +8566,80 @@ mod tests {
                     checkpoint,
                     "Qualify managed sample seed edit",
                 )
-                .unwrap_or_else(|error| panic!("{} prepare publication: {error}", demo.key()));
+                .unwrap_or_else(|error| panic!("{} prepare publication: {error}", sample.key));
             workbench
                 .session
                 .apply_prepared(prepared)
-                .unwrap_or_else(|error| panic!("{} publish point seed: {error}", demo.key()));
+                .unwrap_or_else(|error| panic!("{} publish point seed: {error}", sample.key));
             assert_eq!(
                 workbench.session.snapshot().interaction_overlay,
                 overlay,
                 "{} published overlay",
-                demo.key(),
+                sample.key,
             );
             assert_eq!(
                 workbench.session.snapshot().managed,
                 before.managed,
                 "{} instance edit leaves source, IR, and executed artifact unchanged",
-                demo.key(),
+                sample.key,
             );
             assert_eq!(
                 workbench.session.snapshot().code_project,
                 before.code_project,
                 "{} instance edit leaves pinned patch artifacts unchanged",
-                demo.key(),
+                sample.key,
             );
             workbench
                 .session
                 .undo()
-                .unwrap_or_else(|error| panic!("{} Undo: {error}", demo.key()))
-                .unwrap_or_else(|| panic!("{} Undo receipt", demo.key()));
+                .unwrap_or_else(|error| panic!("{} Undo: {error}", sample.key))
+                .unwrap_or_else(|| panic!("{} Undo receipt", sample.key));
             assert_eq!(
                 workbench.session.snapshot(),
                 &before,
                 "{} Undo restores the exact prior session snapshot",
-                demo.key(),
+                sample.key,
             );
             assert_eq!(
                 workbench.session.snapshot().interaction_overlay,
                 CodeInteractionOverlay::empty(),
                 "{} Undo clears the representative edit",
-                demo.key(),
+                sample.key,
             );
         }
     }
 
     #[test]
-    fn reusable_projects_use_semantic_groups_without_implementation_badges() {
+    fn canonical_samples_use_four_semantic_groups_without_implementation_badges() {
         let markup = sample_group_markup(None);
         assert!(!markup.contains("Code &amp; reusable patches"));
         assert!(!markup.contains("Code projects"));
         assert!(!markup.contains("wb-code-sample-mark"));
         for group in [
-            "Patterns &amp; generated geometry",
-            "Structures",
-            "Fabrication &amp; products",
+            "Mechanisms",
+            "Products &amp; fabrication",
+            "Reference labs",
+            "Scale studies",
         ] {
             assert!(markup.contains(group), "missing semantic group {group}");
         }
-        assert_eq!(markup.matches("data-sample-group-trigger").count(), 3);
-        let demos = geosolve_sketch_code::CodeProjectDemoId::ALL;
-        assert_eq!(
-            demos.len(),
-            12,
-            "the additive code catalog includes the routing and manufacturing dogfood demonstrations"
-        );
-        assert_eq!(markup.matches("data-code-sample-id=").count(), demos.len());
-        for id in demos {
+        assert_eq!(markup.matches("data-sample-group-trigger").count(), 4);
+        let samples = geosolve_sketch_code::bundled_sample_catalog();
+        assert_eq!(markup.matches("data-sample-id=").count(), samples.len());
+        for sample in samples {
             assert_eq!(
                 markup
-                    .matches(&format!("data-code-sample-id=\"{}\"", id.key()))
+                    .matches(&format!("data-sample-id=\"{}\"", sample.key))
                     .count(),
                 1,
             );
         }
-        assert!(!markup.contains("data-sample-id="));
+        assert!(!markup.contains("data-code-sample-id="));
     }
 
     #[test]
     fn managed_and_custom_files_have_truthful_distinct_ownership_surfaces() {
-        let mut workbench = open("rounded-polyline");
+        let mut workbench = open("typed-panel");
         let managed = workbench.panel_markup();
         assert!(managed.contains("data-code-file-kind=\"managed\""));
         assert!(managed.contains("data-code-action=\"apply\""));
@@ -8692,37 +8647,34 @@ mod tests {
         assert!(managed.contains("Managed controls"));
         assert!(managed.contains("data-code-control-id="));
         assert!(managed.contains("Modifiable in sketch.ts"));
-        assert!(managed.contains("<code>mm(4)</code>"));
-        assert!(managed.contains("<strong>rounded</strong>"));
-        assert!(managed.contains("<strong>radius</strong>"));
         assert!(!managed.contains("data-code-lens-declaration="));
         assert!(!managed.contains("data-code-lens-path="));
         assert!(!managed.contains("Read-only in demo"));
 
         workbench
-            .select_file("patches/round-every-corner.patch.ts")
+            .select_file("patches/water-channel.patch.ts")
             .unwrap();
         let custom = workbench.panel_markup();
         assert!(custom.contains("data-code-file-kind=\"custom\""));
         assert!(custom.contains("Read-only in demo"));
-        assert!(custom.contains("p.each"));
+        assert!(custom.contains("waterChannel"));
         assert!(!custom.contains("id=\"wb-code-managed-source\""));
     }
 
     #[test]
     fn every_enabled_manifest_control_is_reachable_once_in_the_code_panel() {
-        for id in geosolve_sketch_code::CodeProjectDemoId::ALL {
-            let workbench = open(id.key());
+        for sample in geosolve_sketch_code::bundled_sample_catalog() {
+            let workbench = open(sample.key);
             let manifest = workbench
                 .managed_controls()
-                .unwrap_or_else(|error| panic!("{} manifest: {error}", id.key()));
+                .unwrap_or_else(|error| panic!("{} manifest: {error}", sample.key));
             let markup = workbench.panel_markup();
             let enabled = manifest.editable().collect::<Vec<_>>();
             assert_eq!(
                 markup.matches("data-code-control-id=").count(),
                 enabled.len(),
                 "{} must render every enabled control exactly once",
-                id.key(),
+                sample.key,
             );
             for control in enabled {
                 let attribute = format!(
@@ -8733,7 +8685,7 @@ mod tests {
                     markup.matches(&attribute).count(),
                     1,
                     "{} omitted or duplicated enabled control {}",
-                    id.key(),
+                    sample.key,
                     control.id.0,
                 );
             }
@@ -8757,7 +8709,7 @@ mod tests {
 
     #[test]
     fn managed_manifest_and_capabilities_are_transient_browser_authority() {
-        let mut workbench = open("typed-panel");
+        let mut workbench = open("mounting-plate");
         let persistence_before = workbench.to_persistence_json().unwrap();
         let project_before = workbench.project.to_canonical_json().unwrap();
         let expansion_before = serde_json::to_string(
@@ -8858,7 +8810,7 @@ mod tests {
 
     #[test]
     fn complete_offline_project_session_draft_and_file_selection_round_trip() {
-        let mut workbench = open("mounting-plate");
+        let mut workbench = open("pc-water-manifold");
         workbench
             .select_file("patches/mounting-plate.patch.ts")
             .unwrap();
