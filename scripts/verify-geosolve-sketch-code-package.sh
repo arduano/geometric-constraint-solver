@@ -62,11 +62,33 @@ do
   grep -Fqx "$required" <<<"$contents"
 done
 
-patches=(
-  --config "patch.crates-io.geosolve-constraint-editor.path=\"$repo_root/crates/geosolve-constraint-editor\""
-  --config "patch.crates-io.geosolve-sketch.path=\"$repo_root/crates/geosolve-sketch\""
-  --config "patch.crates-io.geosolve-sketch-intent.path=\"$repo_root/crates/geosolve-sketch-intent\""
+local_dependencies=(
+  geosolve-constraint-editor
+  geosolve-sketch
+  geosolve-sketch-features
+  geosolve-sketch-intent
 )
+
+manifest_local_dependencies="$({
+  sed -nE \
+    's/^([a-zA-Z0-9_-]+)[[:space:]]*=.*path[[:space:]]*=[[:space:]]*"\.\.\/[^\"]+".*$/\1/p' \
+    "$repo_root/crates/$package_name/Cargo.toml"
+} | LC_ALL=C sort)"
+patched_local_dependencies="$(printf '%s\n' "${local_dependencies[@]}" | LC_ALL=C sort)"
+if [[ "$manifest_local_dependencies" != "$patched_local_dependencies" ]]; then
+  echo "package verifier patches do not match direct local dependencies" >&2
+  diff -u \
+    <(printf '%s\n' "$manifest_local_dependencies") \
+    <(printf '%s\n' "$patched_local_dependencies") >&2 || true
+  exit 1
+fi
+
+patches=()
+for dependency in "${local_dependencies[@]}"; do
+  patches+=(
+    --config "patch.crates-io.$dependency.path=\"$repo_root/crates/$dependency\""
+  )
+done
 
 # Direct GeoSolve dependencies are not published yet. The patches let Cargo
 # construct the real normalized archive while retaining local dependency
