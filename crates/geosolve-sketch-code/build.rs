@@ -107,6 +107,13 @@ struct SampleManifest {
 struct ValidatedSample {
     manifest: SampleManifest,
     directory: PathBuf,
+    patches: Vec<ValidatedSamplePatch>,
+}
+
+struct ValidatedSamplePatch {
+    base_name: String,
+    source_path: PathBuf,
+    artifact_path: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -278,10 +285,99 @@ fn validate_sample(directory: PathBuf) -> ValidatedSample {
         manifest.key
     );
 
+    let patches = validate_sample_patches(&manifest, &directory, &compiled);
+
     ValidatedSample {
         manifest,
         directory,
+        patches,
     }
+}
+
+fn validate_sample_patches(
+    manifest: &SampleManifest,
+    directory: &Path,
+    compiled: &Value,
+) -> Vec<ValidatedSamplePatch> {
+    let patches_dir = directory.join("patches");
+    println!("cargo:rerun-if-changed={}", patches_dir.display());
+    if !patches_dir.is_dir() {
+        assert!(
+            compiled
+                .pointer("/ir/imports")
+                .and_then(Value::as_array)
+                .is_some_and(|imports| imports.iter().all(|import| {
+                    import.get("module").and_then(Value::as_str) == Some("@geosolve/sketch-code")
+                })),
+            "{} imports a custom patch but has no colocated patches directory",
+            manifest.key
+        );
+        return Vec::new();
+    }
+
+    let mut sources = directory_paths(&patches_dir)
+        .into_iter()
+        .filter(|path| path.extension().and_then(|extension| extension.to_str()) == Some("ts"))
+        .collect::<Vec<_>>();
+    sources.sort();
+    let mut patches = Vec::with_capacity(sources.len());
+    for source_path in sources {
+        let file_name = source_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("bundled patch filename is UTF-8");
+        let base_name = file_name
+            .strip_suffix(".patch.ts")
+            .unwrap_or_else(|| panic!("{} has invalid bundled patch `{file_name}`", manifest.key))
+            .to_owned();
+        assert_valid_key(&base_name);
+        let artifact_path = patches_dir.join(format!("{base_name}.artifact.json"));
+        println!("cargo:rerun-if-changed={}", source_path.display());
+        println!("cargo:rerun-if-changed={}", artifact_path.display());
+        assert!(
+            artifact_path.is_file(),
+            "{} patch `{file_name}` lacks `{}`",
+            manifest.key,
+            artifact_path.display()
+        );
+
+        let source = read_file(&source_path, "bundled patch source");
+        let artifact: Value = read_json(&artifact_path, "bundled patch artifact");
+        let module_specifier = format!("./patches/{file_name}");
+        assert_eq!(
+            artifact.get("module_specifier").and_then(Value::as_str),
+            Some(module_specifier.as_str()),
+            "{} patch artifact module specifier differs from its colocated source",
+            manifest.key
+        );
+        assert_eq!(
+            artifact.get("source_digest").and_then(Value::as_str),
+            Some(sha256_hex(&source).as_str()),
+            "{} patch artifact source digest is stale",
+            manifest.key
+        );
+        patches.push(ValidatedSamplePatch {
+            base_name,
+            source_path,
+            artifact_path,
+        });
+    }
+
+    let artifact_count = directory_paths(&patches_dir)
+        .into_iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with(".artifact.json"))
+        })
+        .count();
+    assert_eq!(
+        artifact_count,
+        patches.len(),
+        "{} patches directory contains an orphan artifact",
+        manifest.key
+    );
+    patches
 }
 
 fn validate_expected(manifest: &SampleManifest) {
@@ -634,6 +730,29 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
     } else {
         "None".to_owned()
     };
+    let patches = sample
+        .patches
+        .iter()
+        .map(|patch| {
+            format!(
+                "BundledSamplePatch::new({}, include_str!({}), include_str!({}))",
+                RustString(&format!("patches/{}.patch.ts", patch.base_name)),
+                RustString(
+                    patch
+                        .source_path
+                        .to_str()
+                        .expect("bundled patch source path is UTF-8")
+                ),
+                RustString(
+                    patch
+                        .artifact_path
+                        .to_str()
+                        .expect("bundled patch artifact path is UTF-8")
+                ),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
     write!(
         generated,
         "    BundledSampleSpec::new(\n        {ordinal}, {key}, {title}, {category}, {summary},\n        \
@@ -643,7 +762,7 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
          include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \
          \"/assets/bundled-samples/{raw_key}/sketch.ts\")),\n        \
          &BUNDLED_SAMPLE_ENVELOPE_{ordinal:02},\n        include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \
-         \"/assets/bundled-samples/{raw_key}/witnesses.json\")),\n        {notice},\n    ),\n",
+         \"/assets/bundled-samples/{raw_key}/witnesses.json\")),\n        {notice},\n        &[{patches}],\n    ),\n",
         ordinal = manifest.ordinal,
         key = RustString(&manifest.key),
         title = RustString(&manifest.title),
@@ -652,6 +771,7 @@ fn append_generated_sample(generated: &mut String, sample: &ValidatedSample) {
         raw = manifest.expected.raw_dof,
         effective = manifest.expected.effective_dof,
         raw_key = manifest.key,
+        patches = patches,
     )
     .expect("writing generated Rust to a String cannot fail");
 }

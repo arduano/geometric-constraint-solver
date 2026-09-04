@@ -2,15 +2,19 @@
 
 //! Canonical manifest-driven bundled-sample registry.
 
-use std::sync::OnceLock;
+use std::{collections::BTreeMap, sync::OnceLock};
 
+use geosolve_sketch_intent::intent_content_digest;
 use miniz_oxide::{
     DataFormat, MZFlush, MZStatus,
     inflate::stream::{InflateState, inflate},
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{CodeProject, CompiledManagedSource, MANAGED_WIRE_LIMIT, ProjectKey};
+use crate::{
+    CodeProject, CodeProjectFile, CompiledManagedSource, MANAGED_WIRE_LIMIT, PatchModuleArtifact,
+    ProjectKey,
+};
 
 /// Stable user-facing section of the bundled sample catalog.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -126,6 +130,27 @@ struct BundledCompilerEnvelope {
     text: OnceLock<String>,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct BundledSamplePatch {
+    path: &'static str,
+    source: &'static str,
+    artifact_json: &'static str,
+}
+
+impl BundledSamplePatch {
+    #[allow(
+        dead_code,
+        reason = "generated registries without custom patch samples do not call this constructor"
+    )]
+    const fn new(path: &'static str, source: &'static str, artifact_json: &'static str) -> Self {
+        Self {
+            path,
+            source,
+            artifact_json,
+        }
+    }
+}
+
 impl BundledCompilerEnvelope {
     const fn new(compressed: &'static [u8], decompressed_len: usize) -> Self {
         Self {
@@ -211,6 +236,7 @@ pub struct BundledSampleSpec {
     compiled: &'static BundledCompilerEnvelope,
     witnesses_json: &'static str,
     notice: Option<&'static str>,
+    patches: &'static [BundledSamplePatch],
 }
 
 impl BundledSampleSpec {
@@ -232,6 +258,7 @@ impl BundledSampleSpec {
         compiled: &'static BundledCompilerEnvelope,
         witnesses_json: &'static str,
         notice: Option<&'static str>,
+        patches: &'static [BundledSamplePatch],
     ) -> Self {
         Self {
             ordinal,
@@ -247,6 +274,7 @@ impl BundledSampleSpec {
             compiled,
             witnesses_json,
             notice,
+            patches,
         }
     }
 
@@ -299,11 +327,66 @@ impl BundledSampleSpec {
             compiled.normalized_source, self.managed_source,
             "bundled source must match its authenticated compiler envelope"
         );
-        CodeProject::managed(
-            ProjectKey(format!("geosolve-sample-{}", self.key)),
-            compiled,
-        )
-        .unwrap_or_else(|error| panic!("bundled sample `{}` is valid: {error:?}", self.key))
+        let managed = compiled.into_managed_document().unwrap_or_else(|error| {
+            panic!(
+                "bundled sample `{}` projects to managed authority: {error:?}",
+                self.key
+            )
+        });
+        let mut custom_files = BTreeMap::new();
+        let mut artifacts = BTreeMap::new();
+        let mut pins = BTreeMap::new();
+        for patch in self.patches {
+            let source_digest = intent_content_digest(patch.source.as_bytes()).to_string();
+            custom_files.insert(
+                patch.path.to_owned(),
+                CodeProjectFile {
+                    path: patch.path.to_owned(),
+                    source_digest,
+                    contents: patch.source.to_owned(),
+                    managed: false,
+                },
+            );
+            let definition: PatchModuleArtifact = serde_json::from_str(patch.artifact_json)
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "bundled sample `{}` patch `{}` is valid JSON: {error}",
+                        self.key, patch.path
+                    )
+                });
+            let validated = definition.clone().validate().unwrap_or_else(|error| {
+                panic!(
+                    "bundled sample `{}` patch `{}` is valid: {error:?}",
+                    self.key, patch.path
+                )
+            });
+            let value = serde_json::from_str(validated.canonical_json())
+                .expect("validated canonical patch artifact is JSON");
+            pins.insert(
+                definition.module_specifier.clone(),
+                serde_json::json!({
+                    "artifact": validated.digest(),
+                    "source": definition.source_digest,
+                    "interface": definition.interface_digest,
+                    "sdk_abi": definition.sdk_abi,
+                }),
+            );
+            artifacts.insert(validated.digest().to_owned(), value);
+        }
+        let project = CodeProject {
+            project: ProjectKey(format!("geosolve-sample-{}", self.key)),
+            managed,
+            custom_files,
+            artifacts,
+            lock: serde_json::json!({
+                "format": "geosolve-lock-v1",
+                "modules": pins,
+            }),
+        };
+        project
+            .validate()
+            .unwrap_or_else(|error| panic!("bundled sample `{}` is valid: {error:?}", self.key));
+        project
     }
 }
 
