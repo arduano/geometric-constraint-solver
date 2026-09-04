@@ -1,126 +1,99 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
-  const point1A1RectangleBottomLeft = $.geometry.sketchPoint("point1A1RectangleBottomLeft", {
-    point: [0, 0],
-    label: "A1 rectangle.bottom_left",
-  });
-  const point2A1RectangleBottomRight = $.geometry.sketchPoint("point2A1RectangleBottomRight", {
-    point: [4, 0],
-    label: "A1 rectangle.bottom_right",
-  });
-  const point3A1RectangleTopRight = $.geometry.sketchPoint("point3A1RectangleTopRight", {
-    point: [4, 3],
-    label: "A1 rectangle.top_right",
-  });
-  const point4A1RectangleTopLeft = $.geometry.sketchPoint("point4A1RectangleTopLeft", {
-    point: [0, 3],
-    label: "A1 rectangle.top_left",
-  });
-  const point5OverlappingGuideStart = $.geometry.sketchPoint("point5OverlappingGuideStart", {
-    point: [0, 0],
-    label: "Overlapping guide start",
-  });
-  const point6OverlappingGuideEnd = $.geometry.sketchPoint("point6OverlappingGuideEnd", {
-    point: [4, 0],
-    label: "Overlapping guide end",
-  });
-  const curve1A1RectangleEdge1 = $.geometry.segment("curve1A1RectangleEdge1", {
-    start: point1A1RectangleBottomLeft.point,
-    end: point2A1RectangleBottomRight.point,
-    branchDirection: [1, 0],
-    label: "A1 rectangle.edge_1",
-    role: "profile",
-  });
-  const curve2A1RectangleEdge2 = $.geometry.segment("curve2A1RectangleEdge2", {
-    start: point2A1RectangleBottomRight.point,
-    end: point3A1RectangleTopRight.point,
-    branchDirection: [0, 1],
-    label: "A1 rectangle.edge_2",
-    role: "profile",
-  });
-  const curve3A1RectangleEdge3 = $.geometry.segment("curve3A1RectangleEdge3", {
-    start: point3A1RectangleTopRight.point,
-    end: point4A1RectangleTopLeft.point,
-    branchDirection: [-1, 0],
-    label: "A1 rectangle.edge_3",
-    role: "profile",
-  });
-  const curve4A1RectangleEdge4 = $.geometry.segment("curve4A1RectangleEdge4", {
-    start: point4A1RectangleTopLeft.point,
-    end: point1A1RectangleBottomLeft.point,
-    branchDirection: [0, -1],
-    label: "A1 rectangle.edge_4",
-    role: "profile",
-  });
-  const curve5SharedCornerConstructionDiagonal = $.geometry.segment("curve5SharedCornerConstructionDiagonal", {
-    start: point1A1RectangleBottomLeft.point,
-    end: point3A1RectangleTopRight.point,
-    branchDirection: [0.8, 0.6],
-    label: "Shared-corner construction diagonal",
+  // Front-plane interface study from the published MINI X-carriage model.
+  // The 31.423 x 69.407 mm box records only the mesh/solid envelope; the
+  // smaller pitch rectangle intentionally diagrams selected M3 interfaces
+  // and is not a printable outline or a claim of complete OEM dimensions.
+  const carriageEnvelope = $.operation.rectangle("carriageEnvelope", {
+    origin: [-15.7115, -34.7035],
+    width: mm(31.423),
+    height: mm(69.407),
+    label: "MINI X-carriage projected envelope",
     role: "construction",
   });
-  const curve6ConstructionGuideOverlappingTheProfileBase = $.geometry.segment("curve6ConstructionGuideOverlappingTheProfileBase", {
-    start: point5OverlappingGuideStart.point,
-    end: point6OverlappingGuideEnd.point,
-    branchDirection: [1, 0],
-    label: "Construction guide overlapping the profile base",
+  const bearingSweep = $.operation.slot("bearingSweep", {
+    firstCenter: [0, -12],
+    secondCenter: [0, 12],
+    radius: mm(7.5),
+    label: "Schematic linear-bearing clearance datum",
     role: "construction",
   });
-  const constraint1A1RectangleAnchor = $.constraint.fixedPoint("constraint1A1RectangleAnchor", {
-    point: point1A1RectangleBottomLeft.point,
-    target: [0, 0],
-    label: "A1 rectangle.anchor",
+  const mountingPitch = $.operation.rectangle("mountingPitch", {
+    origin: [-9, -12],
+    width: mm(18),
+    height: mm(24),
+    label: "Schematic selected M3 interface pitch",
+    role: "construction",
   });
-  const constraint2A1RectangleBottomHorizontal = $.constraint.horizontal("constraint2A1RectangleBottomHorizontal", {
-    span: curve1A1RectangleEdge1.span,
-    label: "A1 rectangle.bottom_horizontal",
+  const lowerLeftMount = $.geometry.centerRadiusCircle("lowerLeftMount", {
+    center: [-9, -12],
+    radius: mm(1.6),
+    label: "Schematic lower-left M3 interface",
+    role: "profile",
   });
-  const constraint3A1RectangleRightVertical = $.constraint.vertical("constraint3A1RectangleRightVertical", {
-    span: curve2A1RectangleEdge2.span,
-    label: "A1 rectangle.right_vertical",
+  const lowerRightMount = $.geometry.centerRadiusCircle("lowerRightMount", {
+    center: [9, -12],
+    radius: mm(1.6),
+    label: "Schematic lower-right M3 interface",
+    role: "profile",
   });
-  const constraint4A1RectangleTopHorizontal = $.constraint.horizontal("constraint4A1RectangleTopHorizontal", {
-    span: curve3A1RectangleEdge3.span,
-    label: "A1 rectangle.top_horizontal",
+  const upperRightMount = $.geometry.centerRadiusCircle("upperRightMount", {
+    center: [9, 12],
+    radius: mm(1.6),
+    label: "Schematic upper-right M3 interface",
+    role: "profile",
   });
-  const constraint5A1RectangleLeftVertical = $.constraint.vertical("constraint5A1RectangleLeftVertical", {
-    span: curve4A1RectangleEdge4.span,
-    label: "A1 rectangle.left_vertical",
+  const upperLeftMount = $.geometry.centerRadiusCircle("upperLeftMount", {
+    center: [-9, 12],
+    radius: mm(1.6),
+    label: "Schematic upper-left M3 interface",
+    role: "profile",
   });
-  const dimension1Width4 = $.dimension.curveLength("dimension1Width4", {
-    curve: curve1A1RectangleEdge1.span,
-    value: mm(4),
-    label: "width-4",
+  const lowerLeftOnPitch = $.constraint.coincident("lowerLeftOnPitch", {
+    first: lowerLeftMount.center,
+    second: mountingPitch.corners.bottomLeft,
+    label: "Locate lower-left mount on pitch datum",
+  });
+  const lowerRightOnPitch = $.constraint.coincident("lowerRightOnPitch", {
+    first: lowerRightMount.center,
+    second: mountingPitch.corners.bottomRight,
+    label: "Locate lower-right mount on pitch datum",
+  });
+  const upperRightOnPitch = $.constraint.coincident("upperRightOnPitch", {
+    first: upperRightMount.center,
+    second: mountingPitch.corners.topRight,
+    label: "Locate upper-right mount on pitch datum",
+  });
+  const upperLeftOnPitch = $.constraint.coincident("upperLeftOnPitch", {
+    first: upperLeftMount.center,
+    second: mountingPitch.corners.topLeft,
+    label: "Locate upper-left mount on pitch datum",
+  });
+  const mountRadius = $.dimension.radius("mountRadius", {
+    curve: lowerLeftMount.curve,
+    value: mm(1.6),
+    label: "M3 interface radius",
     mode: "driving",
   });
-  const dimension2A1RectangleHeightDimension = $.dimension.curveLength("dimension2A1RectangleHeightDimension", {
-    curve: curve2A1RectangleEdge2.span,
-    value: mm(3),
-    label: "A1 rectangle.height_dimension",
-    mode: "driving",
+  const matchLowerRight = $.constraint.equalRadius("matchLowerRight", {
+    first: lowerLeftMount.curve,
+    second: lowerRightMount.curve,
+    label: "Match lower-right mount",
   });
-  const dimension3A1DiagonalReference = $.dimension.pointDistance("dimension3A1DiagonalReference", {
-    first: point1A1RectangleBottomLeft.point,
-    second: point3A1RectangleTopRight.point,
-    value: mm(5),
-    label: "A1 diagonal reference",
-    mode: "reference",
+  const matchUpperRight = $.constraint.equalRadius("matchUpperRight", {
+    first: lowerLeftMount.curve,
+    second: upperRightMount.curve,
+    label: "Match upper-right mount",
   });
-  const constraint6FixOverlappingConstructionGuideControl1 = $.constraint.fixedPoint("constraint6FixOverlappingConstructionGuideControl1", {
-    point: point5OverlappingGuideStart.point,
-    target: [0, 0],
-    label: "Fix Overlapping construction guide control 1",
+  const matchUpperLeft = $.constraint.equalRadius("matchUpperLeft", {
+    first: lowerLeftMount.curve,
+    second: upperLeftMount.curve,
+    label: "Match upper-left mount",
   });
-  const constraint7FixOverlappingConstructionGuideControl2 = $.constraint.fixedPoint("constraint7FixOverlappingConstructionGuideControl2", {
-    point: point6OverlappingGuideEnd.point,
-    target: [4, 0],
-    label: "Fix Overlapping construction guide control 2",
-  });
-  $.group("Points", [point1A1RectangleBottomLeft, point2A1RectangleBottomRight, point3A1RectangleTopRight, point4A1RectangleTopLeft, point5OverlappingGuideStart, point6OverlappingGuideEnd]);
-  $.group("Geometry", [curve1A1RectangleEdge1, curve2A1RectangleEdge2, curve3A1RectangleEdge3, curve4A1RectangleEdge4, curve5SharedCornerConstructionDiagonal, curve6ConstructionGuideOverlappingTheProfileBase]);
-  $.group("Constraints", [constraint1A1RectangleAnchor, constraint2A1RectangleBottomHorizontal, constraint3A1RectangleRightVertical, constraint4A1RectangleTopHorizontal, constraint5A1RectangleLeftVertical, constraint6FixOverlappingConstructionGuideControl1, constraint7FixOverlappingConstructionGuideControl2]);
-  $.group("Dimensions", [dimension1Width4, dimension2A1RectangleHeightDimension, dimension3A1DiagonalReference]);
+  $.group("Published X-carriage envelope", [carriageEnvelope]);
+  $.group("Bearing and belt datum", [bearingSweep]);
+  $.group("Selected mounting interface", [mountingPitch, lowerLeftMount, lowerRightMount, upperRightMount, upperLeftMount, lowerLeftOnPitch, lowerRightOnPitch, upperRightOnPitch, upperLeftOnPitch, mountRadius, matchLowerRight, matchUpperRight, matchUpperLeft]);
   return {};
 });

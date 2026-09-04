@@ -1,5 +1,5 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "point1A1RectangleBottomLeft", "path": ["point"], "replacement": [-6, -4] },
+  "representative_edit": { "declaration": "carriageBody", "path": ["width"], "replacement": { "unit": "mm", "value": 62 } },
   "drags": []
 }

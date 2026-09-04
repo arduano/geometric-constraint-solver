@@ -3,9 +3,30 @@
   "ordinal": 12,
   "key": "hevort-datum-study",
   "title": "HevORT HD9 and MGN9 datum study",
-  "summary": "A scoped 2D reference study records mounting datums without claiming an imported solid.",
+  "summary": "A 64.1 mm HD9 lower-body envelope aligns belt clearance with nominal MGN9 rail, carriage and 15 x 20 mm mounting datums.",
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "groups": ["HD9 carriage envelope", "MGN9 rail datum", "MGN9 mounting interface"],
+  "provenance": [
+    {
+      "relationship": "dimensions_only",
+      "name": "HevORT HD9 CFx Y-carriage lower body",
+      "url": "https://github.com/MirageC79/HevORT",
+      "revision": "7e26a9320f825ada57a145dfcf1a3d6c77488576",
+      "path": "files/STL/HD9/Option_HD9_CFx/XYHD9_CFx_YCarriage_LH_LowerBody v1.step",
+      "licence": "GPL-3.0-only",
+      "scope": "Front-envelope dimensions and selected HD9 interface context interpreted into an independently redrawn planar datum study; no imported solid, exact part projection or manufacturing guarantee.",
+      "notice_required": true
+    },
+    {
+      "relationship": "dimensions_only",
+      "name": "HevORT HD9 CFx MGN9 option BOM",
+      "url": "https://github.com/MirageC79/HevORT",
+      "revision": "7e26a9320f825ada57a145dfcf1a3d6c77488576",
+      "path": "bom/Option_HD9_CFx_MGN9.xlsx",
+      "licence": "GPL-3.0-only",
+      "scope": "MGN9 component selection informs the nominal rail and carriage mounting datums only; hardware suitability and manufacture remain outside this sample.",
+      "notice_required": true
+    }
+  ]
 }

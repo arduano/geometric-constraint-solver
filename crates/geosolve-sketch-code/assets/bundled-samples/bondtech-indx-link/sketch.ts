@@ -1,126 +1,160 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
-  const point1A1RectangleBottomLeft = $.geometry.sketchPoint("point1A1RectangleBottomLeft", {
-    point: [0, 0],
-    label: "A1 rectangle.bottom_left",
+  // This planar diagram combines the published Link assembly envelope with
+  // the README's qualitative three-point Maxwell-coupling architecture. Seat
+  // and board coordinates are schematic, not extracted manufacturing data.
+  const toolLinkEnvelope = $.operation.rectangle("toolLinkEnvelope", {
+    origin: [-37.858, -16.773],
+    width: mm(75.716),
+    height: mm(33.546),
+    label: "INDX Link published plan envelope",
+    role: "construction",
   });
-  const point2A1RectangleBottomRight = $.geometry.sketchPoint("point2A1RectangleBottomRight", {
-    point: [4, 0],
-    label: "A1 rectangle.bottom_right",
+  const linkBoardEnvelope = $.operation.rectangle("linkBoardEnvelope", {
+    origin: [42, -14],
+    width: mm(24),
+    height: mm(28),
+    label: "Schematic link-board service zone",
+    role: "construction",
   });
-  const point3A1RectangleTopRight = $.geometry.sketchPoint("point3A1RectangleTopRight", {
-    point: [4, 3],
-    label: "A1 rectangle.top_right",
+  const couplingDatum = $.operation.rectangle("couplingDatum", {
+    origin: [-12.12435565298214, -7],
+    width: mm(24.24871130596428),
+    height: mm(21),
+    label: "Schematic coupling coordinate datum",
+    role: "construction",
   });
-  const point4A1RectangleTopLeft = $.geometry.sketchPoint("point4A1RectangleTopLeft", {
-    point: [0, 3],
-    label: "A1 rectangle.top_left",
+  const couplingPitch = $.geometry.centerRadiusCircle("couplingPitch", {
+    center: [0, 0],
+    radius: mm(14),
+    label: "Schematic Maxwell coupling pitch reference",
+    role: "construction",
   });
-  const point5OverlappingGuideStart = $.geometry.sketchPoint("point5OverlappingGuideStart", {
-    point: [0, 0],
-    label: "Overlapping guide start",
-  });
-  const point6OverlappingGuideEnd = $.geometry.sketchPoint("point6OverlappingGuideEnd", {
-    point: [4, 0],
-    label: "Overlapping guide end",
-  });
-  const curve1A1RectangleEdge1 = $.geometry.segment("curve1A1RectangleEdge1", {
-    start: point1A1RectangleBottomLeft.point,
-    end: point2A1RectangleBottomRight.point,
-    branchDirection: [1, 0],
-    label: "A1 rectangle.edge_1",
+  const upperCoupling = $.geometry.centerRadiusCircle("upperCoupling", {
+    center: [0, 14],
+    radius: mm(2.5),
+    label: "Schematic upper coupling seat",
     role: "profile",
   });
-  const curve2A1RectangleEdge2 = $.geometry.segment("curve2A1RectangleEdge2", {
-    start: point2A1RectangleBottomRight.point,
-    end: point3A1RectangleTopRight.point,
-    branchDirection: [0, 1],
-    label: "A1 rectangle.edge_2",
+  const lowerRightCoupling = $.geometry.centerRadiusCircle("lowerRightCoupling", {
+    center: [12.12435565298214, -7],
+    radius: mm(2.5),
+    label: "Schematic lower-right coupling seat",
     role: "profile",
   });
-  const curve3A1RectangleEdge3 = $.geometry.segment("curve3A1RectangleEdge3", {
-    start: point3A1RectangleTopRight.point,
-    end: point4A1RectangleTopLeft.point,
+  const lowerLeftCoupling = $.geometry.centerRadiusCircle("lowerLeftCoupling", {
+    center: [-12.12435565298214, -7],
+    radius: mm(2.5),
+    label: "Schematic lower-left coupling seat",
+    role: "profile",
+  });
+  const locateCouplingPitch = $.constraint.fixedPoint("locateCouplingPitch", {
+    point: couplingPitch.center,
+    target: [0, 0],
+    label: "Locate coupling pitch reference",
+  });
+  const locateUpperCoupling = $.constraint.fixedPoint("locateUpperCoupling", {
+    point: upperCoupling.center,
+    target: [0, 14],
+    label: "Locate upper coupling seat",
+  });
+  const locateLowerRightCoupling = $.constraint.coincident("locateLowerRightCoupling", {
+    first: lowerRightCoupling.center,
+    second: couplingDatum.corners.bottomRight,
+    label: "Locate lower-right coupling seat",
+  });
+  const locateLowerLeftCoupling = $.constraint.coincident("locateLowerLeftCoupling", {
+    first: lowerLeftCoupling.center,
+    second: couplingDatum.corners.bottomLeft,
+    label: "Locate lower-left coupling seat",
+  });
+  const couplingPitchRadius = $.dimension.radius("couplingPitchRadius", {
+    curve: couplingPitch.curve,
+    value: mm(14),
+    label: "Schematic coupling pitch radius",
+    mode: "driving",
+  });
+  const couplingSeatRadius = $.dimension.radius("couplingSeatRadius", {
+    curve: upperCoupling.curve,
+    value: mm(2.5),
+    label: "Schematic coupling-seat radius",
+    mode: "driving",
+  });
+  const matchLowerRightCoupling = $.constraint.equalRadius("matchLowerRightCoupling", {
+    first: upperCoupling.curve,
+    second: lowerRightCoupling.curve,
+    label: "Match lower-right coupling seat",
+  });
+  const matchLowerLeftCoupling = $.constraint.equalRadius("matchLowerLeftCoupling", {
+    first: upperCoupling.curve,
+    second: lowerLeftCoupling.curve,
+    label: "Match lower-left coupling seat",
+  });
+  const upperToLowerRight = $.geometry.segment("upperToLowerRight", {
+    start: upperCoupling.center,
+    end: lowerRightCoupling.center,
+    branchDirection: [0.5, -0.8660254037844386],
+    label: "Schematic upper-to-lower-right coupling leg",
+    role: "construction",
+  });
+  const lowerCouplingBase = $.geometry.segment("lowerCouplingBase", {
+    start: lowerRightCoupling.center,
+    end: lowerLeftCoupling.center,
     branchDirection: [-1, 0],
-    label: "A1 rectangle.edge_3",
-    role: "profile",
-  });
-  const curve4A1RectangleEdge4 = $.geometry.segment("curve4A1RectangleEdge4", {
-    start: point4A1RectangleTopLeft.point,
-    end: point1A1RectangleBottomLeft.point,
-    branchDirection: [0, -1],
-    label: "A1 rectangle.edge_4",
-    role: "profile",
-  });
-  const curve5SharedCornerConstructionDiagonal = $.geometry.segment("curve5SharedCornerConstructionDiagonal", {
-    start: point1A1RectangleBottomLeft.point,
-    end: point3A1RectangleTopRight.point,
-    branchDirection: [0.8, 0.6],
-    label: "Shared-corner construction diagonal",
+    label: "Schematic lower coupling leg",
     role: "construction",
   });
-  const curve6ConstructionGuideOverlappingTheProfileBase = $.geometry.segment("curve6ConstructionGuideOverlappingTheProfileBase", {
-    start: point5OverlappingGuideStart.point,
-    end: point6OverlappingGuideEnd.point,
-    branchDirection: [1, 0],
-    label: "Construction guide overlapping the profile base",
+  const lowerLeftToUpper = $.geometry.segment("lowerLeftToUpper", {
+    start: lowerLeftCoupling.center,
+    end: upperCoupling.center,
+    branchDirection: [0.5, 0.8660254037844386],
+    label: "Schematic lower-left-to-upper coupling leg",
     role: "construction",
   });
-  const constraint1A1RectangleAnchor = $.constraint.fixedPoint("constraint1A1RectangleAnchor", {
-    point: point1A1RectangleBottomLeft.point,
-    target: [0, 0],
-    label: "A1 rectangle.anchor",
+  const couplingToBoard = $.operation.rectangle("couplingToBoard", {
+    origin: [18, -0.25],
+    width: mm(24),
+    height: mm(0.5),
+    label: "Schematic tool-link to board datum",
+    role: "construction",
   });
-  const constraint2A1RectangleBottomHorizontal = $.constraint.horizontal("constraint2A1RectangleBottomHorizontal", {
-    span: curve1A1RectangleEdge1.span,
-    label: "A1 rectangle.bottom_horizontal",
+  const boardMountUpper = $.geometry.centerRadiusCircle("boardMountUpper", {
+    center: [66, 14],
+    radius: mm(1.6),
+    label: "Schematic upper link-board mount",
+    role: "profile",
   });
-  const constraint3A1RectangleRightVertical = $.constraint.vertical("constraint3A1RectangleRightVertical", {
-    span: curve2A1RectangleEdge2.span,
-    label: "A1 rectangle.right_vertical",
+  const boardMountLower = $.geometry.centerRadiusCircle("boardMountLower", {
+    center: [66, -14],
+    radius: mm(1.6),
+    label: "Schematic lower link-board mount",
+    role: "profile",
   });
-  const constraint4A1RectangleTopHorizontal = $.constraint.horizontal("constraint4A1RectangleTopHorizontal", {
-    span: curve3A1RectangleEdge3.span,
-    label: "A1 rectangle.top_horizontal",
+  const locateBoardMountUpper = $.constraint.coincident("locateBoardMountUpper", {
+    first: boardMountUpper.center,
+    second: linkBoardEnvelope.corners.topRight,
+    label: "Locate upper board mount",
   });
-  const constraint5A1RectangleLeftVertical = $.constraint.vertical("constraint5A1RectangleLeftVertical", {
-    span: curve4A1RectangleEdge4.span,
-    label: "A1 rectangle.left_vertical",
+  const locateBoardMountLower = $.constraint.coincident("locateBoardMountLower", {
+    first: boardMountLower.center,
+    second: linkBoardEnvelope.corners.bottomRight,
+    label: "Locate lower board mount",
   });
-  const dimension1Width4 = $.dimension.curveLength("dimension1Width4", {
-    curve: curve1A1RectangleEdge1.span,
-    value: mm(4),
-    label: "width-4",
+  const boardMountRadius = $.dimension.radius("boardMountRadius", {
+    curve: boardMountUpper.curve,
+    value: mm(1.6),
+    label: "Schematic link-board mount radius",
     mode: "driving",
   });
-  const dimension2A1RectangleHeightDimension = $.dimension.curveLength("dimension2A1RectangleHeightDimension", {
-    curve: curve2A1RectangleEdge2.span,
-    value: mm(3),
-    label: "A1 rectangle.height_dimension",
-    mode: "driving",
+  const matchBoardMount = $.constraint.equalRadius("matchBoardMount", {
+    first: boardMountUpper.curve,
+    second: boardMountLower.curve,
+    label: "Matched link-board mounts",
   });
-  const dimension3A1DiagonalReference = $.dimension.pointDistance("dimension3A1DiagonalReference", {
-    first: point1A1RectangleBottomLeft.point,
-    second: point3A1RectangleTopRight.point,
-    value: mm(5),
-    label: "A1 diagonal reference",
-    mode: "reference",
-  });
-  const constraint6FixOverlappingConstructionGuideControl1 = $.constraint.fixedPoint("constraint6FixOverlappingConstructionGuideControl1", {
-    point: point5OverlappingGuideStart.point,
-    target: [0, 0],
-    label: "Fix Overlapping construction guide control 1",
-  });
-  const constraint7FixOverlappingConstructionGuideControl2 = $.constraint.fixedPoint("constraint7FixOverlappingConstructionGuideControl2", {
-    point: point6OverlappingGuideEnd.point,
-    target: [4, 0],
-    label: "Fix Overlapping construction guide control 2",
-  });
-  $.group("Points", [point1A1RectangleBottomLeft, point2A1RectangleBottomRight, point3A1RectangleTopRight, point4A1RectangleTopLeft, point5OverlappingGuideStart, point6OverlappingGuideEnd]);
-  $.group("Geometry", [curve1A1RectangleEdge1, curve2A1RectangleEdge2, curve3A1RectangleEdge3, curve4A1RectangleEdge4, curve5SharedCornerConstructionDiagonal, curve6ConstructionGuideOverlappingTheProfileBase]);
-  $.group("Constraints", [constraint1A1RectangleAnchor, constraint2A1RectangleBottomHorizontal, constraint3A1RectangleRightVertical, constraint4A1RectangleTopHorizontal, constraint5A1RectangleLeftVertical, constraint6FixOverlappingConstructionGuideControl1, constraint7FixOverlappingConstructionGuideControl2]);
-  $.group("Dimensions", [dimension1Width4, dimension2A1RectangleHeightDimension, dimension3A1DiagonalReference]);
+  $.group("Tool-link envelope", [toolLinkEnvelope, couplingToBoard]);
+  $.group("Three-point coupling", [couplingDatum, couplingPitch, upperCoupling, lowerRightCoupling, lowerLeftCoupling, locateCouplingPitch, locateUpperCoupling, locateLowerRightCoupling, locateLowerLeftCoupling, couplingPitchRadius, couplingSeatRadius, matchLowerRightCoupling, matchLowerLeftCoupling, upperToLowerRight, lowerCouplingBase, lowerLeftToUpper]);
+  $.group("Link-board interface", [linkBoardEnvelope, boardMountUpper, boardMountLower, locateBoardMountUpper, locateBoardMountLower, boardMountRadius, matchBoardMount]);
   return {};
 });

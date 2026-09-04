@@ -3,9 +3,30 @@
   "ordinal": 13,
   "key": "voron-panel",
   "title": "Voron V0.2 motor panel",
-  "summary": "A scoped 2D reference study makes the panel outline and interface datums inspectable.",
+  "summary": "A simplified V0.2 motor-panel study pairs its published 122 x 37 mm bounds and 116 mm inner span with explicitly schematic central-passage and edge-notch references.",
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "groups": ["Panel envelope", "Central motor passage", "Side-notch references"],
+  "provenance": [
+    {
+      "relationship": "dimensions_only",
+      "name": "Voron V0.2 motor-panel drawing",
+      "url": "https://github.com/VoronDesign/Voron-0",
+      "revision": "a53fc87562fd630c846af38d7de850c894dc3d85",
+      "path": "Drawings/Motor_Panel_v0.2.PDF",
+      "licence": "GPL-3.0-only",
+      "scope": "Overall 122 x 37 mm bounds and 116 mm inner span inform the planar datum study; curved transitions are schematic and bend details and manufacturing instructions are omitted.",
+      "notice_required": true
+    },
+    {
+      "relationship": "dimensions_only",
+      "name": "Voron V0.2 motor-panel DXF",
+      "url": "https://github.com/VoronDesign/Voron-0",
+      "revision": "a53fc87562fd630c846af38d7de850c894dc3d85",
+      "path": "DXF/Motor_Panel.dxf",
+      "licence": "GPL-3.0-only",
+      "scope": "Polyline topology was consulted to make the central opening and paired edge-notch arrangement recognizable; the displayed curved proxies are explicitly schematic and this is not a cut-ready DXF or manufacturing guarantee.",
+      "notice_required": true
+    }
+  ]
 }

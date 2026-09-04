@@ -3,9 +3,30 @@
   "ordinal": 14,
   "key": "prusa-mini-interface",
   "title": "Prusa MINI and MINI+ X-carriage interface",
-  "summary": "A scoped 2D reference study records selected X-carriage mounting relationships.",
+  "summary": "A front-plane MINI X-carriage study combines the published 31.423 x 69.407 mm envelope with bearing and selected M3 interface datums.",
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "groups": ["Published X-carriage envelope", "Bearing and belt datum", "Selected mounting interface"],
+  "provenance": [
+    {
+      "relationship": "dimensions_only",
+      "name": "Original Prusa MINI X-carriage STEP",
+      "url": "https://github.com/prusa3d/Original-Prusa-MINI",
+      "revision": "853bc30c4b10190f1d669ed6d0a567e333c28f21",
+      "path": "STEP/PRINTED PARTS/MINI-x-carriage.stp",
+      "licence": "GPL-3.0-only",
+      "scope": "Selected circular-interface dimensions and component context inform an independently redrawn front-plane study; no STEP geometry is imported and schematic mount locations are not OEM manufacturing data.",
+      "notice_required": true
+    },
+    {
+      "relationship": "dimensions_only",
+      "name": "Original Prusa MINI X-carriage STL",
+      "url": "https://github.com/prusa3d/Original-Prusa-MINI",
+      "revision": "853bc30c4b10190f1d669ed6d0a567e333c28f21",
+      "path": "STL/MINI-x-carriage.stl",
+      "licence": "GPL-3.0-only",
+      "scope": "The mesh bounds provide only the 31.423 x 69.407 mm front envelope; this study is not a printable replacement, exact outline or fitness claim.",
+      "notice_required": true
+    }
+  ]
 }

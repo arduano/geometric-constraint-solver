@@ -3,9 +3,20 @@
   "ordinal": 15,
   "key": "micron-carriage",
   "title": "Printers for Ants Micron CNC X-carriage",
-  "summary": "A scoped 2D reference study exposes selected carriage interfaces and symmetry datums.",
+  "summary": "An independently redrawn Micron carriage study relates its CNC body, nominal MGN9H 15 x 20 mm mounting pitch and toolhead interface.",
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "groups": ["CNC carriage body", "Rail-block datum", "Toolhead interface"],
+  "provenance": [
+    {
+      "relationship": "dimensions_only",
+      "name": "Printers for Ants Micron CNC carriage assembly",
+      "url": "https://github.com/PrintersForAnts/Micron",
+      "revision": "61a229ba01c3febbfb9b994e07302d9ddac68bfb",
+      "path": "CAD/SubAssemblies/CNC_Carriage.step",
+      "licence": "GPL-3.0-only",
+      "scope": "Selected component relationships inform a diagrammatic, independently redrawn planar interface study; body outlines are schematic and no solid, exact projection or manufacturing guarantee is provided.",
+      "notice_required": true
+    }
+  ]
 }
