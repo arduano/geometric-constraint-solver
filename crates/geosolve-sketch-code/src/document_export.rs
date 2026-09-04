@@ -16,11 +16,11 @@ use geosolve_sketch::{
     DocumentArcTangencySide, DocumentBSplineForm, DocumentCircleContainment,
     DocumentCircleTangencyMode, DocumentConstraint, DocumentConstraintDefinition,
     DocumentCoordinateAxis, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
-    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimension,
-    DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentElementId,
-    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch,
-    DocumentLineOffsetOrientation, DocumentLineSide, FeatureEndpoint, GeometryRole, ScalarUnit,
-    SketchDocument, TangentOrientation,
+    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentCurveTrimView,
+    DocumentDimension, DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense,
+    DocumentElementId, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+    DocumentHyperbolaBranch, DocumentLineOffsetOrientation, DocumentLineSide, DocumentTrimBoundary,
+    FeatureEndpoint, GeometryRole, ScalarUnit, SketchDocument, TangentOrientation,
 };
 use geosolve_sketch_features::{
     ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFilletParent,
@@ -54,6 +54,10 @@ pub enum ManagedSketchExportError {
         "dimension `{id}` uses Profile Offset authority, which is not a standalone document projection"
     )]
     ProfileOffsetDimension { id: String },
+    #[error("trim topology on {support:?} cannot be reproduced by managed operations")]
+    UnsupportedTrimTopology { support: CurveSpan },
+    #[error("user suppression of {element:?} cannot be represented by managed source")]
+    UnsupportedUserSuppression { element: DocumentElementId },
     #[error("the generated managed source is {actual} bytes; the limit is {limit}")]
     ResourceLimit { actual: usize, limit: usize },
 }
@@ -70,8 +74,9 @@ pub enum ManagedSketchExportError {
 /// # Errors
 ///
 /// Returns a typed refusal for invalid/non-finite documents, host-external
-/// authority, unsupported non-canonical spline knots, Profile Offset's
-/// multi-object closure, or source exceeding the managed-source bound.
+/// authority, unsupported non-canonical spline knots, non-replayable trim or
+/// suppression state, Profile Offset's multi-object closure, or source
+/// exceeding the managed-source bound.
 pub fn export_sketch_document_to_managed_source(
     document: &SketchDocument,
 ) -> Result<String, ManagedSketchExportError> {
@@ -119,6 +124,14 @@ fn export_document(
     {
         return Err(ManagedSketchExportError::HostAuthority);
     }
+    if let Some(element) = document.user_inactive_elements().find(|element| {
+        !matches!(
+            element,
+            DocumentElementId::Point(_) | DocumentElementId::Curve(_)
+        )
+    }) {
+        return Err(ManagedSketchExportError::UnsupportedUserSuppression { element });
+    }
 
     let mut exporter = DocumentExporter::new(document, features);
     exporter.emit()?;
@@ -141,6 +154,7 @@ struct DocumentExporter<'a> {
     dimension_symbols: BTreeMap<geosolve_sketch::DocumentDimensionId, String>,
     feature_symbols: Vec<String>,
     inactive: BTreeSet<DocumentElementId>,
+    trim_operation_count: usize,
 }
 
 impl<'a> DocumentExporter<'a> {
@@ -205,6 +219,7 @@ impl<'a> DocumentExporter<'a> {
             dimension_symbols,
             feature_symbols,
             inactive: document.user_inactive_elements().collect(),
+            trim_operation_count: 0,
         }
     }
 
@@ -214,11 +229,114 @@ impl<'a> DocumentExporter<'a> {
         );
         self.emit_points()?;
         self.emit_curves()?;
+        self.emit_trim_views()?;
         self.emit_sources()?;
         self.emit_features()?;
         self.emit_groups();
         self.source.push_str("  return {};\n});\n");
         Ok(())
+    }
+
+    fn emit_trim_views(&mut self) -> Result<(), ManagedSketchExportError> {
+        let mut visited_supports = BTreeSet::new();
+        let views = self.document.trim_views().to_vec();
+        for view in &views {
+            if !visited_supports.insert(view.support) {
+                return Err(ManagedSketchExportError::UnsupportedTrimTopology {
+                    support: view.support,
+                });
+            }
+            match (view.start, view.end) {
+                (DocumentTrimBoundary::Fixed(start), DocumentTrimBoundary::Fixed(end)) => {
+                    self.emit_fixed_trim_view(
+                        view,
+                        start.parameter,
+                        start.winding,
+                        end.parameter,
+                        end.winding,
+                    )?;
+                }
+                (DocumentTrimBoundary::FilletContact { .. }, DocumentTrimBoundary::Fixed(_))
+                | (DocumentTrimBoundary::Fixed(_), DocumentTrimBoundary::FilletContact { .. })
+                    if !self.trim_support_is_full_periodic(view.support)? =>
+                {
+                    // The owning CurveCurveFillet declaration reconstructs this
+                    // exact contact-owned view when sources are materialized.
+                }
+                _ => {
+                    return Err(ManagedSketchExportError::UnsupportedTrimTopology {
+                        support: view.support,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_fixed_trim_view(
+        &mut self,
+        view: &DocumentCurveTrimView,
+        start: f64,
+        start_winding: i32,
+        end: f64,
+        end_winding: i32,
+    ) -> Result<(), ManagedSketchExportError> {
+        const OPERATION_PARAMETER_EPSILON: f64 = 1.0e-12;
+        let starts_at_support = start.total_cmp(&0.0).is_eq();
+        let ends_at_support = end.total_cmp(&1.0).is_eq();
+        if self.trim_support_is_full_periodic(view.support)?
+            || start_winding != 0
+            || end_winding != 0
+            || start < 0.0
+            || end > 1.0
+            || start >= end
+            || (!starts_at_support && start <= OPERATION_PARAMETER_EPSILON)
+            || (!ends_at_support && end >= 1.0 - OPERATION_PARAMETER_EPSILON)
+            || end - start <= OPERATION_PARAMETER_EPSILON
+            || (starts_at_support && ends_at_support)
+        {
+            return Err(ManagedSketchExportError::UnsupportedTrimTopology {
+                support: view.support,
+            });
+        }
+
+        let mut source = self.span_ref(view.support)?;
+        if !starts_at_support {
+            source = self.emit_trim_operation(&source, start, "after");
+        }
+        if !ends_at_support {
+            self.emit_trim_operation(&source, end, "before");
+        }
+        Ok(())
+    }
+
+    fn emit_trim_operation(&mut self, source: &str, parameter: f64, retained: &str) -> String {
+        self.trim_operation_count += 1;
+        let ordinal = self.trim_operation_count;
+        let symbol = format!("operationTrim{ordinal}");
+        writeln!(
+            self.source,
+            "  const {symbol} = $.operation.trim({symbol_json}, {{\n    source: {source},\n    parameter: {parameter},\n    retained: {retained},\n  }});",
+            symbol_json = json_string(&symbol),
+            parameter = number(parameter),
+            retained = json_string(retained),
+        )
+        .expect("writing managed source to a String cannot fail");
+        format!("{symbol}.retained")
+    }
+
+    fn trim_support_is_full_periodic(
+        &self,
+        support: CurveSpan,
+    ) -> Result<bool, ManagedSketchExportError> {
+        let curve = self
+            .document
+            .curve(support.curve)
+            .ok_or_else(|| missing("curve", &support.curve))?;
+        Ok(matches!(
+            curve.definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+        ))
     }
 
     fn emit_points(&mut self) -> Result<(), ManagedSketchExportError> {
@@ -1916,7 +2034,9 @@ mod tests {
     use geosolve_sketch::{
         ContactAdmissibleRange, ContactAdmissibleRangeEdit, ContactNeighborhood, CurveDefinition,
         CurveSpan, DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveContinuity,
-        DocumentElementId, DocumentParameterKind, GeometryRole, SketchDocument,
+        DocumentCurveTrimView, DocumentDimensionDefinition, DocumentDimensionMode,
+        DocumentElementId, DocumentParameterKind, DocumentTrimBoundary, DocumentTrimParameter,
+        ExternalFeatureKindV1, GeometryRole, ScalarDomain, ScalarUnit, SketchDocument,
     };
     use geosolve_sketch_features::{
         ComputedFeatureDocument, ComputedFilletParent, NativeCurveSpanSource,
@@ -2000,15 +2120,228 @@ mod tests {
 
     #[test]
     fn projection_fails_closed_for_host_owned_authority() {
-        let mut document = SketchDocument::new(1.0).expect("document");
-        document
+        let mut parameter_document = SketchDocument::new(1.0).expect("document");
+        let parameter = parameter_document
             .add_parameter("host length", DocumentParameterKind::Length)
             .expect("parameter");
+        parameter_document
+            .set_element_user_suppressed(DocumentElementId::Parameter(parameter), true)
+            .expect("parameter suppression");
 
         assert_eq!(
-            export_sketch_document_to_managed_source(&document),
+            export_sketch_document_to_managed_source(&parameter_document),
             Err(ManagedSketchExportError::HostAuthority),
         );
+
+        let mut external_document = SketchDocument::new(1.0).expect("document");
+        let external = external_document
+            .add_external_binding("host point", ExternalFeatureKindV1::Point, None)
+            .expect("external binding");
+        external_document
+            .set_element_user_suppressed(DocumentElementId::ExternalBinding(external), true)
+            .expect("external-binding suppression");
+
+        assert_eq!(
+            export_sketch_document_to_managed_source(&external_document),
+            Err(ManagedSketchExportError::HostAuthority),
+        );
+    }
+
+    #[test]
+    fn projection_replays_one_fixed_trim_interval_through_managed_operations() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).unwrap();
+        let end = document.add_point("end", [4.0, 0.0]).unwrap();
+        let curve = document
+            .add_curve(
+                "support",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let support = CurveSpan::line(curve);
+        document
+            .replace_trim_views(
+                support,
+                vec![DocumentCurveTrimView {
+                    support,
+                    start: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                        parameter: 0.25,
+                        winding: 0,
+                    }),
+                    end: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                        parameter: 0.75,
+                        winding: 0,
+                    }),
+                }],
+            )
+            .unwrap();
+
+        let source = export_sketch_document_to_managed_source(&document).unwrap();
+        let keep_after = source
+            .find("parameter: 0.25,\n    retained: \"after\",")
+            .expect("lower trim boundary is replayed");
+        let keep_before = source
+            .find("parameter: 0.75,\n    retained: \"before\",")
+            .expect("upper trim boundary is replayed");
+        assert!(keep_after < keep_before);
+        assert_eq!(source.matches("$.operation.trim").count(), 2);
+
+        document
+            .replace_trim_views(
+                support,
+                vec![DocumentCurveTrimView {
+                    support,
+                    start: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                        parameter: 0.0,
+                        winding: 0,
+                    }),
+                    end: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                        parameter: 1.0,
+                        winding: 0,
+                    }),
+                }],
+            )
+            .unwrap();
+        assert_eq!(
+            export_sketch_document_to_managed_source(&document),
+            Err(ManagedSketchExportError::UnsupportedTrimTopology { support })
+        );
+    }
+
+    #[test]
+    fn projection_replays_point_and_curve_user_inactivity() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).unwrap();
+        let end = document.add_point("end", [4.0, 0.0]).unwrap();
+        let curve = document
+            .add_curve(
+                "support",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        document
+            .set_element_user_suppressed(DocumentElementId::Point(start), true)
+            .unwrap();
+        document
+            .set_element_user_suppressed(DocumentElementId::Curve(curve), true)
+            .unwrap();
+
+        let source = export_sketch_document_to_managed_source(&document).unwrap();
+        assert!(source.contains("$.suppress(point1Start);"));
+        assert!(source.contains("$.suppress(curve1Support);"));
+        assert_eq!(source.matches("$.suppress(").count(), 2);
+    }
+
+    #[test]
+    fn projection_fails_closed_for_unrepresentable_user_inactivity() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).unwrap();
+        let end = document.add_point("end", [4.0, 0.0]).unwrap();
+        let curve = document
+            .add_curve(
+                "support",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let scalar = document
+            .add_scalar(
+                "unused scalar",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let contact = document
+            .add_curve_contact(
+                "contact",
+                CurveSpan::line(curve),
+                0.5,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .unwrap();
+
+        for element in [
+            DocumentElementId::Document(document.id()),
+            DocumentElementId::Scalar(scalar),
+            DocumentElementId::Contact(contact),
+        ] {
+            let mut candidate = document.clone();
+            candidate
+                .set_element_user_suppressed(element, true)
+                .unwrap();
+            assert_eq!(
+                export_sketch_document_to_managed_source(&candidate),
+                Err(ManagedSketchExportError::UnsupportedUserSuppression { element })
+            );
+        }
+    }
+
+    #[test]
+    fn projection_keeps_constraint_dimension_and_source_owned_suppression() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).unwrap();
+        let end = document.add_point("end", [4.0, 0.0]).unwrap();
+        let curve = document
+            .add_curve(
+                "support",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let support = CurveSpan::line(curve);
+        let constraint = document
+            .add_constraint(
+                "horizontal",
+                DocumentConstraintDefinition::Horizontal { line: support },
+            )
+            .unwrap();
+        let constraint_source = document.constraint(constraint).unwrap().source_id;
+        let target = document
+            .add_scalar("length", 4.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .unwrap();
+        let dimension = document
+            .add_dimension(
+                "length",
+                DocumentDimensionDefinition::CurveLength {
+                    curve: support,
+                    target,
+                },
+                DocumentDimensionMode::Driving,
+            )
+            .unwrap();
+        let dimension_source = document.dimension(dimension).unwrap().source_id;
+
+        for element in [
+            DocumentElementId::Constraint(constraint),
+            DocumentElementId::Dimension(dimension),
+            DocumentElementId::Source(constraint_source),
+            DocumentElementId::Source(dimension_source),
+        ] {
+            let mut candidate = document.clone();
+            candidate
+                .set_element_user_suppressed(element, true)
+                .unwrap();
+            assert_eq!(candidate.user_inactive_elements().count(), 0);
+            let source = export_sketch_document_to_managed_source(&candidate).unwrap();
+            assert_eq!(source.matches("suppressed: true,").count(), 1);
+        }
     }
 
     #[test]

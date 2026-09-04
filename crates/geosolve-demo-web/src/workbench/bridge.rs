@@ -1205,32 +1205,40 @@ impl WorkbenchBridge {
     }
 
     fn open_sample(&mut self, key: &str, claimed_title: Option<&str>) -> Result<(), String> {
+        self.open_sample_with(key, claimed_title, CodeProjectWorkbench::open_key)
+    }
+
+    fn open_sample_with(
+        &mut self,
+        key: &str,
+        claimed_title: Option<&str>,
+        open_managed: impl FnOnce(
+            &str,
+        ) -> Result<
+            (
+                CodeProjectWorkbench,
+                Box<geosolve_constraint_editor::ProjectionalEditorSession>,
+            ),
+            String,
+        >,
+    ) -> Result<(), String> {
         if key.is_empty() || key.len() > MAX_COMMAND_BYTES {
             return Err("sample key is empty or too large".into());
         }
         if claimed_title.is_some_and(|title| title.len() > MAX_TITLE_BYTES) {
             return Err("sample title is too large".into());
         }
+        let (code_project, editor) = open_managed(key)?;
+        let mut samples = super::samples::SampleCatalogState::default();
+        samples.select_code_key(key)?;
+        let title = code_project.title().into();
+        let authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
+
         self.cancel_active_interaction(None)?;
-        if let Ok((code_project, editor)) = CodeProjectWorkbench::open_key(key) {
-            let mut samples = super::samples::SampleCatalogState::default();
-            samples.select_code_key(key)?;
-            self.title = code_project.title().into();
-            self.authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
-            self.code_project = Some(code_project);
-            self.samples = samples;
-        } else {
-            let mut samples = super::samples::SampleCatalogState::default();
-            let coordinator = samples.open_key(key)?;
-            self.authority = WorkbenchDocumentAuthority::from_flat_coordinator(&coordinator)?;
-            self.code_project = None;
-            self.title = samples
-                .selected_title()
-                .or(claimed_title)
-                .unwrap_or("Sample")
-                .to_owned();
-            self.samples = samples;
-        }
+        self.title = title;
+        self.authority = authority;
+        self.code_project = Some(code_project);
+        self.samples = samples;
         self.reset_explorer_visibility();
         self.reset_transient_tools();
         self.camera.reset();
@@ -4891,6 +4899,64 @@ mod tests {
             candidate_source_digest: compiled.ir.source_digest.clone(),
             compiled,
         }
+    }
+
+    #[test]
+    fn managed_sample_open_failure_does_not_fall_back_to_native_catalog() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        bridge
+            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"polyline"}}"#)
+            .unwrap();
+        let pointer = |phase: &str, buttons: u16| {
+            serde_json::json!({
+                "version": 1,
+                "phase": phase,
+                "pointerId": 91,
+                "x": 360.0,
+                "y": 280.0,
+                "buttons": buttons,
+                "modifiers": {
+                    "alt": false,
+                    "ctrl": false,
+                    "meta": false,
+                    "shift": false,
+                },
+            })
+            .to_string()
+        };
+        bridge.pointer_json(&pointer("down", 1)).unwrap();
+        bridge.pointer_json(&pointer("up", 0)).unwrap();
+        let draft_stages_before = bridge
+            .editor()
+            .editor()
+            .geometry_draft_status()
+            .expect("active polyline draft")
+            .completed_stages;
+        let project_before = bridge.export_project_json().unwrap();
+        let title_before = bridge.title.clone();
+        let revision_before = bridge.revision;
+
+        let error = bridge
+            .open_sample_with("drafting-compass", None, |_| {
+                Err("injected managed materialization failure".into())
+            })
+            .expect_err("a known sample must not fail open to its native oracle");
+
+        assert_eq!(error, "injected managed materialization failure");
+        assert!(bridge.code_project.is_none());
+        assert_eq!(bridge.title, title_before);
+        assert_eq!(bridge.revision, revision_before);
+        assert_eq!(bridge.export_project_json().unwrap(), project_before);
+        assert_eq!(bridge.active_tool, "polyline");
+        assert_eq!(
+            bridge
+                .editor()
+                .editor()
+                .geometry_draft_status()
+                .expect("failed open retains active polyline draft")
+                .completed_stages,
+            draft_stages_before,
+        );
     }
 
     #[test]
