@@ -17,11 +17,12 @@ use geosolve_headless::{
     HeadlessPreparedEdit, bundled_sample_keys, inspect, prepare_edit, publish_render, render,
     resolve_edit,
 };
+use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
     CodeProject, CompiledManagedSource, KeyedReconcileState, ManagedControlEdit,
-    ManagedControlEditBatch, ManagedValue, PreparedManagedMutationReceipt, ProjectKey,
-    SketchCodeSession, UnitLiteral, bundled_sample_catalog, expand_code_project,
-    managed_control_manifest, required_generated_members,
+    ManagedControlEditBatch, ManagedPathSegment, ManagedValue, PreparedManagedMutationReceipt,
+    ProjectKey, SketchCodeSession, UnitLiteral, bundled_sample_catalog, expand_code_project,
+    managed_control_manifest, materialize_code_project_cold, required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
@@ -106,6 +107,57 @@ fn edit_with_pinned_deno(
     let prepared = prepare_edit(input, batch)?;
     let receipt = run_pinned_deno_mutation(&prepared);
     resolve_edit(input, &prepared, receipt)
+}
+
+fn witness_value(value: &serde_json::Value) -> ManagedValue {
+    match value {
+        serde_json::Value::Null => ManagedValue::Null,
+        serde_json::Value::Bool(value) => ManagedValue::Bool(*value),
+        serde_json::Value::Number(value) => ManagedValue::Number(
+            value
+                .as_f64()
+                .filter(|value| value.is_finite())
+                .expect("witness number is finite"),
+        ),
+        serde_json::Value::String(value) => ManagedValue::String(value.clone()),
+        serde_json::Value::Array(values) => {
+            ManagedValue::Array(values.iter().map(witness_value).collect())
+        }
+        serde_json::Value::Object(fields)
+            if fields.len() == 2
+                && fields.get("unit").is_some_and(serde_json::Value::is_string)
+                && fields
+                    .get("value")
+                    .is_some_and(serde_json::Value::is_number) =>
+        {
+            ManagedValue::Unit(UnitLiteral {
+                unit: fields["unit"]
+                    .as_str()
+                    .expect("checked witness unit")
+                    .to_owned(),
+                value: fields["value"]
+                    .as_f64()
+                    .filter(|value| value.is_finite())
+                    .expect("witness unit value is finite"),
+            })
+        }
+        serde_json::Value::Object(fields) => ManagedValue::Object(
+            fields
+                .iter()
+                .map(|(name, value)| (name.clone(), witness_value(value)))
+                .collect(),
+        ),
+    }
+}
+
+fn witness_path_matches(actual: &[ManagedPathSegment], expected: &[serde_json::Value]) -> bool {
+    actual.len() == expected.len()
+        && actual.iter().zip(expected).all(|(actual, expected)| {
+            matches!(
+                (actual, expected.as_str()),
+                (ManagedPathSegment::Field(actual), Some(expected)) if actual == expected
+            )
+        })
 }
 
 fn run_cli_prepare_edit(
@@ -659,6 +711,227 @@ fn all_twenty_bundled_samples_inspect_with_deterministic_report_v2_authority() {
                 sample.key
             );
         }
+    }
+}
+
+#[test]
+#[ignore = "release gate builds and invokes the pinned TypeScript mutation sidecar"]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive cross-host matrix keeps each declared edit, accepted solve, exact code history, and reload authority adjacent"
+)]
+fn all_twenty_bundled_samples_apply_declared_edit_undo_redo_and_reload() {
+    for (index, sample) in bundled_sample_catalog().iter().enumerate() {
+        let witness: serde_json::Value = serde_json::from_str(sample.witnesses_json())
+            .unwrap_or_else(|error| panic!("{} witness JSON: {error}", sample.key));
+        assert_eq!(
+            witness["format"], "geosolve-sample-witnesses-v1",
+            "{}",
+            sample.key
+        );
+        let edit = &witness["representative_edit"];
+        let declaration = edit["declaration"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{} edit declaration", sample.key));
+        let path = edit["path"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{} edit path", sample.key));
+        let replacement = witness_value(&edit["replacement"]);
+
+        let input = HeadlessInput::BundledSample(sample.key.to_owned());
+        let before = inspect(&input)
+            .unwrap_or_else(|error| panic!("{} pre-edit inspection: {error}", sample.key));
+        let control = before
+            .controls
+            .editable()
+            .find(|control| {
+                control.source.declaration.0 == declaration
+                    && witness_path_matches(&control.source.path.0, path)
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "{} declared representative edit `{declaration}` at {path:?} is not an editable runtime control",
+                    sample.key
+                )
+            });
+        assert_ne!(
+            control.value, replacement,
+            "{} representative edit must change its exact-CAS value",
+            sample.key
+        );
+        let edited = edit_with_pinned_deno(
+            &input,
+            &ManagedControlEditBatch::new([ManagedControlEdit {
+                token: control.token().expect("editable witness control").clone(),
+                value: replacement,
+            }]),
+        )
+        .unwrap_or_else(|error| panic!("{} representative edit: {error}", sample.key));
+        assert_ne!(
+            edited.report().source_digest,
+            before.report.source_digest,
+            "{} source edit",
+            sample.key
+        );
+        assert!(
+            edited.report().validation.hard_residuals_validated,
+            "{}",
+            sample.key
+        );
+        assert!(
+            edited.report().validation.all_active_features_current,
+            "{}",
+            sample.key
+        );
+        assert!(
+            edited
+                .report()
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
+            "{}",
+            sample.key
+        );
+        assert_eq!(
+            edited.report().validation.numerical_right_nullity,
+            sample.expected.numerical_right_nullity(),
+            "{} edited right nullity",
+            sample.key
+        );
+        assert_eq!(
+            edited
+                .report()
+                .validation
+                .bidirectional_bounded_degrees_of_freedom,
+            sample.expected.bidirectional_bounded_degrees_of_freedom(),
+            "{} edited bounded mobility",
+            sample.key
+        );
+
+        let edited_project = edited.project().clone();
+        let edited_project_json = edited_project
+            .to_canonical_json()
+            .unwrap_or_else(|error| panic!("{} edited project JSON: {error}", sample.key));
+        let reloaded = render(&HeadlessInput::CodeProjectJson(edited_project_json.clone()))
+            .unwrap_or_else(|error| panic!("{} edited project reload: {error}", sample.key));
+        assert_eq!(
+            reloaded.project().to_canonical_json().unwrap(),
+            edited_project_json,
+            "{} exact project reload",
+            sample.key
+        );
+        let mut edited_report = serde_json::to_value(edited.report()).unwrap();
+        let mut reloaded_report = serde_json::to_value(reloaded.report()).unwrap();
+        edited_report
+            .as_object_mut()
+            .expect("report object")
+            .remove("input");
+        reloaded_report
+            .as_object_mut()
+            .expect("report object")
+            .remove("input");
+        assert_eq!(
+            reloaded_report, edited_report,
+            "{} reload changes only the admitted input descriptor",
+            sample.key
+        );
+
+        let base_project = sample.project();
+        let base_generated = KeyedReconcileState::empty()
+            .plan(
+                required_generated_members(&base_project)
+                    .unwrap_or_else(|error| panic!("{} base members: {error}", sample.key)),
+                &BTreeSet::new(),
+            )
+            .unwrap_or_else(|error| panic!("{} base reconciliation: {error}", sample.key))
+            .into_staged();
+        let seed = 0x92_0200_u128 + index as u128;
+        let base_materialized = materialize_code_project_cold(
+            &base_project,
+            &base_generated,
+            IntentSessionId::from_raw(seed),
+            DocumentId(PersistentId::from_u128(seed)),
+            1.0,
+        )
+        .unwrap_or_else(|error| panic!("{} base materialization: {error}", sample.key));
+        let mut session = SketchCodeSession::new_project(
+            base_project,
+            base_generated,
+            base_materialized.expansion,
+            serde_json::json!({ "sample": sample.key, "stage": "base" }),
+        )
+        .unwrap_or_else(|error| panic!("{} code-session bootstrap: {error}", sample.key));
+        let base_snapshot = session.snapshot().clone();
+        let plan = session
+            .plan_structural_reconciliation(
+                session.identity(),
+                required_generated_members(&edited_project)
+                    .unwrap_or_else(|error| panic!("{} edited members: {error}", sample.key)),
+                &BTreeSet::new(),
+            )
+            .unwrap_or_else(|error| panic!("{} edited reconciliation: {error}", sample.key));
+        let edited_materialized = materialize_code_project_cold(
+            &edited_project,
+            plan.staged(),
+            IntentSessionId::from_raw(seed + 0x1_0000),
+            DocumentId(PersistentId::from_u128(seed + 0x1_0000)),
+            1.0,
+        )
+        .unwrap_or_else(|error| panic!("{} edited materialization: {error}", sample.key));
+        let prepared = session
+            .prepare_project_edit_from_plan(
+                session.identity(),
+                edited_project,
+                plan,
+                edited_materialized.expansion,
+                serde_json::json!({ "sample": sample.key, "stage": "edited" }),
+                "Apply declared M92 representative edit",
+            )
+            .unwrap_or_else(|error| panic!("{} prepare code history: {error}", sample.key));
+        session
+            .apply_prepared(prepared)
+            .unwrap_or_else(|error| panic!("{} publish code history: {error}", sample.key));
+        let edited_snapshot = session.snapshot().clone();
+        assert!(session.can_undo(), "{}", sample.key);
+        assert!(!session.can_redo(), "{}", sample.key);
+        session
+            .undo()
+            .unwrap_or_else(|error| panic!("{} Undo: {error}", sample.key))
+            .unwrap_or_else(|| panic!("{} Undo receipt", sample.key));
+        assert_eq!(
+            session.snapshot(),
+            &base_snapshot,
+            "{} exact Undo",
+            sample.key
+        );
+        assert!(session.can_redo(), "{}", sample.key);
+        session
+            .redo()
+            .unwrap_or_else(|error| panic!("{} Redo: {error}", sample.key))
+            .unwrap_or_else(|| panic!("{} Redo receipt", sample.key));
+        assert_eq!(
+            session.snapshot(),
+            &edited_snapshot,
+            "{} exact Redo",
+            sample.key
+        );
+        let wire = session
+            .to_canonical_json()
+            .unwrap_or_else(|error| panic!("{} session JSON: {error}", sample.key));
+        let restored = SketchCodeSession::from_json(&wire)
+            .unwrap_or_else(|error| panic!("{} session reload: {error}", sample.key));
+        assert_eq!(
+            restored.to_canonical_json().unwrap(),
+            wire,
+            "{} exact code-session reload",
+            sample.key
+        );
+        assert_eq!(
+            restored.snapshot(),
+            &edited_snapshot,
+            "{} reloaded edited authority",
+            sample.key
+        );
     }
 }
 

@@ -2,8 +2,9 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
-const TYPED_PANEL_TITLE = "Typed panel · keyed Fillets";
-const COMPASS_ROSE_TITLE = "Compass rose · generated compass pattern";
+const MANIFOLD_TITLE = "PC liquid-cooling manifold";
+const JANSEN_TITLE = "Theo Jansen-style walking leg · 1 DOF";
+const SCISSOR_TITLE = "Generated five-stage scissor lift · 1 DOF";
 
 function auditRuntime(page: Page) {
   const errors: string[] = [];
@@ -53,21 +54,30 @@ function savedProjectFingerprint(value: string | null) {
   return `${value.length}:${checksum >>> 0}`;
 }
 
-async function openTypedPanel(page: Page) {
+async function openManifold(page: Page) {
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
-  await page.getByPlaceholder("Search 37 samples…").fill("typed panel");
-  await page.getByRole("button", { name: new RegExp(TYPED_PANEL_TITLE) }).click();
-  await expect(page.locator("header").getByText(TYPED_PANEL_TITLE, { exact: true })).toBeVisible();
+  await page.getByPlaceholder("Search 20 samples…").fill("water manifold");
+  await page.getByRole("button", { name: new RegExp(MANIFOLD_TITLE) }).click();
+  await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText('"use geosolve sketch"');
 }
 
-async function openCompassRose(page: Page) {
+async function openJansen(page: Page) {
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
-  await page.getByPlaceholder(/Search \d+ samples…/).fill("compass rose");
-  await page.getByRole("button", { name: new RegExp(COMPASS_ROSE_TITLE) }).click();
-  await expect(page.locator("header").getByText(COMPASS_ROSE_TITLE, { exact: true })).toBeVisible();
+  await page.getByPlaceholder("Search 20 samples…").fill("Jansen");
+  await page.getByRole("button", { name: new RegExp(JANSEN_TITLE) }).click();
+  await expect(page.locator("header").getByText(JANSEN_TITLE, { exact: true })).toBeVisible();
+  await expect(page.locator(".cm-content")).toContainText('"use geosolve sketch"');
+}
+
+async function openScissorLift(page: Page) {
+  await page.getByRole("button", { name: "File menu" }).click();
+  await page.getByRole("menuitem", { name: /Open/ }).click();
+  await page.getByPlaceholder("Search 20 samples…").fill("five-stage scissor");
+  await page.getByRole("button", { name: new RegExp(SCISSOR_TITLE) }).click();
+  await expect(page.locator("header").getByText(SCISSOR_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText('"use geosolve sketch"');
 }
 
@@ -146,7 +156,7 @@ test("real WASM opens an actual sample with a styled authoritative SVG and layou
   await expect(page.getByRole("tabpanel").getByText("Imported", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("IntentBootstrapMetadata");
   await expect(page.locator("body")).not.toContainText("Bootstrap {");
-  await openTypedPanel(page);
+  await openManifold(page);
 
   const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
   await expect(frame).toHaveCount(1);
@@ -156,7 +166,7 @@ test("real WASM opens an actual sample with a styled authoritative SVG and layou
 
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
-  await expect(page.getByRole("region", { name: "Recent" }).getByRole("button", { name: new RegExp(TYPED_PANEL_TITLE) })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Recent" }).getByRole("button", { name: new RegExp(MANIFOLD_TITLE) })).toBeVisible();
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "code", exact: true }).click();
@@ -179,7 +189,7 @@ test("CodeMirror DOM, selection, scroll, and browser-local draft survive layout 
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
 
   const editor = page.locator(".cm-editor");
   const content = page.locator(".cm-content");
@@ -224,7 +234,7 @@ test("invalid source retains the accepted frame and one positioned Problem until
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
   const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
   const acceptedFrame = await frame.evaluate((element) => element.outerHTML);
 
@@ -259,20 +269,20 @@ test("managed parameter edit persists through a real bridge reload", async ({ pa
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
   await page.getByRole("tab", { name: "Parameters" }).click();
-  const radius = page.getByRole("textbox", { name: "cornerFillets · radius" });
-  await radius.fill("2");
-  await radius.press("Enter");
-  await expect(page.getByRole("textbox", { name: "cornerFillets · radius" })).toHaveValue("2");
-  await expect(page.locator(".cm-content")).toContainText("radius: mm(2)");
+  const width = page.getByRole("textbox", { name: "reservoirWidth · value" });
+  await width.fill("62");
+  await width.press("Enter");
+  await expect(page.getByRole("textbox", { name: "reservoirWidth · value" })).toHaveValue("62");
+  await expect(page.locator(".cm-content")).toContainText("value: mm(62)");
   await expect.poll(async () => (await readSavedProject(page))?.length ?? 0).toBeGreaterThan(1_000);
 
   await page.reload({ waitUntil: "networkidle" });
-  await expect(page.locator("header").getByText(TYPED_PANEL_TITLE, { exact: true })).toBeVisible();
+  await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Parameters" }).click();
-  await expect(page.getByRole("textbox", { name: "cornerFillets · radius" })).toHaveValue("2");
-  await expect(page.locator(".cm-content")).toContainText("radius: mm(2)");
+  await expect(page.getByRole("textbox", { name: "reservoirWidth · value" })).toHaveValue("62");
+  await expect(page.locator(".cm-content")).toContainText("value: mm(62)");
   assertCleanRuntime();
 });
 
@@ -280,7 +290,7 @@ test("real WASM source-backs click-authored geometry in a managed sample", async
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
   const originalSource = await page.locator(".cm-content").textContent();
 
   const canvas = page.getByRole("application");
@@ -435,11 +445,11 @@ test("two circle contacts publish their Segment and accept the next pointer gest
   assertCleanRuntime();
 });
 
-test("Compass Rose Polyline Finish upgrades and publishes inferred constraints into sketch.ts", async ({ page }) => {
+test("canonical Jansen sample Polyline Finish publishes inferred constraints into sketch.ts", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openCompassRose(page);
+  await openJansen(page);
 
   const source = page.locator(".cm-content");
   const originalSource = await source.textContent();
@@ -514,11 +524,11 @@ test("Compass Rose Polyline Finish upgrades and publishes inferred constraints i
   assertCleanRuntime();
 });
 
-test("Compass Rose point drags remain solver overlays and accept the next gesture", async ({ page }) => {
+test("canonical scissor-lift point drags remain solver overlays and accept the next gesture", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openCompassRose(page);
+  await openScissorLift(page);
 
   const source = page.locator(".cm-content");
   const originalSource = await source.textContent();
@@ -530,13 +540,13 @@ test("Compass Rose point drags remain solver overlays and accept the next gestur
   expect(await points.count()).toBeGreaterThan(0);
   const centerIndex = await points.evaluateAll((elements) => {
     const svg = elements[0]?.closest("svg");
-    if (!svg) throw new Error("Compass Rose has no authoritative SVG");
+    if (!svg) throw new Error("scissor lift has no authoritative SVG");
     const viewBox = (svg.getAttribute("viewBox") ?? "")
       .split(/\s+/u)
       .map(Number);
     const [minX = NaN, minY = NaN, width = NaN, height = NaN] = viewBox;
     if (viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value))) {
-      throw new Error("Compass Rose has no finite SVG viewBox");
+      throw new Error("scissor lift has no finite SVG viewBox");
     }
     const center = [
       minX + width / 2,
@@ -583,7 +593,7 @@ test("Compass Rose point drags remain solver overlays and accept the next gestur
     lastSavedFingerprint = savedProjectFingerprint(lastSaved);
   }
 
-  // Five retained Compass Rose drag snapshots exceed Chromium's former 5 MiB
+  // Five retained scissor-lift drag snapshots exceed Chromium's former 5 MiB
   // localStorage path. The newest exact workspace belongs only to IndexedDB.
   const finalSaved = lastSaved;
   expect(finalSaved).not.toBeNull();
@@ -591,7 +601,7 @@ test("Compass Rose point drags remain solver overlays and accept the next gestur
   const savedEnvelope = JSON.parse(finalSaved!) as { format?: unknown; project?: unknown };
   expect(savedEnvelope.format).toBe("geosolve-workbench-presentation-v1");
   expect(typeof savedEnvelope.project).toBe("string");
-  expect(JSON.parse(savedEnvelope.project as string).version).toBe("geosolve-code-workbench-v3");
+  expect(JSON.parse(savedEnvelope.project as string).version).toBe("geosolve-code-workbench-v4");
   expect(await page.evaluate(() => localStorage.getItem("geosolve.project.v1"))).toBeNull();
   const finalPosition = await point.evaluate((element) => [
     element.getAttribute("cx"),
@@ -599,7 +609,7 @@ test("Compass Rose point drags remain solver overlays and accept the next gestur
   ]);
 
   await page.reload({ waitUntil: "networkidle" });
-  await expect(page.locator("header").getByText(COMPASS_ROSE_TITLE, { exact: true })).toBeVisible();
+  await expect(page.locator("header").getByText(SCISSOR_TITLE, { exact: true })).toBeVisible();
   const restoredPoint = page.locator(
     `.wb-accepted-scene .wb-points > circle.wb-point[data-persistent-id=${JSON.stringify(persistentId)}]`,
   );
@@ -625,7 +635,7 @@ test("Cubic Bézier authoring publishes one named typed declaration", async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
 
   const source = page.locator(".cm-content");
   const originalSource = await source.textContent();
@@ -840,7 +850,7 @@ test("a downloaded reproduction imports atomically through the real bridge", asy
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
 
   await page.getByRole("button", { name: "Diagnostics" }).click();
   const downloadPromise = page.waitForEvent("download");
@@ -862,8 +872,8 @@ test("a downloaded reproduction imports atomically through the real bridge", asy
   await page.getByRole("menuitem", { name: "Import project or repro…" }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "geosolve-reproduction.txt", mimeType: "text/plain", buffer: Buffer.from(reproduction) });
-  await expect(page.locator("header").getByText(TYPED_PANEL_TITLE, { exact: true })).toBeVisible();
-  await expect(page.locator(".cm-content")).toContainText("radius: mm(4)");
+  await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
+  await expect(page.locator(".cm-content")).toContainText("const reservoirWidth = $.dimension.curveLength");
   await expect(page.locator('[role="application"] svg.geosolve-authoritative-frame style')).toContainText(".wb-point");
   assertCleanRuntime();
 });
@@ -981,7 +991,7 @@ test("canvas action feedback overlays the workspace without shifting it", async 
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
 
   const canvas = page.getByRole("application");
   const before = await canvas.boundingBox();
@@ -1039,7 +1049,7 @@ test("normal pointer capture release commits Circle geometry and edits its compa
   await page.setViewportSize({ width: 1440, height: 900 });
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await openTypedPanel(page);
+  await openManifold(page);
 
   const canvas = page.getByRole("application");
   const frame = canvas.locator("svg.geosolve-authoritative-frame");
