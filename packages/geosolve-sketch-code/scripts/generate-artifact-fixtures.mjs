@@ -26,60 +26,11 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const check = process.argv.includes("--check");
-let qualifiedBundledSampleEdits = 0;
-
-/**
- * Exercise one real source mutation and its exact inverse through the pinned
- * parser, printer, runtime recorder and patch environment. This is deliberately
- * done for every bundled sample instead of relying on one synthetic fixture.
- */
-function qualifyBundledSampleEdit(name, compiled, options = {}) {
-  const declaration = compiled.artifact.declarations.find((candidate) =>
-    !compiled.artifact.suppressions.some((suppression) =>
-      suppression.target.declaration === candidate.declaration &&
-      suppression.target.path.length === 0
-    )
-  )?.declaration;
-  assert.ok(declaration, `${name} has a declaration to edit`);
-  const target = { target: "declaration", declaration };
-  const edited = applyManagedSketchMutation(compiled, {
-    mutation: "set_suppressed",
-    target,
-    suppressed: true,
-  }, options).compiled;
-  assert.notEqual(
-    edited.normalizedSource,
-    compiled.normalizedSource,
-    `${name} representative source edit changes canonical source`,
-  );
-  const undone = applyManagedSketchMutation(edited, {
-    mutation: "set_suppressed",
-    target,
-    suppressed: false,
-  }, options).compiled;
-  assert.equal(
-    undone.normalizedSource,
-    compiled.normalizedSource,
-    `${name} source edit restores exact canonical source`,
-  );
-  assert.deepEqual(
-    undone.ir,
-    compiled.ir,
-    `${name} source edit restores exact IR`,
-  );
-  assert.deepEqual(
-    undone.artifact,
-    compiled.artifact,
-    `${name} source edit restores exact artifact`,
-  );
-  qualifiedBundledSampleEdits += 1;
-}
 
 const fixtures = [
   {
     source: "examples/adaptive-lanterns.patch.ts",
     fixture: "test/fixtures/adaptive-lanterns.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/adaptive-lanterns.artifact.json",
     moduleSpecifier: "./patches/adaptive-lanterns.patch.ts",
     exportName: "adaptiveLanterns",
     patch: adaptiveLanterns,
@@ -87,7 +38,6 @@ const fixtures = [
   {
     source: "examples/bridge-cables.patch.ts",
     fixture: "test/fixtures/bridge-cables.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/bridge-cables.artifact.json",
     moduleSpecifier: "./patches/bridge-cables.patch.ts",
     exportName: "bridgeCables",
     patch: bridgeCables,
@@ -95,7 +45,6 @@ const fixtures = [
   {
     source: "examples/compass-core.patch.ts",
     fixture: "test/fixtures/compass-core.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/compass-core.artifact.json",
     moduleSpecifier: "./patches/compass-core.patch.ts",
     exportName: "compassCore",
     patch: compassCore,
@@ -103,7 +52,6 @@ const fixtures = [
   {
     source: "examples/corner-reliefs.patch.ts",
     fixture: "test/fixtures/corner-reliefs.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/corner-reliefs.artifact.json",
     moduleSpecifier: "./patches/corner-reliefs.patch.ts",
     exportName: "cornerReliefs",
     patch: cornerReliefs,
@@ -111,7 +59,6 @@ const fixtures = [
   {
     source: "examples/harness-route.patch.ts",
     fixture: "test/fixtures/harness-route.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/harness-route.artifact.json",
     moduleSpecifier: "./patches/harness-route.patch.ts",
     exportName: "harnessRoute",
     patch: harnessRoute,
@@ -119,7 +66,6 @@ const fixtures = [
   {
     source: "examples/rounded-polyline.patch.ts",
     fixture: "test/fixtures/round-every-corner.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/round-every-corner.artifact.json",
     moduleSpecifier: "./patches/round-every-corner.patch.ts",
     exportName: "roundEveryCorner",
     patch: roundEveryCorner,
@@ -127,7 +73,6 @@ const fixtures = [
   {
     source: "examples/typed-panel.patch.ts",
     fixture: "test/fixtures/fillet-record.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/fillet-record.artifact.json",
     moduleSpecifier: "./patches/fillet-record.patch.ts",
     exportName: "fillets",
     patch: fillets,
@@ -135,7 +80,6 @@ const fixtures = [
   {
     source: "examples/braced-frame.patch.ts",
     fixture: "test/fixtures/cross-brace.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/cross-brace.artifact.json",
     moduleSpecifier: "./patches/cross-brace.patch.ts",
     exportName: "crossBrace",
     patch: crossBrace,
@@ -143,7 +87,6 @@ const fixtures = [
   {
     source: "examples/mounting-plate.patch.ts",
     fixture: "test/fixtures/mounting-plate.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/mounting-plate.artifact.json",
     moduleSpecifier: "./patches/mounting-plate.patch.ts",
     exportName: "mountingPlate",
     patch: mountingPlate,
@@ -151,7 +94,6 @@ const fixtures = [
   {
     source: "examples/water-channel.patch.ts",
     fixture: "test/fixtures/water-channel.artifact.json",
-    rustFixture: "../../crates/geosolve-sketch-code/assets/artifacts/water-channel.artifact.json",
     moduleSpecifier: "./patches/water-channel.patch.ts",
     exportName: "waterChannel",
     patch: waterChannel,
@@ -252,6 +194,10 @@ const twoCircleSnappedSegment = {
 
 const managedSketchFixtures = [
   {
+    source: "../../crates/geosolve-sketch-code/assets/bootstrap/authored-empty.sketch.ts",
+    fixture: "../../crates/geosolve-sketch-code/assets/bootstrap/authored-empty.compiled.json",
+  },
+  {
     source: "test/fixtures/managed-contact-range-base.sketch.ts",
     fixture: "test/fixtures/managed-contact-range-base.json",
   },
@@ -323,7 +269,7 @@ const managedSketchFixtures = [
     fixture: "test/fixtures/managed-polyline.json",
   },
   {
-    source: "../../crates/geosolve-sketch-code/assets/demos/authored-empty.sketch.ts",
+    source: "../../crates/geosolve-sketch-code/assets/bootstrap/authored-empty.sketch.ts",
     fixture: "test/fixtures/managed-empty-circle.json",
     mutation: authoredCircleOne,
   },
@@ -485,103 +431,6 @@ const managedSketchFixtures = [
   },
 ];
 
-const bundledManagedSketches = [
-  {
-    name: "rounded-polyline",
-    source: "test/managed/rounded-polyline.managed.ts",
-    patches: { roundEveryCorner: recordPatchArtifact(roundEveryCorner) },
-  },
-  {
-    name: "typed-panel",
-    source: "test/managed/typed-panel.managed.ts",
-    patches: { fillets: recordPatchArtifact(fillets) },
-  },
-  {
-    name: "braced-frame",
-    source: "test/managed/braced-frame.managed.ts",
-    patches: { crossBrace: recordPatchArtifact(crossBrace) },
-  },
-  {
-    name: "mounting-plate",
-    source: "test/managed/mounting-plate.managed.ts",
-    patches: { mountingPlate: recordPatchArtifact(mountingPlate) },
-  },
-  {
-    name: "adaptive-lanterns",
-    source: "test/managed/adaptive-lanterns.managed.ts",
-    patches: { adaptiveLanterns: recordPatchArtifact(adaptiveLanterns) },
-  },
-  {
-    name: "suspension-bridge",
-    source: "test/managed/suspension-bridge.managed.ts",
-    patches: { bridgeCables: recordPatchArtifact(bridgeCables) },
-  },
-  {
-    name: "compass-rose",
-    source: "test/managed/compass-rose.managed.ts",
-    patches: { compassCore: recordPatchArtifact(compassCore) },
-  },
-  {
-    name: "neon-manifold",
-    source: "test/managed/neon-manifold.managed.ts",
-    patches: {},
-  },
-  {
-    name: "pc-water-manifold",
-    source: "test/managed/pc-water-manifold.managed.ts",
-    patches: { waterChannel: recordPatchArtifact(waterChannel) },
-  },
-  {
-    name: "robotic-routing-board",
-    source: "test/managed/robotic-routing-board.managed.ts",
-    patches: { harnessRoute: recordPatchArtifact(harnessRoute) },
-  },
-  {
-    name: "cnc-joinery-fit-coupon",
-    source: "test/managed/cnc-joinery-fit-coupon.managed.ts",
-    patches: {
-      cornerReliefs: recordPatchArtifact(cornerReliefs),
-      fillets: recordPatchArtifact(fillets),
-    },
-  },
-  {
-    name: "gridfinity-1x1x3-section",
-    source: "test/managed/gridfinity-1x1x3-section.managed.ts",
-    patches: { fillets: recordPatchArtifact(fillets) },
-  },
-];
-
-// These sources are projected from the 25 direct-native catalog references by
-// the Rust regeneration owner. TypeScript remains the sole compiler authority:
-// this list only pins their normalized V3 source/IR/artifact envelopes.
-const nativeReferenceSketches = [
-  "drafting-compass",
-  "bezier-continuity-bridge",
-  "twin-roller-cam",
-  "tangent-orbit",
-  "elliptic-trammel",
-  "scotch-yoke",
-  "rotating-constraint-square",
-  "scissor-jack",
-  "five-stage-scissor-tower",
-  "peaucellier-inversor",
-  "four-bar-coupler",
-  "pantograph-linkage",
-  "three-link-drawing-arm",
-  "constraint-dimension-sampler",
-  "auto-constraint-drafting",
-  "retained-drafting-relations",
-  "tangent-radial-normal",
-  "contact-branch-specimen",
-  "angle-dimension-annotations",
-  "contextual-constraint-annotations",
-  "dense-constraint-junction",
-  "construction-reference-geometry",
-  "curve-family-gallery",
-  "periodic-nurbs-specimen",
-  "fillet-workshop",
-];
-
 for (const fixture of fixtures) {
   const source = await readFile(resolve(packageRoot, fixture.source));
   const compiled = compilePatchArtifact({
@@ -597,21 +446,9 @@ for (const fixture of fixtures) {
       compiled.canonicalJson,
       `${fixture.fixture} is stale; run npm run generate:fixtures`,
     );
-    if (fixture.rustFixture !== undefined) {
-      assert.equal(
-        await readFile(resolve(packageRoot, fixture.rustFixture), "utf8"),
-        compiled.canonicalJson,
-        `${fixture.rustFixture} is stale; run npm run generate:fixtures`,
-      );
-    }
   } else {
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(destination, compiled.canonicalJson);
-    if (fixture.rustFixture !== undefined) {
-      const rustDestination = resolve(packageRoot, fixture.rustFixture);
-      await mkdir(dirname(rustDestination), { recursive: true });
-      await writeFile(rustDestination, compiled.canonicalJson);
-    }
   }
 }
 
@@ -648,86 +485,3 @@ for (const fixture of managedSketchFixtures) {
     await writeFile(destination, canonicalEnvelope);
   }
 }
-
-for (const fixture of bundledManagedSketches) {
-  const source = await readFile(resolve(packageRoot, fixture.source), "utf8");
-  let compiled;
-  try {
-    compiled = compileManagedSource(source, { patches: fixture.patches });
-  } catch (error) {
-    throw new Error(`failed to compile bundled sketch ${fixture.name}`, {
-      cause: error,
-    });
-  }
-  qualifyBundledSampleEdit(fixture.name, compiled, {
-    patches: fixture.patches,
-  });
-  const sourceDestination = resolve(
-    packageRoot,
-    `../../crates/geosolve-sketch-code/assets/demos/${fixture.name}.sketch.ts`,
-  );
-  const compiledDestination = resolve(
-    packageRoot,
-    `../../crates/geosolve-sketch-code/assets/demos/${fixture.name}.compiled.json`,
-  );
-  const canonicalEnvelope = JSON.stringify(compiled);
-  if (check) {
-    assert.equal(
-      await readFile(sourceDestination, "utf8"),
-      compiled.normalizedSource,
-      `${fixture.name}.sketch.ts is stale; run npm run generate:fixtures`,
-    );
-    assert.equal(
-      await readFile(compiledDestination, "utf8"),
-      canonicalEnvelope,
-      `${fixture.name}.compiled.json is stale; run npm run generate:fixtures`,
-    );
-  } else {
-    await mkdir(dirname(sourceDestination), { recursive: true });
-    await writeFile(sourceDestination, compiled.normalizedSource);
-    await writeFile(compiledDestination, canonicalEnvelope);
-  }
-}
-
-for (const name of nativeReferenceSketches) {
-  const sourceDestination = resolve(
-    packageRoot,
-    `../../crates/geosolve-sketch-code/assets/samples/${name}.sketch.ts`,
-  );
-  const compiledDestination = resolve(
-    packageRoot,
-    `../../crates/geosolve-sketch-code/assets/samples/${name}.compiled.json`,
-  );
-  const source = await readFile(sourceDestination, "utf8");
-  let compiled;
-  try {
-    compiled = compileManagedSource(source);
-  } catch (error) {
-    throw new Error(`failed to compile native-reference sketch ${name}`, {
-      cause: error,
-    });
-  }
-  qualifyBundledSampleEdit(name, compiled);
-  const canonicalEnvelope = JSON.stringify(compiled);
-  if (check) {
-    assert.equal(
-      source,
-      compiled.normalizedSource,
-      `${name}.sketch.ts is stale; run npm run generate:fixtures`,
-    );
-    assert.equal(
-      await readFile(compiledDestination, "utf8"),
-      canonicalEnvelope,
-      `${name}.compiled.json is stale; run npm run generate:fixtures`,
-    );
-  } else {
-    await writeFile(sourceDestination, compiled.normalizedSource);
-    await writeFile(compiledDestination, canonicalEnvelope);
-  }
-}
-
-assert.equal(
-  qualifiedBundledSampleEdits,
-  37,
-  "every bundled sample has representative source edit and exact Undo coverage",
-);

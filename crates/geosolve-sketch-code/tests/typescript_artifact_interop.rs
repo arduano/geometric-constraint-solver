@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_sketch_code::{
-    ArtifactValidationError, CodeProjectDemoId, CompiledManagedSource, FeatureKind,
-    ManagedPathSegment, PatchModuleArtifact, PatchTemplateNode, SemanticOutputPath,
-    TemplateArgument, TemplateBinding, bundled_code_project_demos,
+    ArtifactValidationError, CompiledManagedSource, FeatureKind, ManagedPathSegment,
+    PatchModuleArtifact, PatchTemplateNode, SemanticOutputPath, TemplateArgument, TemplateBinding,
+    bundled_sample, bundled_sample_catalog,
 };
 use geosolve_sketch_intent::intent_content_digest;
 
@@ -15,99 +15,22 @@ struct Fixture {
 
 #[test]
 fn bundled_managed_programs_authenticate_input_and_publish_normalized_source() {
-    let fixtures = [
-        (
-            CodeProjectDemoId::RoundedPolyline,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/rounded-polyline.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::TypedPanel,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/typed-panel.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::BracedFrame,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/braced-frame.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::MountingPlate,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/mounting-plate.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::AdaptiveLanterns,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/adaptive-lanterns.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::SuspensionBridge,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/suspension-bridge.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::CompassRose,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/compass-rose.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::NeonManifold,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/neon-manifold.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::PcWaterManifold,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/pc-water-manifold.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::RoboticRoutingBoard,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/robotic-routing-board.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::CncJoineryFitCoupon,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/cnc-joinery-fit-coupon.managed.ts"
-            ),
-        ),
-        (
-            CodeProjectDemoId::GridfinityBinSection,
-            include_str!(
-                "../../../packages/geosolve-sketch-code/test/managed/gridfinity-1x1x3-section.managed.ts"
-            ),
-        ),
-    ];
-    let demos = bundled_code_project_demos();
-    for (id, fixture) in fixtures {
-        let demo = demos
-            .iter()
-            .find(|demo| demo.id == id)
-            .unwrap_or_else(|| panic!("missing bundled demo `{}`", id.key()));
-        let compiled = CompiledManagedSource::from_json(demo.compiled_source)
-            .unwrap_or_else(|error| panic!("{} compiler envelope was rejected: {error}", id.key()));
+    for sample in bundled_sample_catalog() {
+        let compiled =
+            CompiledManagedSource::from_json(sample.compiled_source()).unwrap_or_else(|error| {
+                panic!("{} compiler envelope was rejected: {error}", sample.key)
+            });
         assert_eq!(
             compiled.input_source_digest,
-            intent_content_digest(fixture.as_bytes()).to_string(),
-            "{} must authenticate the exact author input checked by tsconfig.managed.json",
-            id.key(),
+            intent_content_digest(sample.managed_source().as_bytes()).to_string(),
+            "{} must authenticate its exact canonical sample source",
+            sample.key,
         );
         assert_eq!(
             compiled.normalized_source,
-            demo.managed_source,
+            sample.managed_source(),
             "{} must display and replay the compiler's canonical normalized source",
-            id.key(),
+            sample.key,
         );
     }
 }
@@ -209,7 +132,6 @@ fn fixtures() -> [Fixture; 10] {
 
 #[test]
 fn typescript_emitted_artifacts_are_byte_exact_rust_canonical_values() {
-    let demos = bundled_code_project_demos();
     for fixture in fixtures() {
         let validated = PatchModuleArtifact::from_canonical_json(fixture.canonical_json)
             .unwrap_or_else(|error| panic!("{} was rejected: {error}", fixture.module));
@@ -233,53 +155,19 @@ fn typescript_emitted_artifacts_are_byte_exact_rust_canonical_values() {
             "{} interface pin must authenticate the canonical TS compiler interface",
             fixture.module,
         );
-
-        let bundled = demos
-            .iter()
-            .flat_map(|demo| &demo.artifacts)
-            .find(|artifact| artifact.module_specifier == fixture.module)
-            .unwrap_or_else(|| panic!("{} is absent from the bundled demos", fixture.module));
-        assert_eq!(
-            bundled.clone().validate().unwrap().canonical_json(),
-            fixture.canonical_json
-        );
     }
 }
 
 #[test]
-fn harness_route_sources_and_artifacts_are_byte_identical_across_hosts() {
-    let package_source =
-        include_str!("../../../packages/geosolve-sketch-code/examples/harness-route.patch.ts");
-    assert_eq!(
-        package_source,
-        include_str!("../assets/patches/harness-route.patch.ts")
+fn canonical_water_patch_is_byte_identical_to_the_typescript_compiler_fixture() {
+    assert!(bundled_sample("pc-water-manifold").is_some());
+    let expected = include_str!(
+        "../../../packages/geosolve-sketch-code/test/fixtures/water-channel.artifact.json"
     );
-
-    let package_artifact = include_str!(
-        "../../../packages/geosolve-sketch-code/test/fixtures/harness-route.artifact.json"
+    let bundled = include_str!(
+        "../assets/bundled-samples/pc-water-manifold/patches/water-channel.artifact.json"
     );
-    assert_eq!(
-        package_artifact,
-        include_str!("../assets/artifacts/harness-route.artifact.json")
-    );
-}
-
-#[test]
-fn corner_relief_sources_and_artifacts_are_byte_identical_across_hosts() {
-    let package_source =
-        include_str!("../../../packages/geosolve-sketch-code/examples/corner-reliefs.patch.ts");
-    assert_eq!(
-        package_source,
-        include_str!("../assets/patches/corner-reliefs.patch.ts")
-    );
-
-    let package_artifact = include_str!(
-        "../../../packages/geosolve-sketch-code/test/fixtures/corner-reliefs.artifact.json"
-    );
-    assert_eq!(
-        package_artifact,
-        include_str!("../assets/artifacts/corner-reliefs.artifact.json")
-    );
+    assert_eq!(bundled, expected);
 }
 
 #[test]

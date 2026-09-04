@@ -3,20 +3,19 @@
 use std::collections::BTreeSet;
 
 use geosolve_sketch_code::{
-    CodeProject, CodeProjectDemoId, ExpandedCodeProject, KeyedReconcileState,
-    MANAGED_CONTROL_LIMIT, ManagedControlAccess, ManagedControlEdit, ManagedControlEditBatch,
-    ManagedControlError, ManagedControlSchema, ManagedSketchMutation, ManagedValue, ProjectKey,
-    UnitLiteral, bundled_code_project_demos, expand_code_project, managed_control_manifest,
+    CodeProject, ExpandedCodeProject, KeyedReconcileState, MANAGED_CONTROL_LIMIT,
+    ManagedControlAccess, ManagedControlEdit, ManagedControlEditBatch, ManagedControlError,
+    ManagedControlSchema, ManagedSketchMutation, ManagedValue, ProjectKey, UnitLiteral,
+    bundled_sample, bundled_sample_catalog, expand_code_project, managed_control_manifest,
     prepare_managed_control_mutation, required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
-fn project(id: CodeProjectDemoId) -> CodeProject {
-    bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == id)
-        .expect("bundled project")
-        .project()
+#[path = "support/managed_regression_projects.rs"]
+mod managed_regression_projects;
+
+fn project(key: &str) -> CodeProject {
+    bundled_sample(key).expect("bundled sample").project()
 }
 
 fn expansion(project: &CodeProject, seed: u128) -> ExpandedCodeProject {
@@ -46,15 +45,15 @@ fn path_text(control: &geosolve_sketch_code::ManagedControl) -> String {
 
 #[test]
 fn bundled_v3_controls_are_runtime_derived_typed_and_source_authenticated() {
-    for (ordinal, demo) in bundled_code_project_demos().into_iter().enumerate() {
-        let project = demo.project();
+    for (ordinal, sample) in bundled_sample_catalog().iter().enumerate() {
+        let project = sample.project();
         assert!(project.managed.compiled.is_some());
         let expansion = expansion(&project, 0x90_10 + ordinal as u128);
         let manifest = managed_control_manifest(&project, &expansion).expect("control manifest");
         assert_eq!(manifest.project, project.project);
         assert_eq!(manifest.source_digest, project.managed.source_digest);
         assert_eq!(manifest.expansion_digest, expansion.digest);
-        assert!(!manifest.controls.is_empty(), "{}", demo.id.key());
+        assert!(!manifest.controls.is_empty(), "{}", sample.key);
 
         for control in &manifest.controls {
             assert!(control.source.span.start < control.source.span.end);
@@ -81,7 +80,8 @@ fn bundled_v3_controls_are_runtime_derived_typed_and_source_authenticated() {
 
 #[test]
 fn typed_panel_shared_radius_prepares_one_exact_runtime_provenance_mutation() {
-    let project = project(CodeProjectDemoId::TypedPanel);
+    let project = managed_regression_projects::managed_regression_project("typed-panel")
+        .expect("typed-panel regression project");
     let expansion = expansion(&project, 0x90_20);
     let manifest = managed_control_manifest(&project, &expansion).unwrap();
     let radius = manifest
@@ -124,7 +124,8 @@ fn typed_panel_shared_radius_prepares_one_exact_runtime_provenance_mutation() {
 
 #[test]
 fn prepared_control_batches_reject_stale_duplicate_invalid_and_oversized_input_atomically() {
-    let project = project(CodeProjectDemoId::TypedPanel);
+    let project = managed_regression_projects::managed_regression_project("typed-panel")
+        .expect("typed-panel regression project");
     let expansion = expansion(&project, 0x90_30);
     let manifest = managed_control_manifest(&project, &expansion).unwrap();
     let control = manifest.editable().next().expect("editable control");
@@ -178,7 +179,7 @@ fn prepared_control_batches_reject_stale_duplicate_invalid_and_oversized_input_a
 
 #[test]
 fn control_manifest_is_transient_and_compiled_project_wire_has_no_legacy_lenses() {
-    let project = project(CodeProjectDemoId::CompassRose);
+    let project = project("theo-jansen-leg");
     let before = project.to_canonical_json().unwrap();
     let expansion = expansion(&project, 0x90_40);
     let _manifest = managed_control_manifest(&project, &expansion).unwrap();
@@ -189,6 +190,6 @@ fn control_manifest_is_transient_and_compiled_project_wire_has_no_legacy_lenses(
     assert!(!before.contains("managed-v2"));
     assert_eq!(
         project.project,
-        ProjectKey("geosolve-demo-compass-rose".into())
+        ProjectKey("geosolve-sample-theo-jansen-leg".into())
     );
 }

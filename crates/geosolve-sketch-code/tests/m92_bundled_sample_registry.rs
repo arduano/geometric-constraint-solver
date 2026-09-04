@@ -70,6 +70,22 @@ fn canonical_registry_has_frozen_order_and_distribution() {
     assert_eq!(categories.get(&SampleCategory::ReferenceLab), Some(&2));
     assert_eq!(categories.get(&SampleCategory::ScaleStudy), Some(&2));
     assert!(bundled_sample("unknown-sample").is_none());
+    for retired in [
+        "rounded-polyline",
+        "typed-panel",
+        "braced-frame",
+        "mounting-plate",
+        "compass-rose",
+        "drafting-compass",
+        "scotch-yoke",
+        "scissor-jack",
+        "five-stage-scissor-tower",
+    ] {
+        assert!(
+            bundled_sample(retired).is_none(),
+            "retired catalog key `{retired}` must not resolve"
+        );
+    }
 }
 
 #[test]

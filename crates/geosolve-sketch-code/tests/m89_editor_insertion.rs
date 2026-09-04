@@ -9,11 +9,10 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CANVAS_ADDITIONS_GROUP, CodeProject, CodeProjectDemoId, CompiledManagedSource,
-    EditorBootstrapDeclaration, EditorDeclarationInsertionError,
-    EditorSourceDeclarationClosureKind, ExpandedSemanticTarget, GeneratedMemberAddress,
-    KeyedReconcileState, ManagedPathSegment, ManagedValue, ProjectKey, SemanticOutputPath,
-    SemanticSymbol, bundled_code_project_demos, materialize_code_project_cold,
+    CANVAS_ADDITIONS_GROUP, CodeProject, CompiledManagedSource, EditorBootstrapDeclaration,
+    EditorDeclarationInsertionError, EditorSourceDeclarationClosureKind, ExpandedSemanticTarget,
+    GeneratedMemberAddress, KeyedReconcileState, ManagedPathSegment, ManagedValue, ProjectKey,
+    SemanticOutputPath, SemanticSymbol, materialize_code_project_cold,
     prepare_editor_declaration_insertions, required_generated_members,
 };
 use geosolve_sketch_intent::{
@@ -23,6 +22,9 @@ use geosolve_sketch_intent::{
     IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSessionId, IntentUnit, LeafField,
     OperationKind, ParameterIntentKind, PatchPortRef,
 };
+
+#[path = "support/managed_regression_projects.rs"]
+mod managed_regression_projects;
 
 const EMPTY_MANAGED: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -2019,11 +2021,8 @@ fn accepted_non_authoring_node_is_rejected_without_source_mutation() {
 
 #[test]
 fn generated_patch_dependency_uses_its_authenticated_public_result_path() {
-    let demo = bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == CodeProjectDemoId::BracedFrame)
-        .expect("braced-frame fixture");
-    let project = demo.project();
+    let project = managed_regression_projects::managed_regression_project("braced-frame")
+        .expect("braced-frame regression project");
     let generated = KeyedReconcileState::empty()
         .plan(
             required_generated_members(&project).expect("generated member inventory"),

@@ -2704,9 +2704,11 @@ mod tests {
 
     #[test]
     fn legacy_direct_family_alias_is_rejected_even_in_a_digest_consistent_envelope() {
-        let mut compiled = CompiledManagedSource::from_json(include_str!(
-            "../assets/demos/neon-manifold.compiled.json"
-        ))
+        let mut compiled = CompiledManagedSource::from_json(
+            crate::bundled_sample("cnc-dogbone-coupon")
+                .expect("canonical bundled sample")
+                .compiled_source(),
+        )
         .expect("checked-in V3 compiler envelope");
         let declaration = compiled
             .ir
@@ -2754,9 +2756,11 @@ mod tests {
             "outputs",
             "editLens",
         ] {
-            let mut compiled = CompiledManagedSource::from_json(include_str!(
-                "../assets/demos/neon-manifold.compiled.json"
-            ))
+            let mut compiled = CompiledManagedSource::from_json(
+                crate::bundled_sample("cnc-dogbone-coupon")
+                    .expect("canonical bundled sample")
+                    .compiled_source(),
+            )
             .expect("checked-in V3 compiler envelope");
             let symbol = compiled
                 .ir
@@ -2806,9 +2810,11 @@ mod tests {
 
     #[test]
     fn m90_f002_reachable_binding_cannot_hide_a_retired_transport_property() {
-        let mut compiled = CompiledManagedSource::from_json(include_str!(
-            "../assets/demos/neon-manifold.compiled.json"
-        ))
+        let mut compiled = CompiledManagedSource::from_json(
+            crate::bundled_sample("cnc-dogbone-coupon")
+                .expect("canonical bundled sample")
+                .compiled_source(),
+        )
         .expect("checked-in V3 compiler envelope");
         let first_declaration = compiled
             .ir

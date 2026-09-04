@@ -33,34 +33,25 @@ trap cleanup EXIT
 
 contents="$(cargo package --locked --allow-dirty --list -p "$package_name")"
 for required in \
-  assets/artifacts/adaptive-lanterns.artifact.json \
-  assets/artifacts/bridge-cables.artifact.json \
-  assets/artifacts/compass-core.artifact.json \
-  assets/artifacts/corner-reliefs.artifact.json \
-  assets/artifacts/cross-brace.artifact.json \
-  assets/artifacts/fillet-record.artifact.json \
-  assets/artifacts/harness-route.artifact.json \
-  assets/artifacts/mounting-plate.artifact.json \
-  assets/artifacts/round-every-corner.artifact.json \
-  assets/artifacts/water-channel.artifact.json \
-  assets/demos/cnc-joinery-fit-coupon.sketch.ts \
-  assets/demos/gridfinity-1x1x3-section.NOTICE.md \
-  assets/demos/gridfinity-1x1x3-section.sketch.ts \
-  assets/demos/pc-water-manifold.sketch.ts \
-  assets/demos/robotic-routing-board.sketch.ts \
-  assets/patches/adaptive-lanterns.patch.ts \
-  assets/patches/braced-frame.patch.ts \
-  assets/patches/bridge-cables.patch.ts \
-  assets/patches/compass-core.patch.ts \
-  assets/patches/corner-reliefs.patch.ts \
-  assets/patches/harness-route.patch.ts \
-  assets/patches/mounting-plate.patch.ts \
-  assets/patches/rounded-polyline.patch.ts \
-  assets/patches/typed-panel.patch.ts \
-  assets/patches/water-channel.patch.ts
+  assets/bootstrap/authored-empty.compiled.json \
+  assets/bootstrap/authored-empty.sketch.ts \
+  assets/bundled-samples/README.md \
+  assets/bundled-samples/theo-jansen-leg/manifest.json \
+  assets/bundled-samples/theo-jansen-leg/sketch.compiled.json \
+  assets/bundled-samples/theo-jansen-leg/sketch.ts \
+  assets/bundled-samples/theo-jansen-leg/witnesses.json \
+  assets/bundled-samples/pc-water-manifold/patches/water-channel.artifact.json \
+  assets/bundled-samples/pc-water-manifold/patches/water-channel.patch.ts \
+  assets/bundled-samples/gridfinity-bin-section/NOTICE.md \
+  assets/bundled-samples/robotic-harness-backplane/sketch.ts
 do
   grep -Fqx "$required" <<<"$contents"
 done
+
+if grep -Eq '^assets/(demos|samples|artifacts|patches)/' <<<"$contents"; then
+  echo "retired flat sample assets remain in the package" >&2
+  exit 1
+fi
 
 local_dependencies=(
   geosolve-constraint-editor

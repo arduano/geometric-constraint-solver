@@ -4,19 +4,18 @@ use std::collections::BTreeSet;
 
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProjectDemoId, KeyedReconcileState, ManagedControlConsumerTarget,
-    bundled_code_project_demos, expand_code_project, managed_control_manifest,
-    materialize_code_project_cold, required_generated_members,
+    KeyedReconcileState, ManagedControlConsumerTarget, expand_code_project,
+    managed_control_manifest, materialize_code_project_cold, required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
+#[path = "support/managed_regression_projects.rs"]
+mod managed_regression_projects;
+
 #[test]
 fn normalized_routing_board_retains_local_and_shared_runtime_control_fanout() {
-    let project = bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == CodeProjectDemoId::RoboticRoutingBoard)
-        .expect("routing-board sample")
-        .project();
+    let project = managed_regression_projects::managed_regression_project("robotic-routing-board")
+        .expect("routing-board regression project");
     let desired = required_generated_members(&project).expect("routing generated inventory");
     let generated = KeyedReconcileState::empty()
         .plan(desired, &BTreeSet::new())

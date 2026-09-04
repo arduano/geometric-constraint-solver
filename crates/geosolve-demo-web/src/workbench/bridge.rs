@@ -4942,7 +4942,7 @@ mod tests {
         let revision_before = bridge.revision;
 
         let error = bridge
-            .open_sample_with("drafting-compass", None, |_| {
+            .open_sample_with("theo-jansen-leg", None, |_| {
                 Err("injected managed materialization failure".into())
             })
             .expect_err("a known sample must not fail open to its native oracle");
@@ -5227,7 +5227,7 @@ export default sketch(($) => {
             .expect("empty managed project opens");
         let source_before = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../geosolve-sketch-code/assets/demos/authored-empty.sketch.ts"
+            "/../geosolve-sketch-code/assets/bootstrap/authored-empty.sketch.ts"
         ));
         let revision_before = bridge.revision;
         let identity_before = bridge
@@ -7193,22 +7193,27 @@ export default sketch(($) => {
     }
 
     #[test]
-    fn converted_scotch_yoke_drag_uses_managed_authority_without_compilation() {
-        require_managed_sample_point_drag("scotch-yoke", [3.0, 4.0], [20.0, -14.0], 91_101);
+    fn theo_jansen_drag_uses_canonical_managed_authority_without_compilation() {
+        require_managed_sample_point_drag("theo-jansen-leg", [-8.0, 3.0], [12.0, 10.0], 92_101);
     }
 
     #[test]
-    fn converted_scissor_jack_drag_uses_managed_authority_without_compilation() {
-        require_managed_sample_point_drag("scissor-jack", [4.0, 0.0], [-22.0, 0.0], 91_102);
-    }
-
-    #[test]
-    fn converted_five_stage_tower_drag_uses_managed_authority_without_compilation() {
+    fn whitworth_drag_uses_canonical_managed_authority_without_compilation() {
         require_managed_sample_point_drag(
-            "five-stage-scissor-tower",
+            "whitworth-quick-return",
+            [2.0, 2.0],
+            [12.0, -8.0],
+            92_102,
+        );
+    }
+
+    #[test]
+    fn five_stage_lift_drag_uses_canonical_managed_authority_without_compilation() {
+        require_managed_sample_point_drag(
+            "five-stage-scissor-lift",
             [4.0, 0.0],
             [-5.0, 0.0],
-            91_103,
+            92_103,
         );
     }
 

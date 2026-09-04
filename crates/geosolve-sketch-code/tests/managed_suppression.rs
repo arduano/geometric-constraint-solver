@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use geosolve_constraint_editor::ComputedFeatureEvaluationState;
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeExpansionError, CodeInteractionOverlay, CodeOwnerAddress, CodeProject, CodeProjectDemoId,
+    CodeExpansionError, CodeInteractionOverlay, CodeOwnerAddress, CodeProject,
     CompiledManagedSource, EXECUTED_SKETCH_ARTIFACT_FORMAT, ExecutedConsumerTarget,
     ExecutedDeclarationResult, ExecutedGeneratedMember, ExecutedGroup, ExecutedResultLeaf,
     ExecutedSketchArtifact, ExecutedSuppression, ExecutedValueConsumer, FeatureKind,
@@ -13,11 +13,13 @@ use geosolve_sketch_code::{
     ManagedControlConsumerTarget, ManagedControlReadOnlyReason, ManagedExpression, ManagedIrImport,
     ManagedObjectField, ManagedPathSegment, ManagedReference, ManagedSketchIr, ManagedSourceSite,
     ManagedSourceSiteKind, ManagedSourceSpan, ManagedStatement, ManagedValue, ProjectKey,
-    SemanticOutputPath, SemanticSymbol, bundled_code_project_demos, expand_code_project,
-    expand_code_project_with_overlay, managed_control_manifest, materialize_code_project_cold,
-    required_generated_members,
+    SemanticOutputPath, SemanticSymbol, expand_code_project, expand_code_project_with_overlay,
+    managed_control_manifest, materialize_code_project_cold, required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId, intent_content_digest};
+
+#[path = "support/managed_regression_projects.rs"]
+mod managed_regression_projects;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -484,11 +486,8 @@ fn generated_fillets_compiled(suppressed: bool) -> CompiledManagedSource {
 }
 
 fn generated_fillets_project(suppressed: bool) -> CodeProject {
-    let base = bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == CodeProjectDemoId::TypedPanel)
-        .unwrap()
-        .project();
+    let base = managed_regression_projects::managed_regression_project("typed-panel")
+        .expect("typed-panel regression project");
     let project = CodeProject {
         project: ProjectKey("m89-managed-generated-suppression".into()),
         managed: generated_fillets_compiled(suppressed)
@@ -972,11 +971,8 @@ fn direct_shared_radius_manifest_uses_exact_runtime_fan_out() {
 #[test]
 fn generated_shared_radius_manifest_authenticates_exact_two_fillet_consumers() {
     let compiled = generated_fillets_compiled(false);
-    let base = bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == CodeProjectDemoId::TypedPanel)
-        .unwrap()
-        .project();
+    let base = managed_regression_projects::managed_regression_project("typed-panel")
+        .expect("typed-panel regression project");
     let project = CodeProject {
         project: ProjectKey("m89-managed-generated-runtime-controls".into()),
         managed: compiled.into_managed_document().unwrap(),
@@ -1048,11 +1044,8 @@ fn managed_schemas_never_invent_editability_without_an_executed_consumer_edge() 
         "incomplete direct runtime provenance must reject at compiler-envelope admission"
     );
 
-    let base = bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == CodeProjectDemoId::TypedPanel)
-        .unwrap()
-        .project();
+    let base = managed_regression_projects::managed_regression_project("typed-panel")
+        .expect("typed-panel regression project");
     let patch = CodeProject {
         project: ProjectKey("m89-managed-generated-no-runtime-controls".into()),
         managed: without_generated_value_consumers(generated_fillets_compiled(false))

@@ -137,38 +137,10 @@ fn main() {
     let output_dir = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo provides OUT_DIR"))
         .join("bundled-compiler-envelopes");
 
-    // These two M91 asset families remain only while their consumers are
-    // clean-broken in the integration branch. They do not feed the M92
-    // registry generated below.
-    for category in ["samples", "demos"] {
-        compress_flat_category(&manifest_dir, &output_dir, category);
-    }
-
     let samples = validate_bundled_samples(&manifest_dir);
     compress_bundled_samples(&samples, &output_dir);
     generate_registry(&samples, &output_dir);
     generate_frontend_manifest(&samples, &output_dir);
-}
-
-fn compress_flat_category(manifest_dir: &Path, output_dir: &Path, category: &str) {
-    let source_dir = manifest_dir.join("assets").join(category);
-    let destination_dir = output_dir.join(category);
-    println!("cargo:rerun-if-changed={}", source_dir.display());
-    recreate_directory(&destination_dir);
-
-    let mut sources = directory_paths(&source_dir)
-        .into_iter()
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.ends_with(".compiled.json"))
-        })
-        .collect::<Vec<_>>();
-    sources.sort();
-    for source in sources {
-        println!("cargo:rerun-if-changed={}", source.display());
-        compress_envelope(&source, &destination_dir, None);
-    }
 }
 
 fn validate_bundled_samples(manifest_dir: &Path) -> Vec<ValidatedSample> {

@@ -6,10 +6,10 @@
 //! headless editor and low-level intent graph do not depend on it.
 
 mod artifact;
+mod bootstrap;
 mod bundled_samples;
 mod composition;
 mod declaration_catalog;
-mod demos;
 mod document_export;
 mod editor_insertion;
 mod expansion;
@@ -49,10 +49,6 @@ pub use declaration_catalog::{
     CodeDeclarationResultDescriptor, CodeResultKeySource, CodeResultShape, code_authoring_family,
     declaration_result_catalog, public_code_authoring_families, resolve_code_authoring_declaration,
     typescript_declaration_result_catalog,
-};
-pub use demos::{
-    BundledCodeProject, CodeProjectDemo, CodeProjectDemoId, bundled_code_project_demos,
-    bundled_code_projects, rounded_polyline_member_addresses,
 };
 pub use document_export::{
     ManagedSketchExportError, export_sketch_document_to_managed_source,

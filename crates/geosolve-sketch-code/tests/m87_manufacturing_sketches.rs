@@ -4,27 +4,19 @@ use std::collections::BTreeSet;
 
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProjectDemoId, KeyedReconcileState, ManagedControlEdit, ManagedControlEditBatch,
-    ManagedSketchMutation, bundled_code_project_demos, expand_code_project,
-    managed_control_manifest, materialize_code_project_cold, prepare_managed_control_mutation,
-    required_generated_members,
+    KeyedReconcileState, ManagedControlEdit, ManagedControlEditBatch, ManagedSketchMutation,
+    bundled_sample, expand_code_project, managed_control_manifest, materialize_code_project_cold,
+    prepare_managed_control_mutation, required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
 #[test]
 fn normalized_manufacturing_samples_cold_solve_and_prepare_source_owned_controls() {
-    for (ordinal, id) in [
-        CodeProjectDemoId::CncJoineryFitCoupon,
-        CodeProjectDemoId::GridfinityBinSection,
-    ]
-    .into_iter()
-    .enumerate()
+    for (ordinal, key) in ["cnc-dogbone-coupon", "gridfinity-bin-section"]
+        .into_iter()
+        .enumerate()
     {
-        let project = bundled_code_project_demos()
-            .into_iter()
-            .find(|demo| demo.id == id)
-            .expect("manufacturing sample")
-            .project();
+        let project = bundled_sample(key).expect("manufacturing sample").project();
         let desired = required_generated_members(&project).expect("generated inventory");
         let generated = KeyedReconcileState::empty()
             .plan(desired, &BTreeSet::new())
@@ -83,14 +75,16 @@ fn normalized_manufacturing_samples_cold_solve_and_prepare_source_owned_controls
 
 #[test]
 fn gridfinity_uses_one_coordinate_datum_instead_of_point_fixing_the_profile() {
-    let source = bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == CodeProjectDemoId::GridfinityBinSection)
-        .unwrap()
-        .managed_source;
+    let source = bundled_sample("gridfinity-bin-section")
+        .expect("canonical Gridfinity sample")
+        .managed_source();
     assert_eq!(source.matches("$.constraint.fixedCoordinate(").count(), 1);
-    assert_eq!(source.matches("$.constraint.fixedPoint(").count(), 0);
+    assert_eq!(
+        source.matches("$.constraint.fixedPoint(").count(),
+        1,
+        "the independent plan study owns the only fixed point"
+    );
     assert!(source.contains("const baseBottomWidth = $.dimension.curveLength("));
-    assert!(source.contains("const floorFillets = $.use("));
-    assert!(source.contains("const lipFillets = $.use("));
+    assert!(source.contains("$.group(\"3U material section\""));
+    assert!(source.contains("$.group(\"1 x 1 plan study\""));
 }

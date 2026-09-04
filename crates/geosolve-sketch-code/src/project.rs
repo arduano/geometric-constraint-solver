@@ -59,7 +59,7 @@ impl CodeProject {
     /// materialization.
     pub fn empty(project: ProjectKey) -> Result<Self, CodeProjectError> {
         let compiled =
-            CompiledManagedSource::from_json(crate::demos::authored_empty_compiled_source())?;
+            CompiledManagedSource::from_json(crate::bootstrap::AUTHORED_EMPTY_COMPILED_SOURCE)?;
         Self::managed(project, compiled)
     }
 
@@ -281,7 +281,7 @@ fn valid_patch_path(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::{bundled_code_project_demos, bundled_code_projects};
+    use crate::{bundled_sample, bundled_sample_catalog};
 
     use super::*;
 
@@ -293,15 +293,15 @@ mod tests {
         assert!(project.managed.program.declarations.is_empty());
         assert_eq!(
             project.managed.source,
-            include_str!("../assets/demos/authored-empty.sketch.ts")
+            crate::bootstrap::AUTHORED_EMPTY_SOURCE
         );
         assert!(project.validate().is_ok());
     }
 
     #[test]
-    fn all_thirty_seven_bundled_projects_round_trip_source_ir_and_artifacts() {
-        let bundled = bundled_code_projects();
-        assert_eq!(bundled.len(), 37);
+    fn all_twenty_bundled_samples_round_trip_source_ir_and_artifacts() {
+        let bundled = bundled_sample_catalog();
+        assert_eq!(bundled.len(), 20);
         for sample in bundled {
             let project = sample.project();
             let source_before = project.managed.source.clone();
@@ -315,28 +315,29 @@ mod tests {
             project.validate().unwrap();
             let json = project.to_canonical_json().unwrap();
             let restored = CodeProject::from_json(&json).unwrap();
-            assert_eq!(restored.managed.source, source_before, "{}", sample.key());
+            assert_eq!(restored.managed.source, source_before, "{}", sample.key);
             assert_eq!(
                 restored.managed.compiled.as_deref(),
                 Some(compiled_before.as_ref()),
                 "{} IR and executed compiler artifact",
-                sample.key(),
+                sample.key,
             );
-            assert_eq!(restored.custom_files, custom_before, "{}", sample.key());
-            assert_eq!(restored.artifacts, artifacts_before, "{}", sample.key());
-            assert_eq!(restored, project, "{}", sample.key());
+            assert_eq!(restored.custom_files, custom_before, "{}", sample.key);
+            assert_eq!(restored.artifacts, artifacts_before, "{}", sample.key);
+            assert_eq!(restored, project, "{}", sample.key);
             assert_eq!(
                 restored.to_canonical_json().unwrap(),
                 json,
                 "{} canonical bytes",
-                sample.key(),
+                sample.key,
             );
         }
     }
 
     #[test]
     fn tampered_custom_source_artifact_and_lock_fail_closed() {
-        let mut custom = bundled_code_project_demos().remove(0).project();
+        let patched = bundled_sample("pc-water-manifold").expect("patched bundled sample");
+        let mut custom = patched.project();
         custom
             .custom_files
             .values_mut()
@@ -349,7 +350,7 @@ mod tests {
             Err(CodeProjectError::InvalidProject(_))
         ));
 
-        let mut artifact = bundled_code_project_demos().remove(0).project();
+        let mut artifact = patched.project();
         let value = artifact.artifacts.values_mut().next().unwrap();
         value["export_name"] = serde_json::json!("different");
         assert!(matches!(
@@ -359,7 +360,7 @@ mod tests {
             ))
         ));
 
-        let mut lock = bundled_code_project_demos().remove(0).project();
+        let mut lock = patched.project();
         lock.lock["modules"] = serde_json::json!({});
         assert!(matches!(
             lock.validate(),
@@ -378,7 +379,9 @@ mod tests {
 
     #[test]
     fn project_json_rejects_unknown_top_level_authority() {
-        let project = bundled_code_project_demos().remove(0).project();
+        let project = bundled_sample("pc-water-manifold")
+            .expect("patched bundled sample")
+            .project();
         let mut value: serde_json::Value =
             serde_json::from_str(&project.to_canonical_json().unwrap()).unwrap();
         value["unexpectedAuthority"] = serde_json::json!(true);
@@ -391,14 +394,15 @@ mod tests {
 
     #[test]
     fn lock_and_patch_paths_are_exact_closed_authority() {
-        let mut extra_lock = bundled_code_project_demos().remove(0).project();
+        let patched = bundled_sample("pc-water-manifold").expect("patched bundled sample");
+        let mut extra_lock = patched.project();
         extra_lock.lock["unexpected"] = serde_json::json!(true);
         assert!(matches!(
             extra_lock.validate(),
             Err(CodeProjectError::InvalidProject(_))
         ));
 
-        let mut extra_pin = bundled_code_project_demos().remove(0).project();
+        let mut extra_pin = patched.project();
         extra_pin.lock["modules"]
             .as_object_mut()
             .unwrap()
@@ -416,7 +420,7 @@ mod tests {
             "patches/nested/../helper.patch.ts",
             "patches\\helper.patch.ts",
         ] {
-            let mut project = bundled_code_project_demos().remove(0).project();
+            let mut project = patched.project();
             let (_, mut file) = project.custom_files.pop_first().unwrap();
             file.path = invalid.into();
             project.custom_files.insert(invalid.into(), file);

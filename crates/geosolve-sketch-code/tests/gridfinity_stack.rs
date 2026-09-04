@@ -5,10 +5,12 @@ use std::collections::BTreeSet;
 use geosolve_constraint_editor::ComputedFeatureEvaluationState;
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProjectDemoId, KeyedReconcileState, bundled_code_project_demos,
-    materialize_code_project_cold, required_generated_members,
+    KeyedReconcileState, materialize_code_project_cold, required_generated_members,
 };
 use geosolve_sketch_intent::IntentSessionId;
+
+#[path = "support/managed_regression_projects.rs"]
+mod managed_regression_projects;
 
 const ONE_MIB: usize = 1024 * 1024;
 
@@ -21,11 +23,9 @@ fn gridfinity_cold_materialization_fits_one_mib_native_proxy_stack() {
         .name("gridfinity-one-mib-stack".into())
         .stack_size(ONE_MIB)
         .spawn(|| {
-            let project = bundled_code_project_demos()
-                .into_iter()
-                .find(|demo| demo.id == CodeProjectDemoId::GridfinityBinSection)
-                .expect("bundled Gridfinity demo")
-                .project();
+            let project =
+                managed_regression_projects::managed_regression_project("gridfinity-1x1x3-section")
+                    .expect("exact Gridfinity stack regression project");
             let generated = KeyedReconcileState::empty()
                 .plan(
                     required_generated_members(&project)

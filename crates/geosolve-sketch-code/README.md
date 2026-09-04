@@ -52,9 +52,11 @@ native host then admits the compiler envelope as an
 artifact-free project through the optional companion API:
 
 ```rust
-use geosolve_sketch_code::{CodeProject, CompiledManagedSource, ProjectKey};
+use geosolve_sketch_code::{bundled_sample, CodeProject, CompiledManagedSource, ProjectKey};
 
-let compiler_envelope = include_str!("../assets/demos/neon-manifold.compiled.json");
+let compiler_envelope = bundled_sample("theo-jansen-leg")
+    .expect("canonical bundled sample")
+    .compiled_source();
 let compiled = CompiledManagedSource::from_json(compiler_envelope)?;
 let project = CodeProject::managed(ProjectKey("example".into()), compiled)?;
 assert!(project.custom_files.is_empty());
@@ -67,21 +69,20 @@ can replace accepted scene authority. The authenticated IR remains deep enough t
 normalized sketch again, while the execution artifact records runtime reference flow and callback
 output structure.
 
-## Demonstrations
+## Bundled samples
 
-The bundled project catalog contains complete code-authored examples, including:
+One manifest-driven registry contains exactly twenty complete code-authored samples across
+mechanisms, fabrication/product studies, reference labs and scale studies. For example:
 
-- **Rounded polyline** maps one reusable Fillet patch over every current keyed corner, so insertion
-  and removal change cardinality without ordinal retargeting.
-- **Typed panel** passes named rectangle corner outputs into a mapped Fillet record and returns the
-  same record keys in its result type.
-- **Braced frame** combines direct geometry, a reusable cross-brace and an ordinary native relation
-  in one GUI/code/GUI-editable scene.
-- **Mounting plate** consumes a caller-compiled, pinned custom patch that expands a rounded profile
-  and stable keyed holes without evaluating TypeScript in Rust or the browser.
+- **Theo Jansen walking leg** retains one intended constrained degree of freedom.
+- **PC liquid-cooling manifold** composes direct constrained geometry with one colocated,
+  authenticated water-channel patch.
+- **Gridfinity plan and 3U section** records standards-informed dimensions with adjacent provenance.
+- **Perforated fixture field** and **robotic harness backplane** exercise complete dense scenes
+  without a second catalog or LOD authority.
 
 In `geosolve-demo-web`, open a fresh sketch, select **Code**, and choose **Start from code** or one
-of those examples. Editing `sketch.ts` and pressing **Apply** compiles and validates the complete
+of those samples. Editing `sketch.ts` and pressing **Apply** compiles and validates the complete
 candidate atomically; invalid syntax or geometry retains the prior accepted canvas and remains
 undoable. Compiler/IR and live-control APIs intentionally live on the package's `/compiler`, `/ir`,
 and `/control` subpaths rather than the public authoring root.

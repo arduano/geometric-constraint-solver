@@ -9,20 +9,19 @@ use std::collections::BTreeSet;
 use geosolve_constraint_editor::IntentNativeBinding;
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeExpansionError, CodeProject, CodeProjectDemoId, ExpandedSemanticTarget,
-    GeneratedMemberAddress, KeyedReconcileState, ManagedValue, MaterializedCodeProject,
-    SketchCodeSession, bundled_code_project_demos, expand_code_project,
-    materialize_code_project_cold, materialize_code_project_incremental,
+    CodeExpansionError, CodeProject, ExpandedSemanticTarget, GeneratedMemberAddress,
+    KeyedReconcileState, ManagedValue, MaterializedCodeProject, SketchCodeSession,
+    expand_code_project, materialize_code_project_cold, materialize_code_project_incremental,
     required_generated_members,
 };
 use geosolve_sketch_intent::{IntentPortRef, IntentSession, IntentSessionId, NodeId};
 
+#[path = "support/managed_regression_projects.rs"]
+mod managed_regression_projects;
+
 fn rounded_project() -> CodeProject {
-    bundled_code_project_demos()
-        .into_iter()
-        .find(|demo| demo.id == CodeProjectDemoId::RoundedPolyline)
-        .expect("rounded Polyline demo")
-        .project()
+    managed_regression_projects::managed_regression_project("rounded-polyline")
+        .expect("rounded Polyline regression project")
 }
 
 fn rise_point() -> GeneratedMemberAddress {

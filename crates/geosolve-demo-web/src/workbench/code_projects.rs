@@ -1598,13 +1598,8 @@ impl CodeProjectWorkbench {
             return Self::open_project(CodeProjectOrigin::Bundled(sample), sample.project());
         }
         #[cfg(test)]
-        if let Some(fixture) = geosolve_sketch_code::bundled_code_projects()
-            .into_iter()
-            .find(|fixture| fixture.key() == key)
-        {
-            // Historical behavior tests retain their exact source fixtures, but
-            // these aliases are absent from production and from every catalog.
-            return Self::open_project(CodeProjectOrigin::Authored, fixture.project());
+        if let Some(project) = super::test_code_projects::managed_regression_project(key) {
+            return Self::open_project(CodeProjectOrigin::Authored, project);
         }
         Err(format!("unknown bundled sample `{key}`"))
     }
@@ -1640,11 +1635,10 @@ impl CodeProjectWorkbench {
     ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
         let mut project = if let Some(sample) = bundled_sample(sample_key) {
             sample.project()
-        } else if let Some(fixture) = geosolve_sketch_code::bundled_code_projects()
-            .into_iter()
-            .find(|fixture| fixture.key() == sample_key)
+        } else if let Some(project) =
+            super::test_code_projects::managed_regression_project(sample_key)
         {
-            fixture.project()
+            project
         } else {
             return Err(format!("unknown bundled sample `{sample_key}`"));
         };

@@ -28,6 +28,8 @@ mod persistence;
 mod samples;
 #[cfg(any(target_arch = "wasm32", test))]
 mod scene;
+#[cfg(test)]
+mod test_code_projects;
 
 #[cfg(any(target_arch = "wasm32", test))]
 const WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
