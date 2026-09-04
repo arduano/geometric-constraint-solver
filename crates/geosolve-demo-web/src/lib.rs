@@ -476,7 +476,7 @@ mod wasm {
             clippy::too_many_lines,
             reason = "one exhaustive adapter-boundary matrix keeps each production-frame parity invariant adjacent"
         )]
-        fn actual_wasm_all_thirty_seven_samples_match_independently_composed_production_frames() {
+        fn actual_wasm_all_twenty_samples_match_independently_composed_production_frames() {
             const PRODUCTION_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 
             fn normalize_allocator_ids(frame: &str) -> String {
