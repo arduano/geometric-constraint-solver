@@ -4835,6 +4835,7 @@ impl SketchDocument {
         let mut candidate = self.clone();
         candidate.trim_views.retain(|view| view.support != support);
         candidate.trim_views.extend(views);
+        candidate.trim_views.sort_by_key(|view| view.support);
         candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
@@ -9075,6 +9076,7 @@ impl SketchDocument {
             self.fillet_trim_view(request.first, constraint, contacts[0])?,
             self.fillet_trim_view(request.second, constraint, contacts[1])?,
         ]);
+        self.trim_views.sort_by_key(|view| view.support);
         self.validate_after_mutation()?;
 
         let radius_target = self.add_scalar(

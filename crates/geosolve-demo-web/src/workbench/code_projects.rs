@@ -8321,6 +8321,67 @@ mod tests {
         open_with_editor(key).0
     }
 
+    #[test]
+    fn fabrication_operations_atlas_checkpoint_preserves_exact_authority() {
+        let sample = bundled_sample("fabrication-operations-atlas").expect("registered atlas");
+        let project = sample.project();
+        let desired = required_generated_members(&project).expect("generated members");
+        let plan = KeyedReconcileState::empty()
+            .plan(desired, &BTreeSet::new())
+            .expect("reconciliation plan");
+        let materialized =
+            materialize_candidate(&project, plan.staged()).expect("initial atlas materialization");
+        let accepted = materialized
+            .editor
+            .coordinator()
+            .accepted_materialization()
+            .expect("atlas accepted materialization");
+        assert!(accepted_validation_is_publishable(&accepted.validation));
+        validate_terminal_preview_session(&accepted.session).expect("validated atlas session");
+        let design_before = accepted.session.design_document().clone();
+        let accepted_before = accepted
+            .session
+            .accepted_state_for_current_input()
+            .expect("current accepted atlas")
+            .document()
+            .clone();
+        for document in [&design_before, &accepted_before] {
+            assert!(
+                document
+                    .points()
+                    .iter()
+                    .flat_map(|point| point.position)
+                    .chain(document.scalars().iter().map(|scalar| scalar.value))
+                    .all(f64::is_finite)
+            );
+        }
+        let ownership_before = accepted.ownership.clone();
+        let validation_before = accepted.validation.clone();
+        let evidence_before = accepted.evidence.clone();
+
+        let checkpoint = encode_editor_checkpoint(&materialized.editor).expect("atlas checkpoint");
+        let restored = restore_editor_checkpoint(&checkpoint).expect("atlas checkpoint restore");
+        let accepted_after = restored
+            .coordinator()
+            .accepted_materialization()
+            .expect("restored atlas accepted materialization");
+        assert!(accepted_validation_is_publishable(
+            &accepted_after.validation
+        ));
+        assert_eq!(accepted_after.session.design_document(), &design_before);
+        assert_eq!(
+            accepted_after
+                .session
+                .accepted_state_for_current_input()
+                .expect("restored current accepted atlas")
+                .document(),
+            &accepted_before,
+        );
+        assert_eq!(accepted_after.ownership, ownership_before);
+        assert_eq!(accepted_after.validation, validation_before);
+        assert_eq!(accepted_after.evidence, evidence_before);
+    }
+
     fn open_boxed(key: &str) -> (Box<CodeProjectWorkbench>, Box<ProjectionalEditorSession>) {
         let (workbench, editor) = open_with_editor(key);
         (Box::new(workbench), editor)
