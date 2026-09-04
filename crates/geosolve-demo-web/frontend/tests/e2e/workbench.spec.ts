@@ -444,6 +444,7 @@ test("Compass Rose Polyline Finish upgrades and publishes inferred constraints i
   const source = page.locator(".cm-content");
   const originalSource = await source.textContent();
   expect(originalSource).not.toBeNull();
+  const originalLines = await source.locator(".cm-line").allTextContents();
 
   const canvas = page.getByRole("application");
   const frame = canvas.locator("svg.geosolve-authoritative-frame");
@@ -473,8 +474,12 @@ test("Compass Rose Polyline Finish upgrades and publishes inferred constraints i
   expect(publishedSource).toContain("span: geometry1.segments.byKey.v0");
   expect(publishedSource).toContain("const constraint3 = $.constraint.vertical");
   expect(publishedSource).toContain("span: geometry1.segments.byKey.v1");
-  expect(publishedLines.length).toBeLessThanOrEqual(75);
-  expect(new TextEncoder().encode(publishedSource).byteLength).toBeLessThanOrEqual(2_500);
+  const originalFormattedSource = `${originalLines.join("\n")}\n`;
+  expect(publishedLines.length - originalLines.length).toBeLessThanOrEqual(30);
+  expect(
+    new TextEncoder().encode(publishedSource).byteLength
+      - new TextEncoder().encode(originalFormattedSource).byteLength,
+  ).toBeLessThanOrEqual(1_500);
 
   const additions = page.getByRole("list", { name: "Canvas additions" });
   await expect(additions).toBeVisible();
@@ -583,7 +588,10 @@ test("Compass Rose point drags remain solver overlays and accept the next gestur
   const finalSaved = lastSaved;
   expect(finalSaved).not.toBeNull();
   expect(new TextEncoder().encode(finalSaved!).byteLength).toBeGreaterThan(5 * 1024 * 1024);
-  expect(JSON.parse(finalSaved!).version).toBe("geosolve-code-workbench-v3");
+  const savedEnvelope = JSON.parse(finalSaved!) as { format?: unknown; project?: unknown };
+  expect(savedEnvelope.format).toBe("geosolve-workbench-presentation-v1");
+  expect(typeof savedEnvelope.project).toBe("string");
+  expect(JSON.parse(savedEnvelope.project as string).version).toBe("geosolve-code-workbench-v3");
   expect(await page.evaluate(() => localStorage.getItem("geosolve.project.v1"))).toBeNull();
   const finalPosition = await point.evaluate((element) => [
     element.getAttribute("cx"),
@@ -747,7 +755,7 @@ export default sketch(($) => {
   expect(declaration).not.toBeNull();
   expect(declaration![1]).toBe(declaration![2]);
   const declarationName = declaration![1];
-  const filletLabel = publishedSource.match(/name: "(Fillet \d+)"/u)?.[1];
+  const filletLabel = publishedSource.match(/label: "(Fillet \d+)"/u)?.[1];
   expect(filletLabel).toBeDefined();
   await expect(frame.locator(".wb-draft")).toHaveCount(0);
   const computedFillets = frame.locator(".wb-computed-geometry path.wb-computed-fillet");
@@ -790,7 +798,7 @@ export default sketch(($) => {
   await expect.poll(() => computedFillets.first().getAttribute("d")).not.toBe(originalPath);
   const editedPath = await computedFillets.first().getAttribute("d");
   const sourceAfterRadiusEdit = `${(await source.locator(".cm-line").allTextContents()).join("\n")}\n`;
-  expect(sourceAfterRadiusEdit).toContain(`name: "${filletLabel}"`);
+  expect(sourceAfterRadiusEdit).toContain(`label: "${filletLabel}"`);
 
   await page.getByRole("tab", { name: "Inspector" }).click();
   await expect(details.getByRole("heading", { name: filletLabel!, exact: true })).toBeVisible();
