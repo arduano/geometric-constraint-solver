@@ -9,12 +9,9 @@ agent or native host that needs exact semantic controls and visual evidence from
 design authority. Source mutation remains browser-free, but deliberately invokes the pinned Deno
 compiler between Rust-owned prepare and resolve phases.
 
-M87 is accepted and closed. The supervising user's 2026-08-31 milestone-level close decision accepts
-U9/U10 without a separate row replay; the earlier U1-U8 disposition remains historical. This
-workflow, all twelve bundled demos and the deterministic manufacturing-sketch products are
-retained. Exact source `32c7289`, tree `38f7175`, passes the complete clean release gate. No
-immutable artifact is frozen, no release is published and the mutable Tailscale development
-listener is not retired.
+M87 is accepted and closed. Its browser-free project and two-phase mutation flows remain. M92
+clean-breaks the old twelve-entry demo vocabulary into the one canonical twenty-entry bundled
+sample registry and replaces report v1 with deterministic `geosolve-headless-report-v2`.
 
 M90 supersedes the historical M87 raw-source input and one-phase edit APIs. The current clean-break
 contract admits only executed V3 compiler authority (`geosolve-managed-sketch-ir-v3` plus
@@ -27,18 +24,19 @@ Choose exactly one input for each command:
 
 - `--project project.json` accepts a complete compiled V3 `CodeProject`, including pinned data-only
   artifacts;
-- `--demo KEY` selects one of the twelve checked-in offline projects listed by `demos`.
+- `--sample KEY` selects one of the twenty checked-in source-authoritative projects listed by
+  `samples`.
 
 Raw `sketch.ts` is not an admitted native input because Rust does not pretend to execute TypeScript.
 A custom patch remains a compiled, pinned extension point: its TypeScript source is never executed
 by the headless solver, and its canonical data-only artifact must already be in `project.json` or a
-bundled demo.
+bundled sample.
 
 ## Inspect
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  inspect --demo typed-panel > inspection.json
+  inspect --sample theo-jansen-leg > inspection.json
 ```
 
 The JSON contains a deterministic solve/render report and a transient managed-control manifest.
@@ -77,7 +75,7 @@ permitted semantic delta. The command writes a compiler request to stdout and ch
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  prepare-edit --demo typed-panel --edit batch.json > /tmp/geosolve-prepared.json
+  prepare-edit --sample theo-jansen-leg --edit batch.json > /tmp/geosolve-prepared.json
 ```
 
 Build the pinned TypeScript package, then pass the complete prepared request to the Deno mutation
@@ -102,10 +100,10 @@ native Intent, solves, independently validates, and only then atomically publish
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  resolve-edit --demo typed-panel \
+  resolve-edit --sample theo-jansen-leg \
   --prepared /tmp/geosolve-prepared.json \
   --receipt /tmp/geosolve-receipt.json \
-  --out /tmp/geosolve-typed-panel-r2
+  --out /tmp/geosolve-jansen-r2
 ```
 
 A stale token, mismatched input, tampered request or receipt, wrong type/unit, non-finite value,
@@ -117,7 +115,7 @@ For the next stateless iteration, inspect the emitted `project.json`, then use i
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  inspect --project /tmp/geosolve-typed-panel-r2/project.json > inspection-r2.json
+  inspect --project /tmp/geosolve-jansen-r2/project.json > inspection-r2.json
 ```
 
 ## Render products
@@ -132,7 +130,9 @@ publication uses an atomic no-replace directory rename and never overwrites an e
 generation. Other targets currently fail closed before publication because the crate does not yet
 have a proven atomic no-clobber directory primitive for them. A successful directory contains:
 
-- `report.json` — input/digest identities, independent validation, fitted camera and output hashes;
+- `report.json` — input/digest identities, independent validation, numerical right nullity,
+  equality and bidirectional bounded DOF, ordered source-group names/counts, fitted camera and
+  output hashes;
 - `controls.json` — the exact transient managed-control manifest;
 - `project.json` — canonical complete project authority;
 - `sketch.ts` — the accepted managed source;
@@ -149,55 +149,22 @@ Every success-like result has finite current accepted geometry, independently va
 residuals no greater than `1e-9` (or a validated empty hard set), and Current active computed
 features. No solved coordinate is ever written back into managed source.
 
-## Routing-board dogfood
+## Showcase and scale dogfood
 
-The densest bundled project exercises the same stateless path without a browser:
-
-```bash
-cargo run --locked -p geosolve-headless -- \
-  inspect --demo robotic-routing-board > routing-board-inspection.json
-
-cargo run --locked -p geosolve-headless -- \
-  render --demo robotic-routing-board --out /tmp/geosolve-routing-board-new
-```
-
-Its current normalized V3 inventory is 104 points, 112 native curves, 41 constraints, two
-dimensions, 64 Current features and 136 computed edges. The source contains eight keyed ten-vertex
-open routes; the pinned artifact derives 80 clip circles and 64 Fillets. Repeating the exact render
-must reproduce the pretty-encoded report and controls, logical scene markup, standalone SVG and PNG
-bytes for the pinned build. PNG equality remains a deterministic build regression, not
-cross-platform solver authority.
-
-## CNC and Gridfinity dogfood
-
-The two additive manufacturing-sketch entries use the same stateless commands:
+Every entry in the canonical registry uses the same stateless path. For example:
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  render --demo cnc-joinery-fit-coupon --out /tmp/geosolve-cnc-coupon-new
+  inspect --sample robotic-harness-backplane > backplane-inspection.json
 
 cargo run --locked -p geosolve-headless -- \
-  render --demo gridfinity-1x1x3-section --out /tmp/geosolve-gridfinity-section-new
+  render --sample gridfinity-bin-section --out /tmp/geosolve-gridfinity-new
 ```
 
-The CNC report must describe the fully constrained 120 x 140 mm blank, three 70 mm-wide mortises with
-loose/nominal/press heights of 18.4/18.0/17.6 mm, three 95 x 18 mm tabs, twelve shared cutter-radius
-circles and ten handling Fillets. Its current normalized V3 inventory is 29 points, 26 native
-curves, 20 constraints, 33 dimensions, 10 Current features and 23 computed edges. Exactly one
-`FixedPoint`, no `FixedCoordinate` and seven relational construction datums locate the components.
+The headless regressions open, inspect and render all twenty entries through the ordinary managed
+path, compare report bytes, verify manifest mobility and exact group order/counts, and require
+independent native acceptance. Generate products into new directories. Wall-clock and solver timing
+remain outside report v2.
 
-The Gridfinity report must retain one fully constrained symmetric closed 26-point
-material contour with the reviewed 41.5/35.6 mm widths, 4.75/7 mm base levels, 21 mm body, 0.95 mm
-walls, 4.4 mm nominal lip rise and two floor plus two lip Fillets. Its current normalized V3
-inventory is 31 points, 11 native curves, 31 constraints, 18 dimensions, four Current features and
-11 computed edges. Thirteen datum-axis symmetry relations and ten orthogonal construction spans
-govern the contour from one Y `FixedCoordinate` and no `FixedPoint`. Both reports must expose
-numerical and structural left/right nullity zero plus equality and bidirectional bounded DOF zero.
-
-Repeated report/control/logical-scene/SVG/PNG products remain covered by the current headless
-regressions. Generate review products into new, non-existing directories rather than relying on
-historical mutable `/tmp` evidence.
-
-These outputs are 2D/2.5D design evidence. They do not create CAM, toolpath, cutter-compensation,
-boolean, solid, printer-fit or manufacturing authority. Diagnosed performance/stack work is carried
-into M88's subsequently completed ordered stability prerequisite.
+These outputs are 2D/2.5D design evidence and do not create CAM, toolpath, solid, printer-fit, or
+manufacturing authority.

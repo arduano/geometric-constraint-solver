@@ -16,10 +16,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProject, CodeProjectDemoId, CodeSessionIdentity, KeyedReconcileState,
-    ManagedControlEditBatch, ManagedControlManifest, ManagedMutationAuthority, PatchModuleArtifact,
-    PreparedManagedMutationReceipt, PreparedManagedMutationRequest, ProjectKey,
-    bundled_code_projects, managed_control_manifest, materialize_code_project_cold,
+    CodeProject, CodeSessionIdentity, KeyedReconcileState, ManagedControlEditBatch,
+    ManagedControlManifest, ManagedMutationAuthority, PatchModuleArtifact,
+    PreparedManagedMutationReceipt, PreparedManagedMutationRequest, ProjectKey, bundled_sample,
+    bundled_sample_catalog, managed_control_manifest, materialize_code_project_cold,
     prepare_managed_control_mutation, prepare_managed_mutation, required_generated_members,
     validate_prepared_managed_mutation,
 };
@@ -32,8 +32,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-/// Version of every deterministic headless report emitted by M87.
-pub const HEADLESS_REPORT_VERSION: &str = "geosolve-headless-report-v1";
+/// Version of every deterministic headless report emitted by M92.
+pub const HEADLESS_REPORT_VERSION: &str = "geosolve-headless-report-v2";
 /// Chord tolerance shared with canonical static browser export.
 pub const HEADLESS_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 /// Maximum encoded size of one exact-CAS edit batch accepted by the CLI.
@@ -50,8 +50,8 @@ static NEXT_TEMP_DIRECTORY: AtomicU64 = AtomicU64::new(1);
 pub enum HeadlessInput {
     /// Strict canonical `CodeProject` JSON, including any pinned artifacts.
     CodeProjectJson(String),
-    /// One checked-in offline demonstration key.
-    BundledDemo(String),
+    /// One checked-in source-authoritative sample key.
+    BundledSample(String),
 }
 
 /// Stable description of the admitted input authority.
@@ -59,7 +59,15 @@ pub enum HeadlessInput {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HeadlessInputIdentity {
     CodeProjectJson { project: ProjectKey },
-    BundledDemo { key: String, project: ProjectKey },
+    BundledSample { key: String, project: ProjectKey },
+}
+
+/// One source-authored functional group in exact declaration order.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HeadlessSourceGroupReport {
+    pub name: String,
+    pub declaration_count: usize,
 }
 
 /// Independent native acceptance evidence included in every solved report.
@@ -75,6 +83,9 @@ pub struct HeadlessValidationReport {
     pub dimension_count: usize,
     pub feature_count: usize,
     pub computed_edge_count: usize,
+    pub numerical_right_nullity: usize,
+    pub equality_degrees_of_freedom: usize,
+    pub bidirectional_bounded_degrees_of_freedom: usize,
 }
 
 /// Fitted deterministic camera used for scene and export composition.
@@ -100,6 +111,7 @@ pub struct HeadlessReport {
     pub intent_session: String,
     pub document: String,
     pub validation: HeadlessValidationReport,
+    pub source_groups: Vec<HeadlessSourceGroupReport>,
     pub camera: HeadlessCameraReport,
     pub scene_markup_sha256: String,
     pub svg_sha256: String,
@@ -182,8 +194,8 @@ impl HeadlessRender {
 pub enum HeadlessError {
     #[error("headless input exceeds the project byte limit")]
     InputTooLarge,
-    #[error("unknown bundled demonstration `{0}`")]
-    UnknownDemo(String),
+    #[error("unknown bundled sample `{0}`")]
+    UnknownSample(String),
     #[error("headless project is invalid: {0}")]
     Project(String),
     #[error("headless managed controls are invalid: {0}")]
@@ -216,16 +228,12 @@ impl HeadlessInput {
                 };
                 Ok((identity, project))
             }
-            Self::BundledDemo(key) => {
-                let id = CodeProjectDemoId::from_key(key)
-                    .ok_or_else(|| HeadlessError::UnknownDemo(key.clone()))?;
-                let project = bundled_code_projects()
-                    .into_iter()
-                    .find(|project| project.key() == id.key())
-                    .ok_or_else(|| HeadlessError::UnknownDemo(key.clone()))?
+            Self::BundledSample(key) => {
+                let project = bundled_sample(key)
+                    .ok_or_else(|| HeadlessError::UnknownSample(key.clone()))?
                     .project();
                 Ok((
-                    HeadlessInputIdentity::BundledDemo {
+                    HeadlessInputIdentity::BundledSample {
                         key: key.clone(),
                         project: project.project.clone(),
                     },
@@ -236,12 +244,12 @@ impl HeadlessInput {
     }
 }
 
-/// Lists the complete stable bundled-demo key inventory.
+/// Lists the complete stable bundled-sample key inventory.
 #[must_use]
-pub fn bundled_demo_keys() -> Vec<&'static str> {
-    CodeProjectDemoId::ALL
-        .into_iter()
-        .map(CodeProjectDemoId::key)
+pub fn bundled_sample_keys() -> Vec<&'static str> {
+    bundled_sample_catalog()
+        .iter()
+        .map(|sample| sample.key)
         .collect()
 }
 
@@ -352,7 +360,7 @@ fn identity_for_edited(
         HeadlessInputIdentity::CodeProjectJson { .. } => HeadlessInputIdentity::CodeProjectJson {
             project: project.project.clone(),
         },
-        HeadlessInputIdentity::BundledDemo { key, .. } => HeadlessInputIdentity::BundledDemo {
+        HeadlessInputIdentity::BundledSample { key, .. } => HeadlessInputIdentity::BundledSample {
             key,
             project: project.project.clone(),
         },
@@ -488,6 +496,38 @@ fn solve_and_render(
         .ok_or_else(|| {
             HeadlessError::IndependentValidation("accepted state is not current".into())
         })?;
+    let diagnostics = accepted.diagnostics();
+    let numerical_right_nullity = diagnostics
+        .rank
+        .and_then(|rank| rank.numerical_right_nullity)
+        .ok_or_else(|| {
+            HeadlessError::IndependentValidation(
+                "accepted state has no valid numerical right nullity".into(),
+            )
+        })?;
+    let equality_degrees_of_freedom = diagnostics
+        .mobility
+        .and_then(|mobility| mobility.equality_degrees_of_freedom)
+        .ok_or_else(|| {
+            HeadlessError::IndependentValidation(
+                "accepted state has no valid equality degrees of freedom".into(),
+            )
+        })?;
+    let bidirectional_bounded_degrees_of_freedom = diagnostics
+        .mobility
+        .and_then(|mobility| mobility.bidirectional_bounded_degrees_of_freedom)
+        .ok_or_else(|| {
+            HeadlessError::IndependentValidation(
+                "accepted state has no valid bidirectional bounded degrees of freedom".into(),
+            )
+        })?;
+    if numerical_right_nullity != equality_degrees_of_freedom
+        || bidirectional_bounded_degrees_of_freedom > equality_degrees_of_freedom
+    {
+        return Err(HeadlessError::IndependentValidation(
+            "accepted rank and mobility diagnostics are inconsistent".into(),
+        ));
+    }
     let scene_markup = compose_static_scene_svg(Some(&scene), Some(accepted), camera);
     let svg =
         standalone_static_export_svg_with_size(&scene_markup, PNG_EXPORT_WIDTH, PNG_EXPORT_HEIGHT)
@@ -500,6 +540,19 @@ fn solve_and_render(
         .to_canonical_json()
         .map_err(|error| HeadlessError::Project(error.to_string()))?;
     let project_digest = sha256(project_json.as_bytes());
+    let source_groups = project
+        .managed
+        .compiled
+        .as_deref()
+        .ok_or_else(|| HeadlessError::Project("project has no compiled managed authority".into()))?
+        .artifact
+        .groups
+        .iter()
+        .map(|group| HeadlessSourceGroupReport {
+            name: group.name.clone(),
+            declaration_count: group.declarations.len(),
+        })
+        .collect();
     let validation_report = HeadlessValidationReport {
         hard_residuals_validated: validation.hard_residuals_validated,
         all_active_features_current: validation.all_active_features_current,
@@ -510,6 +563,9 @@ fn solve_and_render(
         dimension_count: accepted.document().dimensions().len(),
         feature_count: validation.feature_count,
         computed_edge_count: validation.computed_edge_count,
+        numerical_right_nullity,
+        equality_degrees_of_freedom,
+        bidirectional_bounded_degrees_of_freedom,
     };
     let report = HeadlessReport {
         version: HEADLESS_REPORT_VERSION.into(),
@@ -520,6 +576,7 @@ fn solve_and_render(
         intent_session: intent.to_string(),
         document: document.to_string(),
         validation: validation_report,
+        source_groups,
         camera: HeadlessCameraReport {
             logical_size: [1_000, 700],
             model_center: camera.model_center(),

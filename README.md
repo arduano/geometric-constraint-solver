@@ -307,12 +307,11 @@ cargo run --locked -p geosolve-linkage --example spatial_assembly
 Browser-free managed-code inspection and rendering:
 
 ```bash
-cargo run --locked -p geosolve-headless -- demos
-cargo run --locked -p geosolve-headless -- inspect --demo typed-panel
-cargo run --locked -p geosolve-headless -- render --demo typed-panel --out /tmp/geosolve-typed-panel-new
-cargo run --locked -p geosolve-headless -- render --demo robotic-routing-board --out /tmp/geosolve-routing-board-new
-cargo run --locked -p geosolve-headless -- render --demo cnc-joinery-fit-coupon --out /tmp/geosolve-cnc-coupon-new
-cargo run --locked -p geosolve-headless -- render --demo gridfinity-1x1x3-section --out /tmp/geosolve-gridfinity-section-new
+cargo run --locked -p geosolve-headless -- samples
+cargo run --locked -p geosolve-headless -- inspect --sample theo-jansen-leg
+cargo run --locked -p geosolve-headless -- render --sample pc-water-manifold --out /tmp/geosolve-manifold-new
+cargo run --locked -p geosolve-headless -- render --sample gridfinity-bin-section --out /tmp/geosolve-gridfinity-new
+cargo run --locked -p geosolve-headless -- render --sample robotic-harness-backplane --out /tmp/geosolve-backplane-new
 ```
 
 An exact source edit is a two-phase transaction. Given a `batch.json` containing a current control
@@ -321,7 +320,7 @@ return the receipt to Rust for cold solve, independent validation and atomic pub
 
 ```bash
 cargo run --locked -p geosolve-headless -- \
-  prepare-edit --demo typed-panel --edit batch.json > /tmp/geosolve-prepared.json
+  prepare-edit --sample theo-jansen-leg --edit batch.json > /tmp/geosolve-prepared.json
 
 (
   cd packages/geosolve-sketch-code
@@ -333,14 +332,14 @@ cargo run --locked -p geosolve-headless -- \
 )
 
 cargo run --locked -p geosolve-headless -- \
-  resolve-edit --demo typed-panel \
+  resolve-edit --sample theo-jansen-leg \
   --prepared /tmp/geosolve-prepared.json \
   --receipt /tmp/geosolve-receipt.json \
-  --out /tmp/geosolve-typed-panel-edited
+  --out /tmp/geosolve-jansen-edited
 ```
 
 The output directory must not already exist. Native `inspect` and `render` accept only a bundled
-demo or a complete compiled V3 `project.json`; the removed raw-source input is not a fallback. See
+sample or a complete compiled V3 `project.json`; the removed raw-source input is not a fallback. See
 [`docs/M87_HEADLESS.md`](docs/M87_HEADLESS.md) for the retained headless workflow and exact
 managed-control batch format.
 

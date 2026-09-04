@@ -14,24 +14,35 @@ use std::thread;
 
 use geosolve_headless::{
     HEADLESS_EDIT_BATCH_LIMIT, HEADLESS_REPORT_VERSION, HeadlessError, HeadlessInput,
-    HeadlessPreparedEdit, bundled_demo_keys, inspect, prepare_edit, publish_render, render,
+    HeadlessPreparedEdit, bundled_sample_keys, inspect, prepare_edit, publish_render, render,
     resolve_edit,
 };
 use geosolve_sketch_code::{
     CodeProject, CompiledManagedSource, KeyedReconcileState, ManagedControlEdit,
     ManagedControlEditBatch, ManagedValue, PreparedManagedMutationReceipt, ProjectKey,
-    SketchCodeSession, UnitLiteral, expand_code_project, managed_control_manifest,
-    required_generated_members,
+    SketchCodeSession, UnitLiteral, bundled_sample_catalog, expand_code_project,
+    managed_control_manifest, required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
 static NEXT_OUTPUT: AtomicU64 = AtomicU64::new(1);
 
-fn typed_panel() -> HeadlessInput {
-    HeadlessInput::BundledDemo("typed-panel".into())
+fn managed_fixture() -> HeadlessInput {
+    const COMPILED: &str = include_str!(
+        "../../../packages/geosolve-sketch-code/test/fixtures/managed-compiler-envelope.json"
+    );
+    let compiled = CompiledManagedSource::from_json(COMPILED)
+        .expect("validated browser/Deno compiler fixture");
+    let project = CodeProject::managed(ProjectKey("m92-headless-managed".into()), compiled)
+        .expect("managed CodeProject");
+    HeadlessInput::CodeProjectJson(
+        project
+            .to_canonical_json()
+            .expect("canonical managed CodeProject JSON"),
+    )
 }
 
-fn typed_panel_radius(
+fn managed_fixture_radius(
     inspection: &geosolve_headless::HeadlessInspection,
 ) -> &geosolve_sketch_code::ManagedControl {
     inspection
@@ -44,7 +55,7 @@ fn typed_panel_radius(
                     if unit == "mm" && value.to_bits() == 4.0_f64.to_bits()
             ) && control.consumers.len() == 2
         })
-        .expect("Typed Panel shared radius control")
+        .expect("managed fixture shared radius control")
 }
 
 fn run_pinned_deno_mutation(prepared: &HeadlessPreparedEdit) -> PreparedManagedMutationReceipt {
@@ -167,7 +178,7 @@ fn run_cli_two_phase_edit(
 #[test]
 #[ignore = "release gate builds the pinned TypeScript sidecar before running this exact test"]
 fn inspect_edit_solve_and_static_render_share_one_exact_control_authority() {
-    let before = inspect(&typed_panel()).expect("headless Typed Panel inspection");
+    let before = inspect(&managed_fixture()).expect("headless managed fixture inspection");
     assert_eq!(before.report.version, HEADLESS_REPORT_VERSION);
     assert!(before.report.validation.hard_residuals_validated);
     assert!(before.report.validation.all_active_features_current);
@@ -178,9 +189,9 @@ fn inspect_edit_solve_and_static_render_share_one_exact_control_authority() {
             .maximum_normalized_hard_residual
             .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
     );
-    let radius = typed_panel_radius(&before);
+    let radius = managed_fixture_radius(&before);
     let edited = edit_with_pinned_deno(
-        &typed_panel(),
+        &managed_fixture(),
         &ManagedControlEditBatch::new([ManagedControlEdit {
             token: radius.token().expect("editable radius").clone(),
             value: ManagedValue::Unit(UnitLiteral {
@@ -226,11 +237,11 @@ fn inspect_edit_solve_and_static_render_share_one_exact_control_authority() {
 }
 
 #[test]
-fn project_json_and_bundled_inputs_are_all_browser_free() {
-    let bundled = render(&typed_panel()).expect("bundled demo render");
-    assert!(bundled.report().validation.hard_residuals_validated);
+fn project_json_input_is_browser_free_and_strict() {
+    let rendered = render(&managed_fixture()).expect("managed project render");
+    assert!(rendered.report().validation.hard_residuals_validated);
 
-    let canonical = bundled.project().to_canonical_json().unwrap();
+    let canonical = rendered.project().to_canonical_json().unwrap();
     let mut unknown: serde_json::Value = serde_json::from_str(&canonical).unwrap();
     unknown["unexpectedAuthority"] = serde_json::json!(true);
     let error = render(&HeadlessInput::CodeProjectJson(
@@ -337,8 +348,8 @@ fn compiled_managed_project_reload_inspect_and_render_are_byte_deterministic() {
 
 #[test]
 fn repeated_render_is_byte_deterministic_and_publication_is_new_directory_only() {
-    let first_inspection = inspect(&typed_panel()).expect("first inspection");
-    let second_inspection = inspect(&typed_panel()).expect("second inspection");
+    let first_inspection = inspect(&managed_fixture()).expect("first inspection");
+    let second_inspection = inspect(&managed_fixture()).expect("second inspection");
     assert_eq!(
         serde_json::to_vec_pretty(&first_inspection.report).unwrap(),
         serde_json::to_vec_pretty(&second_inspection.report).unwrap(),
@@ -350,8 +361,8 @@ fn repeated_render_is_byte_deterministic_and_publication_is_new_directory_only()
         "repeated inspect controls must have identical encoded bytes",
     );
 
-    let first = render(&typed_panel()).expect("first render");
-    let second = render(&typed_panel()).expect("second render");
+    let first = render(&managed_fixture()).expect("first render");
+    let second = render(&managed_fixture()).expect("second render");
     assert_eq!(
         serde_json::to_vec_pretty(first.report()).unwrap(),
         serde_json::to_vec_pretty(second.report()).unwrap(),
@@ -412,138 +423,8 @@ fn repeated_render_is_byte_deterministic_and_publication_is_new_directory_only()
 }
 
 #[test]
-fn robotic_routing_board_report_controls_scene_svg_and_png_are_byte_deterministic() {
-    let input = HeadlessInput::BundledDemo("robotic-routing-board".into());
-    let first = render(&input).expect("first routing-board render");
-    let second = render(&input).expect("second routing-board render");
-
-    assert_eq!(first.report().validation.point_count, 104);
-    assert_eq!(first.report().validation.curve_count, 112);
-    assert_eq!(first.report().validation.constraint_count, 41);
-    assert_eq!(first.report().validation.dimension_count, 2);
-    assert_eq!(first.report().validation.feature_count, 64);
-    assert_eq!(first.report().validation.computed_edge_count, 136);
-    assert!(first.report().validation.hard_residuals_validated);
-    assert!(first.report().validation.all_active_features_current);
-    assert!(
-        first
-            .report()
-            .validation
-            .maximum_normalized_hard_residual
-            .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
-    );
-    assert_eq!(
-        serde_json::to_vec_pretty(first.report()).unwrap(),
-        serde_json::to_vec_pretty(second.report()).unwrap(),
-        "routing-board report bytes must be deterministic",
-    );
-    assert_eq!(
-        serde_json::to_vec_pretty(first.controls()).unwrap(),
-        serde_json::to_vec_pretty(second.controls()).unwrap(),
-        "routing-board control bytes must be deterministic",
-    );
-    assert_eq!(
-        first.scene_markup().as_bytes(),
-        second.scene_markup().as_bytes(),
-        "routing-board logical scene bytes must be deterministic",
-    );
-    assert_eq!(
-        first.svg().as_bytes(),
-        second.svg().as_bytes(),
-        "routing-board standalone SVG bytes must be deterministic",
-    );
-    assert_eq!(
-        first.png(),
-        second.png(),
-        "routing-board PNG bytes must be deterministic for the pinned build",
-    );
-}
-
-#[test]
-fn manufacturing_sketch_reports_controls_scenes_svg_and_png_are_byte_deterministic() {
-    let cases = [
-        ("cnc-joinery-fit-coupon", 29, 26, 20, 33, 10, 23),
-        ("gridfinity-1x1x3-section", 31, 11, 31, 18, 4, 11),
-    ];
-
-    for (key, points, curves, constraints, dimensions, features, edges) in cases {
-        let input = HeadlessInput::BundledDemo(key.into());
-        let first = render(&input).unwrap_or_else(|error| panic!("first {key} render: {error}"));
-        let second = render(&input).unwrap_or_else(|error| panic!("second {key} render: {error}"));
-
-        assert_eq!(
-            first.report().validation.point_count,
-            points,
-            "{key} points"
-        );
-        assert_eq!(
-            first.report().validation.curve_count,
-            curves,
-            "{key} curves"
-        );
-        assert_eq!(
-            first.report().validation.constraint_count,
-            constraints,
-            "{key} constraints",
-        );
-        assert_eq!(
-            first.report().validation.dimension_count,
-            dimensions,
-            "{key} dimensions",
-        );
-        assert_eq!(
-            first.report().validation.feature_count,
-            features,
-            "{key} features",
-        );
-        assert_eq!(
-            first.report().validation.computed_edge_count,
-            edges,
-            "{key} computed edges",
-        );
-        assert!(
-            first.report().validation.hard_residuals_validated,
-            "{key} hard-residual authority",
-        );
-        assert!(
-            first.report().validation.all_active_features_current,
-            "{key} Current features",
-        );
-        assert!(
-            first
-                .report()
-                .validation
-                .maximum_normalized_hard_residual
-                .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
-            "{key} independent residual bound",
-        );
-        assert_eq!(
-            serde_json::to_vec_pretty(first.report()).unwrap(),
-            serde_json::to_vec_pretty(second.report()).unwrap(),
-            "{key} report bytes",
-        );
-        assert_eq!(
-            serde_json::to_vec_pretty(first.controls()).unwrap(),
-            serde_json::to_vec_pretty(second.controls()).unwrap(),
-            "{key} control bytes",
-        );
-        assert_eq!(
-            first.scene_markup().as_bytes(),
-            second.scene_markup().as_bytes(),
-            "{key} logical scene bytes",
-        );
-        assert_eq!(
-            first.svg().as_bytes(),
-            second.svg().as_bytes(),
-            "{key} standalone SVG bytes",
-        );
-        assert_eq!(first.png(), second.png(), "{key} pinned-build PNG bytes");
-    }
-}
-
-#[test]
 fn managed_capabilities_are_transient_from_project_and_session_persistence() {
-    let rendered = render(&typed_panel()).expect("render exact Typed Panel authority");
+    let rendered = render(&managed_fixture()).expect("render exact managed authority");
     let project = rendered.project().clone();
     let project_wire = project.to_canonical_json().unwrap();
     let generated = KeyedReconcileState::empty()
@@ -600,7 +481,7 @@ fn managed_capabilities_are_transient_from_project_and_session_persistence() {
 
 #[test]
 fn concurrent_publication_is_atomic_no_clobber_and_io_failure_leaves_no_generation() {
-    let rendered = Arc::new(render(&typed_panel()).expect("render publication candidate"));
+    let rendered = Arc::new(render(&managed_fixture()).expect("render publication candidate"));
     let ordinal = NEXT_OUTPUT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
         "geosolve-m87-headless-publication-race-{}-{ordinal}",
@@ -649,30 +530,199 @@ fn concurrent_publication_is_atomic_no_clobber_and_io_failure_leaves_no_generati
 }
 
 #[test]
-fn all_twelve_bundled_demos_cold_materialize_with_independent_native_acceptance() {
-    let keys = bundled_demo_keys();
-    assert_eq!(keys.len(), 12);
-    for key in keys {
-        let rendered = render(&HeadlessInput::BundledDemo(key.into()))
-            .unwrap_or_else(|error| panic!("{key} failed headless render: {error}"));
-        assert!(
-            rendered.report().validation.hard_residuals_validated,
-            "{key}"
+#[allow(
+    clippy::too_many_lines,
+    reason = "one catalog audit keeps report identity, mobility, group ordering, independent validation, and timing exclusion together for every sample"
+)]
+fn all_twenty_bundled_samples_inspect_with_deterministic_report_v2_authority() {
+    let samples = bundled_sample_catalog();
+    let keys = bundled_sample_keys();
+    assert_eq!(samples.len(), 20);
+    assert_eq!(
+        keys,
+        samples.iter().map(|sample| sample.key).collect::<Vec<_>>()
+    );
+
+    for sample in samples {
+        let input = HeadlessInput::BundledSample(sample.key.into());
+        let inspection = inspect(&input)
+            .unwrap_or_else(|error| panic!("{} failed inspection: {error}", sample.key));
+        let rendered =
+            render(&input).unwrap_or_else(|error| panic!("{} failed render: {error}", sample.key));
+        assert_eq!(
+            serde_json::to_vec_pretty(&inspection.report).unwrap(),
+            serde_json::to_vec_pretty(rendered.report()).unwrap(),
+            "{} report bytes",
+            sample.key
+        );
+        assert_eq!(
+            &inspection.controls,
+            rendered.controls(),
+            "{} controls",
+            sample.key
+        );
+        assert_eq!(inspection.report.version, "geosolve-headless-report-v2");
+        assert_eq!(inspection.report.version, HEADLESS_REPORT_VERSION);
+        assert!(matches!(
+            &inspection.report.input,
+            geosolve_headless::HeadlessInputIdentity::BundledSample { key, .. }
+                if key == sample.key
+        ));
+        assert_eq!(
+            serde_json::to_value(&inspection.report.input).unwrap()["kind"],
+            "bundled_sample"
+        );
+        assert_eq!(
+            inspection.report.validation.numerical_right_nullity,
+            sample.expected.numerical_right_nullity(),
+            "{} numerical right nullity",
+            sample.key
+        );
+        assert_eq!(
+            inspection.report.validation.equality_degrees_of_freedom,
+            sample.expected.equality_degrees_of_freedom(),
+            "{} equality DOF",
+            sample.key
+        );
+        assert_eq!(
+            inspection
+                .report
+                .validation
+                .bidirectional_bounded_degrees_of_freedom,
+            sample.expected.bidirectional_bounded_degrees_of_freedom(),
+            "{} bidirectional bounded DOF",
+            sample.key
+        );
+        let project = sample.project();
+        let expected_groups = project
+            .managed
+            .compiled
+            .as_deref()
+            .expect("sample compiler authority")
+            .artifact
+            .groups
+            .iter()
+            .map(|group| (group.name.as_str(), group.declarations.len()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            inspection
+                .report
+                .source_groups
+                .iter()
+                .map(|group| (group.name.as_str(), group.declaration_count))
+                .collect::<Vec<_>>(),
+            expected_groups,
+            "{} ordered source groups",
+            sample.key
+        );
+        assert_eq!(
+            inspection
+                .report
+                .source_groups
+                .iter()
+                .map(|group| group.name.as_str())
+                .collect::<Vec<_>>(),
+            sample.functional_groups,
+            "{} manifest group order",
+            sample.key
         );
         assert!(
-            rendered.report().validation.all_active_features_current,
-            "{key}"
+            inspection.report.validation.hard_residuals_validated,
+            "{}",
+            sample.key
         );
         assert!(
-            rendered
-                .report()
+            inspection.report.validation.all_active_features_current,
+            "{}",
+            sample.key
+        );
+        assert!(
+            inspection
+                .report
                 .validation
                 .maximum_normalized_hard_residual
                 .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
-            "{key}"
+            "{}",
+            sample.key
         );
-        assert!(!rendered.svg().is_empty(), "{key}");
+        let report_json = serde_json::to_string(&inspection.report).unwrap();
+        for removed in [
+            "headless-report-v1",
+            "elapsed",
+            "duration",
+            "timing",
+            "wall_clock",
+        ] {
+            assert!(
+                !report_json.contains(removed),
+                "{} report contains removed `{removed}` authority",
+                sample.key
+            );
+        }
     }
+}
+
+#[test]
+fn cli_rejects_removed_demo_vocabulary_and_unknown_sample_transactionally() {
+    let ordinal = NEXT_OUTPUT.fetch_add(1, Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "geosolve-m92-headless-cli-clean-break-{}-{ordinal}",
+        std::process::id()
+    ));
+    fs::create_dir(&root).unwrap();
+    let binary = env!("CARGO_BIN_EXE_geosolve-headless");
+
+    let samples = Command::new(binary).arg("samples").output().unwrap();
+    assert!(samples.status.success());
+    assert!(samples.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(samples.stdout)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        bundled_sample_keys()
+    );
+
+    let removed_demos = Command::new(binary).arg("demos").output().unwrap();
+    assert!(!removed_demos.status.success());
+    assert!(!String::from_utf8_lossy(&removed_demos.stderr).contains("--demo"));
+
+    let removed_demo_flag = Command::new(binary)
+        .args(["inspect", "--demo", "typed-panel"])
+        .output()
+        .unwrap();
+    assert!(!removed_demo_flag.status.success());
+    assert!(String::from_utf8_lossy(&removed_demo_flag.stderr).contains("unknown option `--demo`"));
+
+    let removed_identity =
+        serde_json::from_value::<geosolve_headless::HeadlessInputIdentity>(serde_json::json!({
+            "kind": "bundled_demo",
+            "key": "typed-panel",
+            "project": "geosolve-demo-typed-panel"
+        }));
+    assert!(removed_identity.is_err());
+
+    let unknown_output = root.join("unknown-sample-output");
+    let unknown_sample = Command::new(binary)
+        .args(["render", "--sample", "not-a-real-sample", "--out"])
+        .arg(&unknown_output)
+        .output()
+        .unwrap();
+    assert!(!unknown_sample.status.success());
+    assert!(
+        String::from_utf8_lossy(&unknown_sample.stderr)
+            .contains("unknown bundled sample `not-a-real-sample`")
+    );
+    assert!(
+        !unknown_output.exists(),
+        "unknown sample rejection must publish no partial output"
+    );
+    assert!(matches!(
+        render(&HeadlessInput::BundledSample("not-a-real-sample".into())),
+        Err(HeadlessError::UnknownSample(key)) if key == "not-a-real-sample"
+    ));
+
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -690,20 +740,23 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
     assert!(!root.exists(), "CLI test namespace must be fresh");
     fs::create_dir(&root).expect("create owned CLI test root");
     let project = root.join("project.json");
-    let canonical_project = render(&typed_panel())
-        .expect("load bundled compiled project authority")
+    let canonical_project = render(&managed_fixture())
+        .expect("load compiled project authority")
         .project()
         .to_canonical_json()
-        .expect("encode bundled compiled project authority");
+        .expect("encode compiled project authority");
     fs::write(&project, canonical_project).expect("write compiled CLI project input");
     let binary = env!("CARGO_BIN_EXE_geosolve-headless");
 
-    let demos = Command::new(binary)
-        .arg("demos")
+    let samples = Command::new(binary)
+        .arg("samples")
         .output()
-        .expect("run demos command");
-    assert!(demos.status.success());
-    assert_eq!(String::from_utf8(demos.stdout).unwrap().lines().count(), 12);
+        .expect("run samples command");
+    assert!(samples.status.success());
+    assert_eq!(
+        String::from_utf8(samples.stdout).unwrap().lines().count(),
+        20
+    );
 
     let inspected = Command::new(binary)
         .args(["inspect", "--project"])
@@ -717,7 +770,7 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
     );
     let inspected: geosolve_headless::HeadlessInspection =
         serde_json::from_slice(&inspected.stdout).expect("decode CLI inspection");
-    let radius = typed_panel_radius(&inspected);
+    let radius = managed_fixture_radius(&inspected);
     let batch = ManagedControlEditBatch::new([ManagedControlEdit {
         token: radius.token().expect("editable CLI radius").clone(),
         value: ManagedValue::Unit(UnitLiteral {
@@ -771,7 +824,7 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
                     if unit == "mm" && value.to_bits() == 3.0_f64.to_bits()
             ) && control.consumers.len() == 2
         })
-        .expect("edited Typed Panel shared radius control");
+        .expect("edited managed-fixture shared radius control");
     assert_ne!(edited_radius.token().unwrap(), radius.token().unwrap());
 
     let rendered_edited_output = root.join("rendered-edited-project");
@@ -890,47 +943,6 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
     assert!(!rejected.status.success());
     assert!(!rejected_output.exists());
 
-    let failed_inspection = inspect(&typed_panel()).expect("inspect failed-acceptance fixture");
-    let failed_batch = ManagedControlEditBatch::new([ManagedControlEdit {
-        token: typed_panel_radius(&failed_inspection)
-            .token()
-            .unwrap()
-            .clone(),
-        value: ManagedValue::Unit(UnitLiteral {
-            unit: "mm".into(),
-            value: 400.0,
-        }),
-    }]);
-    assert!(matches!(
-        edit_with_pinned_deno(&typed_panel(), &failed_batch),
-        Err(HeadlessError::Materialization(_))
-    ));
-    let failed_batch_path = root.join("failed-acceptance-batch.json");
-    fs::write(
-        &failed_batch_path,
-        serde_json::to_vec(&failed_batch).unwrap(),
-    )
-    .unwrap();
-    let failed_acceptance_output = root.join("failed-acceptance-output");
-    let failed_acceptance = run_cli_two_phase_edit(
-        binary,
-        "--demo",
-        OsStr::new("typed-panel"),
-        &failed_batch_path,
-        &failed_acceptance_output,
-        &root,
-        "failed-acceptance",
-    );
-    assert!(!failed_acceptance.status.success());
-    assert!(
-        String::from_utf8_lossy(&failed_acceptance.stderr)
-            .contains("native materialization failed")
-    );
-    assert!(
-        !failed_acceptance_output.exists(),
-        "a representable edit which fails native acceptance must publish no directory",
-    );
-
     let invalid_project = root.join("invalid-project.json");
     fs::write(&invalid_project, b"{}").unwrap();
     let invalid_project_output = root.join("invalid-project-output");
@@ -970,8 +982,8 @@ fn cli_rejects_removed_raw_source_flags_and_inputs_at_streaming_bounds() {
     let irrelevant_key = Command::new(binary)
         .args([
             "inspect",
-            "--demo",
-            "typed-panel",
+            "--sample",
+            "theo-jansen-leg",
             "--project-key",
             "foreign",
         ])
@@ -1012,8 +1024,8 @@ fn cli_rejects_removed_raw_source_flags_and_inputs_at_streaming_bounds() {
         .unwrap();
     let batch_rejection = run_cli_prepare_edit(
         binary,
-        "--demo",
-        OsStr::new("typed-panel"),
+        "--sample",
+        OsStr::new("pc-water-manifold"),
         &oversized_batch,
     );
     assert!(!batch_rejection.status.success());

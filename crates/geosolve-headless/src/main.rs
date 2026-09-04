@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use geosolve_headless::{
     HEADLESS_EDIT_BATCH_LIMIT, HEADLESS_PREPARED_EDIT_LIMIT, HeadlessInput, HeadlessPreparedEdit,
-    bundled_demo_keys, inspect, prepare_edit, publish_render, render, resolve_edit,
+    bundled_sample_keys, inspect, prepare_edit, publish_render, render, resolve_edit,
 };
 use geosolve_sketch_code::{
     CODE_PROJECT_LIMIT, ManagedControlEditBatch, PreparedManagedMutationReceipt,
@@ -32,14 +32,14 @@ struct CommandInputs {
 fn run() -> Result<(), String> {
     let mut arguments = env::args().skip(1);
     let command = arguments.next().ok_or_else(usage)?;
-    if command == "demos" {
+    if command == "samples" {
         if arguments.next().is_some() {
             return Err(usage());
         }
-        println!("{}", bundled_demo_keys().join("\n"));
+        println!("{}", bundled_sample_keys().join("\n"));
         return Ok(());
     }
-    let mut demo = None;
+    let mut sample = None;
     let mut project_json = None;
     let mut inputs = CommandInputs::default();
     while let Some(argument) = arguments.next() {
@@ -47,7 +47,7 @@ fn run() -> Result<(), String> {
             .next()
             .ok_or_else(|| format!("missing value after `{argument}`\n{}", usage()))?;
         match argument.as_str() {
-            "--demo" => demo = Some(value),
+            "--sample" => sample = Some(value),
             "--project" => project_json = Some(PathBuf::from(value)),
             "--edit" => inputs.edit = Some(PathBuf::from(value)),
             "--prepared" => inputs.prepared = Some(PathBuf::from(value)),
@@ -56,12 +56,12 @@ fn run() -> Result<(), String> {
             _ => return Err(format!("unknown option `{argument}`\n{}", usage())),
         }
     }
-    let input_count = usize::from(demo.is_some()) + usize::from(project_json.is_some());
+    let input_count = usize::from(sample.is_some()) + usize::from(project_json.is_some());
     if input_count != 1 {
         return Err(format!("select exactly one input\n{}", usage()));
     }
-    let input = if let Some(key) = demo {
-        HeadlessInput::BundledDemo(key)
+    let input = if let Some(key) = sample {
+        HeadlessInput::BundledSample(key)
     } else {
         let path = project_json.expect("one input checked");
         HeadlessInput::CodeProjectJson(read_bounded_utf8(
@@ -180,11 +180,11 @@ fn read_bounded_utf8(path: &Path, limit: usize, label: &str) -> Result<String, S
 fn usage() -> String {
     concat!(
         "usage:\n",
-        "  geosolve-headless demos\n",
-        "  geosolve-headless inspect (--demo KEY | --project FILE)\n",
-        "  geosolve-headless render (--demo KEY | --project FILE) --out NEW_DIR\n",
-        "  geosolve-headless prepare-edit (--demo KEY | --project FILE) --edit BATCH.json\n",
-        "  geosolve-headless resolve-edit (--demo KEY | --project FILE) --prepared PREPARED.json --receipt RECEIPT.json --out NEW_DIR"
+        "  geosolve-headless samples\n",
+        "  geosolve-headless inspect (--sample KEY | --project FILE)\n",
+        "  geosolve-headless render (--sample KEY | --project FILE) --out NEW_DIR\n",
+        "  geosolve-headless prepare-edit (--sample KEY | --project FILE) --edit BATCH.json\n",
+        "  geosolve-headless resolve-edit (--sample KEY | --project FILE) --prepared PREPARED.json --receipt RECEIPT.json --out NEW_DIR"
     )
     .into()
 }
