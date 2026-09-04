@@ -3236,6 +3236,14 @@ impl WorkbenchBridge {
             .expect("WorkbenchBridge construction admits only projectional authority")
     }
 
+    /// Test-only view of the accepted owner behind the actual WASM adapter.
+    #[cfg(all(test, target_arch = "wasm32"))]
+    pub(crate) fn accepted_editor_for_adapter_test(
+        &self,
+    ) -> &geosolve_constraint_editor::ProjectionalEditorSession {
+        self.editor()
+    }
+
     fn editor_mut(&mut self) -> &mut geosolve_constraint_editor::ProjectionalEditorSession {
         self.authority
             .projectional_mut()

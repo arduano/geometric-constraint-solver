@@ -225,6 +225,10 @@ mod wasm {
             IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSuccess,
             MAX_INTENT_RPC_MUTATION_RECEIPT_BYTES, MAX_INTENT_RPC_REQUEST_BYTES,
         };
+        use geosolve_sketch_code::{
+            CompiledManagedSource, ManagedPathSegment, ManagedSketchMutation, ManagedValue,
+            PreparedManagedMutationReceipt, PreparedManagedMutationRequest, UnitLiteral,
+        };
         use geosolve_sketch_intent::{
             GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
             IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition,
@@ -617,6 +621,573 @@ mod wasm {
                 assert!(
                     actual_frame.contains("wb-accepted-scene"),
                     "{key} accepted frame"
+                );
+            }
+        }
+
+        #[wasm_bindgen_test]
+        #[allow(
+            clippy::too_many_lines,
+            reason = "one focused adapter oracle keeps scale selection, prepared compilation, validation and exact history adjacent"
+        )]
+        fn actual_wasm_scale_samples_select_edit_validate_and_retain_history() {
+            struct ScaleEditCase {
+                key: &'static str,
+                declaration: &'static str,
+                path: &'static [&'static str],
+                original: f64,
+                replacement: f64,
+                compiled_fixture: &'static [u8],
+            }
+
+            const CASES: &[ScaleEditCase] = &[
+                ScaleEditCase {
+                    key: "perforated-fixture-field",
+                    declaration: "northernCells",
+                    path: &["pilotRadius"],
+                    original: 2.5,
+                    replacement: 2.7,
+                    compiled_fixture: include_bytes!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/tests/fixtures/m92-perforated-fixture-field-edit.compiled.json.zlib"
+                    )),
+                },
+                ScaleEditCase {
+                    key: "robotic-harness-backplane",
+                    declaration: "bendRadius",
+                    path: &[],
+                    original: 5.0,
+                    replacement: 4.5,
+                    compiled_fixture: include_bytes!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/tests/fixtures/m92-robotic-harness-backplane-edit.compiled.json.zlib"
+                    )),
+                },
+            ];
+
+            fn parse_snapshot(encoded: &str, context: &str) -> serde_json::Value {
+                serde_json::from_str(encoded)
+                    .unwrap_or_else(|error| panic!("{context} snapshot JSON: {error}"))
+            }
+
+            fn managed_source<'a>(snapshot: &'a serde_json::Value, key: &str) -> &'a str {
+                snapshot["source"]["files"]
+                    .as_array()
+                    .and_then(|files| files.iter().find(|file| file["path"] == "sketch.ts"))
+                    .and_then(|file| file["contents"].as_str())
+                    .unwrap_or_else(|| panic!("{key} managed source"))
+            }
+
+            fn frame_svg<'a>(snapshot: &'a serde_json::Value, key: &str) -> &'a str {
+                snapshot["frame"]["svg"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{key} frame SVG"))
+            }
+
+            fn svg_attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+                let marker = format!("{name}=\"");
+                let value = tag.get(tag.find(&marker)? + marker.len()..)?;
+                value.get(..value.find('"')?)
+            }
+
+            fn first_interactive_point(svg: &str, key: &str) -> [f64; 2] {
+                svg.split("<circle")
+                    .skip(1)
+                    .find_map(|suffix| {
+                        let tag = suffix.get(..suffix.find("/>")?)?;
+                        if !tag.contains("class=\"wb-point")
+                            || !tag.contains("data-interactive=\"true\"")
+                        {
+                            return None;
+                        }
+                        Some([
+                            svg_attribute(tag, "cx")?.parse::<f64>().ok()?,
+                            svg_attribute(tag, "cy")?.parse::<f64>().ok()?,
+                        ])
+                    })
+                    .unwrap_or_else(|| panic!("{key} has no interactive SVG point"))
+            }
+
+            fn click(
+                handle: &mut super::WorkbenchHandle,
+                pointer_id: u64,
+                position: [f64; 2],
+                key: &str,
+            ) -> serde_json::Value {
+                let request = |phase: &str, buttons: u16| {
+                    serde_json::json!({
+                        "version": 1,
+                        "phase": phase,
+                        "pointerId": pointer_id,
+                        "x": position[0],
+                        "y": position[1],
+                        "buttons": buttons,
+                        "modifiers": {
+                            "alt": false,
+                            "ctrl": false,
+                            "meta": false,
+                            "shift": false,
+                        },
+                    })
+                    .to_string()
+                };
+                handle
+                    .pointer(&request("down", 1))
+                    .unwrap_or_else(|error| panic!("{key} pointer down: {error:?}"));
+                parse_snapshot(
+                    &handle
+                        .pointer(&request("up", 0))
+                        .unwrap_or_else(|error| panic!("{key} pointer up: {error:?}")),
+                    key,
+                )
+            }
+
+            fn inspect_controls(
+                handle: &mut super::WorkbenchHandle,
+                key: &str,
+            ) -> serde_json::Value {
+                let response = handle.code_control_rpc(r#"{"method":"inspect_managed_controls"}"#);
+                let response: serde_json::Value = serde_json::from_str(&response)
+                    .unwrap_or_else(|error| panic!("{key} control response JSON: {error}"));
+                assert_eq!(response["outcome"], "success", "{key} controls");
+                assert_eq!(
+                    response["value"]["result"], "managed_controls",
+                    "{key} controls"
+                );
+                response["value"]["snapshot"].clone()
+            }
+
+            fn code_revision(snapshot: &serde_json::Value, key: &str) -> u64 {
+                snapshot["identity"]["revision"]
+                    .as_u64()
+                    .unwrap_or_else(|| panic!("{key} code revision"))
+            }
+
+            fn assert_complete_frame(snapshot: &serde_json::Value, key: &str) {
+                let svg = frame_svg(snapshot, key);
+                assert!(svg.starts_with("<svg"), "{key} SVG root");
+                assert!(svg.ends_with("</svg>"), "{key} complete SVG");
+                assert!(svg.contains("wb-accepted-scene"), "{key} accepted frame");
+                assert!(svg.contains("wb-geometry"), "{key} complete geometry frame");
+                assert!(!svg.contains("NaN"), "{key} frame has no NaN");
+                assert!(!svg.contains("Infinity"), "{key} frame has no infinity");
+            }
+
+            fn assert_accepted_invariants(
+                handle: &super::WorkbenchHandle,
+                key: &str,
+                expected_raw_dof: usize,
+                expected_effective_dof: usize,
+            ) {
+                let accepted = handle
+                    .bridge
+                    .accepted_editor_for_adapter_test()
+                    .coordinator()
+                    .accepted_materialization()
+                    .unwrap_or_else(|| panic!("{key} accepted materialization"));
+                assert!(
+                    accepted.validation.hard_residuals_validated,
+                    "{key} independently validated hard residuals"
+                );
+                assert!(
+                    accepted.validation.all_active_features_current,
+                    "{key} current computed features"
+                );
+                assert!(
+                    accepted
+                        .validation
+                        .maximum_normalized_hard_residual
+                        .is_none_or(|residual| residual.is_finite() && residual <= 1.0e-9),
+                    "{key} normalized hard residual"
+                );
+                let state = accepted
+                    .session
+                    .accepted_state_for_current_input()
+                    .unwrap_or_else(|| panic!("{key} current accepted state"));
+                let diagnostics = state.diagnostics();
+                assert_eq!(
+                    diagnostics
+                        .rank
+                        .and_then(|rank| rank.numerical_right_nullity),
+                    Some(expected_raw_dof),
+                    "{key} numerical right-nullity"
+                );
+                let mobility = diagnostics
+                    .mobility
+                    .unwrap_or_else(|| panic!("{key} mobility diagnostics"));
+                assert_eq!(
+                    mobility.equality_degrees_of_freedom,
+                    Some(expected_raw_dof),
+                    "{key} equality DOF"
+                );
+                assert_eq!(
+                    mobility.bidirectional_bounded_degrees_of_freedom,
+                    Some(expected_effective_dof),
+                    "{key} bidirectional bounded DOF"
+                );
+                assert!(
+                    state
+                        .document()
+                        .points()
+                        .iter()
+                        .flat_map(|point| point.position)
+                        .chain(state.document().scalars().iter().map(|scalar| scalar.value))
+                        .all(f64::is_finite),
+                    "{key} finite accepted points and scalars"
+                );
+            }
+
+            for (index, case) in CASES.iter().enumerate() {
+                let sample = geosolve_sketch_code::bundled_sample(case.key)
+                    .unwrap_or_else(|| panic!("{} canonical sample", case.key));
+                let mut handle = super::WorkbenchHandle::new(r#"{"version":1}"#)
+                    .unwrap_or_else(|error| panic!("{} WASM workbench: {error:?}", case.key));
+                let opened = parse_snapshot(
+                    &handle
+                        .dispatch(
+                            &serde_json::json!({
+                                "version": 1,
+                                "command": "sample.open",
+                                "payload": { "key": case.key },
+                            })
+                            .to_string(),
+                        )
+                        .unwrap_or_else(|error| panic!("{} sample open: {error:?}", case.key)),
+                    case.key,
+                );
+                assert_eq!(opened["project"]["status"], "accepted", "{}", case.key);
+                assert!(
+                    opened["problems"].as_array().is_some_and(Vec::is_empty),
+                    "{} initial Problems",
+                    case.key
+                );
+                assert_complete_frame(&opened, case.key);
+                assert_accepted_invariants(
+                    &handle,
+                    case.key,
+                    sample.expected.numerical_right_nullity(),
+                    sample.expected.bidirectional_bounded_degrees_of_freedom(),
+                );
+                let base_source = managed_source(&opened, case.key).to_owned();
+                let base_frame = frame_svg(&opened, case.key).to_owned();
+                let base_controls = inspect_controls(&mut handle, case.key);
+                assert_eq!(base_controls["can_undo"], false, "{}", case.key);
+                assert_eq!(base_controls["can_redo"], false, "{}", case.key);
+                let base_identity = base_controls["identity"].clone();
+                assert_eq!(code_revision(&base_controls, case.key), 0, "{}", case.key);
+
+                let controls = base_controls["manifest"]["controls"]
+                    .as_array()
+                    .unwrap_or_else(|| panic!("{} managed controls", case.key));
+                let expected_path = serde_json::to_value(case.path).unwrap();
+                let control = controls
+                    .iter()
+                    .find(|control| {
+                        control["source"]["declaration"] == case.declaration
+                            && control["source"]["path"] == expected_path
+                    })
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{} exact managed control {}.{:?}",
+                            case.key, case.declaration, case.path
+                        )
+                    });
+                assert_eq!(control["access"]["access"], "editable", "{}", case.key);
+                assert_eq!(
+                    control["value"],
+                    serde_json::json!({
+                        "kind": "unit",
+                        "value": { "unit": "mm", "value": case.original },
+                    }),
+                    "{} exact base control value",
+                    case.key
+                );
+                let control_id = control["id"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{} control id", case.key))
+                    .to_owned();
+                drop(base_controls);
+
+                let point = first_interactive_point(&base_frame, case.key);
+                let selected = click(
+                    &mut handle,
+                    u64::try_from(index).unwrap() + 92_100,
+                    point,
+                    case.key,
+                );
+                assert!(selected["selection"].is_object(), "{} selection", case.key);
+                assert!(
+                    frame_svg(&selected, case.key).contains("class=\"wb-point selected"),
+                    "{} selected point paint",
+                    case.key
+                );
+                assert_eq!(
+                    managed_source(&selected, case.key),
+                    base_source,
+                    "{}",
+                    case.key
+                );
+                assert_eq!(
+                    selected["presentation"]["canUndo"], false,
+                    "{} selection leaves Undo history unchanged",
+                    case.key
+                );
+                assert_eq!(selected["presentation"]["canRedo"], false, "{}", case.key);
+
+                // Selection is presentation-only and deliberately absent from
+                // outer code checkpoints. Clear it through the public pointer
+                // adapter before freezing exact base/edited history frames.
+                let deselected = click(
+                    &mut handle,
+                    u64::try_from(index).unwrap() + 92_200,
+                    [1.0, 1.0],
+                    case.key,
+                );
+                assert!(
+                    deselected["selection"].is_null(),
+                    "{} deselection",
+                    case.key
+                );
+                assert_eq!(frame_svg(&deselected, case.key), base_frame, "{}", case.key);
+                assert_eq!(
+                    managed_source(&deselected, case.key),
+                    base_source,
+                    "{}",
+                    case.key
+                );
+                let pending = parse_snapshot(
+                    &handle
+                        .dispatch(
+                            &serde_json::json!({
+                                "version": 1,
+                                "command": "parameter.edit",
+                                "payload": {
+                                    "id": control_id,
+                                    "value": case.replacement,
+                                },
+                            })
+                            .to_string(),
+                        )
+                        .unwrap_or_else(|error| {
+                            panic!("{} prepare parameter edit: {error:?}", case.key)
+                        }),
+                    case.key,
+                );
+                assert_eq!(pending["pendingManagedMutation"]["kind"], "managed");
+                assert_eq!(
+                    managed_source(&pending, case.key),
+                    base_source,
+                    "{}",
+                    case.key
+                );
+                assert_eq!(frame_svg(&pending, case.key), base_frame, "{}", case.key);
+                assert_eq!(pending["presentation"]["canUndo"], false, "{}", case.key);
+                assert_eq!(pending["presentation"]["canRedo"], false, "{}", case.key);
+                assert!(
+                    pending["problems"].as_array().is_some_and(Vec::is_empty),
+                    "{} pending Problems",
+                    case.key
+                );
+
+                let request: PreparedManagedMutationRequest =
+                    serde_json::from_value(pending["pendingManagedMutation"]["request"].clone())
+                        .unwrap_or_else(|error| panic!("{} prepared request: {error}", case.key));
+                assert_eq!(
+                    request.current.normalized_source, base_source,
+                    "{}",
+                    case.key
+                );
+                assert_eq!(
+                    serde_json::to_value(&request.ticket.session).unwrap(),
+                    base_identity,
+                    "{} pending compilation retains exact code history identity",
+                    case.key
+                );
+                let ManagedSketchMutation::SetValues { values } = &request.ticket.mutation else {
+                    panic!("{} representative edit must prepare set_values", case.key)
+                };
+                assert_eq!(values.len(), 1, "{}", case.key);
+                assert_eq!(values[0].declaration, case.declaration, "{}", case.key);
+                assert_eq!(
+                    values[0].path,
+                    case.path
+                        .iter()
+                        .map(|field| ManagedPathSegment::Field((*field).to_owned()))
+                        .collect::<Vec<_>>(),
+                    "{}",
+                    case.key
+                );
+                assert_eq!(
+                    values[0].expected,
+                    ManagedValue::Unit(UnitLiteral {
+                        unit: "mm".into(),
+                        value: case.original,
+                    }),
+                    "{}",
+                    case.key
+                );
+                assert_eq!(
+                    values[0].value,
+                    ManagedValue::Unit(UnitLiteral {
+                        unit: "mm".into(),
+                        value: case.replacement,
+                    }),
+                    "{}",
+                    case.key
+                );
+
+                let decompressed = miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(
+                    case.compiled_fixture,
+                    geosolve_sketch_code::MANAGED_WIRE_LIMIT,
+                )
+                .unwrap_or_else(|error| panic!("{} compressed fixture: {error:?}", case.key));
+                let fixture = std::str::from_utf8(&decompressed)
+                    .unwrap_or_else(|error| panic!("{} fixture UTF-8: {error}", case.key));
+                let candidate = CompiledManagedSource::from_json(fixture)
+                    .unwrap_or_else(|error| panic!("{} candidate fixture: {error}", case.key));
+                assert_eq!(
+                    candidate
+                        .artifact
+                        .groups
+                        .iter()
+                        .map(|group| group.name.as_str())
+                        .collect::<Vec<_>>(),
+                    sample.functional_groups,
+                    "{} exact candidate group order",
+                    case.key
+                );
+                let candidate_source = candidate.normalized_source.clone();
+                let receipt = PreparedManagedMutationReceipt {
+                    ticket_digest: request.ticket.ticket_digest,
+                    base_source_digest: request.current.ir.source_digest,
+                    candidate_source_digest: candidate.ir.source_digest.clone(),
+                    compiled: candidate,
+                };
+                let accepted = parse_snapshot(
+                    &handle
+                        .dispatch(
+                            &serde_json::json!({
+                                "version": 1,
+                                "command": "managed.mutation.resolve",
+                                "payload": receipt,
+                            })
+                            .to_string(),
+                        )
+                        .unwrap_or_else(|error| {
+                            panic!("{} resolve parameter edit: {error:?}", case.key)
+                        }),
+                    case.key,
+                );
+                assert!(
+                    accepted.get("pendingManagedMutation").is_none(),
+                    "{}",
+                    case.key
+                );
+                assert_eq!(accepted["project"]["status"], "accepted", "{}", case.key);
+                assert!(
+                    accepted["problems"].as_array().is_some_and(Vec::is_empty),
+                    "{} accepted Problems",
+                    case.key
+                );
+                assert!(accepted["selection"].is_null(), "{}", case.key);
+                assert_eq!(
+                    managed_source(&accepted, case.key),
+                    candidate_source,
+                    "{} exact candidate source publication",
+                    case.key
+                );
+                assert_eq!(accepted["presentation"]["canUndo"], true, "{}", case.key);
+                assert_eq!(accepted["presentation"]["canRedo"], false, "{}", case.key);
+                assert_complete_frame(&accepted, case.key);
+                let edited_frame = frame_svg(&accepted, case.key).to_owned();
+                let repeated = parse_snapshot(
+                    &handle
+                        .snapshot()
+                        .unwrap_or_else(|error| panic!("{} repeat snapshot: {error:?}", case.key)),
+                    case.key,
+                );
+                assert_eq!(
+                    repeated["frame"], accepted["frame"],
+                    "{} deterministic edited frame",
+                    case.key
+                );
+                let visible_groups = accepted["explorer"]
+                    .as_array()
+                    .expect("Explorer groups")
+                    .iter()
+                    .filter_map(|group| group["label"].as_str())
+                    .filter(|label| sample.functional_groups.contains(label))
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    visible_groups, sample.functional_groups,
+                    "{} exact Explorer functional-group order",
+                    case.key
+                );
+                assert_accepted_invariants(
+                    &handle,
+                    case.key,
+                    sample.expected.numerical_right_nullity(),
+                    sample.expected.bidirectional_bounded_degrees_of_freedom(),
+                );
+                let edited_controls = inspect_controls(&mut handle, case.key);
+                assert_eq!(
+                    edited_controls["identity"]["session"], base_identity["session"],
+                    "{} code session",
+                    case.key
+                );
+                assert_eq!(
+                    code_revision(&edited_controls, case.key),
+                    base_identity["revision"].as_u64().unwrap() + 1,
+                    "{} exactly one accepted code revision",
+                    case.key
+                );
+                assert_eq!(edited_controls["can_undo"], true, "{}", case.key);
+                assert_eq!(edited_controls["can_redo"], false, "{}", case.key);
+                drop(edited_controls);
+
+                let undone = parse_snapshot(
+                    &handle
+                        .dispatch(r#"{"version":1,"command":"history.undo"}"#)
+                        .unwrap_or_else(|error| panic!("{} Undo: {error:?}", case.key)),
+                    case.key,
+                );
+                assert_eq!(
+                    managed_source(&undone, case.key),
+                    base_source,
+                    "{}",
+                    case.key
+                );
+                assert_eq!(frame_svg(&undone, case.key), base_frame, "{}", case.key);
+                assert_eq!(undone["presentation"]["canUndo"], false, "{}", case.key);
+                assert_eq!(undone["presentation"]["canRedo"], true, "{}", case.key);
+                assert!(undone["problems"].as_array().is_some_and(Vec::is_empty));
+                assert_accepted_invariants(
+                    &handle,
+                    case.key,
+                    sample.expected.numerical_right_nullity(),
+                    sample.expected.bidirectional_bounded_degrees_of_freedom(),
+                );
+                let redone = parse_snapshot(
+                    &handle
+                        .dispatch(r#"{"version":1,"command":"history.redo"}"#)
+                        .unwrap_or_else(|error| panic!("{} Redo: {error:?}", case.key)),
+                    case.key,
+                );
+                assert_eq!(
+                    managed_source(&redone, case.key),
+                    candidate_source,
+                    "{} Redo source",
+                    case.key
+                );
+                assert_eq!(frame_svg(&redone, case.key), edited_frame, "{}", case.key);
+                assert_eq!(redone["presentation"]["canUndo"], true, "{}", case.key);
+                assert_eq!(redone["presentation"]["canRedo"], false, "{}", case.key);
+                assert!(redone["problems"].as_array().is_some_and(Vec::is_empty));
+                assert_accepted_invariants(
+                    &handle,
+                    case.key,
+                    sample.expected.numerical_right_nullity(),
+                    sample.expected.bidirectional_bounded_degrees_of_freedom(),
                 );
             }
         }

@@ -4,16 +4,43 @@ import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync, inflateSync } from "node:zlib";
 
-import { compileManagedSource } from "../dist/src/managed.js";
+import {
+  applyManagedSketchMutation,
+  compileManagedSource,
+} from "../dist/src/managed.js";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sampleRoot = resolve(
   packageRoot,
   "../../crates/geosolve-sketch-code/assets/bundled-samples",
 );
+const demoFixtureRoot = resolve(
+  packageRoot,
+  "../../crates/geosolve-demo-web/tests/fixtures",
+);
 const check = process.argv.includes("--check");
 const write = process.argv.includes("--write");
+
+const releaseWasmScaleEdits = new Map([
+  [
+    "perforated-fixture-field",
+    {
+      declaration: "northernCells",
+      path: ["pilotRadius"],
+      expected: { unit: "mm", value: 2.5 },
+    },
+  ],
+  [
+    "robotic-harness-backplane",
+    {
+      declaration: "bendRadius",
+      path: [],
+      expected: { unit: "mm", value: 5 },
+    },
+  ],
+]);
 
 if (check === write) {
   throw new TypeError(
@@ -67,6 +94,39 @@ for (const { directory, key } of directories) {
     : compileManagedSource(first.normalizedSource, options);
   const envelope = JSON.stringify(compiled);
 
+  const scaleEdit = releaseWasmScaleEdits.get(key);
+  let editedEnvelope;
+  if (scaleEdit !== undefined) {
+    const witnesses = JSON.parse(
+      await readFile(join(directory, "witnesses.json"), "utf8"),
+    );
+    const edit = witnesses.representative_edit;
+    assert.equal(edit.declaration, scaleEdit.declaration);
+    assert.deepEqual(edit.path, scaleEdit.path);
+    assert.equal(edit.replacement?.unit, scaleEdit.expected.unit);
+    assert.equal(typeof edit.replacement?.value, "number");
+    const receipt = applyManagedSketchMutation(
+      compiled,
+      {
+        mutation: "set_values",
+        values: [{
+          declaration: scaleEdit.declaration,
+          path: scaleEdit.path,
+          expected: { kind: "unit", value: scaleEdit.expected },
+          value: { kind: "unit", value: edit.replacement },
+        }],
+      },
+      options,
+    );
+    assert.equal(receipt.baseSourceDigest, compiled.ir.source_digest);
+    assert.equal(
+      receipt.candidateSourceDigest,
+      receipt.compiled.ir.source_digest,
+    );
+    assert.notEqual(receipt.compiled.normalizedSource, compiled.normalizedSource);
+    editedEnvelope = JSON.stringify(receipt.compiled);
+  }
+
   if (check) {
     assert.equal(
       source,
@@ -81,5 +141,24 @@ for (const { directory, key } of directories) {
   } else {
     await writeFile(sourcePath, compiled.normalizedSource);
     await writeFile(compiledPath, envelope);
+  }
+
+  if (editedEnvelope !== undefined) {
+    const editedPath = join(
+      demoFixtureRoot,
+      `m92-${key}-edit.compiled.json.zlib`,
+    );
+    if (check) {
+      assert.equal(
+        inflateSync(await readFile(editedPath)).toString("utf8"),
+        editedEnvelope,
+        `${key} release-WASM edit fixture is stale; run the bundled-sample generator`,
+      );
+    } else {
+      await writeFile(
+        editedPath,
+        deflateSync(Buffer.from(editedEnvelope), { level: 9 }),
+      );
+    }
   }
 }
