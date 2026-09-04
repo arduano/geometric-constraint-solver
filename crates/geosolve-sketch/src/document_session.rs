@@ -8238,6 +8238,10 @@ impl SketchDocument {
         }
         let design = self;
         let mut seed = design.clone();
+        // Accepted point/scalar/control values form one coordinated numerical
+        // state. Validate only after all matching values have been copied so
+        // no invalid intermediate curve branch can reject a valid seed.
+        seed.defer_mutation_validation();
         for point in design.points() {
             let Some(parent_design) = upstream_design.point(point.id) else {
                 continue;
@@ -8311,6 +8315,8 @@ impl SketchDocument {
                 seed.set_conic_weighted_middle(curve.id, parent_accepted_middle)?;
             }
         }
+        seed.resume_mutation_validation();
+        seed.validate()?;
         Ok(seed)
     }
 }
