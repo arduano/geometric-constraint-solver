@@ -3,9 +3,17 @@
   "ordinal": 17,
   "key": "curves-contact-continuity-atlas",
   "title": "Curves, contact and continuity atlas",
-  "summary": "A broad source-defined reference lays out curve families and explicit contact state.",
+  "summary": "Readable analytic and spline specimens frame explicit rolling contact and a parametric-C2 seam.",
   "category": "reference_lab",
-  "expected": { "raw_dof": 166, "effective_dof": 158 },
-  "groups": ["Points", "Geometry", "Constraints"],
+  "expected": {
+    "raw_dof": 81,
+    "effective_dof": 81
+  },
+  "groups": [
+    "Analytic curve vocabulary",
+    "Spline curve vocabulary",
+    "Explicit rolling contact",
+    "Parametric C2 continuity"
+  ],
   "provenance": []
 }

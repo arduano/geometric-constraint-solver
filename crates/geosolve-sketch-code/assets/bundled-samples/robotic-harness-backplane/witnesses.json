@@ -1,5 +1,5 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "point1FixedSpecimenPoint", "path": ["point"], "replacement": [-12, 8] },
+  "representative_edit": { "declaration": "bendRadius", "path": [], "replacement": { "unit": "mm", "value": 4.5 } },
   "drags": []
 }

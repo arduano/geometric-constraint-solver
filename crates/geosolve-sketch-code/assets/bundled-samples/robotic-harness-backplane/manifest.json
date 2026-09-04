@@ -3,9 +3,17 @@
   "ordinal": 20,
   "key": "robotic-harness-backplane",
   "title": "Dense robotic harness-routing backplane",
-  "summary": "A dense source-defined routing board exercises complete retained presentation at scale.",
+  "summary": "Eight readable harness trunks generate keyed clips and computed bend fillets across a complete robotic cell backplane.",
   "category": "scale_study",
-  "expected": { "raw_dof": 112, "effective_dof": 112 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "expected": {
+    "raw_dof": 268,
+    "effective_dof": 268
+  },
+  "groups": [
+    "Backplane and mounting grid",
+    "Power and servo harnesses",
+    "Sensor harnesses",
+    "Tooling vision and service harnesses"
+  ],
   "provenance": []
 }

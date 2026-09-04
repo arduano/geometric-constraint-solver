@@ -1,5 +1,5 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "point1PointDistanceFirstPoint", "path": ["point"], "replacement": [-8, 8] },
+  "representative_edit": { "declaration": "cornerFillet", "path": ["radius"], "replacement": { "unit": "mm", "value": 2.25 } },
   "drags": []
 }

@@ -1,358 +1,655 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { sketch, mm } from "@geosolve/sketch-code";
+import { fixtureCells } from "./patches/fixture-cells.patch.ts";
 
 export default sketch(($) => {
-  const point1MidpointReferenceStart = $.geometry.sketchPoint("point1MidpointReferenceStart", {
-    point: [-11, 5],
-    label: "Midpoint reference start",
-  });
-  const point2MidpointReferenceEnd = $.geometry.sketchPoint("point2MidpointReferenceEnd", {
-    point: [-3, 5],
-    label: "Midpoint reference end",
-  });
-  const point3AffinePolylineStart = $.geometry.sketchPoint("point3AffinePolylineStart", {
-    point: [-11, 1],
-    label: "Affine polyline start",
-  });
-  const point4AffinePolylineCorner = $.geometry.sketchPoint("point4AffinePolylineCorner", {
-    point: [-7, 3],
-    label: "Affine polyline corner",
-  });
-  const point5AffinePolylineEnd = $.geometry.sketchPoint("point5AffinePolylineEnd", {
-    point: [-3, 1],
-    label: "Affine polyline end",
-  });
-  const point6ProfilePointSpecimen = $.geometry.sketchPoint("point6ProfilePointSpecimen", {
-    point: [-11, -9],
-    label: "Profile point specimen",
-  });
-  const point7ConstructionPointSpecimen = $.geometry.sketchPoint("point7ConstructionPointSpecimen", {
-    point: [-7, -9],
-    label: "Construction point specimen",
-  });
-  const point8RedundantInferenceRejectionStartPoint = $.geometry.sketchPoint("point8RedundantInferenceRejectionStartPoint", {
-    point: [2, -9],
-    label: "Redundant inference rejection start point",
-  });
-  const point9RedundantInferenceRejectionEndPoint = $.geometry.sketchPoint("point9RedundantInferenceRejectionEndPoint", {
-    point: [10, -9],
-    label: "Redundant inference rejection end point",
-  });
-  const point10CurveTargetCircleCenter = $.geometry.sketchPoint("point10CurveTargetCircleCenter", {
-    point: [2, 5],
-    label: "Curve target circle center",
-  });
-  const point11CurveTargetBezierStart = $.geometry.sketchPoint("point11CurveTargetBezierStart", {
-    point: [6, 3],
-    label: "Curve target Bezier start",
-  });
-  const point12CurveTargetBezierControl1 = $.geometry.sketchPoint("point12CurveTargetBezierControl1", {
-    point: [8, 7],
-    label: "Curve target Bezier control 1",
-  });
-  const point13CurveTargetBezierControl2 = $.geometry.sketchPoint("point13CurveTargetBezierControl2", {
-    point: [10, 2],
-    label: "Curve target Bezier control 2",
-  });
-  const point14CurveTargetBezierEnd = $.geometry.sketchPoint("point14CurveTargetBezierEnd", {
-    point: [12, 5],
-    label: "Curve target Bezier end",
-  });
-  const point15DraftPoint = $.geometry.sketchPoint("point15DraftPoint", {
-    point: [5, -1],
-    label: "draft point",
-  });
-  const point16DraftPoint = $.geometry.sketchPoint("point16DraftPoint", {
-    point: [7, -4],
-    label: "draft point",
-  });
-  const point17DraftPoint = $.geometry.sketchPoint("point17DraftPoint", {
-    point: [10, 0],
-    label: "draft point",
-  });
-  const point18DraftPoint = $.geometry.sketchPoint("point18DraftPoint", {
-    point: [12, -3],
-    label: "draft point",
-  });
-  const point19ProfileOverlapStart = $.geometry.sketchPoint("point19ProfileOverlapStart", {
-    point: [-11, -3],
-    label: "Profile overlap start",
-  });
-  const point20ProfileOverlapEnd = $.geometry.sketchPoint("point20ProfileOverlapEnd", {
-    point: [-3, -3],
-    label: "Profile overlap end",
-  });
-  const point21ConstructionOverlapStart = $.geometry.sketchPoint("point21ConstructionOverlapStart", {
-    point: [-11, -3],
-    label: "Construction overlap start",
-  });
-  const point22ConstructionOverlapEnd = $.geometry.sketchPoint("point22ConstructionOverlapEnd", {
-    point: [-3, -3],
-    label: "Construction overlap end",
-  });
-  const point23ExactAmbiguityAStart = $.geometry.sketchPoint("point23ExactAmbiguityAStart", {
-    point: [2, -6],
-    label: "Exact ambiguity A start",
-  });
-  const point24ExactAmbiguityAEnd = $.geometry.sketchPoint("point24ExactAmbiguityAEnd", {
-    point: [10, -6],
-    label: "Exact ambiguity A end",
-  });
-  const point25ExactAmbiguityBStart = $.geometry.sketchPoint("point25ExactAmbiguityBStart", {
-    point: [2, -6],
-    label: "Exact ambiguity B start",
-  });
-  const point26ExactAmbiguityBEnd = $.geometry.sketchPoint("point26ExactAmbiguityBEnd", {
-    point: [10, -6],
-    label: "Exact ambiguity B end",
-  });
-  const curve1MidpointAndAffineReferenceLine = $.geometry.segment("curve1MidpointAndAffineReferenceLine", {
-    start: point1MidpointReferenceStart.point,
-    end: point2MidpointReferenceEnd.point,
-    branchDirection: [1, 0],
-    label: "Midpoint and affine reference line",
+  // The plate and three readable serpentine lattices are the only authored
+  // geometry. A keyed structural patch produces exact concentric Circles at
+  // every lattice point: 192 pilots plus 192 counterbores, with no LOD.
+  const fixtureEnvelope = $.geometry.twoPointAlignedRectangle("fixtureEnvelope", {
+    firstCorner: [-180, -70],
+    oppositeCorner: [180, 70],
     role: "profile",
+    label: "360 × 140 mm fixture envelope",
   });
-  const curve2AffineReferencePolyline = $.geometry.polyline("curve2AffineReferencePolyline", {
+  const northernLattice = $.geometry.polyline("northernLattice", {
     vertices: [{
-      key: "vertex1",
-      position: point3AffinePolylineStart.point,
+      key: "r00c00",
+      position: [-172.5, 52.5],
     }, {
-      key: "vertex2",
-      position: point4AffinePolylineCorner.point,
+      key: "r00c01",
+      position: [-157.5, 52.5],
     }, {
-      key: "vertex3",
-      position: point5AffinePolylineEnd.point,
+      key: "r00c02",
+      position: [-142.5, 52.5],
+    }, {
+      key: "r00c03",
+      position: [-127.5, 52.5],
+    }, {
+      key: "r00c04",
+      position: [-112.5, 52.5],
+    }, {
+      key: "r00c05",
+      position: [-97.5, 52.5],
+    }, {
+      key: "r00c06",
+      position: [-82.5, 52.5],
+    }, {
+      key: "r00c07",
+      position: [-67.5, 52.5],
+    }, {
+      key: "r00c08",
+      position: [-52.5, 52.5],
+    }, {
+      key: "r00c09",
+      position: [-37.5, 52.5],
+    }, {
+      key: "r00c10",
+      position: [-22.5, 52.5],
+    }, {
+      key: "r00c11",
+      position: [-7.5, 52.5],
+    }, {
+      key: "r00c12",
+      position: [7.5, 52.5],
+    }, {
+      key: "r00c13",
+      position: [22.5, 52.5],
+    }, {
+      key: "r00c14",
+      position: [37.5, 52.5],
+    }, {
+      key: "r00c15",
+      position: [52.5, 52.5],
+    }, {
+      key: "r00c16",
+      position: [67.5, 52.5],
+    }, {
+      key: "r00c17",
+      position: [82.5, 52.5],
+    }, {
+      key: "r00c18",
+      position: [97.5, 52.5],
+    }, {
+      key: "r00c19",
+      position: [112.5, 52.5],
+    }, {
+      key: "r00c20",
+      position: [127.5, 52.5],
+    }, {
+      key: "r00c21",
+      position: [142.5, 52.5],
+    }, {
+      key: "r00c22",
+      position: [157.5, 52.5],
+    }, {
+      key: "r00c23",
+      position: [172.5, 52.5],
+    }, {
+      key: "r01c23",
+      position: [172.5, 37.5],
+    }, {
+      key: "r01c22",
+      position: [157.5, 37.5],
+    }, {
+      key: "r01c21",
+      position: [142.5, 37.5],
+    }, {
+      key: "r01c20",
+      position: [127.5, 37.5],
+    }, {
+      key: "r01c19",
+      position: [112.5, 37.5],
+    }, {
+      key: "r01c18",
+      position: [97.5, 37.5],
+    }, {
+      key: "r01c17",
+      position: [82.5, 37.5],
+    }, {
+      key: "r01c16",
+      position: [67.5, 37.5],
+    }, {
+      key: "r01c15",
+      position: [52.5, 37.5],
+    }, {
+      key: "r01c14",
+      position: [37.5, 37.5],
+    }, {
+      key: "r01c13",
+      position: [22.5, 37.5],
+    }, {
+      key: "r01c12",
+      position: [7.5, 37.5],
+    }, {
+      key: "r01c11",
+      position: [-7.5, 37.5],
+    }, {
+      key: "r01c10",
+      position: [-22.5, 37.5],
+    }, {
+      key: "r01c09",
+      position: [-37.5, 37.5],
+    }, {
+      key: "r01c08",
+      position: [-52.5, 37.5],
+    }, {
+      key: "r01c07",
+      position: [-67.5, 37.5],
+    }, {
+      key: "r01c06",
+      position: [-82.5, 37.5],
+    }, {
+      key: "r01c05",
+      position: [-97.5, 37.5],
+    }, {
+      key: "r01c04",
+      position: [-112.5, 37.5],
+    }, {
+      key: "r01c03",
+      position: [-127.5, 37.5],
+    }, {
+      key: "r01c02",
+      position: [-142.5, 37.5],
+    }, {
+      key: "r01c01",
+      position: [-157.5, 37.5],
+    }, {
+      key: "r01c00",
+      position: [-172.5, 37.5],
     }],
     closed: false,
-    branchDirections: [[0.8944271909999159, 0.4472135954999579], [0.8944271909999159, -0.4472135954999579]],
-    label: "Affine reference polyline",
-    role: "profile",
-  });
-  const curve3ProfilePointSpecimenMarker = $.geometry.centerRadiusCircle("curve3ProfilePointSpecimenMarker", {
-    center: point6ProfilePointSpecimen.point,
-    radius: mm(0.75),
-    label: "Profile point specimen marker",
-    role: "profile",
-  });
-  const curve4ConstructionPointSpecimenMarker = $.geometry.centerRadiusCircle("curve4ConstructionPointSpecimenMarker", {
-    center: point7ConstructionPointSpecimen.point,
-    radius: mm(0.75),
-    label: "Construction point specimen marker",
     role: "construction",
+    label: "Northern two-row mounting lattice",
   });
-  const curve5RedundantInferenceRejectionStartMarker = $.geometry.centerRadiusCircle("curve5RedundantInferenceRejectionStartMarker", {
-    center: point8RedundantInferenceRejectionStartPoint.point,
-    radius: mm(0.65),
-    label: "Redundant inference rejection start marker",
-    role: "construction",
+  const northernCells = $.use("northernCells", fixtureCells, {
+    centers: northernLattice.vertices,
+    pilotRadius: mm(2.5),
+    counterboreRadius: mm(4.5),
   });
-  const curve6RedundantInferenceRejectionEndMarker = $.geometry.centerRadiusCircle("curve6RedundantInferenceRejectionEndMarker", {
-    center: point9RedundantInferenceRejectionEndPoint.point,
-    radius: mm(0.65),
-    label: "Redundant inference rejection end marker",
-    role: "construction",
-  });
-  const curve7RedundantInferenceRejectionReference = $.geometry.segment("curve7RedundantInferenceRejectionReference", {
-    start: point8RedundantInferenceRejectionStartPoint.point,
-    end: point9RedundantInferenceRejectionEndPoint.point,
-    branchDirection: [1, 0],
-    label: "Redundant inference rejection reference",
-    role: "construction",
-  });
-  const curve8CurveTargetCircle = $.geometry.centerRadiusCircle("curve8CurveTargetCircle", {
-    center: point10CurveTargetCircleCenter.point,
-    radius: mm(2),
-    label: "Curve target circle",
-    role: "profile",
-  });
-  const curve9CurveTargetCubicBezier = $.geometry.cubicBezier("curve9CurveTargetCubicBezier", {
-    start: point11CurveTargetBezierStart.point,
-    firstControl: point12CurveTargetBezierControl1.point,
-    secondControl: point13CurveTargetBezierControl2.point,
-    end: point14CurveTargetBezierEnd.point,
-    label: "Curve target cubic Bezier",
-    role: "profile",
-  });
-  const curve10Nurbs = $.geometry.openControlNurbs("curve10Nurbs", {
-    controls: [{
-      key: "control1",
-      position: point15DraftPoint.point,
-      weight: 1,
+  const centralLattice = $.geometry.polyline("centralLattice", {
+    vertices: [{
+      key: "r02c00",
+      position: [-172.5, 22.5],
     }, {
-      key: "control2",
-      position: point16DraftPoint.point,
-      weight: 1,
+      key: "r02c01",
+      position: [-157.5, 22.5],
     }, {
-      key: "control3",
-      position: point17DraftPoint.point,
-      weight: 1,
+      key: "r02c02",
+      position: [-142.5, 22.5],
     }, {
-      key: "control4",
-      position: point18DraftPoint.point,
-      weight: 1,
+      key: "r02c03",
+      position: [-127.5, 22.5],
+    }, {
+      key: "r02c04",
+      position: [-112.5, 22.5],
+    }, {
+      key: "r02c05",
+      position: [-97.5, 22.5],
+    }, {
+      key: "r02c06",
+      position: [-82.5, 22.5],
+    }, {
+      key: "r02c07",
+      position: [-67.5, 22.5],
+    }, {
+      key: "r02c08",
+      position: [-52.5, 22.5],
+    }, {
+      key: "r02c09",
+      position: [-37.5, 22.5],
+    }, {
+      key: "r02c10",
+      position: [-22.5, 22.5],
+    }, {
+      key: "r02c11",
+      position: [-7.5, 22.5],
+    }, {
+      key: "r02c12",
+      position: [7.5, 22.5],
+    }, {
+      key: "r02c13",
+      position: [22.5, 22.5],
+    }, {
+      key: "r02c14",
+      position: [37.5, 22.5],
+    }, {
+      key: "r02c15",
+      position: [52.5, 22.5],
+    }, {
+      key: "r02c16",
+      position: [67.5, 22.5],
+    }, {
+      key: "r02c17",
+      position: [82.5, 22.5],
+    }, {
+      key: "r02c18",
+      position: [97.5, 22.5],
+    }, {
+      key: "r02c19",
+      position: [112.5, 22.5],
+    }, {
+      key: "r02c20",
+      position: [127.5, 22.5],
+    }, {
+      key: "r02c21",
+      position: [142.5, 22.5],
+    }, {
+      key: "r02c22",
+      position: [157.5, 22.5],
+    }, {
+      key: "r02c23",
+      position: [172.5, 22.5],
+    }, {
+      key: "r03c23",
+      position: [172.5, 7.5],
+    }, {
+      key: "r03c22",
+      position: [157.5, 7.5],
+    }, {
+      key: "r03c21",
+      position: [142.5, 7.5],
+    }, {
+      key: "r03c20",
+      position: [127.5, 7.5],
+    }, {
+      key: "r03c19",
+      position: [112.5, 7.5],
+    }, {
+      key: "r03c18",
+      position: [97.5, 7.5],
+    }, {
+      key: "r03c17",
+      position: [82.5, 7.5],
+    }, {
+      key: "r03c16",
+      position: [67.5, 7.5],
+    }, {
+      key: "r03c15",
+      position: [52.5, 7.5],
+    }, {
+      key: "r03c14",
+      position: [37.5, 7.5],
+    }, {
+      key: "r03c13",
+      position: [22.5, 7.5],
+    }, {
+      key: "r03c12",
+      position: [7.5, 7.5],
+    }, {
+      key: "r03c11",
+      position: [-7.5, 7.5],
+    }, {
+      key: "r03c10",
+      position: [-22.5, 7.5],
+    }, {
+      key: "r03c09",
+      position: [-37.5, 7.5],
+    }, {
+      key: "r03c08",
+      position: [-52.5, 7.5],
+    }, {
+      key: "r03c07",
+      position: [-67.5, 7.5],
+    }, {
+      key: "r03c06",
+      position: [-82.5, 7.5],
+    }, {
+      key: "r03c05",
+      position: [-97.5, 7.5],
+    }, {
+      key: "r03c04",
+      position: [-112.5, 7.5],
+    }, {
+      key: "r03c03",
+      position: [-127.5, 7.5],
+    }, {
+      key: "r03c02",
+      position: [-142.5, 7.5],
+    }, {
+      key: "r03c01",
+      position: [-157.5, 7.5],
+    }, {
+      key: "r03c00",
+      position: [-172.5, 7.5],
+    }, {
+      key: "r04c00",
+      position: [-172.5, -7.5],
+    }, {
+      key: "r04c01",
+      position: [-157.5, -7.5],
+    }, {
+      key: "r04c02",
+      position: [-142.5, -7.5],
+    }, {
+      key: "r04c03",
+      position: [-127.5, -7.5],
+    }, {
+      key: "r04c04",
+      position: [-112.5, -7.5],
+    }, {
+      key: "r04c05",
+      position: [-97.5, -7.5],
+    }, {
+      key: "r04c06",
+      position: [-82.5, -7.5],
+    }, {
+      key: "r04c07",
+      position: [-67.5, -7.5],
+    }, {
+      key: "r04c08",
+      position: [-52.5, -7.5],
+    }, {
+      key: "r04c09",
+      position: [-37.5, -7.5],
+    }, {
+      key: "r04c10",
+      position: [-22.5, -7.5],
+    }, {
+      key: "r04c11",
+      position: [-7.5, -7.5],
+    }, {
+      key: "r04c12",
+      position: [7.5, -7.5],
+    }, {
+      key: "r04c13",
+      position: [22.5, -7.5],
+    }, {
+      key: "r04c14",
+      position: [37.5, -7.5],
+    }, {
+      key: "r04c15",
+      position: [52.5, -7.5],
+    }, {
+      key: "r04c16",
+      position: [67.5, -7.5],
+    }, {
+      key: "r04c17",
+      position: [82.5, -7.5],
+    }, {
+      key: "r04c18",
+      position: [97.5, -7.5],
+    }, {
+      key: "r04c19",
+      position: [112.5, -7.5],
+    }, {
+      key: "r04c20",
+      position: [127.5, -7.5],
+    }, {
+      key: "r04c21",
+      position: [142.5, -7.5],
+    }, {
+      key: "r04c22",
+      position: [157.5, -7.5],
+    }, {
+      key: "r04c23",
+      position: [172.5, -7.5],
+    }, {
+      key: "r05c23",
+      position: [172.5, -22.5],
+    }, {
+      key: "r05c22",
+      position: [157.5, -22.5],
+    }, {
+      key: "r05c21",
+      position: [142.5, -22.5],
+    }, {
+      key: "r05c20",
+      position: [127.5, -22.5],
+    }, {
+      key: "r05c19",
+      position: [112.5, -22.5],
+    }, {
+      key: "r05c18",
+      position: [97.5, -22.5],
+    }, {
+      key: "r05c17",
+      position: [82.5, -22.5],
+    }, {
+      key: "r05c16",
+      position: [67.5, -22.5],
+    }, {
+      key: "r05c15",
+      position: [52.5, -22.5],
+    }, {
+      key: "r05c14",
+      position: [37.5, -22.5],
+    }, {
+      key: "r05c13",
+      position: [22.5, -22.5],
+    }, {
+      key: "r05c12",
+      position: [7.5, -22.5],
+    }, {
+      key: "r05c11",
+      position: [-7.5, -22.5],
+    }, {
+      key: "r05c10",
+      position: [-22.5, -22.5],
+    }, {
+      key: "r05c09",
+      position: [-37.5, -22.5],
+    }, {
+      key: "r05c08",
+      position: [-52.5, -22.5],
+    }, {
+      key: "r05c07",
+      position: [-67.5, -22.5],
+    }, {
+      key: "r05c06",
+      position: [-82.5, -22.5],
+    }, {
+      key: "r05c05",
+      position: [-97.5, -22.5],
+    }, {
+      key: "r05c04",
+      position: [-112.5, -22.5],
+    }, {
+      key: "r05c03",
+      position: [-127.5, -22.5],
+    }, {
+      key: "r05c02",
+      position: [-142.5, -22.5],
+    }, {
+      key: "r05c01",
+      position: [-157.5, -22.5],
+    }, {
+      key: "r05c00",
+      position: [-172.5, -22.5],
     }],
-    degree: 3,
-    gauge: "control1",
-    label: "NURBS",
-    role: "profile",
-  });
-  const curve11ProfileOverlapPriorityReference = $.geometry.segment("curve11ProfileOverlapPriorityReference", {
-    start: point19ProfileOverlapStart.point,
-    end: point20ProfileOverlapEnd.point,
-    branchDirection: [1, 0],
-    label: "Profile overlap priority reference",
-    role: "profile",
-  });
-  const curve12ConstructionOverlapPriorityReference = $.geometry.segment("curve12ConstructionOverlapPriorityReference", {
-    start: point21ConstructionOverlapStart.point,
-    end: point22ConstructionOverlapEnd.point,
-    branchDirection: [1, 0],
-    label: "Construction overlap priority reference",
+    closed: false,
     role: "construction",
+    label: "Central four-row mounting lattice",
   });
-  const curve13ExactAmbiguityReferenceA = $.geometry.segment("curve13ExactAmbiguityReferenceA", {
-    start: point23ExactAmbiguityAStart.point,
-    end: point24ExactAmbiguityAEnd.point,
-    branchDirection: [1, 0],
-    label: "Exact ambiguity reference A",
-    role: "profile",
+  const centralCells = $.use("centralCells", fixtureCells, {
+    centers: centralLattice.vertices,
+    pilotRadius: mm(2.5),
+    counterboreRadius: mm(4.5),
   });
-  const curve14ExactAmbiguityReferenceB = $.geometry.segment("curve14ExactAmbiguityReferenceB", {
-    start: point25ExactAmbiguityBStart.point,
-    end: point26ExactAmbiguityBEnd.point,
-    branchDirection: [1, 0],
-    label: "Exact ambiguity reference B",
-    role: "profile",
+  const southernLattice = $.geometry.polyline("southernLattice", {
+    vertices: [{
+      key: "r06c00",
+      position: [-172.5, -37.5],
+    }, {
+      key: "r06c01",
+      position: [-157.5, -37.5],
+    }, {
+      key: "r06c02",
+      position: [-142.5, -37.5],
+    }, {
+      key: "r06c03",
+      position: [-127.5, -37.5],
+    }, {
+      key: "r06c04",
+      position: [-112.5, -37.5],
+    }, {
+      key: "r06c05",
+      position: [-97.5, -37.5],
+    }, {
+      key: "r06c06",
+      position: [-82.5, -37.5],
+    }, {
+      key: "r06c07",
+      position: [-67.5, -37.5],
+    }, {
+      key: "r06c08",
+      position: [-52.5, -37.5],
+    }, {
+      key: "r06c09",
+      position: [-37.5, -37.5],
+    }, {
+      key: "r06c10",
+      position: [-22.5, -37.5],
+    }, {
+      key: "r06c11",
+      position: [-7.5, -37.5],
+    }, {
+      key: "r06c12",
+      position: [7.5, -37.5],
+    }, {
+      key: "r06c13",
+      position: [22.5, -37.5],
+    }, {
+      key: "r06c14",
+      position: [37.5, -37.5],
+    }, {
+      key: "r06c15",
+      position: [52.5, -37.5],
+    }, {
+      key: "r06c16",
+      position: [67.5, -37.5],
+    }, {
+      key: "r06c17",
+      position: [82.5, -37.5],
+    }, {
+      key: "r06c18",
+      position: [97.5, -37.5],
+    }, {
+      key: "r06c19",
+      position: [112.5, -37.5],
+    }, {
+      key: "r06c20",
+      position: [127.5, -37.5],
+    }, {
+      key: "r06c21",
+      position: [142.5, -37.5],
+    }, {
+      key: "r06c22",
+      position: [157.5, -37.5],
+    }, {
+      key: "r06c23",
+      position: [172.5, -37.5],
+    }, {
+      key: "r07c23",
+      position: [172.5, -52.5],
+    }, {
+      key: "r07c22",
+      position: [157.5, -52.5],
+    }, {
+      key: "r07c21",
+      position: [142.5, -52.5],
+    }, {
+      key: "r07c20",
+      position: [127.5, -52.5],
+    }, {
+      key: "r07c19",
+      position: [112.5, -52.5],
+    }, {
+      key: "r07c18",
+      position: [97.5, -52.5],
+    }, {
+      key: "r07c17",
+      position: [82.5, -52.5],
+    }, {
+      key: "r07c16",
+      position: [67.5, -52.5],
+    }, {
+      key: "r07c15",
+      position: [52.5, -52.5],
+    }, {
+      key: "r07c14",
+      position: [37.5, -52.5],
+    }, {
+      key: "r07c13",
+      position: [22.5, -52.5],
+    }, {
+      key: "r07c12",
+      position: [7.5, -52.5],
+    }, {
+      key: "r07c11",
+      position: [-7.5, -52.5],
+    }, {
+      key: "r07c10",
+      position: [-22.5, -52.5],
+    }, {
+      key: "r07c09",
+      position: [-37.5, -52.5],
+    }, {
+      key: "r07c08",
+      position: [-52.5, -52.5],
+    }, {
+      key: "r07c07",
+      position: [-67.5, -52.5],
+    }, {
+      key: "r07c06",
+      position: [-82.5, -52.5],
+    }, {
+      key: "r07c05",
+      position: [-97.5, -52.5],
+    }, {
+      key: "r07c04",
+      position: [-112.5, -52.5],
+    }, {
+      key: "r07c03",
+      position: [-127.5, -52.5],
+    }, {
+      key: "r07c02",
+      position: [-142.5, -52.5],
+    }, {
+      key: "r07c01",
+      position: [-157.5, -52.5],
+    }, {
+      key: "r07c00",
+      position: [-172.5, -52.5],
+    }],
+    closed: false,
+    role: "construction",
+    label: "Southern two-row mounting lattice",
   });
-  const constraint1FixMidpointReferenceControl1 = $.constraint.fixedPoint("constraint1FixMidpointReferenceControl1", {
-    point: point1MidpointReferenceStart.point,
-    target: [-11, 5],
-    label: "Fix midpoint reference control 1",
+  const southernCells = $.use("southernCells", fixtureCells, {
+    centers: southernLattice.vertices,
+    pilotRadius: mm(2.5),
+    counterboreRadius: mm(4.5),
   });
-  const constraint2FixMidpointReferenceControl2 = $.constraint.fixedPoint("constraint2FixMidpointReferenceControl2", {
-    point: point2MidpointReferenceEnd.point,
-    target: [-3, 5],
-    label: "Fix midpoint reference control 2",
+  const horizontalPitch = $.dimension.pointDistance("horizontalPitch", {
+    first: northernLattice.vertices.byKey.r00c00,
+    second: northernLattice.vertices.byKey.r00c01,
+    value: mm(15),
+    mode: "reference",
+    label: "Horizontal pitch · 15 mm",
   });
-  const constraint3FixAffineReferencePolylineControl1 = $.constraint.fixedPoint("constraint3FixAffineReferencePolylineControl1", {
-    point: point3AffinePolylineStart.point,
-    target: [-11, 1],
-    label: "Fix affine reference polyline control 1",
+  const verticalPitch = $.dimension.pointDistance("verticalPitch", {
+    first: northernLattice.vertices.byKey.r00c00,
+    second: northernLattice.vertices.byKey.r01c00,
+    value: mm(15),
+    mode: "reference",
+    label: "Vertical pitch · 15 mm",
   });
-  const constraint4FixAffineReferencePolylineControl2 = $.constraint.fixedPoint("constraint4FixAffineReferencePolylineControl2", {
-    point: point4AffinePolylineCorner.point,
-    target: [-7, 3],
-    label: "Fix affine reference polyline control 2",
-  });
-  const constraint5FixAffineReferencePolylineControl3 = $.constraint.fixedPoint("constraint5FixAffineReferencePolylineControl3", {
-    point: point5AffinePolylineEnd.point,
-    target: [-3, 1],
-    label: "Fix affine reference polyline control 3",
-  });
-  const constraint6FixConstructionPointSpecimen = $.constraint.fixedPoint("constraint6FixConstructionPointSpecimen", {
-    point: point7ConstructionPointSpecimen.point,
-    target: [-7, -9],
-    label: "Fix Construction point specimen",
-  });
-  const constraint7PreparedRejectionReferenceIsHorizontal = $.constraint.horizontal("constraint7PreparedRejectionReferenceIsHorizontal", {
-    span: curve7RedundantInferenceRejectionReference.span,
-    label: "Prepared rejection reference is horizontal",
-  });
-  const constraint8FixCurveTargetCircleCenter = $.constraint.fixedPoint("constraint8FixCurveTargetCircleCenter", {
-    point: point10CurveTargetCircleCenter.point,
-    target: [2, 5],
-    label: "Fix curve target circle center",
-  });
-  const dimension1CurveTargetCircleRadiusDimension = $.dimension.radius("dimension1CurveTargetCircleRadiusDimension", {
-    curve: curve8CurveTargetCircle.curve,
-    value: mm(2),
-    label: "Curve target circle radius dimension",
-    mode: "driving",
-  });
-  const constraint9FixCurveTargetCubicBezierControl1 = $.constraint.fixedPoint("constraint9FixCurveTargetCubicBezierControl1", {
-    point: point11CurveTargetBezierStart.point,
-    target: [6, 3],
-    label: "Fix curve target cubic Bezier control 1",
-  });
-  const constraint10FixCurveTargetCubicBezierControl2 = $.constraint.fixedPoint("constraint10FixCurveTargetCubicBezierControl2", {
-    point: point12CurveTargetBezierControl1.point,
-    target: [8, 7],
-    label: "Fix curve target cubic Bezier control 2",
-  });
-  const constraint11FixCurveTargetCubicBezierControl3 = $.constraint.fixedPoint("constraint11FixCurveTargetCubicBezierControl3", {
-    point: point13CurveTargetBezierControl2.point,
-    target: [10, 2],
-    label: "Fix curve target cubic Bezier control 3",
-  });
-  const constraint12FixCurveTargetCubicBezierControl4 = $.constraint.fixedPoint("constraint12FixCurveTargetCubicBezierControl4", {
-    point: point14CurveTargetBezierEnd.point,
-    target: [12, 5],
-    label: "Fix curve target cubic Bezier control 4",
-  });
-  const constraint13FixCurveTargetNurbsControl1 = $.constraint.fixedPoint("constraint13FixCurveTargetNurbsControl1", {
-    point: point15DraftPoint.point,
-    target: [5, -1],
-    label: "Fix curve target NURBS control 1",
-  });
-  const constraint14FixCurveTargetNurbsControl2 = $.constraint.fixedPoint("constraint14FixCurveTargetNurbsControl2", {
-    point: point16DraftPoint.point,
-    target: [7, -4],
-    label: "Fix curve target NURBS control 2",
-  });
-  const constraint15FixCurveTargetNurbsControl3 = $.constraint.fixedPoint("constraint15FixCurveTargetNurbsControl3", {
-    point: point17DraftPoint.point,
-    target: [10, 0],
-    label: "Fix curve target NURBS control 3",
-  });
-  const constraint16FixCurveTargetNurbsControl4 = $.constraint.fixedPoint("constraint16FixCurveTargetNurbsControl4", {
-    point: point18DraftPoint.point,
-    target: [12, -3],
-    label: "Fix curve target NURBS control 4",
-  });
-  const constraint17FixProfileOverlapReferenceControl1 = $.constraint.fixedPoint("constraint17FixProfileOverlapReferenceControl1", {
-    point: point19ProfileOverlapStart.point,
-    target: [-11, -3],
-    label: "Fix profile overlap reference control 1",
-  });
-  const constraint18FixProfileOverlapReferenceControl2 = $.constraint.fixedPoint("constraint18FixProfileOverlapReferenceControl2", {
-    point: point20ProfileOverlapEnd.point,
-    target: [-3, -3],
-    label: "Fix profile overlap reference control 2",
-  });
-  const constraint19FixConstructionOverlapReferenceControl1 = $.constraint.fixedPoint("constraint19FixConstructionOverlapReferenceControl1", {
-    point: point21ConstructionOverlapStart.point,
-    target: [-11, -3],
-    label: "Fix construction overlap reference control 1",
-  });
-  const constraint20FixConstructionOverlapReferenceControl2 = $.constraint.fixedPoint("constraint20FixConstructionOverlapReferenceControl2", {
-    point: point22ConstructionOverlapEnd.point,
-    target: [-3, -3],
-    label: "Fix construction overlap reference control 2",
-  });
-  const constraint21FixExactAmbiguityReferenceAControl1 = $.constraint.fixedPoint("constraint21FixExactAmbiguityReferenceAControl1", {
-    point: point23ExactAmbiguityAStart.point,
-    target: [2, -6],
-    label: "Fix exact ambiguity reference A control 1",
-  });
-  const constraint22FixExactAmbiguityReferenceAControl2 = $.constraint.fixedPoint("constraint22FixExactAmbiguityReferenceAControl2", {
-    point: point24ExactAmbiguityAEnd.point,
-    target: [10, -6],
-    label: "Fix exact ambiguity reference A control 2",
-  });
-  const constraint23FixExactAmbiguityReferenceBControl1 = $.constraint.fixedPoint("constraint23FixExactAmbiguityReferenceBControl1", {
-    point: point25ExactAmbiguityBStart.point,
-    target: [2, -6],
-    label: "Fix exact ambiguity reference B control 1",
-  });
-  const constraint24FixExactAmbiguityReferenceBControl2 = $.constraint.fixedPoint("constraint24FixExactAmbiguityReferenceBControl2", {
-    point: point26ExactAmbiguityBEnd.point,
-    target: [10, -6],
-    label: "Fix exact ambiguity reference B control 2",
-  });
-  $.group("Points", [point1MidpointReferenceStart, point2MidpointReferenceEnd, point3AffinePolylineStart, point4AffinePolylineCorner, point5AffinePolylineEnd, point6ProfilePointSpecimen, point7ConstructionPointSpecimen, point8RedundantInferenceRejectionStartPoint, point9RedundantInferenceRejectionEndPoint, point10CurveTargetCircleCenter, point11CurveTargetBezierStart, point12CurveTargetBezierControl1, point13CurveTargetBezierControl2, point14CurveTargetBezierEnd, point15DraftPoint, point16DraftPoint, point17DraftPoint, point18DraftPoint, point19ProfileOverlapStart, point20ProfileOverlapEnd, point21ConstructionOverlapStart, point22ConstructionOverlapEnd, point23ExactAmbiguityAStart, point24ExactAmbiguityAEnd, point25ExactAmbiguityBStart, point26ExactAmbiguityBEnd]);
-  $.group("Geometry", [curve1MidpointAndAffineReferenceLine, curve2AffineReferencePolyline, curve3ProfilePointSpecimenMarker, curve4ConstructionPointSpecimenMarker, curve5RedundantInferenceRejectionStartMarker, curve6RedundantInferenceRejectionEndMarker, curve7RedundantInferenceRejectionReference, curve8CurveTargetCircle, curve9CurveTargetCubicBezier, curve10Nurbs, curve11ProfileOverlapPriorityReference, curve12ConstructionOverlapPriorityReference, curve13ExactAmbiguityReferenceA, curve14ExactAmbiguityReferenceB]);
-  $.group("Constraints", [constraint1FixMidpointReferenceControl1, constraint2FixMidpointReferenceControl2, constraint3FixAffineReferencePolylineControl1, constraint4FixAffineReferencePolylineControl2, constraint5FixAffineReferencePolylineControl3, constraint6FixConstructionPointSpecimen, constraint7PreparedRejectionReferenceIsHorizontal, constraint8FixCurveTargetCircleCenter, constraint9FixCurveTargetCubicBezierControl1, constraint10FixCurveTargetCubicBezierControl2, constraint11FixCurveTargetCubicBezierControl3, constraint12FixCurveTargetCubicBezierControl4, constraint13FixCurveTargetNurbsControl1, constraint14FixCurveTargetNurbsControl2, constraint15FixCurveTargetNurbsControl3, constraint16FixCurveTargetNurbsControl4, constraint17FixProfileOverlapReferenceControl1, constraint18FixProfileOverlapReferenceControl2, constraint19FixConstructionOverlapReferenceControl1, constraint20FixConstructionOverlapReferenceControl2, constraint21FixExactAmbiguityReferenceAControl1, constraint22FixExactAmbiguityReferenceAControl2, constraint23FixExactAmbiguityReferenceBControl1, constraint24FixExactAmbiguityReferenceBControl2]);
-  $.group("Dimensions", [dimension1CurveTargetCircleRadiusDimension]);
-  return {};
+  $.group("Fixture envelope", [fixtureEnvelope]);
+  $.group("Northern mounting bank", [northernLattice, northernCells]);
+  $.group("Central mounting bank", [centralLattice, centralCells]);
+  $.group("Southern mounting bank", [southernLattice, southernCells]);
+  $.group("Fixture pitch annotations", [horizontalPitch, verticalPitch]);
+  return {
+    envelope: fixtureEnvelope,
+    cells: {
+      northern: northernCells,
+      central: centralCells,
+      southern: southernCells,
+    },
+    pitch: {
+      horizontal: horizontalPitch,
+      vertical: verticalPitch,
+    },
+  };
 });

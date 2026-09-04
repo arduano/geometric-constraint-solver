@@ -1,195 +1,404 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { deg, sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
-  const point1PointDistanceFirstPoint = $.geometry.sketchPoint("point1PointDistanceFirstPoint", {
-    point: [-20, 7],
-    label: "Point-distance first point",
+  // Profile generators: these operations deliberately expose their authored
+  // width, height, radius, side count and orientation as managed controls.
+  const stockBlank = $.operation.rectangle("stockBlank", {
+    origin: [-38, 15],
+    width: mm(14),
+    height: mm(10),
+    role: "profile",
+    label: "14 × 10 mm stock blank",
   });
-  const point2PointDistanceSecondPoint = $.geometry.sketchPoint("point2PointDistanceSecondPoint", {
-    point: [-15, 7],
-    label: "Point-distance second point",
+  const hexFlange = $.operation.regularPolygon("hexFlange", {
+    center: [-13, 20],
+    radius: mm(6),
+    sides: 6,
+    rotation: deg(30),
+    role: "profile",
+    label: "Hexagonal flange",
   });
-  const point3StraightLengthStart = $.geometry.sketchPoint("point3StraightLengthStart", {
-    point: [-11, 7],
-    label: "Straight length start",
+  const obroundPort = $.operation.slot("obroundPort", {
+    firstCenter: [4, 20],
+    secondCenter: [16, 20],
+    radius: mm(3),
+    role: "profile",
+    label: "Machined obround port",
   });
-  const point4StraightLengthEnd = $.geometry.sketchPoint("point4StraightLengthEnd", {
-    point: [-6, 7],
-    label: "Straight length end",
-  });
-  const point5ArcRadiusCenter = $.geometry.sketchPoint("point5ArcRadiusCenter", {
-    point: [11, 7],
-    label: "Arc radius center",
-  });
-  const point6DiameterCircleCenter = $.geometry.sketchPoint("point6DiameterCircleCenter", {
-    point: [-18, -6],
-    label: "Diameter circle center",
-  });
-  const point7AngleFirstVertex = $.geometry.sketchPoint("point7AngleFirstVertex", {
-    point: [-10, -8],
-    label: "Angle first vertex",
-  });
-  const point8AngleFirstEndpoint = $.geometry.sketchPoint("point8AngleFirstEndpoint", {
-    point: [-6, -8],
-    label: "Angle first endpoint",
-  });
-  const point9AngleSecondVertex = $.geometry.sketchPoint("point9AngleSecondVertex", {
-    point: [-10, -8],
-    label: "Angle second vertex",
-  });
-  const point10AngleSecondEndpoint = $.geometry.sketchPoint("point10AngleSecondEndpoint", {
-    point: [-7, -5],
-    label: "Angle second endpoint",
-  });
-  const point11SupportingOffsetSourceStart = $.geometry.sketchPoint("point11SupportingOffsetSourceStart", {
-    point: [-1, -9],
-    label: "Supporting-offset source start",
-  });
-  const point12SupportingOffsetSourceEnd = $.geometry.sketchPoint("point12SupportingOffsetSourceEnd", {
-    point: [3, -9],
-    label: "Supporting-offset source end",
-  });
-  const point13SupportingOffsetTargetStart = $.geometry.sketchPoint("point13SupportingOffsetTargetStart", {
-    point: [0, -6],
-    label: "Supporting-offset target start",
-  });
-  const point14SupportingOffsetTargetEnd = $.geometry.sketchPoint("point14SupportingOffsetTargetEnd", {
-    point: [4, -6],
-    label: "Supporting-offset target end",
-  });
-  const point15ExactOffsetSourceStart = $.geometry.sketchPoint("point15ExactOffsetSourceStart", {
-    point: [10, -9],
-    label: "Exact-offset source start",
-  });
-  const point16ExactOffsetSourceEnd = $.geometry.sketchPoint("point16ExactOffsetSourceEnd", {
-    point: [14, -9],
-    label: "Exact-offset source end",
-  });
-  const point17ExactOffsetTargetStart = $.geometry.sketchPoint("point17ExactOffsetTargetStart", {
-    point: [10, -6],
-    label: "Exact-offset target start",
-  });
-  const point18ExactOffsetTargetEnd = $.geometry.sketchPoint("point18ExactOffsetTargetEnd", {
-    point: [14, -6],
-    label: "Exact-offset target end",
-  });
-  const curve1StraightLengthSpecimen = $.geometry.segment("curve1StraightLengthSpecimen", {
-    start: point3StraightLengthStart.point,
-    end: point4StraightLengthEnd.point,
+  // Topology operations retain both their native source and their exact
+  // operation result so the Explorer can explain what is consumed or kept.
+  const splitSource = $.geometry.segment("splitSource", {
+    start: [-38, 6],
+    end: [-24, 6],
     branchDirection: [1, 0],
-    label: "Straight length specimen",
-    role: "profile",
+    role: "construction",
+    label: "Split stock",
   });
-  const curve2CircularArcRadiusSpecimen = $.geometry.centerArc("curve2CircularArcRadiusSpecimen", {
-    center: point5ArcRadiusCenter.point,
-    start: [12.414213562373096, 5.585786437626905],
-    end: [9.585786437626904, 8.414213562373096],
-    sweep: "counterClockwise",
-    label: "Circular-arc radius specimen",
-    role: "profile",
+  const splitAtDatum = $.operation.split("splitAtDatum", {
+    source: splitSource.span,
+    parameter: 0.4,
+    retained: "before",
+    label: "Split at 40%",
   });
-  const curve3FullCircleDiameterSpecimen = $.geometry.centerRadiusCircle("curve3FullCircleDiameterSpecimen", {
-    center: point6DiameterCircleCenter.point,
+  const breakSource = $.geometry.segment("breakSource", {
+    start: [-18, 6],
+    end: [-4, 6],
+    branchDirection: [1, 0],
+    role: "construction",
+    label: "Break stock",
+  });
+  const reliefBreak = $.operation.break("reliefBreak", {
+    source: breakSource.span,
+    start: 0.3,
+    end: 0.7,
+    retained: "before",
+    label: "Central relief break",
+  });
+  const trimSource = $.geometry.segment("trimSource", {
+    start: [2, 6],
+    end: [16, 6],
+    branchDirection: [1, 0],
+    role: "construction",
+    label: "Trim stock",
+  });
+  const finishTrim = $.operation.trim("finishTrim", {
+    source: trimSource.span,
+    parameter: 0.65,
+    retained: "after",
+    label: "Retain final 35%",
+  });
+  const extensionSource = $.geometry.segment("extensionSource", {
+    start: [23, 6],
+    end: [28, 6],
+    branchDirection: [1, 0],
+    role: "construction",
+    label: "Extension source",
+  });
+  const extensionLimit = $.geometry.segment("extensionLimit", {
+    start: [34, 2],
+    end: [34, 10],
+    branchDirection: [0, 1],
+    role: "construction",
+    label: "Extension limit",
+  });
+  const extendToLimit = $.operation.extend("extendToLimit", {
+    source: extensionSource.span,
+    target: extensionLimit.span,
+    endpoint: "end",
+    label: "Extend to vertical limit",
+  });
+  // Finishing operations demonstrate relational construction: a mirrored
+  // curve, two parent-contact operations and an open-chain offset.
+  const mirrorAxis = $.geometry.segment("mirrorAxis", {
+    start: [-28, -15],
+    end: [-28, -2],
+    branchDirection: [0, 1],
+    role: "construction",
+    label: "Mirror centreline",
+  });
+  const mirrorSeed = $.geometry.quadraticBezier("mirrorSeed", {
+    start: [-25, -13],
+    control: [-20, -4],
+    end: [-15, -12],
+    role: "profile",
+    label: "Mirror seed profile",
+  });
+  const reflectedProfile = $.operation.mirror("reflectedProfile", {
+    source: mirrorSeed.curve,
+    axis: mirrorAxis.span,
+    label: "Reflected profile",
+  });
+  const chamferHorizontal = $.geometry.segment("chamferHorizontal", {
+    start: [-8, -13],
+    end: [2, -13],
+    branchDirection: [1, 0],
+    role: "profile",
+    label: "Chamfer horizontal parent",
+  });
+  const chamferVertical = $.geometry.segment("chamferVertical", {
+    start: chamferHorizontal.start,
+    end: [-8, -3],
+    branchDirection: [0, 1],
+    role: "profile",
+    label: "Chamfer vertical parent",
+  });
+  const cornerChamfer = $.operation.chamfer("cornerChamfer", {
+    first: chamferHorizontal.span,
+    second: chamferVertical.span,
+    firstDistance: mm(2),
+    secondDistance: mm(3),
+    label: "2 × 3 mm asymmetric chamfer",
+  });
+  const filletHorizontal = $.geometry.segment("filletHorizontal", {
+    start: [7, -13],
+    end: [19, -13],
+    branchDirection: [1, 0],
+    role: "profile",
+    label: "Fillet horizontal parent",
+  });
+  const filletVertical = $.geometry.segment("filletVertical", {
+    start: filletHorizontal.end,
+    end: [19, -1],
+    branchDirection: [0, 1],
+    role: "profile",
+    label: "Fillet vertical parent",
+  });
+  const cornerFillet = $.operation.associativeFillet("cornerFillet", {
     radius: mm(2),
-    label: "Full-circle diameter specimen",
-    role: "profile",
+    radiusMode: "driving",
+    parents: [{
+      span: filletHorizontal.span,
+      parameter: 0.75,
+      winding: 0,
+      neighborhood: {
+        kind: "interior",
+      },
+      normalSide: "left",
+      trimEndpoint: "end",
+      periodicAnchor: {
+        kind: "none",
+      },
+    }, {
+      span: filletVertical.span,
+      parameter: 0.25,
+      winding: 0,
+      neighborhood: {
+        kind: "interior",
+      },
+      normalSide: "left",
+      trimEndpoint: "start",
+      periodicAnchor: {
+        kind: "none",
+      },
+    }],
+    endpointOrder: "firstThenSecond",
+    sweep: "counterClockwise",
+    label: "Associative 2 mm fillet",
   });
-  const curve4AngleFirstLeg = $.geometry.segment("curve4AngleFirstLeg", {
-    start: point7AngleFirstVertex.point,
-    end: point8AngleFirstEndpoint.point,
+  const offsetSource = $.geometry.segment("offsetSource", {
+    start: [25, -13],
+    end: [39, -13],
     branchDirection: [1, 0],
-    label: "Angle first leg",
     role: "profile",
+    label: "Offset source edge",
   });
-  const curve5AngleSecondLeg = $.geometry.segment("curve5AngleSecondLeg", {
-    start: point9AngleSecondVertex.point,
-    end: point10AngleSecondEndpoint.point,
-    branchDirection: [0.7071067811865476, 0.7071067811865476],
-    label: "Angle second leg",
-    role: "profile",
+  const offsetChain = $.aggregate.openChain("offsetChain", {
+    spans: [offsetSource.span],
+    label: "Open edge chain",
   });
-  const curve6SupportingOffsetSource = $.geometry.segment("curve6SupportingOffsetSource", {
-    start: point11SupportingOffsetSourceStart.point,
-    end: point12SupportingOffsetSourceEnd.point,
+  const machiningAllowance = $.operation.profileOffset("machiningAllowance", {
+    sources: [offsetChain.chain],
+    distance: mm(2),
+    side: "left",
+    firstTraversal: "forward",
+    label: "2 mm machining allowance",
+  });
+  // A true generated feature: one authored centre-drill cross becomes
+  // twenty-four equally spaced instances. Both sources are native point-
+  // defined spans, the exact family admitted by Linear Pattern.
+  const pilotHorizontal = $.geometry.segment("pilotHorizontal", {
+    start: [-39.4, -24],
+    end: [-36.6, -24],
     branchDirection: [1, 0],
-    label: "Supporting-offset source",
-    role: "profile",
+    role: "construction",
+    label: "Centre-drill horizontal marker",
   });
-  const curve7SupportingOffsetTarget = $.geometry.segment("curve7SupportingOffsetTarget", {
-    start: point13SupportingOffsetTargetStart.point,
-    end: point14SupportingOffsetTargetEnd.point,
+  const pilotVertical = $.geometry.segment("pilotVertical", {
+    start: [-38, -25.4],
+    end: [-38, -22.6],
+    branchDirection: [0, 1],
+    role: "construction",
+    label: "Centre-drill vertical marker",
+  });
+  const holeStrip = $.operation.linearPattern("holeStrip", {
+    sources: [pilotHorizontal.curve, pilotVertical.curve],
+    instances: 24,
+    step: [3.3, 0],
+    label: "24-place centre-drill strip",
+  });
+  // A separate metrology bench makes the constraint and dimension vocabulary
+  // visible without entangling the operation specimens above. One datum point
+  // removes only this bench's global gauge; relational constraints establish
+  // its two right-angle frames and matched inspection bores.
+  const datumBaseline = $.geometry.segment("datumBaseline", {
+    start: [-38, -39],
+    end: [-24, -39],
     branchDirection: [1, 0],
-    label: "Supporting-offset target",
-    role: "profile",
+    role: "construction",
+    label: "Primary datum baseline",
   });
-  const curve8ExactOffsetSource = $.geometry.segment("curve8ExactOffsetSource", {
-    start: point15ExactOffsetSourceStart.point,
-    end: point16ExactOffsetSourceEnd.point,
+  const datumUpright = $.geometry.segment("datumUpright", {
+    start: [-38, -39],
+    end: [-38, -29],
+    branchDirection: [0, 1],
+    role: "construction",
+    label: "Primary datum upright",
+  });
+  const followerBaseline = $.geometry.segment("followerBaseline", {
+    start: [-16, -39],
+    end: [-2, -39],
     branchDirection: [1, 0],
-    label: "Exact-offset source",
+    role: "construction",
+    label: "Matched secondary baseline",
+  });
+  const followerUpright = $.geometry.segment("followerUpright", {
+    start: [-16, -39],
+    end: [-16, -29],
+    branchDirection: [0, 1],
+    role: "construction",
+    label: "Secondary datum upright",
+  });
+  const datumMidpoint = $.geometry.sketchPoint("datumMidpoint", {
+    point: [-31, -39],
+    role: "construction",
+    label: "Baseline midpoint witness",
+  });
+  const inspectionBore = $.geometry.centerRadiusCircle("inspectionBore", {
+    center: [24, -34],
+    radius: mm(3),
     role: "profile",
+    label: "Driven inspection bore",
   });
-  const curve9ExactOffsetTarget = $.geometry.segment("curve9ExactOffsetTarget", {
-    start: point17ExactOffsetTargetStart.point,
-    end: point18ExactOffsetTargetEnd.point,
-    branchDirection: [1, 0],
-    label: "Exact-offset target",
+  const comparisonBore = $.geometry.centerRadiusCircle("comparisonBore", {
+    center: [36, -34],
+    radius: mm(3),
     role: "profile",
+    label: "Equal-radius comparison bore",
   });
-  const dimension1PointDistance = $.dimension.pointDistance("dimension1PointDistance", {
-    first: point1PointDistanceFirstPoint.point,
-    second: point2PointDistanceSecondPoint.point,
-    value: mm(5),
-    label: "Point distance",
-    mode: "reference",
+  const datumAnchor = $.constraint.fixedPoint("datumAnchor", {
+    point: datumBaseline.start,
+    target: [-38, -39],
+    label: "Primary datum origin",
   });
-  const dimension2StraightCurveLength = $.dimension.curveLength("dimension2StraightCurveLength", {
-    curve: curve1StraightLengthSpecimen.span,
-    value: mm(5),
-    label: "Straight curve length",
+  const baselineHorizontal = $.constraint.horizontal("baselineHorizontal", {
+    span: datumBaseline.span,
+    label: "Primary baseline horizontal",
+  });
+  const uprightVertical = $.constraint.vertical("uprightVertical", {
+    span: datumUpright.span,
+    label: "Primary upright vertical",
+  });
+  const datumCorner = $.constraint.coincident("datumCorner", {
+    first: datumBaseline.start,
+    second: datumUpright.start,
+    label: "Primary datum corner",
+  });
+  const followerHorizontal = $.constraint.horizontal("followerHorizontal", {
+    span: followerBaseline.span,
+    label: "Secondary baseline horizontal",
+  });
+  const followerVertical = $.constraint.vertical("followerVertical", {
+    span: followerUpright.span,
+    label: "Secondary upright vertical",
+  });
+  const followerCorner = $.constraint.coincident("followerCorner", {
+    first: followerBaseline.start,
+    second: followerUpright.start,
+    label: "Secondary datum corner",
+  });
+  const matchedBaselines = $.constraint.equalLength("matchedBaselines", {
+    first: datumBaseline.span,
+    second: followerBaseline.span,
+    label: "Matched baseline lengths",
+  });
+  const midpointWitness = $.constraint.midpoint("midpointWitness", {
+    point: datumMidpoint.point,
+    line: datumBaseline.span,
+    label: "Witness at baseline midpoint",
+  });
+  const boreCentersAligned = $.constraint.horizontalPoints("boreCentersAligned", {
+    first: inspectionBore.center,
+    second: comparisonBore.center,
+    label: "Inspection bore centres aligned",
+  });
+  const matchedBoreRadii = $.constraint.equalRadius("matchedBoreRadii", {
+    first: inspectionBore.curve,
+    second: comparisonBore.curve,
+    label: "Inspection bores share radius",
+  });
+  const baselineLength = $.dimension.curveLength("baselineLength", {
+    curve: datumBaseline.span,
+    value: mm(14),
     mode: "driving",
+    label: "Primary datum length · 14 mm",
   });
-  const dimension3ArcRadius = $.dimension.radius("dimension3ArcRadius", {
-    curve: curve2CircularArcRadiusSpecimen.curve,
-    value: mm(2),
-    label: "Arc radius",
+  const uprightHeight = $.dimension.curveLength("uprightHeight", {
+    curve: datumUpright.span,
+    value: mm(10),
     mode: "driving",
+    label: "Primary datum height · 10 mm",
   });
-  const dimension4CircleDiameter = $.dimension.diameter("dimension4CircleDiameter", {
-    curve: curve3FullCircleDiameterSpecimen.curve,
-    value: mm(4),
-    label: "Circle diameter",
+  const followerHeight = $.dimension.curveLength("followerHeight", {
+    curve: followerUpright.span,
+    value: mm(10),
     mode: "driving",
+    label: "Secondary datum height · 10 mm",
   });
-  const dimension5OrientedAngle = $.dimension.orientedAngle("dimension5OrientedAngle", {
-    first: curve4AngleFirstLeg.span,
-    second: curve5AngleSecondLeg.span,
-    value: rad(0.7853981633974483),
+  const datumAngle = $.dimension.orientedAngle("datumAngle", {
+    first: datumBaseline.span,
+    second: datumUpright.span,
+    value: deg(90),
     orientation: "counterClockwise",
-    label: "Oriented angle",
-    mode: "driving",
+    mode: "reference",
+    label: "Reference datum angle · 90°",
   });
-  const dimension6SupportingLineOffset = $.dimension.supportingLineOffset("dimension6SupportingLineOffset", {
-    first: curve6SupportingOffsetSource.span,
-    second: curve7SupportingOffsetTarget.span,
+  const inspectionDiameter = $.dimension.diameter("inspectionDiameter", {
+    curve: inspectionBore.curve,
+    value: mm(6),
+    mode: "driving",
+    label: "Driven inspection diameter · 6 mm",
+  });
+  const comparisonRadius = $.dimension.radius("comparisonRadius", {
+    curve: comparisonBore.curve,
     value: mm(3),
-    side: "left",
-    orientation: "same",
-    label: "Supporting-line offset",
-    mode: "driving",
+    mode: "reference",
+    label: "Reference comparison radius · 3 mm",
   });
-  const dimension7ExactTranslatedSegmentOffset = $.dimension.exactTranslatedSegmentOffset("dimension7ExactTranslatedSegmentOffset", {
-    first: curve8ExactOffsetSource.span,
-    second: curve9ExactOffsetTarget.span,
-    value: mm(3),
-    side: "left",
-    orientation: "same",
-    label: "Exact translated-segment offset",
-    mode: "driving",
+  // Driving and reference annotations stay next to the functional specimens
+  // they describe, rather than living in generic type-based buckets.
+  const seedChord = $.dimension.pointDistance("seedChord", {
+    first: splitSource.start,
+    second: splitSource.end,
+    value: mm(14),
+    mode: "reference",
+    label: "Reference split-source chord · 14 mm",
   });
-  $.group("Points", [point1PointDistanceFirstPoint, point2PointDistanceSecondPoint, point3StraightLengthStart, point4StraightLengthEnd, point5ArcRadiusCenter, point6DiameterCircleCenter, point7AngleFirstVertex, point8AngleFirstEndpoint, point9AngleSecondVertex, point10AngleSecondEndpoint, point11SupportingOffsetSourceStart, point12SupportingOffsetSourceEnd, point13SupportingOffsetTargetStart, point14SupportingOffsetTargetEnd, point15ExactOffsetSourceStart, point16ExactOffsetSourceEnd, point17ExactOffsetTargetStart, point18ExactOffsetTargetEnd]);
-  $.group("Geometry", [curve1StraightLengthSpecimen, curve2CircularArcRadiusSpecimen, curve3FullCircleDiameterSpecimen, curve4AngleFirstLeg, curve5AngleSecondLeg, curve6SupportingOffsetSource, curve7SupportingOffsetTarget, curve8ExactOffsetSource, curve9ExactOffsetTarget]);
-  $.group("Dimensions", [dimension1PointDistance, dimension2StraightCurveLength, dimension3ArcRadius, dimension4CircleDiameter, dimension5OrientedAngle, dimension6SupportingLineOffset, dimension7ExactTranslatedSegmentOffset]);
-  return {};
+  const markerEdge = $.dimension.curveLength("markerEdge", {
+    curve: pilotHorizontal.span,
+    value: mm(2.8),
+    mode: "reference",
+    label: "Reference marker edge",
+  });
+  $.group("Profile generators", [stockBlank, hexFlange, obroundPort]);
+  $.group("Split break trim extend", [splitSource, splitAtDatum, breakSource, reliefBreak, trimSource, finishTrim, extensionSource, extensionLimit, extendToLimit]);
+  $.group("Mirror chamfer fillet offset", [mirrorAxis, mirrorSeed, reflectedProfile, chamferHorizontal, chamferVertical, cornerChamfer, filletHorizontal, filletVertical, cornerFillet, offsetSource, offsetChain, machiningAllowance]);
+  $.group("Generated drilling pattern", [pilotHorizontal, pilotVertical, holeStrip]);
+  $.group("Constraint and metrology bench", [datumBaseline, datumUpright, followerBaseline, followerUpright, datumMidpoint, inspectionBore, comparisonBore, datumAnchor, baselineHorizontal, uprightVertical, datumCorner, followerHorizontal, followerVertical, followerCorner, matchedBaselines, midpointWitness, boreCentersAligned, matchedBoreRadii, baselineLength, uprightHeight, followerHeight, datumAngle, inspectionDiameter, comparisonRadius]);
+  $.group("Fabrication annotations", [seedChord, markerEdge]);
+  return {
+    generators: {
+      blank: stockBlank,
+      flange: hexFlange,
+      port: obroundPort,
+    },
+    topology: {
+      split: splitAtDatum,
+      break: reliefBreak,
+      trim: finishTrim,
+      extend: extendToLimit,
+    },
+    finishing: {
+      mirror: reflectedProfile,
+      chamfer: cornerChamfer,
+      fillet: cornerFillet,
+      offset: machiningAllowance,
+    },
+    pattern: holeStrip,
+    metrology: {
+      datum: datumBaseline,
+      midpoint: datumMidpoint,
+      bores: [inspectionBore, comparisonBore],
+    },
+  };
 });
