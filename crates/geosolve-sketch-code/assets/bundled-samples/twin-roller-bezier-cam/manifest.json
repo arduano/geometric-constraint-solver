@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 3,
+  "key": "twin-roller-bezier-cam",
+  "title": "Twin-roller Bézier cam · 2 DOF",
+  "summary": "Two independently movable equal-radius rollers retain explicit tangent contacts on a quadratic cam.",
+  "category": "mechanism",
+  "expected": { "raw_dof": 2, "effective_dof": 2 },
+  "groups": ["Bezier cam profile", "Left roller follower", "Right roller follower"],
+  "provenance": []
+}

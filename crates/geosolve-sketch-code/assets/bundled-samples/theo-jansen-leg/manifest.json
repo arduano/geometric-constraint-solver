@@ -1,0 +1,11 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 1,
+  "key": "theo-jansen-leg",
+  "title": "Theo Jansen-style walking leg · 1 DOF",
+  "summary": "An independently authored seven-bar walking-leg study driven by one crank.",
+  "category": "mechanism",
+  "expected": { "raw_dof": 1, "effective_dof": 1 },
+  "groups": ["Ground frame", "Crank input", "Coupled leg"],
+  "provenance": []
+}
