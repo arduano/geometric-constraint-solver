@@ -1,5 +1,5 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "point1A3LineStart", "path": ["point"], "replacement": [0, 0] },
+  "representative_edit": { "declaration": "reservoirWidth", "path": ["value"], "replacement": { "unit": "mm", "value": 62 } },
   "drags": []
 }

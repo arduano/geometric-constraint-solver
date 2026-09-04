@@ -3,9 +3,20 @@
   "ordinal": 8,
   "key": "vacuum-fixture-plate",
   "title": "CNC vacuum fixture and spoilboard plate",
-  "summary": "A dimensioned plate study organizes mounting, vacuum and workholding references.",
+  "summary": "A 200 x 120 mm datum-driven plate combines a gasket groove, six-port vacuum grid and symmetric workholding pattern.",
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "groups": ["Fixture envelope", "Gasket groove", "Vacuum distribution grid", "Workholding pattern"],
+  "provenance": [
+    {
+      "relationship": "original",
+      "name": "GeoSolve independently drawn vacuum-fixture study",
+      "url": null,
+      "revision": null,
+      "path": null,
+      "license": "GPL-3.0-or-later",
+      "scope": "Planar layout study only; no vacuum-flow, sealing, stock-holding or CAM guarantee.",
+      "notice_required": false
+    }
+  ]
 }

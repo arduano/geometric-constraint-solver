@@ -3,19 +3,19 @@
   "ordinal": 10,
   "key": "gridfinity-bin-section",
   "title": "Gridfinity plan and 3U section",
-  "summary": "A standards-informed plan and central section expose base, cavity, wall and stacking intent.",
+  "summary": "A standards-informed 1 x 1 plan and symmetric 3U section expose base, body, lip and cavity intent with one scalar section datum.",
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
+  "groups": ["3U material section", "Section standard dimensions", "Section projection datums", "1 x 1 plan study"],
   "provenance": [
     {
-      "relationship": "adapted",
-      "name": "gridfinity-rebuilt-openscad",
+      "relationship": "dimensions_only",
+      "name": "Gridfinity Rebuilt OpenSCAD standard dimensions",
       "url": "https://github.com/kennetek/gridfinity-rebuilt-openscad",
       "revision": "910e22d8607fd7f5f51ad5e5cbc5287a76810bfd",
       "path": "src/core/standard.scad",
-      "licence": "MIT",
-      "scope": "Dimensional constants and profile stages interpreted as a constrained 2D study; no imported solid or manufacturing guarantee.",
+      "license": "MIT",
+      "scope": "Selected public grid, height, base and stacking-lip dimensions were interpreted into an independently drawn 2D plan and centre section.",
       "notice_required": true
     }
   ]

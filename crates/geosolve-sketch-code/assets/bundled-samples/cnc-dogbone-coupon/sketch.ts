@@ -1,338 +1,396 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
-  const point1LineLineHorizontalStart = $.geometry.sketchPoint("point1LineLineHorizontalStart", {
-    point: [-9, 5],
-    label: "Line-line horizontal start",
-  });
-  const point2LineLineHorizontalEnd = $.geometry.sketchPoint("point2LineLineHorizontalEnd", {
-    point: [-1, 5],
-    label: "Line-line horizontal end",
-  });
-  const point3LineLineVerticalStart = $.geometry.sketchPoint("point3LineLineVerticalStart", {
-    point: [-3, 1],
-    label: "Line-line vertical start",
-  });
-  const point4LineLineVerticalEnd = $.geometry.sketchPoint("point4LineLineVerticalEnd", {
-    point: [-3, 9],
-    label: "Line-line vertical end",
-  });
-  const point5HighValenceSharedJunction = $.geometry.sketchPoint("point5HighValenceSharedJunction", {
-    point: [14, 6],
-    label: "High-valence shared junction",
-  });
-  const point6HighValenceUpperEndpoint = $.geometry.sketchPoint("point6HighValenceUpperEndpoint", {
-    point: [14, 10],
-    label: "High-valence upper endpoint",
-  });
-  const point7HighValenceLowerLeftEndpoint = $.geometry.sketchPoint("point7HighValenceLowerLeftEndpoint", {
-    point: [10.5, 3.5],
-    label: "High-valence lower-left endpoint",
-  });
-  const point8HighValenceLowerRightEndpoint = $.geometry.sketchPoint("point8HighValenceLowerRightEndpoint", {
-    point: [17.5, 3.5],
-    label: "High-valence lower-right endpoint",
-  });
-  const point9FriendlyLineCircleCenter = $.geometry.sketchPoint("point9FriendlyLineCircleCenter", {
-    point: [6, 4],
-    label: "Friendly line-circle center",
-  });
-  const point10FriendlyLineCircleLineStart = $.geometry.sketchPoint("point10FriendlyLineCircleLineStart", {
-    point: [1, 2.5],
-    label: "Friendly line-circle line start",
-  });
-  const point11FriendlyLineCircleLineEnd = $.geometry.sketchPoint("point11FriendlyLineCircleLineEnd", {
-    point: [11, 2.5],
-    label: "Friendly line-circle line end",
-  });
-  const point12NearFoldStressLineCircleCenter = $.geometry.sketchPoint("point12NearFoldStressLineCircleCenter", {
-    point: [22, 7],
-    label: "Near-fold stress line-circle center",
-  });
-  const point13NearFoldStressLineCircleLineStart = $.geometry.sketchPoint("point13NearFoldStressLineCircleLineStart", {
-    point: [18, 4],
-    label: "Near-fold stress line-circle line start",
-  });
-  const point14NearFoldStressLineCircleLineEnd = $.geometry.sketchPoint("point14NearFoldStressLineCircleLineEnd", {
-    point: [26, 4],
-    label: "Near-fold stress line-circle line end",
-  });
-  const point15LineBezierStart = $.geometry.sketchPoint("point15LineBezierStart", {
-    point: [1, -3],
-    label: "Line-Bezier start",
-  });
-  const point16LineBezierControl = $.geometry.sketchPoint("point16LineBezierControl", {
-    point: [4, -7],
-    label: "Line-Bezier control",
-  });
-  const point17LineBezierEnd = $.geometry.sketchPoint("point17LineBezierEnd", {
-    point: [8, -3],
-    label: "Line-Bezier end",
-  });
-  const point18LineBezierLineStart = $.geometry.sketchPoint("point18LineBezierLineStart", {
-    point: [6, -8],
-    label: "Line-Bezier line start",
-  });
-  const point19LineBezierLineEnd = $.geometry.sketchPoint("point19LineBezierLineEnd", {
-    point: [6, 0],
-    label: "Line-Bezier line end",
-  });
-  const point20BatchPolylineStart = $.geometry.sketchPoint("point20BatchPolylineStart", {
-    point: [-10, -2],
-    label: "Batch polyline start",
-  });
-  const point21BatchPolylineFirstCorner = $.geometry.sketchPoint("point21BatchPolylineFirstCorner", {
-    point: [-6, -2],
-    label: "Batch polyline first corner",
-  });
-  const point22BatchPolylineSecondCorner = $.geometry.sketchPoint("point22BatchPolylineSecondCorner", {
-    point: [-6, -7],
-    label: "Batch polyline second corner",
-  });
-  const point23BatchPolylineEnd = $.geometry.sketchPoint("point23BatchPolylineEnd", {
-    point: [-2, -7],
-    label: "Batch polyline end",
-  });
-  const point24ConflictPolylineStart = $.geometry.sketchPoint("point24ConflictPolylineStart", {
-    point: [11, -3],
-    label: "Conflict polyline start",
-  });
-  const point25ConflictPolylineFirstCorner = $.geometry.sketchPoint("point25ConflictPolylineFirstCorner", {
-    point: [15, -3],
-    label: "Conflict polyline first corner",
-  });
-  const point26ConflictPolylineSecondCorner = $.geometry.sketchPoint("point26ConflictPolylineSecondCorner", {
-    point: [15, -4.75],
-    label: "Conflict polyline second corner",
-  });
-  const point27ConflictPolylineEnd = $.geometry.sketchPoint("point27ConflictPolylineEnd", {
-    point: [19, -4.75],
-    label: "Conflict polyline end",
-  });
-  const curve1LineLineHorizontalSupport = $.geometry.segment("curve1LineLineHorizontalSupport", {
-    start: point1LineLineHorizontalStart.point,
-    end: point2LineLineHorizontalEnd.point,
-    branchDirection: [1, 0],
-    label: "Line-line horizontal support",
+  // Sacrificial router-fit coupon comparing loose, nominal and press stations.
+  // The corner-centred circles are explicit dogbone overcuts, not CAM output.
+  const femaleBlank = $.geometry.twoPointAlignedRectangle("femaleBlank", {
+    firstCorner: [-130, -70],
+    oppositeCorner: [-10, 70],
+    label: "Female coupon blank",
     role: "profile",
   });
-  const curve2LineLineVerticalSupport = $.geometry.segment("curve2LineLineVerticalSupport", {
-    start: point3LineLineVerticalStart.point,
-    end: point4LineLineVerticalEnd.point,
-    branchDirection: [0, 1],
-    label: "Line-line vertical support",
-    role: "profile",
+  const femaleBlankAnchor = $.constraint.fixedPoint("femaleBlankAnchor", {
+    point: femaleBlank.corners[0],
+    target: [-130, -70],
+    label: "Coupon datum",
   });
-  const curve3HighValenceBranch1 = $.geometry.segment("curve3HighValenceBranch1", {
-    start: point5HighValenceSharedJunction.point,
-    end: point6HighValenceUpperEndpoint.point,
-    branchDirection: [0, 1],
-    label: "High-valence branch 1",
-    role: "profile",
-  });
-  const curve4HighValenceBranch2 = $.geometry.segment("curve4HighValenceBranch2", {
-    start: point5HighValenceSharedJunction.point,
-    end: point7HighValenceLowerLeftEndpoint.point,
-    branchDirection: [-0.813733471206735, -0.5812381937190965],
-    label: "High-valence branch 2",
-    role: "profile",
-  });
-  const curve5HighValenceBranch3 = $.geometry.segment("curve5HighValenceBranch3", {
-    start: point5HighValenceSharedJunction.point,
-    end: point8HighValenceLowerRightEndpoint.point,
-    branchDirection: [0.813733471206735, -0.5812381937190965],
-    label: "High-valence branch 3",
-    role: "profile",
-  });
-  const curve6FriendlyLineCircleCircularSupport = $.geometry.centerRadiusCircle("curve6FriendlyLineCircleCircularSupport", {
-    center: point9FriendlyLineCircleCenter.point,
-    radius: mm(1),
-    label: "Friendly line-circle circular support",
-    role: "profile",
-  });
-  const curve7FriendlyLineCircleLinearSupport = $.geometry.segment("curve7FriendlyLineCircleLinearSupport", {
-    start: point10FriendlyLineCircleLineStart.point,
-    end: point11FriendlyLineCircleLineEnd.point,
-    branchDirection: [1, 0],
-    label: "Friendly line-circle linear support",
-    role: "profile",
-  });
-  const curve8NearFoldStressLineCircleCircularSupport = $.geometry.centerRadiusCircle("curve8NearFoldStressLineCircleCircularSupport", {
-    center: point12NearFoldStressLineCircleCenter.point,
-    radius: mm(2),
-    label: "Near-fold stress line-circle circular support",
-    role: "profile",
-  });
-  const curve9NearFoldStressLineCircleLinearSupport = $.geometry.segment("curve9NearFoldStressLineCircleLinearSupport", {
-    start: point13NearFoldStressLineCircleLineStart.point,
-    end: point14NearFoldStressLineCircleLineEnd.point,
-    branchDirection: [1, 0],
-    label: "Near-fold stress line-circle linear support",
-    role: "profile",
-  });
-  const curve10LineBezierCurvedSupport = $.geometry.quadraticBezier("curve10LineBezierCurvedSupport", {
-    start: point15LineBezierStart.point,
-    control: point16LineBezierControl.point,
-    end: point17LineBezierEnd.point,
-    label: "Line-Bezier curved support",
-    role: "profile",
-  });
-  const curve11LineBezierLinearSupport = $.geometry.segment("curve11LineBezierLinearSupport", {
-    start: point18LineBezierLineStart.point,
-    end: point19LineBezierLineEnd.point,
-    branchDirection: [0, 1],
-    label: "Line-Bezier linear support",
-    role: "profile",
-  });
-  const curve12EditableBatchAndSequentialPolyline = $.geometry.polyline("curve12EditableBatchAndSequentialPolyline", {
-    vertices: [{
-      key: "vertex1",
-      position: point20BatchPolylineStart.point,
-    }, {
-      key: "vertex2",
-      position: point21BatchPolylineFirstCorner.point,
-    }, {
-      key: "vertex3",
-      position: point22BatchPolylineSecondCorner.point,
-    }, {
-      key: "vertex4",
-      position: point23BatchPolylineEnd.point,
-    }],
-    closed: false,
-    branchDirections: [[1, 0], [0, -1], [1, 0]],
-    label: "Editable batch and sequential polyline",
-    role: "profile",
-  });
-  const curve13EditableShortMiddleConflictPolyline = $.geometry.polyline("curve13EditableShortMiddleConflictPolyline", {
-    vertices: [{
-      key: "vertex1",
-      position: point24ConflictPolylineStart.point,
-    }, {
-      key: "vertex2",
-      position: point25ConflictPolylineFirstCorner.point,
-    }, {
-      key: "vertex3",
-      position: point26ConflictPolylineSecondCorner.point,
-    }, {
-      key: "vertex4",
-      position: point27ConflictPolylineEnd.point,
-    }],
-    closed: false,
-    branchDirections: [[1, 0], [0, -1], [1, 0]],
-    label: "Editable short-middle conflict polyline",
-    role: "profile",
-  });
-  const constraint1FixLineLineHorizontalControl1 = $.constraint.fixedPoint("constraint1FixLineLineHorizontalControl1", {
-    point: point1LineLineHorizontalStart.point,
-    target: [-9, 5],
-    label: "Fix Line-line horizontal control 1",
-  });
-  const constraint2FixLineLineHorizontalControl2 = $.constraint.fixedPoint("constraint2FixLineLineHorizontalControl2", {
-    point: point2LineLineHorizontalEnd.point,
-    target: [-1, 5],
-    label: "Fix Line-line horizontal control 2",
-  });
-  const constraint3FixLineLineVerticalControl1 = $.constraint.fixedPoint("constraint3FixLineLineVerticalControl1", {
-    point: point3LineLineVerticalStart.point,
-    target: [-3, 1],
-    label: "Fix Line-line vertical control 1",
-  });
-  const constraint4FixLineLineVerticalControl2 = $.constraint.fixedPoint("constraint4FixLineLineVerticalControl2", {
-    point: point4LineLineVerticalEnd.point,
-    target: [-3, 9],
-    label: "Fix Line-line vertical control 2",
-  });
-  const constraint5FixHighValenceSharedJunction = $.constraint.fixedPoint("constraint5FixHighValenceSharedJunction", {
-    point: point5HighValenceSharedJunction.point,
-    target: [14, 6],
-    label: "Fix high-valence shared junction",
-  });
-  const constraint6FixHighValenceEndpoint1 = $.constraint.fixedPoint("constraint6FixHighValenceEndpoint1", {
-    point: point6HighValenceUpperEndpoint.point,
-    target: [14, 10],
-    label: "Fix high-valence endpoint 1",
-  });
-  const constraint7FixHighValenceEndpoint2 = $.constraint.fixedPoint("constraint7FixHighValenceEndpoint2", {
-    point: point7HighValenceLowerLeftEndpoint.point,
-    target: [10.5, 3.5],
-    label: "Fix high-valence endpoint 2",
-  });
-  const constraint8FixHighValenceEndpoint3 = $.constraint.fixedPoint("constraint8FixHighValenceEndpoint3", {
-    point: point8HighValenceLowerRightEndpoint.point,
-    target: [17.5, 3.5],
-    label: "Fix high-valence endpoint 3",
-  });
-  const constraint9FixFriendlyLineCircleCenter = $.constraint.fixedPoint("constraint9FixFriendlyLineCircleCenter", {
-    point: point9FriendlyLineCircleCenter.point,
-    target: [6, 4],
-    label: "Fix Friendly line-circle center",
-  });
-  const dimension1FriendlyLineCircleSourceRadius = $.dimension.radius("dimension1FriendlyLineCircleSourceRadius", {
-    curve: curve6FriendlyLineCircleCircularSupport.curve,
-    value: mm(1),
-    label: "Friendly line-circle source radius",
+  const femaleBlankWidth = $.dimension.curveLength("femaleBlankWidth", {
+    curve: femaleBlank.spans[0],
+    value: mm(120),
+    label: "Female blank width",
     mode: "driving",
   });
-  const constraint10FixFriendlyLineCircleLineControl1 = $.constraint.fixedPoint("constraint10FixFriendlyLineCircleLineControl1", {
-    point: point10FriendlyLineCircleLineStart.point,
-    target: [1, 2.5],
-    label: "Fix Friendly line-circle line control 1",
-  });
-  const constraint11FixFriendlyLineCircleLineControl2 = $.constraint.fixedPoint("constraint11FixFriendlyLineCircleLineControl2", {
-    point: point11FriendlyLineCircleLineEnd.point,
-    target: [11, 2.5],
-    label: "Fix Friendly line-circle line control 2",
-  });
-  const constraint12FixNearFoldStressLineCircleCenter = $.constraint.fixedPoint("constraint12FixNearFoldStressLineCircleCenter", {
-    point: point12NearFoldStressLineCircleCenter.point,
-    target: [22, 7],
-    label: "Fix Near-fold stress line-circle center",
-  });
-  const dimension2NearFoldStressLineCircleSourceRadius = $.dimension.radius("dimension2NearFoldStressLineCircleSourceRadius", {
-    curve: curve8NearFoldStressLineCircleCircularSupport.curve,
-    value: mm(2),
-    label: "Near-fold stress line-circle source radius",
+  const femaleBlankHeight = $.dimension.curveLength("femaleBlankHeight", {
+    curve: femaleBlank.spans[1],
+    value: mm(140),
+    label: "Female blank height",
     mode: "driving",
   });
-  const constraint13FixNearFoldStressLineCircleLineControl1 = $.constraint.fixedPoint("constraint13FixNearFoldStressLineCircleLineControl1", {
-    point: point13NearFoldStressLineCircleLineStart.point,
-    target: [18, 4],
-    label: "Fix Near-fold stress line-circle line control 1",
+  const stationX = $.geometry.segment("stationX", {
+    start: femaleBlank.corners[0],
+    end: [-105, -70],
+    branchDirection: [1, 0],
+    label: "Mortise station X datum",
+    role: "construction",
   });
-  const constraint14FixNearFoldStressLineCircleLineControl2 = $.constraint.fixedPoint("constraint14FixNearFoldStressLineCircleLineControl2", {
-    point: point14NearFoldStressLineCircleLineEnd.point,
-    target: [26, 4],
-    label: "Fix Near-fold stress line-circle line control 2",
+  const stationXHorizontal = $.constraint.horizontal("stationXHorizontal", {
+    span: stationX.span,
+    label: "Station X axis",
   });
-  const constraint15FixLineBezierCurveControl1 = $.constraint.fixedPoint("constraint15FixLineBezierCurveControl1", {
-    point: point15LineBezierStart.point,
-    target: [1, -3],
-    label: "Fix Line-Bezier curve control 1",
+  const stationXInset = $.dimension.curveLength("stationXInset", {
+    curve: stationX.span,
+    value: mm(25),
+    label: "Mortise X inset",
+    mode: "driving",
   });
-  const constraint16FixLineBezierCurveControl2 = $.constraint.fixedPoint("constraint16FixLineBezierCurveControl2", {
-    point: point16LineBezierControl.point,
-    target: [4, -7],
-    label: "Fix Line-Bezier curve control 2",
+  const pressMortiseY = $.geometry.segment("pressMortiseY", {
+    start: stationX.end,
+    end: [-105, -50.8],
+    branchDirection: [0, 1],
+    label: "Press station Y datum",
+    role: "construction",
   });
-  const constraint17FixLineBezierCurveControl3 = $.constraint.fixedPoint("constraint17FixLineBezierCurveControl3", {
-    point: point17LineBezierEnd.point,
-    target: [8, -3],
-    label: "Fix Line-Bezier curve control 3",
+  const pressMortiseYVertical = $.constraint.vertical("pressMortiseYVertical", {
+    span: pressMortiseY.span,
+    label: "Press station vertical datum",
   });
-  const constraint18FixLineBezierLineControl1 = $.constraint.fixedPoint("constraint18FixLineBezierLineControl1", {
-    point: point18LineBezierLineStart.point,
-    target: [6, -8],
-    label: "Fix Line-Bezier line control 1",
+  const pressMortiseYInset = $.dimension.curveLength("pressMortiseYInset", {
+    curve: pressMortiseY.span,
+    value: mm(19.2),
+    label: "Press station lower inset",
+    mode: "driving",
   });
-  const constraint19FixLineBezierLineControl2 = $.constraint.fixedPoint("constraint19FixLineBezierLineControl2", {
-    point: point19LineBezierLineEnd.point,
-    target: [6, 0],
-    label: "Fix Line-Bezier line control 2",
+  const pressToNominal = $.geometry.segment("pressToNominal", {
+    start: pressMortiseY.end,
+    end: [-105, -9],
+    branchDirection: [0, 1],
+    label: "Press-to-nominal pitch",
+    role: "construction",
   });
-  $.group("Points", [point1LineLineHorizontalStart, point2LineLineHorizontalEnd, point3LineLineVerticalStart, point4LineLineVerticalEnd, point5HighValenceSharedJunction, point6HighValenceUpperEndpoint, point7HighValenceLowerLeftEndpoint, point8HighValenceLowerRightEndpoint, point9FriendlyLineCircleCenter, point10FriendlyLineCircleLineStart, point11FriendlyLineCircleLineEnd, point12NearFoldStressLineCircleCenter, point13NearFoldStressLineCircleLineStart, point14NearFoldStressLineCircleLineEnd, point15LineBezierStart, point16LineBezierControl, point17LineBezierEnd, point18LineBezierLineStart, point19LineBezierLineEnd, point20BatchPolylineStart, point21BatchPolylineFirstCorner, point22BatchPolylineSecondCorner, point23BatchPolylineEnd, point24ConflictPolylineStart, point25ConflictPolylineFirstCorner, point26ConflictPolylineSecondCorner, point27ConflictPolylineEnd]);
-  $.group("Geometry", [curve1LineLineHorizontalSupport, curve2LineLineVerticalSupport, curve3HighValenceBranch1, curve4HighValenceBranch2, curve5HighValenceBranch3, curve6FriendlyLineCircleCircularSupport, curve7FriendlyLineCircleLinearSupport, curve8NearFoldStressLineCircleCircularSupport, curve9NearFoldStressLineCircleLinearSupport, curve10LineBezierCurvedSupport, curve11LineBezierLinearSupport, curve12EditableBatchAndSequentialPolyline, curve13EditableShortMiddleConflictPolyline]);
-  $.group("Constraints", [constraint1FixLineLineHorizontalControl1, constraint2FixLineLineHorizontalControl2, constraint3FixLineLineVerticalControl1, constraint4FixLineLineVerticalControl2, constraint5FixHighValenceSharedJunction, constraint6FixHighValenceEndpoint1, constraint7FixHighValenceEndpoint2, constraint8FixHighValenceEndpoint3, constraint9FixFriendlyLineCircleCenter, constraint10FixFriendlyLineCircleLineControl1, constraint11FixFriendlyLineCircleLineControl2, constraint12FixNearFoldStressLineCircleCenter, constraint13FixNearFoldStressLineCircleLineControl1, constraint14FixNearFoldStressLineCircleLineControl2, constraint15FixLineBezierCurveControl1, constraint16FixLineBezierCurveControl2, constraint17FixLineBezierCurveControl3, constraint18FixLineBezierLineControl1, constraint19FixLineBezierLineControl2]);
-  $.group("Dimensions", [dimension1FriendlyLineCircleSourceRadius, dimension2NearFoldStressLineCircleSourceRadius]);
+  const pressToNominalVertical = $.constraint.vertical("pressToNominalVertical", {
+    span: pressToNominal.span,
+    label: "Mortise pitch axis",
+  });
+  const pressToNominalPitch = $.dimension.curveLength("pressToNominalPitch", {
+    curve: pressToNominal.span,
+    value: mm(41.8),
+    label: "Press-to-nominal pitch",
+    mode: "driving",
+  });
+  const nominalToLoose = $.geometry.segment("nominalToLoose", {
+    start: pressToNominal.end,
+    end: [-105, 32.8],
+    branchDirection: [0, 1],
+    label: "Nominal-to-loose pitch",
+    role: "construction",
+  });
+  const nominalToLooseVertical = $.constraint.vertical("nominalToLooseVertical", {
+    span: nominalToLoose.span,
+    label: "Mortise pitch axis",
+  });
+  const nominalToLoosePitch = $.dimension.curveLength("nominalToLoosePitch", {
+    curve: nominalToLoose.span,
+    value: mm(41.8),
+    label: "Nominal-to-loose pitch",
+    mode: "driving",
+  });
+  const pressMortise = $.geometry.twoPointAlignedRectangle("pressMortise", {
+    firstCorner: pressMortiseY.end,
+    oppositeCorner: [-35, -33.2],
+    label: "17.6 mm press mortise",
+    role: "profile",
+  });
+  const pressMortiseWidth = $.dimension.curveLength("pressMortiseWidth", {
+    curve: pressMortise.spans[0],
+    value: mm(70),
+    label: "Press mortise length",
+    mode: "driving",
+  });
+  const pressMortiseHeight = $.dimension.curveLength("pressMortiseHeight", {
+    curve: pressMortise.spans[1],
+    value: mm(17.6),
+    label: "Press mortise width",
+    mode: "driving",
+  });
+  const nominalMortise = $.geometry.twoPointAlignedRectangle("nominalMortise", {
+    firstCorner: pressToNominal.end,
+    oppositeCorner: [-35, 9],
+    label: "18.0 mm nominal mortise",
+    role: "profile",
+  });
+  const nominalMortiseWidth = $.dimension.curveLength("nominalMortiseWidth", {
+    curve: nominalMortise.spans[0],
+    value: mm(70),
+    label: "Nominal mortise length",
+    mode: "driving",
+  });
+  const nominalMortiseHeight = $.dimension.curveLength("nominalMortiseHeight", {
+    curve: nominalMortise.spans[1],
+    value: mm(18),
+    label: "Nominal mortise width",
+    mode: "driving",
+  });
+  const looseMortise = $.geometry.twoPointAlignedRectangle("looseMortise", {
+    firstCorner: nominalToLoose.end,
+    oppositeCorner: [-35, 51.2],
+    label: "18.4 mm loose mortise",
+    role: "profile",
+  });
+  const looseMortiseWidth = $.dimension.curveLength("looseMortiseWidth", {
+    curve: looseMortise.spans[0],
+    value: mm(70),
+    label: "Loose mortise length",
+    mode: "driving",
+  });
+  const looseMortiseHeight = $.dimension.curveLength("looseMortiseHeight", {
+    curve: looseMortise.spans[1],
+    value: mm(18.4),
+    label: "Loose mortise width",
+    mode: "driving",
+  });
+  const nominalTabDatum = $.geometry.segment("nominalTabDatum", {
+    start: nominalMortise.corners[0],
+    end: [20, -9],
+    branchDirection: [1, 0],
+    label: "Male coupon station datum",
+    role: "construction",
+  });
+  const nominalTabDatumHorizontal = $.constraint.horizontal("nominalTabDatumHorizontal", {
+    span: nominalTabDatum.span,
+    label: "Male station axis",
+  });
+  const stationGap = $.dimension.curveLength("stationGap", {
+    curve: nominalTabDatum.span,
+    value: mm(125),
+    label: "Female-to-male station gap",
+    mode: "driving",
+  });
+  const pressTabDatum = $.geometry.segment("pressTabDatum", {
+    start: nominalTabDatum.end,
+    end: [20, -51],
+    branchDirection: [0, -1],
+    label: "Press tab pitch",
+    role: "construction",
+  });
+  const pressTabDatumVertical = $.constraint.vertical("pressTabDatumVertical", {
+    span: pressTabDatum.span,
+    label: "Male pitch axis",
+  });
+  const pressTabPitch = $.dimension.curveLength("pressTabPitch", {
+    curve: pressTabDatum.span,
+    value: mm(42),
+    label: "Press tab pitch",
+    mode: "driving",
+  });
+  const looseTabDatum = $.geometry.segment("looseTabDatum", {
+    start: nominalTabDatum.end,
+    end: [20, 33],
+    branchDirection: [0, 1],
+    label: "Loose tab pitch",
+    role: "construction",
+  });
+  const looseTabDatumVertical = $.constraint.vertical("looseTabDatumVertical", {
+    span: looseTabDatum.span,
+    label: "Male pitch axis",
+  });
+  const looseTabPitch = $.dimension.curveLength("looseTabPitch", {
+    curve: looseTabDatum.span,
+    value: mm(42),
+    label: "Loose tab pitch",
+    mode: "driving",
+  });
+  const pressTab = $.geometry.twoPointAlignedRectangle("pressTab", {
+    firstCorner: pressTabDatum.end,
+    oppositeCorner: [115, -33],
+    label: "Press-fit test tab",
+    role: "profile",
+  });
+  const pressTabLength = $.dimension.curveLength("pressTabLength", {
+    curve: pressTab.spans[0],
+    value: mm(95),
+    label: "Press tab length",
+    mode: "driving",
+  });
+  const pressTabThickness = $.dimension.curveLength("pressTabThickness", {
+    curve: pressTab.spans[1],
+    value: mm(18),
+    label: "Press tab thickness",
+    mode: "driving",
+  });
+  const nominalTab = $.geometry.twoPointAlignedRectangle("nominalTab", {
+    firstCorner: nominalTabDatum.end,
+    oppositeCorner: [115, 9],
+    label: "Nominal test tab",
+    role: "profile",
+  });
+  const nominalTabLength = $.dimension.curveLength("nominalTabLength", {
+    curve: nominalTab.spans[0],
+    value: mm(95),
+    label: "Nominal tab length",
+    mode: "driving",
+  });
+  const nominalTabThickness = $.dimension.curveLength("nominalTabThickness", {
+    curve: nominalTab.spans[1],
+    value: mm(18),
+    label: "Nominal tab thickness",
+    mode: "driving",
+  });
+  const looseTab = $.geometry.twoPointAlignedRectangle("looseTab", {
+    firstCorner: looseTabDatum.end,
+    oppositeCorner: [115, 51],
+    label: "Loose-fit test tab",
+    role: "profile",
+  });
+  const looseTabLength = $.dimension.curveLength("looseTabLength", {
+    curve: looseTab.spans[0],
+    value: mm(95),
+    label: "Loose tab length",
+    mode: "driving",
+  });
+  const looseTabThickness = $.dimension.curveLength("looseTabThickness", {
+    curve: looseTab.spans[1],
+    value: mm(18),
+    label: "Loose tab thickness",
+    mode: "driving",
+  });
+  const pressReliefLl = $.geometry.centerRadiusCircle("pressReliefLl", {
+    center: pressMortise.corners[0],
+    radius: mm(3.175),
+    label: "Press LL cutter relief",
+    role: "profile",
+  });
+  const pressReliefLr = $.geometry.centerRadiusCircle("pressReliefLr", {
+    center: pressMortise.corners[1],
+    radius: mm(3.175),
+    label: "Press LR cutter relief",
+    role: "profile",
+  });
+  const pressReliefUr = $.geometry.centerRadiusCircle("pressReliefUr", {
+    center: pressMortise.corners[2],
+    radius: mm(3.175),
+    label: "Press UR cutter relief",
+    role: "profile",
+  });
+  const pressReliefUl = $.geometry.centerRadiusCircle("pressReliefUl", {
+    center: pressMortise.corners[3],
+    radius: mm(3.175),
+    label: "Press UL cutter relief",
+    role: "profile",
+  });
+  const nominalReliefLl = $.geometry.centerRadiusCircle("nominalReliefLl", {
+    center: nominalMortise.corners[0],
+    radius: mm(3.175),
+    label: "Nominal LL cutter relief",
+    role: "profile",
+  });
+  const nominalReliefLr = $.geometry.centerRadiusCircle("nominalReliefLr", {
+    center: nominalMortise.corners[1],
+    radius: mm(3.175),
+    label: "Nominal LR cutter relief",
+    role: "profile",
+  });
+  const nominalReliefUr = $.geometry.centerRadiusCircle("nominalReliefUr", {
+    center: nominalMortise.corners[2],
+    radius: mm(3.175),
+    label: "Nominal UR cutter relief",
+    role: "profile",
+  });
+  const nominalReliefUl = $.geometry.centerRadiusCircle("nominalReliefUl", {
+    center: nominalMortise.corners[3],
+    radius: mm(3.175),
+    label: "Nominal UL cutter relief",
+    role: "profile",
+  });
+  const looseReliefLl = $.geometry.centerRadiusCircle("looseReliefLl", {
+    center: looseMortise.corners[0],
+    radius: mm(3.175),
+    label: "Loose LL cutter relief",
+    role: "profile",
+  });
+  const looseReliefLr = $.geometry.centerRadiusCircle("looseReliefLr", {
+    center: looseMortise.corners[1],
+    radius: mm(3.175),
+    label: "Loose LR cutter relief",
+    role: "profile",
+  });
+  const looseReliefUr = $.geometry.centerRadiusCircle("looseReliefUr", {
+    center: looseMortise.corners[2],
+    radius: mm(3.175),
+    label: "Loose UR cutter relief",
+    role: "profile",
+  });
+  const looseReliefUl = $.geometry.centerRadiusCircle("looseReliefUl", {
+    center: looseMortise.corners[3],
+    radius: mm(3.175),
+    label: "Loose UL cutter relief",
+    role: "profile",
+  });
+  const cutterRadius = $.dimension.radius("cutterRadius", {
+    curve: pressReliefLl.curve,
+    value: mm(3.175),
+    label: "6.35 mm cutter",
+    mode: "driving",
+  });
+  const pressReliefLrEqual = $.constraint.equalRadius("pressReliefLrEqual", {
+    first: pressReliefLl.curve,
+    second: pressReliefLr.curve,
+    label: "Common cutter radius",
+  });
+  const pressReliefUrEqual = $.constraint.equalRadius("pressReliefUrEqual", {
+    first: pressReliefLl.curve,
+    second: pressReliefUr.curve,
+    label: "Common cutter radius",
+  });
+  const pressReliefUlEqual = $.constraint.equalRadius("pressReliefUlEqual", {
+    first: pressReliefLl.curve,
+    second: pressReliefUl.curve,
+    label: "Common cutter radius",
+  });
+  const nominalReliefLlEqual = $.constraint.equalRadius("nominalReliefLlEqual", {
+    first: pressReliefLl.curve,
+    second: nominalReliefLl.curve,
+    label: "Common cutter radius",
+  });
+  const nominalReliefLrEqual = $.constraint.equalRadius("nominalReliefLrEqual", {
+    first: pressReliefLl.curve,
+    second: nominalReliefLr.curve,
+    label: "Common cutter radius",
+  });
+  const nominalReliefUrEqual = $.constraint.equalRadius("nominalReliefUrEqual", {
+    first: pressReliefLl.curve,
+    second: nominalReliefUr.curve,
+    label: "Common cutter radius",
+  });
+  const nominalReliefUlEqual = $.constraint.equalRadius("nominalReliefUlEqual", {
+    first: pressReliefLl.curve,
+    second: nominalReliefUl.curve,
+    label: "Common cutter radius",
+  });
+  const looseReliefLlEqual = $.constraint.equalRadius("looseReliefLlEqual", {
+    first: pressReliefLl.curve,
+    second: looseReliefLl.curve,
+    label: "Common cutter radius",
+  });
+  const looseReliefLrEqual = $.constraint.equalRadius("looseReliefLrEqual", {
+    first: pressReliefLl.curve,
+    second: looseReliefLr.curve,
+    label: "Common cutter radius",
+  });
+  const looseReliefUrEqual = $.constraint.equalRadius("looseReliefUrEqual", {
+    first: pressReliefLl.curve,
+    second: looseReliefUr.curve,
+    label: "Common cutter radius",
+  });
+  const looseReliefUlEqual = $.constraint.equalRadius("looseReliefUlEqual", {
+    first: pressReliefLl.curve,
+    second: looseReliefUl.curve,
+    label: "Common cutter radius",
+  });
+  $.group("Female coupon blank", [femaleBlank, femaleBlankAnchor, femaleBlankWidth, femaleBlankHeight]);
+  $.group("Relational station datums", [stationX, stationXHorizontal, stationXInset, pressMortiseY, pressMortiseYVertical, pressMortiseYInset, pressToNominal, pressToNominalVertical, pressToNominalPitch, nominalToLoose, nominalToLooseVertical, nominalToLoosePitch, nominalTabDatum, nominalTabDatumHorizontal, stationGap, pressTabDatum, pressTabDatumVertical, pressTabPitch, looseTabDatum, looseTabDatumVertical, looseTabPitch]);
+  $.group("Press-fit station", [pressMortise, pressMortiseWidth, pressMortiseHeight, pressTab, pressTabLength, pressTabThickness, pressReliefLl, pressReliefLr, pressReliefUr, pressReliefUl, cutterRadius, pressReliefLrEqual, pressReliefUrEqual, pressReliefUlEqual]);
+  $.group("Nominal-fit station", [nominalMortise, nominalMortiseWidth, nominalMortiseHeight, nominalTab, nominalTabLength, nominalTabThickness, nominalReliefLl, nominalReliefLr, nominalReliefUr, nominalReliefUl, nominalReliefLlEqual, nominalReliefLrEqual, nominalReliefUrEqual, nominalReliefUlEqual]);
+  $.group("Loose-fit station", [looseMortise, looseMortiseWidth, looseMortiseHeight, looseTab, looseTabLength, looseTabThickness, looseReliefLl, looseReliefLr, looseReliefUr, looseReliefUl, looseReliefLlEqual, looseReliefLrEqual, looseReliefUrEqual, looseReliefUlEqual]);
   return {};
 });

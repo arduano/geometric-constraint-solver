@@ -3,9 +3,20 @@
   "ordinal": 7,
   "key": "cnc-dogbone-coupon",
   "title": "CNC joinery and dogbone fit coupon",
-  "summary": "A planar router-fit coupon compares keyed clearances and explicit corner reliefs.",
+  "summary": "A fully constrained three-station router coupon compares press, nominal and loose mortises against common tabs and explicit cutter reliefs.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 16, "effective_dof": 16 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Female coupon blank", "Relational station datums", "Press-fit station", "Nominal-fit station", "Loose-fit station"],
+  "provenance": [
+    {
+      "relationship": "original",
+      "name": "GeoSolve independently drawn CNC fit coupon",
+      "url": null,
+      "revision": null,
+      "path": null,
+      "license": "GPL-3.0-or-later",
+      "scope": "Planar calibration geometry only; relief circles are explicit design intent, not cutter compensation or CAM.",
+      "notice_required": false
+    }
+  ]
 }

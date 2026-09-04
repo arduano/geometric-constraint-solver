@@ -3,9 +3,20 @@
   "ordinal": 9,
   "key": "dust-shoe-clamp",
   "title": "CNC router dust shoe and spindle clamp",
-  "summary": "A planar clamp and dust-shoe interface study keeps concentric and mounting intent explicit.",
+  "summary": "A fully constrained 65 mm spindle ring combines an extraction boss, split relief and symmetric clamp lug.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 1, "effective_dof": 1 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Spindle clamp ring", "Dust extraction port", "Symmetric clamp lug", "Split relief"],
+  "provenance": [
+    {
+      "relationship": "original",
+      "name": "GeoSolve independently drawn router dust-shoe study",
+      "url": null,
+      "revision": null,
+      "path": null,
+      "license": "GPL-3.0-or-later",
+      "scope": "Conceptual 2D interface geometry only; no airflow, clamp-load, collision or CAM claim.",
+      "notice_required": false
+    }
+  ]
 }

@@ -3,9 +3,20 @@
   "ordinal": 6,
   "key": "pc-water-manifold",
   "title": "PC liquid-cooling manifold",
-  "summary": "A constrained planar study of a distribution plate, ports and routed channels.",
+  "summary": "A constrained acrylic distribution-plate study combines three routed channels, O-ring grooves, reservoir bay and symmetric fastener stack.",
   "category": "product_fabrication",
   "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Points", "Geometry", "Constraints", "Dimensions"],
-  "provenance": []
+  "groups": ["Manifold envelope and reservoir", "Upper channel circuit", "Middle channel circuit", "Lower channel circuit", "Fastener stack"],
+  "provenance": [
+    {
+      "relationship": "original",
+      "name": "GeoSolve independently drawn PC water-manifold study",
+      "url": null,
+      "revision": null,
+      "path": null,
+      "license": "GPL-3.0-or-later",
+      "scope": "Planar acrylic-plate layout only; no flow, pressure, sealing, thermal or manufacturing guarantee.",
+      "notice_required": false
+    }
+  ]
 }
