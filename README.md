@@ -167,11 +167,21 @@ M91 integrates intrinsic contact topology plus authored ranges, advisory TypeScr
 intelligence, one 37-entry managed-source sample catalog, persistent presentation-only Explorer
 visibility and native/managed semantic oracle parity. Exact source
 `6d0155151133ba2540fd1dc4b2b071f141b86064` passes the complete clean release gate; immutable
-snapshot `/tmp/geosolve-m91-uat.17Q5LnSg` is byte-verified at
+snapshot `/tmp/geosolve-m91-uat.17Q5LnSg` was byte-verified while served at
 `http://100.94.63.83:18091/`. On 2026-09-04 the supervising user explicitly approved every part of
 the UAT, accepting M91-U1 through M91-U14 as Pass at milestone level without claiming a separately
-logged row-by-row replay. GitHub Pages publication, hosted-byte verification and accepted-service
-retirement remain pending; public Pages therefore still serves accepted M86 at this checkpoint.
+logged row-by-row replay. Publication descendant
+`177227941af97f24307fe4229797bbd84857e458` subsequently passed GitHub Pages run `33878060784`,
+which published artifact `9938976843` as deployment `6265455733`. Its exact ten-file aggregate is
+`a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`; all eleven public routes
+exact-match, and the public release-WASM workbench and language-service browser suite passes `20/20`.
+The accepted M90 and M91 services were then retired. M91 is complete and publicly closed.
+
+M92 is the current in-progress advanced sample showcase. It targets replacing the accumulated
+catalog variants with one manifest-driven, source-authoritative 20-sample registry: five mechanisms,
+eleven product/fabrication studies, two capability atlases and two scale labs (`5/11/2/2`).
+Mechanical qualification, an immutable M92 nomination, composite human UAT and milestone closure
+remain pending.
 
 Physics, collision and a production rendering system remain out of scope.
 
@@ -179,8 +189,8 @@ Physics, collision and a production rendering system remain out of scope.
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M1-M88 accepted and M90 the active typed executed-sketch
-   clean break.
+3. `PLAN.md` — authoritative roadmap; M91 is publicly closed and M92 is the current in-progress
+   20-sample showcase.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -219,8 +229,9 @@ Physics, collision and a production rendering system remain out of scope.
 23. `docs/M90_GOALS.md`, `docs/M90_IMPLEMENTATION.md` and `docs/M90_UAT.md` — completed typed V3
     clean break, F001-F006 repairs and scoped closure; M90-U1 through M90-U10 transferred into M91.
 24. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — clean-qualified,
-    immutable code-driven-authoring candidate accepted by explicit composite approval; public Pages
-    closeout remains pending.
+    explicitly accepted and publicly closed code-driven-authoring milestone.
+25. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — current in-progress
+    20-sample advanced showcase, implementation ledger and not-yet-nominated composite scorecard.
 
 ## Workspace
 
@@ -248,7 +259,7 @@ Physics, collision and a production rendering system remain out of scope.
   by native and WASM, plus a native-only pure-Rust PNG path with a pinned bundled font and no
   external resources.
 - `geosolve-headless` — browser-free inspect, cold solve, independent validation and static
-  screenshot orchestration for compiled V3 code projects and bundled demonstrations, plus the
+  screenshot orchestration for compiled V3 code projects and bundled samples, plus the
   Rust prepare/resolve boundaries for exact source edits performed by the pinned Deno compiler.
 - `geosolve-linkage` — persistent planar and spatial rigid bodies/features/sources, deterministic JSON/runtime remapping, gauge-separated mobility, common joints/mates, drivers, explicit assembly modes, independently published natural/pseudo-arclength continuation, typed hysteretic branch events/mode changes and multi-driver body/feature velocity fields with optional physical motion bases.
 - `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
@@ -273,9 +284,11 @@ workbench redesign and post-acceptance Rust-DOM compatibility retirement. Its ac
 snapshot remains live on Tailscale; no M88 public deployment or service retirement is inferred.
 M89 established executed, reversible managed source. M90 completed the clean break to one named,
 typed V3 sketch language and removed its temporary compatibility APIs. M91's five integrated
-workstreams are clean-qualified, immutably nominated and accepted by the supervising user's explicit
-composite approval; only public Pages closeout and service retirement remain pending.
-Public Pages remains on accepted M86 at this approval checkpoint. New
+workstreams are clean-qualified, accepted and publicly closed; exact Pages publication and browser
+verification pass, and the accepted M90/M91 services are retired. M92 is now in progress toward one
+manifest-driven, source-authoritative 20-sample showcase split `5/11/2/2` across mechanisms,
+product/fabrication studies, capability atlases and scale labs. Its qualification, UAT nomination,
+human review and closure remain pending. New
 milestones normally end in hands-on UAT after objective automation; M74 records an
 explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
@@ -361,10 +374,11 @@ cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown
 cargo bench --locked -p geosolve-core --no-run
 ```
 
-`scripts/release-gate.sh` preserves the native, package, WASM and release Vite gates but no
-longer contains a browser E2E invocation. Cleanup qualification is direct Rust/WASM testing;
-current commands are listed in `START_HERE.md`, while `docs/M52_IMPLEMENTATION.md` records the
-post-cleanup candidate-specific evidence.
+`scripts/release-gate.sh` runs the native, package, WASM, frontend build/distribution gates and a
+focused real release-WASM Chromium Playwright check for TypeScript language-service behavior. The
+retired broad Chromium/CDP E2E suite is not restored. Current commands are listed in
+`START_HERE.md`, while `docs/M52_IMPLEMENTATION.md` records the post-cleanup candidate-specific
+evidence.
 
 NixOS-friendly shell:
 

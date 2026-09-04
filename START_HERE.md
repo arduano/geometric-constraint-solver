@@ -685,8 +685,9 @@ is no longer the current candidate.
 Status: **Closed by explicit scoped supervising-user approval on 2026-09-04. M90-F005/F006 repairs,
 collateral qualification, the complete dirty-tree release gate, optimized release-WASM build and
 immutable Tailscale nomination pass. M90-U1 through M90-U10 are transferred/deferred, not passed or
-waived, into the M91 composite UAT. The exact closing candidate remains Tailscale-only at
-`http://100.94.63.83:18090/`; no GitHub Pages deployment or public push was authorized or made.**
+waived, into the M91 composite UAT. At M90 closure, the exact candidate was available only at
+`http://100.94.63.83:18090/`; no GitHub Pages deployment or public push had been authorized or
+made. The service was retired after the later M91 public verification recorded below.**
 
 M90 makes the clean break anticipated by M89: the only
 managed directive is `"use geosolve sketch"`, and the only admitted compiler envelopes are
@@ -817,7 +818,7 @@ The current immutable optimized snapshot is `/tmp/geosolve-m90-uat.EtWyWQlt`, wi
 match at SHA-256 `41d11e1c56bad8dcc57edf229f0bfec20d8f5e602b3c385e5e68d54dd42c816a`, and the optimized
 release-WASM browser bundle passes `4/4` on both. Tailscale-only unit
 `geosolve-m90-f006-replacement-uat-18090.service`, PID `462021`, invocation
-`4a17e69e926446eba21439ac4dd6f4e6`, exact-serves only that snapshot at
+`4a17e69e926446eba21439ac4dd6f4e6`, exact-served only that snapshot during nomination at
 `http://100.94.63.83:18090/`.
 
 The final full dirty-tree gate command
@@ -831,9 +832,9 @@ complete dirty-tree qualification, not clean-source qualification.
 
 The supervising user explicitly approved scoped closure on 2026-09-04. M90-U1 through M90-U10
 remain unexecuted and transfer/defer—not pass or waive—into M91's composite UAT. The immutable F006
-snapshot and service remain Tailscale-only closing publication authority; no GitHub Pages deployment
-or public push was authorized or made. Automated qualification accepts no human row. M90 is closed;
-`PLAN.md` owns the full evidence and M91 intake ledger.
+snapshot and service were the Tailscale-only closing publication authority; no GitHub Pages
+deployment or public push had been authorized or made at that checkpoint. Automated qualification
+accepts no human row. M90 is closed; `PLAN.md` owns the full evidence and M91 intake ledger.
 
 Post-close clean-source evidence now removes the remaining qualification caveat. Exact commit
 `fd3a3b864422a4d014525aefafc6d0e4147fa93c`, tree
@@ -843,10 +844,9 @@ Post-close clean-source evidence now removes the remaining qualification caveat.
 distribution byte-matches `/tmp/geosolve-m90-uat.EtWyWQlt.sha256`, so no replacement service or
 candidate was needed. M90-U1 through M90-U10 remain transferred and unexecuted.
 
-## M91 integrated candidate and approval
+## M91 integrated candidate, approval and public closeout
 
-Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
-GitHub Pages closeout remains pending.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
 
 The supervising user's blanket/composite approval of every part of the UAT accepts M91-U1 through
 M91-U14 as Pass without claiming a separately logged row-by-row replay. M90 remains closed: its ten
@@ -894,11 +894,33 @@ manifest `/tmp/geosolve-m91-uat.17Q5LnSg.sha256` has SHA-256
 `6832d1b6fd984076a47440ccac82ece0dfd205a9e93346dfb3cbd6783240e961`. Staging/live HTTP
 ledgers are byte-identical at SHA-256
 `35531210b63479565e4350b44593ebe62d228e756e67378f829c99399e86bab4`, and both frozen endpoints
-pass Chromium `20/20`. Tailscale-only unit `geosolve-m91-uat-18091.service`, PID `2142854`,
-invocation `bf93a3f5dab84809a24fdc2db6f23f4f`, exact-serves the snapshot at
-`http://100.94.63.83:18091/`. M90 remained byte-identical. At nomination no public deployment or
-GitHub Pages publication had occurred. Human acceptance now passes; Pages publication, hosted-byte
-verification and accepted-service retirement remain pending.
+pass Chromium `20/20`. At nomination, Tailscale-only unit `geosolve-m91-uat-18091.service`, PID
+`2142854`, invocation `bf93a3f5dab84809a24fdc2db6f23f4f`, exact-served the snapshot at
+`http://100.94.63.83:18091/`; M90 remained byte-identical, and no public deployment or GitHub Pages
+publication had occurred.
+
+Human acceptance passed separately. Publication descendant
+`177227941af97f24307fe4229797bbd84857e458` then passed GitHub Actions run `33878060784`, which
+published artifact `9938976843` as deployment `6265455733` at
+`https://arduano.github.io/geometric-constraint-solver/`. The downloaded artifact's exact ten-file
+aggregate is `a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`; all eleven public routes
+exact-match with the required transport metadata, and the public release-WASM browser qualification
+passes `20/20`. The accepted M90 and M91 services were retired only after verification. M91 is
+closed.
+
+## M92 current advanced sample showcase
+
+Status: **in progress; not yet mechanically qualified or nominated for human UAT.**
+
+M92 targets replacing the accumulated 12/25/37-entry catalog variants with one manifest-driven,
+source-authoritative 20-sample registry. The frozen scope requires five mechanisms, eleven
+product/fabrication studies, two capability atlases and two scale labs (`5/11/2/2`). Source,
+compiler envelopes, witnesses, expected mobility, ordered functional groups and provenance must be
+colocated per sample; frontend and headless consumers must share the registry, and headless
+terminology must clean-break to sample/report-v2 rather than demo/report-v1. `docs/M92_GOALS.md`
+freezes scope, `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` retains the
+unexecuted composite human scorecard. Do not infer final qualification, immutable nomination, UAT
+acceptance or closure.
 
 ## Read first
 
@@ -964,12 +986,16 @@ verification and accepted-service retirement remain pending.
     contract for one named typed authoring language, joint lexical/runtime provenance, V3-only
     source authority, complete source-backed canvas authoring and browser-free compiled-project
     workflows; M90-F001-F006 are implemented, F005/F006 collateral and optimized browser
-    qualification plus the complete dirty-tree gate pass; the immutable post-F006 candidate remains
-    Tailscale-only, and scoped closure transfers/defers M90-U1 through M90-U10 into M91 without
-    passing or waiving them.
+    qualification plus the complete dirty-tree gate pass; scoped closure transferred/deferred
+    M90-U1 through M90-U10 into M91 without passing or waiving them, and the post-F006 service is
+    now retired.
 27. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — integrated five-
     workstream contract, reviewed dual-backend exclusions, resolved M91-F001/M91-F002 findings,
-    clean-qualified immutable nomination and 14-row composite scorecard.
+    clean-qualified immutable nomination, accepted 14-row composite scorecard and exact public
+    closeout.
+28. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — current in-progress
+    20-sample showcase contract, execution ledger and not-yet-nominated eight-row composite
+    scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -1572,13 +1598,17 @@ Durable milestone and cleanup records:
 - `docs/M90_GOALS.md` (completed V3-only named typed sketch-language and clean-break contract)
 - `docs/M90_IMPLEMENTATION.md` (completed lexical/runtime authority, distinct source-compiler versus
   solver-instance overlay ownership and implemented M90-F001-F006 repairs)
-- `docs/M90_UAT.md` (immutable post-F006 candidate exact-served on Tailscale; complete dirty-tree
-  gate and scoped closure recorded, with M90-U1 through M90-U10 transferred/deferred into M91)
+- `docs/M90_UAT.md` (historical immutable post-F006 Tailscale candidate; complete dirty-tree gate,
+  scoped closure, later service retirement and M90-U1 through M90-U10 transfer into M91 recorded)
 - `docs/M91_GOALS.md` (accepted cohesive code-driven-authoring contract and public-closeout boundary)
 - `docs/M91_IMPLEMENTATION.md` (five workstreams, four reviewed exclusions, resolved M91-F001/F002
-  and clean-qualified immutable nomination)
+  and clean-qualified immutable nomination plus exact Pages closeout)
 - `docs/M91_UAT.md` (M91-U1 through M91-U14 accepted by explicit composite approval without a
-  separately logged row-by-row replay; Pages closeout pending)
+  separately logged row-by-row replay; exact Pages closeout and service retirement complete)
+- `docs/M92_GOALS.md` (frozen 20-sample `5/11/2/2` showcase scope and release boundary)
+- `docs/M92_IMPLEMENTATION.md` (current registry-first implementation and pending qualification
+  ledger)
+- `docs/M92_UAT.md` (not-yet-nominated M92-U1 through M92-U8 composite human scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
