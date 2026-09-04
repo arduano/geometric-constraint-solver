@@ -5154,8 +5154,7 @@ globally blocked later pointer input.
 
 ## M91 cohesive code-driven-authoring acceptance
 
-Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
-GitHub Pages closeout remains pending.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
 
 The supervising user's blanket/composite approval of every part of the UAT accepts M91-U1 through
 M91-U14 as Pass without claiming a separately logged row-by-row replay. The ten transferred
@@ -5237,9 +5236,15 @@ Chromium `20/20`. Tailscale-only unit `geosolve-m91-uat-18091.service`, PID `214
 `bf93a3f5dab84809a24fdc2db6f23f4f`, exact-serves it at `http://100.94.63.83:18091/`. The protected
 M90 service remained byte-identical. No public push or GitHub Pages deployment was made.
 
-Human acceptance now passes. M91 remains open only for GitHub Pages publication, downloaded-artifact
-and hosted-byte verification, public release-WASM browser qualification, accepted-service retirement
-and the final evidence-only closeout record.
+Human acceptance and public closeout pass. Workflow run `33878060784` (build `101039695274`, deploy
+`101042386558`) published artifact `9938976843` in deployment `6265455733` from publication
+descendant `177227941af97f24307fe4229797bbd84857e458`. The downloaded `artifact.tar` SHA-256 is
+`7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118967101b3783d`; its exact ten-file aggregate
+is `a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`. Eleven public routes at
+`https://arduano.github.io/geometric-constraint-solver/` returned exact bytes with HTTP 200, no
+redirects, identity encoding and correct MIME types, and `/` equals `index.html`. Public
+release-WASM/browser qualification passed 20/20. Both accepted M90/M91 listeners were then stopped.
+M91 is closed.
 
 ## Regression and oracle policy
 

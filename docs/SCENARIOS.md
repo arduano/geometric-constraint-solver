@@ -6955,8 +6955,7 @@ M90 is closed.
 
 ## M91 cohesive code-driven-authoring fixtures
 
-Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
-GitHub Pages closeout remains pending.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
 
 These fixtures mechanically qualify the five integrated workstreams; they do not substitute for
 human acceptance. The supervising user's blanket/composite approval accepts M91-U1 through M91-U14
@@ -7097,8 +7096,13 @@ endpoints pass Chromium `20/20`. Unit `geosolve-m91-uat-18091.service`, PID `214
 `bf93a3f5dab84809a24fdc2db6f23f4f`, serves only that snapshot at
 `http://100.94.63.83:18091/`. M90 remained byte-identical; no GitHub Pages deployment or public push
 was made at nomination. Automated evidence did not execute, pass or waive a human UAT row. Human
-acceptance now passes separately; Pages publication, hosted-byte verification and accepted-service
-retirement remain pending.
+acceptance now passes separately. GitHub Actions run `33878060784` published artifact `9938976843`
+as deployment `6265455733` from descendant
+`177227941af97f24307fe4229797bbd84857e458`. Downloaded archive SHA-256
+`7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118967101b3783d` reconstructs the exact
+ten-file aggregate `a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`.
+All eleven public routes exact-match with HTTP 200 and correct transport metadata; public Chromium
+passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M91 is closed.
 
 ## Frozen near-singular fixtures
 

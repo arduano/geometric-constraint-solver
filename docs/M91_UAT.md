@@ -2,8 +2,7 @@
 
 # M91 UAT: cohesive code-driven authoring
 
-Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
-GitHub Pages closeout remains pending.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
 
 The supervising user's explicit approval of every part of this UAT accepts M91-U1 through M91-U14
 as Pass at milestone level. This is blanket/composite approval of the clean-qualified immutable M91
@@ -43,9 +42,14 @@ packaging-verifier finding `M91-F002` by `6d01551`.
   `bf93a3f5dab84809a24fdc2db6f23f4f`, `http://100.94.63.83:18091/`.
 
 At nomination, the protected M90 service and served bytes remained identical and were not restarted.
-Automated evidence accepted no scorecard row, and no public deployment or GitHub Pages publication
-was made. Human acceptance is now recorded separately above; Pages publication, hosted-byte
-verification and accepted-service retirement remain pending.
+Automated nomination evidence accepted no scorecard row. After the human acceptance recorded above,
+GitHub Actions run `33878060784` (build `101039695274`, deploy `101042386558`) published artifact
+`9938976843` as deployment `6265455733` from descendant
+`177227941af97f24307fe4229797bbd84857e458`. Downloaded archive SHA-256
+`7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118967101b3783d` has exact ten-file aggregate
+`a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`. Eleven public routes
+byte-match with correct HTTP metadata and public Chromium passes 20/20. Both accepted M90/M91
+listeners were stopped only after verification. M91 is closed.
 
 ## Transferred M90 scorecard
 

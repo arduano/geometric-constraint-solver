@@ -4,8 +4,7 @@
 
 ## Outcome
 
-Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
-GitHub Pages closeout remains pending.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
 
 The implementation is mechanically qualified and its immutable candidate is published on the
 Tailscale-only UAT endpoint below. The supervising user's blanket approval of every part of the UAT
@@ -125,5 +124,9 @@ The frozen candidate passed 20/20 Chromium checks on both staging and live endpo
 byte-identical and was not restarted. At nomination, no public deployment or GitHub Pages
 publication had occurred, and automated evidence accepted none of the 14 human UAT rows. On
 2026-09-04 the supervising user separately accepted M91-U1 through M91-U14 by blanket/composite
-approval, without claiming a separately logged row-by-row replay. Public Pages closeout remains
-pending.
+approval, without claiming a separately logged row-by-row replay. GitHub Actions run `33878060784`
+published artifact `9938976843` as deployment `6265455733` from descendant
+`177227941af97f24307fe4229797bbd84857e458`; downloaded archive SHA-256 is
+`7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118967101b3783d` and its exact ten-file
+aggregate is `a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`. Eleven hosted routes and
+public Chromium 20/20 pass, then both accepted M90/M91 listeners were retired. M91 is closed.

@@ -7997,8 +7997,7 @@ a browser; all accepted geometry is finite and independently validated at normal
 
 ## M91 — cohesive code-driven authoring
 
-Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
-GitHub Pages closeout remains pending.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
 
 Scope and integration order are frozen in `docs/M91_GOALS.md` and `docs/M91_IMPLEMENTATION.md`.
 The supervising user's blanket/composite approval of every part of the UAT accepts M91-U1 through
@@ -8100,9 +8099,21 @@ pass or waive any UAT row, and no public push or GitHub Pages deployment was mad
 - [x] Receive explicit supervising-user blanket/composite approval of M91-U1 through M91-U14 on
   2026-09-04, recording every row as Pass at milestone level without claiming a separately logged
   row-by-row replay.
-- [ ] Publish the approved descendant through GitHub Pages, exact-verify the downloaded artifact and
+- [x] Publish the approved descendant through GitHub Pages, exact-verify the downloaded artifact and
   every hosted path, run the public release-WASM browser qualification, retire the accepted M90/M91
   listeners only after verification, and record the final public closeout evidence.
+
+Public closeout used product authority `6d0155151133ba2540fd1dc4b2b071f141b86064` and publication
+descendant `177227941af97f24307fe4229797bbd84857e458`. GitHub Actions run `33878060784` (build job
+`101039695274`, deploy job `101042386558`) published artifact `9938976843` as deployment
+`6265455733` at `https://arduano.github.io/geometric-constraint-solver/`. The downloaded archive
+`artifact.tar` has SHA-256 `7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118967101b3783d`;
+its exact ten-file aggregate is
+`a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`. All eleven public routes
+returned exact artifact bytes with HTTP 200, no redirects, identity encoding and correct MIME
+types; `/` equals `index.html`. The public release-WASM workbench and language-service suite passed
+20/20. Only after those checks, `geosolve-m90-f006-replacement-uat-18090.service` and
+`geosolve-m91-uat-18091.service` were stopped. M91 is closed.
 
 ## Explicit non-goals
 

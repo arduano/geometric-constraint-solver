@@ -2,8 +2,7 @@
 
 # M91 implementation: parallel workstreams and integration
 
-Status: **Accepted at milestone level by explicit supervising-user approval on 2026-09-04; public
-GitHub Pages closeout remains pending.**
+Status: **Complete and publicly closed on 2026-09-04 after explicit supervising-user approval.**
 
 ## Integration order
 
@@ -224,4 +223,10 @@ and served root remained byte-identical before and after publication and were ne
 At nomination, no public push or GitHub Pages deployment was made and all 14 human UAT rows remained
 unrun. On 2026-09-04 the supervising user's explicit blanket/composite approval accepted M91-U1
 through M91-U14 as Pass at milestone level without claiming a separately logged row-by-row replay.
-Pages publication, hosted-byte verification and accepted-service retirement remain pending.
+Pages publication and accepted-service retirement are complete. GitHub Actions run `33878060784`
+(build `101039695274`, deploy `101042386558`) published artifact `9938976843` as deployment
+`6265455733` from descendant `177227941af97f24307fe4229797bbd84857e458`. Downloaded
+`artifact.tar` SHA-256 is `7dd107d94b22c1f364fbcd824980170cf9ce33f80b6cbefd6118967101b3783d`;
+the exact ten-file aggregate is
+`a8133280c286771ece4a2069880f417ea05f72980fbfa034cb774cb7a2156bad`. Eleven hosted paths and
+public Chromium 20/20 pass. Both accepted M90/M91 listeners were then stopped. M91 is closed.
