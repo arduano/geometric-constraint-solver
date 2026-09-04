@@ -7106,7 +7106,8 @@ passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M
 
 ## M92 advanced showcase fixtures
 
-Status: **in progress**.
+Status: **implemented; clean qualification and immutable UAT nomination in progress**. These
+fixtures provide automated evidence only; M92-U1 through M92-U8 remain unexecuted.
 
 ### M92-C1 — canonical registry is complete and singular
 
@@ -7156,6 +7157,24 @@ Exercise the perforated field and robotic backplane through native/headless/rele
 including selection and one representative edit. Require deterministic complete frames, exact
 source authority, release WASM `<20 MiB`, distribution `<30 MiB`, and no LOD or timing field in
 semantic output.
+
+### M92-F001 — trim-view checkpoint order is canonical at the owner
+
+Reproduce with the fabrication operations atlas, whose fixed-trim operations visit supports in an
+order different from persistent support identity and whose later associative Fillet appends trim
+rows for lower-ID supports. Cold materialization is valid and publishes finite independently
+validated accepted authority. Encoding and restoring the editor checkpoint must then preserve the
+exact design document, accepted numerical continuation, ownership, validation and evidence.
+
+The owner regression applies fixed-trim replacements in reverse support order, then adds a Fillet
+whose lower-ID support rows arrive later. `SketchDocument::trim_views()` must remain in canonical
+support order before serialization, draft-v5 round-trip must compare exactly equal, and visible
+interval values must remain bit-exact. Both public mutation paths—`replace_trim_views` and
+associative Fillet insertion—restore this invariant. Strict continuation comparison and all
+independent validation remain unchanged. Commit `b861f4c` owns the fix and exact owner/thin-adapter
+regressions. Collateral `d450e94` routes the legacy managed-controls catalog fixture through public
+cold materialization when native operation planning is required; classify that test-only issue as
+`HARNESS_ERROR`, not another M92 finding.
 
 ## Frozen near-singular fixtures
 

@@ -8121,37 +8121,58 @@ Status: **in progress**. Scope, clean breaks and integration order are frozen in
 `docs/M92_GOALS.md`; `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` owns the
 single composite human review.
 
-- [ ] Replace the duplicated 12/25/37-entry sample catalogs with one public, manifest-driven,
+- [x] Replace the duplicated 12/25/37-entry sample catalogs with one public, manifest-driven,
   source-authoritative registry in `geosolve-sketch-code`. Exactly 20 visible samples are ordered as
   five mechanisms, eleven products/fabrication studies, two capability atlases and two scale labs.
-- [ ] Make every entry mechanically complete: finite independently validated accepted geometry,
+- [x] Make every entry mechanically complete: finite independently validated accepted geometry,
   normalized Hard residual at most `1e-9`, truthful expected raw/effective mobility, minimal
   anchoring, explicit branch/contact state, meaningful flat functional groups, and complete
   source/IR/project inverse authority.
-- [ ] Deliver five advanced manipulable mechanisms: Theo Jansen-style walking leg, Whitworth
+- [x] Deliver five advanced manipulable mechanisms: Theo Jansen-style walking leg, Whitworth
   quick-return, twin-roller Bezier cam, Peaucellier straight-line linkage and generated five-stage
   scissor lift. Each owns deterministic drag witnesses for its intended motion.
-- [ ] Deliver eleven recognizable fabrication/product studies: improved PC liquid-cooling
+- [x] Deliver eleven recognizable fabrication/product studies: improved PC liquid-cooling
   manifold, CNC dogbone fit coupon, CNC vacuum fixture plate, CNC router dust shoe/spindle clamp,
   Gridfinity plan plus 3U section, NEMA 17 mounting face, HevORT HD9/MGN9 datum study, Voron V0.2
   motor panel, Prusa MINI X-carriage interface, Micron CNC X-carriage and Bondtech INDX tool link.
-- [ ] Deliver two broad atlases and two honest scale cases: curves/contact/continuity; fabrication
+- [x] Deliver two broad atlases and two honest scale cases: curves/contact/continuity; fabrication
   operations/constraints/dimensions/annotations; a parametric perforated fixture field; and a dense
   robotic harness-routing backplane.
-- [ ] Store exact external URL/revision/path/licence relationships and adjacent NOTICE text where
+- [x] Store exact external URL/revision/path/licence relationships and adjacent NOTICE text where
   provenance requires it. These are 2D constraint studies, not imported solids or claims of exact
   OEM manufacture.
-- [ ] Clean-break headless terminology from demos to samples and publish deterministic report v2
+- [x] Clean-break headless terminology from demos to samples and publish deterministic report v2
   with numerical right nullity, equality DOF, bidirectional bounded DOF, and ordered source-group
   names/counts. No compatibility aliases or wall-clock values remain.
-- [ ] Expand the stable oracle so every applicable common interaction executes through native and
+- [x] Expand the stable oracle so every applicable common interaction executes through native and
   code-driven backends, with reviewed explicit exclusions rather than silent parity claims.
-- [ ] Prove representative edit, Undo/Redo/reload, native/headless/release-WASM parity and exact
-  frontend-manifest generation for every entry; retain release WASM below 20 MiB and the complete
-  distribution below 30 MiB.
+- [x] Add exact automated coverage for representative edit, Undo/Redo/reload,
+  native/headless/release-WASM parity and frontend-manifest generation for every entry, with release
+  WASM below 20 MiB and the complete distribution below 30 MiB as enforced release boundaries.
+  Final clean execution of those gates remains part of the unchecked nomination item below.
 - [ ] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
   survey/check/require-clean, package/frontend tests and the clean release gate; then freeze one
   byte-verified immutable M92 UAT without publishing Pages before human approval.
+
+Implementation checkpoint: the manifest-driven registry and all four sample waves are integrated
+at the frozen `5/11/2/2` distribution. Registry, source/compiler/project authority, sample-wave,
+drag-witness, headless report-v2, representative-edit/history, release-WASM adapter and release-size
+owners are present. Complete clean qualification and immutable UAT nomination are still in progress;
+no M92 human row or Pages publication is claimed.
+
+`M92-F001` was reproduced while opening the fabrication operations atlas across the editor-checkpoint
+boundary. Live `SketchDocument` trim rows retained operation insertion order, while draft-v5
+persistence canonicalized the same rows by support. Strict accepted-continuation restoration
+correctly rejected that durable-order mismatch. Commit `b861f4c` restores the owning document
+invariant by canonicalizing trim rows after both public mutation paths—generic trim replacement and
+associative Fillet insertion—without weakening strict restore or validation. The focused
+`trim_mutations_preserve_canonical_order_across_draft_checkpoint_round_trip` owner regression and
+`fabrication_operations_atlas_checkpoint_preserves_exact_authority` adapter regression retain the
+failure boundary. Collateral commit `d450e94` corrects the pre-M92 managed-controls test harness to
+obtain operation-bearing expansions through public cold materialization; that was a `HARNESS_ERROR`,
+not a second product finding. Qualification setup commit `d5fcdf9` additionally stops advertising
+absent optional sample notice/patch paths from `build.rs`; the existing registry-root watch still
+owns later creation, while repeated unchanged golden subprocesses now remain Cargo-fresh.
 
 ## Explicit non-goals
 

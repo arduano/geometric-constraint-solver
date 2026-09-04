@@ -2,6 +2,9 @@
 
 # M92 implementation: registry-first parallel sample rebuild
 
+Status: **implementation integrated; clean qualification and immutable UAT nomination in progress**.
+No M92 human row or public Pages release is claimed by this checkpoint.
+
 ## Integration order
 
 1. Land documentation and the canonical manifest/schema validator.
@@ -36,9 +39,82 @@ The obsolete `SampleId`, `CodeProjectDemoId`, `CodeProjectDemo`, `BundledCodePro
 `bundled_code_project_demos` and `bundled_code_projects` surfaces are removed without aliases.
 Headless similarly removes all demo spellings and report v1.
 
+## Integrated implementation checkpoint
+
+The registry contains exactly 20 source-authoritative entries in canonical `5/11/2/2` category
+order. All four independently built waves are integrated:
+
+- five mechanisms with explicit intended mobility and deterministic retained drag witnesses;
+- eleven constrained product/fabrication studies with intentional flat groups and bounded, exact
+  provenance/NOTICE relationships where external references apply;
+- two broad capability atlases for curves/contact/continuity and fabrication operations,
+  constraints, dimensions and annotations;
+- two deterministic scale studies: the generated perforated fixture field and dense robotic
+  harness-routing backplane.
+
+The checked-in implementation owners include:
+
+- `m92_bundled_sample_registry` for exact order, category distribution and authenticated compiler
+  envelopes;
+- `m92_mechanism_wave`, `m92_mechanism_drag_witnesses`, `m92_fabrication_wave_a`,
+  `m92_fabrication_wave_b` and `m92_atlas_scale_wave` for cold materialization, finite accepted
+  authority, residual/mobility expectations, grouping, provenance, edits and drag witnesses;
+- `all_twenty_samples_open_with_nonempty_independently_validated_native_canvases` and
+  `all_twenty_samples_accept_one_semantic_seed_edit_and_exact_undo` for the ordinary workbench
+  boundary;
+- `all_twenty_bundled_samples_inspect_with_deterministic_report_v2_authority` and
+  `all_twenty_bundled_samples_apply_declared_edit_undo_redo_and_reload` for browser-free report,
+  source-edit, history and reload authority;
+- `actual_wasm_all_twenty_samples_match_independently_composed_production_frames` for the actual
+  WASM adapter against independently composed production frames;
+- generated `samples.json` drift checks and strict `<20 MiB` release-WASM / `<30 MiB` distribution
+  validators;
+- the milestone-neutral native/managed golden backend parity owner and its four reviewed,
+  fail-closed exclusions.
+
+These are implemented test and code owners, not a claim that the final clean nomination command has
+finished. The final command outcomes, frozen artifact identity and browser evidence will be recorded
+only after qualification completes.
+
+## M92-F001 — canonical live trim-view order
+
+The fabrication operations atlas initially failed while crossing the editor checkpoint. Its
+accepted live `SketchDocument` stored nine trim views in operation insertion order, while
+`to_draft_v5_json` canonicalized those rows by support. Persisted Intent materialization,
+ownership, validation and semantic identity otherwise matched the live accepted materialization;
+strict numerical-continuation restoration rejected only the noncanonical durable order.
+
+The owner was `geosolve-sketch`, not the Intent evidence or host-request adapter. Commit `b861f4c`
+sorts the live trim side table after both mutation paths capable of disturbing the documented
+canonical invariant: `replace_trim_views` and associative Fillet insertion. It does not relax strict
+document equality, checkpoint restoration, independent residual validation or publication policy.
+
+The repair is retained by:
+
+- `trim_mutations_preserve_canonical_order_across_draft_checkpoint_round_trip`, which applies fixed
+  replacements in reverse support order, appends lower-ID Fillet supports later, checks live
+  canonical order and requires an exact draft-v5 round-trip;
+- `fabrication_operations_atlas_checkpoint_preserves_exact_authority`, which checks exact design,
+  accepted continuation, ownership, validation and evidence across the real workbench checkpoint.
+
+The first collateral catalog sweep also exposed an old test-harness assumption: direct
+context-free expansion cannot plan the new operation-bearing samples. Commit `d450e94` changes only
+that legacy managed-controls fixture to obtain its expansion through public cold materialization
+with explicit intent session, document and model-scale authority. This was a `HARNESS_ERROR`, not
+`M92-F002`, and it duplicates no equation or operation semantics.
+
+Qualification setup also found that `build.rs` advertised nonexistent optional `NOTICE.md` and
+`patches/` paths. Cargo consequently marked `geosolve-sketch-code` dirty and rebuilt the generated
+registry before every golden-parity subprocess. Commit `d5fcdf9` advertises optional paths only when
+they exist; the already registered sample-root directory remains the authority for later file
+creation. Two identical warnings-verbose focused invocations prove the first rebuilds for the
+source change and the second reports `Fresh geosolve-sketch-code`. This was build-dependency
+tracking overhead, not a semantic oracle timeout or product finding.
+
 ## Qualification
 
-Focused registry/sample/witness tests run throughout. Final nomination requires:
+Focused registry/sample/witness coverage is integrated. Complete qualification is currently in
+progress. Final nomination still requires:
 
 ```bash
 cargo fmt --all -- --check
@@ -51,3 +127,7 @@ NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 Exact results and any reproduced finding IDs are appended before nomination.
+
+No final gate result, immutable snapshot path/hash, HTTP byte-verification ledger or browser result
+is recorded yet. GitHub Pages remains unchanged until explicit supervising-user approval after the
+composite UAT.
