@@ -2,12 +2,13 @@
 
 use std::collections::BTreeSet;
 
+use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
     CodeProject, ExpandedCodeProject, KeyedReconcileState, MANAGED_CONTROL_LIMIT,
     ManagedControlAccess, ManagedControlEdit, ManagedControlEditBatch, ManagedControlError,
     ManagedControlSchema, ManagedSketchMutation, ManagedValue, ProjectKey, UnitLiteral,
     bundled_sample, bundled_sample_catalog, expand_code_project, managed_control_manifest,
-    prepare_managed_control_mutation, required_generated_members,
+    materialize_code_project_cold, prepare_managed_control_mutation, required_generated_members,
 };
 use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
@@ -26,6 +27,23 @@ fn expansion(project: &CodeProject, seed: u128) -> ExpandedCodeProject {
         .into_staged();
     let intent = IntentSession::with_id(IntentSessionId::from_raw(seed)).expect("intent session");
     expand_code_project(project, &generated, intent.identity()).expect("project expansion")
+}
+
+fn materialized_expansion(project: &CodeProject, seed: u128) -> ExpandedCodeProject {
+    let desired = required_generated_members(project).expect("generated inventory");
+    let generated = KeyedReconcileState::empty()
+        .plan(desired, &BTreeSet::new())
+        .expect("generated reconciliation")
+        .into_staged();
+    materialize_code_project_cold(
+        project,
+        &generated,
+        IntentSessionId::from_raw(seed),
+        DocumentId(PersistentId::from_u128(seed)),
+        1.0,
+    )
+    .expect("project materialization")
+    .expansion
 }
 
 fn path_text(control: &geosolve_sketch_code::ManagedControl) -> String {
@@ -48,7 +66,7 @@ fn bundled_v3_controls_are_runtime_derived_typed_and_source_authenticated() {
     for (ordinal, sample) in bundled_sample_catalog().iter().enumerate() {
         let project = sample.project();
         assert!(project.managed.compiled.is_some());
-        let expansion = expansion(&project, 0x90_10 + ordinal as u128);
+        let expansion = materialized_expansion(&project, 0x90_10 + ordinal as u128);
         let manifest = managed_control_manifest(&project, &expansion).expect("control manifest");
         assert_eq!(manifest.project, project.project);
         assert_eq!(manifest.source_digest, project.managed.source_digest);
