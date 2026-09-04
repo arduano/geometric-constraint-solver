@@ -8639,7 +8639,7 @@ mod tests {
 
     #[test]
     fn managed_and_custom_files_have_truthful_distinct_ownership_surfaces() {
-        let mut workbench = open("typed-panel");
+        let mut workbench = open("pc-water-manifold");
         let managed = workbench.panel_markup();
         assert!(managed.contains("data-code-file-kind=\"managed\""));
         assert!(managed.contains("data-code-action=\"apply\""));
@@ -8812,7 +8812,7 @@ mod tests {
     fn complete_offline_project_session_draft_and_file_selection_round_trip() {
         let mut workbench = open("pc-water-manifold");
         workbench
-            .select_file("patches/mounting-plate.patch.ts")
+            .select_file("patches/water-channel.patch.ts")
             .unwrap();
         let custom_before = workbench
             .project
@@ -8828,7 +8828,7 @@ mod tests {
         let restored = CodeProjectWorkbench::from_persistence_json(&json).unwrap();
         assert_eq!(
             restored.selected_file.path(),
-            "patches/mounting-plate.patch.ts"
+            "patches/water-channel.patch.ts"
         );
         assert!(
             restored
