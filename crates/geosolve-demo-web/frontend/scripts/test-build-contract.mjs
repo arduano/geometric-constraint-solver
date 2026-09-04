@@ -80,6 +80,11 @@ try {
   ceilingWasm.set(wasmMagic);
   await writeFile(resolve(wasmAtCeiling, "assets/module-12345678.wasm"), ceilingWasm);
   validate(wasmAtCeiling, "./", false);
+  const wasmBelowCeiling = await fixture("geosolve-wasm-below-ceiling", "./");
+  const belowCeilingWasm = new Uint8Array(maximumReleaseWasmBytes - 1);
+  belowCeilingWasm.set(wasmMagic);
+  await writeFile(resolve(wasmBelowCeiling, "assets/module-12345678.wasm"), belowCeilingWasm);
+  validate(wasmBelowCeiling, "./", true);
   const distributionAtCeiling = await fixture("geosolve-distribution-at-ceiling", "./");
   const fixtureBytes = await distributionBytes(distributionAtCeiling);
   await writeFile(
@@ -87,6 +92,13 @@ try {
     new Uint8Array(maximumDistributionBytes - fixtureBytes),
   );
   validate(distributionAtCeiling, "./", false);
+  const distributionBelowCeiling = await fixture("geosolve-distribution-below-ceiling", "./");
+  const belowCeilingFixtureBytes = await distributionBytes(distributionBelowCeiling);
+  await writeFile(
+    resolve(distributionBelowCeiling, "assets/padding-12345678.js"),
+    new Uint8Array(maximumDistributionBytes - belowCeilingFixtureBytes - 1),
+  );
+  validate(distributionBelowCeiling, "./", true);
   const tampered = await fixture("geosolve-tampered", "./");
   await writeFile(resolve(tampered, "LICENSE"), "tampered\n");
   validate(tampered, "./", false);
