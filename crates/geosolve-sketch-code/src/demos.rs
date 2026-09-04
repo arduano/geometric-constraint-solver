@@ -2,6 +2,9 @@
 
 use std::{collections::BTreeMap, sync::OnceLock};
 
+#[cfg(test)]
+use std::cell::Cell;
+
 use geosolve_sketch_intent::{intent_content_digest, intent_content_digest as digest};
 use miniz_oxide::{
     DataFormat, MZFlush, MZStatus,
@@ -31,6 +34,8 @@ impl BundledCompilerEnvelope {
     }
 
     fn text(&'static self) -> &'static str {
+        #[cfg(test)]
+        BUNDLED_ENVELOPE_TEXT_ACCESSES.with(|accesses| accesses.set(accesses.get() + 1));
         self.text
             .get_or_init(|| {
                 decompress_bundled_compiler_envelope(self.compressed, self.decompressed_len)
@@ -38,6 +43,11 @@ impl BundledCompilerEnvelope {
             })
             .as_str()
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static BUNDLED_ENVELOPE_TEXT_ACCESSES: Cell<usize> = const { Cell::new(0) };
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -136,6 +146,22 @@ pub enum CodeProjectDemoId {
 }
 
 impl CodeProjectDemoId {
+    /// Complete curated demonstration inventory in stable user-visible order.
+    pub const ALL: [Self; 12] = [
+        Self::RoundedPolyline,
+        Self::TypedPanel,
+        Self::BracedFrame,
+        Self::MountingPlate,
+        Self::AdaptiveLanterns,
+        Self::SuspensionBridge,
+        Self::CompassRose,
+        Self::NeonManifold,
+        Self::PcWaterManifold,
+        Self::RoboticRoutingBoard,
+        Self::CncJoineryFitCoupon,
+        Self::GridfinityBinSection,
+    ];
+
     #[must_use]
     pub const fn key(self) -> &'static str {
         match self {
@@ -151,6 +177,33 @@ impl CodeProjectDemoId {
             Self::RoboticRoutingBoard => "robotic-routing-board",
             Self::CncJoineryFitCoupon => "cnc-joinery-fit-coupon",
             Self::GridfinityBinSection => "gridfinity-1x1x3-section",
+        }
+    }
+
+    /// Resolves one exact curated demonstration key without loading its project.
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|id| id.key() == key)
+    }
+
+    /// Stable user-facing title available without loading the compiled project.
+    #[must_use]
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::RoundedPolyline => "Rounded polyline · dynamic corners",
+            Self::TypedPanel => "Typed panel · keyed Fillets",
+            Self::BracedFrame => "Braced frame · reusable cross-bracing",
+            Self::MountingPlate => "Mounting plate · reusable hole pattern",
+            Self::AdaptiveLanterns => "Lantern garland · adaptive decorations",
+            Self::SuspensionBridge => "Suspension bridge · cable-and-stay layout",
+            Self::CompassRose => "Compass rose · generated compass pattern",
+            Self::NeonManifold => "Neon manifold · explicit bend routing",
+            Self::PcWaterManifold => "PC water manifold · constrained channel layout",
+            Self::RoboticRoutingBoard => {
+                "Robotic cable-harness routing board · adaptive cable routes"
+            }
+            Self::CncJoineryFitCoupon => "CNC joinery fit coupon · keyed corner reliefs",
+            Self::GridfinityBinSection => "Gridfinity 1×1×3U section · keyed standard profile",
         }
     }
 
@@ -345,20 +398,27 @@ impl CodeProjectDemo {
 /// AI-authored patch source.
 #[must_use]
 pub fn bundled_code_project_demos() -> Vec<CodeProjectDemo> {
-    vec![
-        rounded_polyline_demo(),
-        typed_panel_demo(),
-        braced_frame_demo(),
-        mounting_plate_demo(),
-        adaptive_lanterns_demo(),
-        suspension_bridge_demo(),
-        compass_rose_demo(),
-        neon_manifold_demo(),
-        pc_water_manifold_demo(),
-        robotic_routing_board_demo(),
-        cnc_joinery_fit_coupon_demo(),
-        gridfinity_bin_section_demo(),
-    ]
+    CodeProjectDemoId::ALL
+        .into_iter()
+        .map(bundled_code_project_demo)
+        .collect()
+}
+
+fn bundled_code_project_demo(id: CodeProjectDemoId) -> CodeProjectDemo {
+    match id {
+        CodeProjectDemoId::RoundedPolyline => rounded_polyline_demo(),
+        CodeProjectDemoId::TypedPanel => typed_panel_demo(),
+        CodeProjectDemoId::BracedFrame => braced_frame_demo(),
+        CodeProjectDemoId::MountingPlate => mounting_plate_demo(),
+        CodeProjectDemoId::AdaptiveLanterns => adaptive_lanterns_demo(),
+        CodeProjectDemoId::SuspensionBridge => suspension_bridge_demo(),
+        CodeProjectDemoId::CompassRose => compass_rose_demo(),
+        CodeProjectDemoId::NeonManifold => neon_manifold_demo(),
+        CodeProjectDemoId::PcWaterManifold => pc_water_manifold_demo(),
+        CodeProjectDemoId::RoboticRoutingBoard => robotic_routing_board_demo(),
+        CodeProjectDemoId::CncJoineryFitCoupon => cnc_joinery_fit_coupon_demo(),
+        CodeProjectDemoId::GridfinityBinSection => gridfinity_bin_section_demo(),
+    }
 }
 
 /// One user-visible, source-authoritative bundled sketch. The original twelve
@@ -375,7 +435,7 @@ pub struct BundledCodeProject {
 
 #[derive(Clone, Debug)]
 enum BundledCodeProjectSource {
-    Curated(CodeProjectDemo),
+    Curated(CodeProjectDemoId),
     Managed {
         source: &'static str,
         compiled: &'static BundledCompilerEnvelope,
@@ -408,7 +468,7 @@ impl BundledCodeProject {
     #[must_use]
     pub fn project(&self) -> CodeProject {
         match &self.source {
-            BundledCodeProjectSource::Curated(demo) => demo.project(),
+            BundledCodeProjectSource::Curated(id) => bundled_code_project_demo(*id).project(),
             BundledCodeProjectSource::Managed { source, compiled } => {
                 let compiled =
                     CompiledManagedSource::from_json(compiled.text()).unwrap_or_else(|error| {
@@ -579,13 +639,13 @@ pub fn bundled_code_projects() -> Vec<BundledCodeProject> {
         ),
     ];
     projects.extend(
-        bundled_code_project_demos()
+        CodeProjectDemoId::ALL
             .into_iter()
-            .map(|demo| BundledCodeProject {
-                key: demo.id.key(),
-                title: demo.title,
-                summary: demo.summary(),
-                source: BundledCodeProjectSource::Curated(demo),
+            .map(|id| BundledCodeProject {
+                key: id.key(),
+                title: id.title(),
+                summary: id.summary(),
+                source: BundledCodeProjectSource::Curated(id),
             }),
     );
     projects
@@ -635,7 +695,7 @@ fn rounded_polyline_demo() -> CodeProjectDemo {
     let artifact = round_every_corner_artifact(PATCH);
     CodeProjectDemo {
         id: CodeProjectDemoId::RoundedPolyline,
-        title: "Rounded polyline · dynamic corners",
+        title: CodeProjectDemoId::RoundedPolyline.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "rounded-polyline").text(),
         custom_files: BTreeMap::from([("patches/round-every-corner.patch.ts", PATCH)]),
@@ -670,7 +730,7 @@ fn adaptive_lanterns_demo() -> CodeProjectDemo {
     );
     CodeProjectDemo {
         id: CodeProjectDemoId::AdaptiveLanterns,
-        title: "Lantern garland · adaptive decorations",
+        title: CodeProjectDemoId::AdaptiveLanterns.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "adaptive-lanterns").text(),
         custom_files: BTreeMap::from([("patches/adaptive-lanterns.patch.ts", PATCH)]),
@@ -699,7 +759,7 @@ fn suspension_bridge_demo() -> CodeProjectDemo {
     .collect();
     CodeProjectDemo {
         id: CodeProjectDemoId::SuspensionBridge,
-        title: "Suspension bridge · cable-and-stay layout",
+        title: CodeProjectDemoId::SuspensionBridge.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "suspension-bridge").text(),
         custom_files: BTreeMap::from([("patches/bridge-cables.patch.ts", PATCH)]),
@@ -732,7 +792,7 @@ fn compass_rose_demo() -> CodeProjectDemo {
     );
     CodeProjectDemo {
         id: CodeProjectDemoId::CompassRose,
-        title: "Compass rose · generated compass pattern",
+        title: CodeProjectDemoId::CompassRose.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "compass-rose").text(),
         custom_files: BTreeMap::from([("patches/compass-core.patch.ts", CORE_PATCH)]),
@@ -761,7 +821,7 @@ fn neon_manifold_demo() -> CodeProjectDemo {
     const SOURCE: &str = include_str!("../assets/demos/neon-manifold.sketch.ts");
     CodeProjectDemo {
         id: CodeProjectDemoId::NeonManifold,
-        title: "Neon manifold · explicit bend routing",
+        title: CodeProjectDemoId::NeonManifold.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "neon-manifold").text(),
         custom_files: BTreeMap::new(),
@@ -786,7 +846,7 @@ fn pc_water_manifold_demo() -> CodeProjectDemo {
     const SOURCE: &str = include_str!("../assets/demos/pc-water-manifold.sketch.ts");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::PcWaterManifold,
-        title: "PC water manifold · constrained channel layout",
+        title: CodeProjectDemoId::PcWaterManifold.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "pc-water-manifold").text(),
         custom_files: BTreeMap::from([("patches/water-channel.patch.ts", PATCH)]),
@@ -825,7 +885,7 @@ fn robotic_routing_board_demo() -> CodeProjectDemo {
     const SOURCE: &str = include_str!("../assets/demos/robotic-routing-board.sketch.ts");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::RoboticRoutingBoard,
-        title: "Robotic cable-harness routing board · adaptive cable routes",
+        title: CodeProjectDemoId::RoboticRoutingBoard.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "robotic-routing-board").text(),
         custom_files: BTreeMap::from([("patches/harness-route.patch.ts", PATCH)]),
@@ -870,7 +930,7 @@ fn cnc_joinery_fit_coupon_demo() -> CodeProjectDemo {
     const SOURCE: &str = include_str!("../assets/demos/cnc-joinery-fit-coupon.sketch.ts");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::CncJoineryFitCoupon,
-        title: "CNC joinery fit coupon · keyed corner reliefs",
+        title: CodeProjectDemoId::CncJoineryFitCoupon.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "cnc-joinery-fit-coupon").text(),
         custom_files: BTreeMap::from([
@@ -909,7 +969,7 @@ fn gridfinity_bin_section_demo() -> CodeProjectDemo {
     const SOURCE: &str = include_str!("../assets/demos/gridfinity-1x1x3-section.sketch.ts");
     let mut demo = CodeProjectDemo {
         id: CodeProjectDemoId::GridfinityBinSection,
-        title: "Gridfinity 1×1×3U section · keyed standard profile",
+        title: CodeProjectDemoId::GridfinityBinSection.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "gridfinity-1x1x3-section").text(),
         custom_files: BTreeMap::from([("patches/fillet-record.patch.ts", PATCH)]),
@@ -936,7 +996,7 @@ fn typed_panel_demo() -> CodeProjectDemo {
         .collect();
     CodeProjectDemo {
         id: CodeProjectDemoId::TypedPanel,
-        title: "Typed panel · keyed Fillets",
+        title: CodeProjectDemoId::TypedPanel.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "typed-panel").text(),
         custom_files: BTreeMap::from([("patches/fillet-record.patch.ts", PATCH)]),
@@ -955,7 +1015,7 @@ fn braced_frame_demo() -> CodeProjectDemo {
     const SOURCE: &str = include_str!("../assets/demos/braced-frame.sketch.ts");
     CodeProjectDemo {
         id: CodeProjectDemoId::BracedFrame,
-        title: "Braced frame · reusable cross-bracing",
+        title: CodeProjectDemoId::BracedFrame.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "braced-frame").text(),
         custom_files: BTreeMap::from([("patches/cross-brace.patch.ts", PATCH)]),
@@ -986,7 +1046,7 @@ fn mounting_plate_demo() -> CodeProjectDemo {
             .collect();
     CodeProjectDemo {
         id: CodeProjectDemoId::MountingPlate,
-        title: "Mounting plate · reusable hole pattern",
+        title: CodeProjectDemoId::MountingPlate.title(),
         managed_source: SOURCE,
         compiled_source: bundled_compiler_envelope!("demos", "mounting-plate").text(),
         custom_files: BTreeMap::from([("patches/mounting-plate.patch.ts", PATCH)]),
@@ -1200,7 +1260,9 @@ mod tests {
         for project in &projects {
             assert!(catalog_keys.insert(project.key()));
             let reconstructed = match &project.source {
-                BundledCodeProjectSource::Curated(demo) => demo.compiled_source,
+                BundledCodeProjectSource::Curated(id) => {
+                    bundled_code_project_demo(*id).compiled_source
+                }
                 BundledCodeProjectSource::Managed { compiled, .. } => compiled.text(),
             };
             assert_eq!(
@@ -1211,6 +1273,28 @@ mod tests {
             );
         }
         assert_eq!(catalog_keys.len(), 37);
+    }
+
+    #[test]
+    fn catalog_lookup_materializes_only_the_selected_compiler_envelope() {
+        BUNDLED_ENVELOPE_TEXT_ACCESSES.with(|accesses| accesses.set(0));
+        let selected = bundled_code_projects()
+            .into_iter()
+            .find(|project| project.key() == "compass-rose")
+            .expect("Compass Rose catalog entry");
+        assert_eq!(
+            BUNDLED_ENVELOPE_TEXT_ACCESSES.with(Cell::get),
+            0,
+            "catalog metadata lookup must not access any compiler envelope",
+        );
+
+        let project = selected.project();
+        assert!(!project.managed.source.is_empty());
+        assert_eq!(
+            BUNDLED_ENVELOPE_TEXT_ACCESSES.with(Cell::get),
+            1,
+            "opening one sample must access only its compiler envelope",
+        );
     }
 
     #[test]

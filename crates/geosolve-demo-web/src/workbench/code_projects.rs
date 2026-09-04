@@ -38,10 +38,10 @@ use geosolve_sketch_code::{
     ManagedMutationAuthority, ManagedPathSegment, ManagedSketchMutation, ManagedSpan, ManagedValue,
     MaterializedCodeProject, PatchModuleArtifact, PreparedManagedMutationReceipt,
     PreparedManagedMutationRequest, PreparedManagedSourceRequest, ProjectKey, SemanticOutputPath,
-    SemanticSymbol, SketchCodeSession, UnitLiteral, bundled_code_project_demos,
-    bundled_code_projects, direct_declaration_intent_symbol,
-    expand_code_project_for_structural_edit, managed_control_authority, managed_control_manifest,
-    materialize_code_project_cold, materialize_code_project_incremental_for_structural_edit,
+    SemanticSymbol, SketchCodeSession, UnitLiteral, bundled_code_projects,
+    direct_declaration_intent_symbol, expand_code_project_for_structural_edit,
+    managed_control_authority, managed_control_manifest, materialize_code_project_cold,
+    materialize_code_project_incremental_for_structural_edit,
     materialize_code_project_incremental_with_overlay,
     materialize_code_project_incremental_with_overlay_and_accepted_continuation_audited,
     prepare_editor_declaration_insertions, prepare_managed_mutation, prepare_managed_source,
@@ -1633,9 +1633,9 @@ impl CodeProjectWorkbench {
         demo_key: &str,
         compiled: CompiledManagedSource,
     ) -> Result<(Self, Box<ProjectionalEditorSession>), String> {
-        let mut project = bundled_code_project_demos()
+        let mut project = bundled_code_projects()
             .into_iter()
-            .find(|demo| demo.id.key() == demo_key)
+            .find(|demo| demo.key() == demo_key)
             .ok_or_else(|| format!("unknown code project `{demo_key}`"))?
             .project();
         project.project = ProjectKey(project_key.into());
@@ -4381,7 +4381,6 @@ fn canvas_declaration_label_projections(
 }
 
 pub(crate) fn sample_group_markup(selected: Option<&str>) -> String {
-    let demos = bundled_code_project_demos();
     let mut markup = String::new();
     for group in [
         "Patterns & generated geometry",
@@ -4393,20 +4392,20 @@ pub(crate) fn sample_group_markup(selected: Option<&str>) -> String {
             "<li class=\"wb-sample-branch\"><button type=\"button\" data-sample-group-trigger aria-haspopup=\"menu\" aria-expanded=\"false\">{}<span aria-hidden=\"true\">›</span></button><ul class=\"wb-sample-flyout\">",
             escape_html(group),
         );
-        for demo in demos
+        for id in geosolve_sketch_code::CodeProjectDemoId::ALL
             .iter()
-            .filter(|demo| demo.id.semantic_group() == group)
+            .filter(|id| id.semantic_group() == group)
         {
             let _ = write!(
                 markup,
                 "<li><button type=\"button\" data-code-sample-id=\"{}\"{}>{}</button></li>",
-                demo.id.key(),
-                if selected == Some(demo.id.key()) {
+                id.key(),
+                if selected == Some(id.key()) {
                     " aria-current=\"true\""
                 } else {
                     ""
                 },
-                escape_html(demo.title),
+                escape_html(id.title()),
             );
         }
         markup.push_str("</ul></li>");
@@ -8665,17 +8664,17 @@ mod tests {
             assert!(markup.contains(group), "missing semantic group {group}");
         }
         assert_eq!(markup.matches("data-sample-group-trigger").count(), 3);
-        let demos = bundled_code_project_demos();
+        let demos = geosolve_sketch_code::CodeProjectDemoId::ALL;
         assert_eq!(
             demos.len(),
             12,
             "the additive code catalog includes the routing and manufacturing dogfood demonstrations"
         );
         assert_eq!(markup.matches("data-code-sample-id=").count(), demos.len());
-        for demo in demos {
+        for id in demos {
             assert_eq!(
                 markup
-                    .matches(&format!("data-code-sample-id=\"{}\"", demo.id.key()))
+                    .matches(&format!("data-code-sample-id=\"{}\"", id.key()))
                     .count(),
                 1,
             );
@@ -8712,18 +8711,18 @@ mod tests {
 
     #[test]
     fn every_enabled_manifest_control_is_reachable_once_in_the_code_panel() {
-        for demo in bundled_code_project_demos() {
-            let workbench = open(demo.id.key());
+        for id in geosolve_sketch_code::CodeProjectDemoId::ALL {
+            let workbench = open(id.key());
             let manifest = workbench
                 .managed_controls()
-                .unwrap_or_else(|error| panic!("{} manifest: {error}", demo.id.key()));
+                .unwrap_or_else(|error| panic!("{} manifest: {error}", id.key()));
             let markup = workbench.panel_markup();
             let enabled = manifest.editable().collect::<Vec<_>>();
             assert_eq!(
                 markup.matches("data-code-control-id=").count(),
                 enabled.len(),
                 "{} must render every enabled control exactly once",
-                demo.id.key(),
+                id.key(),
             );
             for control in enabled {
                 let attribute = format!(
@@ -8734,7 +8733,7 @@ mod tests {
                     markup.matches(&attribute).count(),
                     1,
                     "{} omitted or duplicated enabled control {}",
-                    demo.id.key(),
+                    id.key(),
                     control.id.0,
                 );
             }

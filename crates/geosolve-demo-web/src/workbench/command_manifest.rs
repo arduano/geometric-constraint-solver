@@ -1482,13 +1482,13 @@ pub(crate) fn sample_manifest() -> Vec<SampleManifestEntry> {
             });
         }
     }
-    for demo in geosolve_sketch_code::bundled_code_project_demos() {
+    for id in geosolve_sketch_code::CodeProjectDemoId::ALL {
         samples.push(SampleManifestEntry {
-            stable_id: format!("sample.code.{}", demo.id.key()),
-            key: demo.id.key(),
-            title: demo.title,
-            group: demo.id.semantic_group(),
-            summary: demo.summary(),
+            stable_id: format!("sample.code.{}", id.key()),
+            key: id.key(),
+            title: id.title(),
+            group: id.semantic_group(),
+            summary: id.summary(),
             kind: SampleKind::Code,
             reachability: CommandReachability::two_actions(),
         });
@@ -1627,9 +1627,9 @@ mod tests {
                 .skip(super::super::samples::SampleId::ALL.len())
                 .map(|sample| sample.key)
                 .collect::<Vec<_>>(),
-            geosolve_sketch_code::bundled_code_project_demos()
+            geosolve_sketch_code::CodeProjectDemoId::ALL
                 .iter()
-                .map(|demo| demo.id.key())
+                .map(|id| id.key())
                 .collect::<Vec<_>>()
         );
     }

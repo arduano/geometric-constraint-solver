@@ -46,6 +46,7 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const readOnlyCompartment = useRef(new Compartment());
   const languageCompartment = useRef(new Compartment());
   const languageClient = useRef<TypeScriptLanguageWorkerClient | null>(null);
   const languageProjectRef = useRef(languageProject);
@@ -72,7 +73,7 @@ export function CodeEditor({
         keymap.of([...defaultKeymap, ...historyKeymap]),
         javascript({ typescript: true }),
         oneDark,
-        EditorState.readOnly.of(readOnly),
+        readOnlyCompartment.current.of(EditorState.readOnly.of(readOnly)),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             synchronize(update.view);
@@ -95,8 +96,16 @@ export function CodeEditor({
       view.current?.destroy();
       view.current = null;
     };
-    // Preserve the editor DOM, cursor and scroll; external source replacement is handled below.
+    // Preserve the editor DOM, cursor and scroll; mode/source changes are reconfigured below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const editor = view.current;
+    if (!editor) return;
+    editor.dispatch({
+      effects: readOnlyCompartment.current.reconfigure(EditorState.readOnly.of(readOnly)),
+    });
   }, [readOnly]);
 
   useEffect(() => {

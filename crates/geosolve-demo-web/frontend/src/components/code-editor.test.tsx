@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { diagnosticCount } from "@codemirror/lint";
 import { EditorView } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
 import { CodeEditor } from "./code-editor";
@@ -16,6 +17,7 @@ class EditorLanguageWorker implements TypeScriptLanguageWorkerPort {
   messageListener?: (event: MessageEvent<TypeScriptLanguageWorkerResponse>) => void;
   errorListener?: (event: ErrorEvent) => void;
   syncs: TypeScriptLanguageRequest[] = [];
+  terminated = false;
 
   constructor(private readonly rejectSync = false) {}
 
@@ -74,7 +76,9 @@ class EditorLanguageWorker implements TypeScriptLanguageWorkerPort {
     if (type === "message") this.messageListener = undefined;
     else this.errorListener = undefined;
   }
-  terminate(): void {}
+  terminate(): void {
+    this.terminated = true;
+  }
 }
 
 describe("CodeEditor TypeScript language integration", () => {
@@ -131,5 +135,41 @@ describe("CodeEditor TypeScript language integration", () => {
       "title",
       "TypeScript language-service project exceeds its source limit",
     );
+  });
+
+  it("retains the editor and TypeScript extensions when read-only mode changes", async () => {
+    const worker = new EditorLanguageWorker();
+    const workerFactory = () => worker;
+    const project = {
+      key: "project",
+      file: "sketch.ts",
+      files: [{ path: "sketch.ts", contents: "const radius: number = wrong;" }],
+    };
+    const { container, rerender } = render(<CodeEditor
+      value="const radius: number = wrong;"
+      onChange={() => undefined}
+      languageProject={project}
+      languageWorkerFactory={workerFactory}
+    />);
+    await waitFor(() => expect(screen.getByText("1 error")).toBeInTheDocument());
+    const editorElement = container.querySelector<HTMLElement>(".cm-editor")!;
+    const editor = EditorView.findFromDOM(editorElement)!;
+    expect(diagnosticCount(editor.state)).toBe(1);
+
+    rerender(<CodeEditor
+      value="const radius: number = wrong;"
+      readOnly
+      onChange={() => undefined}
+      languageProject={project}
+      languageWorkerFactory={workerFactory}
+    />);
+
+    const retainedElement = container.querySelector<HTMLElement>(".cm-editor")!;
+    const retainedEditor = EditorView.findFromDOM(retainedElement)!;
+    expect(retainedElement).toBe(editorElement);
+    expect(retainedEditor).toBe(editor);
+    expect(retainedEditor.state.readOnly).toBe(true);
+    expect(diagnosticCount(retainedEditor.state)).toBe(1);
+    expect(worker.terminated).toBe(false);
   });
 });

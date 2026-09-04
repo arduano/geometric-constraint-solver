@@ -19,7 +19,7 @@ use geosolve_sketch_code::{
     CodeProject, CodeProjectDemoId, CodeSessionIdentity, KeyedReconcileState,
     ManagedControlEditBatch, ManagedControlManifest, ManagedMutationAuthority, PatchModuleArtifact,
     PreparedManagedMutationReceipt, PreparedManagedMutationRequest, ProjectKey,
-    bundled_code_project_demos, managed_control_manifest, materialize_code_project_cold,
+    bundled_code_projects, managed_control_manifest, materialize_code_project_cold,
     prepare_managed_control_mutation, prepare_managed_mutation, required_generated_members,
     validate_prepared_managed_mutation,
 };
@@ -217,11 +217,13 @@ impl HeadlessInput {
                 Ok((identity, project))
             }
             Self::BundledDemo(key) => {
-                let demo = bundled_code_project_demos()
-                    .into_iter()
-                    .find(|demo| demo.id.key() == key)
+                let id = CodeProjectDemoId::from_key(key)
                     .ok_or_else(|| HeadlessError::UnknownDemo(key.clone()))?;
-                let project = demo.project();
+                let project = bundled_code_projects()
+                    .into_iter()
+                    .find(|project| project.key() == id.key())
+                    .ok_or_else(|| HeadlessError::UnknownDemo(key.clone()))?
+                    .project();
                 Ok((
                     HeadlessInputIdentity::BundledDemo {
                         key: key.clone(),
@@ -237,21 +239,10 @@ impl HeadlessInput {
 /// Lists the complete stable bundled-demo key inventory.
 #[must_use]
 pub fn bundled_demo_keys() -> Vec<&'static str> {
-    const IDS: [CodeProjectDemoId; 12] = [
-        CodeProjectDemoId::RoundedPolyline,
-        CodeProjectDemoId::TypedPanel,
-        CodeProjectDemoId::BracedFrame,
-        CodeProjectDemoId::MountingPlate,
-        CodeProjectDemoId::AdaptiveLanterns,
-        CodeProjectDemoId::SuspensionBridge,
-        CodeProjectDemoId::CompassRose,
-        CodeProjectDemoId::NeonManifold,
-        CodeProjectDemoId::PcWaterManifold,
-        CodeProjectDemoId::RoboticRoutingBoard,
-        CodeProjectDemoId::CncJoineryFitCoupon,
-        CodeProjectDemoId::GridfinityBinSection,
-    ];
-    IDS.into_iter().map(CodeProjectDemoId::key).collect()
+    CodeProjectDemoId::ALL
+        .into_iter()
+        .map(CodeProjectDemoId::key)
+        .collect()
 }
 
 /// Inspects one project through the same complete cold solve used by render/edit.
