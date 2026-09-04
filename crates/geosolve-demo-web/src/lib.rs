@@ -227,7 +227,7 @@ mod wasm {
         };
         use geosolve_sketch_code::{
             CompiledManagedSource, ManagedPathSegment, ManagedSketchMutation, ManagedValue,
-            PreparedManagedMutationReceipt, PreparedManagedMutationRequest, UnitLiteral,
+            PreparedManagedMutationReceipt, UnitLiteral,
         };
         use geosolve_sketch_intent::{
             GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
@@ -666,8 +666,97 @@ mod wasm {
             ];
 
             fn parse_snapshot(encoded: &str, context: &str) -> serde_json::Value {
-                serde_json::from_str(encoded)
-                    .unwrap_or_else(|error| panic!("{context} snapshot JSON: {error}"))
+                let snapshot = serde_json::from_str(encoded)
+                    .unwrap_or_else(|error| panic!("{context} snapshot JSON: {error}"));
+                assert_no_presentation_shortcut_keys(&snapshot, context);
+                snapshot
+            }
+
+            fn is_presentation_shortcut_key(field: &str) -> bool {
+                let normalized = field
+                    .chars()
+                    .filter(|character| *character != '_' && *character != '-')
+                    .flat_map(char::to_lowercase)
+                    .collect::<String>();
+                let has_millisecond_suffix = normalized.ends_with("ms");
+                let mut metric = normalized.strip_suffix("ms").unwrap_or(&normalized);
+                while let Some(remainder) = [
+                    "current",
+                    "frame",
+                    "render",
+                    "solve",
+                    "compile",
+                    "load",
+                    "open",
+                    "edit",
+                    "pointer",
+                    "interaction",
+                    "mutation",
+                    "history",
+                    "viewport",
+                    "scene",
+                    "total",
+                ]
+                .iter()
+                .find_map(|prefix| metric.strip_prefix(prefix).filter(|rest| !rest.is_empty()))
+                {
+                    metric = remainder;
+                }
+                (has_millisecond_suffix
+                    && matches!(
+                        metric,
+                        "frame"
+                            | "render"
+                            | "solve"
+                            | "compile"
+                            | "load"
+                            | "open"
+                            | "edit"
+                            | "pointer"
+                            | "interaction"
+                            | "mutation"
+                            | "history"
+                            | "total"
+                    ))
+                    || matches!(
+                        metric,
+                        "lod"
+                            | "lodenabled"
+                            | "lodlevel"
+                            | "lodmode"
+                            | "lodpolicy"
+                            | "lodtier"
+                            | "timing"
+                            | "timings"
+                            | "elapsed"
+                            | "duration"
+                            | "wallclock"
+                    )
+            }
+
+            fn first_presentation_shortcut_key(value: &serde_json::Value) -> Option<&str> {
+                match value {
+                    serde_json::Value::Object(fields) => {
+                        fields.iter().find_map(|(field, child)| {
+                            is_presentation_shortcut_key(field)
+                                .then_some(field.as_str())
+                                .or_else(|| first_presentation_shortcut_key(child))
+                        })
+                    }
+                    serde_json::Value::Array(values) => {
+                        values.iter().find_map(first_presentation_shortcut_key)
+                    }
+                    _ => None,
+                }
+            }
+
+            fn assert_no_presentation_shortcut_keys(value: &serde_json::Value, context: &str) {
+                let shortcut = first_presentation_shortcut_key(value);
+                assert!(
+                    shortcut.is_none(),
+                    "{context} semantic output contains forbidden presentation field `{}`",
+                    shortcut.unwrap_or_default()
+                );
             }
 
             fn managed_source<'a>(snapshot: &'a serde_json::Value, key: &str) -> &'a str {
@@ -690,7 +779,7 @@ mod wasm {
                 value.get(..value.find('"')?)
             }
 
-            fn first_interactive_point(svg: &str, key: &str) -> [f64; 2] {
+            fn first_interactive_point(svg: &str, key: &str) -> ([f64; 2], String) {
                 svg.split("<circle")
                     .skip(1)
                     .find_map(|suffix| {
@@ -700,20 +789,31 @@ mod wasm {
                         {
                             return None;
                         }
-                        Some([
-                            svg_attribute(tag, "cx")?.parse::<f64>().ok()?,
-                            svg_attribute(tag, "cy")?.parse::<f64>().ok()?,
-                        ])
+                        Some((
+                            [
+                                svg_attribute(tag, "cx")?.parse::<f64>().ok()?,
+                                svg_attribute(tag, "cy")?.parse::<f64>().ok()?,
+                            ],
+                            svg_attribute(tag, "data-persistent-id")?.to_owned(),
+                        ))
                     })
                     .unwrap_or_else(|| panic!("{key} has no interactive SVG point"))
+            }
+
+            fn persistent_point_tag<'a>(svg: &'a str, persistent_id: &str) -> Option<&'a str> {
+                svg.split("<circle").skip(1).find_map(|suffix| {
+                    let tag = suffix.get(..suffix.find("/>")?)?;
+                    (svg_attribute(tag, "data-persistent-id") == Some(persistent_id)).then_some(tag)
+                })
             }
 
             fn click(
                 handle: &mut super::WorkbenchHandle,
                 pointer_id: u64,
                 position: [f64; 2],
+                control: bool,
                 key: &str,
-            ) -> serde_json::Value {
+            ) -> (serde_json::Value, serde_json::Value) {
                 let request = |phase: &str, buttons: u16| {
                     serde_json::json!({
                         "version": 1,
@@ -724,22 +824,26 @@ mod wasm {
                         "buttons": buttons,
                         "modifiers": {
                             "alt": false,
-                            "ctrl": false,
+                            "ctrl": control,
                             "meta": false,
                             "shift": false,
                         },
                     })
                     .to_string()
                 };
-                handle
-                    .pointer(&request("down", 1))
-                    .unwrap_or_else(|error| panic!("{key} pointer down: {error:?}"));
-                parse_snapshot(
+                let down = parse_snapshot(
+                    &handle
+                        .pointer(&request("down", 1))
+                        .unwrap_or_else(|error| panic!("{key} pointer down: {error:?}")),
+                    key,
+                );
+                let up = parse_snapshot(
                     &handle
                         .pointer(&request("up", 0))
                         .unwrap_or_else(|error| panic!("{key} pointer up: {error:?}")),
                     key,
-                )
+                );
+                (down, up)
             }
 
             fn inspect_controls(
@@ -749,6 +853,7 @@ mod wasm {
                 let response = handle.code_control_rpc(r#"{"method":"inspect_managed_controls"}"#);
                 let response: serde_json::Value = serde_json::from_str(&response)
                     .unwrap_or_else(|error| panic!("{key} control response JSON: {error}"));
+                assert_no_presentation_shortcut_keys(&response, key);
                 assert_eq!(response["outcome"], "success", "{key} controls");
                 assert_eq!(
                     response["value"]["result"], "managed_controls",
@@ -763,6 +868,13 @@ mod wasm {
                     .unwrap_or_else(|| panic!("{key} code revision"))
             }
 
+            #[derive(serde::Serialize)]
+            struct ResolveMutationCommand<'a> {
+                version: u8,
+                command: &'static str,
+                payload: &'a PreparedManagedMutationReceipt,
+            }
+
             fn assert_complete_frame(snapshot: &serde_json::Value, key: &str) {
                 let svg = frame_svg(snapshot, key);
                 assert!(svg.starts_with("<svg"), "{key} SVG root");
@@ -771,6 +883,35 @@ mod wasm {
                 assert!(svg.contains("wb-geometry"), "{key} complete geometry frame");
                 assert!(!svg.contains("NaN"), "{key} frame has no NaN");
                 assert!(!svg.contains("Infinity"), "{key} frame has no infinity");
+            }
+
+            let forbidden_key_fixture = serde_json::json!({
+                "outer": [{ "nested": { "renderDurationMs": 1 } }],
+            });
+            assert_eq!(
+                first_presentation_shortcut_key(&forbidden_key_fixture),
+                Some("renderDurationMs")
+            );
+            for field in [
+                "lodEnabled",
+                "viewport_lod_level",
+                "timingMs",
+                "frameTiming",
+                "elapsed_ms",
+                "renderDurationMs",
+                "wallClock",
+                "wall_clock_ms",
+                "renderMs",
+            ] {
+                assert!(is_presentation_shortcut_key(field), "forbid `{field}`");
+            }
+            for field in [
+                "pilotRadius",
+                "timingBeltPitch",
+                "durationAngle",
+                "wallClockwiseBranch",
+            ] {
+                assert!(!is_presentation_shortcut_key(field), "allow `{field}`");
             }
 
             fn assert_accepted_invariants(
@@ -869,6 +1010,7 @@ mod wasm {
                     sample.expected.bidirectional_bounded_degrees_of_freedom(),
                 );
                 let base_source = managed_source(&opened, case.key).to_owned();
+                assert_eq!(base_source, sample.managed_source(), "{}", case.key);
                 let base_frame = frame_svg(&opened, case.key).to_owned();
                 let base_controls = inspect_controls(&mut handle, case.key);
                 assert_eq!(base_controls["can_undo"], false, "{}", case.key);
@@ -908,19 +1050,27 @@ mod wasm {
                     .to_owned();
                 drop(base_controls);
 
-                let point = first_interactive_point(&base_frame, case.key);
-                let selected = click(
+                let (point, point_id) = first_interactive_point(&base_frame, case.key);
+                let (selected_down, selected) = click(
                     &mut handle,
                     u64::try_from(index).unwrap() + 92_100,
                     point,
+                    false,
                     case.key,
                 );
-                assert!(selected["selection"].is_object(), "{} selection", case.key);
+                let selected_point_tag =
+                    persistent_point_tag(frame_svg(&selected_down, case.key), &point_id)
+                        .unwrap_or_else(|| panic!("{} selected persistent point paint", case.key));
                 assert!(
-                    frame_svg(&selected, case.key).contains("class=\"wb-point selected"),
-                    "{} selected point paint",
+                    selected_point_tag.contains("class=\"wb-point selected"),
+                    "{} pointer down must select the exact hit point {point_id}",
                     case.key
                 );
+                assert!(selected["selection"].is_object(), "{} selection", case.key);
+                let selected_release_tag =
+                    persistent_point_tag(frame_svg(&selected, case.key), &point_id)
+                        .unwrap_or_else(|| panic!("{} released persistent point paint", case.key));
+                assert!(selected_release_tag.contains("class=\"wb-point selected"));
                 assert_eq!(
                     managed_source(&selected, case.key),
                     base_source,
@@ -937,12 +1087,14 @@ mod wasm {
                 // Selection is presentation-only and deliberately absent from
                 // outer code checkpoints. Clear it through the public pointer
                 // adapter before freezing exact base/edited history frames.
-                let deselected = click(
+                let (deselected_down, deselected) = click(
                     &mut handle,
                     u64::try_from(index).unwrap() + 92_200,
-                    [1.0, 1.0],
+                    point,
+                    true,
                     case.key,
                 );
+                assert!(deselected_down["selection"].is_null(), "{}", case.key);
                 assert!(
                     deselected["selection"].is_null(),
                     "{} deselection",
@@ -989,21 +1141,21 @@ mod wasm {
                     case.key
                 );
 
-                let request: PreparedManagedMutationRequest =
-                    serde_json::from_value(pending["pendingManagedMutation"]["request"].clone())
-                        .unwrap_or_else(|error| panic!("{} prepared request: {error}", case.key));
+                let request = &pending["pendingManagedMutation"]["request"];
                 assert_eq!(
-                    request.current.normalized_source, base_source,
+                    request["current"]["normalizedSource"], base_source,
                     "{}",
                     case.key
                 );
                 assert_eq!(
-                    serde_json::to_value(&request.ticket.session).unwrap(),
-                    base_identity,
+                    request["ticket"]["session"], base_identity,
                     "{} pending compilation retains exact code history identity",
                     case.key
                 );
-                let ManagedSketchMutation::SetValues { values } = &request.ticket.mutation else {
+                let mutation: ManagedSketchMutation =
+                    serde_json::from_value(request["ticket"]["mutation"].clone())
+                        .unwrap_or_else(|error| panic!("{} prepared mutation: {error}", case.key));
+                let ManagedSketchMutation::SetValues { values } = &mutation else {
                     panic!("{} representative edit must prepare set_values", case.key)
                 };
                 assert_eq!(values.len(), 1, "{}", case.key);
@@ -1035,6 +1187,15 @@ mod wasm {
                     "{}",
                     case.key
                 );
+                let ticket_digest = request["ticket"]["ticketDigest"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{} prepared ticket digest", case.key))
+                    .to_owned();
+                let base_source_digest = request["current"]["ir"]["source_digest"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{} prepared base source digest", case.key))
+                    .to_owned();
+                drop(pending);
 
                 let decompressed = miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(
                     case.compiled_fixture,
@@ -1058,24 +1219,21 @@ mod wasm {
                 );
                 let candidate_source = candidate.normalized_source.clone();
                 let receipt = PreparedManagedMutationReceipt {
-                    ticket_digest: request.ticket.ticket_digest,
-                    base_source_digest: request.current.ir.source_digest,
+                    ticket_digest,
+                    base_source_digest,
                     candidate_source_digest: candidate.ir.source_digest.clone(),
                     compiled: candidate,
                 };
+                let resolve_command = serde_json::to_string(&ResolveMutationCommand {
+                    version: 1,
+                    command: "managed.mutation.resolve",
+                    payload: &receipt,
+                })
+                .unwrap_or_else(|error| panic!("{} resolve command: {error}", case.key));
                 let accepted = parse_snapshot(
-                    &handle
-                        .dispatch(
-                            &serde_json::json!({
-                                "version": 1,
-                                "command": "managed.mutation.resolve",
-                                "payload": receipt,
-                            })
-                            .to_string(),
-                        )
-                        .unwrap_or_else(|error| {
-                            panic!("{} resolve parameter edit: {error:?}", case.key)
-                        }),
+                    &handle.dispatch(&resolve_command).unwrap_or_else(|error| {
+                        panic!("{} resolve parameter edit: {error:?}", case.key)
+                    }),
                     case.key,
                 );
                 assert!(
