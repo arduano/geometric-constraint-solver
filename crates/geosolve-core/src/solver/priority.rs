@@ -3753,13 +3753,12 @@ pub(super) fn optimize_component_priority_inner(
                     accepted = Some((accepted_state, trial_cost));
                 }
                 if accepted.is_some()
-                    && ((category == ResidualCategory::Temporary
-                        && temporary_has_movable_preference)
-                        || protected_target.is_some())
+                    && (category == ResidualCategory::Temporary || protected_target.is_some())
                 {
                     // Ordinary first-improvement backtracking avoids repeating
                     // expensive hard/vector reprojection for every smaller
-                    // step. The outer iteration still performs every required
+                    // step, including when a fully driven drag has no passive
+                    // Preference anchors. The outer iteration performs every required
                     // lexicographic descent and independent certification.
                     break;
                 }

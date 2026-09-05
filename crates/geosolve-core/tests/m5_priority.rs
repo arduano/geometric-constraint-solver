@@ -1147,3 +1147,62 @@ fn cross_component_secondary_incidence_is_optimized_as_one_group() {
     assert_eq!(coupled.termination, SolveTermination::Converged);
     assert_eq!(coupled.final_cost, Some(0.0));
 }
+
+#[test]
+fn bounded_temporary_crank_motion_without_passive_preferences() {
+    // M92-F015: a driven one-DOF mechanism has no passive locality anchors.
+    // Temporary descent must finish within the ordinary preview work envelope.
+    for scale in [1.0e-6, 1.0, 1.0e6] {
+        for direction in [-1.0, 1.0] {
+            let mut problem = Problem::new();
+            let variable = problem
+                .add_variable(VariableBlock::vec2([15.0 * scale, 0.0], [scale, scale]).unwrap());
+            add_circle(
+                &mut problem,
+                variable,
+                scale,
+                CircleDistance::unrestricted(15.0 * scale),
+            );
+            let target = [
+                14.265_847_744_427_303 * scale,
+                direction * 4.635_254_915_624_211 * scale,
+            ];
+            add_point_target(
+                &mut problem,
+                variable,
+                ResidualCategory::Temporary,
+                target,
+                scale,
+            );
+            let mut control = OperationControl::unlimited();
+            control.limits.nonlinear_iterations = 256;
+            control.limits.factorizations = 256;
+            control.limits.rank_kernels = 256;
+            control.limits.rejected_trials = 512;
+            let outcome = problem
+                .solve_controlled(SolverConfig::default(), control)
+                .unwrap();
+            let OperationOutcome::Completed {
+                value: report,
+                report: work,
+            } = outcome
+            else {
+                panic!("scale={scale:e}, direction={direction}: {outcome:?}");
+            };
+            assert_eq!(
+                report.termination,
+                SolveTermination::Converged,
+                "{report:?}"
+            );
+            assert!(report.hard_residuals_validated, "{report:?}");
+            let position = point(&problem, variable);
+            assert!(position.into_iter().all(f64::is_finite));
+            assert_normalized_point(position, target, scale);
+            assert!((position[0].hypot(position[1]) / scale - 15.0).abs() <= 1.0e-9);
+            assert_eq!((report.rank, report.local_degrees_of_freedom), (1, 1));
+            assert!(work.stopping_reason.is_none(), "{work:?}");
+            assert!(work.consumed.factorizations <= 256, "{work:?}");
+            assert!(work.consumed.nonlinear_iterations <= 256, "{work:?}");
+        }
+    }
+}
