@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { EditorView } from "@codemirror/view";
@@ -1062,6 +1062,52 @@ describe("M88 workbench interaction contract", () => {
     await user.click(screen.getByRole("menuitem", { name: /^Save in browser/ }));
     await waitFor(() => expect(projectStore.writes).toBe(1));
     expect(projectStore.value).not.toBe("invalid-saved-workspace");
+  });
+
+  it.each(["valid", "malformed"])("preserves a %s unapplied draft across rejected restoration and fallback edits", async (kind) => {
+    class RejectingPersistenceAdapter extends MockWorkbenchAdapter {
+      override async construct(input?: { version: 1; persistedProject?: string }) {
+        if (input?.persistedProject) throw new Error("saved payload is invalid");
+        return super.construct();
+      }
+    }
+    const adapter = new RejectingPersistenceAdapter();
+    const baseline = await adapter.snapshot();
+    const source = baseline.source.files[0]!;
+    const savedDraft = kind === "malformed" ? "{incomplete saved draft" : JSON.stringify({
+      version: 1, title: "Rejected project", sampleKey: null,
+      path: source.path, base: source.contents, contents: `${source.contents}// irreplaceable draft\n`,
+    });
+    const draftKey = "geosolve.source-draft.v1";
+    localStorage.setItem(draftKey, savedDraft);
+    const projectStore = new TestProjectStore("invalid-saved-workspace");
+    const { user, container } = await ready(adapter, projectStore);
+    expect(await screen.findByRole("alert")).toHaveTextContent("your saved data was retained");
+    expect(localStorage.getItem(draftKey)).toBe(savedDraft);
+
+    await user.click(screen.getByRole("button", { name: "Hide construction geometry" }));
+    expect(localStorage.getItem(draftKey)).toBe(savedDraft);
+    await user.click(screen.getByRole("button", { name: /^code$/i }));
+    const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    const fallbackDraft = `${view.state.doc.toString()}// fallback edit\n`;
+    act(() => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: fallbackDraft } }));
+    expect(localStorage.getItem(draftKey)).toBe(savedDraft);
+    expect(projectStore.value).toBe("invalid-saved-workspace");
+    expect(projectStore.writes).toBe(0);
+
+    projectStore.writeIssue = "replacement save failed";
+    await user.click(screen.getByRole("button", { name: "File menu" }));
+    await user.click(screen.getByRole("menuitem", { name: /^Save in browser/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("replacement save failed");
+    expect(localStorage.getItem(draftKey)).toBe(savedDraft);
+    expect(projectStore.value).toBe("invalid-saved-workspace");
+
+    projectStore.writeIssue = null;
+    await user.click(screen.getByRole("button", { name: "File menu" }));
+    await user.click(screen.getByRole("menuitem", { name: /^Save in browser/ }));
+    await waitFor(() => expect(projectStore.value).not.toBe("invalid-saved-workspace"));
+    await waitFor(() => expect(localStorage.getItem(draftKey)).not.toBe(savedDraft));
+    expect(JSON.parse(localStorage.getItem(draftKey)!).contents).toBe(fallbackDraft);
   });
 
   it("gives the modal first Escape ownership", async () => {

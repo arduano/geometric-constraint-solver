@@ -65,6 +65,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const [codeSurface, setCodeSurface] = useState<CodeSurface>(initialPresentation.codeSurface);
   const [recentSamples, setRecentSamples] = useState(initialRecents.entries);
   const [draft, setDraft] = useState("");
+  const [draftStorageSafe, setDraftStorageSafe] = useState(false);
   const [actionError, setActionError] = useState<string | null>([initialPresentation.storageIssue, initialRecents.issue].filter(Boolean).join("; ") || null);
   const [editorNavigation, setEditorNavigation] = useState<EditorNavigation | null>(null);
   const snapshotRef = useRef<WorkbenchSnapshot | null>(null);
@@ -118,6 +119,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
         if (projectSaveEpoch.current === epoch) {
           lastSavedProject.current = payload.contents;
           projectAutosaveSafe.current = true;
+          setDraftStorageSafe(true);
         }
         if (stored.issue) reportError(stored.issue);
         else if (clearError) setActionError(null);
@@ -132,6 +134,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     startupRequest.current = request;
     projectSaveEpoch.current += 1;
     projectAutosaveSafe.current = false;
+    setDraftStorageSafe(false);
     lastSavedProject.current = undefined;
     setStartupError(null);
     const install = async (next: WorkbenchSnapshot) => {
@@ -146,6 +149,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       const restored = restoredBrowserDraft(checked, file);
       if (restored.issue) reportError(restored.issue);
       setDraft(restored.contents ?? file?.contents ?? "");
+      setDraftStorageSafe(projectAutosaveSafe.current);
       return true;
     };
     void projectStore.read().then(async (storedProject) => {
@@ -254,7 +258,9 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   }, [queueProjectSave, snapshot?.project.sampleKey, snapshot?.project.title, snapshot?.revision]);
 
   useEffect(() => {
-    if (!snapshot) return;
+    // A failed/uncertain project restore also protects its separately saved
+    // unapplied source. Only a successful explicit save releases that protection.
+    if (!snapshot || !draftStorageSafe) return;
     const file = snapshot.source.files.find((candidate) => candidate.path === snapshot.source.selectedPath);
     if (!file || file.readOnly || draft === file.contents) {
       const removed = removeBrowserStorage(DRAFT_KEY, "the unapplied source draft");
@@ -263,7 +269,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
     }
     const stored = writeBrowserStorage(DRAFT_KEY, JSON.stringify({ version: 1, title: snapshot.project.title, sampleKey: snapshot.project.sampleKey ?? null, path: file.path, base: file.contents, contents: draft }), "the unapplied source draft");
     if (stored.issue) reportError(stored.issue);
-  }, [draft, reportError, snapshot]);
+  }, [draft, draftStorageSafe, reportError, snapshot]);
 
   useEffect(() => {
     const onWorkspaceKey = (event: KeyboardEvent) => {
@@ -539,7 +545,8 @@ function restoredBrowserDraft(snapshot: WorkbenchSnapshot, file?: WorkbenchSnaps
     if (saved?.version !== 1 || saved.title !== snapshot.project.title || (saved.sampleKey ?? null) !== (snapshot.project.sampleKey ?? null) || saved.path !== file.path || saved.base !== file.contents || typeof saved.contents !== "string") return { contents: null, issue: null };
     return { contents: saved.contents, issue: null };
   } catch {
-    const removed = removeBrowserStorage(DRAFT_KEY, "the invalid unapplied source draft");
-    return { contents: null, issue: removed.issue };
+    // Cleanup belongs to the guarded persistence effect after project authority
+    // is resolved, not to this read while a fallback may still be installing.
+    return { contents: null, issue: null };
   }
 }
