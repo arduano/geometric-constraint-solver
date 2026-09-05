@@ -86,6 +86,7 @@ try {
   const workbenchContract = [
     "export class WorkbenchHandle",
     "constructor(request: string);",
+    "static restoreLegacyCodeWorkbench(persisted: string): WorkbenchHandle;",
     "snapshot(): string;",
     "dispatch(request: string): string;",
     "pointer(request: string): string;",

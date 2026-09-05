@@ -23,7 +23,10 @@ export interface JsonWorkbenchHandle {
   free?(): void;
 }
 
-export type JsonWorkbenchHandleConstructor = new (request: string) => JsonWorkbenchHandle;
+export interface JsonWorkbenchHandleConstructor {
+  new (request: string): JsonWorkbenchHandle;
+  restoreLegacyCodeWorkbench?(persisted: string): JsonWorkbenchHandle;
+}
 
 function decodeSnapshot(json: string): WorkbenchSnapshot {
   return assertWorkbenchSnapshot(JSON.parse(json) as WorkbenchSnapshot);
@@ -42,10 +45,27 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
   constructor(private readonly Handle: JsonWorkbenchHandleConstructor) {}
 
   async construct(input: { version: 1; persistedProject?: string }): Promise<WorkbenchSnapshot> {
-    this.handle?.free?.();
-    this.handle = new this.Handle(JSON.stringify(input));
-    this.catalog = assertToolCatalog(JSON.parse(this.handle.toolCatalog()) as ToolCatalog);
-    return decodeSnapshot(this.handle.snapshot());
+    let candidate: JsonWorkbenchHandle;
+    try {
+      candidate = new this.Handle(JSON.stringify(input));
+    } catch (error) {
+      if (!input.persistedProject || !this.Handle.restoreLegacyCodeWorkbench) throw error;
+      // Pass the original bytes to Rust. Parsing and rewriting here could erase
+      // duplicate fields before the strict legacy/authority decoders see them.
+      candidate = this.Handle.restoreLegacyCodeWorkbench(input.persistedProject);
+    }
+    try {
+      const catalog = assertToolCatalog(JSON.parse(candidate.toolCatalog()) as ToolCatalog);
+      const snapshot = decodeSnapshot(candidate.snapshot());
+      const previous = this.handle;
+      this.handle = candidate;
+      this.catalog = catalog;
+      previous?.free?.();
+      return snapshot;
+    } catch (error) {
+      candidate.free?.();
+      throw error;
+    }
   }
 
   async toolCatalog() {

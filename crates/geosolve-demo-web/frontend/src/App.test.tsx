@@ -976,7 +976,7 @@ describe("M88 workbench interaction contract", () => {
     expect(projectStore.value).toBe("unread-indexed-project");
   });
 
-  it("does not remove rejected saved bytes before a fresh fallback is ready", async () => {
+  it("retains rejected saved bytes after a fresh fallback and pauses automatic saving", async () => {
     let releaseFallback!: () => void;
     const fallbackGate = new Promise<void>((resolve) => { releaseFallback = resolve; });
     class DelayedFallbackAdapter extends MockWorkbenchAdapter {
@@ -998,8 +998,10 @@ describe("M88 workbench interaction contract", () => {
 
     releaseFallback();
     expect(await screen.findByText("Untitled sketch")).toBeVisible();
-    await waitFor(() => expect(projectStore.removals).toBe(1));
-    await waitFor(() => expect(projectStore.writes).toBe(1));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Automatic project saving is paused");
+    expect(projectStore.removals).toBe(0);
+    expect(projectStore.writes).toBe(0);
+    expect(projectStore.value).toBe("rejected-saved-workspace");
   });
 
   it("loads with safe defaults and a durable alert when browser storage reads are blocked", async () => {
@@ -1037,7 +1039,7 @@ describe("M88 workbench interaction contract", () => {
     expect(screen.getByRole("region", { name: "Code workspace" })).toBeVisible();
   });
 
-  it("recovers a rejected saved project even when its storage removal is blocked", async () => {
+  it("retains rejected bytes until an explicit manual replacement save", async () => {
     class RejectingPersistenceAdapter extends MockWorkbenchAdapter {
       override async construct(input?: { version: 1; persistedProject?: string }) {
         if (input?.persistedProject) throw new Error("saved payload is invalid");
@@ -1050,10 +1052,16 @@ describe("M88 workbench interaction contract", () => {
       "Browser storage could not remove the saved project: SecurityError: Removal is blocked",
     );
 
-    await ready(new RejectingPersistenceAdapter(), projectStore);
+    const { user } = await ready(new RejectingPersistenceAdapter(), projectStore);
     expect(screen.getByText("Untitled sketch")).toBeVisible();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Saved workspace could not be restored and was reset: saved payload is invalid");
-    expect(screen.getByRole("alert")).toHaveTextContent("Browser storage could not remove the saved project: SecurityError: Removal is blocked");
+    expect(await screen.findByRole("alert")).toHaveTextContent("your saved data was retained");
+    expect(projectStore.removals).toBe(0);
+    expect(projectStore.writes).toBe(0);
+    expect(projectStore.value).toBe("invalid-saved-workspace");
+    await user.click(screen.getByRole("button", { name: "File menu" }));
+    await user.click(screen.getByRole("menuitem", { name: /^Save in browser/ }));
+    await waitFor(() => expect(projectStore.writes).toBe(1));
+    expect(projectStore.value).not.toBe("invalid-saved-workspace");
   });
 
   it("gives the modal first Escape ownership", async () => {

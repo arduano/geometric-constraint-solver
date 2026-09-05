@@ -66,7 +66,7 @@ function acceptedManagedSourceFromSavedProject(value: string | null) {
 
   const codeWorkbench = parseJsonRecord(presentation.project);
   if (
-    codeWorkbench?.version !== "geosolve-code-workbench-v4"
+    !["geosolve-code-workbench-v4", "geosolve-code-workbench-v5"].includes(String(codeWorkbench?.version))
     || typeof codeWorkbench.project !== "string"
   ) return null;
 
@@ -705,7 +705,7 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
   const savedEnvelope = JSON.parse(finalSaved!) as { format?: unknown; project?: unknown };
   expect(savedEnvelope.format).toBe("geosolve-workbench-presentation-v1");
   expect(typeof savedEnvelope.project).toBe("string");
-  expect(JSON.parse(savedEnvelope.project as string).version).toBe("geosolve-code-workbench-v4");
+  expect(JSON.parse(savedEnvelope.project as string).version).toBe("geosolve-code-workbench-v5");
   expect(await page.evaluate(() => localStorage.getItem("geosolve.project.v1"))).toBeNull();
 
   // Camera state is presentation-local. Normalize it exactly as the native

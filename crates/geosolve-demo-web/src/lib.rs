@@ -139,6 +139,14 @@ mod wasm {
                 .map_err(|error| JsValue::from_str(&error))
         }
 
+        /// Strict bounded recovery for historical v4 browser saves (M92-F013).
+        #[wasm_bindgen(js_name = restoreLegacyCodeWorkbench)]
+        pub fn restore_legacy_code_workbench(persisted: &str) -> Result<WorkbenchHandle, JsValue> {
+            crate::workbench::bridge::WorkbenchBridge::restore_legacy_code_workbench(persisted)
+                .map(|bridge| WorkbenchHandle { bridge })
+                .map_err(|error| JsValue::from_str(&error))
+        }
+
         #[wasm_bindgen(js_name = exportProject)]
         pub fn export_project(&self) -> Result<String, JsValue> {
             self.bridge
@@ -1343,6 +1351,65 @@ mod wasm {
                 assert!(redone["problems"].as_array().is_some_and(Vec::is_empty));
                 assert_accepted_invariants(
                     &handle,
+                    case.key,
+                    sample.expected.numerical_right_nullity(),
+                    sample.expected.bidirectional_bounded_degrees_of_freedom(),
+                );
+                // Exercise the real browser transport, including its nested
+                // persistence string and unchanged request-size guard (M92-F013).
+                let persistence: serde_json::Value = serde_json::from_str(
+                    &handle
+                        .persist_project()
+                        .unwrap_or_else(|error| panic!("{} persistence: {error:?}", case.key)),
+                )
+                .unwrap();
+                let mut restored = super::WorkbenchHandle::new(
+                    &serde_json::json!({
+                        "version": 1,
+                        "persistedProject": persistence["contents"],
+                    })
+                    .to_string(),
+                )
+                .unwrap_or_else(|error| panic!("{} browser reload: {error:?}", case.key));
+                let restored_snapshot = parse_snapshot(&restored.snapshot().unwrap(), case.key);
+                assert_eq!(
+                    managed_source(&restored_snapshot, case.key),
+                    candidate_source
+                );
+                assert_eq!(
+                    restored.export_project().unwrap(),
+                    handle.export_project().unwrap()
+                );
+                assert_eq!(
+                    restored.persist_project().unwrap(),
+                    handle.persist_project().unwrap()
+                );
+                assert_accepted_invariants(
+                    &restored,
+                    case.key,
+                    sample.expected.numerical_right_nullity(),
+                    sample.expected.bidirectional_bounded_degrees_of_freedom(),
+                );
+                let restored_undo = parse_snapshot(
+                    &restored
+                        .dispatch(r#"{"version":1,"command":"history.undo"}"#)
+                        .unwrap(),
+                    case.key,
+                );
+                assert_eq!(managed_source(&restored_undo, case.key), base_source);
+                let restored_redo = parse_snapshot(
+                    &restored
+                        .dispatch(r#"{"version":1,"command":"history.redo"}"#)
+                        .unwrap(),
+                    case.key,
+                );
+                assert_eq!(managed_source(&restored_redo, case.key), candidate_source);
+                assert_eq!(
+                    restored.export_project().unwrap(),
+                    handle.export_project().unwrap()
+                );
+                assert_accepted_invariants(
+                    &restored,
                     case.key,
                     sample.expected.numerical_right_nullity(),
                     sample.expected.bidirectional_bounded_degrees_of_freedom(),

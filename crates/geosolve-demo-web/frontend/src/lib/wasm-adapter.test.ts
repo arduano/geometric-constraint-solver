@@ -53,4 +53,38 @@ describe("WasmWorkbenchAdapter", () => {
     expect(await adapter.resize({ version: 1, width: 1024, height: 720, pixelRatio: 1 })).toBeNull();
     expect(FakeHandle.requests.map((request) => JSON.parse(request))).toEqual([{ version: 1 }, { version: 1, command: "project.new" }]);
   });
+  it("recovers legacy persistence from unchanged raw bytes and replaces only a validated handle", async () => {
+    const freed: string[] = [];
+    const recovered: string[] = [];
+    class RecoveringHandle extends FakeHandle {
+      constructor(private readonly name: string) {
+        super(name);
+        if (name.includes("persistedProject")) throw new Error("ordinary request too large");
+      }
+      override snapshot() {
+        return this.name === "invalid candidate" ? "{}" : super.snapshot();
+      }
+      free() { freed.push(this.name); }
+      static restoreLegacyCodeWorkbench(raw: string) {
+        recovered.push(raw);
+        if (raw === "bad legacy") throw new Error("legacy validation rejected");
+        return new RecoveringHandle(raw === "bad snapshot" ? "invalid candidate" : "recovered");
+      }
+    }
+    const adapter = new WasmWorkbenchAdapter(RecoveringHandle);
+    await adapter.construct({ version: 1 });
+    await expect(adapter.construct({ version: 1, persistedProject: "bad legacy" })).rejects.toThrow("legacy validation rejected");
+    expect(freed).toEqual([]);
+    expect((await adapter.snapshot()).project.title).toBe("Bridge");
+    await expect(adapter.construct({ version: 1, persistedProject: "bad snapshot" })).rejects.toThrow();
+    expect(freed).toEqual(["invalid candidate"]);
+    expect((await adapter.snapshot()).project.title).toBe("Bridge");
+    // Duplicate keys are intentionally retained for Rust to reject; JS must not
+    // normalize the incoming string before forwarding it.
+    const original = '{"format":"legacy","format":"duplicate"}';
+    await adapter.construct({ version: 1, persistedProject: original });
+    expect(recovered).toEqual(["bad legacy", "bad snapshot", original]);
+    expect(freed).toEqual(["invalid candidate", '{"version":1}']);
+  });
+
 });

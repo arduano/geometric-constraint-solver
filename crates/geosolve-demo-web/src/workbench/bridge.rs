@@ -575,6 +575,99 @@ impl WorkbenchBridge {
         }
     }
 
+    /// Recovers one historical presentation envelope without JSON request
+    /// escaping. M92-F013: v4 could emit a valid 64 MiB code owner payload whose
+    /// outer string exceeded the ordinary 40 MiB bridge transport. This entry
+    /// accepts only that legacy format and retains all owner validation.
+    pub(crate) fn restore_legacy_code_workbench(encoded: &str) -> Result<Self, String> {
+        const MAX_LEGACY_PRESENTATION_BYTES: usize = 96 * 1024 * 1024;
+        #[derive(Deserialize)]
+        struct Version {
+            version: String,
+        }
+        if encoded.len() > MAX_LEGACY_PRESENTATION_BYTES {
+            return Err(format!(
+                "legacy presentation exceeds {MAX_LEGACY_PRESENTATION_BYTES} bytes"
+            ));
+        }
+        let envelope: WorkbenchPersistenceEnvelope =
+            serde_json::from_str(encoded).map_err(|error| error.to_string())?;
+        if envelope.format != WORKBENCH_PERSISTENCE_FORMAT {
+            return Err("legacy recovery requires one workbench presentation envelope".into());
+        }
+        // This small discriminator neither rewrites nor substitutes for the
+        // strict complete owner decoder, which rejects unknown/duplicate fields.
+        if envelope.project.len() > geosolve_sketch_code::CODE_PROJECT_LIMIT {
+            return Err("legacy code workbench exceeds its existing owner limit".into());
+        }
+        let version: Version =
+            serde_json::from_str(&envelope.project).map_err(|error| error.to_string())?;
+        if version.version != "geosolve-code-workbench-v4" {
+            return Err("legacy recovery requires code-workbench v4".into());
+        }
+        let code = CodeProjectWorkbench::from_persistence_json(&envelope.project)?;
+        let mut bridge =
+            Self::from_code_workbench(code)?.with_presentation(envelope.presentation)?;
+        // A recovered candidate must be persistable through the normal transport.
+        let compact_request = serde_json::json!({
+            "version": PROTOCOL_VERSION,
+            "persistedProject": bridge.persistence_contents()?,
+        })
+        .to_string();
+        let _: ConstructRequest = decode_request(&compact_request)?;
+        bridge.notice = "Saved code workspace recovered with complete history".into();
+        Ok(bridge)
+    }
+
+    fn with_presentation(
+        mut self,
+        presentation: WorkbenchPresentationPersistence,
+    ) -> Result<Self, String> {
+        let hidden_rows = decode_visibility_rows(presentation.hidden_rows)?;
+        let isolate_restore = presentation
+            .isolate_restore
+            .map(decode_visibility_rows)
+            .transpose()?;
+        self.explorer_visibility = ExplorerVisibilityState {
+            hidden_rows,
+            isolate_restore,
+        };
+        self.reconcile_explorer_visibility();
+        let visibility = GeometryVisibility {
+            explicit_construction: presentation.construction_visible,
+            implicit_construction: presentation.construction_visible,
+            ..self
+                .editor()
+                .editor()
+                .geometry_interaction_policy()
+                .visibility
+        };
+        let _ = self
+            .editor_mut()
+            .editor_mut()
+            .set_geometry_visibility(visibility);
+        self.retained_scene = None;
+        self.accepted_frame = None;
+        Ok(self)
+    }
+
+    fn from_code_workbench(code_project: CodeProjectWorkbench) -> Result<Self, String> {
+        let editor = code_project.restore_accepted_editor()?;
+        let authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
+        let mut samples = super::samples::SampleCatalogState::default();
+        if let Some(key) = code_project.sample_key() {
+            samples.select_key(key)?;
+        }
+        let title = code_project.title().to_owned();
+        Self::from_parts(
+            authority,
+            Some(code_project),
+            samples,
+            title,
+            "Code project restored".into(),
+        )
+    }
+
     fn fresh() -> Result<Self, String> {
         Self::from_parts(
             super::fresh_projectional_authority()?,
@@ -594,34 +687,7 @@ impl WorkbenchBridge {
         if let Ok(envelope) = serde_json::from_str::<WorkbenchPersistenceEnvelope>(encoded)
             && envelope.format == WORKBENCH_PERSISTENCE_FORMAT
         {
-            let hidden_rows = decode_visibility_rows(envelope.presentation.hidden_rows)?;
-            let isolate_restore = envelope
-                .presentation
-                .isolate_restore
-                .map(decode_visibility_rows)
-                .transpose()?;
-            let mut bridge = Self::restore(&envelope.project)?;
-            bridge.explorer_visibility = ExplorerVisibilityState {
-                hidden_rows,
-                isolate_restore,
-            };
-            bridge.reconcile_explorer_visibility();
-            let visibility = GeometryVisibility {
-                explicit_construction: envelope.presentation.construction_visible,
-                implicit_construction: envelope.presentation.construction_visible,
-                ..bridge
-                    .editor()
-                    .editor()
-                    .geometry_interaction_policy()
-                    .visibility
-            };
-            let _ = bridge
-                .editor_mut()
-                .editor_mut()
-                .set_geometry_visibility(visibility);
-            bridge.retained_scene = None;
-            bridge.accepted_frame = None;
-            return Ok(bridge);
+            return Self::restore(&envelope.project)?.with_presentation(envelope.presentation);
         }
         if let Ok(workspace) = crate::reproduction::decode_workspace(encoded) {
             return Self::restore(&workspace).map(|mut bridge| {
@@ -630,20 +696,7 @@ impl WorkbenchBridge {
             });
         }
         if let Ok(code_project) = CodeProjectWorkbench::from_persistence_json(encoded) {
-            let editor = code_project.restore_accepted_editor()?;
-            let authority = WorkbenchDocumentAuthority::from_projectional_editor(*editor)?;
-            let mut samples = super::samples::SampleCatalogState::default();
-            if let Some(key) = code_project.sample_key() {
-                samples.select_key(key)?;
-            }
-            let title = code_project.title().to_owned();
-            return Self::from_parts(
-                authority,
-                Some(code_project),
-                samples,
-                title,
-                "Code project restored".into(),
-            );
+            return Self::from_code_workbench(code_project);
         }
         if let Ok((code_project, editor)) =
             CodeProjectWorkbench::import_canonical_project_json(encoded)
@@ -9357,6 +9410,231 @@ export default sketch(($) => {
             assert_eq!(
                 inspection.report.source_digest,
                 final_compiled.ir.source_digest
+            );
+        }
+    }
+
+    fn m92_legacy_envelope(bridge: &WorkbenchBridge) -> String {
+        let mut envelope: serde_json::Value =
+            serde_json::from_str(&bridge.persistence_contents().unwrap()).unwrap();
+        let mut code: serde_json::Value =
+            serde_json::from_str(envelope["project"].as_str().unwrap()).unwrap();
+        assert_eq!(code["version"], "geosolve-code-workbench-v5");
+        code["session"] = crate::reproduction::decode_workspace(code["session"].as_str().unwrap())
+            .unwrap()
+            .into();
+        code["version"] = "geosolve-code-workbench-v4".into();
+        envelope["project"] = code.to_string().into();
+        envelope.to_string()
+    }
+
+    #[test]
+    fn m92_legacy_recovery_is_strict_and_retains_presentation_and_history() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        bridge.dispatch_json(r#"{"version":1,"command":"sample.open","payload":{"key":"nema-17-motor-interface"}}"#).unwrap();
+        bridge
+            .dispatch_json(r#"{"version":1,"command":"view.construction.toggle"}"#)
+            .unwrap();
+        let legacy = m92_legacy_envelope(&bridge);
+        let recovered = WorkbenchBridge::restore_legacy_code_workbench(&legacy).unwrap();
+        assert_eq!(
+            recovered.persistence_contents().unwrap(),
+            bridge.persistence_contents().unwrap()
+        );
+        assert_eq!(
+            recovered.export_project_json().unwrap(),
+            bridge.export_project_json().unwrap()
+        );
+        let request = serde_json::json!({"version":1,"persistedProject":recovered.persistence_contents().unwrap()}).to_string();
+        let ordinary = WorkbenchBridge::construct_json(&request).unwrap();
+        assert_eq!(
+            ordinary.persistence_contents().unwrap(),
+            recovered.persistence_contents().unwrap()
+        );
+
+        let envelope: serde_json::Value = serde_json::from_str(&legacy).unwrap();
+        let mut unknown = envelope.clone();
+        unknown["unknown"] = true.into();
+        let duplicate = legacy.replacen('{', r#"{"format":"duplicate","#, 1);
+        let mut nested = envelope.clone();
+        nested["project"] = legacy.clone().into();
+        let mut bad_history = envelope.clone();
+        let mut code: serde_json::Value =
+            serde_json::from_str(bad_history["project"].as_str().unwrap()).unwrap();
+        code["session"] = "{}".into();
+        bad_history["project"] = code.to_string().into();
+        for invalid in [
+            unknown.to_string(),
+            duplicate,
+            nested.to_string(),
+            bad_history.to_string(),
+            format!("{legacy}x"),
+            bridge.persistence_contents().unwrap(),
+        ] {
+            assert!(WorkbenchBridge::restore_legacy_code_workbench(&invalid).is_err());
+        }
+        let mut oversized_inner = envelope;
+        oversized_inner["project"] = " "
+            .repeat(geosolve_sketch_code::CODE_PROJECT_LIMIT + 1)
+            .into();
+        assert!(
+            WorkbenchBridge::restore_legacy_code_workbench(&oversized_inner.to_string())
+                .err()
+                .unwrap()
+                .contains("owner limit")
+        );
+        assert!(
+            WorkbenchBridge::restore_legacy_code_workbench(&" ".repeat(96 * 1024 * 1024 + 1))
+                .err()
+                .unwrap()
+                .contains("legacy presentation exceeds")
+        );
+    }
+
+    #[test]
+    #[ignore = "requires preserved external M92-F013 browser payload through M92_LEGACY_PAYLOAD"]
+    fn m92_exact_captured_legacy_workspace_recovers_complete_history() {
+        let path = std::env::var_os("M92_LEGACY_PAYLOAD").expect("exact preserved payload path");
+        let legacy = std::fs::read_to_string(path).unwrap();
+        assert_eq!(legacy.len(), 81_671_710);
+        let original_envelope: serde_json::Value = serde_json::from_str(&legacy).unwrap();
+        let original_code: serde_json::Value =
+            serde_json::from_str(original_envelope["project"].as_str().unwrap()).unwrap();
+        let mut recovered = WorkbenchBridge::restore_legacy_code_workbench(&legacy).unwrap();
+        let compact = recovered.persistence_contents().unwrap();
+        let envelope: serde_json::Value = serde_json::from_str(&compact).unwrap();
+        let code: serde_json::Value =
+            serde_json::from_str(envelope["project"].as_str().unwrap()).unwrap();
+        assert_eq!(code["project"], original_code["project"]);
+        assert_eq!(
+            crate::reproduction::decode_workspace(code["session"].as_str().unwrap()).unwrap(),
+            original_code["session"].as_str().unwrap()
+        );
+        assert_eq!(envelope["presentation"], original_envelope["presentation"]);
+        let request = serde_json::json!({"version":1,"persistedProject":compact}).to_string();
+        eprintln!(
+            "captured legacy {} bytes -> compact {} bytes -> request {} bytes",
+            legacy.len(),
+            compact.len(),
+            request.len()
+        );
+        let restored = WorkbenchBridge::construct_json(&request).unwrap();
+        assert_eq!(restored.persistence_contents().unwrap(), compact);
+        let edited = recovered.export_project_json().unwrap();
+        recovered
+            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .unwrap();
+        assert_ne!(recovered.export_project_json().unwrap(), edited);
+        recovered
+            .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+            .unwrap();
+        assert_eq!(recovered.export_project_json().unwrap(), edited);
+        assert!(
+            recovered
+                .editor()
+                .coordinator()
+                .accepted_materialization()
+                .unwrap()
+                .validation
+                .hard_residuals_validated
+        );
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn m92_scale_sample_edited_history_restores_through_the_browser_request_envelope() {
+        let cases: &[(&str, &str, &str, &[u8])] = &[
+            (
+                "perforated-fixture-field",
+                "northernCells · pilotRadius",
+                "2.7",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/tests/fixtures/m92-perforated-fixture-field-edit.compiled.json.zlib"
+                )),
+            ),
+            (
+                "robotic-harness-backplane",
+                "bendRadius",
+                "4.5",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/tests/fixtures/m92-robotic-harness-backplane-edit.compiled.json.zlib"
+                )),
+            ),
+        ];
+        for (key, label, value, fixture) in cases {
+            let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+            bridge
+                .dispatch_json(
+                    &serde_json::json!({
+                        "version": 1, "command": "sample.open", "payload": { "key": key },
+                    })
+                    .to_string(),
+                )
+                .unwrap();
+            let parameter = bridge
+                .parameter_snapshot()
+                .into_iter()
+                .find(|parameter| parameter.label == *label)
+                .expect("declared scale parameter");
+            bridge
+                .dispatch_json(
+                    &serde_json::json!({
+                        "version": 1, "command": "parameter.edit",
+                        "payload": { "id": parameter.id, "value": value },
+                    })
+                    .to_string(),
+                )
+                .unwrap();
+            let bytes = miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(
+                fixture,
+                geosolve_sketch_code::MANAGED_WIRE_LIMIT,
+            )
+            .unwrap();
+            let compiled = geosolve_sketch_code::CompiledManagedSource::from_json(
+                std::str::from_utf8(&bytes).unwrap(),
+            )
+            .unwrap();
+            let receipt = pending_managed_receipt(&bridge, compiled);
+            bridge.resolve_pending_managed_mutation(receipt).unwrap();
+            bridge
+                .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+                .unwrap();
+            bridge
+                .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+                .unwrap();
+            let persistence = bridge.persistence_contents().unwrap();
+            let request =
+                serde_json::json!({ "version": 1, "persistedProject": persistence }).to_string();
+            eprintln!(
+                "{key}: persisted {} bytes, browser request {} bytes",
+                persistence.len(),
+                request.len()
+            );
+            let restored = WorkbenchBridge::construct_json(&request)
+                .unwrap_or_else(|error| panic!("{key} ordinary edited-history reload: {error}"));
+            assert_eq!(
+                restored.persistence_contents().unwrap(),
+                persistence,
+                "{key} exact complete history"
+            );
+            assert_eq!(
+                restored.export_project_json().unwrap(),
+                bridge.export_project_json().unwrap()
+            );
+            let accepted = restored
+                .editor()
+                .coordinator()
+                .accepted_materialization()
+                .unwrap();
+            assert!(accepted.validation.hard_residuals_validated);
+            assert!(accepted.validation.all_active_features_current);
+            assert!(
+                accepted
+                    .validation
+                    .maximum_normalized_hard_residual
+                    .is_none_or(|value| value.is_finite() && value <= 1e-9)
             );
         }
     }

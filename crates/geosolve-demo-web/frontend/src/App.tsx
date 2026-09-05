@@ -176,15 +176,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
             return;
           }
           if (startupRequest.current !== request) return;
-          const removed = await projectStore.remove();
-          if (startupRequest.current !== request) return;
-          lastSavedProject.current = removed.value ? null : undefined;
-          projectAutosaveSafe.current = true;
-          projectSaveEpoch.current += 1;
-          void queueProjectSave("replacement", false);
-          if (startupRequest.current === request) {
-            setActionError([`Saved workspace could not be restored and was reset: ${errorText(error)}`, removed.issue].filter(Boolean).join("; "));
-          }
+          setActionError(`Saved workspace could not be restored: ${errorText(error)}; your saved data was retained. Automatic project saving is paused until you use Save in browser.`);
         }
         catch (fallbackError) {
           if (startupRequest.current === request) setStartupError(errorText(fallbackError));
