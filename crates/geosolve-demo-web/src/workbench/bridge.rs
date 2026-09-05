@@ -756,11 +756,6 @@ impl WorkbenchBridge {
     }
 
     pub(crate) fn pointer_json(&mut self, request: &str) -> Result<String, String> {
-        if self.pending_managed_mutation.is_some() {
-            return Err(
-                "pointer input is unavailable while a managed-source mutation is compiling".into(),
-            );
-        }
         let request: PointerRequest = decode_request(request)?;
         require_version(request.version)?;
         if request.pointer_id > MAX_SAFE_INTEGER {
@@ -768,6 +763,28 @@ impl WorkbenchBridge {
         }
         if !request.x.is_finite() || !request.y.is_finite() {
             return Err("pointer coordinates must be finite".into());
+        }
+        if self.pending_managed_mutation.is_some() {
+            if matches!(request.phase, PointerPhase::Up) && request.buttons == 0 {
+                // A click-authoring pointer-down can complete a native
+                // candidate and park its managed compiler ticket before the
+                // browser emits the paired pointer-up. The semantic gesture
+                // is already complete; this release exists only to retire
+                // host pointer capture. Accept it without consuming the
+                // ticket or publishing another snapshot. New down/move input
+                // remains guarded until the authenticated receipt settles.
+                self.interaction_trace.record(
+                    "browser.pointerup.pending-managed-release",
+                    format!(
+                        "pointer={} client=[{:.3},{:.3}] buttons={} revision={}",
+                        request.pointer_id, request.x, request.y, request.buttons, self.revision,
+                    ),
+                );
+                return Ok("null".into());
+            }
+            return Err(
+                "pointer input is unavailable while a managed-source mutation is compiling".into(),
+            );
         }
         let Some(input) = self.normalized_pointer(request) else {
             return Ok("null".into());
@@ -4271,6 +4288,7 @@ mod tests {
         MAX_REQUEST_BYTES, MAX_VISIBILITY_ROWS, ManagedMutationAbortPayload,
         PendingManagedMutation, WORKBENCH_PERSISTENCE_FORMAT, WorkbenchBridge,
         WorkbenchDocumentAuthority, WorkbenchPersistenceEnvelope, WorkbenchPresentationPersistence,
+        pending_managed_ticket_digest,
     };
     use crate::workbench::code_projects::CodeProjectWorkbench;
 
@@ -5436,6 +5454,85 @@ export default sketch(($) => {
             .document();
         assert!(undone_document.points().is_empty());
         assert!(undone_document.curves().is_empty());
+    }
+
+    #[test]
+    fn m92_f002_terminal_pointer_release_is_noop_while_managed_click_compiles() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        bridge
+            .dispatch_json(r#"{"version":1,"command":"project.new-code"}"#)
+            .expect("empty managed project opens");
+        bridge
+            .dispatch_json(
+                r#"{"version":1,"command":"tool.select","payload":{"id":"center-radius-circle"}}"#,
+            )
+            .expect("center-radius circle tool activates");
+
+        for (index, position) in [
+            ScreenPoint { x: 470.0, y: 220.0 },
+            ScreenPoint { x: 560.0, y: 220.0 },
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            bridge
+                .pointer_json(&pointer_request("move", 92_002, position, 0))
+                .expect("circle pointer move");
+            bridge
+                .pointer_json(&pointer_request("down", 92_002, position, 1))
+                .expect("circle pointer down");
+            if index == 0 {
+                bridge
+                    .pointer_json(&pointer_request("up", 92_002, position, 0))
+                    .expect("first circle pointer up");
+            }
+        }
+
+        let pending_ticket = pending_managed_ticket_digest(
+            bridge
+                .pending_managed_mutation
+                .as_ref()
+                .expect("the completed Circle awaits its compiler receipt"),
+        )
+        .to_owned();
+        let revision_while_pending = bridge.revision;
+        let persistence_while_pending = bridge.persistence_json().unwrap();
+        assert_eq!(
+            bridge
+                .pointer_json(&pointer_request(
+                    "up",
+                    92_002,
+                    ScreenPoint { x: 560.0, y: 220.0 },
+                    0,
+                ))
+                .expect("the paired browser release is a harmless pending-compilation no-op"),
+            "null",
+        );
+        assert_eq!(
+            pending_managed_ticket_digest(
+                bridge
+                    .pending_managed_mutation
+                    .as_ref()
+                    .expect("the release cannot consume the compiler ticket"),
+            ),
+            pending_ticket,
+        );
+        assert_eq!(bridge.revision, revision_while_pending);
+        assert_eq!(
+            bridge.persistence_json().unwrap(),
+            persistence_while_pending
+        );
+        assert_eq!(
+            bridge
+                .pointer_json(&pointer_request(
+                    "down",
+                    92_003,
+                    ScreenPoint { x: 620.0, y: 260.0 },
+                    1,
+                ))
+                .expect_err("a new gesture remains blocked until compilation settles"),
+            "pointer input is unavailable while a managed-source mutation is compiling",
+        );
     }
 
     #[test]
