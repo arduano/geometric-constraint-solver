@@ -1,5 +1,14 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "adapterPlate", "path": ["width"], "replacement": { "unit": "mm", "value": 66.1 } },
+  "representative_edit": {
+    "declaration": "hd9PitchWidth",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 22
+    }
+  },
   "drags": []
 }
