@@ -8242,6 +8242,13 @@ bounded preview exhaustion; an actual browser drag also fails with Undo disabled
 520-frame native sweeps were unlimited, and the passing source-edit audit did not drag Jansen.
 After the repair, restart the complete clean gate; no prior partial run establishes nomination.
 
+The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` exited 101 at
+`m87_manufacturing_sketches`: its old Gridfinity assertion expected one scalar datum and one fixed
+point instead of the repaired sample's two scalar Y datums and zero fixed points. The corrected
+test preserves source-owned dimensions, view groups and linked floor/width relationships; the
+focused suite passes 2/2 in 7.76 seconds. Classify this as `HARNESS_ERROR`, with no new finding ID.
+The exact receipt is in `docs/M92_VISUAL_AUDIT.md`; repeat the full clean gate before nomination.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

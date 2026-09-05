@@ -7267,6 +7267,18 @@ witnesses and Jansen/scissor browser checks without changing budgets or acceptan
 must be replaced in full after repair; exact receipts and reproductions are recorded in
 `docs/M92_VISUAL_AUDIT.md`.
 
+### M92 Gridfinity harness correction — two linked views retain scalar datums
+
+The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` exited 101 because
+`m87_manufacturing_sketches` still expected one scalar datum and one fixed point. The current
+sample has exactly two scalar Y datums (`sectionBaseYDatum` and `planAnchor`) and no fixed points.
+The corrected test preserves `baseBottomWidth` and both view groups, and checks
+`cavityFloorAtBase` and `planMatchesSection`. M92 compiled-declaration checks independently require
+the same counts; measured height/width edits verify fixed floor height, cavity growth, symmetry
+and linked plan/section widths. The focused manufacturing suite passes 2/2 in 7.76 seconds.
+This is `HARNESS_ERROR`, with no new finding ID or product change. The failed receipt is recorded
+in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination remain pending.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

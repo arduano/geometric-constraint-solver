@@ -3,7 +3,7 @@
 # M92 implementation: registry-first parallel sample rebuild
 
 Status: **F001–F014 repairs integrated; F015 bounded Jansen dragging repaired at the core owner.
-The first audited clean gate failed; replacement qualification and immutable UAT nomination are pending**.
+Both audited clean gates failed; replacement qualification and immutable UAT nomination are pending**.
 No M92 human row or public Pages release is claimed by this checkpoint.
 
 ## Integration order
@@ -201,6 +201,16 @@ successful replacement clean gate, immutable snapshot path/hash, HTTP byte-verif
 immutable-endpoint browser result remain pending. The historical `14/20` diagnostic and later
 development results do not constitute nomination. GitHub Pages remains unchanged until explicit
 supervising-user approval after the composite UAT.
+
+The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89`, tree
+`3ae5232a6ac590390732a30e516b5e332cd76bfd`, ran from 2026-09-05 06:39:55 to 07:05:28 UTC and
+exited 101, with clean unchanged source/tree. It failed an old Gridfinity assertion in
+`m87_manufacturing_sketches` (1 passed / 1 failed, 7.30 seconds): the test expected one scalar
+datum and one fixed point, while the repaired sample uses two scalar Y datums and no fixed points.
+The corrected source test retains dimensions/groups and adds the repaired floor/width links;
+the focused suite passes 2/2 in 7.76 seconds (`gridfinity-old-contract-fixed.log`). This is
+`HARNESS_ERROR`, not a new finding. `M92_VISUAL_AUDIT.md` records the full receipt and log hash.
+Complete clean qualification and immutable nomination still require a successful replacement gate.
 
 ## Authorized visual-audit continuation
 

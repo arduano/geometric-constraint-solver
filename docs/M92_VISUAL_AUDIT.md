@@ -2,8 +2,8 @@
 
 # M92 visual and geometric design audit
 
-Status: **in progress; F015 bounded Jansen dragging is repaired at the core owner. The first
-audited clean gate failed; no replacement candidate is nominated and no human UAT is accepted**.
+Status: **in progress; F015 bounded Jansen dragging is repaired at the core owner. Both audited
+clean gates failed; no replacement candidate is nominated and no human UAT is accepted**.
 
 F003–F014 repairs are integrated. The development sample browser audit passed 20/20 before F014;
 exact legacy recovery and new scale restoration checks pass. F014's Jansen/field browser checks
@@ -432,3 +432,50 @@ through a local development server, never a nominated endpoint.
 The pre-F015 golden survey/check both completed with exit 0 and unchanged 271 PASS rows. Final
 clean release qualification must repeat the oracle against the repaired source. No human UAT
 row or immutable nomination is established by these focused results.
+
+### Second audited clean gate — Gridfinity harness error, no nomination
+
+The post-F015 replacement gate has a complete failure receipt in
+`/home/arduano/m92-visual-audit-20260905/final-gate-r2/receipt.json`:
+
+| Field | Recorded value |
+|---|---|
+| Source | `cd9440e4b4dfc827753ea2e3f9299e792c278f89` |
+| Tree | `3ae5232a6ac590390732a30e516b5e332cd76bfd` |
+| Worktree | `/home/arduano/programming/geometric-constraint-solver.worktrees/m92-final-audit` |
+| Service | `geosolve-m92-f015-release-gate.service` |
+| Invocation | `e44e0b85e5134fc7969ccf03e0c98145` |
+| Start UTC | `2026-09-05T06:39:55.444543+00:00` |
+| End UTC | `2026-09-05T07:05:28.152112+00:00` |
+| Exit | `101` |
+| Source/tree status | Clean and unchanged at start and end |
+| Log bytes / lines | `255675` / `3458` |
+| Log SHA-256 | `36c5739c5163814e6729783fd57c57480836a679c1d2fe99a21e00ac5868c549` |
+
+The exact launch in `final-gate-r2/run.sh` was:
+
+```sh
+nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+```
+
+The gate reached `geosolve-sketch-code`'s `m87_manufacturing_sketches` target and stopped with
+1 passed / 1 failed in 7.30 seconds. Test
+`gridfinity_uses_one_coordinate_datum_instead_of_point_fixing_the_profile` expected one
+`fixedCoordinate` declaration and observed two. Its later assertion also expected one fixed point.
+These assumptions predated the repaired Gridfinity plan/section relationship. The full gate log is
+`/home/arduano/m92-visual-audit-20260905/final-gate-r2/release-gate.log`.
+
+The current sample correctly owns two scalar Y datums (`sectionBaseYDatum` and `planAnchor`) and
+zero fixed points. Symmetry and dimensions allow width edits to propagate through
+`planMatchesSection`; `cavityFloorAtBase` keeps the cavity floor tied to the base. The corrected
+test, `gridfinity_uses_coordinate_datums_without_point_fixing_either_view`, requires these counts
+and named relationships while retaining its dimension/group checks. Independent M92 compiled
+declaration checks already require the same counts; accepted-geometry height and width tests
+measure cavity growth, fixed floor height, symmetry and linked plan/section widths.
+
+This is a confirmed `HARNESS_ERROR`, with no new finding ID and no production change. The focused
+manufacturing suite passes 2/2 in 7.76 seconds in
+`/home/arduano/m92-visual-audit-20260905/gridfinity-old-contract-fixed.log`. Independent read-only
+review found the correction preserves the intended coverage. The failed gate remains failed;
+complete qualification and immutable nomination require a fresh successful clean gate. All
+M92-U1–U8 rows remain pending and unexecuted; GitHub Pages is unchanged.

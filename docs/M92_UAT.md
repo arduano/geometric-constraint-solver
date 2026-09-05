@@ -30,6 +30,12 @@ sweeps were unlimited, and the passing source-edit sample audit did not drag Jan
 a complete successful replacement clean gate is required before nomination.
 These failures and repairs do not execute or waive any human row below.
 
+The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` exited 101 on a
+stale Gridfinity test assumption. The corrected contract requires two scalar Y datums and no fixed
+points; the focused manufacturing suite passes 2/2 in 7.76 seconds. This is `HARNESS_ERROR`, with no new finding
+ID. `M92_VISUAL_AUDIT.md` preserves the exact failed receipt. Final qualification, immutable
+nomination and all eight human rows remain pending.
+
 1. **M92-U1 — Pending / not run — Catalog cohesion.** Open the sample surface. Confirm exactly four
    clear categories and 20 intentionally named entries, with no native/code distinction, duplicates,
    placeholders or old generic samples.

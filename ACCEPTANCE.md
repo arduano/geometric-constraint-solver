@@ -5381,6 +5381,13 @@ Unlimited trajectory evidence and source-edit browser passes do not satisfy this
 The first audited clean gate failed at the stale Jansen selector and must be replaced in full after
 repair; `docs/M92_VISUAL_AUDIT.md` records its exact receipt.
 
+The second audited clean gate also exited 101, on a stale Gridfinity source assertion. Current
+acceptance requires two scalar Y datums and no fixed points across the linked plan/section,
+preserving dimension-driven width, symmetry and cavity-floor behavior. The corrected manufacturing
+suite passes 2/2 and agrees with independent M92 height/width geometry tests. This is
+`HARNESS_ERROR`, with no new finding ID or production change. The exact failed receipt is in
+`docs/M92_VISUAL_AUDIT.md`; a complete successful replacement gate and nomination remain pending.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.

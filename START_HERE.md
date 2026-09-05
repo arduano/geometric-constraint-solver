@@ -911,7 +911,7 @@ closed.
 ## M92 current advanced sample showcase
 
 Status: **in progress; F001–F014 repairs and focused verification are integrated. F015 bounded
-Jansen dragging is repaired at the core owner; the first audited clean gate failed. A replacement
+Jansen dragging is repaired at the core owner; both audited clean gates failed. A replacement
 clean gate and immutable human-UAT nomination remain pending.**
 
 M92 targets replacing the accumulated 12/25/37-entry catalog variants with one manifest-driven,
@@ -966,6 +966,13 @@ sweeps used unlimited work; the passing sample browser audit exercised source ed
 dragging. Core repair `a9d7532` now passes all ten default-budget witnesses, all nine mechanism
 tests and the Jansen/scissor browser regressions. No successful replacement gate or nomination
 is claimed. `docs/M92_VISUAL_AUDIT.md` preserves the failed gate receipt and both reproductions.
+
+The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` also exited 101,
+this time on an old Gridfinity test expecting one scalar datum and one fixed point. The repaired
+sample correctly has two scalar Y datums and no fixed points; the corrected manufacturing test
+passes 2/2 in 7.76 seconds. This is `HARNESS_ERROR`, with no new finding ID. The exact second
+receipt is recorded in `docs/M92_VISUAL_AUDIT.md`; full clean qualification and nomination
+remain pending.
 
 ## Read first
 

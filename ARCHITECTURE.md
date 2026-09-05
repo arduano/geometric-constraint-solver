@@ -2775,3 +2775,12 @@ backtracking to all Temporary objectives without changing budgets, tolerances or
 All ten default-policy witnesses and the Jansen/scissor browser checks now pass. The required boundary preserves hard validation, explicit branches, locality and exact
 history while completing meaningful ordinary drags within the configured budget. The detailed
 reproduction and failed clean-gate receipt are in `docs/M92_VISUAL_AUDIT.md`.
+
+### M92 Gridfinity harness contract
+
+The second audited clean gate failed on a stale Gridfinity source-test assumption. Its linked
+plan and section each own one scalar Y datum, with no fixed points; symmetry, dimensions and
+`planMatchesSection` preserve width propagation, while `cavityFloorAtBase` retains floor height.
+The corrected test agrees with the compiled-declaration and independent geometry contracts and
+passes 2/2. This `HARNESS_ERROR` changes no production semantics and receives no finding ID.
+`docs/M92_VISUAL_AUDIT.md` records the failed gate receipt; complete qualification remains pending.
