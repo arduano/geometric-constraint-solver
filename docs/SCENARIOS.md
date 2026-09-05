@@ -7195,6 +7195,57 @@ those are not additional product findings. Final browser qualification is `20/20
 release harness, whose twentieth row owns the harness-only compiler page, and `19/19` ordinary
 workbench rows against each immutable production endpoint.
 
+### M92-C8 — independent design-intent and real-browser geometry
+
+`m92_mechanism_drag_witnesses` measures the articulated walking locus, full Whitworth cycle,
+independent cam offsets, Peaucellier inversion/straightness and common scissor rise. The three new
+headless intent suites plus mechanism edit suite cover 40 distinct source edits with measured
+native geometry and code history. `m92_atlas_scale_intent` checks complete generated
+distributions, owning bend contacts and advertised atlas outputs. `docs/M92_VISUAL_AUDIT.md`
+records F003–F012 and native reference identities. No sample is accepted solely because its source
+changed or its solve passed.
+
+The separate 20-row browser sample workflow checks actual painted native/computed geometry through
+edit/Undo/Redo/reload, group restoration, fitted bounds and ordinary point ownership. Screen
+evidence is inspected alongside native measurements; it does not replace them or accept human UAT.
+The integrated development run passed 20/20 before F014. Atlas follow-up measurements pass their
+focused baselines; the edit log records 2/2 passing with wrapper exit 143, pending a clean-gate
+receipt.
+
+### M92-F013 — complete scale history survives browser transport
+
+Original baseline source b49dbd3 saves the edited perforated field as 81,671,710 bytes, expanding
+to 119,601,833 bytes in the constructor request; the 40 MiB bridge guard correctly rejects it. The
+inner v4 code workbench 62,706,553 bytes remains within its 64 MiB owner bound. Exact captured
+bytes and SHA-256 86b8d3fb292a0fe19b7f00b23df94147b60d32453087a19e0dd039e5962a4781 are preserved
+externally. This is a transport composition failure, not invalid geometry.
+
+`m92_scale_sample_edited_history_restores_through_the_browser_request_envelope` performs real
+sample open, compiled parameter edit, Undo/Redo, full persistence and constructor restoration for
+both scale entries. The actual-WASM scale lifecycle now also reconstructs persistence and repeats
+history after reload. V5 owner tests preserve exact canonical history and authenticate current,
+Undo and Redo checkpoints after decompression.
+`m92_legacy_recovery_is_strict_and_retains_presentation_and_history` covers strict bounded
+transport and presentation; the opt-in
+`m92_exact_captured_legacy_workspace_recovers_complete_history` consumes the original external
+payload, comparing complete canonical session bytes and history. Frontend tests retain saved
+project and unapplied-draft bytes and the live handle after rejection. Valid and malformed draft
+cases survive fallback edits, presentation changes and failed manual saves; successful explicit
+Save replaces both stores. Both scale new-save native and release-WASM restoration checks, plus
+exact original-save recovery through native and Chromium paths, pass. The audit ledger records
+their exact bytes, commands and outcomes; final clean qualification remains pending.
+
+### M92-F014 — Explorer isolation preserves visible labels and controls
+
+The baseline Explorer viewport was 125 px wide with 258 px scroll width. Clicking Isolate moved
+`scrollLeft` from 0 to 133 and hid the starts of group/declaration labels. Rows and child grids
+must fit the panel through isolation/restoration, preserve complete hover titles and retain usable
+action controls. The default Explorer share grows from 9% to 16%, with its minimum from 6% to 12%.
+The independent DOM probe reports no horizontal overflow before/after Isolate; Jansen and field
+browser checks pass 2/2 and the existing 1024 px layout contract passes. The final clean-gate
+repeat remains pending. This presentation scenario changes no geometry, solver or accepted-history
+contract.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

@@ -8203,6 +8203,35 @@ startup budget expired while a clean optimized WASM build was still progressing.
 now `600,000 ms`; the per-row `120,000 ms` browser timeout remains unchanged. The final gate must
 start fresh from the integrated clean source.
 
+### M92 visual-audit continuation
+
+The authorized 2026-09-05 continuation audits design purpose as well as accepted numerical
+validity. `docs/M92_VISUAL_AUDIT.md` owns all 20 rows and F003–F014. The integrated corrections
+retain the canonical 5/11/2/2 names, use existing typed primitives and explicit branches, and
+change no solver equations. Each sample now declares a distinct second measured parameter edit.
+Mechanisms have independent forward/reverse trajectories; products have measured
+interface/containment relationships; atlases and scale have complete shape/fanout contracts and
+independently justified freedom.
+
+- [x] Implement the strengthened 40-edit headless and 20-row browser geometry/history/group checks.
+  The integrated development browser audit passed 20/20 before F014; scale new-save native/WASM
+  restoration and exact captured legacy recovery through native/Chromium checks pass.
+- [x] Finish F014 focused presentation verification: Jansen and field pass 2/2, and the existing
+  1024 px layout contract passes.
+- [ ] Repeat the final integrated audit in the clean gate.
+  Retain the atlas edit log's 2/2 result and wrapper exit 143 until the clean gate supplies its receipt.
+- [ ] Complete the unchanged clean qualification/immutable nomination requirement above; retain
+  human M92-U1–U8 pending and do not publish Pages.
+
+F013 is repaired at the code-workbench transport owner by `1a3aa61`: v5 compresses complete
+session bytes with bounded integrity checks, preserving canonical source/project and v4 decoding.
+The integration recovery entry accepts one bounded legacy presentation envelope, validates every
+checkpoint and requires compact ordinary persistence. Failed browser restoration retains saved
+project and unapplied-draft bytes; failed manual saves retain both protections. Focused owner
+14/14, frontend 43/43, the strict legacy bridge regression, exact original-save recovery and both
+scale restoration paths pass. These development results do not complete clean qualification or
+immutable nomination. The audit ledger owns exact commands, byte counts and evidence caveats.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

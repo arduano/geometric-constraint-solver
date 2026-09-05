@@ -5340,6 +5340,36 @@ camera-relative reload comparison. Commit `f31e740` corrects those test oracles 
 product behavior. They are `HARNESS_ERROR` or inconclusive classifications, not additional M92
 findings.
 
+### M92 design-intent and restoration audit
+
+The stronger acceptance evidence in `docs/M92_VISUAL_AUDIT.md` supplements residual/DOF and
+backend parity: every named sample must exhibit its intended shape and two distinct meaningful
+source edits. The five mechanisms retain independently measured forward/reverse motion; all eleven
+products retain measured interfaces and appropriate clearances; atlases retain their advertised
+operation/curve outputs; scale edits update the complete intended fanout. Free atlas/scale
+geometry is not described as a rigid parametric assembly: source regeneration preserves
+relationships that native free points do not constrain.
+
+A separate 20-row real-browser audit compares complete rendered geometry at deterministic fitted
+cameras through edit/Undo/Redo/reload and checks selection ownership and group restoration. This
+count is separate from 20 release-harness rows and 19 ordinary rows on each immutable endpoint.
+Headless code-history reconstruction is distinguished from actual retained-editor history.
+
+F013 acceptance requires both scale entries to restore after an edit through the full actual
+browser persistence request. Bounded v5 compression must retain all source/project/checkpoint
+authority and v4 history. A dedicated legacy recovery must preserve the original captured
+81,671,710-byte save, reject malformed/over-limit/unauthenticated input, preserve presentation,
+and emit ordinary compact persistence. Failed restoration must retain saved project and
+unapplied-draft bytes with autosave paused; candidate failure must leave any live handle usable.
+The unchanged 40 MiB ordinary bridge guard remains enforced. The integrated development sample
+workflow passed 20/20 before F014; exact captured legacy recovery and both scale restoration paths
+pass native and browser/WASM checks. The atlas edit log records 2/2 passing, but its wrapper
+exited 143; the clean gate must provide the final qualification receipt. F014 additionally
+requires Explorer labels and controls to stay visible without horizontal scrolling after group
+isolation/restoration. Jansen and field browser checks pass 2/2; the existing 1024 px layout
+contract also passes. These results do not pass human U1–U8, final clean qualification or
+immutable nomination.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.

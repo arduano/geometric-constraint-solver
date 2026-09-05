@@ -910,8 +910,8 @@ closed.
 
 ## M92 current advanced sample showcase
 
-Status: **in progress; M92-F001 and M92-F002 are repaired, but final clean qualification and
-immutable human-UAT nomination remain pending.**
+Status: **in progress; F001–F014 repairs and focused verification are integrated. Final clean
+qualification and immutable human-UAT nomination remain pending.**
 
 M92 targets replacing the accumulated 12/25/37-entry catalog variants with one manifest-driven,
 source-authoritative 20-sample registry. The frozen scope requires five mechanisms, eleven
@@ -932,6 +932,29 @@ asynchronous waits and a camera-relative reload assertion. Final qualification m
 `20/20` release harness and the `19/19` ordinary workbench rows against each production frozen
 endpoint; the twentieth compiler-envelope row exists only in the explicit release harness. M92-U1
 through M92-U8 remain pending and unexecuted, and GitHub Pages remains unchanged.
+
+### M92 visual-audit continuation — 2026-09-05
+
+The supervising user authorized reworking the existing 20 samples to fulfill their named purpose.
+`docs/M92_VISUAL_AUDIT.md` owns the complete baseline, independent measurements, findings
+F003–F014, repair identities and evidence limits. Walking/quick-return topology, six product
+relationships, four pinned-reference interpretations, coupling fanout and harness clearance are
+repaired within existing primitives. Both atlases retain independently derived freedom 81/255;
+scale cases retain 772/268. Forty source-control demonstrations are qualified separately from five
+mechanism sweeps and the actual-browser geometry/history audit.
+
+F013 exposed valid scale history exceeding the nested browser transport. Code-workbench v5
+compresses the complete session while preserving v4 owner compatibility and all checkpoint
+validation. A bounded dedicated legacy recovery preserves original saves; failed browser
+restoration retains both project bytes and the unapplied source draft, with automatic saving
+paused. Exact captured legacy recovery passes native and Chromium checks; both scale entries pass
+new-save native and release-WASM restoration.
+
+The integrated development sample audit passed 20/20, including 40 source edits and rendered
+geometry through history/reload, before the F014 Explorer overflow correction. F014's Jansen and
+field browser checks pass 2/2; the existing 1024 px layout contract also passes. The audit ledger
+preserves the atlas edit log's 2/2 result alongside its wrapper exit 143. Final clean release
+qualification, immutable nomination and all human U1–U8 rows remain pending.
 
 ## Read first
 

@@ -2736,3 +2736,30 @@ harness-only pinned compiler page and runs `20/20`; immutable production distrib
 omit that page and run the remaining `19/19` ordinary workbench rows on each frozen endpoint. The
 compiler-envelope row remains required in the release harness rather than being misreported as a
 production route.
+
+### M92-F013 bounded complete-history persistence
+
+Internal code-workbench v5 retains readable canonical project/source fields and compresses only
+the complete canonical code-session string through the existing pure-Rust reproduction codec.
+Limits remain 12 MiB compressed, 16 MiB text and 64 MiB decoded, with exact length, checksum,
+UTF-8 and complete-stream checks. V4 owner decoding remains supported. Decoded session bytes feed
+the unchanged validating checkpoint decoder; compression integrity alone grants no accepted
+authority.
+
+Historical presentation wrapping could enlarge an otherwise valid 64 MiB owner payload beyond the
+ordinary 40 MiB bridge request. A dedicated v4-only recovery accepts one strict raw presentation
+envelope at most 96 MiB, retains the 64 MiB inner bound, reconstructs through the
+code/accepted-scene owners, restores presentation and checks that new persistence fits the
+ordinary transport. It neither widens ordinary requests nor admits nested fallback envelopes.
+Frontend recovery forwards original bytes without JSON rewriting, validates a candidate before
+replacing its live handle, and preserves saved project and separate unapplied-draft bytes with
+automatic saving paused on failure. Draft restoration is read-only; its write/delete effect
+remains protected until successful explicit Save. `docs/M92_VISUAL_AUDIT.md` records evidence.
+
+### M92 sample presentation checks
+
+The separate 20-row sample browser audit checks two edits per sample, rendered geometry through
+history/reload, selection ownership and group restoration. It supplements the release-harness and
+immutable-endpoint scopes above. F014 keeps Explorer rows and child grids within their panel and
+widens the default panel share; these presentation changes do not alter accepted geometry or
+history.

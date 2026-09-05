@@ -6,11 +6,19 @@ Status: **not yet nominated; M92-U1 through M92-U8 are pending and unexecuted**.
 `5/11/2/2` implementation and automated scorecard owners are integrated, and `M92-F001` is repaired
 by `b861f4c`. `M92-F002`'s terminal managed-release defect is repaired by `e40d11d`, with paired
 frontend regression `c85e8aa` and browser-oracle correction `f31e740`; collateral harness correction
-`d450e94` remains unrelated. Complete clean qualification, immutable freeze and exact browser
-evidence are still in progress. The release harness must pass `20/20`, including its harness-only
+`d450e94` remains unrelated. Complete clean qualification, immutable freeze and exact immutable-endpoint
+browser evidence are still in progress. The release harness must pass `20/20`, including its harness-only
 compiler-envelope row, while each production frozen endpoint must pass the `19/19` ordinary
 workbench rows. Automated evidence cannot pass these human rows, and no Pages publication is
 authorized before approval.
+
+The 2026-09-05 visual/geometric continuation in `M92_VISUAL_AUDIT.md` records F003–F014 and two
+measured edits per sample. The integrated development sample audit passed 20/20 before F014;
+legacy recovery and scale restoration checks pass. F014's Jansen and field browser checks pass
+2/2, and its existing 1024 px layout contract passes. Failed restoration preserves saved project
+and unapplied source-draft bytes until successful explicit replacement Save. The atlas edit log's
+2/2 result retains the wrapper exit 143 caveat. These are automated development results; final
+clean qualification, immutable nomination and every human row below remain pending.
 
 1. **M92-U1 — Pending / not run — Catalog cohesion.** Open the sample surface. Confirm exactly four
    clear categories and 20 intentionally named entries, with no native/code distinction, duplicates,

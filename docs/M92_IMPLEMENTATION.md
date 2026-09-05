@@ -187,7 +187,40 @@ NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 
 Exact results and any reproduced finding IDs are appended before nomination.
 
-No final gate result, immutable snapshot path/hash, HTTP byte-verification ledger or browser result
-is recorded yet. In particular, the initial `14/20` diagnostic above is reproduction/classification
-evidence, not nomination evidence. GitHub Pages remains unchanged until explicit supervising-user
-approval after the composite UAT.
+No final clean-gate result, immutable snapshot path/hash, HTTP byte-verification ledger or immutable
+endpoint browser result is recorded yet. The historical `14/20` diagnostic above is
+reproduction/classification evidence. Later development results are summarized below and detailed in
+`M92_VISUAL_AUDIT.md`; they do not constitute nomination. GitHub Pages remains unchanged until
+explicit supervising-user approval after the composite UAT.
+
+## Authorized visual-audit continuation
+
+The 2026-09-05 continuation reworks all 20 named entries within their existing scope; it does not
+replace the catalog or extend the primitive set. `M92_VISUAL_AUDIT.md` is the detailed execution
+and finding ledger for F003–F014. Integrated mechanism trajectories contain 520 accepted native
+frames; product repairs are independently measured against layout intent and pinned STEP/DXF
+references. Both atlas and scale mobility decompositions are reviewed independently of their
+manifests.
+
+Every entry now declares two distinct parameter witnesses. Mandatory headless edit suites run
+after the pinned TypeScript package is built; they are ignored in the earlier clean workspace pass
+to avoid depending on an absent sidecar. The release gate invokes each explicitly. A separate
+20-row browser audit compares actual geometry and accepted source through history/reload, checks
+fitted bounds, group restoration and Inspector ownership, and preserves PNG/SVG/source evidence.
+
+F013 owner commit `1a3aa61` compresses complete code-session history in internal v5 while
+retaining legacy v4 validation. Integration adds strict bounded raw legacy recovery, frontend
+candidate swap only after validation, and rejected-save retention with autosave paused. Follow-up
+`41744ca` also preserves unapplied source drafts through failed restoration and failed replacement
+saves; the paired valid/malformed-draft regression fails before repair and passes after it
+(frontend 43/43). Exact captured legacy recovery passes native and Chromium checks; both scale
+entries pass new-save native and release-WASM restoration. The integrated development sample
+browser audit passed 20/20 in 15.7 minutes, including 40 edits and complete rendered geometry
+through history/reload, before the F014 presentation change.
+
+All 40 measured source edits have focused-suite evidence. The atlas follow-up edit log records 2/2
+passing in 415.68 seconds, but the outer wrapper returned 143; the clean gate must provide its
+final receipt. F014 repairs Explorer overflow and widens the default panel. Its independent DOM
+probe, Jansen and field browser checks (2/2), and the existing 1024 px layout contract pass.
+Formatting and TypeScript checks pass. Final clean release qualification, immutable nomination and
+all human U1–U8 rows remain pending.
