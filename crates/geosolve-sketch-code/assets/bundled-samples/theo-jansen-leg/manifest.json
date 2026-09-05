@@ -2,10 +2,28 @@
   "format": "geosolve-bundled-sample-v1",
   "ordinal": 1,
   "key": "theo-jansen-leg",
-  "title": "Theo Jansen-style walking leg · 1 DOF",
-  "summary": "An independently authored seven-bar walking-leg study driven by one crank.",
+  "title": "Theo Jansen-style walking leg \u00b7 1 DOF",
+  "summary": "The articulated Jansen eight-bar leg turns a complete crank revolution into a broad, nearly level stance and lifted return.",
   "category": "mechanism",
-  "expected": { "raw_dof": 1, "effective_dof": 1 },
-  "groups": ["Ground frame", "Crank input", "Coupled leg"],
-  "provenance": []
+  "expected": {
+    "raw_dof": 1,
+    "effective_dof": 1
+  },
+  "groups": [
+    "Ground frame",
+    "Crank input",
+    "Coupled leg"
+  ],
+  "provenance": [
+    {
+      "relationship": "dimensions_only",
+      "name": "Jansen linkage ratios",
+      "url": "https://en.wikipedia.org/w/index.php?title=Jansen%27s_linkage&oldid=1370652486",
+      "revision": "1370652486",
+      "path": "Jansen's linkage / Jansen Linkage Ratios",
+      "licence": "CC-BY-SA-4.0 (reference text); numerical dimensions are factual data",
+      "scope": "Original GeoSolve declarations interpreting the published 13 ratios and eight-bar graph in millimetres. No source text, artwork or CAD files copied.",
+      "notice_required": true
+    }
+  ]
 }
