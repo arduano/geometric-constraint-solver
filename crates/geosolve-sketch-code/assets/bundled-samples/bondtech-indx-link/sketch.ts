@@ -5,6 +5,8 @@ export default sketch(($) => {
   // This planar diagram combines the published Link assembly envelope with
   // the README's qualitative three-point Maxwell-coupling architecture. Seat
   // and board coordinates are schematic, not extracted manufacturing data.
+  // All seats follow the driving pitch circle as an equilateral triangle;
+  // explicit contact sectors preserve the three-point assembly on edits.
   const toolLinkEnvelope = $.operation.rectangle("toolLinkEnvelope", {
     origin: [-37.858, -16.773],
     width: mm(75.716),
@@ -17,13 +19,6 @@ export default sketch(($) => {
     width: mm(24),
     height: mm(28),
     label: "Schematic link-board service zone",
-    role: "construction",
-  });
-  const couplingDatum = $.operation.rectangle("couplingDatum", {
-    origin: [-12.12435565298214, -7],
-    width: mm(24.24871130596428),
-    height: mm(21),
-    label: "Schematic coupling coordinate datum",
     role: "construction",
   });
   const couplingPitch = $.geometry.centerRadiusCircle("couplingPitch", {
@@ -54,21 +49,6 @@ export default sketch(($) => {
     point: couplingPitch.center,
     target: [0, 0],
     label: "Locate coupling pitch reference",
-  });
-  const locateUpperCoupling = $.constraint.fixedPoint("locateUpperCoupling", {
-    point: upperCoupling.center,
-    target: [0, 14],
-    label: "Locate upper coupling seat",
-  });
-  const locateLowerRightCoupling = $.constraint.coincident("locateLowerRightCoupling", {
-    first: lowerRightCoupling.center,
-    second: couplingDatum.corners.bottomRight,
-    label: "Locate lower-right coupling seat",
-  });
-  const locateLowerLeftCoupling = $.constraint.coincident("locateLowerLeftCoupling", {
-    first: lowerLeftCoupling.center,
-    second: couplingDatum.corners.bottomLeft,
-    label: "Locate lower-left coupling seat",
   });
   const couplingPitchRadius = $.dimension.radius("couplingPitchRadius", {
     curve: couplingPitch.curve,
@@ -113,13 +93,6 @@ export default sketch(($) => {
     label: "Schematic lower-left-to-upper coupling leg",
     role: "construction",
   });
-  const couplingToBoard = $.operation.rectangle("couplingToBoard", {
-    origin: [18, -0.25],
-    width: mm(24),
-    height: mm(0.5),
-    label: "Schematic tool-link to board datum",
-    role: "construction",
-  });
   const boardMountUpper = $.geometry.centerRadiusCircle("boardMountUpper", {
     center: [66, 14],
     radius: mm(1.6),
@@ -153,8 +126,74 @@ export default sketch(($) => {
     second: boardMountLower.curve,
     label: "Matched link-board mounts",
   });
-  $.group("Tool-link envelope", [toolLinkEnvelope, couplingToBoard]);
-  $.group("Three-point coupling", [couplingDatum, couplingPitch, upperCoupling, lowerRightCoupling, lowerLeftCoupling, locateCouplingPitch, locateUpperCoupling, locateLowerRightCoupling, locateLowerLeftCoupling, couplingPitchRadius, couplingSeatRadius, matchLowerRightCoupling, matchLowerLeftCoupling, upperToLowerRight, lowerCouplingBase, lowerLeftToUpper]);
+  const upperCouplingOnPitch = $.constraint.pointOnCurve("upperCouplingOnPitch", {
+    point: upperCoupling.center,
+    curve: couplingPitch.span,
+    contact: {
+      parameter: 1.5707963267948966,
+      winding: 0,
+      range: {
+        lower: 1,
+        upper: 2,
+      },
+      neighborhood: {
+        kind: "interior",
+      },
+      orientation: "none",
+    },
+    label: "upperCoupling retained on coupling pitch",
+  });
+  const lowerRightCouplingOnPitch = $.constraint.pointOnCurve("lowerRightCouplingOnPitch", {
+    point: lowerRightCoupling.center,
+    curve: couplingPitch.span,
+    contact: {
+      parameter: 5.759586531581287,
+      winding: 0,
+      range: {
+        lower: 5,
+        upper: 6.2,
+      },
+      neighborhood: {
+        kind: "interior",
+      },
+      orientation: "none",
+    },
+    label: "lowerRightCoupling retained on coupling pitch",
+  });
+  const lowerLeftCouplingOnPitch = $.constraint.pointOnCurve("lowerLeftCouplingOnPitch", {
+    point: lowerLeftCoupling.center,
+    curve: couplingPitch.span,
+    contact: {
+      parameter: 3.665191429188092,
+      winding: 0,
+      range: {
+        lower: 3.2,
+        upper: 4.1,
+      },
+      neighborhood: {
+        kind: "interior",
+      },
+      orientation: "none",
+    },
+    label: "lowerLeftCoupling retained on coupling pitch",
+  });
+  const couplingAxis = $.constraint.pointOnDatumAxis("couplingAxis", {
+    point: upperCoupling.center,
+    axis: "y",
+    label: "Upper seat defines coupling orientation",
+  });
+  const equalCouplingLeg1 = $.constraint.equalLength("equalCouplingLeg1", {
+    first: upperToLowerRight.span,
+    second: lowerCouplingBase.span,
+    label: "Equilateral coupling triangle first pair",
+  });
+  const equalCouplingLeg2 = $.constraint.equalLength("equalCouplingLeg2", {
+    first: upperToLowerRight.span,
+    second: lowerLeftToUpper.span,
+    label: "Equilateral coupling triangle second pair",
+  });
+  $.group("Tool-link envelope", [toolLinkEnvelope]);
+  $.group("Three-point coupling", [couplingPitch, upperCoupling, lowerRightCoupling, lowerLeftCoupling, locateCouplingPitch, couplingPitchRadius, couplingSeatRadius, matchLowerRightCoupling, matchLowerLeftCoupling, upperToLowerRight, lowerCouplingBase, lowerLeftToUpper, upperCouplingOnPitch, lowerRightCouplingOnPitch, lowerLeftCouplingOnPitch, couplingAxis, equalCouplingLeg1, equalCouplingLeg2]);
   $.group("Link-board interface", [linkBoardEnvelope, boardMountUpper, boardMountLower, locateBoardMountUpper, locateBoardMountLower, boardMountRadius, matchBoardMount]);
   return {};
 });

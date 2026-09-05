@@ -1,5 +1,14 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "toolLinkEnvelope", "path": ["width"], "replacement": { "unit": "mm", "value": 76.716 } },
+  "representative_edit": {
+    "declaration": "couplingPitchRadius",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 15
+    }
+  },
   "drags": []
 }
