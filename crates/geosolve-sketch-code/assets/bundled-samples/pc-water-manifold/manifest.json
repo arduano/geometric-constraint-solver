@@ -3,10 +3,20 @@
   "ordinal": 6,
   "key": "pc-water-manifold",
   "title": "PC liquid-cooling manifold",
-  "summary": "A constrained acrylic distribution-plate study combines three routed channels, O-ring grooves, reservoir bay and symmetric fastener stack.",
+  "summary": "A constrained acrylic distribution-plate study combines three routed channel centre lines, outlet bores, a shared reservoir, one enclosing O-ring groove and an external fastener stack.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Manifold envelope and reservoir", "Upper channel circuit", "Middle channel circuit", "Lower channel circuit", "Fastener stack"],
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
+  },
+  "groups": [
+    "Manifold envelope and reservoir",
+    "Upper channel circuit",
+    "Middle channel circuit",
+    "Lower channel circuit",
+    "Shared circuit seal",
+    "Fastener stack"
+  ],
   "provenance": [
     {
       "relationship": "original",

@@ -103,7 +103,7 @@ export default sketch(($) => {
     curve: upperOutletDatum.span,
     value: mm(30),
   });
-  // Upper water route and a separately constrained closed O-ring groove.
+  // Routed channel centre lines join one shared reservoir.
   const upperCenterline = $.geometry.polyline("upperCenterline", {
     vertices: [{
       key: "reservoir",
@@ -145,73 +145,6 @@ export default sketch(($) => {
   const upperCenterLength2 = $.dimension.curveLength("upperCenterLength2", {
     curve: upperCenterline.segments.byKey.rise,
     value: mm(126),
-  });
-  const upperSealInsetX = $.geometry.segment("upperSealInsetX", {
-    start: upperCenterline.vertices.byKey.reservoir,
-    end: [-52, 30],
-    branchDirection: [-1, 0],
-    role: "construction",
-  });
-  const upperSealInsetXAxis = $.constraint.horizontal("upperSealInsetXAxis", {
-    span: upperSealInsetX.span,
-  });
-  const upperSealInsetXLength = $.dimension.curveLength("upperSealInsetXLength", {
-    curve: upperSealInsetX.span,
-    value: mm(4),
-  });
-  const upperSealInsetY = $.geometry.segment("upperSealInsetY", {
-    start: upperSealInsetX.end,
-    end: [-52, 24],
-    branchDirection: [0, -1],
-    role: "construction",
-  });
-  const upperSealInsetYAxis = $.constraint.vertical("upperSealInsetYAxis", {
-    span: upperSealInsetY.span,
-  });
-  const upperSealInsetYLength = $.dimension.curveLength("upperSealInsetYLength", {
-    curve: upperSealInsetY.span,
-    value: mm(6),
-  });
-  const upperSeal = $.geometry.polyline("upperSeal", {
-    vertices: [{
-      key: "innerStart",
-      position: [-52, 24],
-    }, {
-      key: "innerRun",
-      position: [106, 24],
-    }, {
-      key: "outerPort",
-      position: [106, 50],
-    }, {
-      key: "outerStart",
-      position: [-52, 50],
-    }],
-    closed: true,
-    branchDirections: [[1, 0], [0, 1], [-1, 0], [0, -1]],
-  });
-  const upperSealLocated = $.constraint.coincident("upperSealLocated", {
-    first: upperSeal.vertices.byKey.innerStart,
-    second: upperSealInsetY.end,
-  });
-  const upperSealAxis0 = $.constraint.horizontal("upperSealAxis0", {
-    span: upperSeal.segments.byKey.innerStart,
-  });
-  const upperSealAxis1 = $.constraint.vertical("upperSealAxis1", {
-    span: upperSeal.segments.byKey.innerRun,
-  });
-  const upperSealAxis2 = $.constraint.horizontal("upperSealAxis2", {
-    span: upperSeal.segments.byKey.outerPort,
-  });
-  const upperSealAxis3 = $.constraint.vertical("upperSealAxis3", {
-    span: upperSeal.segments.byKey.outerStart,
-  });
-  const upperSealLength0 = $.dimension.curveLength("upperSealLength0", {
-    curve: upperSeal.segments.byKey.innerStart,
-    value: mm(158),
-  });
-  const upperSealLength1 = $.dimension.curveLength("upperSealLength1", {
-    curve: upperSeal.segments.byKey.innerRun,
-    value: mm(26),
   });
   // Middle route deliberately differs in keyed topology and packaging dimensions.
   const middleCenterline = $.geometry.polyline("middleCenterline", {
@@ -256,73 +189,6 @@ export default sketch(($) => {
     curve: middleCenterline.segments.byKey.rise,
     value: mm(104),
   });
-  const middleSealInsetX = $.geometry.segment("middleSealInsetX", {
-    start: middleCenterline.vertices.byKey.reservoir,
-    end: [-52, 0],
-    branchDirection: [-1, 0],
-    role: "construction",
-  });
-  const middleSealInsetXAxis = $.constraint.horizontal("middleSealInsetXAxis", {
-    span: middleSealInsetX.span,
-  });
-  const middleSealInsetXLength = $.dimension.curveLength("middleSealInsetXLength", {
-    curve: middleSealInsetX.span,
-    value: mm(4),
-  });
-  const middleSealInsetY = $.geometry.segment("middleSealInsetY", {
-    start: middleSealInsetX.end,
-    end: [-52, -6],
-    branchDirection: [0, -1],
-    role: "construction",
-  });
-  const middleSealInsetYAxis = $.constraint.vertical("middleSealInsetYAxis", {
-    span: middleSealInsetY.span,
-  });
-  const middleSealInsetYLength = $.dimension.curveLength("middleSealInsetYLength", {
-    curve: middleSealInsetY.span,
-    value: mm(6),
-  });
-  const middleSeal = $.geometry.polyline("middleSeal", {
-    vertices: [{
-      key: "innerStart",
-      position: [-52, -6],
-    }, {
-      key: "innerRun",
-      position: [106, -6],
-    }, {
-      key: "outerPort",
-      position: [106, 20],
-    }, {
-      key: "outerStart",
-      position: [-52, 20],
-    }],
-    closed: true,
-    branchDirections: [[1, 0], [0, 1], [-1, 0], [0, -1]],
-  });
-  const middleSealLocated = $.constraint.coincident("middleSealLocated", {
-    first: middleSeal.vertices.byKey.innerStart,
-    second: middleSealInsetY.end,
-  });
-  const middleSealAxis0 = $.constraint.horizontal("middleSealAxis0", {
-    span: middleSeal.segments.byKey.innerStart,
-  });
-  const middleSealAxis1 = $.constraint.vertical("middleSealAxis1", {
-    span: middleSeal.segments.byKey.innerRun,
-  });
-  const middleSealAxis2 = $.constraint.horizontal("middleSealAxis2", {
-    span: middleSeal.segments.byKey.outerPort,
-  });
-  const middleSealAxis3 = $.constraint.vertical("middleSealAxis3", {
-    span: middleSeal.segments.byKey.outerStart,
-  });
-  const middleSealLength0 = $.dimension.curveLength("middleSealLength0", {
-    curve: middleSeal.segments.byKey.innerStart,
-    value: mm(158),
-  });
-  const middleSealLength1 = $.dimension.curveLength("middleSealLength1", {
-    curve: middleSeal.segments.byKey.innerRun,
-    value: mm(26),
-  });
   // Lower route mirrors the packaging direction while keeping its own stable keys.
   const lowerCenterline = $.geometry.polyline("lowerCenterline", {
     vertices: [{
@@ -366,75 +232,8 @@ export default sketch(($) => {
     curve: lowerCenterline.segments.byKey.drop,
     value: mm(126),
   });
-  const lowerSealInsetX = $.geometry.segment("lowerSealInsetX", {
-    start: lowerCenterline.vertices.byKey.reservoir,
-    end: [-52, -30],
-    branchDirection: [-1, 0],
-    role: "construction",
-  });
-  const lowerSealInsetXAxis = $.constraint.horizontal("lowerSealInsetXAxis", {
-    span: lowerSealInsetX.span,
-  });
-  const lowerSealInsetXLength = $.dimension.curveLength("lowerSealInsetXLength", {
-    curve: lowerSealInsetX.span,
-    value: mm(4),
-  });
-  const lowerSealInsetY = $.geometry.segment("lowerSealInsetY", {
-    start: lowerSealInsetX.end,
-    end: [-52, -24],
-    branchDirection: [0, 1],
-    role: "construction",
-  });
-  const lowerSealInsetYAxis = $.constraint.vertical("lowerSealInsetYAxis", {
-    span: lowerSealInsetY.span,
-  });
-  const lowerSealInsetYLength = $.dimension.curveLength("lowerSealInsetYLength", {
-    curve: lowerSealInsetY.span,
-    value: mm(6),
-  });
-  const lowerSeal = $.geometry.polyline("lowerSeal", {
-    vertices: [{
-      key: "innerStart",
-      position: [-52, -24],
-    }, {
-      key: "innerRun",
-      position: [106, -24],
-    }, {
-      key: "outerPort",
-      position: [106, -50],
-    }, {
-      key: "outerStart",
-      position: [-52, -50],
-    }],
-    closed: true,
-    branchDirections: [[1, 0], [0, -1], [-1, 0], [0, 1]],
-  });
-  const lowerSealLocated = $.constraint.coincident("lowerSealLocated", {
-    first: lowerSeal.vertices.byKey.innerStart,
-    second: lowerSealInsetY.end,
-  });
-  const lowerSealAxis0 = $.constraint.horizontal("lowerSealAxis0", {
-    span: lowerSeal.segments.byKey.innerStart,
-  });
-  const lowerSealAxis1 = $.constraint.vertical("lowerSealAxis1", {
-    span: lowerSeal.segments.byKey.innerRun,
-  });
-  const lowerSealAxis2 = $.constraint.horizontal("lowerSealAxis2", {
-    span: lowerSeal.segments.byKey.outerPort,
-  });
-  const lowerSealAxis3 = $.constraint.vertical("lowerSealAxis3", {
-    span: lowerSeal.segments.byKey.outerStart,
-  });
-  const lowerSealLength0 = $.dimension.curveLength("lowerSealLength0", {
-    curve: lowerSeal.segments.byKey.innerStart,
-    value: mm(158),
-  });
-  const lowerSealLength1 = $.dimension.curveLength("lowerSealLength1", {
-    curve: lowerSeal.segments.byKey.innerRun,
-    value: mm(26),
-  });
   // One AI-authored structural rule rounds every current water-channel corner.
-  // O-ring groove centerlines stay simple closed loops for cheap deterministic replay.
+  // One common closed seal surrounds the entire connected wet circuit.
   const channelBendRadius = mm(5);
   const upperChannelBends = $.use("upperChannelBends", waterChannel, {
     corners: upperCenterline.filletableCorners,
@@ -448,10 +247,97 @@ export default sketch(($) => {
     corners: lowerCenterline.filletableCorners,
     bendRadius: channelBendRadius,
   });
+  const upperOutlet = $.geometry.centerRadiusCircle("upperOutlet", {
+    center: upperCenterline.vertices.byKey.port,
+    radius: mm(3),
+    label: "Upper outlet bore",
+  });
+  const upperOutletRadius = $.dimension.radius("upperOutletRadius", {
+    curve: upperOutlet.curve,
+    value: mm(3),
+    label: "Outlet radius",
+  });
+  const middleOutlet = $.geometry.centerRadiusCircle("middleOutlet", {
+    center: middleCenterline.vertices.byKey.port,
+    radius: mm(3),
+    label: "Middle outlet bore",
+  });
+  const middleOutletRadius = $.dimension.radius("middleOutletRadius", {
+    curve: middleOutlet.curve,
+    value: mm(3),
+    label: "Outlet radius",
+  });
+  const lowerOutlet = $.geometry.centerRadiusCircle("lowerOutlet", {
+    center: lowerCenterline.vertices.byKey.port,
+    radius: mm(3),
+    label: "Lower outlet bore",
+  });
+  const lowerOutletRadius = $.dimension.radius("lowerOutletRadius", {
+    curve: lowerOutlet.curve,
+    value: mm(3),
+    label: "Outlet radius",
+  });
+  const sealInsetX = $.geometry.segment("sealInsetX", {
+    start: reservoir.corners[0],
+    end: [-114, -42],
+    branchDirection: [-1, 0],
+    role: "construction",
+  });
+  const sealInsetXAxis = $.constraint.horizontal("sealInsetXAxis", {
+    span: sealInsetX.span,
+  });
+  const sealInsetXLength = $.dimension.curveLength("sealInsetXLength", {
+    curve: sealInsetX.span,
+    value: mm(6),
+  });
+  const sealInsetY = $.geometry.segment("sealInsetY", {
+    start: sealInsetX.end,
+    end: [-114, -50],
+    branchDirection: [0, -1],
+    role: "construction",
+  });
+  const sealInsetYAxis = $.constraint.vertical("sealInsetYAxis", {
+    span: sealInsetY.span,
+  });
+  const sealInsetYLength = $.dimension.curveLength("sealInsetYLength", {
+    curve: sealInsetY.span,
+    value: mm(8),
+  });
+  const sealPortX = $.geometry.segment("sealPortX", {
+    start: upperCenterline.vertices.byKey.port,
+    end: [106, 44],
+    branchDirection: [1, 0],
+    role: "construction",
+  });
+  const sealPortXAxis = $.constraint.horizontal("sealPortXAxis", {
+    span: sealPortX.span,
+  });
+  const sealPortXLength = $.dimension.curveLength("sealPortXLength", {
+    curve: sealPortX.span,
+    value: mm(6),
+  });
+  const sealPortY = $.geometry.segment("sealPortY", {
+    start: sealPortX.end,
+    end: [106, 50],
+    branchDirection: [0, 1],
+    role: "construction",
+  });
+  const sealPortYAxis = $.constraint.vertical("sealPortYAxis", {
+    span: sealPortY.span,
+  });
+  const sealPortYLength = $.dimension.curveLength("sealPortYLength", {
+    curve: sealPortY.span,
+    value: mm(6),
+  });
+  const commonSeal = $.geometry.twoPointAlignedRectangle("commonSeal", {
+    firstCorner: sealInsetY.end,
+    oppositeCorner: sealPortY.end,
+    label: "Shared wet-circuit O-ring centreline",
+  });
   // Dimensioned construction rails carry eight referenced 5 mm screw centers.
   const topScrewInset = $.geometry.segment("topScrewInset", {
     start: plate.corners[3],
-    end: [-120, 53],
+    end: [-120, 56],
     branchDirection: [0, -1],
     role: "construction",
   });
@@ -460,11 +346,11 @@ export default sketch(($) => {
   });
   const topScrewInsetLength = $.dimension.curveLength("topScrewInsetLength", {
     curve: topScrewInset.span,
-    value: mm(7),
+    value: mm(4),
   });
   const topScrewRail0 = $.geometry.segment("topScrewRail0", {
     start: topScrewInset.end,
-    end: [-108, 53],
+    end: [-108, 56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -477,7 +363,7 @@ export default sketch(($) => {
   });
   const topScrewRail1 = $.geometry.segment("topScrewRail1", {
     start: topScrewRail0.end,
-    end: [-80, 53],
+    end: [-80, 56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -490,7 +376,7 @@ export default sketch(($) => {
   });
   const topScrewRail2 = $.geometry.segment("topScrewRail2", {
     start: topScrewRail1.end,
-    end: [96, 53],
+    end: [96, 56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -503,7 +389,7 @@ export default sketch(($) => {
   });
   const topScrewRail3 = $.geometry.segment("topScrewRail3", {
     start: topScrewRail2.end,
-    end: [112, 53],
+    end: [112, 56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -516,7 +402,7 @@ export default sketch(($) => {
   });
   const bottomScrewInset = $.geometry.segment("bottomScrewInset", {
     start: plate.corners[0],
-    end: [-120, -53],
+    end: [-120, -56],
     branchDirection: [0, 1],
     role: "construction",
   });
@@ -525,11 +411,11 @@ export default sketch(($) => {
   });
   const bottomScrewInsetLength = $.dimension.curveLength("bottomScrewInsetLength", {
     curve: bottomScrewInset.span,
-    value: mm(7),
+    value: mm(4),
   });
   const bottomScrewRail0 = $.geometry.segment("bottomScrewRail0", {
     start: bottomScrewInset.end,
-    end: [-108, -53],
+    end: [-108, -56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -542,7 +428,7 @@ export default sketch(($) => {
   });
   const bottomScrewRail1 = $.geometry.segment("bottomScrewRail1", {
     start: bottomScrewRail0.end,
-    end: [-80, -53],
+    end: [-80, -56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -555,7 +441,7 @@ export default sketch(($) => {
   });
   const bottomScrewRail2 = $.geometry.segment("bottomScrewRail2", {
     start: bottomScrewRail1.end,
-    end: [96, -53],
+    end: [96, -56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -568,7 +454,7 @@ export default sketch(($) => {
   });
   const bottomScrewRail3 = $.geometry.segment("bottomScrewRail3", {
     start: bottomScrewRail2.end,
-    end: [112, -53],
+    end: [112, -56],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -644,9 +530,10 @@ export default sketch(($) => {
     value: mm(5),
   });
   $.group("Manifold envelope and reservoir", [plate, plateAnchor, plateWidth, plateHeight, reservoirInsetX, reservoirInsetXAxis, reservoirInsetXLength, reservoirInsetY, reservoirInsetYAxis, reservoirInsetYLength, reservoir, reservoirLocated, reservoirWidth, reservoirHeight, lowerOutletDatum, lowerOutletAxis, lowerOutletLength, middleOutletDatum, middleOutletAxis, middleOutletLength, upperOutletDatum, upperOutletAxis, upperOutletLength]);
-  $.group("Upper channel circuit", [upperCenterline, upperCenterLocated, upperCenterAxis0, upperCenterAxis1, upperCenterAxis2, upperCenterLength0, upperCenterLength1, upperCenterLength2, upperSealInsetX, upperSealInsetXAxis, upperSealInsetXLength, upperSealInsetY, upperSealInsetYAxis, upperSealInsetYLength, upperSeal, upperSealLocated, upperSealAxis0, upperSealAxis1, upperSealAxis2, upperSealAxis3, upperSealLength0, upperSealLength1, upperChannelBends]);
-  $.group("Middle channel circuit", [middleCenterline, middleCenterLocated, middleCenterAxis0, middleCenterAxis1, middleCenterAxis2, middleCenterLength0, middleCenterLength1, middleCenterLength2, middleSealInsetX, middleSealInsetXAxis, middleSealInsetXLength, middleSealInsetY, middleSealInsetYAxis, middleSealInsetYLength, middleSeal, middleSealLocated, middleSealAxis0, middleSealAxis1, middleSealAxis2, middleSealAxis3, middleSealLength0, middleSealLength1, middleChannelBends]);
-  $.group("Lower channel circuit", [lowerCenterline, lowerCenterLocated, lowerCenterAxis0, lowerCenterAxis1, lowerCenterAxis2, lowerCenterLength0, lowerCenterLength1, lowerCenterLength2, lowerSealInsetX, lowerSealInsetXAxis, lowerSealInsetXLength, lowerSealInsetY, lowerSealInsetYAxis, lowerSealInsetYLength, lowerSeal, lowerSealLocated, lowerSealAxis0, lowerSealAxis1, lowerSealAxis2, lowerSealAxis3, lowerSealLength0, lowerSealLength1, lowerChannelBends]);
+  $.group("Upper channel circuit", [upperCenterline, upperCenterLocated, upperCenterAxis0, upperCenterAxis1, upperCenterAxis2, upperCenterLength0, upperCenterLength1, upperCenterLength2, upperChannelBends, upperOutlet, upperOutletRadius]);
+  $.group("Middle channel circuit", [middleCenterline, middleCenterLocated, middleCenterAxis0, middleCenterAxis1, middleCenterAxis2, middleCenterLength0, middleCenterLength1, middleCenterLength2, middleChannelBends, middleOutlet, middleOutletRadius]);
+  $.group("Lower channel circuit", [lowerCenterline, lowerCenterLocated, lowerCenterAxis0, lowerCenterAxis1, lowerCenterAxis2, lowerCenterLength0, lowerCenterLength1, lowerCenterLength2, lowerChannelBends, lowerOutlet, lowerOutletRadius]);
+  $.group("Shared circuit seal", [commonSeal, sealInsetX, sealInsetXAxis, sealInsetXLength, sealInsetY, sealInsetYAxis, sealInsetYLength, sealPortX, sealPortXAxis, sealPortXLength, sealPortY, sealPortYAxis, sealPortYLength]);
   $.group("Fastener stack", [topScrewInset, topScrewInsetAxis, topScrewInsetLength, topScrewRail0, topScrewRail0Axis, topScrewRail0Length, topScrewRail1, topScrewRail1Axis, topScrewRail1Length, topScrewRail2, topScrewRail2Axis, topScrewRail2Length, topScrewRail3, topScrewRail3Axis, topScrewRail3Length, bottomScrewInset, bottomScrewInsetAxis, bottomScrewInsetLength, bottomScrewRail0, bottomScrewRail0Axis, bottomScrewRail0Length, bottomScrewRail1, bottomScrewRail1Axis, bottomScrewRail1Length, bottomScrewRail2, bottomScrewRail2Axis, bottomScrewRail2Length, bottomScrewRail3, bottomScrewRail3Axis, bottomScrewRail3Length, screwNwOuter, screwNwInner, screwNeInner, screwNeOuter, screwSwOuter, screwSwInner, screwSeInner, screwSeOuter, screwNwOuterDiameter, screwNwInnerDiameter, screwNeInnerDiameter, screwNeOuterDiameter, screwSwOuterDiameter, screwSwInnerDiameter, screwSeInnerDiameter, screwSeOuterDiameter]);
   return {};
 });

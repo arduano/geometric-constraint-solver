@@ -1,5 +1,5 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
   // A reusable 200 x 120 mm fixture plate. One corner fixes the global gauge;
@@ -56,26 +56,16 @@ export default sketch(($) => {
     label: "Gasket groove centreline",
     role: "profile",
   });
-  const gasketInset = $.geometry.segment("gasketInset", {
-    start: plate.corners[0],
-    end: gasket.corners[0],
-    branchDirection: [0.7071067811865475, 0.7071067811865475],
-    label: "Gasket inset datum",
+  const gasketDiagonal = $.geometry.segment("gasketDiagonal", {
+    start: gasket.corners[0],
+    end: gasket.corners[2],
+    branchDirection: [0.8741572761215377, 0.48564293117863205],
     role: "construction",
   });
-  const gasketInsetLength = $.dimension.curveLength("gasketInsetLength", {
-    curve: gasketInset.span,
-    value: mm(14.142135623730951),
-    label: "10 x 10 mm gasket inset",
-    mode: "driving",
-  });
-  const gasketInsetAngle = $.dimension.orientedAngle("gasketInsetAngle", {
-    first: plate.spans[0],
-    second: gasketInset.span,
-    value: rad(0.7853981633974483),
-    orientation: "counterClockwise",
-    label: "Gasket inset direction",
-    mode: "driving",
+  const gasketCentered = $.constraint.midpoint("gasketCentered", {
+    point: plateCenter.point,
+    line: gasketDiagonal.span,
+    label: "Gasket centered on vacuum axis",
   });
   const gasketWidth = $.dimension.curveLength("gasketWidth", {
     curve: gasket.spans[0],
@@ -222,36 +212,37 @@ export default sketch(($) => {
     label: "Central vacuum rail",
     role: "construction",
   });
+  // Through fasteners stay outside the evacuated area, with positive gasket clearance.
   const mountNe = $.geometry.sketchPoint("mountNe", {
-    point: [85, 45],
+    point: [94, 54],
     label: "NE workholding centre",
     role: "construction",
   });
   const mountNw = $.geometry.sketchPoint("mountNw", {
-    point: [-85, 45],
+    point: [-94, 54],
     label: "NW workholding centre",
     role: "construction",
   });
   const mountSe = $.geometry.sketchPoint("mountSe", {
-    point: [85, -45],
+    point: [94, -54],
     label: "SE workholding centre",
     role: "construction",
   });
   const mountSw = $.geometry.sketchPoint("mountSw", {
-    point: [-85, -45],
+    point: [-94, -54],
     label: "SW workholding centre",
     role: "construction",
   });
   const mountNeX = $.constraint.fixedCoordinate("mountNeX", {
     point: mountNe.point,
     axis: "x",
-    target: mm(85),
+    target: mm(94),
     label: "Workholding X inset",
   });
   const mountNeY = $.constraint.fixedCoordinate("mountNeY", {
     point: mountNe.point,
     axis: "y",
-    target: mm(45),
+    target: mm(54),
     label: "Workholding Y inset",
   });
   const mountNorthSymmetry = $.constraint.symmetricAboutDatumAxis("mountNorthSymmetry", {
@@ -363,7 +354,7 @@ export default sketch(($) => {
     mode: "driving",
   });
   $.group("Fixture envelope", [plate, plateAnchor, plateWidth, plateHeight, plateDiagonal, plateCenter, centerOnDiagonal, centerPort, centerPortRadius]);
-  $.group("Gasket groove", [gasket, gasketInset, gasketInsetLength, gasketInsetAngle, gasketWidth, gasketHeight]);
+  $.group("Gasket groove", [gasket, gasketDiagonal, gasketCentered, gasketWidth, gasketHeight]);
   $.group("Vacuum distribution grid", [vacuumUpperLeft, vacuumUpperCenter, vacuumUpperRight, vacuumLowerLeft, vacuumLowerCenter, vacuumLowerRight, upperPairSymmetry, upperRightX, upperRightY, upperCenterOnY, upperRowAligned, mirrorLeftPorts, mirrorCenterPorts, mirrorRightPorts, portUpperLeft, portUpperCenter, portUpperRight, portLowerLeft, portLowerCenter, portLowerRight, upperVacuumRail, lowerVacuumRail, centerVacuumRail, upperLeftPortRadius, upperCenterPortRadius, upperRightPortRadius, lowerLeftPortRadius, lowerCenterPortRadius, lowerRightPortRadius]);
   $.group("Workholding pattern", [mountNe, mountNw, mountSe, mountSw, mountNeX, mountNeY, mountNorthSymmetry, mountEastSymmetry, mountWestSymmetry, holeNe, holeNw, holeSe, holeSw, holeNeRadius, holeNwRadius, holeSeRadius, holeSwRadius]);
   return {};
