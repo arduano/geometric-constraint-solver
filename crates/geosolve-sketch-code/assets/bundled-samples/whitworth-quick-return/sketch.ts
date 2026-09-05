@@ -2,12 +2,15 @@
 import { sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
+  // The rocker pivot is below the crank so its end swings left/right beneath
+  // the horizontal ram guide. The 8 mm return link reaches every crank angle.
+  // A vertical fixed frame retains the selected ground orientation explicitly.
   const crankPivot = $.geometry.sketchPoint("crankPivot", {
     point: [0, 0],
     label: "Crank pivot",
   });
   const rockerPivot = $.geometry.sketchPoint("rockerPivot", {
-    point: [5, 0],
+    point: [0, -5],
     label: "Slotted-rocker pivot",
   });
   const crankPin = $.geometry.sketchPoint("crankPin", {
@@ -15,17 +18,17 @@ export default sketch(($) => {
     label: "Sliding crank pin",
   });
   const rockerEnd = $.geometry.sketchPoint("rockerEnd", {
-    point: [-4, 6],
+    point: [2.971563339261892, 5.400471687416621],
     label: "Rocker end",
   });
   const ramPin = $.geometry.sketchPoint("ramPin", {
-    point: [4, 6],
+    point: [10.949067071784423, 6],
     label: "Ram pin",
   });
   const frame = $.geometry.segment("frame", {
     start: crankPivot.point,
     end: rockerPivot.point,
-    branchDirection: [1, 0],
+    branchDirection: [0, -1],
     label: "Machine frame",
     role: "construction",
   });
@@ -39,14 +42,14 @@ export default sketch(($) => {
   const slottedRocker = $.geometry.segment("slottedRocker", {
     start: rockerPivot.point,
     end: rockerEnd.point,
-    branchDirection: [-0.8320502943378437, 0.5547001962252291],
+    branchDirection: [0.27472112789737807, 0.9615239476408232],
     label: "Slotted rocker",
     role: "profile",
   });
   const returnLink = $.geometry.segment("returnLink", {
     start: rockerEnd.point,
     end: ramPin.point,
-    branchDirection: [1, 0],
+    branchDirection: [0.9971879665653164, 0.07494103907292238],
     label: "Return link",
     role: "profile",
   });
@@ -55,7 +58,7 @@ export default sketch(($) => {
     target: [0, 0],
     label: "Frame datum",
   });
-  const frameAxis = $.constraint.horizontal("frameAxis", {
+  const frameAxis = $.constraint.vertical("frameAxis", {
     span: frame.span,
     label: "Pivot axis",
   });
@@ -81,7 +84,7 @@ export default sketch(($) => {
     point: crankPin.point,
     curve: slottedRocker.span,
     contact: {
-      parameter: 0.3333333333333333,
+      parameter: 0.673046397354189,
       winding: 0,
       neighborhood: {
         kind: "interior",
@@ -105,7 +108,7 @@ export default sketch(($) => {
   const strokeReference = $.dimension.pointDistance("strokeReference", {
     first: crankPivot.point,
     second: ramPin.point,
-    value: mm(7.211102550927978),
+    value: mm(12.485274115630538),
     label: "Current ram reach",
     mode: "reference",
   });

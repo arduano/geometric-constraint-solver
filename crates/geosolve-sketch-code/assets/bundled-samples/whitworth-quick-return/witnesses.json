@@ -1,8 +1,37 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "returnLinkLength", "path": ["value"], "replacement": { "unit": "mm", "value": 8.5 } },
+  "representative_edit": {
+    "declaration": "returnLinkLength",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 8.5
+    }
+  },
   "drags": [
-    { "name": "advance crank", "declaration": "crankPin", "output_path": ["point"], "target": [1.2, 2.55] },
-    { "name": "near return limit", "declaration": "ramPin", "output_path": ["point"], "target": [2.0, 6.0] }
+    {
+      "name": "advance crank",
+      "declaration": "crankPin",
+      "output_path": [
+        "point"
+      ],
+      "target": [
+        1.2,
+        2.55
+      ]
+    },
+    {
+      "name": "approach positive ram limit",
+      "declaration": "ramPin",
+      "output_path": [
+        "point"
+      ],
+      "target": [
+        11.5,
+        6
+      ]
+    }
   ]
 }
