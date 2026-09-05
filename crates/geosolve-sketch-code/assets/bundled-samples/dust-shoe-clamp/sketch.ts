@@ -172,17 +172,19 @@ export default sketch(($) => {
     label: "Upper screw radius",
     mode: "driving",
   });
+  // The split crosses the screw lug and overlaps the bore by 1.5 mm.
+  // Its two sides can be drawn together by the screw pair.
   const splitRelief = $.geometry.twoPointAlignedRectangle("splitRelief", {
-    firstCorner: [32.5, -2.5],
-    oppositeCorner: [46, 2.5],
+    firstCorner: [-66, -2.5],
+    oppositeCorner: [-31, 2.5],
     label: "Clamp split relief",
     role: "profile",
   });
   const splitX = $.constraint.fixedCoordinate("splitX", {
     point: splitRelief.corners[0],
     axis: "x",
-    target: mm(32.5),
-    label: "Split begins at spindle bore",
+    target: mm(-66),
+    label: "Split begins outside the clamp lug",
   });
   const splitY = $.constraint.fixedCoordinate("splitY", {
     point: splitRelief.corners[0],
@@ -192,7 +194,7 @@ export default sketch(($) => {
   });
   const splitLength = $.dimension.curveLength("splitLength", {
     curve: splitRelief.spans[0],
-    value: mm(13.5),
+    value: mm(35),
     label: "Split length",
     mode: "driving",
   });
