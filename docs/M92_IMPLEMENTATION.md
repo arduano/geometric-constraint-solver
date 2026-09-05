@@ -160,6 +160,16 @@ production endpoint must pass the remaining `19/19` ordinary workbench rows. The
 row remains mandatory in the release harness; it is not a missing product route and must not be
 reported as part of a frozen production endpoint run.
 
+The preliminary clean gate at pre-F002 source `7941614` passed the workspace, unchanged golden,
+WASM parity, all-sample edit/reload, documentation, release-performance, licence and package stages,
+then ended at exit `1` when Playwright's language-service fixture server reached its fixed
+`180,000 ms` startup timeout during a still-progressing clean optimized WASM build. Its
+`610,186`-byte, `9,565`-line log is
+`/tmp/geosolve-m92-release-gate-r2.O2RJc0L5/release-gate.log`, SHA-256
+`ba90593ea578d3f5d6351ed2bd2d6b5f10a983bde8a7e6da2c372b72c68dad0d`. This is a
+`HARNESS_ERROR`, not clean qualification or a product finding. The Playwright server-start budget
+is now `600,000 ms`; individual browser rows retain their existing `120,000 ms` timeout.
+
 ## Qualification
 
 Focused registry/sample/witness coverage is integrated. Complete qualification is currently in

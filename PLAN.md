@@ -8196,6 +8196,13 @@ camera comparison. Final qualification must distinguish `20/20` in the explicit 
 including its harness-only compiler-envelope page, from `19/19` ordinary workbench rows on each
 production frozen endpoint. The final qualification/nomination checkbox remains unchecked.
 
+A preliminary clean gate on that pre-F002 source passed through release performance and package
+verification, then ended at exit `1` solely because Playwright's fixed `180,000 ms` fixture-server
+startup budget expired while a clean optimized WASM build was still progressing. Record this as
+`HARNESS_ERROR`, not product failure or clean qualification. The server-only startup allowance is
+now `600,000 ms`; the per-row `120,000 ms` browser timeout remains unchanged. The final gate must
+start fresh from the integrated clean source.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

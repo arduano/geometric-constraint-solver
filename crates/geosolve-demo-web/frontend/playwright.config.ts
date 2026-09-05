@@ -19,6 +19,9 @@ export default defineConfig({
     command: `npm run wasm:release && GEOSOLVE_BROWSER_COMPILER_HARNESS=1 VITE_GEOSOLVE_MOCK=0 npm run build:ui && vite preview --host 127.0.0.1 --port ${port}`,
     port,
     reuseExistingServer: false,
-    timeout: 180_000,
+    // A clean optimized WASM build can exceed three minutes on the release
+    // qualification host. This timeout owns only fixture-server startup; the
+    // per-test 120 second budget above remains unchanged.
+    timeout: 600_000,
   },
 });
