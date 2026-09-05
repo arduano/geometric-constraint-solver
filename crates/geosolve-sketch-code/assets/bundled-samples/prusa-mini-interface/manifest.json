@@ -3,10 +3,17 @@
   "ordinal": 14,
   "key": "prusa-mini-interface",
   "title": "Prusa MINI and MINI+ X-carriage interface",
-  "summary": "A front-plane MINI X-carriage study combines the published 31.423 x 69.407 mm envelope with bearing and selected M3 interface datums.",
+  "summary": "Two published R7.5 bearing seats on 34 mm centres and two extracted normal-axis interfaces replace schematic mounting proxies.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Published X-carriage envelope", "Bearing and belt datum", "Selected mounting interface"],
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
+  },
+  "groups": [
+    "Published X-carriage envelope",
+    "Bearing seats",
+    "Selected mounting interface"
+  ],
   "provenance": [
     {
       "relationship": "dimensions_only",
@@ -15,7 +22,7 @@
       "revision": "853bc30c4b10190f1d669ed6d0a567e333c28f21",
       "path": "STEP/PRINTED PARTS/MINI-x-carriage.stp",
       "licence": "GPL-3.0-only",
-      "scope": "Selected circular-interface dimensions and component context inform an independently redrawn front-plane study; no STEP geometry is imported and schematic mount locations are not OEM manufacturing data.",
+      "scope": "Selected STEP cylindrical interfaces normal to Z are redrawn in coordinates (Y,X-17): two R7.5 bearing seats at X=0/34,Y=0; R1.6 at X=1.75,Y=12; R1.65 at X=46.5,Y=4. Orthogonal bores and 3D details are omitted. Parameter edits explore an adapter variant rather than modifying OEM specifications.",
       "notice_required": true
     },
     {
@@ -25,7 +32,7 @@
       "revision": "853bc30c4b10190f1d669ed6d0a567e333c28f21",
       "path": "STL/MINI-x-carriage.stl",
       "licence": "GPL-3.0-only",
-      "scope": "The mesh bounds provide only the 31.423 x 69.407 mm front envelope; this study is not a printable replacement, exact outline or fitness claim.",
+      "scope": "STL axis-aligned bounds are 31.423 x 69.407 x 29 mm. Only the independently centred first-two-axis bounding box is shown as construction; it is not a registration of the differently oriented STL and STEP or a printable outline.",
       "notice_required": true
     }
   ]
