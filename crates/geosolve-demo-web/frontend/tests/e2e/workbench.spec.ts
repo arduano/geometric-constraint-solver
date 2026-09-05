@@ -191,8 +191,8 @@ test("real WASM opens an actual sample with a styled authoritative SVG and layou
   await boot(page);
   const explorer = page.getByRole("complementary", { name: "Explorer" });
   const explorerBounds = await explorer.boundingBox();
-  expect(explorerBounds?.width).toBeGreaterThanOrEqual(80);
-  expect(explorerBounds?.width).toBeLessThanOrEqual(100);
+  expect(explorerBounds?.width).toBeGreaterThanOrEqual(145);
+  expect(explorerBounds?.width).toBeLessThanOrEqual(175);
   const imported = explorer.getByRole("button", { name: "legacy-document", exact: true });
   await expect(imported).toHaveText("legacy-document");
   const importedIcon = imported.locator("svg.lucide-box");

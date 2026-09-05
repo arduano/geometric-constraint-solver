@@ -22,30 +22,37 @@ const samples = await Promise.all(directories.map(async (key) => ({
 samples.sort((a, b) => a.manifest.ordinal - b.manifest.ordinal);
 expect(samples).toHaveLength(20);
 
-async function savedWorkspace(page: Page): Promise<string | null> {
-  return page.evaluate<string | null>(`(async () => {
-    const database = await new Promise((resolve, reject) => {
-      const request = indexedDB.open("geosolve.browser-projects.v1", 1);
-      request.onsuccess = () => resolve(request.result);
+const savedWorkspaceExpression = `(async () => {
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open("geosolve.browser-projects.v1", 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database.transaction("projects", "readonly").objectStore("projects").get("current");
+      request.onsuccess = () => resolve(typeof request.result === "string" ? request.result : null);
       request.onerror = () => reject(request.error);
     });
-    try {
-      return await new Promise((resolve, reject) => {
-        const request = database.transaction("projects", "readonly").objectStore("projects").get("current");
-        request.onsuccess = () => resolve(typeof request.result === "string" ? request.result : null);
-        request.onerror = () => reject(request.error);
-      });
-    } finally { database.close(); }
-  })()`);
+  } finally { database.close(); }
+})()`;
+
+async function savedWorkspace(page: Page): Promise<string | null> {
+  return page.evaluate<string | null>(savedWorkspaceExpression);
 }
 
 async function acceptedSource(page: Page): Promise<string | null> {
-  const wire = await savedWorkspace(page);
-  if (wire === null) return null;
-  const presentation = JSON.parse(wire);
-  const workbench = JSON.parse(presentation.project);
-  const project = JSON.parse(workbench.project);
-  return project.managed?.source ?? null;
+  // Read the same persisted authority in the browser, returning only source.
+  // Repeatedly copying multi-megabyte session strings through the debugging
+  // transport measures the test runner rather than the application workflow.
+  return page.evaluate<string | null>(`(async () => {
+    const wire = await ${savedWorkspaceExpression};
+    if (wire === null) return null;
+    const presentation = JSON.parse(wire);
+    const workbench = JSON.parse(presentation.project);
+    const project = JSON.parse(workbench.project);
+    return project.managed?.source ?? null;
+  })()`);
 }
 
 // Compare the actual painted geometry at a deterministic fitted camera. Ignore
