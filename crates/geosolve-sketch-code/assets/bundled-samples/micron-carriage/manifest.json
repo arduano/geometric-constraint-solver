@@ -3,10 +3,17 @@
   "ordinal": 15,
   "key": "micron-carriage",
   "title": "Printers for Ants Micron CNC X-carriage",
-  "summary": "An independently redrawn Micron carriage study relates its CNC body, nominal MGN9H 15 x 20 mm mounting pitch and toolhead interface.",
+  "summary": "A continuous stepped carriage relates extracted 16 x 15 mm and alternate 10 x 15 mm rail patterns to the 25 mm belt-fastener pitch.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["CNC carriage body", "Rail-block datum", "Toolhead interface"],
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
+  },
+  "groups": [
+    "CNC carriage body",
+    "Rail-block datum",
+    "Toolhead interface"
+  ],
   "provenance": [
     {
       "relationship": "dimensions_only",
@@ -15,7 +22,7 @@
       "revision": "61a229ba01c3febbfb9b994e07302d9ddac68bfb",
       "path": "CAD/SubAssemblies/CNC_Carriage.step",
       "licence": "GPL-3.0-only",
-      "scope": "Selected component relationships inform a diagrammatic, independently redrawn planar interface study; body outlines are schematic and no solid, exact projection or manufacturing guarantee is provided.",
+      "scope": "Selected X-normal cylinders from the STEP are redrawn in (Y,Z-18.89933933439): R1.5 axes at Y=+/-8 and Z=11.39933933439/26.39933933439 establish the 16 x 15 mm mounting pattern; the alternate Y=+/-5 positions establish 10 x 15. R3.5 counterbores at Y=+/-12.5,Z=33.2497800904261 establish the 25 mm belt-fastener pitch. The continuous stepped body is schematic; no solid or manufacturing guarantee is provided.",
       "notice_required": true
     }
   ]
