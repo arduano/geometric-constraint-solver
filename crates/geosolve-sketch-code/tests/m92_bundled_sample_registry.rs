@@ -4,10 +4,9 @@ use std::collections::BTreeMap;
 
 use geosolve_sketch_code::{SampleCategory, bundled_sample, bundled_sample_catalog};
 
-const KEYS: [&str; 20] = [
+const KEYS: [&str; 16] = [
     "theo-jansen-leg",
     "whitworth-quick-return",
-    "twin-roller-bezier-cam",
     "peaucellier-linkage",
     "five-stage-scissor-lift",
     "pc-water-manifold",
@@ -15,10 +14,7 @@ const KEYS: [&str; 20] = [
     "vacuum-fixture-plate",
     "dust-shoe-clamp",
     "gridfinity-bin-section",
-    "nema-17-motor-interface",
-    "hevort-datum-study",
     "voron-panel",
-    "prusa-mini-interface",
     "micron-carriage",
     "bondtech-indx-link",
     "curves-contact-continuity-atlas",
@@ -30,7 +26,7 @@ const KEYS: [&str; 20] = [
 #[test]
 fn canonical_registry_has_frozen_order_and_distribution() {
     let catalog = bundled_sample_catalog();
-    assert_eq!(catalog.len(), 20);
+    assert_eq!(catalog.len(), 16);
     assert_eq!(
         catalog.iter().map(|sample| sample.key).collect::<Vec<_>>(),
         KEYS
@@ -40,7 +36,7 @@ fn canonical_registry_has_frozen_order_and_distribution() {
             .iter()
             .map(|sample| sample.ordinal)
             .collect::<Vec<_>>(),
-        (1..=20).collect::<Vec<_>>()
+        (1..=16).collect::<Vec<_>>()
     );
 
     let mut categories = BTreeMap::new();
@@ -62,15 +58,19 @@ fn canonical_registry_has_frozen_order_and_distribution() {
         assert!(!sample.managed_source().is_empty());
         assert!(!sample.witnesses_json().is_empty());
     }
-    assert_eq!(categories.get(&SampleCategory::Mechanism), Some(&5));
+    assert_eq!(categories.get(&SampleCategory::Mechanism), Some(&4));
     assert_eq!(
         categories.get(&SampleCategory::ProductFabrication),
-        Some(&11)
+        Some(&8)
     );
     assert_eq!(categories.get(&SampleCategory::ReferenceLab), Some(&2));
     assert_eq!(categories.get(&SampleCategory::ScaleStudy), Some(&2));
     assert!(bundled_sample("unknown-sample").is_none());
     for retired in [
+        "prusa-mini-interface",
+        "nema-17-motor-interface",
+        "hevort-datum-study",
+        "twin-roller-bezier-cam",
         "rounded-polyline",
         "typed-panel",
         "braced-frame",

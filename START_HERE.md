@@ -910,13 +910,19 @@ closed.
 
 ## M92 current advanced sample showcase
 
-Status: **in progress; F001–F015 repairs are clean-qualified and the immutable candidate is
-nominated for human UAT. M92-U1–U8 remain pending and unexecuted.**
+Status: **in progress; the user-authorized 16-sample pruning pass awaits fresh qualification and
+replacement immutable nomination. M92-U1–U8 remain pending and unexecuted.**
 
-Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
+The user removed Prusa MINI, NEMA 17, HevORT and the twin-roller Bezier cam from the public
+catalog. [The scope amendment](docs/M92_GOALS.md#authorized-scope-amendment--2026-09-05) fixes the
+surviving inventory at `4/8/2/2` and 32 meaningful measured edits. Survivor source/compiler bytes
+are unchanged; ordinals are renumbered. The cam's independent tangent-offset/locality regression
+remains private test coverage. The address below still serves the pre-pruning 20-sample snapshot.
+
+Pre-pruning clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
 (exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
-`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and remains served at
 **http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
 language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
 separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
@@ -926,14 +932,14 @@ GitHub Pages remains unchanged. Later documentation commits do not change these 
 See [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) for exact commands, receipts, visual limits and the two earlier failed gates.
 
 M92 targets replacing the accumulated 12/25/37-entry catalog variants with one manifest-driven,
-source-authoritative 20-sample registry. The frozen scope requires five mechanisms, eleven
-product/fabrication studies, two capability atlases and two scale labs (`5/11/2/2`). Source,
+source-authoritative 16-sample registry. The amended scope requires four mechanisms, eight
+product/fabrication studies, two capability atlases and two scale labs (`4/8/2/2`). Source,
 compiler envelopes, witnesses, expected mobility, ordered functional groups and provenance must be
 colocated per sample; frontend and headless consumers must share the registry, and headless
 terminology must clean-break to sample/report-v2 rather than demo/report-v1. `docs/M92_GOALS.md`
-freezes scope, `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` retains the
-unexecuted composite human scorecard. Mechanical qualification and nomination are recorded above;
-they do not establish human UAT acceptance or closure.
+owns the amended scope, `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` retains
+the unexecuted composite human scorecard. The historical mechanical qualification and nomination
+above do not qualify the pruned catalog or establish human UAT acceptance or closure.
 
 `M92-F001` restores canonical live trim-view order across persistent checkpoints. `M92-F002`
 repairs the browser/bridge lifecycle in which a terminal click could park a managed compiler ticket
@@ -945,7 +951,7 @@ asynchronous waits and a camera-relative reload assertion. Final qualification n
 endpoint; the twentieth compiler-envelope row exists only in the explicit release harness. M92-U1
 through M92-U8 remain pending and unexecuted, and GitHub Pages remains unchanged.
 
-### M92 visual-audit continuation — 2026-09-05
+### M92 visual-audit continuation — 2026-09-05, pre-pruning evidence
 
 The supervising user authorized reworking the existing 20 samples to fulfill their named purpose.
 `docs/M92_VISUAL_AUDIT.md` owns the complete baseline, independent measurements, findings
@@ -1058,7 +1064,7 @@ full clean qualification and nomination.
     clean-qualified immutable nomination, accepted 14-row composite scorecard and exact public
     closeout.
 28. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — current in-progress
-    20-sample showcase contract, execution ledger, nominated candidate and pending eight-row
+    amended 16-sample showcase contract, execution ledger, pending replacement and eight-row
     composite scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
@@ -1669,10 +1675,10 @@ Durable milestone and cleanup records:
   and clean-qualified immutable nomination plus exact Pages closeout)
 - `docs/M91_UAT.md` (M91-U1 through M91-U14 accepted by explicit composite approval without a
   separately logged row-by-row replay; exact Pages closeout and service retirement complete)
-- `docs/M92_GOALS.md` (frozen 20-sample `5/11/2/2` showcase scope and release boundary)
+- `docs/M92_GOALS.md` (amended 16-sample `4/8/2/2` showcase scope and release boundary)
 - `docs/M92_IMPLEMENTATION.md` (current registry-first implementation, qualification and nomination
   ledger)
-- `docs/M92_UAT.md` (nominated candidate and pending M92-U1 through M92-U8 composite human scorecard)
+- `docs/M92_UAT.md` (pre-pruning snapshot, pending replacement and M92-U1 through M92-U8 human scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

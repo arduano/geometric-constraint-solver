@@ -19,15 +19,6 @@
   },
   {
     "ordinal": 3,
-    "stableId": "sample.twin-roller-bezier-cam",
-    "key": "twin-roller-bezier-cam",
-    "title": "Twin-roller Bézier cam · 2 DOF",
-    "category": "mechanism",
-    "group": "Mechanisms",
-    "summary": "Two independently movable equal-radius rollers retain explicit tangent contacts on a quadratic cam."
-  },
-  {
-    "ordinal": 4,
     "stableId": "sample.peaucellier-linkage",
     "key": "peaucellier-linkage",
     "title": "Peaucellier straight-line linkage · 1 DOF",
@@ -36,7 +27,7 @@
     "summary": "A dimensioned inversor cell converts a circular driver into exact straight-line motion."
   },
   {
-    "ordinal": 5,
+    "ordinal": 4,
     "stableId": "sample.five-stage-scissor-lift",
     "key": "five-stage-scissor-lift",
     "title": "Generated five-stage scissor lift · 1 DOF",
@@ -45,7 +36,7 @@
     "summary": "Five equal diagonal stages and six horizontal platforms share one guided extension mode."
   },
   {
-    "ordinal": 6,
+    "ordinal": 5,
     "stableId": "sample.pc-water-manifold",
     "key": "pc-water-manifold",
     "title": "PC liquid-cooling manifold",
@@ -54,7 +45,7 @@
     "summary": "A constrained acrylic distribution-plate study combines three routed channel centre lines, outlet bores, a shared reservoir, one enclosing O-ring groove and an external fastener stack."
   },
   {
-    "ordinal": 7,
+    "ordinal": 6,
     "stableId": "sample.cnc-dogbone-coupon",
     "key": "cnc-dogbone-coupon",
     "title": "CNC joinery and dogbone fit coupon",
@@ -63,7 +54,7 @@
     "summary": "A fully constrained three-station router coupon compares press, nominal and loose mortises against common tabs and explicit cutter reliefs."
   },
   {
-    "ordinal": 8,
+    "ordinal": 7,
     "stableId": "sample.vacuum-fixture-plate",
     "key": "vacuum-fixture-plate",
     "title": "CNC vacuum fixture and spoilboard plate",
@@ -72,7 +63,7 @@
     "summary": "A 200 x 120 mm datum-driven plate combines a gasket groove, six-port vacuum grid and symmetric workholding pattern."
   },
   {
-    "ordinal": 9,
+    "ordinal": 8,
     "stableId": "sample.dust-shoe-clamp",
     "key": "dust-shoe-clamp",
     "title": "CNC router dust shoe and spindle clamp",
@@ -81,7 +72,7 @@
     "summary": "A fully constrained 65 mm spindle ring combines an extraction boss, split relief and symmetric clamp lug."
   },
   {
-    "ordinal": 10,
+    "ordinal": 9,
     "stableId": "sample.gridfinity-bin-section",
     "key": "gridfinity-bin-section",
     "title": "Gridfinity plan and 3U section",
@@ -90,25 +81,7 @@
     "summary": "A standards-informed 1 x 1 plan and symmetric 3U section expose base, body, lip and cavity intent with one scalar section datum."
   },
   {
-    "ordinal": 11,
-    "stableId": "sample.nema-17-motor-interface",
-    "key": "nema-17-motor-interface",
-    "title": "NEMA 17 mounting-face study",
-    "category": "product_fabrication",
-    "group": "Products & fabrication",
-    "summary": "A datum-driven 42.3 mm face exposes the pilot, shaft and symmetric 31 mm mounting pattern."
-  },
-  {
-    "ordinal": 12,
-    "stableId": "sample.hevort-datum-study",
-    "key": "hevort-datum-study",
-    "title": "HevORT HD9 and MGN9 datum study",
-    "category": "product_fabrication",
-    "group": "Products & fabrication",
-    "summary": "Separate HD9 20 x 20 mm extracted mount and nominal MGN9H 15 x 16 mm mount studies make the differing interfaces explicit."
-  },
-  {
-    "ordinal": 13,
+    "ordinal": 10,
     "stableId": "sample.voron-panel",
     "key": "voron-panel",
     "title": "Voron V0.2 motor panel",
@@ -117,16 +90,7 @@
     "summary": "A connected 122 x 37 mm boundary contains the edge-open T-passage and bilateral side notches; squared transitions make this an editable topology study."
   },
   {
-    "ordinal": 14,
-    "stableId": "sample.prusa-mini-interface",
-    "key": "prusa-mini-interface",
-    "title": "Prusa MINI and MINI+ X-carriage interface",
-    "category": "product_fabrication",
-    "group": "Products & fabrication",
-    "summary": "Two published R7.5 bearing seats on 34 mm centres and two extracted normal-axis interfaces replace schematic mounting proxies."
-  },
-  {
-    "ordinal": 15,
+    "ordinal": 11,
     "stableId": "sample.micron-carriage",
     "key": "micron-carriage",
     "title": "Printers for Ants Micron CNC X-carriage",
@@ -135,7 +99,7 @@
     "summary": "A continuous stepped carriage relates extracted 16 x 15 mm and alternate 10 x 15 mm rail patterns to the 25 mm belt-fastener pitch."
   },
   {
-    "ordinal": 16,
+    "ordinal": 12,
     "stableId": "sample.bondtech-indx-link",
     "key": "bondtech-indx-link",
     "title": "Bondtech INDX tool-link interface",
@@ -144,7 +108,7 @@
     "summary": "A Bondtech INDX Link study pairs the published plan envelope with a schematic three-point Maxwell coupling and link-board service zone."
   },
   {
-    "ordinal": 17,
+    "ordinal": 13,
     "stableId": "sample.curves-contact-continuity-atlas",
     "key": "curves-contact-continuity-atlas",
     "title": "Curves, contact and continuity atlas",
@@ -153,7 +117,7 @@
     "summary": "Readable analytic and spline specimens frame explicit rolling contact and a parametric-C2 seam."
   },
   {
-    "ordinal": 18,
+    "ordinal": 14,
     "stableId": "sample.fabrication-operations-atlas",
     "key": "fabrication-operations-atlas",
     "title": "Fabrication operations, constraints, dimensions and annotations atlas",
@@ -162,7 +126,7 @@
     "summary": "Profile and topology operations, generated drilling, explicit constraint relations and a broad metrology annotation bench."
   },
   {
-    "ordinal": 19,
+    "ordinal": 15,
     "stableId": "sample.perforated-fixture-field",
     "key": "perforated-fixture-field",
     "title": "Parametric perforated fixture field",
@@ -171,7 +135,7 @@
     "summary": "Three keyed serpentine lattices generate 192 pilot/counterbore pairs across a complete fixture plate."
   },
   {
-    "ordinal": 20,
+    "ordinal": 16,
     "stableId": "sample.robotic-harness-backplane",
     "key": "robotic-harness-backplane",
     "title": "Dense robotic harness-routing backplane",

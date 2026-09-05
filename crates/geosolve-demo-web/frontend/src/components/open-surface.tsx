@@ -33,7 +33,7 @@ export function OpenSurface({ recents, onOpen, onNewSketch, onNewCode, onImport,
         <p className="mt-1 text-sm text-muted">Start cleanly or inspect one of the complete bundled examples.</p>
         <div className="relative mt-4">
           <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted" />
-          <input ref={searchRef} autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search 20 samples…" className="h-9 w-full rounded-md border border-border bg-canvas pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent focus:ring-1 focus:ring-accent" />
+          <input ref={searchRef} autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${samples.length} samples…`} className="h-9 w-full rounded-md border border-border bg-canvas pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted focus:border-accent focus:ring-1 focus:ring-accent" />
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <QuickStart icon={<FilePlus2 />} label="New sketch" onClick={onNewSketch} />

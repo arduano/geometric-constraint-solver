@@ -71,7 +71,7 @@ output structure.
 
 ## Bundled samples
 
-One manifest-driven registry contains exactly twenty complete code-authored samples across
+One manifest-driven registry contains exactly sixteen complete code-authored samples across
 mechanisms, fabrication/product studies, reference labs and scale studies. For example:
 
 - **Theo Jansen walking leg** retains one intended constrained degree of freedom.

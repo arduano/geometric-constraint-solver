@@ -7106,19 +7106,22 @@ passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M
 
 ## M92 advanced showcase fixtures
 
-Status: **in progress; F001–F015 repairs are clean-qualified and the immutable candidate is
-nominated. Human M92-U1–U8 remain pending and unexecuted; GitHub Pages is unchanged.**
+Status: **in progress; the authorized 16-sample pruning pass awaits fresh qualification and
+replacement immutable nomination. Human M92-U1–U8 remain pending and unexecuted; GitHub Pages
+is unchanged.**
 
-See [final qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) for the exact `b854d74` candidate,
-20-sample visual/history audit and frozen endpoint receipts.
+See [pre-pruning qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination)
+for the exact `b854d74` candidate, historical 20-sample visual/history audit and frozen endpoint
+receipts. Its unchanged snapshot remains served while the replacement is qualified.
 
 ### M92-C1 — canonical registry is complete and singular
 
-Load the public bundled-sample registry and require ordinals exactly `1..=20`, unique keys/titles,
-category counts `5/11/2/2`, all required colocated assets, byte-identical source/compiler authority,
+Load the public bundled-sample registry and require ordinals exactly `1..=16`, unique keys/titles,
+category counts `4/8/2/2`, all required colocated assets, byte-identical source/compiler authority,
 truthful expected mobility, exact ordered functional groups and complete provenance. Generate the
 frontend JSON and compare it byte-for-byte. No legacy 12/25/37 catalog type or native/code menu
-branch remains reachable.
+branch remains reachable. Reject all four user-pruned public keys: `prusa-mini-interface`,
+`nema-17-motor-interface`, `hevort-datum-study` and `twin-roller-bezier-cam`.
 
 ### M92-C2 — every sample is independently valid and reversible
 
@@ -7129,11 +7132,13 @@ project, apply the declared representative edit, then prove exact Undo, Redo and
 
 ### M92-C3 — mechanisms retain intended motion
 
-For Theo Jansen, Whitworth, twin-roller Bezier cam, Peaucellier and the five-stage scissor lift,
+For Theo Jansen, Whitworth, Peaucellier and the five-stage scissor lift,
 execute every declared drag witness through the retained coordinator. Require accepted finite
 terminal geometry, residual validation, unchanged explicit assembly/contact branch, expected
 mobility and exact Undo/Redo/reload. Unrelated components do not drift beyond the stated witness
-contract.
+contract. The active public catalog contains eight default-budget witnesses. Preserve the removed
+cam's exact tangent-offset and passive-follower-locality trajectory as a private source/compiler
+fixture; it is excluded from public catalog discovery and counts.
 
 ### M92-C4 — product studies retain provenance and honest scope
 
@@ -7200,21 +7205,26 @@ workbench rows against each immutable production endpoint.
 ### M92-C8 — independent design-intent and real-browser geometry
 
 `m92_mechanism_drag_witnesses` measures the articulated walking locus, full Whitworth cycle,
-independent cam offsets, Peaucellier inversion/straightness and common scissor rise. The three new
-headless intent suites plus mechanism edit suite cover 40 distinct source edits with measured
+Peaucellier inversion/straightness and common scissor rise, and retains independent cam offsets
+through a private regression fixture. The three headless intent suites plus mechanism edit suite
+cover 32 distinct public-sample source edits with measured
 native geometry and code history. `m92_atlas_scale_intent` checks complete generated
 distributions, owning bend contacts and advertised atlas outputs. `docs/M92_VISUAL_AUDIT.md`
 records F003–F012 and native reference identities. No sample is accepted solely because its source
 changed or its solve passed.
 
-The separate 20-row browser sample workflow checks actual painted native/computed geometry through
+The separate 16-row browser sample workflow checks actual painted native/computed geometry through
 edit/Undo/Redo/reload, group restoration, fitted bounds and ordinary point ownership. Screen
 evidence is inspected alongside native measurements; it does not replace them or accept human UAT.
-The integrated development run passed 20/20 before F014. Atlas follow-up measurements pass their
-focused baselines; the edit log retains 2/2 passing with wrapper exit 143. The final clean gate
+Historical pre-pruning evidence: the integrated development run passed 20/20 before F014. Atlas
+follow-up measurements pass their focused baselines; the edit log retains 2/2 passing with wrapper
+exit 143. The final clean gate
 now supplies an independent repeated receipt.
 
 ### M92-F013 — complete scale history survives browser transport
+
+The defect and qualification records below preserve their original pre-pruning source identities
+and sample/witness counts. They do not qualify the amended 16-sample catalog.
 
 Original baseline source b49dbd3 saves the edited perforated field as 81,671,710 bytes, expanding
 to 119,601,833 bytes in the constructor request; the 40 MiB bridge guard correctly rejects it. The

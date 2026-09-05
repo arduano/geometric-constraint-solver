@@ -90,7 +90,6 @@ fn advanced_mechanism_wave_cold_materializes_with_intended_mobility() {
     for (ordinal, (key, raw, effective)) in [
         ("theo-jansen-leg", 1, 1),
         ("whitworth-quick-return", 1, 1),
-        ("twin-roller-bezier-cam", 2, 2),
         ("peaucellier-linkage", 1, 1),
         ("five-stage-scissor-lift", 1, 1),
     ]

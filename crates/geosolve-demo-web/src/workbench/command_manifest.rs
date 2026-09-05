@@ -1465,7 +1465,7 @@ pub(crate) struct SampleManifestEntry {
     pub(crate) reachability: CommandReachability,
 }
 
-/// All 20 user-visible examples in canonical manifest order.
+/// All user-visible examples in canonical manifest order.
 pub(crate) fn sample_manifest() -> Vec<SampleManifestEntry> {
     geosolve_sketch_code::bundled_sample_catalog()
         .iter()
@@ -1593,9 +1593,9 @@ mod tests {
                 .iter()
                 .filter(|sample| sample.kind == SampleKind::Code)
                 .count(),
-            20
+            16
         );
-        assert_eq!(samples.len(), 20);
+        assert_eq!(samples.len(), 16);
         assert_eq!(
             samples.iter().map(|sample| sample.key).collect::<Vec<_>>(),
             geosolve_sketch_code::bundled_sample_catalog()
@@ -1672,7 +1672,7 @@ mod tests {
     }
 
     #[test]
-    fn sample_search_is_case_insensitive_across_all_twenty_entries() {
+    fn sample_search_is_case_insensitive_across_all_bundled_entries() {
         let samples = sample_manifest();
         assert_eq!(search_samples(""), samples);
         for sample in samples {

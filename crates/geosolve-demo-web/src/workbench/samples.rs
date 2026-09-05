@@ -48,7 +48,7 @@ mod tests {
     fn menu_contains_each_canonical_sample_once_in_four_categories() {
         let markup = SampleCatalogState::default().menu_markup();
         assert_eq!(markup.matches("data-sample-group-trigger").count(), 4);
-        assert_eq!(markup.matches("data-sample-id=").count(), 20);
+        assert_eq!(markup.matches("data-sample-id=").count(), 16);
         assert!(!markup.contains("data-code-sample-id="));
         for sample in geosolve_sketch_code::bundled_sample_catalog() {
             assert_eq!(

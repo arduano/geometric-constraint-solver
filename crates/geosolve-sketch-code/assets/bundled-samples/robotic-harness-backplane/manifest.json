@@ -1,6 +1,6 @@
 {
   "format": "geosolve-bundled-sample-v1",
-  "ordinal": 20,
+  "ordinal": 16,
   "key": "robotic-harness-backplane",
   "title": "Dense robotic harness-routing backplane",
   "summary": "Eight readable harness trunks generate keyed clips and computed bend fillets across a complete robotic cell backplane.",

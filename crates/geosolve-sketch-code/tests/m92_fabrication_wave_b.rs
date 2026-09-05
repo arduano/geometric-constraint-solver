@@ -11,13 +11,7 @@ use geosolve_sketch_code::{
 };
 use geosolve_sketch_intent::IntentSessionId;
 
-const SAMPLES: [&str; 5] = [
-    "hevort-datum-study",
-    "voron-panel",
-    "prusa-mini-interface",
-    "micron-carriage",
-    "bondtech-indx-link",
-];
+const SAMPLES: [&str; 3] = ["voron-panel", "micron-carriage", "bondtech-indx-link"];
 
 fn generated(project: &CodeProject) -> KeyedReconcileState {
     KeyedReconcileState::empty()
@@ -247,7 +241,7 @@ fn validate(key: &str, seed: u128) {
 fn fabrication_wave_b_is_provenanced_grouped_editable_and_fully_constrained() {
     for (ordinal, key) in SAMPLES.into_iter().enumerate() {
         let sample = bundled_sample(key).expect("registered sample");
-        assert_eq!(sample.ordinal, ordinal + 12, "{key}");
+        assert_eq!(sample.ordinal, ordinal + 10, "{key}");
         validate(key, 0x92_70 + ordinal as u128);
     }
 }

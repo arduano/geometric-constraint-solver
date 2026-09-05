@@ -2,13 +2,19 @@
 
 # M92 UAT: advanced sample showcase
 
-Status: **immutable candidate nominated; M92 remains in progress. M92-U1 through M92-U8 are
+Status: **16-sample pruning qualification and replacement nomination pending; M92 remains in
+progress. M92-U1 through M92-U8 are
 pending and unexecuted.** Automated evidence cannot pass or waive these human rows.
 
-Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
+The [authorized scope amendment](M92_GOALS.md#authorized-scope-amendment--2026-09-05) removes
+Prusa MINI, NEMA 17, HevORT and the twin-roller Bezier cam. The active scorecard below covers
+16 samples in `4/8/2/2` categories and 32 measured source edits. The existing address still serves
+the pre-pruning 20-sample snapshot; it is not the replacement candidate.
+
+Pre-pruning clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
 (exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
-`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and remains served at
 **http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
 language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
 separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
@@ -19,7 +25,8 @@ GitHub Pages remains unchanged. Later documentation commits do not change these 
 The [final qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) ledger preserves the gate receipt, frozen manifest,
 eleven-route HTTP byte/metadata checks on both endpoints, exact browser inventories and visual
 review. Local staging was stopped after its checks; the Tailscale address above remains live.
-Review the exact immutable candidate. GitHub Pages remains the accepted M91 publication.
+Review the replacement immutable candidate once its qualification is recorded. GitHub Pages
+remains the accepted M91 publication.
 
 The 2026-09-05 continuation repaired sample topology, driven dimensions, reference relationships,
 clearances and shared edit propagation, plus full scale history restoration, Explorer overflow
@@ -39,12 +46,12 @@ The earlier atlas log's 2/2 result retains its wrapper exit 143; the successful 
 an independent repeated receipt. None of these records executes or waives a human row.
 
 1. **M92-U1 — Pending / not run — Catalog cohesion.** Open the sample surface. Confirm exactly four
-   clear categories and 20 intentionally named entries, with no native/code distinction, duplicates,
+   clear categories and 16 intentionally named entries, with no native/code distinction, duplicates,
    placeholders or old generic samples.
 2. **M92-U2 — Pending / not run — Advanced mechanisms.** Manipulate Theo Jansen, Whitworth,
-   twin-roller cam, Peaucellier and the five-stage scissor lift. Confirm each moves along the intended
+   Peaucellier and the five-stage scissor lift. Confirm each moves along the intended
    mechanism, remains stable on release and exposes understandable source/group organization.
-3. **M92-U3 — Pending / not run — CNC/product usefulness.** Review all eleven fabrication/product
+3. **M92-U3 — Pending / not run — CNC/product usefulness.** Review all eight fabrication/product
    studies. Confirm the geometry is recognizable, dimensions and construction intent are legible,
    groups make useful portions easy to isolate, and reference-derived scope/provenance is clear.
 4. **M92-U4 — Pending / not run — Gridfinity.** Change representative plan/height parameters,

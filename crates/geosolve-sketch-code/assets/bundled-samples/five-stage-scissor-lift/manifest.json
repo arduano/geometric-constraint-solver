@@ -1,6 +1,6 @@
 {
   "format": "geosolve-bundled-sample-v1",
-  "ordinal": 5,
+  "ordinal": 4,
   "key": "five-stage-scissor-lift",
   "title": "Generated five-stage scissor lift · 1 DOF",
   "summary": "Five equal diagonal stages and six horizontal platforms share one guided extension mode.",

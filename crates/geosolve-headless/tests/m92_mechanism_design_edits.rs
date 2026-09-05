@@ -64,7 +64,7 @@ fn distance(a: [f64; 2], b: [f64; 2]) -> f64 {
 #[allow(
     clippy::too_many_lines,
     clippy::float_cmp,
-    reason = "the complete ten-edit matrix asserts exact fixed datums alongside independently measured relationships"
+    reason = "the complete eight-edit matrix asserts exact fixed datums alongside independently measured relationships"
 )]
 fn exercise_sample(sample: &str) {
     let cases = [
@@ -81,13 +81,6 @@ fn exercise_sample(sample: &str) {
             8.5,
             "crankLength",
             3.0,
-        ),
-        (
-            "twin-roller-bezier-cam",
-            "dimension1CamRollerRadius1",
-            1.2,
-            "camRise",
-            5.0,
         ),
         (
             "peaucellier-linkage",
@@ -119,16 +112,11 @@ fn exercise_sample(sample: &str) {
             let edited = audit::edit_mm(
                 &HeadlessInput::BundledSample(key.into()),
                 declaration,
-                if declaration == "camRise" {
-                    &["target"]
-                } else {
-                    &["value"]
-                },
+                &["value"],
                 value,
             );
             audit::assert_valid(&edited);
             audit::assert_history(&base, edited.project());
-            let doc = audit::accepted_document(edited.project());
             let points = named_points(edited.project());
             match key {
                 "theo-jansen-leg" => {
@@ -155,36 +143,6 @@ fn exercise_sample(sample: &str) {
                     assert!((point(&points, "ramPin")[1] - 6.0).abs() < 1e-8);
                     assert_eq!(point(&points, "crankPivot"), [0.0, 0.0]);
                     assert!(distance(point(&points, "rockerPivot"), [0.0, -5.0]) < 1e-9);
-                }
-                "twin-roller-bezier-cam" => {
-                    let radii = doc
-                        .curves()
-                        .iter()
-                        .filter_map(|curve| {
-                            if let geosolve_sketch::CurveDefinition::Circle { radius, .. } =
-                                curve.definition
-                            {
-                                Some(doc.scalar(radius).unwrap().value)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    assert_eq!(radii.len(), 2);
-                    assert!(
-                        radii
-                            .into_iter()
-                            .all(|r| (r - if index == 0 { value } else { 1.0 }).abs() < 1e-8)
-                    );
-                    for label in ["point1CamQ0", "point3CamQ2"] {
-                        assert_eq!(point(&points, label), point(&original, label));
-                    }
-                    assert!(
-                        distance(
-                            point(&points, "point2CamQ1"),
-                            [0.0, if index == 0 { 4.0 } else { value }]
-                        ) < 1e-9
-                    );
                 }
                 "peaucellier-linkage" => {
                     let (long, side) = if index == 0 {
@@ -235,11 +193,6 @@ fn jansen_crank_and_rocker_edits_preserve_other_links_and_history() {
 #[ignore = "requires built package and pinned Deno; mandatory release gate"]
 fn whitworth_crank_and_return_link_edits_preserve_guides_and_history() {
     exercise_sample("whitworth-quick-return");
-}
-#[test]
-#[ignore = "requires built package and pinned Deno; mandatory release gate"]
-fn cam_radius_and_rise_edits_preserve_contact_and_history() {
-    exercise_sample("twin-roller-bezier-cam");
 }
 #[test]
 #[ignore = "requires built package and pinned Deno; mandatory release gate"]

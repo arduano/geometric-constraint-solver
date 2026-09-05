@@ -2,8 +2,26 @@
 
 # M92 visual and geometric design audit
 
-Status: **in progress; F001–F015 repairs are clean-qualified and the immutable candidate is
-nominated for human review. M92-U1–U8 remain pending and unexecuted.**
+Status: **in progress; the authorized 16-sample pruning pass awaits fresh qualification and
+replacement immutable nomination. M92-U1–U8 remain pending and unexecuted.**
+
+## Authorized pruning continuation — 2026-09-05
+
+The user removed `prusa-mini-interface`, `nema-17-motor-interface`, `hevort-datum-study` and
+`twin-roller-bezier-cam` from the public catalog. The amended inventory contains four mechanisms,
+eight product/fabrication studies, two atlases and two scale studies, with 32 meaningful measured
+source edits and eight public mechanism witnesses. Survivor keys, source/compiler authority and
+geometry remain unchanged; only their manifest ordinals are renumbered. The cam tangent-offset
+and passive-follower-locality regression retains its source/envelope as a private test fixture.
+
+Qualification of the 16-sample replacement is pending. The immutable 20-sample snapshot
+`/tmp/geosolve-m92-uat.x4b870rw` remains served at `http://100.94.63.83:18092/` while that work
+proceeds. All earlier 20-sample/40-edit/ten-witness records below are pre-pruning evidence and keep
+their exact source, byte and result identities. They do not qualify the replacement catalog or
+accept any human UAT row. A fresh gate, visual/history audit, no-rebuild freeze and exact endpoint
+verification are required before replacing the nomination. Pages remains unchanged.
+
+## Pre-pruning audit and qualification
 
 F003–F014 repairs are integrated. The development sample browser audit passed 20/20 before F014;
 exact legacy recovery and new scale restoration checks pass. F014's Jansen/field browser checks
@@ -486,6 +504,9 @@ complete qualification and immutable nomination required a fresh successful clea
 recorded below. All M92-U1–U8 rows remain pending and unexecuted; GitHub Pages is unchanged.
 
 ## Final clean qualification and immutable nomination
+
+This is the completed **pre-pruning** nomination. Its 20-sample and 40-edit evidence remains
+historical; the 16-sample replacement has not yet been qualified or nominated.
 
 Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05

@@ -178,10 +178,11 @@ exact-match, and the public release-WASM workbench and language-service browser 
 The accepted M90 and M91 services were then retired. M91 is complete and publicly closed.
 
 M92 is the current in-progress advanced sample showcase. It targets replacing the accumulated
-catalog variants with one manifest-driven, source-authoritative 20-sample registry: five mechanisms,
-eleven product/fabrication studies, two capability atlases and two scale labs (`5/11/2/2`).
-Mechanical qualification, an immutable M92 nomination, composite human UAT and milestone closure
-remain pending.
+catalog variants with one manifest-driven, source-authoritative 16-sample registry: four mechanisms,
+eight product/fabrication studies, two capability atlases and two scale labs (`4/8/2/2`).
+The user-authorized pruning amendment supersedes the qualified 20-entry inventory. Replacement
+qualification and immutable nomination are pending; composite human UAT and milestone closure remain
+open. See `docs/M92_GOALS.md` and `docs/M92_VISUAL_AUDIT.md`.
 
 Physics, collision and a production rendering system remain out of scope.
 
@@ -190,7 +191,7 @@ Physics, collision and a production rendering system remain out of scope.
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
 3. `PLAN.md` — authoritative roadmap; M91 is publicly closed and M92 is the current in-progress
-   20-sample showcase.
+   16-sample showcase.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -231,7 +232,7 @@ Physics, collision and a production rendering system remain out of scope.
 24. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — clean-qualified,
     explicitly accepted and publicly closed code-driven-authoring milestone.
 25. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — current in-progress
-    20-sample advanced showcase, implementation ledger and not-yet-nominated composite scorecard.
+    16-sample advanced showcase, implementation ledger and not-yet-nominated composite scorecard.
 
 ## Workspace
 
@@ -286,7 +287,7 @@ M89 established executed, reversible managed source. M90 completed the clean bre
 typed V3 sketch language and removed its temporary compatibility APIs. M91's five integrated
 workstreams are clean-qualified, accepted and publicly closed; exact Pages publication and browser
 verification pass, and the accepted M90/M91 services are retired. M92 is now in progress toward one
-manifest-driven, source-authoritative 20-sample showcase split `5/11/2/2` across mechanisms,
+manifest-driven, source-authoritative 16-sample showcase split `4/8/2/2` across mechanisms,
 product/fabrication studies, capability atlases and scale labs. Its qualification, UAT nomination,
 human review and closure remain pending. New
 milestones normally end in hands-on UAT after objective automation; M74 records an

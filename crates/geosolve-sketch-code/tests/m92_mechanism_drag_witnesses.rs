@@ -8,19 +8,18 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{DesignPointId, DocumentId, OperationControl, PersistentId};
 use geosolve_sketch_code::{
-    CodeOwnerAddress, CodePointEdit, ExpandedCodeProject, ExpandedPort, ExpandedWritablePoint,
-    KeyedReconcileState, ManagedPathSegment, SemanticOutputPath, bundled_sample,
-    materialize_code_project_cold, required_generated_members,
+    CodeOwnerAddress, CodePointEdit, CodeProject, CompiledManagedSource, ExpandedCodeProject,
+    ExpandedPort, ExpandedWritablePoint, KeyedReconcileState, ManagedPathSegment, ProjectKey,
+    SemanticOutputPath, bundled_sample, materialize_code_project_cold, required_generated_members,
 };
 use geosolve_sketch_intent::{
     IntentPlanDisposition, IntentPortKind, IntentSession, IntentSessionId,
 };
 use serde::Deserialize;
 
-const MECHANISMS: [&str; 5] = [
+const MECHANISMS: [&str; 4] = [
     "theo-jansen-leg",
     "whitworth-quick-return",
-    "twin-roller-bezier-cam",
     "peaucellier-linkage",
     "five-stage-scissor-lift",
 ];
@@ -769,7 +768,7 @@ fn every_mechanism_witness_accepts_default_bounded_pointer_frames() {
     }
     assert!(
         checked >= MECHANISMS.len(),
-        "complete five-mechanism inventory"
+        "complete public mechanism inventory"
     );
     assert!(
         failures.is_empty(),
@@ -884,7 +883,23 @@ fn trace_mechanism(
     targets: &[[f64; 2]],
     dof: usize,
 ) -> Vec<Vec<[f64; 2]>> {
-    let project = bundled_sample(sample_key).unwrap().project();
+    let project = if sample_key == "twin-roller-bezier-cam" {
+        // Catalog curation must not discard the independent tangent/locality regression.
+        let compiled = CompiledManagedSource::from_json(include_str!(
+            "fixtures/twin-roller-bezier-cam/sketch.compiled.json"
+        ))
+        .expect("private cam compiler envelope");
+        compiled
+            .validate_input_source(include_str!("fixtures/twin-roller-bezier-cam/sketch.ts"))
+            .expect("private cam source authority");
+        CodeProject::managed(
+            ProjectKey("regression-twin-roller-bezier-cam".into()),
+            compiled,
+        )
+        .expect("private cam project")
+    } else {
+        bundled_sample(sample_key).unwrap().project()
+    };
     let document = DocumentId(PersistentId::from_u128(0x9292));
     let materialized = materialize_code_project_cold(
         &project,

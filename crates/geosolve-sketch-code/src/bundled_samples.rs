@@ -443,7 +443,7 @@ mod tests {
         for sample in bundled_sample_catalog() {
             assert!(sample.compiled.text.get().is_none());
         }
-        let selected = bundled_sample("twin-roller-bezier-cam").expect("known sample");
+        let selected = bundled_sample("peaucellier-linkage").expect("known sample");
         assert!(selected.compiled.text.get().is_none());
         assert!(!selected.compiled_source().is_empty());
         assert!(selected.compiled.text.get().is_some());

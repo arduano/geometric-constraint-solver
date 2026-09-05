@@ -23,28 +23,6 @@ fn circles(document: &SketchDocument) -> Vec<([f64; 2], f64)> {
 }
 
 #[test]
-fn prusa_bearing_axes_are_34_mm_apart() {
-    let circles = circles(&document("prusa-mini-interface"));
-    let bearings = circles
-        .iter()
-        .filter(|(_, r)| (r - 7.5).abs() < 1e-8)
-        .collect::<Vec<_>>();
-    assert_eq!(
-        bearings.len(),
-        2,
-        "the published STEP has two R7.5 bearing seats, not one slotted proxy"
-    );
-    assert!(
-        (f64::hypot(
-            bearings[0].0[0] - bearings[1].0[0],
-            bearings[0].0[1] - bearings[1].0[1]
-        ) - 34.)
-            .abs()
-            < 1e-8
-    );
-}
-
-#[test]
 fn micron_rail_mounts_use_the_extracted_16_by_15_interface() {
     let circles = circles(&document("micron-carriage"));
     for x in [-8., 8.] {
@@ -57,17 +35,6 @@ fn micron_rail_mounts_use_the_extracted_16_by_15_interface() {
             );
         }
     }
-}
-
-#[test]
-fn hevort_keeps_extracted_hd9_mounts_distinct_from_the_mgn9_pitch() {
-    let circles = circles(&document("hevort-datum-study"));
-    assert!(
-        circles.iter().any(|(p, r)| (p[0] - 10.).abs() < 1e-8
-            && (p[1] - 10.).abs() < 1e-8
-            && (r - 1.6).abs() < 1e-8),
-        "HD9 STEP mount axes form a 20 by 20 square"
-    );
 }
 
 #[test]
@@ -206,50 +173,12 @@ fn contains(poly: &[[f64; 2]], p: [f64; 2]) -> bool {
 }
 #[allow(
     clippy::too_many_lines,
-    reason = "keeps independently measured expectations for the five reference studies adjacent"
+    reason = "keeps independently measured expectations for the three reference studies adjacent"
 )]
 fn intent(project: &geosolve_sketch_code::CodeProject, key: &str, edit: Option<usize>) {
     let native = audit::accepted_document(project);
     let doc = &named_circle_geometry(project);
     match key {
-        "hevort-datum-study" => {
-            square(
-                doc,
-                "hd9PitchHole",
-                [0., 0.],
-                if edit == Some(0) { 22. } else { 20. },
-                20.,
-                1.6,
-            );
-            square(
-                doc,
-                "mountingPitchHole",
-                [58., 0.],
-                15.,
-                16.,
-                if edit == Some(1) { 1.8 } else { 1.6 },
-            );
-        }
-        "prusa-mini-interface" => {
-            pair(
-                doc,
-                "bearing",
-                [0., 0.],
-                if edit == Some(0) { 36. } else { 34. },
-                if edit == Some(1) { 8. } else { 7.5 },
-                1,
-            );
-            for (label, position, radius) in [
-                ("lowerInterface", [12., -15.25], 1.6),
-                ("upperInterface", [4., 29.5], 1.65),
-            ] {
-                let holes = named_circles(doc, label);
-                assert_eq!(holes.len(), 1);
-                near(holes[0].0[0], position[0]);
-                near(holes[0].0[1], position[1]);
-                near(holes[0].1, radius);
-            }
-        }
         "micron-carriage" => {
             square(
                 doc,
@@ -403,10 +332,6 @@ macro_rules! edit_case {
         }
     };
 }
-edit_case!(hevort_hd9_pitch_edit, "hevort-datum-study", 0);
-edit_case!(hevort_mgn9_clearance_edit, "hevort-datum-study", 1);
-edit_case!(prusa_bearing_pitch_edit, "prusa-mini-interface", 0);
-edit_case!(prusa_bearing_radius_edit, "prusa-mini-interface", 1);
 edit_case!(micron_rail_pitch_edit, "micron-carriage", 0);
 edit_case!(micron_belt_pitch_edit, "micron-carriage", 1);
 edit_case!(voron_panel_width_edit, "voron-panel", 0);

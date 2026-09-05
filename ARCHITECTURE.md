@@ -2695,14 +2695,17 @@ Chromium 20/20 pass before both accepted M90/M91 listeners were retired. M91 is 
 
 ## M92 canonical bundled-sample architecture
 
-Mechanical qualification and immutable nomination pass for `b854d74`; M92 remains in progress
-pending human U1–U8. See [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination). The frozen production checks
-count 19 ordinary workbench rows and the separate bounded Jansen workflow independently.
+The authorized pruning amendment reduces the public catalog to 16 entries in `4/8/2/2` categories.
+Fresh qualification and replacement immutable nomination are pending; M92 and human U1–U8 remain
+open. [Pre-pruning qualification](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination)
+for `b854d74` remains historical evidence. Its still-served snapshot contains 20 samples. Frozen
+production checks count 19 ordinary workbench rows and the separate bounded Jansen workflow
+independently of catalog size.
 
 M92 replaces accumulated catalog variants with one manifest-driven registry owned by
 `geosolve-sketch-code`. `BundledSampleSpec` binds a stable ordinal/key/title/category/summary to its
 typed `sketch.ts`, authenticated compiler envelope, witnesses, expected mobility, ordered functional
-groups and provenance. `bundled_sample_catalog()` returns the exact 20-entry order and
+groups and provenance. `bundled_sample_catalog()` returns the exact 16-entry order and
 `bundled_sample(key)` resolves without a parallel enum. The frontend manifest is generated from the
 same registry; web and headless consumers do not curate independent lists.
 
@@ -2710,8 +2713,11 @@ Assets live together under `assets/bundled-samples/<key>/`: `manifest.json`, `sk
 `sketch.compiled.json`, `witnesses.json`, and `NOTICE.md` where required. Registry validation rejects
 ordinal gaps, duplicate keys/titles, category-count drift, missing assets, source/compiler mismatch,
 invalid expected mobility, duplicate/missing functional-group ownership and incomplete provenance.
-The fixed distribution is five mechanisms, eleven fabrication/products, two atlases and two scale
-labs.
+The fixed distribution is four mechanisms, eight fabrication/products, two atlases and two scale
+labs. The public assets for Prusa MINI, NEMA 17, HevORT and the twin-roller Bezier cam are retired;
+survivor keys and source/compiler envelopes remain unchanged while ordinals become `1..=16`.
+The cam source/envelope remains only as a private test fixture for exact tangent-offset and
+passive-follower-locality coverage, outside registry discovery and runtime catalog assets.
 
 All samples are source authoritative. TypeScript records equation-free declarations and groups;
 native materialization, solve, independent validation, rank/mobility, accepted scene and history
@@ -2762,8 +2768,8 @@ remains protected until successful explicit Save. `docs/M92_VISUAL_AUDIT.md` rec
 
 ### M92 sample presentation checks
 
-The separate 20-row sample browser audit checks two edits per sample, rendered geometry through
-history/reload, selection ownership and group restoration. It supplements the release-harness and
+The separate 16-row sample browser audit checks two edits per sample (32 edits), rendered geometry
+through history/reload, selection ownership and group restoration. It supplements the release-harness and
 immutable-endpoint scopes above. F014 keeps Explorer rows and child grids within their panel and
 widens the default panel share; these presentation changes do not alter accepted geometry or
 history.
@@ -2776,7 +2782,9 @@ reproduced work exhaustion before core repair under the ordinary 256-factorizati
 geometry remained retained, but no movement or Undo entry was accepted. Browser reproduction reached
 the same disabled-Undo outcome. Core repair `a9d7532` extends existing first-improvement
 backtracking to all Temporary objectives without changing budgets, tolerances or certification.
-All ten default-policy witnesses and the Jansen/scissor browser checks now pass. The required boundary preserves hard validation, explicit branches, locality and exact
+The pre-pruning ten default-policy witnesses and Jansen/scissor browser checks passed. The active
+four-mechanism catalog retains eight default-policy witnesses for renewed qualification. The
+required boundary preserves hard validation, explicit branches, locality and exact
 history while completing meaningful ordinary drags within the configured budget. The detailed
 reproduction and failed clean-gate receipt are in `docs/M92_VISUAL_AUDIT.md`.
 

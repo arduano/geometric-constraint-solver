@@ -9,10 +9,10 @@ const paletteSource = await readFile(new URL("../../src/workbench/geometry_palet
 const actionSource = await readFile(new URL("../../src/workbench/action_surface.rs", import.meta.url), "utf8");
 const manifestSource = await readFile(new URL("../../src/workbench/command_manifest.rs", import.meta.url), "utf8");
 
-if (samples.length !== 20) throw new Error(`canonical registry must expose 20 samples; received ${samples.length}`);
-if (samples.map(({ ordinal }) => ordinal).join(",") !== Array.from({ length: 20 }, (_, index) => index + 1).join(",")) throw new Error("sample ordinals must be exactly 1..=20");
+if (samples.length !== 16) throw new Error(`canonical registry must expose 16 samples; received ${samples.length}`);
+if (samples.map(({ ordinal }) => ordinal).join(",") !== Array.from({ length: 16 }, (_, index) => index + 1).join(",")) throw new Error("sample ordinals must be exactly 1..=16");
 const categoryCounts = Object.groupBy(samples, ({ category }) => category);
-if (categoryCounts.mechanism?.length !== 5 || categoryCounts.product_fabrication?.length !== 11 || categoryCounts.reference_lab?.length !== 2 || categoryCounts.scale_study?.length !== 2) throw new Error("sample categories must remain 5/11/2/2");
+if (categoryCounts.mechanism?.length !== 4 || categoryCounts.product_fabrication?.length !== 8 || categoryCounts.reference_lab?.length !== 2 || categoryCounts.scale_study?.length !== 2) throw new Error("sample categories must remain 4/8/2/2");
 const identities = new Set(samples.map(({ stableId }) => stableId));
 if (identities.size !== samples.length) throw new Error("sample stable IDs must be unique");
 const sampleKeys = new Set(samples.map(({ key }) => key));
@@ -50,4 +50,4 @@ for (const entry of [...commands.modify, ...commands.context, ...commands.canvas
   const keyFound = actionSource.includes(`"${entry.id}"`) || manifestSource.includes(`"${entry.id}"`);
   if (!keyFound || !(manifestSource.includes(`"${entry.label}"`) || actionSource.includes(`"${entry.label}"`))) throw new Error(`feature/display command drift: ${entry.id}`);
 }
-console.log("frontend manifests match Rust authority: 20 canonical source-authoritative samples + complete primary command inventory");
+console.log("frontend manifests match Rust authority: 16 canonical source-authoritative samples + complete primary command inventory");

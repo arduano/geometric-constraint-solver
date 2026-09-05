@@ -488,7 +488,7 @@ mod wasm {
             clippy::too_many_lines,
             reason = "one exhaustive adapter-boundary matrix keeps each production-frame parity invariant adjacent"
         )]
-        fn actual_wasm_all_twenty_samples_match_independently_composed_production_frames() {
+        fn actual_wasm_all_bundled_samples_match_independently_composed_production_frames() {
             const PRODUCTION_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 
             fn normalize_allocator_ids(frame: &str) -> String {
@@ -525,7 +525,7 @@ mod wasm {
             }
 
             let samples = geosolve_sketch_code::bundled_sample_catalog();
-            assert_eq!(samples.len(), 20);
+            assert_eq!(samples.len(), 16);
             for sample in samples {
                 let key = sample.key;
                 let mut handle = super::WorkbenchHandle::new(r#"{"version":1}"#)

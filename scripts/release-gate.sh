@@ -57,7 +57,7 @@ cargo test --locked -p geosolve-headless --test m87_headless \
   inspect_edit_solve_and_static_render_share_one_exact_control_authority \
   -- --exact --ignored
 cargo test --locked -p geosolve-headless --test m87_headless \
-  all_twenty_bundled_samples_apply_declared_edit_undo_redo_and_reload \
+  all_bundled_samples_apply_declared_edit_undo_redo_and_reload \
   -- --exact --ignored --test-threads=1
 cargo test --locked -p geosolve-headless --test m87_headless \
   cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs \

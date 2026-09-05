@@ -260,23 +260,19 @@ fn gridfinity_height_edit_preserves_floor_and_increases_cavity() {
 #[test]
 #[ignore = "requires the pinned TypeScript sidecar"]
 // M92-F005: independent accepted-geometry regression.
-fn declared_radius_edits_change_accepted_manufacturing_dimensions() {
-    for (key, curve, expected) in [
-        ("dust-shoe-clamp", "spindleBore", 33.0),
-        ("nema-17-motor-interface", "pilot", 11.2),
-    ] {
-        let witness: serde_json::Value =
-            serde_json::from_str(bundled_sample(key).unwrap().witnesses_json()).unwrap();
-        let w = &witness["representative_edit"];
-        let edited = edit(
-            key,
-            w["declaration"].as_str().unwrap(),
-            w["path"][0].as_str().unwrap(),
-            expected,
-        );
-        let g = geometry(edited.project());
-        near(g[curve].radius.unwrap(), expected, key);
-    }
+fn declared_radius_edit_changes_the_accepted_spindle_bore() {
+    let key = "dust-shoe-clamp";
+    let witness: serde_json::Value =
+        serde_json::from_str(bundled_sample(key).unwrap().witnesses_json()).unwrap();
+    let w = &witness["representative_edit"];
+    let edited = edit(
+        key,
+        w["declaration"].as_str().unwrap(),
+        w["path"][0].as_str().unwrap(),
+        33.0,
+    );
+    let g = geometry(edited.project());
+    near(g["spindleBore"].radius.unwrap(), 33.0, key);
 }
 #[test]
 // M92-F008: independent accepted-geometry regression.
@@ -454,18 +450,7 @@ fn gridfinity_width_edit_keeps_plan_section_and_symmetry_consistent() {
 }
 #[test]
 #[ignore = "requires the pinned TypeScript sidecar"]
-fn second_radius_and_screw_edits_preserve_interface_datums() {
-    let before = geometry(&bundled_sample("nema-17-motor-interface").unwrap().project());
-    let e = edit("nema-17-motor-interface", "shaftRadius", "value", 3.0);
-    let g = geometry(e.project());
-    near(g["shaft"].radius.unwrap(), 3.0, "shaft radius");
-    for name in ["holeNe", "holeNw", "holeSe", "holeSw", "pilot"] {
-        for (a, b) in g[name].points.iter().zip(&before[name].points) {
-            near(a[0], b[0], name);
-            near(a[1], b[1], name);
-        }
-        near(g[name].radius.unwrap(), before[name].radius.unwrap(), name);
-    }
+fn screw_pitch_edit_preserves_the_spindle_bore() {
     let e = edit("dust-shoe-clamp", "screwAxisLength", "value", 22.0);
     let g = geometry(e.project());
     near(g["upperClampScrew"].points[0][1], 11.0, "upper screw");

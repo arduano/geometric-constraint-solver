@@ -107,7 +107,7 @@ function savedProjectFingerprint(value: string | null) {
 async function openManifold(page: Page) {
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
-  await page.getByPlaceholder("Search 20 samples…").fill("water manifold");
+  await page.getByPlaceholder("Search 16 samples…").fill("water manifold");
   await page.getByRole("button", { name: new RegExp(MANIFOLD_TITLE) }).click();
   await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText('"use geosolve sketch"');
@@ -116,7 +116,7 @@ async function openManifold(page: Page) {
 async function openJansen(page: Page) {
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
-  await page.getByPlaceholder("Search 20 samples…").fill("Jansen");
+  await page.getByPlaceholder("Search 16 samples…").fill("Jansen");
   await page.getByRole("button", { name: new RegExp(JANSEN_TITLE) }).click();
   await expect(page.locator("header").getByText(JANSEN_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText('"use geosolve sketch"');
@@ -125,7 +125,7 @@ async function openJansen(page: Page) {
 async function openScissorLift(page: Page) {
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
-  await page.getByPlaceholder("Search 20 samples…").fill("five-stage scissor");
+  await page.getByPlaceholder("Search 16 samples…").fill("five-stage scissor");
   await page.getByRole("button", { name: new RegExp(SCISSOR_TITLE) }).click();
   await expect(page.locator("header").getByText(SCISSOR_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText('"use geosolve sketch"');

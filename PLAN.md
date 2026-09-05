@@ -8117,24 +8117,26 @@ types; `/` equals `index.html`. The public release-WASM workbench and language-s
 
 ## M92 — advanced sample showcase and scale corpus
 
-Status: **in progress**. Scope, clean breaks and integration order are frozen in
+Status: **in progress; 16-sample pruning qualification and replacement nomination pending**.
+The user-authorized 2026-09-05 amendment removes Prusa MINI, NEMA 17, HevORT and the twin-roller
+Bezier cam. Active scope, clean breaks and integration order are recorded in
 `docs/M92_GOALS.md`; `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` owns the
 single composite human review.
 
 - [x] Replace the duplicated 12/25/37-entry sample catalogs with one public, manifest-driven,
-  source-authoritative registry in `geosolve-sketch-code`. Exactly 20 visible samples are ordered as
-  five mechanisms, eleven products/fabrication studies, two capability atlases and two scale labs.
+  source-authoritative registry in `geosolve-sketch-code`. Exactly 16 visible samples are ordered as
+  four mechanisms, eight products/fabrication studies, two capability atlases and two scale labs.
 - [x] Make every entry mechanically complete: finite independently validated accepted geometry,
   normalized Hard residual at most `1e-9`, truthful expected raw/effective mobility, minimal
   anchoring, explicit branch/contact state, meaningful flat functional groups, and complete
   source/IR/project inverse authority.
-- [x] Deliver five advanced manipulable mechanisms: Theo Jansen-style walking leg, Whitworth
-  quick-return, twin-roller Bezier cam, Peaucellier straight-line linkage and generated five-stage
+- [x] Deliver four advanced manipulable mechanisms: Theo Jansen-style walking leg, Whitworth
+  quick-return, Peaucellier straight-line linkage and generated five-stage
   scissor lift. Each owns deterministic drag witnesses for its intended motion.
-- [x] Deliver eleven recognizable fabrication/product studies: improved PC liquid-cooling
+- [x] Deliver eight recognizable fabrication/product studies: improved PC liquid-cooling
   manifold, CNC dogbone fit coupon, CNC vacuum fixture plate, CNC router dust shoe/spindle clamp,
-  Gridfinity plan plus 3U section, NEMA 17 mounting face, HevORT HD9/MGN9 datum study, Voron V0.2
-  motor panel, Prusa MINI X-carriage interface, Micron CNC X-carriage and Bondtech INDX tool link.
+  Gridfinity plan plus 3U section, Voron V0.2 motor panel, Micron CNC X-carriage and Bondtech INDX
+  tool link.
 - [x] Deliver two broad atlases and two honest scale cases: curves/contact/continuity; fabrication
   operations/constraints/dimensions/annotations; a parametric perforated fixture field; and a dense
   robotic harness-routing backplane.
@@ -8149,17 +8151,26 @@ single composite human review.
 - [x] Add exact automated coverage for representative edit, Undo/Redo/reload,
   native/headless/release-WASM parity and frontend-manifest generation for every entry, with release
   WASM below 20 MiB and the complete distribution below 30 MiB as enforced release boundaries.
-  Final clean execution and immutable nomination now pass as recorded below.
-- [x] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
+  Pre-pruning qualification is recorded below; renewed execution is pending for the 16 survivors.
+- [ ] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
   survey/check/require-clean, package/frontend tests and the clean release gate; then freeze one
   byte-verified immutable M92 UAT without publishing Pages before human approval.
 
-Implementation checkpoint: the manifest-driven registry and all four sample waves are integrated
-at the frozen `5/11/2/2` distribution. Registry, source/compiler/project authority, sample-wave,
+Implementation checkpoint: the manifest-driven registry and all four sample waves are integrated;
+the authorized pruning revises their distribution to `4/8/2/2`. Survivor source/compiler bytes
+stay unchanged, ordinals become contiguous and retired cam geometry retains private regression
+coverage. Registry, source/compiler/project authority, sample-wave,
 drag-witness, headless report-v2, representative-edit/history, release-WASM adapter and release-size
 owners are present. M92-F001 and M92-F002 repairs plus their focused regressions are integrated.
-Complete clean qualification and immutable UAT nomination now pass; no M92 human row
-or Pages publication is claimed. See [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
+The prior clean qualification and immutable UAT nomination pass only for the pre-pruning catalog;
+the 16-sample replacement requires 32 measured edits, eight public mechanism witnesses and a new
+clean gate and immutable snapshot. No M92 human row or Pages publication is claimed. See
+[pre-pruning qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
+
+### Pre-pruning implementation and qualification evidence
+
+The records below retain their original 20-sample, 40-edit and ten-witness counts. They describe
+the unchanged historical sources and snapshot, and do not qualify the pruned replacement.
 
 `M92-F001` was reproduced while opening the fabrication operations atlas across the editor-checkpoint
 boundary. Live `SketchDocument` trim rows retained operation insertion order, while draft-v5
@@ -8252,7 +8263,7 @@ focused suite passes 2/2 in 7.76 seconds. Classify this as `HARNESS_ERROR`, with
 The exact failed receipt is in `docs/M92_VISUAL_AUDIT.md`; the full replacement gate and nomination
 subsequently passed.
 
-Final mechanical nomination — 2026-09-05:
+Pre-pruning mechanical nomination — 2026-09-05:
 
 Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05

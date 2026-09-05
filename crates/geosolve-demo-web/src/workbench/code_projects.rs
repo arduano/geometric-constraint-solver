@@ -8417,9 +8417,9 @@ mod tests {
         clippy::too_many_lines,
         reason = "one reviewed sample matrix keeps source, compiler, artifact, solve, DOF, and finite-scene parity adjacent"
     )]
-    fn all_twenty_samples_open_with_nonempty_independently_validated_native_canvases() {
+    fn all_bundled_samples_open_with_nonempty_independently_validated_native_canvases() {
         let samples = bundled_sample_catalog();
-        assert_eq!(samples.len(), 20);
+        assert_eq!(samples.len(), 16);
         for sample in samples {
             let expected_raw_dof = sample.expected.numerical_right_nullity();
             let expected_effective_dof = sample.expected.bidirectional_bounded_degrees_of_freedom();
@@ -8521,9 +8521,9 @@ mod tests {
         clippy::too_many_lines,
         reason = "one exhaustive sample matrix keeps edit, publication, finite-scene validation and exact Undo adjacent"
     )]
-    fn all_twenty_samples_accept_one_semantic_seed_edit_and_exact_undo() {
+    fn all_bundled_samples_accept_one_semantic_seed_edit_and_exact_undo() {
         let samples = bundled_sample_catalog();
-        assert_eq!(samples.len(), 20);
+        assert_eq!(samples.len(), 16);
         for (index, sample) in samples.iter().enumerate() {
             let (mut workbench, _editor) = open_with_editor(sample.key);
             let before = workbench.session.snapshot().clone();

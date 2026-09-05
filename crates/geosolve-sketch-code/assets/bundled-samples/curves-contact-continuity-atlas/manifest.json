@@ -1,6 +1,6 @@
 {
   "format": "geosolve-bundled-sample-v1",
-  "ordinal": 17,
+  "ordinal": 13,
   "key": "curves-contact-continuity-atlas",
   "title": "Curves, contact and continuity atlas",
   "summary": "Readable analytic and spline specimens frame explicit rolling contact and a parametric-C2 seam.",

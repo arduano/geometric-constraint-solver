@@ -20,7 +20,7 @@ const samples = await Promise.all(directories.map(async (key) => ({
   },
 })));
 samples.sort((a, b) => a.manifest.ordinal - b.manifest.ordinal);
-expect(samples).toHaveLength(20);
+expect(samples).toHaveLength(16);
 
 const savedWorkspaceExpression = `(async () => {
   const database = await new Promise((resolve, reject) => {
@@ -201,7 +201,7 @@ for (const { key, manifest, witnesses } of samples) {
     await page.goto("/", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "File menu" }).click();
     await page.getByRole("menuitem", { name: /Open/ }).click();
-    await page.getByPlaceholder("Search 20 samples…").fill(manifest.title);
+    await page.getByPlaceholder("Search 16 samples…").fill(manifest.title);
     await page.getByRole("button").filter({ has: page.getByText(manifest.title, { exact: true }) }).click();
     await expect(page.locator("header").getByText(manifest.title, { exact: true })).toBeVisible();
     await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).not.toBeNull();

@@ -299,9 +299,9 @@ mod tests {
     }
 
     #[test]
-    fn all_twenty_bundled_samples_round_trip_source_ir_and_artifacts() {
+    fn all_bundled_samples_round_trip_source_ir_and_artifacts() {
         let bundled = bundled_sample_catalog();
-        assert_eq!(bundled.len(), 20);
+        assert_eq!(bundled.len(), 16);
         for sample in bundled {
             let project = sample.project();
             let source_before = project.managed.source.clone();

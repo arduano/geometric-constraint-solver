@@ -1,6 +1,6 @@
 {
   "format": "geosolve-bundled-sample-v1",
-  "ordinal": 8,
+  "ordinal": 7,
   "key": "vacuum-fixture-plate",
   "title": "CNC vacuum fixture and spoilboard plate",
   "summary": "A 200 x 120 mm datum-driven plate combines a gasket groove, six-port vacuum grid and symmetric workholding pattern.",

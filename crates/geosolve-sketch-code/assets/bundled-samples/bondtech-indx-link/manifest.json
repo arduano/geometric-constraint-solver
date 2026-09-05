@@ -1,6 +1,6 @@
 {
   "format": "geosolve-bundled-sample-v1",
-  "ordinal": 16,
+  "ordinal": 12,
   "key": "bondtech-indx-link",
   "title": "Bondtech INDX tool-link interface",
   "summary": "A Bondtech INDX Link study pairs the published plan envelope with a schematic three-point Maxwell coupling and link-board service zone.",

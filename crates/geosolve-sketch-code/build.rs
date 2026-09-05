@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 const COMPRESSION_LEVEL: u8 = 10;
 const MANIFEST_FORMAT: &str = "geosolve-bundled-sample-v1";
 const WITNESSES_FORMAT: &str = "geosolve-sample-witnesses-v1";
-const SAMPLE_COUNT: usize = 20;
+const SAMPLE_COUNT: usize = 16;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -181,10 +181,10 @@ fn validate_bundled_samples(manifest_dir: &Path) -> Vec<ValidatedSample> {
         );
         *categories.entry(manifest.category).or_default() += 1;
     }
-    assert_eq!(categories.get(&ManifestCategory::Mechanism), Some(&5));
+    assert_eq!(categories.get(&ManifestCategory::Mechanism), Some(&4));
     assert_eq!(
         categories.get(&ManifestCategory::ProductFabrication),
-        Some(&11)
+        Some(&8)
     );
     assert_eq!(categories.get(&ManifestCategory::ReferenceLab), Some(&2));
     assert_eq!(categories.get(&ManifestCategory::ScaleStudy), Some(&2));

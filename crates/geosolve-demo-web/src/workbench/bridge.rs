@@ -9454,7 +9454,11 @@ export default sketch(($) => {
     #[test]
     fn m92_legacy_recovery_is_strict_and_retains_presentation_and_history() {
         let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
-        bridge.dispatch_json(r#"{"version":1,"command":"sample.open","payload":{"key":"nema-17-motor-interface"}}"#).unwrap();
+        bridge
+            .dispatch_json(
+                r#"{"version":1,"command":"sample.open","payload":{"key":"dust-shoe-clamp"}}"#,
+            )
+            .unwrap();
         bridge
             .dispatch_json(r#"{"version":1,"command":"view.construction.toggle"}"#)
             .unwrap();

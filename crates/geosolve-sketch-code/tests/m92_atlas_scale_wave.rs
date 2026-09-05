@@ -27,7 +27,7 @@ struct ExpectedSample {
 
 const SAMPLES: [ExpectedSample; 4] = [
     ExpectedSample {
-        ordinal: 17,
+        ordinal: 13,
         key: "curves-contact-continuity-atlas",
         category: SampleCategory::ReferenceLab,
         raw_dof: 81,
@@ -55,7 +55,7 @@ const SAMPLES: [ExpectedSample; 4] = [
         ],
     },
     ExpectedSample {
-        ordinal: 18,
+        ordinal: 14,
         key: "fabrication-operations-atlas",
         category: SampleCategory::ReferenceLab,
         raw_dof: 255,
@@ -92,7 +92,7 @@ const SAMPLES: [ExpectedSample; 4] = [
         ],
     },
     ExpectedSample {
-        ordinal: 19,
+        ordinal: 15,
         key: "perforated-fixture-field",
         category: SampleCategory::ScaleStudy,
         raw_dof: 772,
@@ -103,7 +103,7 @@ const SAMPLES: [ExpectedSample; 4] = [
         required_families: &[],
     },
     ExpectedSample {
-        ordinal: 20,
+        ordinal: 16,
         key: "robotic-harness-backplane",
         category: SampleCategory::ScaleStudy,
         raw_dof: 268,

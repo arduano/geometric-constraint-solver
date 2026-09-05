@@ -1,6 +1,6 @@
 {
   "format": "geosolve-bundled-sample-v1",
-  "ordinal": 7,
+  "ordinal": 6,
   "key": "cnc-dogbone-coupon",
   "title": "CNC joinery and dogbone fit coupon",
   "summary": "A fully constrained three-station router coupon compares press, nominal and loose mortises against common tabs and explicit cutter reliefs.",

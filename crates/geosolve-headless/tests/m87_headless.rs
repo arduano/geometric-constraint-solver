@@ -593,10 +593,10 @@ fn concurrent_publication_is_atomic_no_clobber_and_io_failure_leaves_no_generati
     clippy::too_many_lines,
     reason = "one catalog audit keeps report identity, mobility, group ordering, independent validation, and timing exclusion together for every sample"
 )]
-fn all_twenty_bundled_samples_inspect_with_deterministic_report_v2_authority() {
+fn all_bundled_samples_inspect_with_deterministic_report_v2_authority() {
     let samples = bundled_sample_catalog();
     let keys = bundled_sample_keys();
-    assert_eq!(samples.len(), 20);
+    assert_eq!(samples.len(), 16);
     assert_eq!(
         keys,
         samples.iter().map(|sample| sample.key).collect::<Vec<_>>()
@@ -727,7 +727,7 @@ fn all_twenty_bundled_samples_inspect_with_deterministic_report_v2_authority() {
     clippy::too_many_lines,
     reason = "one exhaustive cross-host matrix keeps each declared edit, accepted solve, exact code history, and reload authority adjacent"
 )]
-fn all_twenty_bundled_samples_apply_declared_edit_undo_redo_and_reload() {
+fn all_bundled_samples_apply_declared_edit_undo_redo_and_reload() {
     for (index, sample) in bundled_sample_catalog().iter().enumerate() {
         let witness: serde_json::Value = serde_json::from_str(sample.witnesses_json())
             .unwrap_or_else(|error| panic!("{} witness JSON: {error}", sample.key));
@@ -1035,7 +1035,7 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
     assert!(samples.status.success());
     assert_eq!(
         String::from_utf8(samples.stdout).unwrap().lines().count(),
-        20
+        16
     );
 
     let inspected = Command::new(binary)

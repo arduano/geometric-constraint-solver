@@ -4,41 +4,50 @@
 
 ## Outcome
 
-Replace the accumulated sample catalog with one coherent 20-entry, code-authoritative showcase.
+Replace the accumulated sample catalog with one coherent 16-entry, code-authoritative showcase.
 The milestone demonstrates advanced constrained motion, recognizable fabrication/product studies,
 broad API coverage and honest scale while keeping source, UX, native execution and AI authoring in
 one inspectable model.
 
-## Frozen inventory
+## Authorized scope amendment — 2026-09-05
+
+The supervising user authorized pruning `prusa-mini-interface`, `nema-17-motor-interface`,
+`hevort-datum-study` and `twin-roller-bezier-cam` from the public catalog. This supersedes the
+original frozen 20-entry inventory. The active distribution is `4/8/2/2`, with two meaningful
+measured source edits per survivor (32 edits). Survivor keys, source and authenticated compiler
+envelopes stay unchanged; manifest ordinals become contiguous `1..=16`.
+
+The cam's tangent-offset and passive-follower-locality regression remains a private test fixture,
+outside the runtime catalog. The previous 20-sample qualification and immutable snapshot remain
+historical pre-pruning evidence. Fresh qualification and replacement immutable nomination are
+pending; M92 and all human U1–U8 rows remain open.
+
+## Active inventory
 
 Mechanisms:
 
 1. Theo Jansen-style walking leg;
 2. Whitworth quick-return;
-3. twin-roller Bezier cam;
-4. Peaucellier straight-line linkage;
-5. generated five-stage scissor lift.
+3. Peaucellier straight-line linkage;
+4. generated five-stage scissor lift.
 
 Products and fabrication:
 
-6. improved PC liquid-cooling manifold;
-7. CNC joinery/dogbone fit coupon;
-8. CNC vacuum fixture/spoilboard plate;
-9. CNC router dust shoe/spindle clamp;
-10. Gridfinity plan plus 3U section;
-11. NEMA 17 mounting-face study;
-12. HevORT HD9/MGN9 datum study;
-13. Voron V0.2 motor panel;
-14. Prusa MINI/MINI+ X-carriage interface;
-15. Printers for Ants Micron CNC X-carriage;
-16. Bondtech INDX tool-link interface.
+5. improved PC liquid-cooling manifold;
+6. CNC joinery/dogbone fit coupon;
+7. CNC vacuum fixture/spoilboard plate;
+8. CNC router dust shoe/spindle clamp;
+9. Gridfinity plan plus 3U section;
+10. Voron V0.2 motor panel;
+11. Printers for Ants Micron CNC X-carriage;
+12. Bondtech INDX tool-link interface.
 
 Atlases and scale:
 
-17. curves/contact/continuity atlas;
-18. fabrication operations/constraints/dimensions/annotations atlas;
-19. parametric perforated fixture/mounting-cell field;
-20. dense robotic harness-routing backplane.
+13. curves/contact/continuity atlas;
+14. fabrication operations/constraints/dimensions/annotations atlas;
+15. parametric perforated fixture/mounting-cell field;
+16. dense robotic harness-routing backplane.
 
 ## Quality boundary
 
