@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { readFile } from "node:fs/promises";
+import { inflateSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
 
 const MANIFOLD_TITLE = "PC liquid-cooling manifold";
@@ -530,10 +531,23 @@ test("canonical Jansen sample Polyline Finish publishes inferred constraints int
   const canvas = page.getByRole("application");
   const frame = canvas.locator("svg.geosolve-authoritative-frame");
   const originalCurveCount = await frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve").count();
-  const bounds = await canvas.boundingBox();
-  expect(bounds).not.toBeNull();
   const click = async (x: number, y: number) => {
-    await page.mouse.click(bounds!.x + bounds!.width * x, bounds!.y + bounds!.height * y);
+    // The split panel can letterbox the SVG. Container fractions may land
+    // outside its actual viewBox and are correctly rejected by the editor.
+    const position = await frame.evaluate((element, fraction) => {
+      const svg = element as unknown as {
+        viewBox: { baseVal: { x: number; y: number; width: number; height: number } };
+        createSVGPoint(): { x: number; y: number; matrixTransform(matrix: unknown): { x: number; y: number } };
+        getScreenCTM(): unknown;
+      };
+      const box = svg.viewBox.baseVal;
+      const point = svg.createSVGPoint();
+      point.x = box.x + box.width * fraction.x;
+      point.y = box.y + box.height * fraction.y;
+      const result = point.matrixTransform(svg.getScreenCTM());
+      return { x: result.x, y: result.y };
+    }, { x, y });
+    await page.mouse.click(position.x, position.y);
   };
 
   await page.getByRole("button", { name: "Sketch", exact: true }).click();
@@ -698,14 +712,21 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
   }
 
   // Five retained scissor-lift drag snapshots exceed Chromium's former 5 MiB
-  // localStorage path. The newest exact workspace belongs only to IndexedDB.
+  // localStorage path before v5 compression. Verify the actual decoded size;
+  // successful compression must not make this history regression fail.
   const finalSaved = lastSaved;
   expect(finalSaved).not.toBeNull();
-  expect(new TextEncoder().encode(finalSaved!).byteLength).toBeGreaterThan(5 * 1024 * 1024);
   const savedEnvelope = JSON.parse(finalSaved!) as { format?: unknown; project?: unknown };
   expect(savedEnvelope.format).toBe("geosolve-workbench-presentation-v1");
   expect(typeof savedEnvelope.project).toBe("string");
-  expect(JSON.parse(savedEnvelope.project as string).version).toBe("geosolve-code-workbench-v5");
+  const workbench = JSON.parse(savedEnvelope.project as string) as { version: string; session: string };
+  expect(workbench.version).toBe("geosolve-code-workbench-v5");
+  const capsule = workbench.session.split(":");
+  expect(capsule).toHaveLength(5);
+  expect(capsule.slice(0, 2)).toEqual(["GEOSOLVE_REPRO_V1", "zlib-base64url"]);
+  const decoded = inflateSync(Buffer.from(capsule[4], "base64url"), { maxOutputLength: 64 * 1024 * 1024 });
+  expect(decoded.byteLength).toBe(Number(capsule[2]));
+  expect(decoded.byteLength).toBeGreaterThan(5 * 1024 * 1024);
   expect(await page.evaluate(() => localStorage.getItem("geosolve.project.v1"))).toBeNull();
 
   // Camera state is presentation-local. Normalize it exactly as the native

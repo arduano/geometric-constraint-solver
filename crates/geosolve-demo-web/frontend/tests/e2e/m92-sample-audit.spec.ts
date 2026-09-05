@@ -116,6 +116,81 @@ function controlLabel(edit: Edit): string {
   return edit.path.length ? `${edit.declaration} · ${edit.path.join(".")}` : edit.declaration;
 }
 
+async function requireJansenDrag(page: Page, info: TestInfo, originalSource: string, baseline: string) {
+  const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
+  const points = frame.locator('.wb-accepted-scene .wb-points > circle.wb-point');
+  await expect(points).toHaveCount(8);
+  const geometry = await points.evaluateAll((elements) => elements.map((element) => ({
+    id: element.getAttribute("data-persistent-id"),
+    x: Number(element.getAttribute("cx")),
+    y: Number(element.getAttribute("cy")),
+  })));
+  // The authored crank starts at [15, 0], to the right of O=[0, 0]
+  // and every leg joint. Use its two actual painted endpoints to calibrate
+  // the model-to-screen transform, without a private bridge test hook.
+  const [crank, ground] = [...geometry].sort((a, b) => b.x - a.x);
+  const foot = [...geometry].sort((a, b) => b.y - a.y)[0];
+  expect(Math.abs(crank.y - ground.y)).toBeLessThan(0.002);
+  const scale = (crank.x - ground.x) / 15;
+  expect(scale).toBeGreaterThan(0);
+  const selector = (id: string | null) => `.wb-points > circle.wb-point[data-persistent-id=${JSON.stringify(id)}]`;
+  const input = frame.locator(selector(crank.id));
+  const bounds = await input.boundingBox();
+  expect(bounds).not.toBeNull();
+  const start = [bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2];
+  const target = { x: ground.x + 14.265847744427303 * scale, y: ground.y - 4.635254915624211 * scale };
+  const pointerTarget = await frame.evaluate((element, position) => {
+    const svg = element as unknown as {
+      createSVGPoint(): { x: number; y: number; matrixTransform(matrix: unknown): { x: number; y: number } };
+      getScreenCTM(): unknown;
+    };
+    const point = svg.createSVGPoint();
+    point.x = position.x;
+    point.y = position.y;
+    const transformed = point.matrixTransform(svg.getScreenCTM());
+    return { x: transformed.x, y: transformed.y };
+  }, target);
+  const undo = page.getByRole("button", { name: "Undo", exact: true });
+  await expect(undo).toBeDisabled();
+  const initialSave = await savedWorkspace(page);
+  await page.mouse.move(start[0], start[1]);
+  await page.mouse.down();
+  await page.mouse.move(pointerTarget.x, pointerTarget.y, { steps: 12 });
+  await page.mouse.up();
+  // Unlimited native sweeps previously missed a bounded preview exhaustion:
+  // selecting the input succeeded, but no accepted frame moved or committed.
+  await expect(undo).toBeEnabled();
+  const position = (id: string | null) => frame.locator(selector(id)).evaluate((element) => ({
+    x: Number(element.getAttribute("cx")), y: Number(element.getAttribute("cy")),
+  }));
+  const moved = await position(crank.id);
+  expect(Math.hypot(moved.x - target.x, moved.y - target.y) / scale).toBeLessThan(0.05);
+  expect(await position(ground.id)).toEqual({ x: ground.x, y: ground.y });
+  const movedFoot = await position(foot.id);
+  expect(Math.hypot(movedFoot.x - foot.x, movedFoot.y - foot.y) / scale).toBeGreaterThan(0.1);
+  await expect.poll(() => acceptedSource(page)).toBe(originalSource);
+  await expect.poll(() => savedWorkspace(page)).not.toBe(initialSave);
+  const terminal = await fittedGeometry(page);
+  expect(terminal).not.toBe(baseline);
+  await capture(page, info, "theo-jansen-leg", "drag-terminal");
+  const terminalSave = await savedWorkspace(page);
+  await undo.click();
+  expect(await fittedGeometry(page)).toBe(baseline);
+  await expect(undo).toBeDisabled();
+  await expect.poll(() => savedWorkspace(page)).not.toBe(terminalSave);
+  const undoSave = await savedWorkspace(page);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  expect(await fittedGeometry(page)).toBe(terminal);
+  await expect.poll(() => savedWorkspace(page)).not.toBe(undoSave);
+  await page.reload({ waitUntil: "networkidle" });
+  await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(originalSource);
+  expect(await fittedGeometry(page)).toBe(terminal);
+  await capture(page, info, "theo-jansen-leg", "drag-reload");
+  await undo.click();
+  expect(await fittedGeometry(page)).toBe(baseline);
+  await expect(undo).toBeDisabled();
+}
+
 for (const { key, manifest, witnesses } of samples) {
   test(`M92 visual workflow ${manifest.ordinal}: ${key}`, async ({ page }, info) => {
     test.setTimeout(360_000);
@@ -157,6 +232,10 @@ for (const { key, manifest, witnesses } of samples) {
       .filter(({ left }) => left !== 0));
     expect(horizontalScroll, "group actions must not scroll declaration labels out of view").toEqual([]);
     await capture(page, info, key, "baseline");
+    if (key === "theo-jansen-leg") {
+      expect(original).not.toBeNull();
+      await requireJansenDrag(page, info, original!, baselineGeometry);
+    }
     expect(witnesses.secondary_edit, `${key} requires a distinct measured second parameter`).toBeDefined();
     expect(controlLabel(witnesses.secondary_edit)).not.toBe(controlLabel(witnesses.representative_edit));
     for (const [index, edit] of [witnesses.representative_edit, witnesses.secondary_edit].entries()) {

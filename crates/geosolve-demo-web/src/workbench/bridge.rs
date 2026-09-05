@@ -7127,7 +7127,7 @@ export default sketch(($) => {
     fn require_managed_sample_point_drag(
         sample: &str,
         initial: [f64; 2],
-        screen_delta: [f64; 2],
+        model_target: [f64; 2],
         pointer_id: u64,
     ) {
         let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
@@ -7157,10 +7157,7 @@ export default sketch(($) => {
             .unwrap_or_else(|| panic!("{sample} draggable point at {initial:?}"));
         let point_id = point.id;
         let start = point.screen_position;
-        let target = ScreenPoint {
-            x: start.x + screen_delta[0],
-            y: start.y + screen_delta[1],
-        };
+        let target = opened.viewport.model_to_screen(model_target);
         let origin = accepted_point_position(&bridge, point_id);
         let project_before = accepted_compiled_project(&bridge);
         let source_before = project_before.managed.source.clone();
@@ -7195,9 +7192,24 @@ export default sketch(($) => {
             &[SelectionItem::Point(point_id)],
             "{sample} point marker wins the authoring hit",
         );
-        bridge
-            .pointer_json(&pointer_request("move", pointer_id, target, 1))
-            .unwrap_or_else(|error| panic!("{sample} point preview: {error}"));
+        // A browser drag supplies consecutive moves, preserving the retained
+        // continuation path instead of jumping directly to its terminal target.
+        for step in 1..=12 {
+            let fraction = f64::from(step) / 12.0;
+            let position = ScreenPoint {
+                x: (target.x - start.x).mul_add(fraction, start.x),
+                y: (target.y - start.y).mul_add(fraction, start.y),
+            };
+            bridge
+                .pointer_json(&pointer_request("move", pointer_id, position, 1))
+                .unwrap_or_else(|error| panic!("{sample} point preview {step}: {error}"));
+        }
+        assert!(
+            bridge.last_error.is_none(),
+            "{sample} preview: {:?}; start {start:?}, target {target:?}, viewport {:?}",
+            bridge.last_error,
+            opened.viewport,
+        );
         let preview = bridge
             .editor()
             .coordinator()
@@ -7207,10 +7219,15 @@ export default sketch(($) => {
             .unwrap_or_else(|| panic!("{sample} accepted point preview"))
             .position;
         assert!(preview.into_iter().all(f64::is_finite), "{sample} preview");
-        assert_ne!(
-            preview.map(f64::to_bits),
-            origin.map(f64::to_bits),
-            "{sample} drag must move the requested point",
+        assert!(
+            (preview[0] - origin[0]).hypot(preview[1] - origin[1]) > 1.0e-4,
+            "{sample} drag must move the requested point; start {start:?}, target {target:?}, viewport {:?}",
+            opened.viewport,
+        );
+        assert!(
+            (preview[0] - model_target[0]).hypot(preview[1] - model_target[1])
+                < (origin[0] - model_target[0]).hypot(origin[1] - model_target[1]),
+            "{sample} accepted preview must approach its requested target",
         );
 
         bridge
@@ -7352,7 +7369,13 @@ export default sketch(($) => {
 
     #[test]
     fn theo_jansen_drag_uses_canonical_managed_authority_without_compilation() {
-        require_managed_sample_point_drag("theo-jansen-leg", [-8.0, 3.0], [12.0, 10.0], 92_101);
+        // Match the articulated leg's crank pin and its declared advance witness.
+        require_managed_sample_point_drag(
+            "theo-jansen-leg",
+            [15.0, 0.0],
+            [14.265_847_744_427_303, 4.635_254_915_624_211],
+            92_101,
+        );
     }
 
     #[test]
@@ -7360,7 +7383,7 @@ export default sketch(($) => {
         require_managed_sample_point_drag(
             "whitworth-quick-return",
             [2.0, 2.0],
-            [12.0, -8.0],
+            [1.2, 2.55],
             92_102,
         );
     }
@@ -7370,7 +7393,7 @@ export default sketch(($) => {
         require_managed_sample_point_drag(
             "five-stage-scissor-lift",
             [4.0, 0.0],
-            [-5.0, 0.0],
+            [3.0, 0.0],
             92_103,
         );
     }
