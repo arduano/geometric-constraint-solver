@@ -74,16 +74,24 @@ fn normalized_manufacturing_samples_cold_solve_and_prepare_source_owned_controls
 }
 
 #[test]
-fn gridfinity_uses_one_coordinate_datum_instead_of_point_fixing_the_profile() {
+fn gridfinity_uses_coordinate_datums_without_point_fixing_either_view() {
     let source = bundled_sample("gridfinity-bin-section")
         .expect("canonical Gridfinity sample")
         .managed_source();
-    assert_eq!(source.matches("$.constraint.fixedCoordinate(").count(), 1);
+    assert_eq!(
+        source.matches("$.constraint.fixedCoordinate(").count(),
+        2,
+        "the section and linked plan each own one vertical datum"
+    );
     assert_eq!(
         source.matches("$.constraint.fixedPoint(").count(),
-        1,
-        "the independent plan study owns the only fixed point"
+        0,
+        "both views remain width-editable through their dimension and symmetry relations"
     );
+    assert!(source.contains("const sectionBaseYDatum = $.constraint.fixedCoordinate("));
+    assert!(source.contains("const planAnchor = $.constraint.fixedCoordinate("));
+    assert!(source.contains("const cavityFloorAtBase = $.constraint.horizontalPoints("));
+    assert!(source.contains("const planMatchesSection = $.constraint.verticalPoints("));
     assert!(source.contains("const baseBottomWidth = $.dimension.curveLength("));
     assert!(source.contains("$.group(\"3U material section\""));
     assert!(source.contains("$.group(\"1 x 1 plan study\""));
