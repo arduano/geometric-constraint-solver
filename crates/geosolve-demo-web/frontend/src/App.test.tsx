@@ -615,11 +615,13 @@ describe("M88 workbench interaction contract", () => {
     expect(adapter.phases).toContain("move");
   });
 
-  it("resolves a pointer-returned managed mutation before installing its snapshot", async () => {
+  it("settles a down-returned managed mutation while its paired release remains harmless", async () => {
     class ManagedPointerAdapter extends MockWorkbenchAdapter {
       commands: string[] = [];
+      phases: string[] = [];
       override async pointer(input: PointerSample) {
-        if (input.phase !== "up") return null;
+        this.phases.push(input.phase);
+        if (input.phase !== "down") return null;
         this.state.pendingManagedMutation = pendingManagedMutation("a");
         const pending = await this.snapshot();
         pending.project.title = "Unresolved compiler request";
@@ -638,7 +640,9 @@ describe("M88 workbench interaction contract", () => {
     fireEvent.pointerUp(canvas, { pointerId: 17, buttons: 0, clientX: 20, clientY: 20 });
 
     await waitFor(() => expect(adapter.commands).toContain("managed.mutation.resolve"));
+    expect(adapter.phases).toEqual(["down", "up"]);
     expect(screen.queryByText("Unresolved compiler request")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^code$/i }));
     await waitFor(() => expect(container.querySelector(".cm-content")?.textContent).toContain("$.suppress(edge);"));
   });
