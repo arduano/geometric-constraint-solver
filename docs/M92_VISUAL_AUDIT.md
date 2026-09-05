@@ -21,6 +21,28 @@ their exact source, byte and result identities. They do not qualify the replacem
 accept any human UAT row. A fresh gate, visual/history audit, no-rebuild freeze and exact endpoint
 verification are required before replacing the nomination. Pages remains unchanged.
 
+## Pruning gate R1 — stale package generator count
+
+Clean pruning source `ed4dbec2034cc414b2390de5818a35c34f79cc78`, tree
+`8be254186e32459d95b87f06c3b47b21f285184b`, ran the unchanged release gate from
+2026-09-05 10:31:42.896638 to 11:44:34.941821 UTC and exited 1. The package's
+`generate-bundled-samples.mjs --check` retained `directories.length === 20` after the authorized
+inventory became 16. This is a missed harness inventory migration, not a solver finding. The
+correction changes only that expected count; compiler/source equality and scale-edit fixture
+checks remain intact.
+
+Before stopping, format, warnings-denied Clippy, 2,603 native/documentation tests, 271-row golden
+require-clean, 37 WASM interaction tests and three release-WASM lifecycle tests passed. Independent
+survey and check also passed on exact clean `ed4dbec`; the survey output is byte-identical to the
+unchanged 271-PASS oracle SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+
+Evidence: `/home/arduano/m92-visual-audit-20260905/pruning-r1/gate/receipt.json`,
+`release-gate.log` (433,329 bytes, 6,793 lines; SHA-256
+`c2e83470a8507651016827a74801c8d1218d0ae2b76ccf8f55116f3b7be4cb8d`) and
+`pruning-r1/golden-r2/completion.json`. No replacement distribution was frozen or nominated from
+this failed gate; the previous immutable review build remains served.
+
 ## Pre-pruning audit and qualification
 
 F003–F014 repairs are integrated. The development sample browser audit passed 20/20 before F014;

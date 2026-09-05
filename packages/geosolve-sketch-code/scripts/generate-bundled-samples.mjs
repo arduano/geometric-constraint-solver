@@ -80,7 +80,7 @@ for (const entry of await readdir(sampleRoot, { withFileTypes: true })) {
   directories.push({ directory, key: entry.name, ordinal: manifest.ordinal });
 }
 directories.sort((left, right) => left.ordinal - right.ordinal);
-assert.equal(directories.length, 20);
+assert.equal(directories.length, 16);
 
 for (const { directory, key } of directories) {
   const sourcePath = join(directory, "sketch.ts");
