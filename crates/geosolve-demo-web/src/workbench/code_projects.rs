@@ -58,7 +58,8 @@ use geosolve_sketch_intent::{
 use serde::{Deserialize, Serialize};
 
 const MANAGED_FILE: &str = "sketch.ts";
-const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v4";
+const CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v5";
+const LEGACY_CODE_WORKBENCH_WIRE_VERSION: &str = "geosolve-code-workbench-v4";
 const CODE_PROJECT_MODEL_SCALE: f64 = 1.0;
 const MAX_MANAGED_DRAFT_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 static NEXT_CODE_MATERIALIZATION: AtomicU64 = AtomicU64::new(1);
@@ -966,11 +967,23 @@ struct CodeProjectWorkbenchWire {
     version: String,
     origin: CodeProjectOriginWire,
     project: String,
+    // V4 stores canonical session JSON directly. V5 transports those exact
+    // bytes through the bounded reproduction codec; the project/source remain
+    // readable without decompressing history or delegated editor checkpoints.
     session: String,
     selected_file: String,
     managed_draft: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     draft_diagnostic: Option<ManagedDiagnostic>,
+}
+
+fn decode_code_workbench_session(version: &str, session: String) -> Result<String, String> {
+    match version {
+        LEGACY_CODE_WORKBENCH_WIRE_VERSION => Ok(session),
+        CODE_WORKBENCH_WIRE_VERSION => crate::reproduction::decode_workspace(&session)
+            .map_err(|error| format!("invalid compressed code session: {error}")),
+        _ => Err("unsupported code-workbench version".into()),
+    }
 }
 
 fn restore_code_project_origin(origin: CodeProjectOriginWire) -> Result<CodeProjectOrigin, String> {
@@ -1711,6 +1724,20 @@ impl CodeProjectWorkbench {
 
     pub(crate) fn to_persistence_json(&self) -> Result<String, String> {
         validate_managed_draft_bound(&self.managed_draft)?;
+        // Nested session/checkpoint JSON otherwise expands at every workbench,
+        // presentation and browser-request string boundary. Compress the full
+        // session without discarding any current, accepted, Undo or Redo state.
+        // The existing codec bounds compressed bytes at 12 MiB and decoded
+        // bytes at 64 MiB, and checks exact length, checksum, UTF-8 and complete
+        // stream consumption.
+        let session = {
+            let json = self
+                .session
+                .to_canonical_json()
+                .map_err(|error| error.to_string())?;
+            crate::reproduction::encode_workspace(&json)
+                .map_err(|error| format!("cannot encode code session: {error}"))?
+        };
         let wire = CodeProjectWorkbenchWire {
             version: CODE_WORKBENCH_WIRE_VERSION.into(),
             origin: self.origin.to_wire(),
@@ -1718,10 +1745,7 @@ impl CodeProjectWorkbench {
                 .project
                 .to_canonical_json()
                 .map_err(|error| error.to_string())?,
-            session: self
-                .session
-                .to_canonical_json()
-                .map_err(|error| error.to_string())?,
+            session,
             selected_file: self.selected_file.path().into(),
             managed_draft: self.managed_draft.clone(),
             draft_diagnostic: self.draft_diagnostic.clone(),
@@ -1747,14 +1771,15 @@ impl CodeProjectWorkbench {
         }
         let wire: CodeProjectWorkbenchWire =
             serde_json::from_str(json).map_err(|error| error.to_string())?;
-        if wire.version != CODE_WORKBENCH_WIRE_VERSION {
-            return Err("unsupported code-workbench version".into());
-        }
+        let session_json = decode_code_workbench_session(&wire.version, wire.session)?;
         validate_managed_draft_bound(&wire.managed_draft)?;
         let origin = restore_code_project_origin(wire.origin)?;
         let project = CodeProject::from_json(&wire.project).map_err(|error| error.to_string())?;
+        // Transport integrity is not publication authority. Every checkpoint,
+        // including historical accepted states, still crosses the same native
+        // decoder and independent validation used by the legacy wire.
         let session = SketchCodeSession::from_json_validating_checkpoints(
-            &wire.session,
+            &session_json,
             validate_editor_checkpoint,
         )
         .map_err(|error| error.to_string())?;
@@ -8864,6 +8889,209 @@ mod tests {
     }
 
     #[test]
+    fn m92_v5_session_transport_preserves_exact_session_and_readable_project() {
+        let workbench = open("braced-frame");
+        let json = workbench.to_persistence_json().unwrap();
+        let wire: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(wire["version"], "geosolve-code-workbench-v5");
+        assert_eq!(
+            wire["project"].as_str().unwrap(),
+            workbench.project.to_canonical_json().unwrap(),
+        );
+        assert_eq!(wire["managed_draft"], workbench.managed_draft);
+        let encoded_session = wire["session"].as_str().unwrap();
+        let session = crate::reproduction::decode_workspace(encoded_session).unwrap();
+        assert_eq!(session, workbench.session.to_canonical_json().unwrap());
+        assert!(encoded_session.len() < session.len());
+        let restored = CodeProjectWorkbench::from_persistence_json(&json).unwrap();
+        assert_eq!(restored.to_persistence_json().unwrap(), json);
+    }
+
+    fn persistence_history_workbench() -> CodeProjectWorkbench {
+        let base = CompiledManagedSource::from_json(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-base.json"
+        )))
+        .unwrap();
+        let (mut workbench, _) =
+            CodeProjectWorkbench::open_managed_test_compiled("m92-persistence-history", base)
+                .unwrap();
+        for (json, source) in [
+            (
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-supporting-line.json"
+                )),
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-supporting-line.sketch.ts"
+                )),
+            ),
+            (
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-limited.json"
+                )),
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../packages/geosolve-sketch-code/test/fixtures/managed-contact-range-limited.sketch.ts"
+                )),
+            ),
+        ] {
+            let compiled = CompiledManagedSource::from_json(json).unwrap();
+            publish_managed_source_fixture(&mut workbench, source, compiled);
+        }
+        workbench.step_history(true).unwrap().unwrap();
+        assert!(workbench.can_undo() && workbench.can_redo());
+        workbench
+    }
+
+    fn assert_persisted_native_authority(workbench: &CodeProjectWorkbench) {
+        let editor = workbench.restore_accepted_editor().unwrap();
+        assert_eq!(
+            encode_editor_checkpoint(&editor).unwrap(),
+            *workbench.accepted_editor_checkpoint(),
+        );
+        let accepted = editor.coordinator().accepted_materialization().unwrap();
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9),
+        );
+        let document = accepted
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document();
+        assert!(
+            document
+                .points()
+                .iter()
+                .flat_map(|point| point.position)
+                .chain(document.scalars().iter().map(|scalar| scalar.value))
+                .all(f64::is_finite),
+        );
+    }
+
+    #[test]
+    fn m92_v4_session_history_migrates_losslessly_to_v5() {
+        let mut workbench = persistence_history_workbench();
+        let persisted = workbench.to_persistence_json().unwrap();
+        let session = workbench.session.to_canonical_json().unwrap();
+        let project = workbench.project.to_canonical_json().unwrap();
+        let mut legacy: serde_json::Value = serde_json::from_str(&persisted).unwrap();
+        legacy["version"] = "geosolve-code-workbench-v4".into();
+        legacy["session"] = session.clone().into();
+        let mut migrated =
+            CodeProjectWorkbench::from_persistence_json(&legacy.to_string()).unwrap();
+        let mut restored = CodeProjectWorkbench::from_persistence_json(&persisted).unwrap();
+        for candidate in [&migrated, &restored] {
+            assert_eq!(candidate.to_persistence_json().unwrap(), persisted);
+            assert_eq!(candidate.session.to_canonical_json().unwrap(), session);
+            assert_eq!(candidate.project.to_canonical_json().unwrap(), project);
+            assert_persisted_native_authority(candidate);
+        }
+        for undo in [false, true, true, false] {
+            workbench.step_history(undo).unwrap().unwrap();
+            for candidate in [&mut migrated, &mut restored] {
+                candidate.step_history(undo).unwrap().unwrap();
+                assert_eq!(
+                    candidate.to_persistence_json().unwrap(),
+                    workbench.to_persistence_json().unwrap(),
+                );
+                assert_persisted_native_authority(candidate);
+            }
+        }
+    }
+
+    #[test]
+    fn m92_v5_session_transport_rejects_corruption_trailing_stream_and_oversize() {
+        use base64::Engine as _;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+        let workbench = open("braced-frame");
+        let persisted = workbench.to_persistence_json().unwrap();
+        let mut wire: serde_json::Value = serde_json::from_str(&persisted).unwrap();
+        let payload = wire["session"].as_str().unwrap().to_owned();
+        let fields = payload.split(':').map(str::to_owned).collect::<Vec<_>>();
+        assert_eq!(fields.len(), 5);
+        let mut cases = Vec::new();
+        let mut corrupt = fields.clone();
+        let checksum = u64::from_str_radix(&corrupt[3], 16).unwrap() ^ 1;
+        corrupt[3] = format!("{checksum:016x}");
+        cases.push(("checksum", corrupt.join(":")));
+        let compressed = URL_SAFE_NO_PAD.decode(&fields[4]).unwrap();
+        let mut truncated = fields.clone();
+        truncated[4] = URL_SAFE_NO_PAD.encode(&compressed[..compressed.len() - 1]);
+        cases.push(("truncated", truncated.join(":")));
+        let mut trailing_bytes = compressed;
+        trailing_bytes.push(0);
+        let mut trailing = fields.clone();
+        trailing[4] = URL_SAFE_NO_PAD.encode(trailing_bytes);
+        cases.push(("trailing", trailing.join(":")));
+        let mut oversized = fields.clone();
+        oversized[2] = (geosolve_sketch_code::CODE_PROJECT_LIMIT + 1).to_string();
+        cases.push(("decoded bound", oversized.join(":")));
+        let mut over_expanding = fields;
+        over_expanding[2] = "1".into();
+        cases.push(("declared output bound", over_expanding.join(":")));
+        for (label, payload) in cases {
+            wire["session"] = payload.into();
+            let error = CodeProjectWorkbench::from_persistence_json(&wire.to_string())
+                .err()
+                .unwrap_or_else(|| panic!("{label} must reject before restore"));
+            assert!(
+                error.contains("invalid compressed code session"),
+                "{label}: {error}"
+            );
+        }
+        assert_eq!(workbench.to_persistence_json().unwrap(), persisted);
+    }
+
+    #[test]
+    fn m92_v5_session_transport_still_authenticates_current_undo_and_redo_checkpoints() {
+        let workbench = persistence_history_workbench();
+        let persisted = workbench.to_persistence_json().unwrap();
+        let mut wire: serde_json::Value = serde_json::from_str(&persisted).unwrap();
+        let canonical_session = workbench.session.to_canonical_json().unwrap();
+        for path in ["/snapshot", "/undo/0/snapshot", "/redo/0/snapshot"] {
+            let mut session: serde_json::Value = serde_json::from_str(&canonical_session).unwrap();
+            let snapshot = session
+                .pointer_mut(path)
+                .expect("populated historical snapshot");
+            let mut checkpoint: serde_json::Value =
+                serde_json::from_str(snapshot["accepted_editor_checkpoint"].as_str().unwrap())
+                    .unwrap();
+            let digest = checkpoint["digest"].as_str().unwrap();
+            checkpoint["digest"] = format!(
+                "{}{}",
+                if digest.starts_with('0') { '1' } else { '0' },
+                &digest[1..]
+            )
+            .into();
+            // Keep current/accepted checkpoint equality and a valid transport
+            // checksum, so the delegated native authority validator must reject.
+            snapshot["editor_checkpoint"] = checkpoint.to_string().into();
+            snapshot["accepted_editor_checkpoint"] = snapshot["editor_checkpoint"].clone();
+            let session = session.to_string();
+            let payload = crate::reproduction::encode_workspace(&session).unwrap();
+            assert_eq!(
+                crate::reproduction::decode_workspace(&payload).unwrap(),
+                session
+            );
+            wire["session"] = payload.into();
+            let error = CodeProjectWorkbench::from_persistence_json(&wire.to_string())
+                .err()
+                .unwrap_or_else(|| panic!("tampered {path} native authority must reject"));
+            assert!(error.contains("digest"), "{path}: {error}");
+        }
+        assert_eq!(workbench.to_persistence_json().unwrap(), persisted);
+    }
+
+    #[test]
     fn complete_offline_project_session_draft_and_file_selection_round_trip() {
         let mut workbench = open("pc-water-manifold");
         workbench
@@ -8927,11 +9155,25 @@ mod tests {
         let workbench = open("braced-frame");
         let json = workbench.to_persistence_json().unwrap();
         let mut wire: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let session = wire["session"].as_str().unwrap();
-        wire["session"] = serde_json::Value::String(
-            session.replace("geosolve-demo-braced-frame", "geosolve-demo-tampered-frame"),
-        );
-        assert!(CodeProjectWorkbench::from_persistence_json(&wire.to_string()).is_err());
+        let session =
+            crate::reproduction::decode_workspace(wire["session"].as_str().unwrap()).unwrap();
+        let tampered =
+            session.replace("geosolve-demo-braced-frame", "geosolve-demo-tampered-frame");
+        assert_ne!(tampered, session);
+        for version in [
+            LEGACY_CODE_WORKBENCH_WIRE_VERSION,
+            CODE_WORKBENCH_WIRE_VERSION,
+        ] {
+            wire["version"] = version.into();
+            wire["session"] = if version == LEGACY_CODE_WORKBENCH_WIRE_VERSION {
+                tampered.clone().into()
+            } else {
+                crate::reproduction::encode_workspace(&tampered)
+                    .unwrap()
+                    .into()
+            };
+            assert!(CodeProjectWorkbench::from_persistence_json(&wire.to_string()).is_err());
+        }
     }
 
     #[test]
