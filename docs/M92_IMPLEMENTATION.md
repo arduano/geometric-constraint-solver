@@ -2,7 +2,8 @@
 
 # M92 implementation: registry-first parallel sample rebuild
 
-Status: **implementation integrated; clean qualification and immutable UAT nomination in progress**.
+Status: **F001–F014 repairs integrated; F015 bounded Jansen dragging repaired at the core owner.
+The first audited clean gate failed; replacement qualification and immutable UAT nomination are pending**.
 No M92 human row or public Pages release is claimed by this checkpoint.
 
 ## Integration order
@@ -187,20 +188,28 @@ NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 
 Exact results and any reproduced finding IDs are appended before nomination.
 
-No final clean-gate result, immutable snapshot path/hash, HTTP byte-verification ledger or immutable
-endpoint browser result is recorded yet. The historical `14/20` diagnostic above is
-reproduction/classification evidence. Later development results are summarized below and detailed in
-`M92_VISUAL_AUDIT.md`; they do not constitute nomination. GitHub Pages remains unchanged until
-explicit supervising-user approval after the composite UAT.
+The first audited clean gate at source `c4c02abd8a92e2e929ccfb23b59c211a32a7400a`, tree
+`74ff8155a389ef97249c3984e4692f5059269b49`, ran from 2026-09-05 05:41:16 to 05:59:54 UTC and
+exited 101. Formatting and warnings-denied Clippy passed; the demo library reported 292 passed,
+1 failed and 1 ignored in 750.90 seconds. Its Jansen bridge helper still selected the removed
+`[-8, 3]` point. The source/tree remained clean and unchanged. The full receipt and log identity
+are in `M92_VISUAL_AUDIT.md`; the failure is distinct from both the historical server-start timeout
+above and the older baseline journal missing an exit receipt.
+
+Correcting that stale fixture exposed F015's actual bounded drag failure, described below. A
+successful replacement clean gate, immutable snapshot path/hash, HTTP byte-verification ledger and
+immutable-endpoint browser result remain pending. The historical `14/20` diagnostic and later
+development results do not constitute nomination. GitHub Pages remains unchanged until explicit
+supervising-user approval after the composite UAT.
 
 ## Authorized visual-audit continuation
 
 The 2026-09-05 continuation reworks all 20 named entries within their existing scope; it does not
 replace the catalog or extend the primitive set. `M92_VISUAL_AUDIT.md` is the detailed execution
-and finding ledger for F003–F014. Integrated mechanism trajectories contain 520 accepted native
-frames; product repairs are independently measured against layout intent and pinned STEP/DXF
-references. Both atlas and scale mobility decompositions are reviewed independently of their
-manifests.
+and finding ledger for F003–F015. Integrated mechanism trajectories contain 520 accepted native
+frames with unlimited work budgets; product repairs are independently measured against layout
+intent and pinned STEP/DXF references. Both atlas and scale mobility decompositions are reviewed
+independently of their manifests.
 
 Every entry now declares two distinct parameter witnesses. Mandatory headless edit suites run
 after the pinned TypeScript package is built; they are ignored in the earlier clean workspace pass
@@ -224,3 +233,21 @@ final receipt. F014 repairs Explorer overflow and widens the default panel. Its 
 probe, Jansen and field browser checks (2/2), and the existing 1024 px layout contract pass.
 Formatting and TypeScript checks pass. Final clean release qualification, immutable nomination and
 all human U1–U8 rows remain pending.
+
+### M92-F015 — bounded retained-editor drag qualification
+
+After correcting the stale bridge selector, advancing the repaired Jansen crank from `[15, 0]`
+toward `[14.265847744427303, 4.635254915624211]` over 12 moves exhausts the ordinary preview
+budget: 256/256 factorizations, 254 nonlinear iterations and a largest dense kernel of 23×12.
+Initial previews reject 144–148 trials. The prior valid geometry remains retained, but no movement
+or Undo entry is accepted and `last_error` stays empty. The new actual crank drag inside Jansen's
+existing browser workflow independently fails at disabled Undo, exit 1. The earlier 20/20 sample
+audit tested source edits/history and did not drag Jansen; its passes and the unlimited native
+trajectories do not establish bounded interaction acceptance.
+
+Core repair `a9d7532` extends existing first-improvement backtracking to all Temporary objectives;
+all ten default-policy pointer witnesses and the Jansen/scissor browser checks now pass. Required qualification preserves hard
+validation, explicit branches, fixed ground and unchanged source while accepting meaningful
+movement within the ordinary configured budget, committing one action on release and restoring
+exact geometry through Undo/Redo/reload without compilation. After focused owner and browser
+qualification, restart the complete clean release gate. No immutable nomination is yet claimed.

@@ -2,13 +2,15 @@
 
 # M92 visual and geometric design audit
 
-Status: **in progress; no replacement candidate nominated and no human UAT accepted**.
+Status: **in progress; F015 bounded Jansen dragging is repaired at the core owner. The first
+audited clean gate failed; no replacement candidate is nominated and no human UAT is accepted**.
 
-F003–F013 repairs are integrated. The development sample browser audit passed 20/20 before F014;
-exact legacy recovery and new scale restoration checks pass. F014's Jansen and existing 1024 px
-layout checks pass, while its field browser check remains pending. Final clean release qualification
-and immutable nomination remain pending. The atlas edit log's 2/2 result retains its wrapper exit
-143 caveat, detailed below.
+F003–F014 repairs are integrated. The development sample browser audit passed 20/20 before F014;
+exact legacy recovery and new scale restoration checks pass. F014's Jansen/field browser checks
+pass 2/2 in 5.3 minutes, exit 0; its existing 1024 px layout check also passes. F015 exposes a
+bounded drag path absent from the unlimited native sweeps and source-edit-only Jansen browser
+audit. Final clean release qualification and immutable nomination remain pending. The atlas edit
+log's 2/2 result retains its wrapper exit 143 caveat, detailed below.
 
 The supervising user authorized implementation of the visual/geometric audit and repair plan on
 2026-09-05. A sample that solves correctly but fails to demonstrate its named purpose must be
@@ -311,3 +313,122 @@ nix-shell shell.nix --run 'cd crates/geosolve-demo-web/frontend && npx vitest ru
 Independent follow-up review found no remaining blocker in raw legacy bounds, strict owner/history
 validation, candidate replacement or either storage-preservation path. No solver equations
 changed.
+
+### M92-F015 — bounded crank previews retain the old frame without movement
+
+The first audited clean gate found that
+`workbench::bridge::tests::theo_jansen_drag_uses_canonical_managed_authority_without_compilation`
+still selected the removed `[-8, 3]` point. That initial fixture failure is `HARNESS_ERROR`.
+Correcting selection to the repaired crank at `[15, 0]` and sending 12 moves toward
+`[14.265847744427303, 4.635254915624211]` independently reproduced an actual `DEFECT` at the
+bounded retained-editor preview boundary.
+
+`jansen-bounded-outcome.log` records `WorkExhausted` at `BeforeFactorization`, with 256/256
+factorizations, 254 nonlinear iterations and a largest dense kernel of 23×12. The initial
+previews reject 144–148 trials; later attempts in the same log reach 158. The editor retains
+finite previously validated geometry, but the requested point does not move, release produces no
+Undo entry and `last_error` remains empty. The focused corrected bridge regression fails its
+movement assertion (0 passed / 1 failed, 5.84 seconds). A retained accepted frame after rejection
+does not establish that the drag accepted movement.
+
+The new actual-crank browser check is inside Jansen's existing sample workflow, so the sample
+audit inventory remains 20. Independent Chromium reproduction fails at disabled Undo, exit 1,
+in `jansen-bounded-browser-baseline.log` (one row, 9.3 seconds). The log identifies the browser
+error context and trace under
+`test-results/m92-sample-audit-M92-visual-workflow-1-theo-jansen-leg-chromium/` as
+`error-context.md` and `trace.zip`. The prior 520-frame native mechanism trajectories used
+unlimited work budgets; the earlier 20/20 browser sample audit checked source edits/history
+without dragging Jansen. Both remain valid evidence for their original scope, but neither
+qualifies this bounded interaction.
+
+At reproduction, core diagnosis and repair were pending. The correction and focused
+qualification are recorded below.
+The required regression must prove meaningful crank and foot movement within the ordinary
+configured budget, finite independently validated hard residuals, retained explicit branches and
+fixed ground, unchanged managed source, one history action on release and exact geometry
+Undo/Redo/reload without compilation. The browser check requires input target error at most
+0.05 mm and output travel greater than 0.1 mm. Valid prior-state retention remains mandatory on
+rejection. Focused owner and browser passes must precede a complete replacement clean gate.
+
+### First audited clean gate — failed, no nomination
+
+This is the first clean gate after the visual-audit integration. It is distinct from the historical
+pre-F002 `7941614` server-start timeout and the original baseline journal with no exit receipt.
+The audited invocation has a complete failure receipt:
+
+| Field | Recorded value |
+|---|---|
+| Source | `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` |
+| Tree | `74ff8155a389ef97249c3984e4692f5059269b49` |
+| Worktree | `/home/arduano/programming/geometric-constraint-solver.worktrees/m92-final-audit` |
+| Service | `geosolve-m92-audited-release-gate.service` |
+| Invocation | `d10ff7c22efa47b4937c0d7c07f73c35` |
+| Start UTC | `2026-09-05T05:41:16.299236+00:00` |
+| End UTC | `2026-09-05T05:59:54.846172+00:00` |
+| Exit | `101` |
+| Source/tree status | Clean and unchanged at start and end |
+| Log bytes / lines | `150960` / `1815` |
+| Log SHA-256 | `fd748cf22ba1979ecddcf92bc179776b7c31d06c73d35f27fbc481ee97a63037` |
+
+The exact launch in `final-gate/run.sh` was:
+
+```sh
+nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+```
+
+Formatting and warnings-denied Clippy passed. The demo library finished 292 passed / 1 failed /
+1 ignored in 750.90 seconds, failing
+`workbench::bridge::tests::theo_jansen_drag_uses_canonical_managed_authority_without_compilation`
+with `theo-jansen-leg draggable point at [-8.0, 3.0]`. It therefore stopped before completing
+the gate. The receipt is
+`/home/arduano/m92-visual-audit-20260905/final-gate/receipt.json`; the corresponding log is
+`/home/arduano/m92-visual-audit-20260905/final-gate/release-gate.log`.
+
+Corrected selection subsequently exposed the independently reproduced F015 defect above. No
+nomination follows from this failed gate or prior partial runs. After repair, run the full gate
+again from clean integrated source and preserve a new complete receipt. All M92-U1–U8 human rows
+remain pending and unexecuted; GitHub Pages is unchanged.
+
+
+### F015 core repair and bounded qualification
+
+Core commit `a9d7532` extends existing first-improvement backtracking to all Temporary objectives.
+A fully driven one-DOF mechanism has no passive Preference anchors; the previous conditional made
+its line search evaluate all 20 smaller steps after finding valid descent. Each Jansen trial
+spent 12–15 iterations hard-reprojecting near floating-point resolution. No work cap, tolerance,
+branch rule, Hard validation or priority certification changes.
+
+The minimal core crank regression fails at 256 factorizations before correction and completes
+with 51 in the first repaired unit-scale case. Final coverage includes both directions at
+1e-6, 1 and 1e6 scales, independently checked radius, finite target placement and rank 1/DOF 1.
+The 18-test priority suite, all core tests (213 passed / 1 existing ignored), 26 lifecycle tests,
+five locality tests and three managed bridge drags pass. Core Clippy and formatting pass;
+`f015-owner-update.txt` preserves exact commands and outcomes.
+
+`every_mechanism_witness_accepts_default_bounded_pointer_frames` uses the real editor constructor's
+default control and actual scene picking/pointer frames. All ten witnesses across five mechanisms
+pass, requiring explicit accepted preview effects, finite independently validated Hard residuals,
+expected mobility, history-free previews and exact terminal/Undo/Redo/reload. The focused run
+`f015-all-bounded-witnesses.log` passes in 62.11 seconds, exit 0. The complete nine-test mechanism
+suite, including all original trajectories and retained witnesses, passes in 115.63 seconds
+(`bounded-mechanism-full-suite.log`). Its strict witness reader also accepts the registry's
+existing secondary-edit field. Initial focused Clippy found only two manual-midpoint style
+violations in the new test; corrected Clippy passes. No production equation changed.
+
+Browser preflight passed 17 of 18 other ordinary workbench rows. The Jansen Polyline test's third
+container-relative click landed in the SVG's letterboxed area, outside the viewBox, and correctly
+created no vertex. Mapping all three clicks through the actual SVG screen transform preserves
+its original Horizontal/Vertical authoring assertions and passes against unchanged pre-fix
+production (1/1, `jansen-authoring-camera-fixed.log`); classify as HARNESS_ERROR. The post-fix Jansen browser workflow passes in 18.8 seconds, including actual crank/foot
+movement and exact geometry through Undo/Redo/reload. Scissor completes all five coupled-stage
+drags; its old assertion incorrectly required the compressed v5 save to exceed 5 MiB. The actual
+4,547,985-byte save contains 17,903,027 decoded session bytes. Checking bounded zlib decoding and
+that real history size preserves the large-history contract. The corrected scissor row passes
+1/1 in 16.2 seconds (`f015-scissor-browser-fixed.log`); TypeScript passes. The first two browser
+launches lacked isolated package dependencies and the direct-Node launcher lacked npm bin PATH;
+those harness failures ran no browser assertions. Qualification used the built release WASM
+through a local development server, never a nominated endpoint.
+
+The pre-F015 golden survey/check both completed with exit 0 and unchanged 271 PASS rows. Final
+clean release qualification must repeat the oracle against the repaired source. No human UAT
+row or immutable nomination is established by these focused results.

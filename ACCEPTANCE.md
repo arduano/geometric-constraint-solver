@@ -5370,6 +5370,17 @@ isolation/restoration. Jansen and field browser checks pass 2/2; the existing 10
 contract also passes. These results do not pass human U1–U8, final clean qualification or
 immutable nomination.
 
+F015 additionally requires the repaired Jansen crank to move through the ordinary bounded retained
+preview path, release into one accepted history action, and support exact Undo/Redo without
+compilation. Starting at `[15, 0]`, the target `[14.265847744427303, 4.635254915624211]` must produce
+meaningful accepted movement while retaining finite independently validated geometry and explicit
+branches. Retaining the old valid frame after work exhaustion is not successful dragging. The
+corrected native regression and added browser drag now pass with core repair `a9d7532`; all ten
+default-policy mechanism witnesses also pass.
+Unlimited trajectory evidence and source-edit browser passes do not satisfy this criterion.
+The first audited clean gate failed at the stale Jansen selector and must be replaced in full after
+repair; `docs/M92_VISUAL_AUDIT.md` records its exact receipt.
+
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.

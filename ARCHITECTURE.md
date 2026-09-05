@@ -2763,3 +2763,15 @@ history/reload, selection ownership and group restoration. It supplements the re
 immutable-endpoint scopes above. F014 keeps Explorer rows and child grids within their panel and
 widens the default panel share; these presentation changes do not alter accepted geometry or
 history.
+
+### M92-F015 bounded mechanism dragging
+
+Interactive retained-editor previews use finite operation budgets. An unlimited native trajectory
+and a browser source-edit/history audit do not qualify this boundary. The repaired Jansen crank
+reproduces work exhaustion under the ordinary 256-factorization preview limit; the previous valid
+geometry remains retained, but no movement or Undo entry is accepted. Browser reproduction reaches
+the same disabled-Undo outcome. Core repair `a9d7532` extends existing first-improvement
+backtracking to all Temporary objectives without changing budgets, tolerances or certification.
+All ten default-policy witnesses and the Jansen/scissor browser checks now pass. The required boundary preserves hard validation, explicit branches, locality and exact
+history while completing meaningful ordinary drags within the configured budget. The detailed
+reproduction and failed clean-gate receipt are in `docs/M92_VISUAL_AUDIT.md`.

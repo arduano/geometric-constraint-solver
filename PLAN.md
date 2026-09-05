@@ -8206,7 +8206,7 @@ start fresh from the integrated clean source.
 ### M92 visual-audit continuation
 
 The authorized 2026-09-05 continuation audits design purpose as well as accepted numerical
-validity. `docs/M92_VISUAL_AUDIT.md` owns all 20 rows and F003–F014. The integrated corrections
+validity. `docs/M92_VISUAL_AUDIT.md` owns all 20 rows and F003–F015. The integrated corrections
 retain the canonical 5/11/2/2 names, use existing typed primitives and explicit branches, and
 change no solver equations. Each sample now declares a distinct second measured parameter edit.
 Mechanisms have independent forward/reverse trajectories; products have measured
@@ -8218,6 +8218,9 @@ independently justified freedom.
   restoration and exact captured legacy recovery through native/Chromium checks pass.
 - [x] Finish F014 focused presentation verification: Jansen and field pass 2/2, and the existing
   1024 px layout contract passes.
+- [x] Repair F015 bounded Jansen dragging and qualify actual accepted movement, release and history
+  through the retained editor and existing browser sample workflow. Core `a9d7532`, all ten
+  default-budget witnesses, all nine mechanism tests and Jansen/scissor browser checks pass.
 - [ ] Repeat the final integrated audit in the clean gate.
   Retain the atlas edit log's 2/2 result and wrapper exit 143 until the clean gate supplies its receipt.
 - [ ] Complete the unchanged clean qualification/immutable nomination requirement above; retain
@@ -8231,6 +8234,13 @@ project and unapplied-draft bytes; failed manual saves retain both protections. 
 14/14, frontend 43/43, the strict legacy bridge regression, exact original-save recovery and both
 scale restoration paths pass. These development results do not complete clean qualification or
 immutable nomination. The audit ledger owns exact commands, byte counts and evidence caveats.
+
+The first audited clean gate at `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` exited 101:
+format/Clippy passed, but the demo library finished 292 passed / 1 failed / 1 ignored because its
+Jansen helper used the removed `[-8, 3]` point. Corrected selection independently exposed F015's
+bounded preview exhaustion; an actual browser drag also fails with Undo disabled. The prior
+520-frame native sweeps were unlimited, and the passing source-edit audit did not drag Jansen.
+After the repair, restart the complete clean gate; no prior partial run establishes nomination.
 
 ## Explicit non-goals
 

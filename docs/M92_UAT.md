@@ -12,13 +12,23 @@ compiler-envelope row, while each production frozen endpoint must pass the `19/1
 workbench rows. Automated evidence cannot pass these human rows, and no Pages publication is
 authorized before approval.
 
-The 2026-09-05 visual/geometric continuation in `M92_VISUAL_AUDIT.md` records F003–F014 and two
+The 2026-09-05 visual/geometric continuation in `M92_VISUAL_AUDIT.md` records F003–F015 and two
 measured edits per sample. The integrated development sample audit passed 20/20 before F014;
 legacy recovery and scale restoration checks pass. F014's Jansen and field browser checks pass
 2/2, and its existing 1024 px layout contract passes. Failed restoration preserves saved project
 and unapplied source-draft bytes until successful explicit replacement Save. The atlas edit log's
 2/2 result retains the wrapper exit 143 caveat. These are automated development results; final
 clean qualification, immutable nomination and every human row below remain pending.
+
+The first audited clean gate at `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` exited 101 after
+formatting/Clippy passed and a stale Jansen bridge selector failed the demo library suite
+(292 passed / 1 failed / 1 ignored). Corrected selection independently exposed F015: ordinary
+bounded crank previews retain the old valid frame but exhaust work without accepted movement or
+Undo. An actual browser drag also fails at disabled Undo. The earlier 520-frame native mechanism
+sweeps were unlimited, and the passing source-edit sample audit did not drag Jansen. Core repair
+`a9d7532`, all ten default-policy pointer witnesses and Jansen/scissor browser checks now pass;
+a complete successful replacement clean gate is required before nomination.
+These failures and repairs do not execute or waive any human row below.
 
 1. **M92-U1 — Pending / not run — Catalog cohesion.** Open the sample surface. Confirm exactly four
    clear categories and 20 intentionally named entries, with no native/code distinction, duplicates,

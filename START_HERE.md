@@ -910,8 +910,9 @@ closed.
 
 ## M92 current advanced sample showcase
 
-Status: **in progress; F001–F014 repairs and focused verification are integrated. Final clean
-qualification and immutable human-UAT nomination remain pending.**
+Status: **in progress; F001–F014 repairs and focused verification are integrated. F015 bounded
+Jansen dragging is repaired at the core owner; the first audited clean gate failed. A replacement
+clean gate and immutable human-UAT nomination remain pending.**
 
 M92 targets replacing the accumulated 12/25/37-entry catalog variants with one manifest-driven,
 source-authoritative 20-sample registry. The frozen scope requires five mechanisms, eleven
@@ -937,7 +938,7 @@ through M92-U8 remain pending and unexecuted, and GitHub Pages remains unchanged
 
 The supervising user authorized reworking the existing 20 samples to fulfill their named purpose.
 `docs/M92_VISUAL_AUDIT.md` owns the complete baseline, independent measurements, findings
-F003–F014, repair identities and evidence limits. Walking/quick-return topology, six product
+F003–F015, repair identities and evidence limits. Walking/quick-return topology, six product
 relationships, four pinned-reference interpretations, coupling fanout and harness clearance are
 repaired within existing primitives. Both atlases retain independently derived freedom 81/255;
 scale cases retain 772/268. Forty source-control demonstrations are qualified separately from five
@@ -955,6 +956,16 @@ geometry through history/reload, before the F014 Explorer overflow correction. F
 field browser checks pass 2/2; the existing 1024 px layout contract also passes. The audit ledger
 preserves the atlas edit log's 2/2 result alongside its wrapper exit 143. Final clean release
 qualification, immutable nomination and all human U1–U8 rows remain pending.
+
+The first audited clean gate at `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` exited 101 after
+formatting/Clippy passed and the demo library reported 292 passed, 1 failed and 1 ignored. Its
+Jansen helper still selected the removed point `[-8, 3]`. Correcting that harness exposed F015:
+ordinary bounded crank previews exhaust 256 factorizations without accepted movement or Undo.
+An added real-browser drag check independently fails at disabled Undo. The prior 520-frame native
+sweeps used unlimited work; the passing sample browser audit exercised source edits, not Jansen
+dragging. Core repair `a9d7532` now passes all ten default-budget witnesses, all nine mechanism
+tests and the Jansen/scissor browser regressions. No successful replacement gate or nomination
+is claimed. `docs/M92_VISUAL_AUDIT.md` preserves the failed gate receipt and both reproductions.
 
 ## Read first
 

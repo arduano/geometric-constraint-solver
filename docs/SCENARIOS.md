@@ -7246,6 +7246,27 @@ browser checks pass 2/2 and the existing 1024 px layout contract passes. The fin
 repeat remains pending. This presentation scenario changes no geometry, solver or accepted-history
 contract.
 
+### M92-F015 — ordinary bounded Jansen drag accepts meaningful movement
+
+Open the repaired `theo-jansen-leg`, select its crank at `[15, 0]`, and send 12 pointer moves
+toward `[14.265847744427303, 4.635254915624211]` before release. The old bridge helper selected
+the removed `[-8, 3]` point; that stale fixture is a separate `HARNESS_ERROR`. With selection
+corrected, the retained preview independently reproduces `WorkExhausted`: 256/256 factorizations,
+254 nonlinear iterations, 144–148 rejected trials in the initial previews and a largest dense
+kernel of 23×12. The prior valid geometry survives, but there is no accepted movement, Undo entry
+or `last_error`. The actual-browser drag added to Jansen's existing sample workflow independently
+fails because Undo remains disabled.
+
+Acceptance requires meaningful input and foot movement within the configured ordinary preview
+budget, finite independently validated geometry, retained explicit branches and fixed ground,
+one accepted history action on release, and exact Undo/Redo without managed recompilation. The
+prior 520-frame mechanism suite was unlimited; the pre-F014 20/20 browser sample audit covered
+source edits/history without dragging Jansen. Neither qualified this bounded interaction. Core
+repair `a9d7532` now passes both directions at three scales, all ten real default-policy pointer
+witnesses and Jansen/scissor browser checks without changing budgets or acceptance tolerances. The first audited clean gate failed on the stale selector and
+must be replaced in full after repair; exact receipts and reproductions are recorded in
+`docs/M92_VISUAL_AUDIT.md`.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:
