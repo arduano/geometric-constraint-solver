@@ -10,5 +10,15 @@
       "value": 33
     }
   },
-  "drags": []
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "screwAxisLength",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 22
+    }
+  }
 }

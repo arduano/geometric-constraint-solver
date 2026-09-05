@@ -33,5 +33,15 @@
         -4.635254915624211
       ]
     }
-  ]
+  ],
+  "secondary_edit": {
+    "declaration": "upperRockerLength",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 42
+    }
+  }
 }

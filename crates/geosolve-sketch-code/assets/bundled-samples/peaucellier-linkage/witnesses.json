@@ -1,8 +1,47 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "dimension2PeaucellierRhombusSide3", "path": ["value"], "replacement": { "unit": "mm", "value": 3.2 } },
+  "representative_edit": {
+    "declaration": "dimension2PeaucellierRhombusSide3",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 3.2
+    }
+  },
   "drags": [
-    { "name": "advance circular input", "declaration": "point3PeaucellierCircularInputP", "output_path": ["point"], "target": [5.0, 3.87] },
-    { "name": "move straight-line output", "declaration": "point4PeaucellierStraightLineOutputQ", "output_path": ["point"], "target": [2.0, 1.5] }
-  ]
+    {
+      "name": "advance circular input",
+      "declaration": "point3PeaucellierCircularInputP",
+      "output_path": [
+        "point"
+      ],
+      "target": [
+        5.0,
+        3.87
+      ]
+    },
+    {
+      "name": "move straight-line output",
+      "declaration": "point4PeaucellierStraightLineOutputQ",
+      "output_path": [
+        "point"
+      ],
+      "target": [
+        2.0,
+        1.5
+      ]
+    }
+  ],
+  "secondary_edit": {
+    "declaration": "dimension1PeaucellierLongRadius5",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 5.2
+    }
+  }
 }

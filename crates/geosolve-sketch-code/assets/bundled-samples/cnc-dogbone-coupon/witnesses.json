@@ -1,5 +1,24 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "looseMortiseHeight", "path": ["value"], "replacement": { "unit": "mm", "value": 18.5 } },
-  "drags": []
+  "representative_edit": {
+    "declaration": "looseMortiseHeight",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 18.5
+    }
+  },
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "cutterRadius",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 4
+    }
+  }
 }

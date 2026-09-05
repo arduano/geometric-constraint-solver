@@ -227,22 +227,27 @@ fn exercise_sample(sample: &str) {
 }
 
 #[test]
+#[ignore = "requires built package and pinned Deno; mandatory release gate"]
 fn jansen_crank_and_rocker_edits_preserve_other_links_and_history() {
     exercise_sample("theo-jansen-leg");
 }
 #[test]
+#[ignore = "requires built package and pinned Deno; mandatory release gate"]
 fn whitworth_crank_and_return_link_edits_preserve_guides_and_history() {
     exercise_sample("whitworth-quick-return");
 }
 #[test]
+#[ignore = "requires built package and pinned Deno; mandatory release gate"]
 fn cam_radius_and_rise_edits_preserve_contact_and_history() {
     exercise_sample("twin-roller-bezier-cam");
 }
 #[test]
+#[ignore = "requires built package and pinned Deno; mandatory release gate"]
 fn peaucellier_side_and_long_bar_edits_preserve_the_inversion_line_and_history() {
     exercise_sample("peaucellier-linkage");
 }
 #[test]
+#[ignore = "requires built package and pinned Deno; mandatory release gate"]
 fn scissor_bar_and_guide_edits_preserve_stages_and_history() {
     exercise_sample("five-stage-scissor-lift");
 }

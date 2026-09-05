@@ -1,5 +1,24 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "gasketWidth", "path": ["value"], "replacement": { "unit": "mm", "value": 176 } },
-  "drags": []
+  "representative_edit": {
+    "declaration": "gasketWidth",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 176
+    }
+  },
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "upperRightX",
+    "path": [
+      "target"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 45
+    }
+  }
 }

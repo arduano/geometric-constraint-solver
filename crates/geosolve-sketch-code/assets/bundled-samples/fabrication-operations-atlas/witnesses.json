@@ -1,5 +1,24 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "cornerFillet", "path": ["radius"], "replacement": { "unit": "mm", "value": 2.25 } },
-  "drags": []
+  "representative_edit": {
+    "declaration": "cornerFillet",
+    "path": [
+      "radius"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 2.25
+    }
+  },
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "stockBlank",
+    "path": [
+      "width"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 16
+    }
+  }
 }

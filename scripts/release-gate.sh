@@ -62,6 +62,14 @@ cargo test --locked -p geosolve-headless --test m87_headless \
 cargo test --locked -p geosolve-headless --test m87_headless \
   cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs \
   -- --exact --ignored
+cargo test --locked -p geosolve-headless --test m92_atlas_scale_intent \
+  -- --ignored --test-threads=1
+cargo test --locked -p geosolve-headless --test m92_product_design_intent \
+  -- --ignored --test-threads=1
+cargo test --locked -p geosolve-headless --test m92_mechanism_design_edits \
+  -- --ignored --test-threads=1
+cargo test --locked -p geosolve-headless --test m92_product_reference_intent \
+  -- --ignored --test-threads=1
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run
 
@@ -109,6 +117,8 @@ done
     GEOSOLVE_CHROMIUM_PATH="$(command -v google-chrome)"
   fi
   npm run test:e2e:language
+  npx playwright test tests/e2e/workbench.spec.ts --workers=1
+  npx playwright test tests/e2e/m92-sample-audit.spec.ts --workers=1
   npm run check
   npm run validate:dist -- ../dist ./
 )

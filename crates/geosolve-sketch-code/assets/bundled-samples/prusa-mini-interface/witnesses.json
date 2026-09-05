@@ -10,5 +10,15 @@
       "value": 36
     }
   },
-  "drags": []
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "bearingRadius",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 8
+    }
+  }
 }

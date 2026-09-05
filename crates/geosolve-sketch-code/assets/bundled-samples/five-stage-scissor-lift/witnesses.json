@@ -1,8 +1,47 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "dimension1TowerMasterDiagonalLength10", "path": ["value"], "replacement": { "unit": "mm", "value": 10.5 } },
+  "representative_edit": {
+    "declaration": "dimension1TowerMasterDiagonalLength10",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 10.5
+    }
+  },
   "drags": [
-    { "name": "raise top platform", "declaration": "point11TowerLevel5Left", "output_path": ["point"], "target": [-3.0, 32.0] },
-    { "name": "compress base slider", "declaration": "point2TowerLevel0Right", "output_path": ["point"], "target": [3.0, 0.0] }
-  ]
+    {
+      "name": "raise top platform",
+      "declaration": "point11TowerLevel5Left",
+      "output_path": [
+        "point"
+      ],
+      "target": [
+        -3.0,
+        32.0
+      ]
+    },
+    {
+      "name": "compress base slider",
+      "declaration": "point2TowerLevel0Right",
+      "output_path": [
+        "point"
+      ],
+      "target": [
+        3.0,
+        0.0
+      ]
+    }
+  ],
+  "secondary_edit": {
+    "declaration": "guideLength",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 9.5
+    }
+  }
 }

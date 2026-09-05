@@ -1,5 +1,20 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "bendRadius", "path": [], "replacement": { "unit": "mm", "value": 4.5 } },
-  "drags": []
+  "representative_edit": {
+    "declaration": "bendRadius",
+    "path": [],
+    "replacement": {
+      "unit": "mm",
+      "value": 4.5
+    }
+  },
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "clipRadius",
+    "path": [],
+    "replacement": {
+      "unit": "mm",
+      "value": 2.8
+    }
+  }
 }

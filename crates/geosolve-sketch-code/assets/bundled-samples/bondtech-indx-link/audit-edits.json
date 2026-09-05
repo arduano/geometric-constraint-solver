@@ -8,7 +8,7 @@
       ],
       "replacement": {
         "unit": "mm",
-        "value": 15
+        "value": 13
       }
     },
     {
@@ -18,7 +18,7 @@
       ],
       "replacement": {
         "unit": "mm",
-        "value": 2.8
+        "value": 2.7
       }
     }
   ]

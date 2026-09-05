@@ -10,5 +10,15 @@
       "value": 18
     }
   },
-  "drags": []
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "beltMountPitch",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 27
+    }
+  }
 }

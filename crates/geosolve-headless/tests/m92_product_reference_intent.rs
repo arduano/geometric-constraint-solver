@@ -308,13 +308,17 @@ fn intent(project: &geosolve_sketch_code::CodeProject, key: &str, edit: Option<u
         "bondtech-indx-link" => {
             let seats = named_circles(doc, "")
                 .into_iter()
-                .filter(|(_, r)| (*r - if edit == Some(1) { 2.8 } else { 2.5 }).abs() < 1e-8)
+                .filter(|(_, r)| (*r - if edit == Some(1) { 2.7 } else { 2.5 }).abs() < 1e-8)
                 .collect::<Vec<_>>();
             assert_eq!(seats.len(), 3);
-            let pitch = if edit == Some(0) { 15. } else { 14. };
+            let pitch = if edit == Some(0) { 13. } else { 14. };
             for (p, r) in &seats {
                 near(p[0].hypot(p[1]), pitch);
-                near(*r, if edit == Some(1) { 2.8 } else { 2.5 });
+                near(*r, if edit == Some(1) { 2.7 } else { 2.5 });
+                assert!(
+                    p[0].abs() + r < 37.858 && p[1].abs() + r < 16.773,
+                    "demonstrated coupling edits fit the published plan reference"
+                );
             }
             for i in 0..3 {
                 let p = seats[i].0;
