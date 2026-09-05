@@ -61,13 +61,12 @@ fn distance(a: [f64; 2], b: [f64; 2]) -> f64 {
     (a[0] - b[0]).hypot(a[1] - b[1])
 }
 
-#[test]
 #[allow(
     clippy::too_many_lines,
     clippy::float_cmp,
     reason = "the complete ten-edit matrix asserts exact fixed datums alongside independently measured relationships"
 )]
-fn every_mechanism_has_two_measured_reversible_design_edits() {
+fn exercise_sample(sample: &str) {
     let cases = [
         (
             "theo-jansen-leg",
@@ -105,7 +104,9 @@ fn every_mechanism_has_two_measured_reversible_design_edits() {
             9.5,
         ),
     ];
-    for (key, first, first_value, second, second_value) in cases {
+    for (key, first, first_value, second, second_value) in
+        cases.into_iter().filter(|(key, ..)| *key == sample)
+    {
         if let Some(root) = std::env::var_os("M92_AUDIT_OUTPUT") {
             std::fs::create_dir_all(std::path::PathBuf::from(root).join(key)).unwrap();
         }
@@ -157,10 +158,17 @@ fn every_mechanism_has_two_measured_reversible_design_edits() {
                 }
                 "twin-roller-bezier-cam" => {
                     let radii = doc
-                        .scalars()
+                        .curves()
                         .iter()
-                        .filter(|s| matches!(s.unit, geosolve_sketch::ScalarUnit::Length))
-                        .map(|s| s.value)
+                        .filter_map(|curve| {
+                            if let geosolve_sketch::CurveDefinition::Circle { radius, .. } =
+                                curve.definition
+                            {
+                                Some(doc.scalar(radius).unwrap().value)
+                            } else {
+                                None
+                            }
+                        })
                         .collect::<Vec<_>>();
                     assert_eq!(radii.len(), 2);
                     assert!(
@@ -216,4 +224,25 @@ fn every_mechanism_has_two_measured_reversible_design_edits() {
             audit::preserve(&edited, key, &format!("edit-{}", index + 1));
         }
     }
+}
+
+#[test]
+fn jansen_crank_and_rocker_edits_preserve_other_links_and_history() {
+    exercise_sample("theo-jansen-leg");
+}
+#[test]
+fn whitworth_crank_and_return_link_edits_preserve_guides_and_history() {
+    exercise_sample("whitworth-quick-return");
+}
+#[test]
+fn cam_radius_and_rise_edits_preserve_contact_and_history() {
+    exercise_sample("twin-roller-bezier-cam");
+}
+#[test]
+fn peaucellier_side_and_long_bar_edits_preserve_the_inversion_line_and_history() {
+    exercise_sample("peaucellier-linkage");
+}
+#[test]
+fn scissor_bar_and_guide_edits_preserve_stages_and_history() {
+    exercise_sample("five-stage-scissor-lift");
 }
