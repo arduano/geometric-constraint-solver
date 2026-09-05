@@ -216,7 +216,10 @@ fn fabrication_wave_a_is_source_authoritative_grouped_and_fully_constrained() {
             .count();
         assert!(fixed_points <= 1, "{key} uses {fixed_points} fixed points");
         if key == "gridfinity-bin-section" {
-            assert_eq!(fixed_points, 1, "Gridfinity plan owns the only fixed point");
+            assert_eq!(
+                fixed_points, 0,
+                "Gridfinity uses symmetry and two scalar Y datums"
+            );
             assert_eq!(
                 compiled
                     .artifact
@@ -224,8 +227,8 @@ fn fabrication_wave_a_is_source_authoritative_grouped_and_fully_constrained() {
                     .iter()
                     .filter(|entry| entry.family == "constraint.fixedCoordinate")
                     .count(),
-                1,
-                "Gridfinity section owns one scalar Y datum"
+                2,
+                "Gridfinity section and plan each own one scalar Y datum"
             );
         }
         let mut ownership = BTreeMap::<&str, usize>::new();
