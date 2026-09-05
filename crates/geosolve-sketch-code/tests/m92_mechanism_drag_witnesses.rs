@@ -3,7 +3,8 @@
 use std::collections::BTreeSet;
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, IntentNativeBinding, ProjectionalIntentCoordinator,
+    ColdIntentMaterializer, EditorEffect, IntentNativeBinding, Modifiers, PointerInput,
+    ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{DesignPointId, DocumentId, OperationControl, PersistentId};
 use geosolve_sketch_code::{
@@ -30,6 +31,8 @@ struct SampleWitnesses {
     format: String,
     #[serde(rename = "representative_edit")]
     _representative_edit: serde_json::Value,
+    #[serde(rename = "secondary_edit")]
+    _secondary_edit: serde_json::Value,
     drags: Vec<DragWitness>,
 }
 
@@ -431,6 +434,348 @@ fn every_mechanism_drag_witness_is_retained_reversible_and_cold_restorable() {
         }
     }
     assert!(witness_count >= MECHANISMS.len());
+}
+
+fn bounded_pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
+    PointerInput {
+        pointer_id,
+        position,
+        modifiers: Modifiers::default(),
+    }
+}
+
+fn bounded_viewport(editor: &ProjectionalEditorSession) -> Viewport {
+    let document = editor
+        .presentation_session()
+        .unwrap()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    let mut lower = [f64::INFINITY; 2];
+    let mut upper = [f64::NEG_INFINITY; 2];
+    for point in document.points() {
+        for axis in 0..2 {
+            lower[axis] = lower[axis].min(point.position[axis]);
+            upper[axis] = upper[axis].max(point.position[axis]);
+        }
+    }
+    let scale =
+        (800.0 / (upper[0] - lower[0]).max(1.0)).min(500.0 / (upper[1] - lower[1]).max(1.0));
+    Viewport::new(
+        [1000.0, 700.0],
+        [lower[0].midpoint(upper[0]), lower[1].midpoint(upper[1])],
+        scale,
+    )
+    .unwrap()
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "keeps all twelve real pointer frames and their independent acceptance checks together"
+)]
+fn bounded_preview_frames(
+    editor: &mut ProjectionalEditorSession,
+    point: DesignPointId,
+    viewport: Viewport,
+    target: [f64; 2],
+    pointer_id: u64,
+    expected_dof: usize,
+    context: &str,
+) -> [f64; 2] {
+    let intent_before = editor.coordinator().intent().to_canonical_json().unwrap();
+    let origin = point_position(editor.coordinator(), point, context);
+    let start = viewport.model_to_screen(origin);
+    let end = viewport.model_to_screen(target);
+    assert!(
+        (end.x - start.x).hypot(end.y - start.y) > 6.0,
+        "{context}: witness must exceed the ordinary pointer threshold"
+    );
+    let scene = editor.scene(viewport, 0.25).unwrap();
+    editor
+        .pointer_down(&scene, bounded_pointer(pointer_id, start))
+        .unwrap_or_else(|error| panic!("{context}: pointer down: {error}"));
+    assert_eq!(
+        editor.editor().selection(),
+        &[SelectionItem::Point(point)],
+        "{context}: the normal scene picker must select the declared driver"
+    );
+    let mut attempts = 0;
+    let mut rejected = Vec::new();
+    let mut terminal = origin;
+    for step in 1..=12 {
+        let fraction = f64::from(step) / 12.0;
+        let cursor = ScreenPoint {
+            x: (end.x - start.x).mul_add(fraction, start.x),
+            y: (end.y - start.y).mul_add(fraction, start.y),
+        };
+        let before = editor
+            .presentation_session()
+            .unwrap()
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .clone();
+        let scene = editor.scene(viewport, 0.25).unwrap();
+        let audited = editor.pointer_move_audited(&scene, bounded_pointer(pointer_id, cursor));
+        assert_eq!(
+            audited.work.intent_materialization_attempts(),
+            0,
+            "{context}"
+        );
+        assert_eq!(audited.work.history_publications(), 0, "{context}");
+        assert!(audited.work.native_preview_attempts() <= 1, "{context}");
+        let effects = audited
+            .outcome
+            .unwrap_or_else(|error| panic!("{context}: pointer move {step}: {error}"));
+        let preview = effects.iter().find_map(|effect| match effect {
+            EditorEffect::PreviewPointMove {
+                point: moved,
+                model_position,
+            } if *moved == point => Some(*model_position),
+            _ => None,
+        });
+        let state = editor
+            .presentation_session()
+            .unwrap()
+            .accepted_state_for_current_input()
+            .unwrap();
+        if audited.work.native_preview_attempts() == 1 {
+            attempts += 1;
+            if let Some(preview) = preview {
+                assert_eq!(
+                    pair_bits(state.document().point(point).unwrap().position),
+                    pair_bits(preview),
+                    "{context}: accepted effect and authoritative preview agree"
+                );
+                terminal = preview;
+            } else {
+                rejected.push(step);
+                assert_eq!(
+                    state.document(),
+                    &before,
+                    "{context}: rejected frame retention"
+                );
+            }
+        }
+        assert!(state.solve_result().rejection.is_none(), "{context}");
+        assert!(
+            state
+                .solve_result()
+                .acceptance_hard_residual_max
+                .is_some_and(|value| value.is_finite() && value <= 1.0e-9),
+            "{context}: independently validated Hard residuals"
+        );
+        assert!(
+            state
+                .document()
+                .points()
+                .iter()
+                .flat_map(|point| point.position)
+                .chain(state.document().scalars().iter().map(|scalar| scalar.value))
+                .all(f64::is_finite),
+            "{context}: finite accepted preview"
+        );
+        assert_eq!(
+            state.diagnostics().rank.unwrap().numerical_right_nullity,
+            Some(expected_dof),
+            "{context}: preview mobility"
+        );
+        let mobility = state.diagnostics().mobility.unwrap();
+        assert_eq!(mobility.equality_degrees_of_freedom, Some(expected_dof));
+        assert_eq!(
+            mobility.bidirectional_bounded_degrees_of_freedom,
+            Some(expected_dof),
+            "{context}: ordinary witnesses stay inside their usable stroke"
+        );
+        assert_eq!(
+            editor.coordinator().intent().to_canonical_json().unwrap(),
+            intent_before,
+            "{context}: preview preserves complete intent/history/branch state"
+        );
+    }
+    assert!(
+        attempts > 0,
+        "{context}: no native preview request crossed the pointer boundary"
+    );
+    assert!(
+        rejected.is_empty(),
+        "{context}: default bounded policy rejected frames {rejected:?} of {attempts} attempts"
+    );
+    assert!(
+        distance(terminal, origin) > 1.0e-6,
+        "{context}: driver never moved"
+    );
+    assert!(
+        distance(terminal, target) < distance(origin, target),
+        "{context}: constrained driver must approach its cursor target"
+    );
+    terminal
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "keeps the bounded gesture, exact terminal, Undo/Redo and cold reload together"
+)]
+fn exercise_bounded_witness(sample_key: &str, witness: &DragWitness, seed: u128) {
+    let context = format!("{sample_key}/{}", witness.name);
+    let sample = bundled_sample(sample_key).unwrap();
+    let project = sample.project();
+    let document_id = DocumentId(PersistentId::from_u128(seed));
+    let materialized = materialize_code_project_cold(
+        &project,
+        &generated(&project),
+        IntentSessionId::from_raw(seed),
+        document_id,
+        1.0,
+    )
+    .unwrap_or_else(|error| panic!("{context}: materialization: {error}"));
+    let writable = witness_writable_point(&materialized.expansion, witness, &context);
+    // This constructor selects the production default bounded geometry policy.
+    // No copied limit constants or unlimited preview controls enter this test.
+    let mut editor = ProjectionalEditorSession::restore(
+        IntentSession::from_json(
+            &materialized
+                .editor
+                .coordinator()
+                .intent()
+                .to_canonical_json()
+                .unwrap(),
+        )
+        .unwrap(),
+        document_id,
+        1.0,
+    )
+    .unwrap();
+    let point = native_point(editor.coordinator(), &writable.handle, &context);
+    let viewport = bounded_viewport(&editor);
+    let before = accepted_document_json(editor.coordinator(), &context);
+    let undo_before = editor.coordinator().intent().undo_len();
+    let graph_before = editor.coordinator().intent().graph().clone();
+    let pointer_id = u64::try_from(seed).unwrap();
+    let terminal = bounded_preview_frames(
+        &mut editor,
+        point,
+        viewport,
+        witness.target,
+        pointer_id,
+        sample.expected.numerical_right_nullity(),
+        &context,
+    );
+    let scene = editor.scene(viewport, 0.25).unwrap();
+    let committed = editor.pointer_up_audited(
+        &scene,
+        bounded_pointer(pointer_id, viewport.model_to_screen(witness.target)),
+    );
+    assert_eq!(
+        committed.work.history_publications(),
+        1,
+        "{context}: one gesture transaction"
+    );
+    let committed = committed.outcome.unwrap();
+    assert_eq!(
+        committed.transaction.unwrap().disposition,
+        IntentPlanDisposition::Accepted,
+        "{context}: exact terminal publication"
+    );
+    assert_eq!(
+        pair_bits(point_position(editor.coordinator(), point, &context)),
+        pair_bits(terminal),
+        "{context}: commit preserves the last accepted preview"
+    );
+    assert_eq!(editor.coordinator().intent().undo_len(), undo_before + 1);
+    assert_eq!(editor.coordinator().intent().graph(), &graph_before);
+    assert_accepted(
+        editor.coordinator(),
+        sample.expected.numerical_right_nullity(),
+        sample.expected.bidirectional_bounded_degrees_of_freedom(),
+        &context,
+    );
+    let after = accepted_document_json(editor.coordinator(), &context);
+    editor.undo().unwrap().unwrap();
+    assert_eq!(
+        accepted_document_json(editor.coordinator(), &context),
+        before
+    );
+    editor.redo().unwrap().unwrap();
+    assert_eq!(
+        accepted_document_json(editor.coordinator(), &context),
+        after
+    );
+    let persisted = editor.coordinator().intent().to_canonical_json().unwrap();
+    let restored = ProjectionalEditorSession::restore(
+        IntentSession::from_json(&persisted).unwrap(),
+        document_id,
+        1.0,
+    )
+    .unwrap();
+    assert_eq!(
+        restored.coordinator().intent().to_canonical_json().unwrap(),
+        persisted
+    );
+    assert_eq!(
+        accepted_document_json(restored.coordinator(), &context),
+        after
+    );
+    assert_accepted(
+        restored.coordinator(),
+        sample.expected.numerical_right_nullity(),
+        sample.expected.bidirectional_bounded_degrees_of_freedom(),
+        &context,
+    );
+}
+
+#[test]
+fn every_mechanism_witness_accepts_default_bounded_pointer_frames() {
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for (sample_index, key) in MECHANISMS.into_iter().enumerate() {
+        let witnesses =
+            serde_json::from_str::<SampleWitnesses>(bundled_sample(key).unwrap().witnesses_json());
+        let witnesses = match witnesses {
+            Ok(witnesses)
+                if witnesses.format == "geosolve-sample-witnesses-v1"
+                    && !witnesses.drags.is_empty() =>
+            {
+                witnesses
+            }
+            other => {
+                failures.push(format!("{key}: invalid witness inventory: {other:?}"));
+                continue;
+            }
+        };
+        for (drag_index, witness) in witnesses.drags.iter().enumerate() {
+            checked += 1;
+            let seed = 0x9294_0000
+                + u128::try_from(sample_index).unwrap() * 0x100
+                + u128::try_from(drag_index).unwrap();
+            let result = std::panic::catch_unwind(|| exercise_bounded_witness(key, witness, seed));
+            if let Err(panic) = result {
+                let message = panic
+                    .downcast_ref::<String>()
+                    .cloned()
+                    .or_else(|| {
+                        panic
+                            .downcast_ref::<&str>()
+                            .map(|message| (*message).to_owned())
+                    })
+                    .unwrap_or_else(|| "non-text panic".into());
+                eprintln!("FAIL bounded {key}/{}: {message}", witness.name);
+                failures.push(format!("{key}/{}: {message}", witness.name));
+            } else {
+                eprintln!("PASS bounded {key}/{}", witness.name);
+            }
+        }
+    }
+    assert!(
+        checked >= MECHANISMS.len(),
+        "complete five-mechanism inventory"
+    );
+    assert!(
+        failures.is_empty(),
+        "bounded pointer checklist:\n{}",
+        failures.join("\n")
+    );
 }
 
 fn named_point(
