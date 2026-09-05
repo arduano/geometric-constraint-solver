@@ -3,10 +3,17 @@
   "ordinal": 13,
   "key": "voron-panel",
   "title": "Voron V0.2 motor panel",
-  "summary": "A simplified V0.2 motor-panel study pairs its published 122 x 37 mm bounds and 116 mm inner span with explicitly schematic central-passage and edge-notch references.",
+  "summary": "A connected 122 x 37 mm boundary contains the edge-open T-passage and bilateral side notches; squared transitions make this an editable topology study.",
   "category": "product_fabrication",
-  "expected": { "raw_dof": 0, "effective_dof": 0 },
-  "groups": ["Panel envelope", "Central motor passage", "Side-notch references"],
+  "expected": {
+    "raw_dof": 0,
+    "effective_dof": 0
+  },
+  "groups": [
+    "Panel envelope",
+    "Central motor passage",
+    "Side-notch references"
+  ],
   "provenance": [
     {
       "relationship": "dimensions_only",
@@ -15,7 +22,7 @@
       "revision": "a53fc87562fd630c846af38d7de850c894dc3d85",
       "path": "Drawings/Motor_Panel_v0.2.PDF",
       "licence": "GPL-3.0-only",
-      "scope": "Overall 122 x 37 mm bounds and 116 mm inner span inform the planar datum study; curved transitions are schematic and bend details and manufacturing instructions are omitted.",
+      "scope": "The 122 x 37 mm bounds inform the independently redrawn panel. The design study retains bilateral symmetry and an edge-open T passage; it omits bends, production details, curved transitions and manufacturing instructions.",
       "notice_required": true
     },
     {
@@ -25,7 +32,7 @@
       "revision": "a53fc87562fd630c846af38d7de850c894dc3d85",
       "path": "DXF/Motor_Panel.dxf",
       "licence": "GPL-3.0-only",
-      "scope": "Polyline topology was consulted to make the central opening and paired edge-notch arrangement recognizable; the displayed curved proxies are explicitly schematic and this is not a cut-ready DXF or manufacturing guarantee.",
+      "scope": "The single closed DXF polyline establishes an edge-open T passage and paired side notches. Redraw coordinates translate DXF Y by +211.49999618536208; the PDF view is rotated 180 degrees. Source dimensions include a 10 mm neck, 30 x 10 crossbar extent and 3.5 mm notch mouth. Curved lobes and transitions are deliberately squared off, so this is not a cut-ready profile.",
       "notice_required": true
     }
   ]

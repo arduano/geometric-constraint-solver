@@ -1,0 +1,25 @@
+{
+  "format": "geosolve-sample-audit-edits-v1",
+  "edits": [
+    {
+      "declaration": "panelHalfWidth",
+      "path": [
+        "target"
+      ],
+      "replacement": {
+        "unit": "mm",
+        "value": 63
+      }
+    },
+    {
+      "declaration": "passageHalfWidth",
+      "path": [
+        "target"
+      ],
+      "replacement": {
+        "unit": "mm",
+        "value": 17
+      }
+    }
+  ]
+}

@@ -1,5 +1,14 @@
 {
   "format": "geosolve-sample-witnesses-v1",
-  "representative_edit": { "declaration": "innerSpanDatum", "path": ["width"], "replacement": { "unit": "mm", "value": 114 } },
+  "representative_edit": {
+    "declaration": "panelHalfWidth",
+    "path": [
+      "target"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 63
+    }
+  },
   "drags": []
 }
