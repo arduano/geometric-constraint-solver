@@ -2,39 +2,41 @@
 
 # M92 UAT: advanced sample showcase
 
-Status: **not yet nominated; M92-U1 through M92-U8 are pending and unexecuted**. The 20-sample
-`5/11/2/2` implementation and automated scorecard owners are integrated, and `M92-F001` is repaired
-by `b861f4c`. `M92-F002`'s terminal managed-release defect is repaired by `e40d11d`, with paired
-frontend regression `c85e8aa` and browser-oracle correction `f31e740`; collateral harness correction
-`d450e94` remains unrelated. Complete clean qualification, immutable freeze and exact immutable-endpoint
-browser evidence are still in progress. The release harness must pass `20/20`, including its harness-only
-compiler-envelope row, while each production frozen endpoint must pass the `19/19` ordinary
-workbench rows. Automated evidence cannot pass these human rows, and no Pages publication is
-authorized before approval.
+Status: **immutable candidate nominated; M92 remains in progress. M92-U1 through M92-U8 are
+pending and unexecuted.** Automated evidence cannot pass or waive these human rows.
 
-The 2026-09-05 visual/geometric continuation in `M92_VISUAL_AUDIT.md` records F003–F015 and two
-measured edits per sample. The integrated development sample audit passed 20/20 before F014;
-legacy recovery and scale restoration checks pass. F014's Jansen and field browser checks pass
-2/2, and its existing 1024 px layout contract passes. Failed restoration preserves saved project
-and unapplied source-draft bytes until successful explicit replacement Save. The atlas edit log's
-2/2 result retains the wrapper exit 143 caveat. These are automated development results; final
-clean qualification, immutable nomination and every human row below remain pending.
+Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
+`b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
+(exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+**http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
+language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
+separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
+All 20 samples received visual review and two measured edits each; captured geometry and source restore
+exactly through Undo/Redo/reload. M92 remains in progress; all human U1–U8 rows remain pending and
+GitHub Pages remains unchanged. Later documentation commits do not change these qualified bytes.
 
-The first audited clean gate at `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` exited 101 after
-formatting/Clippy passed and a stale Jansen bridge selector failed the demo library suite
-(292 passed / 1 failed / 1 ignored). Corrected selection independently exposed F015: ordinary
-bounded crank previews retain the old valid frame but exhaust work without accepted movement or
-Undo. An actual browser drag also fails at disabled Undo. The earlier 520-frame native mechanism
-sweeps were unlimited, and the passing source-edit sample audit did not drag Jansen. Core repair
-`a9d7532`, all ten default-policy pointer witnesses and Jansen/scissor browser checks now pass;
-a complete successful replacement clean gate is required before nomination.
-These failures and repairs do not execute or waive any human row below.
+The [final qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) ledger preserves the gate receipt, frozen manifest,
+eleven-route HTTP byte/metadata checks on both endpoints, exact browser inventories and visual
+review. Local staging was stopped after its checks; the Tailscale address above remains live.
+Review the exact immutable candidate. GitHub Pages remains the accepted M91 publication.
 
-The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` exited 101 on a
-stale Gridfinity test assumption. The corrected contract requires two scalar Y datums and no fixed
-points; the focused manufacturing suite passes 2/2 in 7.76 seconds. This is `HARNESS_ERROR`, with no new finding
-ID. `M92_VISUAL_AUDIT.md` preserves the exact failed receipt. Final qualification, immutable
-nomination and all eight human rows remain pending.
+The 2026-09-05 continuation repaired sample topology, driven dimensions, reference relationships,
+clearances and shared edit propagation, plus full scale history restoration, Explorer overflow
+and ordinary bounded Jansen dragging. Native measurements and real browser captures cover two
+meaningful source edits for every entry. Some Gridfinity/manifold annotations and small atlas or
+harness-bend details need group isolation and zoom. These remain schematic 2D studies.
+
+Earlier evidence remains historical: the first audited clean gate at
+`c4c02abd8a92e2e929ccfb23b59c211a32a7400a` exited 101 after formatting/Clippy passed and the demo
+library reported 292 passed / 1 failed / 1 ignored on a stale Jansen selector. Corrected selection
+exposed F015's real bounded drag exhaustion and disabled Undo. Core repair `a9d7532` preserves
+budgets and validation, and now passes the complete gate and exact frozen endpoint workflows.
+The second audited gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` exited 101 on the stale
+Gridfinity test: its corrected contract requires two scalar Y datums and no fixed points,
+with focused manufacturing 2/2 passing. This was `HARNESS_ERROR`, with no new finding ID.
+The earlier atlas log's 2/2 result retains its wrapper exit 143; the successful final gate supplies
+an independent repeated receipt. None of these records executes or waives a human row.
 
 1. **M92-U1 — Pending / not run — Catalog cohesion.** Open the sample surface. Confirm exactly four
    clear categories and 20 intentionally named entries, with no native/code distinction, duplicates,

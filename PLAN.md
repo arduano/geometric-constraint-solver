@@ -8149,8 +8149,8 @@ single composite human review.
 - [x] Add exact automated coverage for representative edit, Undo/Redo/reload,
   native/headless/release-WASM parity and frontend-manifest generation for every entry, with release
   WASM below 20 MiB and the complete distribution below 30 MiB as enforced release boundaries.
-  Final clean execution of those gates remains part of the unchecked nomination item below.
-- [ ] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
+  Final clean execution and immutable nomination now pass as recorded below.
+- [x] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
   survey/check/require-clean, package/frontend tests and the clean release gate; then freeze one
   byte-verified immutable M92 UAT without publishing Pages before human approval.
 
@@ -8158,8 +8158,8 @@ Implementation checkpoint: the manifest-driven registry and all four sample wave
 at the frozen `5/11/2/2` distribution. Registry, source/compiler/project authority, sample-wave,
 drag-witness, headless report-v2, representative-edit/history, release-WASM adapter and release-size
 owners are present. M92-F001 and M92-F002 repairs plus their focused regressions are integrated.
-Complete clean qualification and immutable UAT nomination are still in progress; no M92 human row
-or Pages publication is claimed.
+Complete clean qualification and immutable UAT nomination now pass; no M92 human row
+or Pages publication is claimed. See [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
 
 `M92-F001` was reproduced while opening the fabrication operations atlas across the editor-checkpoint
 boundary. Live `SketchDocument` trim rows retained operation insertion order, while draft-v5
@@ -8194,14 +8194,14 @@ M92-F002 lifecycle defect. Harness commit `f31e740` reads accepted managed sourc
 authority with bounded polling, admits legitimate inferred Jansen snaps and normalizes the Scissor
 camera comparison. Final qualification must distinguish `20/20` in the explicit release harness,
 including its harness-only compiler-envelope page, from `19/19` ordinary workbench rows on each
-production frozen endpoint. The final qualification/nomination checkbox remains unchecked.
+production frozen endpoint. These mechanical qualification/nomination checks now pass.
 
 A preliminary clean gate on that pre-F002 source passed through release performance and package
 verification, then ended at exit `1` solely because Playwright's fixed `180,000 ms` fixture-server
 startup budget expired while a clean optimized WASM build was still progressing. Record this as
 `HARNESS_ERROR`, not product failure or clean qualification. The server-only startup allowance is
-now `600,000 ms`; the per-row `120,000 ms` browser timeout remains unchanged. The final gate must
-start fresh from the integrated clean source.
+now `600,000 ms`; the per-row `120,000 ms` browser timeout remains unchanged. This checkpoint
+required a fresh gate from integrated clean source; the completed replacement is recorded below.
 
 ### M92 visual-audit continuation
 
@@ -8221,9 +8221,10 @@ independently justified freedom.
 - [x] Repair F015 bounded Jansen dragging and qualify actual accepted movement, release and history
   through the retained editor and existing browser sample workflow. Core `a9d7532`, all ten
   default-budget witnesses, all nine mechanism tests and Jansen/scissor browser checks pass.
-- [ ] Repeat the final integrated audit in the clean gate.
-  Retain the atlas edit log's 2/2 result and wrapper exit 143 until the clean gate supplies its receipt.
-- [ ] Complete the unchanged clean qualification/immutable nomination requirement above; retain
+- [x] Repeat the final integrated audit in the clean gate.
+  The successful gate supplies an independent repeated receipt; the earlier atlas edit log's 2/2
+  result and wrapper exit 143 remain preserved historical evidence.
+- [x] Complete the unchanged clean qualification/immutable nomination requirement above; retain
   human M92-U1–U8 pending and do not publish Pages.
 
 F013 is repaired at the code-workbench transport owner by `1a3aa61`: v5 compresses complete
@@ -8238,16 +8239,32 @@ immutable nomination. The audit ledger owns exact commands, byte counts and evid
 The first audited clean gate at `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` exited 101:
 format/Clippy passed, but the demo library finished 292 passed / 1 failed / 1 ignored because its
 Jansen helper used the removed `[-8, 3]` point. Corrected selection independently exposed F015's
-bounded preview exhaustion; an actual browser drag also fails with Undo disabled. The prior
+bounded preview exhaustion; an actual browser drag also failed with Undo disabled. The prior
 520-frame native sweeps were unlimited, and the passing source-edit audit did not drag Jansen.
-After the repair, restart the complete clean gate; no prior partial run establishes nomination.
+After the repair, a complete replacement gate was required; no prior partial run established
+nomination. The successful final run below satisfies that requirement.
 
 The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` exited 101 at
 `m87_manufacturing_sketches`: its old Gridfinity assertion expected one scalar datum and one fixed
 point instead of the repaired sample's two scalar Y datums and zero fixed points. The corrected
 test preserves source-owned dimensions, view groups and linked floor/width relationships; the
 focused suite passes 2/2 in 7.76 seconds. Classify this as `HARNESS_ERROR`, with no new finding ID.
-The exact receipt is in `docs/M92_VISUAL_AUDIT.md`; repeat the full clean gate before nomination.
+The exact failed receipt is in `docs/M92_VISUAL_AUDIT.md`; the full replacement gate and nomination
+subsequently passed.
+
+Final mechanical nomination — 2026-09-05:
+
+Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
+`b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
+(exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+**http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
+language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
+separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
+All 20 samples received visual review and two measured edits each; captured geometry and source restore
+exactly through Undo/Redo/reload. M92 remains in progress; all human U1–U8 rows remain pending and
+GitHub Pages remains unchanged. Later documentation commits do not change these qualified bytes.
+Exact commands, receipts and retained limitations: [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
 
 ## Explicit non-goals
 

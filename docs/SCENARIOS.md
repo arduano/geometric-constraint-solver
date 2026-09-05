@@ -7106,9 +7106,11 @@ passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M
 
 ## M92 advanced showcase fixtures
 
-Status: **implemented with M92-F001 and M92-F002 repaired; clean qualification and immutable UAT
-nomination remain in progress**. These fixtures provide automated evidence only; M92-U1 through
-M92-U8 remain unexecuted.
+Status: **in progress; F001–F015 repairs are clean-qualified and the immutable candidate is
+nominated. Human M92-U1–U8 remain pending and unexecuted; GitHub Pages is unchanged.**
+
+See [final qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) for the exact `b854d74` candidate,
+20-sample visual/history audit and frozen endpoint receipts.
 
 ### M92-C1 — canonical registry is complete and singular
 
@@ -7209,8 +7211,8 @@ The separate 20-row browser sample workflow checks actual painted native/compute
 edit/Undo/Redo/reload, group restoration, fitted bounds and ordinary point ownership. Screen
 evidence is inspected alongside native measurements; it does not replace them or accept human UAT.
 The integrated development run passed 20/20 before F014. Atlas follow-up measurements pass their
-focused baselines; the edit log records 2/2 passing with wrapper exit 143, pending a clean-gate
-receipt.
+focused baselines; the edit log retains 2/2 passing with wrapper exit 143. The final clean gate
+now supplies an independent repeated receipt.
 
 ### M92-F013 — complete scale history survives browser transport
 
@@ -7233,7 +7235,7 @@ project and unapplied-draft bytes and the live handle after rejection. Valid and
 cases survive fallback edits, presentation changes and failed manual saves; successful explicit
 Save replaces both stores. Both scale new-save native and release-WASM restoration checks, plus
 exact original-save recovery through native and Chromium paths, pass. The audit ledger records
-their exact bytes, commands and outcomes; final clean qualification remains pending.
+their exact bytes, commands and outcomes; final clean qualification subsequently passed; see the final ledger.
 
 ### M92-F014 — Explorer isolation preserves visible labels and controls
 
@@ -7243,7 +7245,7 @@ must fit the panel through isolation/restoration, preserve complete hover titles
 action controls. The default Explorer share grows from 9% to 16%, with its minimum from 6% to 12%.
 The independent DOM probe reports no horizontal overflow before/after Isolate; Jansen and field
 browser checks pass 2/2 and the existing 1024 px layout contract passes. The final clean-gate
-repeat remains pending. This presentation scenario changes no geometry, solver or accepted-history
+repeat now passes. This presentation scenario changes no geometry, solver or accepted-history
 contract.
 
 ### M92-F015 — ordinary bounded Jansen drag accepts meaningful movement
@@ -7251,11 +7253,11 @@ contract.
 Open the repaired `theo-jansen-leg`, select its crank at `[15, 0]`, and send 12 pointer moves
 toward `[14.265847744427303, 4.635254915624211]` before release. The old bridge helper selected
 the removed `[-8, 3]` point; that stale fixture is a separate `HARNESS_ERROR`. With selection
-corrected, the retained preview independently reproduces `WorkExhausted`: 256/256 factorizations,
+corrected, the retained preview independently reproduced `WorkExhausted`: 256/256 factorizations,
 254 nonlinear iterations, 144–148 rejected trials in the initial previews and a largest dense
-kernel of 23×12. The prior valid geometry survives, but there is no accepted movement, Undo entry
+kernel of 23×12. The prior valid geometry survived, but there was no accepted movement, Undo entry
 or `last_error`. The actual-browser drag added to Jansen's existing sample workflow independently
-fails because Undo remains disabled.
+failed because Undo remained disabled.
 
 Acceptance requires meaningful input and foot movement within the configured ordinary preview
 budget, finite independently validated geometry, retained explicit branches and fixed ground,
@@ -7264,7 +7266,7 @@ prior 520-frame mechanism suite was unlimited; the pre-F014 20/20 browser sample
 source edits/history without dragging Jansen. Neither qualified this bounded interaction. Core
 repair `a9d7532` now passes both directions at three scales, all ten real default-policy pointer
 witnesses and Jansen/scissor browser checks without changing budgets or acceptance tolerances. The first audited clean gate failed on the stale selector and
-must be replaced in full after repair; exact receipts and reproductions are recorded in
+was subsequently replaced in full after repair; exact receipts and reproductions are recorded in
 `docs/M92_VISUAL_AUDIT.md`.
 
 ### M92 Gridfinity harness correction — two linked views retain scalar datums
@@ -7277,7 +7279,7 @@ The corrected test preserves `baseBottomWidth` and both view groups, and checks
 the same counts; measured height/width edits verify fixed floor height, cavity growth, symmetry
 and linked plan/section widths. The focused manufacturing suite passes 2/2 in 7.76 seconds.
 This is `HARNESS_ERROR`, with no new finding ID or product change. The failed receipt is recorded
-in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination remain pending.
+in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination subsequently passed; see the final ledger.
 
 ## Frozen near-singular fixtures
 

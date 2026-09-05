@@ -5257,8 +5257,8 @@ provenance, mechanism drag witnesses, deterministic headless report v2, dual-bac
 coverage, representative edit/history/reload coverage, release-WASM adapter coverage and bounded
 release-distribution checks are implemented. M92-F001 and M92-F002 are repaired with focused owner
 regressions. Complete clean qualification, immutable snapshot freeze and exact browser evidence
-remain in progress. This checkpoint does not accept M92-U1 through M92-U8 and does not authorize
-Pages publication.
+now pass for `b854d74`; see [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination). This evidence does not
+accept M92-U1 through M92-U8 or authorize Pages publication.
 
 The user-visible catalog contains exactly 20 code-authoritative entries in canonical manifest
 order: 5 mechanisms, 11 products/fabrication studies, 2 atlases and 2 scale labs. No native/code
@@ -5364,11 +5364,11 @@ unapplied-draft bytes with autosave paused; candidate failure must leave any liv
 The unchanged 40 MiB ordinary bridge guard remains enforced. The integrated development sample
 workflow passed 20/20 before F014; exact captured legacy recovery and both scale restoration paths
 pass native and browser/WASM checks. The atlas edit log records 2/2 passing, but its wrapper
-exited 143; the clean gate must provide the final qualification receipt. F014 additionally
+exited 143; the final clean gate now supplies an independent repeated receipt. F014 additionally
 requires Explorer labels and controls to stay visible without horizontal scrolling after group
 isolation/restoration. Jansen and field browser checks pass 2/2; the existing 1024 px layout
-contract also passes. These results do not pass human U1–U8, final clean qualification or
-immutable nomination.
+contract also passes. Those focused results alone did not establish final qualification or
+nomination; the successful final ledger now does. Human U1–U8 remain pending.
 
 F015 additionally requires the repaired Jansen crank to move through the ordinary bounded retained
 preview path, release into one accepted history action, and support exact Undo/Redo without
@@ -5378,15 +5378,17 @@ branches. Retaining the old valid frame after work exhaustion is not successful 
 corrected native regression and added browser drag now pass with core repair `a9d7532`; all ten
 default-policy mechanism witnesses also pass.
 Unlimited trajectory evidence and source-edit browser passes do not satisfy this criterion.
-The first audited clean gate failed at the stale Jansen selector and must be replaced in full after
-repair; `docs/M92_VISUAL_AUDIT.md` records its exact receipt.
+The first audited clean gate failed at the stale Jansen selector and required a full replacement
+after repair; `docs/M92_VISUAL_AUDIT.md` records its exact receipt.
 
 The second audited clean gate also exited 101, on a stale Gridfinity source assertion. Current
 acceptance requires two scalar Y datums and no fixed points across the linked plan/section,
 preserving dimension-driven width, symmetry and cavity-floor behavior. The corrected manufacturing
 suite passes 2/2 and agrees with independent M92 height/width geometry tests. This is
 `HARNESS_ERROR`, with no new finding ID or production change. The exact failed receipt is in
-`docs/M92_VISUAL_AUDIT.md`; a complete successful replacement gate and nomination remain pending.
+`docs/M92_VISUAL_AUDIT.md`; the complete successful replacement gate and nomination are now
+recorded in its final ledger. All mechanical release criteria pass, including the separately
+counted bounded Jansen workflow on each frozen endpoint. Human UAT remains pending.
 
 ## Regression and oracle policy
 

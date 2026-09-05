@@ -2695,6 +2695,10 @@ Chromium 20/20 pass before both accepted M90/M91 listeners were retired. M91 is 
 
 ## M92 canonical bundled-sample architecture
 
+Mechanical qualification and immutable nomination pass for `b854d74`; M92 remains in progress
+pending human U1–U8. See [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination). The frozen production checks
+count 19 ordinary workbench rows and the separate bounded Jansen workflow independently.
+
 M92 replaces accumulated catalog variants with one manifest-driven registry owned by
 `geosolve-sketch-code`. `BundledSampleSpec` binds a stable ordinal/key/title/category/summary to its
 typed `sketch.ts`, authenticated compiler envelope, witnesses, expected mobility, ordered functional
@@ -2768,8 +2772,8 @@ history.
 
 Interactive retained-editor previews use finite operation budgets. An unlimited native trajectory
 and a browser source-edit/history audit do not qualify this boundary. The repaired Jansen crank
-reproduces work exhaustion under the ordinary 256-factorization preview limit; the previous valid
-geometry remains retained, but no movement or Undo entry is accepted. Browser reproduction reaches
+reproduced work exhaustion before core repair under the ordinary 256-factorization preview limit; the previous valid
+geometry remained retained, but no movement or Undo entry was accepted. Browser reproduction reached
 the same disabled-Undo outcome. Core repair `a9d7532` extends existing first-improvement
 backtracking to all Temporary objectives without changing budgets, tolerances or certification.
 All ten default-policy witnesses and the Jansen/scissor browser checks now pass. The required boundary preserves hard validation, explicit branches, locality and exact
@@ -2783,4 +2787,4 @@ plan and section each own one scalar Y datum, with no fixed points; symmetry, di
 `planMatchesSection` preserve width propagation, while `cavityFloorAtBase` retains floor height.
 The corrected test agrees with the compiled-declaration and independent geometry contracts and
 passes 2/2. This `HARNESS_ERROR` changes no production semantics and receives no finding ID.
-`docs/M92_VISUAL_AUDIT.md` records the failed gate receipt; complete qualification remains pending.
+`docs/M92_VISUAL_AUDIT.md` records the failed gate receipt; complete qualification subsequently passed in the final ledger.

@@ -2,9 +2,8 @@
 
 # M92 implementation: registry-first parallel sample rebuild
 
-Status: **F001–F014 repairs integrated; F015 bounded Jansen dragging repaired at the core owner.
-Both audited clean gates failed; replacement qualification and immutable UAT nomination are pending**.
-No M92 human row or public Pages release is claimed by this checkpoint.
+Status: **in progress; clean-qualified immutable candidate nominated for human UAT. The two
+earlier audited gates failed; their receipts are preserved. Human U1–U8 remain pending.**
 
 ## Integration order
 
@@ -73,9 +72,8 @@ The checked-in implementation owners include:
 - the milestone-neutral native/managed golden backend parity owner and its four reviewed,
   fail-closed exclusions.
 
-These are implemented test and code owners, not a claim that the final clean nomination command has
-finished. The final command outcomes, frozen artifact identity and browser evidence will be recorded
-only after qualification completes.
+These are the implementation and test owners. The final command outcomes, frozen artifact
+identity and browser evidence are recorded in the final qualification ledger.
 
 ## M92-F001 — canonical live trim-view order
 
@@ -173,20 +171,40 @@ is now `600,000 ms`; individual browser rows retain their existing `120,000 ms` 
 
 ## Qualification
 
-Focused registry/sample/witness coverage is integrated. Complete qualification is currently in
-progress. Final nomination still requires:
+Focused coverage and the complete clean release gate pass. The
+[final qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) ledger owns the
+final source/tree, immutable manifest, endpoint receipts and exact command environments. The
+following commands ran successfully; the workspace test uses `RUST_MIN_STACK=16777216`:
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-cargo test --locked --workspace --all-features
+RUST_MIN_STACK=16777216 cargo test --locked --workspace --all-features
 ./scripts/golden-authoring-scene-oracle.sh --survey
 ./scripts/golden-authoring-scene-oracle.sh --check
 ./scripts/golden-authoring-scene-oracle.sh --require-clean
-NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+NO_COLOR=true GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+GEOSOLVE_E2E_PORT=18197 \
+M92_BROWSER_AUDIT_OUTPUT=/home/arduano/m92-visual-audit-20260905/final-gate-r3/browser-samples \
+nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
 ```
 
-Exact results and any reproduced finding IDs are appended before nomination.
+The successful gate ran from 07:18:29.688311 to 09:51:29.678675 UTC on 2026-09-05, exit 0,
+with clean unchanged source `b854d74`. Native workspace tests report 2,605 passed and zero failed; the separate
+mandatory edit suites cover 40 edits, the unchanged golden has 271 PASS rows, and native/WASM,
+packages, performance, licensing and frontend checks pass. Release browser scopes are 20 workbench,
+20 sample workflows and one language-service row; frontend unit tests pass 97/97.
+
+Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
+`b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
+(exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+**http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
+language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
+separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
+All 20 samples received visual review and two measured edits each; captured geometry and source restore
+exactly through Undo/Redo/reload. M92 remains in progress; all human U1–U8 rows remain pending and
+GitHub Pages remains unchanged. Later documentation commits do not change these qualified bytes.
 
 The first audited clean gate at source `c4c02abd8a92e2e929ccfb23b59c211a32a7400a`, tree
 `74ff8155a389ef97249c3984e4692f5059269b49`, ran from 2026-09-05 05:41:16 to 05:59:54 UTC and
@@ -196,9 +214,9 @@ exited 101. Formatting and warnings-denied Clippy passed; the demo library repor
 are in `M92_VISUAL_AUDIT.md`; the failure is distinct from both the historical server-start timeout
 above and the older baseline journal missing an exit receipt.
 
-Correcting that stale fixture exposed F015's actual bounded drag failure, described below. A
-successful replacement clean gate, immutable snapshot path/hash, HTTP byte-verification ledger and
-immutable-endpoint browser result remain pending. The historical `14/20` diagnostic and later
+Correcting that stale fixture exposed F015's actual bounded drag failure, described below. At
+that checkpoint, a successful replacement gate, freeze and endpoint verification were required;
+the final evidence above now satisfies those requirements. The historical `14/20` diagnostic and later
 development results do not constitute nomination. GitHub Pages remains unchanged until explicit
 supervising-user approval after the composite UAT.
 
@@ -210,7 +228,7 @@ datum and one fixed point, while the repaired sample uses two scalar Y datums an
 The corrected source test retains dimensions/groups and adds the repaired floor/width links;
 the focused suite passes 2/2 in 7.76 seconds (`gridfinity-old-contract-fixed.log`). This is
 `HARNESS_ERROR`, not a new finding. `M92_VISUAL_AUDIT.md` records the full receipt and log hash.
-Complete clean qualification and immutable nomination still require a successful replacement gate.
+A successful replacement gate was required at this checkpoint; it and immutable nomination now pass.
 
 ## Authorized visual-audit continuation
 
@@ -238,20 +256,20 @@ browser audit passed 20/20 in 15.7 minutes, including 40 edits and complete rend
 through history/reload, before the F014 presentation change.
 
 All 40 measured source edits have focused-suite evidence. The atlas follow-up edit log records 2/2
-passing in 415.68 seconds, but the outer wrapper returned 143; the clean gate must provide its
-final receipt. F014 repairs Explorer overflow and widens the default panel. Its independent DOM
+passing in 415.68 seconds, but the outer wrapper returned 143; the successful clean gate now
+provides an independent repeated receipt. F014 repairs Explorer overflow and widens the default panel. Its independent DOM
 probe, Jansen and field browser checks (2/2), and the existing 1024 px layout contract pass.
-Formatting and TypeScript checks pass. Final clean release qualification, immutable nomination and
-all human U1–U8 rows remain pending.
+Formatting and TypeScript checks pass. Final clean release qualification and immutable nomination
+now pass; all human U1–U8 rows remain pending.
 
 ### M92-F015 — bounded retained-editor drag qualification
 
 After correcting the stale bridge selector, advancing the repaired Jansen crank from `[15, 0]`
-toward `[14.265847744427303, 4.635254915624211]` over 12 moves exhausts the ordinary preview
+toward `[14.265847744427303, 4.635254915624211]` over 12 moves exhausted the ordinary preview
 budget: 256/256 factorizations, 254 nonlinear iterations and a largest dense kernel of 23×12.
-Initial previews reject 144–148 trials. The prior valid geometry remains retained, but no movement
-or Undo entry is accepted and `last_error` stays empty. The new actual crank drag inside Jansen's
-existing browser workflow independently fails at disabled Undo, exit 1. The earlier 20/20 sample
+Initial previews rejected 144–148 trials. The prior valid geometry remained retained, but no movement
+or Undo entry was accepted and `last_error` stayed empty. The new actual crank drag inside Jansen's
+existing browser workflow independently failed at disabled Undo, exit 1. The earlier 20/20 sample
 audit tested source edits/history and did not drag Jansen; its passes and the unlimited native
 trajectories do not establish bounded interaction acceptance.
 
@@ -260,4 +278,5 @@ all ten default-policy pointer witnesses and the Jansen/scissor browser checks n
 validation, explicit branches, fixed ground and unchanged source while accepting meaningful
 movement within the ordinary configured budget, committing one action on release and restoring
 exact geometry through Undo/Redo/reload without compilation. After focused owner and browser
-qualification, restart the complete clean release gate. No immutable nomination is yet claimed.
+qualification, the complete clean release gate was repeated successfully. The immutable candidate
+and separate bounded Jansen workflow on both production endpoints are now qualified.

@@ -2,15 +2,16 @@
 
 # M92 visual and geometric design audit
 
-Status: **in progress; F015 bounded Jansen dragging is repaired at the core owner. Both audited
-clean gates failed; no replacement candidate is nominated and no human UAT is accepted**.
+Status: **in progress; F001–F015 repairs are clean-qualified and the immutable candidate is
+nominated for human review. M92-U1–U8 remain pending and unexecuted.**
 
 F003–F014 repairs are integrated. The development sample browser audit passed 20/20 before F014;
 exact legacy recovery and new scale restoration checks pass. F014's Jansen/field browser checks
 pass 2/2 in 5.3 minutes, exit 0; its existing 1024 px layout check also passes. F015 exposes a
 bounded drag path absent from the unlimited native sweeps and source-edit-only Jansen browser
-audit. Final clean release qualification and immutable nomination remain pending. The atlas edit
-log's 2/2 result retains its wrapper exit 143 caveat, detailed below.
+audit. Final clean release qualification and immutable nomination now pass as recorded in the
+final section below. The atlas edit log's 2/2 result retains its wrapper exit 143 caveat,
+detailed below.
 
 The supervising user authorized implementation of the visual/geometric audit and repair plan on
 2026-09-05. A sample that solves correctly but fails to demonstrate its named purpose must be
@@ -178,7 +179,7 @@ after Redo and omitted constructing the persisted browser envelope. The added na
 exercised that actual boundary and independently failed with the same byte counts and error in
 412.20 seconds. At this historical discovery checkpoint, repair and a complete rerun were required
 before qualification could proceed. The completed focused recovery results are recorded below;
-final clean qualification and immutable nomination remain pending.
+final clean qualification and immutable nomination were still pending at that checkpoint; they now pass below.
 
 A first atlas/scale evidence run found a test-export `HARNESS_ERROR`: public `publish_render`
 requires an existing parent directory. The shared optional exporter now creates that parent while
@@ -205,7 +206,7 @@ requires distinct control paths. Existing retained mechanism trajectory tests an
 adapter tests retain actual accepted editor authority. Screenshots remain reviewed evidence rather
 than the mathematical oracle. The strengthened curves browser row passed against preserved baseline
 production in 43.1 seconds. The later integrated development run passed 20/20 before F014, as
-recorded below; the final clean-gate repeat remains pending.
+recorded below; the final clean-gate repeat subsequently passed as recorded below.
 
 Bondtech's original 14→15 pitch and 2.5→2.8 seat witness values extend beyond its fixed published
 construction comparison envelope. That envelope is reference data and is not rescaled to disguise
@@ -225,7 +226,7 @@ Frontend replacement constructs and validates a candidate before freeing the pre
 failed restoration retains saved bytes and pauses automatic saves until an explicit manual Save.
 The focused frontend suite passed 41/41 and the small strict legacy bridge test passed. Exact
 original-payload recovery and scale new-save restoration subsequently passed the checks below.
-Final clean qualification remains pending.
+Final clean qualification was pending at that checkpoint; it now passes below.
 
 ## Integrated restoration and audit qualification
 
@@ -250,7 +251,7 @@ metrology, finite interior fillet contacts with side/sweep, witness radius and p
 closure. Focused baselines 3/3 and four atlas edit loops 2/2 pass; warnings-denied Clippy and formatting
 pass. The atlas edit log records 2/2 passing in 415.68 seconds, but its outer tool wrapper returned
 143; this wrapper anomaly is preserved in `atlas-followup.E37YD2/RESULTS.md`, not represented as a zero exit.
-The complete clean gate will provide the authoritative repeated qualification receipt.
+The successful complete clean gate below now provides the authoritative repeated qualification receipt.
 
 Bondtech's contained demonstration edits and original pitch-propagation regression pass 3/3 in
 65.41 seconds.
@@ -286,7 +287,7 @@ Jansen browser check passes. The existing 1024 px layout-floor workbench test pa
 seconds. Frontend 41/41, TypeScript and formatting checks pass at the F014 checkpoint. The final
 focused Jansen/field browser run passes 2/2 in 5.3 minutes, exit 0 (`browser-explorer-r2.log`).
 Repair commit `a034585` includes the presentation and test transport changes. The final 20-row
-sample audit will repeat inside the clean gate using the corrected presentation and a test
+sample audit subsequently passed inside the clean gate using the corrected presentation and a test
 transport optimization: parse persisted authority in the browser and return only source, avoiding
 repeated multi-megabyte history copies through Playwright. No geometry comparison is weakened.
 
@@ -316,6 +317,9 @@ changed.
 
 ### M92-F015 — bounded crank previews retain the old frame without movement
 
+The following native and browser measurements describe the baseline before core repair `a9d7532`.
+The repair and successful complete qualification are recorded below.
+
 The first audited clean gate found that
 `workbench::bridge::tests::theo_jansen_drag_uses_canonical_managed_authority_without_compilation`
 still selected the removed `[-8, 3]` point. That initial fixture failure is `HARNESS_ERROR`.
@@ -332,7 +336,7 @@ movement assertion (0 passed / 1 failed, 5.84 seconds). A retained accepted fram
 does not establish that the drag accepted movement.
 
 The new actual-crank browser check is inside Jansen's existing sample workflow, so the sample
-audit inventory remains 20. Independent Chromium reproduction fails at disabled Undo, exit 1,
+audit inventory remains 20. Independent Chromium reproduction failed at disabled Undo, exit 1,
 in `jansen-bounded-browser-baseline.log` (one row, 9.3 seconds). The log identifies the browser
 error context and trace under
 `test-results/m92-sample-audit-M92-visual-workflow-1-theo-jansen-leg-chromium/` as
@@ -385,8 +389,8 @@ the gate. The receipt is
 `/home/arduano/m92-visual-audit-20260905/final-gate/release-gate.log`.
 
 Corrected selection subsequently exposed the independently reproduced F015 defect above. No
-nomination follows from this failed gate or prior partial runs. After repair, run the full gate
-again from clean integrated source and preserve a new complete receipt. All M92-U1–U8 human rows
+nomination follows from this failed gate or prior partial runs. This checkpoint required a full
+gate from clean integrated source; the successful final receipt below supplies it. All M92-U1–U8 human rows
 remain pending and unexecuted; GitHub Pages is unchanged.
 
 
@@ -429,9 +433,10 @@ launches lacked isolated package dependencies and the direct-Node launcher lacke
 those harness failures ran no browser assertions. Qualification used the built release WASM
 through a local development server, never a nominated endpoint.
 
-The pre-F015 golden survey/check both completed with exit 0 and unchanged 271 PASS rows. Final
-clean release qualification must repeat the oracle against the repaired source. No human UAT
-row or immutable nomination is established by these focused results.
+The pre-F015 golden survey/check both completed with exit 0 and unchanged 271 PASS rows. They
+required a repeat against repaired source; the final post-F015 survey/check and clean candidate
+gate below supply it. These earlier focused results alone did not establish immutable nomination
+or human UAT acceptance.
 
 ### Second audited clean gate — Gridfinity harness error, no nomination
 
@@ -477,5 +482,115 @@ This is a confirmed `HARNESS_ERROR`, with no new finding ID and no production ch
 manufacturing suite passes 2/2 in 7.76 seconds in
 `/home/arduano/m92-visual-audit-20260905/gridfinity-old-contract-fixed.log`. Independent read-only
 review found the correction preserves the intended coverage. The failed gate remains failed;
-complete qualification and immutable nomination require a fresh successful clean gate. All
-M92-U1–U8 rows remain pending and unexecuted; GitHub Pages is unchanged.
+complete qualification and immutable nomination required a fresh successful clean gate, now
+recorded below. All M92-U1–U8 rows remain pending and unexecuted; GitHub Pages is unchanged.
+
+## Final clean qualification and immutable nomination
+
+Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
+`b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
+(exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+**http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
+language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
+separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
+All 20 samples received visual review and two measured edits each; captured geometry and source restore
+exactly through Undo/Redo/reload. M92 remains in progress; all human U1–U8 rows remain pending and
+GitHub Pages remains unchanged. Later documentation commits do not change these qualified bytes.
+
+The complete gate and final artifact checks pass. These are mechanical nomination results, not
+human acceptance or milestone closure. The earlier failed receipts and wrapper anomalies above
+remain historical evidence and are not retroactively upgraded.
+
+| Evidence | Exact result |
+|---|---|
+| Product source / tree | `b854d74c08833dc33412cfa859ecdef1a0bfc383` / `b6262b7ed51a47608b97264810c3192f9577bc9e` |
+| Clean gate | `2026-09-05T07:18:29.688311+00:00` to `2026-09-05T09:51:29.678675+00:00`, exit 0; clean unchanged start/end |
+| Gate service / invocation | `geosolve-m92-gridfinity-release-gate.service` / `695960c463934706801dfccb46523d6c` |
+| Gate log | `951,249` bytes, `15,963` lines; SHA-256 `28940567ad577ff71832f05cb6bdf420f0c4a069e4810d974ca7231d2d8a9f7b` |
+| Native workspace | 2,605 passed, zero failed; demo lib 293 passed, zero failed, one existing ignored |
+| Golden | 271 unchanged PASS rows, SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` |
+| Mandatory measured edits | Atlas/scale 4/4, products 7/7, mechanisms 5/5, references 11/11; 40 distinct edits |
+| WASM | Seven interaction suites: 37 passed; optimized actual lifecycle 3/3 including scale restore/history |
+| Browser gate | Workbench 20/20 (3.4 min), samples 20/20 (14.5 min), language service 1/1 |
+| Frontend | 8 test files, 97/97 tests; manifest, licences, build contracts, TypeScript, optimized build and dist validation pass |
+| Snapshot | `/tmp/geosolve-m92-uat.x4b870rw`; exactly 10 files / 2 directories, no symlinks/special files; files 0444, directories 0555 |
+| Frozen total | `27128743` bytes, strictly below 30 MiB |
+| WASM | `assets/geosolve_demo_web_bg-DCEEdhO6.wasm`, `18337861` bytes, strictly below 20 MiB; SHA-256 `250af04649347fce3e7de548c7ef6eec3798fec26969ef0c558abc5180f11ab7` |
+| External manifest | `/tmp/geosolve-m92-uat.x4b870rw.sha256`; SHA-256 `e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` |
+| Frozen HTTP | Each endpoint: all 11 routes returned 200, exact bytes/MIME, zero redirects or content encoding; root equals index.html |
+| Local HTTP ledger | SHA-256 `e19995322d156715188e70d3964070e7dfaeb9adc3cc612ea28131f7fbbbf5a8` |
+| Tailscale HTTP ledger | SHA-256 `e19995322d156715188e70d3964070e7dfaeb9adc3cc612ea28131f7fbbbf5a8` |
+| Each frozen browser endpoint | 19/19 ordinary workbench rows plus separate 1/1 Jansen bounded drag/history/reload; zero failed, skipped, flaky or retried rows |
+| Live Tailscale service | `geosolve-m92-uat-18092.service`, PID `2608805`, invocation `751b2baded324c9eb2f0bcc981fef571` |
+| Finalizer completion | `2026-09-05T09:59:33.532283+00:00`; `post-gate-completion.json` status `passed` |
+
+Actual clean-gate launch, from the isolated candidate worktree:
+
+```bash
+NO_COLOR=true \
+GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+GEOSOLVE_E2E_PORT=18197 \
+M92_BROWSER_AUDIT_OUTPUT=/home/arduano/m92-visual-audit-20260905/final-gate-r3/browser-samples \
+nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+```
+
+The gate ran `cargo fmt --all -- --check`, warnings-denied locked workspace Clippy,
+`RUST_MIN_STACK=16777216 cargo test --locked --workspace --all-features`,
+`./scripts/golden-authoring-scene-oracle.sh --require-clean`, the explicit WASM/ignored headless
+suites in `scripts/release-gate.sh`, warnings-denied Rustdoc, benchmark compilation, performance,
+licensing and package-consumer verification. M83 preview p95 is 2.398 ms (<16 ms), terminal is
+55.897 ms (<750 ms), and the 256-moving-body linkage performance test passes in 124.92 seconds.
+No solver equations, residual tolerances, branch semantics or configured work budgets changed
+for final qualification. F015 uses the already-recorded Temporary first-improvement correction.
+
+Separate `./scripts/golden-authoring-scene-oracle.sh --survey` and `--check` both exited 0,
+06:41:18–07:15:55 and 07:15:55–07:48:07 UTC. Their mid-run source observation was `cd9440e`,
+not a clean-start receipt. The finalizer proves the candidate delta is eight reviewed documents
+and the standalone Gridfinity test; all golden runtime inputs remain identical. The exact
+candidate independently passes `--require-clean`. No golden bytes were regenerated or blessed.
+
+The finalizer ran `node scripts/validate-dist.mjs ../dist ./` on the existing production dist,
+then copied it without rebuilding through the unchanged hash-pinned freeze helper. It invoked
+both shell helpers through `/run/current-system/sw/bin/bash`. Frozen browser commands used
+`node node_modules/@playwright/test/cli.js test tests/e2e/workbench.spec.ts --workers=1 --retries=0
+--forbid-only --reporter=list,json` with `--grep-invert` for the exact harness-only compiler-envelope
+title; a separate invocation selected only `M92 visual workflow 1: theo-jansen-leg$` in
+`m92-sample-audit.spec.ts`. Both commands ran against each recorded `GEOSOLVE_E2E_BASE_URL`.
+Every full command, environment, UTC interval, exit code and log hash is in the attempt receipts.
+The production snapshot contains no `compiler-parity.html`; the language-service row is not
+added to the frozen 19-row inventory. Local staging stopped after passing; Tailscale remains live.
+
+An initial finalizer attempt stopped before copying because the freeze helper had mode 0644 and
+was invoked directly (`PermissionError`). This was an orchestration `HARNESS_ERROR`: allocated
+snapshot/evidence directories were empty, with no manifest or endpoint created. The failed
+attempt and path record remain preserved in `finalizer-r4-recovery.json`. R5 changed only the
+explicit Bash invocation and passed all prerequisites, freeze and endpoint checks. Its SHA-256
+is `8b92baac7a0cc6da579bafb8cd33aac6269cdc82520ca4704591815ea0257467`.
+
+Evidence under `/home/arduano/m92-visual-audit-20260905/`:
+
+- [Gate receipt](/home/arduano/m92-visual-audit-20260905/final-gate-r3/receipt.json) and
+  [complete log](/home/arduano/m92-visual-audit-20260905/final-gate-r3/release-gate.log).
+- [Passed nomination receipt](/home/arduano/m92-visual-audit-20260905/final-gate-r3/post-gate-completion.json),
+  attempt `/home/arduano/m92-visual-audit-20260905/final-gate-r3/post-gate-attempt.juk6zv3p` and frozen evidence `/tmp/geosolve-m92-freeze-evidence.p9d7k8to`.
+- [Final visual gallery](/home/arduano/m92-visual-audit-20260905/final-gate-r3-visual-review/index.html):
+  45 comparison/contact sheets from 182 unchanged original PNGs, with SVG, source and geometry
+  records. The manifest hashes every input and ties it to the successful gate receipt.
+- [Primary per-sample visual review](/home/arduano/m92-visual-audit-20260905/final-gate-r3/primary-visual-review-final.json)
+  covers all 20 baseline/two-edit/reload comparisons plus full Jansen drag/reload and selected
+  full-frame detail views. Independent products 12–16 review inspected 25 original full frames.
+- [Independent history/provenance audit](/home/arduano/m92-visual-audit-20260905/final-capture-history-audit-summary.md)
+  verifies all 40 edit loops, exact exported geometry/source Undo/Redo/reload, baseline source
+  equality to Git, capture timestamps and the successful log hash. Jansen's instance drag changes
+  geometry while preserving source, and its terminal geometry survives reload.
+- [Measured mechanism trajectories](/home/arduano/m92-visual-audit-20260905/mechanism-audit-trajectories-r2.png)
+  presents the retained 520 native frames without clipped figure labels.
+
+Agent visual review found no blocking geometry or presentation issue within the declared
+workflows. Gridfinity/manifold dimension clusters, small atlas specimens and harness bend details
+need isolation and zoom; some parameter and Explorer labels remain long. Free atlas/scale source
+relationships do not imply native rigidity, reference products remain schematic 2D studies, and
+these checks do not establish arbitrary edit ranges, collision handling or manufacturing fitness.
+Fitted exported geometry identity is distinct from the independently measured native geometry.
+All human U1–U8 remain pending in `M92_UAT.md`; M92 is not closed and Pages was not published.

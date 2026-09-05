@@ -910,9 +910,20 @@ closed.
 
 ## M92 current advanced sample showcase
 
-Status: **in progress; F001–F014 repairs and focused verification are integrated. F015 bounded
-Jansen dragging is repaired at the core owner; both audited clean gates failed. A replacement
-clean gate and immutable human-UAT nomination remain pending.**
+Status: **in progress; F001–F015 repairs are clean-qualified and the immutable candidate is
+nominated for human UAT. M92-U1–U8 remain pending and unexecuted.**
+
+Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
+`b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
+(exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+**http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
+language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
+separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
+All 20 samples received visual review and two measured edits each; captured geometry and source restore
+exactly through Undo/Redo/reload. M92 remains in progress; all human U1–U8 rows remain pending and
+GitHub Pages remains unchanged. Later documentation commits do not change these qualified bytes.
+See [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination) for exact commands, receipts, visual limits and the two earlier failed gates.
 
 M92 targets replacing the accumulated 12/25/37-entry catalog variants with one manifest-driven,
 source-authoritative 20-sample registry. The frozen scope requires five mechanisms, eleven
@@ -921,15 +932,15 @@ compiler envelopes, witnesses, expected mobility, ordered functional groups and 
 colocated per sample; frontend and headless consumers must share the registry, and headless
 terminology must clean-break to sample/report-v2 rather than demo/report-v1. `docs/M92_GOALS.md`
 freezes scope, `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` retains the
-unexecuted composite human scorecard. Do not infer final qualification, immutable nomination, UAT
-acceptance or closure.
+unexecuted composite human scorecard. Mechanical qualification and nomination are recorded above;
+they do not establish human UAT acceptance or closure.
 
 `M92-F001` restores canonical live trim-view order across persistent checkpoints. `M92-F002`
 repairs the browser/bridge lifecycle in which a terminal click could park a managed compiler ticket
 on `pointerdown` before the paired zero-button `pointerup`; that release is now a validated,
 non-mutating no-op while new gestures remain blocked. The first release-browser diagnostic ran
 `14/20`: its six red rows mixed this one product defect with CodeMirror virtualization, insufficient
-asynchronous waits and a camera-relative reload assertion. Final qualification must pass the full
+asynchronous waits and a camera-relative reload assertion. Final qualification now passes the full
 `20/20` release harness and the `19/19` ordinary workbench rows against each production frozen
 endpoint; the twentieth compiler-envelope row exists only in the explicit release harness. M92-U1
 through M92-U8 remain pending and unexecuted, and GitHub Pages remains unchanged.
@@ -955,24 +966,25 @@ The integrated development sample audit passed 20/20, including 40 source edits 
 geometry through history/reload, before the F014 Explorer overflow correction. F014's Jansen and
 field browser checks pass 2/2; the existing 1024 px layout contract also passes. The audit ledger
 preserves the atlas edit log's 2/2 result alongside its wrapper exit 143. Final clean release
-qualification, immutable nomination and all human U1–U8 rows remain pending.
+qualification and immutable nomination were pending at that development checkpoint; the final
+receipt above now establishes both. All human U1–U8 rows remain pending.
 
 The first audited clean gate at `c4c02abd8a92e2e929ccfb23b59c211a32a7400a` exited 101 after
 formatting/Clippy passed and the demo library reported 292 passed, 1 failed and 1 ignored. Its
 Jansen helper still selected the removed point `[-8, 3]`. Correcting that harness exposed F015:
-ordinary bounded crank previews exhaust 256 factorizations without accepted movement or Undo.
-An added real-browser drag check independently fails at disabled Undo. The prior 520-frame native
+ordinary bounded crank previews exhausted 256 factorizations without accepted movement or Undo.
+An added real-browser drag check independently failed at disabled Undo. The prior 520-frame native
 sweeps used unlimited work; the passing sample browser audit exercised source edits, not Jansen
 dragging. Core repair `a9d7532` now passes all ten default-budget witnesses, all nine mechanism
-tests and the Jansen/scissor browser regressions. No successful replacement gate or nomination
-is claimed. `docs/M92_VISUAL_AUDIT.md` preserves the failed gate receipt and both reproductions.
+tests and the Jansen/scissor browser regressions. Replacement qualification and nomination now
+pass as recorded above. `docs/M92_VISUAL_AUDIT.md` preserves the failed gate receipt and both reproductions.
 
 The second audited clean gate at `cd9440e4b4dfc827753ea2e3f9299e792c278f89` also exited 101,
 this time on an old Gridfinity test expecting one scalar datum and one fixed point. The repaired
 sample correctly has two scalar Y datums and no fixed points; the corrected manufacturing test
 passes 2/2 in 7.76 seconds. This is `HARNESS_ERROR`, with no new finding ID. The exact second
-receipt is recorded in `docs/M92_VISUAL_AUDIT.md`; full clean qualification and nomination
-remain pending.
+receipt is recorded in `docs/M92_VISUAL_AUDIT.md`; the successful replacement above now supplies
+full clean qualification and nomination.
 
 ## Read first
 
@@ -1046,8 +1058,8 @@ remain pending.
     clean-qualified immutable nomination, accepted 14-row composite scorecard and exact public
     closeout.
 28. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — current in-progress
-    20-sample showcase contract, execution ledger and not-yet-nominated eight-row composite
-    scorecard.
+    20-sample showcase contract, execution ledger, nominated candidate and pending eight-row
+    composite scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -1658,9 +1670,9 @@ Durable milestone and cleanup records:
 - `docs/M91_UAT.md` (M91-U1 through M91-U14 accepted by explicit composite approval without a
   separately logged row-by-row replay; exact Pages closeout and service retirement complete)
 - `docs/M92_GOALS.md` (frozen 20-sample `5/11/2/2` showcase scope and release boundary)
-- `docs/M92_IMPLEMENTATION.md` (current registry-first implementation and pending qualification
+- `docs/M92_IMPLEMENTATION.md` (current registry-first implementation, qualification and nomination
   ledger)
-- `docs/M92_UAT.md` (not-yet-nominated M92-U1 through M92-U8 composite human scorecard)
+- `docs/M92_UAT.md` (nominated candidate and pending M92-U1 through M92-U8 composite human scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
