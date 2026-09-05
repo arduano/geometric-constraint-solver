@@ -1,5 +1,5 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
   const point1CamQ0 = $.geometry.sketchPoint("point1CamQ0", {
@@ -46,10 +46,17 @@ export default sketch(($) => {
     target: [-4, 0],
     label: "Cam Q0 fixed",
   });
-  const constraint2CamQ1Fixed = $.constraint.fixedPoint("constraint2CamQ1Fixed", {
+  const camControlCentered = $.constraint.fixedCoordinate("camControlCentered", {
     point: point2CamQ1.point,
-    target: [0, 4],
-    label: "Cam Q1 fixed",
+    axis: "x",
+    target: mm(0),
+    label: "Cam control centered",
+  });
+  const camRise = $.constraint.fixedCoordinate("camRise", {
+    point: point2CamQ1.point,
+    axis: "y",
+    target: mm(4),
+    label: "Cam control rise",
   });
   const constraint3CamQ2Fixed = $.constraint.fixedPoint("constraint3CamQ2Fixed", {
     point: point3CamQ2.point,
@@ -119,7 +126,7 @@ export default sketch(($) => {
     label: "Right roller diameter reference",
     mode: "reference",
   });
-  $.group("Bezier cam profile", [point1CamQ0, point2CamQ1, point3CamQ2, curve1QuadraticBezierCam, constraint1CamQ0Fixed, constraint2CamQ1Fixed, constraint3CamQ2Fixed]);
+  $.group("Bezier cam profile", [point1CamQ0, point2CamQ1, point3CamQ2, curve1QuadraticBezierCam, constraint1CamQ0Fixed, camControlCentered, camRise, constraint3CamQ2Fixed]);
   $.group("Left roller follower", [point4LeftRollerCenter, curve2LeftCamRoller, dimension1CamRollerRadius1, constraint5LeftRollerTangentToCam]);
   $.group("Right roller follower", [point5RightRollerCenter, curve3RightCamRoller, constraint4CamRollersEqualRadius, constraint6RightRollerTangentToCam, dimension2RightRollerDiameterReference]);
   return {};

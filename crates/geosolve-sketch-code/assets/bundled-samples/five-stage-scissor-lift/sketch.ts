@@ -1,5 +1,5 @@
 "use geosolve sketch";
-import { sketch, mm, rad } from "@geosolve/sketch-code";
+import { sketch, mm } from "@geosolve/sketch-code";
 
 export default sketch(($) => {
   const point1TowerLevel0Left = $.geometry.sketchPoint("point1TowerLevel0Left", {
@@ -167,11 +167,45 @@ export default sketch(($) => {
     target: [-4, 0],
     label: "Tower base left fixed",
   });
-  const constraint2TowerBaseRightSlidesHorizontally = $.constraint.fixedCoordinate("constraint2TowerBaseRightSlidesHorizontally", {
+  // A finite physical guide makes collapse/extension limits visible. Changing
+  // guideLength changes the available slider travel without changing the bars.
+  const guideEnd = $.geometry.sketchPoint("guideEnd", {
+    point: [6, 0],
+    label: "Ground guide end",
+  });
+  const groundGuide = $.geometry.segment("groundGuide", {
+    start: point1TowerLevel0Left.point,
+    end: guideEnd.point,
+    branchDirection: [1, 0],
+    label: "Ground slider guide",
+    role: "construction",
+  });
+  const guideHorizontal = $.constraint.horizontal("guideHorizontal", {
+    span: groundGuide.span,
+    label: "Ground guide horizontal",
+  });
+  const guideLength = $.dimension.curveLength("guideLength", {
+    curve: groundGuide.span,
+    value: mm(10),
+    label: "Ground guide length",
+    mode: "driving",
+  });
+  const constraint2TowerBaseRightSlidesHorizontally = $.constraint.pointOnCurve("constraint2TowerBaseRightSlidesHorizontally", {
     point: point2TowerLevel0Right.point,
-    axis: "y",
-    target: mm(0),
-    label: "Tower base right slides horizontally",
+    curve: groundGuide.span,
+    contact: {
+      parameter: 0.8,
+      winding: 0,
+      range: {
+        lower: 0.1,
+        upper: 0.98,
+      },
+      neighborhood: {
+        kind: "interior",
+      },
+      orientation: "none",
+    },
+    label: "Base slider retained inside finite guide",
   });
   const constraint3TowerPlatform1RemainsHorizontal = $.constraint.horizontal("constraint3TowerPlatform1RemainsHorizontal", {
     span: curve2TowerPlatformLevel1.span,
@@ -269,7 +303,7 @@ export default sketch(($) => {
     second: curve16TowerStage5RisingLeftBar.span,
     label: "Tower diagonal 10 matches master",
   });
-  $.group("Guided platforms", [point1TowerLevel0Left, point2TowerLevel0Right, point3TowerLevel1Left, point4TowerLevel1Right, point5TowerLevel2Left, point6TowerLevel2Right, point7TowerLevel3Left, point8TowerLevel3Right, point9TowerLevel4Left, point10TowerLevel4Right, point11TowerLevel5Left, point12TowerLevel5Right, curve1TowerPlatformLevel0, curve2TowerPlatformLevel1, curve3TowerPlatformLevel2, curve4TowerPlatformLevel3, curve5TowerPlatformLevel4, curve6TowerPlatformLevel5, constraint1TowerBaseLeftFixed, constraint2TowerBaseRightSlidesHorizontally, constraint3TowerPlatform1RemainsHorizontal, constraint4TowerPlatform1MatchesBaseWidth, constraint5TowerPlatform2RemainsHorizontal, constraint6TowerPlatform2MatchesBaseWidth, constraint7TowerPlatform3RemainsHorizontal, constraint8TowerPlatform3MatchesBaseWidth, constraint9TowerPlatform4RemainsHorizontal, constraint10TowerPlatform4MatchesBaseWidth, constraint11TowerPlatform5RemainsHorizontal, constraint12TowerPlatform5MatchesBaseWidth]);
+  $.group("Guided platforms", [guideEnd, groundGuide, guideHorizontal, guideLength, point1TowerLevel0Left, point2TowerLevel0Right, point3TowerLevel1Left, point4TowerLevel1Right, point5TowerLevel2Left, point6TowerLevel2Right, point7TowerLevel3Left, point8TowerLevel3Right, point9TowerLevel4Left, point10TowerLevel4Right, point11TowerLevel5Left, point12TowerLevel5Right, curve1TowerPlatformLevel0, curve2TowerPlatformLevel1, curve3TowerPlatformLevel2, curve4TowerPlatformLevel3, curve5TowerPlatformLevel4, curve6TowerPlatformLevel5, constraint1TowerBaseLeftFixed, constraint2TowerBaseRightSlidesHorizontally, constraint3TowerPlatform1RemainsHorizontal, constraint4TowerPlatform1MatchesBaseWidth, constraint5TowerPlatform2RemainsHorizontal, constraint6TowerPlatform2MatchesBaseWidth, constraint7TowerPlatform3RemainsHorizontal, constraint8TowerPlatform3MatchesBaseWidth, constraint9TowerPlatform4RemainsHorizontal, constraint10TowerPlatform4MatchesBaseWidth, constraint11TowerPlatform5RemainsHorizontal, constraint12TowerPlatform5MatchesBaseWidth]);
   $.group("Five coupled scissor stages", [curve7TowerStage1RisingRightBar, curve8TowerStage1RisingLeftBar, curve9TowerStage2RisingRightBar, curve10TowerStage2RisingLeftBar, curve11TowerStage3RisingRightBar, curve12TowerStage3RisingLeftBar, curve13TowerStage4RisingRightBar, curve14TowerStage4RisingLeftBar, curve15TowerStage5RisingRightBar, curve16TowerStage5RisingLeftBar, dimension1TowerMasterDiagonalLength10, constraint13TowerDiagonal2MatchesMaster, constraint14TowerDiagonal3MatchesMaster, constraint15TowerDiagonal4MatchesMaster, constraint16TowerDiagonal5MatchesMaster, constraint17TowerDiagonal6MatchesMaster, constraint18TowerDiagonal7MatchesMaster, constraint19TowerDiagonal8MatchesMaster, constraint20TowerDiagonal9MatchesMaster, constraint21TowerDiagonal10MatchesMaster]);
   return {};
 });
