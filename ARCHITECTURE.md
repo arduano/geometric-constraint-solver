@@ -2723,3 +2723,16 @@ The systemic native/managed oracle dimension follows the owning-layer strategy i
 `.agents/skills/geosolve-harden-defect`: public Rust semantic authority is compared first; WASM is a
 thin adapter parity check; human UAT owns presentation and manipulation feel. Exclusions are
 explicit reviewed non-passes, never inferred from backend failure.
+
+The workbench bridge keeps managed compilation exclusive without rejecting browser capture cleanup.
+While an authenticated managed mutation is pending, new pointer gestures remain unavailable, but a
+decoded and validated terminal `PointerPhase::Up` with zero buttons is a non-mutating host release:
+it returns `null` without consuming the compiler ticket, changing revision/history/persistence or
+publishing a snapshot. `M92-F002` freezes this distinction at the DOM-free bridge owner and at the
+paired frontend event lifecycle; it changes no solver, compiler or accepted-scene equation.
+
+Release-browser qualification has two explicit scopes. The self-built release harness enables the
+harness-only pinned compiler page and runs `20/20`; immutable production distributions deliberately
+omit that page and run the remaining `19/19` ordinary workbench rows on each frozen endpoint. The
+compiler-envelope row remains required in the release harness rather than being misreported as a
+production route.

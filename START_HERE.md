@@ -910,7 +910,8 @@ closed.
 
 ## M92 current advanced sample showcase
 
-Status: **in progress; not yet mechanically qualified or nominated for human UAT.**
+Status: **in progress; M92-F001 and M92-F002 are repaired, but final clean qualification and
+immutable human-UAT nomination remain pending.**
 
 M92 targets replacing the accumulated 12/25/37-entry catalog variants with one manifest-driven,
 source-authoritative 20-sample registry. The frozen scope requires five mechanisms, eleven
@@ -921,6 +922,16 @@ terminology must clean-break to sample/report-v2 rather than demo/report-v1. `do
 freezes scope, `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` retains the
 unexecuted composite human scorecard. Do not infer final qualification, immutable nomination, UAT
 acceptance or closure.
+
+`M92-F001` restores canonical live trim-view order across persistent checkpoints. `M92-F002`
+repairs the browser/bridge lifecycle in which a terminal click could park a managed compiler ticket
+on `pointerdown` before the paired zero-button `pointerup`; that release is now a validated,
+non-mutating no-op while new gestures remain blocked. The first release-browser diagnostic ran
+`14/20`: its six red rows mixed this one product defect with CodeMirror virtualization, insufficient
+asynchronous waits and a camera-relative reload assertion. Final qualification must pass the full
+`20/20` release harness and the `19/19` ordinary workbench rows against each production frozen
+endpoint; the twentieth compiler-envelope row exists only in the explicit release harness. M92-U1
+through M92-U8 remain pending and unexecuted, and GitHub Pages remains unchanged.
 
 ## Read first
 

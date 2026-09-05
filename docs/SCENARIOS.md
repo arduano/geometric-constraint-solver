@@ -7106,8 +7106,9 @@ passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M
 
 ## M92 advanced showcase fixtures
 
-Status: **implemented; clean qualification and immutable UAT nomination in progress**. These
-fixtures provide automated evidence only; M92-U1 through M92-U8 remain unexecuted.
+Status: **implemented with M92-F001 and M92-F002 repaired; clean qualification and immutable UAT
+nomination remain in progress**. These fixtures provide automated evidence only; M92-U1 through
+M92-U8 remain unexecuted.
 
 ### M92-C1 — canonical registry is complete and singular
 
@@ -7175,6 +7176,24 @@ independent validation remain unchanged. Commit `b861f4c` owns the fix and exact
 regressions. Collateral `d450e94` routes the legacy managed-controls catalog fixture through public
 cold materialization when native operation planning is required; classify that test-only issue as
 `HARNESS_ERROR`, not another M92 finding.
+
+### M92-F002 — terminal managed release is a non-mutating no-op
+
+Open a managed project, select Center-Radius Circle and drive its two clicks through
+`WorkbenchBridge::pointer_json`. Let the terminal `pointerdown` complete the native candidate and
+park the authenticated compiler ticket before sending its paired `pointerup` with zero buttons. The
+release must return `"null"`; the pending ticket digest, bridge revision and complete persistence
+bytes must remain unchanged. A subsequent new `pointerdown` remains rejected until compilation
+settles. This is a bridge interaction-lifecycle invariant, not solver convergence or managed
+compiler behavior.
+
+Commit `e40d11d` owns the repair and exact regression
+`m92_f002_terminal_pointer_release_is_noop_while_managed_click_compiles`; `c85e8aa` covers the
+paired frontend event lifecycle. The initial `14/20` release-browser diagnostic also contained
+virtualized-editor, asynchronous-wait and camera-coordinate harness failures repaired by `f31e740`;
+those are not additional product findings. Final browser qualification is `20/20` in the explicit
+release harness, whose twentieth row owns the harness-only compiler page, and `19/19` ordinary
+workbench rows against each immutable production endpoint.
 
 ## Frozen near-singular fixtures
 

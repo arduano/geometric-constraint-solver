@@ -5255,9 +5255,10 @@ The implementation checkpoint contains the singular manifest-driven 20-sample re
 order. The four sample waves, source/compiler/project inverse authority, exact functional groups,
 provenance, mechanism drag witnesses, deterministic headless report v2, dual-backend oracle
 coverage, representative edit/history/reload coverage, release-WASM adapter coverage and bounded
-release-distribution checks are implemented. Complete clean qualification, immutable snapshot
-freeze and exact browser evidence remain in progress. This checkpoint does not accept M92-U1
-through M92-U8 and does not authorize Pages publication.
+release-distribution checks are implemented. M92-F001 and M92-F002 are repaired with focused owner
+regressions. Complete clean qualification, immutable snapshot freeze and exact browser evidence
+remain in progress. This checkpoint does not accept M92-U1 through M92-U8 and does not authorize
+Pages publication.
 
 The user-visible catalog contains exactly 20 code-authoritative entries in canonical manifest
 order: 5 mechanisms, 11 products/fabrication studies, 2 atlases and 2 scale labs. No native/code
@@ -5294,7 +5295,10 @@ history—not backend IDs. Each inapplicable row is named in a reviewed fail-clo
 Closure requires format, warnings-denied workspace Clippy, locked all-feature tests, package and
 frontend checks, golden `--survey`/`--check`/`--require-clean`, optimized release-WASM and clean
 release gate. Release WASM remains `<20 MiB` and distribution `<30 MiB`. Automated evidence does
-not pass the composite human rows in `docs/M92_UAT.md`.
+not pass the composite human rows in `docs/M92_UAT.md`. Browser qualification requires `20/20` in
+the explicit release harness, including the harness-only pinned compiler page, and `19/19` ordinary
+workbench rows against each immutable production endpoint; a production endpoint must not be
+claimed to serve the harness-only twentieth route.
 
 ### M92-F001 — noncanonical live trim-view checkpoint order
 
@@ -5313,6 +5317,28 @@ reverse replacement order plus lower-ID Fillet supports, and
 boundary. Collateral commit `d450e94` changes the older managed-controls catalog test to use public
 cold materialization for operation-bearing samples. That collateral failure was a `HARNESS_ERROR`,
 not a separate M92 product defect.
+
+### M92-F002 — terminal pointer release during managed compilation
+
+A release-WASM browser trace reproduced a bridge lifecycle defect. A terminal `pointerdown` could
+complete click authoring and park an authenticated managed compiler ticket before the browser
+emitted its paired `pointerup`. The blanket pending-mutation guard rejected that harmless release
+and surfaced `pointer input is unavailable while a managed-source mutation is compiling`. The owner
+is the `geosolve-demo-web` workbench bridge, not the solver or managed compiler.
+
+Commit `e40d11d` validates the pointer request before the pending-mutation guard, then accepts only
+`PointerPhase::Up` with `buttons == 0` as a non-mutating `"null"` result. It does not consume the
+compiler ticket, alter revision/history/persistence or publish another snapshot; new `down` and
+`move` input remains rejected until compilation settles. DOM-free regression
+`m92_f002_terminal_pointer_release_is_noop_while_managed_click_compiles` freezes those invariants,
+and frontend regression commit `c85e8aa` covers the paired down/up lifecycle without a false action
+error.
+
+The initial browser diagnostic passed `14/20`; its six red rows combined this one product defect
+with virtualized-CodeMirror source assertions, insufficient asynchronous waits and a
+camera-relative reload comparison. Commit `f31e740` corrects those test oracles without changing
+product behavior. They are `HARNESS_ERROR` or inconclusive classifications, not additional M92
+findings.
 
 ## Regression and oracle policy
 

@@ -101,7 +101,7 @@ The first collateral catalog sweep also exposed an old test-harness assumption: 
 context-free expansion cannot plan the new operation-bearing samples. Commit `d450e94` changes only
 that legacy managed-controls fixture to obtain its expansion through public cold materialization
 with explicit intent session, document and model-scale authority. This was a `HARNESS_ERROR`, not
-`M92-F002`, and it duplicates no equation or operation semantics.
+a product finding, and it duplicates no equation or operation semantics.
 
 Qualification setup also found that `build.rs` advertised nonexistent optional `NOTICE.md` and
 `patches/` paths. Cargo consequently marked `geosolve-sketch-code` dirty and rebuilt the generated
@@ -110,6 +110,55 @@ they exist; the already registered sample-root directory remains the authority f
 creation. Two identical warnings-verbose focused invocations prove the first rebuilds for the
 source change and the second reports `Fresh geosolve-sketch-code`. This was build-dependency
 tracking overhead, not a semantic oracle timeout or product finding.
+
+## M92-F002 — terminal pointer release during managed compilation
+
+A release-WASM browser trace reproduced a bridge lifecycle defect. A terminal click could complete
+the native authoring candidate and park an authenticated managed compiler ticket on `pointerdown`
+before the browser emitted its paired zero-button `pointerup`. `WorkbenchBridge::pointer_json`
+previously checked the blanket pending-mutation guard before decoding the pointer request, so it
+rejected that harmless release with `pointer input is unavailable while a managed-source mutation
+is compiling`.
+
+The owner is the `geosolve-demo-web` workbench bridge, not the solver or managed compiler. Commit
+`e40d11d` decodes and validates version, pointer identity and finite coordinates first. While a
+managed ticket is pending, only `PointerPhase::Up` with `buttons == 0` returns `"null"` as
+non-mutating browser capture cleanup. It does not consume the compiler ticket, change bridge
+revision, history or persistence, or publish another snapshot. New `down` and `move` input remains
+guarded until the authenticated receipt settles.
+
+The repair is retained by DOM-free Rust regression
+`m92_f002_terminal_pointer_release_is_noop_while_managed_click_compiles`, which proves the ticket
+digest, revision and complete persistence bytes remain unchanged and a new gesture is still
+blocked. Frontend commit `c85e8aa` changes the managed-pointer lifecycle fixture to return its
+mutation on `down`, forwards the paired `up`, requires eventual resolution and rejects a false
+action error.
+
+The initial release-browser diagnostic ran against source
+`7941614a7d7c0cd0018b8ce72cc3b7cec6ccd8fc`, tree
+`659668dd7b8cf2233c8dd58d0b44f3e0b41db34a`: `14/20` passed and `6/20` failed. Its log is
+`/home/arduano/geosolve-m92-playwright-rerun.xGmpatAc/playwright.log`, SHA-256
+`81589abb24ae69cf67dc29cf18d306d01175bce06f4d5799701cd666626d2f4b`. Those six red rows did not
+represent six product defects:
+
+- Parameter and Circle used five-second asynchronous assertions that did not establish rejection;
+- Segment, Jansen and Cubic treated CodeMirror's virtualized DOM as the complete accepted source;
+- Jansen also assumed exactly two inferred constraints although a legitimate snap could add one;
+- Scissor compared camera-derived SVG coordinates across a fresh reload fit even though exact model
+  coordinates persisted;
+- Cubic and Circle additionally exposed the same confirmed M92-F002 terminal-release defect.
+
+Harness commit `f31e740` reads accepted `managed.source` through IndexedDB persistence, uses bounded
+30-second polling, admits only legitimate Jansen snap families and fits the Scissor scene before
+cross-reload SVG comparison. These changes correct test authority and do not alter product
+semantics.
+
+Browser counts have two non-interchangeable scopes. The local release harness sets
+`GEOSOLVE_BROWSER_COMPILER_HARNESS=1`, builds the harness-only pinned compiler page and must pass all
+`20/20` rows. A production frozen distribution deliberately omits that page, so each local/Tailscale
+production endpoint must pass the remaining `19/19` ordinary workbench rows. The compiler-envelope
+row remains mandatory in the release harness; it is not a missing product route and must not be
+reported as part of a frozen production endpoint run.
 
 ## Qualification
 
@@ -129,5 +178,6 @@ NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 Exact results and any reproduced finding IDs are appended before nomination.
 
 No final gate result, immutable snapshot path/hash, HTTP byte-verification ledger or browser result
-is recorded yet. GitHub Pages remains unchanged until explicit supervising-user approval after the
-composite UAT.
+is recorded yet. In particular, the initial `14/20` diagnostic above is reproduction/classification
+evidence, not nomination evidence. GitHub Pages remains unchanged until explicit supervising-user
+approval after the composite UAT.

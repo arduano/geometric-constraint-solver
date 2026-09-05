@@ -8157,8 +8157,9 @@ single composite human review.
 Implementation checkpoint: the manifest-driven registry and all four sample waves are integrated
 at the frozen `5/11/2/2` distribution. Registry, source/compiler/project authority, sample-wave,
 drag-witness, headless report-v2, representative-edit/history, release-WASM adapter and release-size
-owners are present. Complete clean qualification and immutable UAT nomination are still in progress;
-no M92 human row or Pages publication is claimed.
+owners are present. M92-F001 and M92-F002 repairs plus their focused regressions are integrated.
+Complete clean qualification and immutable UAT nomination are still in progress; no M92 human row
+or Pages publication is claimed.
 
 `M92-F001` was reproduced while opening the fabrication operations atlas across the editor-checkpoint
 boundary. Live `SketchDocument` trim rows retained operation insertion order, while draft-v5
@@ -8173,6 +8174,27 @@ obtain operation-bearing expansions through public cold materialization; that wa
 not a second product finding. Qualification setup commit `d5fcdf9` additionally stops advertising
 absent optional sample notice/patch paths from `build.rs`; the existing registry-root watch still
 owns later creation, while repeated unchanged golden subprocesses now remain Cargo-fresh.
+
+`M92-F002` was reproduced in the release-WASM browser lifecycle. A terminal click could complete a
+native authoring candidate and park its authenticated managed compiler ticket on `pointerdown`
+before the browser emitted the paired zero-button `pointerup`; the bridge's blanket pending-mutation
+guard rejected that harmless release and surfaced `pointer input is unavailable while a
+managed-source mutation is compiling`. Commit `e40d11d` decodes and validates the request first,
+then returns `null` only for that terminal release without consuming the ticket, changing
+revision/history/persistence or publishing another snapshot. New `down` and `move` input remains
+blocked until the authenticated receipt settles. Exact Rust regression
+`m92_f002_terminal_pointer_release_is_noop_while_managed_click_compiles` and frontend lifecycle
+coverage in `c85e8aa` retain the boundary.
+
+The initial release-browser diagnostic at pre-repair source `7941614` ran `14/20`. Its six red rows
+were not six product findings: Parameter and Circle had inconclusive asynchronous waits; Segment,
+Jansen and Cubic read CodeMirror's virtualized DOM as complete source; Scissor compared
+camera-derived SVG coordinates across a fresh reload fit; and Cubic/Circle also exposed the single
+M92-F002 lifecycle defect. Harness commit `f31e740` reads accepted managed source from persisted
+authority with bounded polling, admits legitimate inferred Jansen snaps and normalizes the Scissor
+camera comparison. Final qualification must distinguish `20/20` in the explicit release harness,
+including its harness-only compiler-envelope page, from `19/19` ordinary workbench rows on each
+production frozen endpoint. The final qualification/nomination checkbox remains unchecked.
 
 ## Explicit non-goals
 

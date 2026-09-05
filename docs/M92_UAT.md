@@ -4,9 +4,13 @@
 
 Status: **not yet nominated; M92-U1 through M92-U8 are pending and unexecuted**. The 20-sample
 `5/11/2/2` implementation and automated scorecard owners are integrated, and `M92-F001` is repaired
-by `b861f4c` with collateral harness correction `d450e94`. Complete clean qualification, immutable
-freeze and exact browser evidence are still in progress. Automated evidence cannot pass these human
-rows, and no Pages publication is authorized before approval.
+by `b861f4c`. `M92-F002`'s terminal managed-release defect is repaired by `e40d11d`, with paired
+frontend regression `c85e8aa` and browser-oracle correction `f31e740`; collateral harness correction
+`d450e94` remains unrelated. Complete clean qualification, immutable freeze and exact browser
+evidence are still in progress. The release harness must pass `20/20`, including its harness-only
+compiler-envelope row, while each production frozen endpoint must pass the `19/19` ordinary
+workbench rows. Automated evidence cannot pass these human rows, and no Pages publication is
+authorized before approval.
 
 1. **M92-U1 — Pending / not run — Catalog cohesion.** Open the sample surface. Confirm exactly four
    clear categories and 20 intentionally named entries, with no native/code distinction, duplicates,
