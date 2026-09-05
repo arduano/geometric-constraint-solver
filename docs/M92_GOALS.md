@@ -19,8 +19,8 @@ envelopes stay unchanged; manifest ordinals become contiguous `1..=16`.
 
 The cam's tangent-offset and passive-follower-locality regression remains a private test fixture,
 outside the runtime catalog. The previous 20-sample qualification and immutable snapshot remain
-historical pre-pruning evidence. Fresh qualification and replacement immutable nomination are
-pending; M92 and all human U1–U8 rows remain open.
+historical pre-pruning evidence. [Fresh qualification and replacement immutable nomination](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
+pass; M92 and all human U1–U8 rows remain open.
 
 ## Active inventory
 

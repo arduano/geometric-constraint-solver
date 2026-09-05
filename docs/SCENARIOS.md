@@ -7106,13 +7106,12 @@ passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M
 
 ## M92 advanced showcase fixtures
 
-Status: **in progress; the authorized 16-sample pruning pass awaits fresh qualification and
-replacement immutable nomination. Human M92-U1–U8 remain pending and unexecuted; GitHub Pages
-is unchanged.**
+Status: **in progress; the 16-sample pruning pass is clean-qualified and immutably nominated.
+Human M92-U1–U8 remain pending and unexecuted; GitHub Pages is unchanged.**
 
-See [pre-pruning qualification and nomination](M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination)
-for the exact `b854d74` candidate, historical 20-sample visual/history audit and frozen endpoint
-receipts. Its unchanged snapshot remains served while the replacement is qualified.
+See [pruned qualification and nomination](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
+for `b153a28`, the 16-sample/32-edit visual and history audit and exact frozen endpoint receipts.
+The prior `b854d74` 20-sample evidence is historical; its snapshot is retained and listener retired.
 
 ### M92-C1 — canonical registry is complete and singular
 

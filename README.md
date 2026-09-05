@@ -180,9 +180,9 @@ The accepted M90 and M91 services were then retired. M91 is complete and publicl
 M92 is the current in-progress advanced sample showcase. It targets replacing the accumulated
 catalog variants with one manifest-driven, source-authoritative 16-sample registry: four mechanisms,
 eight product/fabrication studies, two capability atlases and two scale labs (`4/8/2/2`).
-The user-authorized pruning amendment supersedes the qualified 20-entry inventory. Replacement
-qualification and immutable nomination are pending; composite human UAT and milestone closure remain
-open. See `docs/M92_GOALS.md` and `docs/M92_VISUAL_AUDIT.md`.
+The user-authorized pruning amendment supersedes the qualified 20-entry inventory. The replacement
+is clean-qualified and immutably nominated at **http://100.94.63.83:18092/**; composite human UAT
+and milestone closure remain open. See [qualification evidence](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
 
 Physics, collision and a production rendering system remain out of scope.
 
@@ -232,7 +232,7 @@ Physics, collision and a production rendering system remain out of scope.
 24. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — clean-qualified,
     explicitly accepted and publicly closed code-driven-authoring milestone.
 25. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — current in-progress
-    16-sample advanced showcase, implementation ledger and not-yet-nominated composite scorecard.
+    16-sample advanced showcase, implementation ledger, nominated candidate and pending human scorecard.
 
 ## Workspace
 
@@ -288,8 +288,8 @@ typed V3 sketch language and removed its temporary compatibility APIs. M91's fiv
 workstreams are clean-qualified, accepted and publicly closed; exact Pages publication and browser
 verification pass, and the accepted M90/M91 services are retired. M92 is now in progress toward one
 manifest-driven, source-authoritative 16-sample showcase split `4/8/2/2` across mechanisms,
-product/fabrication studies, capability atlases and scale labs. Its qualification, UAT nomination,
-human review and closure remain pending. New
+product/fabrication studies, capability atlases and scale labs. Mechanical qualification and immutable
+UAT nomination pass; human review and closure remain pending. New
 milestones normally end in hands-on UAT after objective automation; M74 records an
 explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future

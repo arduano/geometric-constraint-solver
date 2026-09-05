@@ -2,8 +2,8 @@
 
 # M92 visual and geometric design audit
 
-Status: **in progress; the authorized 16-sample pruning pass awaits fresh qualification and
-replacement immutable nomination. M92-U1–U8 remain pending and unexecuted.**
+Status: **in progress; the 16-sample pruning pass is clean-qualified and immutably nominated.
+M92-U1–U8 remain pending and unexecuted.**
 
 ## Authorized pruning continuation — 2026-09-05
 
@@ -14,12 +14,12 @@ source edits and eight public mechanism witnesses. Survivor keys, source/compile
 geometry remain unchanged; only their manifest ordinals are renumbered. The cam tangent-offset
 and passive-follower-locality regression retains its source/envelope as a private test fixture.
 
-Qualification of the 16-sample replacement is pending. The immutable 20-sample snapshot
-`/tmp/geosolve-m92-uat.x4b870rw` remains served at `http://100.94.63.83:18092/` while that work
-proceeds. All earlier 20-sample/40-edit/ten-witness records below are pre-pruning evidence and keep
+[Qualification of the 16-sample replacement](#pruned-catalog-qualification-and-immutable-nomination)
+passes, including the fresh gate, visual/history audit, no-rebuild freeze and exact endpoint checks.
+The old immutable 20-sample snapshot `/tmp/geosolve-m92-uat.x4b870rw` is retained and its listener
+retired. All earlier 20-sample/40-edit/ten-witness records below are pre-pruning evidence and keep
 their exact source, byte and result identities. They do not qualify the replacement catalog or
-accept any human UAT row. A fresh gate, visual/history audit, no-rebuild freeze and exact endpoint
-verification are required before replacing the nomination. Pages remains unchanged.
+accept any human UAT row. Pages remains unchanged.
 
 ## Pruning gate R1 — stale package generator count
 
@@ -41,7 +41,8 @@ Evidence: `/home/arduano/m92-visual-audit-20260905/pruning-r1/gate/receipt.json`
 `release-gate.log` (433,329 bytes, 6,793 lines; SHA-256
 `c2e83470a8507651016827a74801c8d1218d0ae2b76ccf8f55116f3b7be4cb8d`) and
 `pruning-r1/golden-r2/completion.json`. No replacement distribution was frozen or nominated from
-this failed gate; the previous immutable review build remains served.
+this failed gate; the previous immutable review build remained served at that checkpoint.
+Successful replacement qualification is recorded below.
 
 ## Pre-pruning audit and qualification
 
@@ -528,12 +529,12 @@ recorded below. All M92-U1–U8 rows remain pending and unexecuted; GitHub Pages
 ## Final clean qualification and immutable nomination
 
 This is the completed **pre-pruning** nomination. Its 20-sample and 40-edit evidence remains
-historical; the 16-sample replacement has not yet been qualified or nominated.
+historical; it is superseded by the qualified 16-sample nomination recorded below.
 
 Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
 (exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
-`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and was nominated at
 **http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
 language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
 separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.
@@ -565,7 +566,7 @@ remain historical evidence and are not retroactively upgraded.
 | Local HTTP ledger | SHA-256 `e19995322d156715188e70d3964070e7dfaeb9adc3cc612ea28131f7fbbbf5a8` |
 | Tailscale HTTP ledger | SHA-256 `e19995322d156715188e70d3964070e7dfaeb9adc3cc612ea28131f7fbbbf5a8` |
 | Each frozen browser endpoint | 19/19 ordinary workbench rows plus separate 1/1 Jansen bounded drag/history/reload; zero failed, skipped, flaky or retried rows |
-| Live Tailscale service | `geosolve-m92-uat-18092.service`, PID `2608805`, invocation `751b2baded324c9eb2f0bcc981fef571` |
+| Historical Tailscale service (retired after pruning qualification) | `geosolve-m92-uat-18092.service`, PID `2608805`, invocation `751b2baded324c9eb2f0bcc981fef571` |
 | Finalizer completion | `2026-09-05T09:59:33.532283+00:00`; `post-gate-completion.json` status `passed` |
 
 Actual clean-gate launch, from the isolated candidate worktree:
@@ -602,7 +603,8 @@ title; a separate invocation selected only `M92 visual workflow 1: theo-jansen-l
 `m92-sample-audit.spec.ts`. Both commands ran against each recorded `GEOSOLVE_E2E_BASE_URL`.
 Every full command, environment, UTC interval, exit code and log hash is in the attempt receipts.
 The production snapshot contains no `compiler-parity.html`; the language-service row is not
-added to the frozen 19-row inventory. Local staging stopped after passing; Tailscale remains live.
+added to the frozen 19-row inventory. Local staging stopped after passing; this historical
+Tailscale listener was later retired after pruning qualification, with its bytes retained.
 
 An initial finalizer attempt stopped before copying because the freeze helper had mode 0644 and
 was invoked directly (`PermissionError`). This was an orchestration `HARNESS_ERROR`: allocated
@@ -637,3 +639,109 @@ relationships do not imply native rigidity, reference products remain schematic 
 these checks do not establish arbitrary edit ranges, collision handling or manufacturing fitness.
 Fitted exported geometry identity is distinct from the independently measured native geometry.
 All human U1–U8 remain pending in `M92_UAT.md`; M92 is not closed and Pages was not published.
+
+## Pruned catalog qualification and immutable nomination
+
+Clean product source `b153a28d9e44dde934b325835913986b0e316ee7`, tree
+`f106276ebecdec1c9d2fc4c7c9937f32d2549e42`, passes the complete unchanged-source replacement
+release gate. The public catalog contains 16 samples in `4/8/2/2` categories after the authorized
+removal of Prusa MINI, NEMA 17, HevORT and the twin-roller Bezier cam. All surviving source and
+authenticated compiler envelopes remain byte-identical; the cam's tangent-offset/passive-locality
+regression remains a private fixture.
+
+The no-rebuild snapshot `/tmp/geosolve-m92-uat._8s63qiy`, external manifest SHA-256 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`, is
+nominated at **http://100.94.63.83:18092/**. The 16 sample workflows cover 32 measured edits and
+actual geometry/source restoration through Undo/Redo/reload. The four public mechanisms retain
+eight bounded pointer witnesses. The separate release workbench inventory remains 20 rows.
+Each frozen endpoint passes 19 ordinary workbench rows, a separate bounded Jansen workflow and
+an additional exact pruned-menu/Recent check. All M92-U1–U8 rows remain Pending / not run; M92
+remains in progress and GitHub Pages is unchanged.
+
+| Evidence | Exact result |
+|---|---|
+| Product source / tree | `b153a28d9e44dde934b325835913986b0e316ee7` / `f106276ebecdec1c9d2fc4c7c9937f32d2549e42` |
+| Gate receipt | `pruning-r1/gate-r2/receipt.json`; `2026-09-05T11:46:19.121966+00:00` to `2026-09-05T14:18:43.460675+00:00`, exit 0; clean unchanged source/tree |
+| Gate service / invocation | `geosolve-m92-pruning-release-gate-r2.service` / `ca0c78f37e0c46a4855c9e30a9092592` |
+| Gate log | `937,425` bytes, `15,863` lines; SHA-256 `1c4dec05cb07d66a2b829c4efb163c3bffc382e0393efc5e74c8f237007882ba` |
+| Native workspace / documentation | `2,603` passed, `0` failed; `32 existing opt-in tests ignored in the workspace phase; required opt-in release suites executed separately` |
+| Golden | 271 unchanged PASS rows, SHA-256 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`; candidate require-clean passes |
+| Measured edits | `atlas/scale 4/4, product design 7/7, mechanisms 4/4, product references 7/7`; 32 distinct public-sample edits |
+| WASM | `seven interaction suites, 37/37`; actual release lifecycle `3/3` |
+| Browser gate | Workbench `20/20 (5.0 min)`, sample workflows `16/16 (15.0 min)`, language `1/1`; no hidden retries/skips |
+| Frontend/package | `8 test files, 97/97 tests`; manifest/compiler generation, TypeScript, licensing, build and dist validation `pass` |
+| Survivor preservation | `pruning-r1/survivor-preservation.json`; source/compiler bytes and private cam fixture unchanged |
+| Visual/history review | `pruning-r1/visual-review/`, `pruning-r1/visual-review-result-r2.json`, `pruning-r1/capture-history-audit.json`; `16 samples, 146 PNG captures and 36 derived sheets; all 16 history audit rows complete with no problems/pending. Agent review found no new visible defect. Crowded small dimensions and fitted-view detail limits remain; no human acceptance` |
+| Snapshot | `/tmp/geosolve-m92-uat._8s63qiy`; `10` files / `2` directories; regular immutable bytes, no symlinks/special files |
+| Frozen distribution / WASM | `26918035` bytes <30 MiB / `18128339` bytes <20 MiB; WASM SHA-256 `6acdf32ebedc4730ee6e39e5b9d8900bb7a6fdb2e1be7a5094fbeb38089fbd7c` |
+| External manifest | `/tmp/geosolve-m92-uat._8s63qiy.sha256`; SHA-256 `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9` |
+| Frozen HTTP | Each endpoint: `11` routes, exact bytes/MIME, no redirects/content encoding; root equals index.html |
+| HTTP ledgers | Local SHA-256 `fdc8abab66306774aada75529aa39c89cce6c32bc7362ec1bbab76bb07257014`; Tailscale SHA-256 `fdc8abab66306774aada75529aa39c89cce6c32bc7362ec1bbab76bb07257014` |
+| Each frozen browser endpoint | 19 ordinary workbench rows + separate 1 bounded Jansen drag/history/reload; zero failures, skips, flaky or retried rows |
+| Separate pruned-menu probes | Exact 16 titles; four pruned searches absent; stale removed Recent entries absent; one surviving dust-shoe Recent entry retained |
+| New Tailscale service | `geosolve-m92-pruned-uat-18092.service`, PID `4073061`, invocation `daa4226b0d454d54902f8aef51541f1f` |
+| Old listener retirement | `/home/arduano/m92-visual-audit-20260905/pruning-r1/gate-r2/post-gate-attempt.vm2cot69/old-endpoint-superseded.json`; retired `2026-09-05T14:24:47.515287+00:00` after local verification; old immutable bytes retained |
+| Finalizer completion | `pruning-r1/gate-r2/post-gate-completion.json`, status `passed`, `2026-09-05T14:27:31.649877+00:00` |
+
+Independent `--survey` and `--check` ran against clean unchanged pruning source
+`ed4dbec2034cc414b2390de5818a35c34f79cc78` and both passed. The finalizer's
+`/home/arduano/m92-visual-audit-20260905/pruning-r1/gate-r2/post-gate-attempt.vm2cot69/golden-runtime-equivalence.json` proves that the candidate delta is exactly
+the package generator's expected-directory-count assertion from 20 to 16 plus the failed-gate
+ledger document. No runtime or oracle input changed. The final candidate independently passes
+`--require-clean`; no golden bytes were regenerated or blessed.
+
+The earlier pruning gate at `ed4dbec...` remains failed, exit 1, for its stale package-generator
+count. The replacement gate above reruns the complete qualification. Its actual command is
+preserved in `pruning-r1/gate-r2/run.sh`; all full command environments, UTC intervals, exit
+codes and log hashes are preserved in the gate and finalizer attempt receipts.
+
+Finalizer `/home/arduano/m92-visual-audit-20260905/pruning-r1/finalize-post-gate-r6.py`, SHA-256 `736c4a1284842a7088d0b00535b60032537dd85e7c58b6a017f09507f8c1a748`, validates the completed
+gate and existing distribution, then copies it without rebuilding through the hash-pinned freeze
+helper invoked with explicit Bash. Only after all local HTTP/browser/menu checks pass does it
+retire `geosolve-m92-uat-18092.service` and start the replacement at the same Tailscale URL.
+The original `/tmp/geosolve-m92-uat.x4b870rw` snapshot and manifest
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` remain immutable historical
+evidence. Local staging is stopped after successful checks; the new Tailscale listener remains
+live. This is mechanical nomination and catalog curation, not human acceptance or milestone closure.
+
+The external evidence root for the relative paths above is
+`/home/arduano/m92-visual-audit-20260905/`. The public runtime asset removals and contiguous registry
+migration are in `ed4dbec`; `b153a28` corrects the package inventory assertion and preserves the
+failed first pruning gate. All 63 surviving non-manifest assets were rechecked against `552d5e9`;
+the private cam source and compiler envelope also match their pre-pruning bytes exactly. No solver
+equation, primitive, acceptance threshold or golden case changed in this pruning pass.
+
+Exact release command, from the clean isolated checkout:
+
+```bash
+NO_COLOR=true \
+GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome \
+GEOSOLVE_E2E_PORT=18197 \
+M92_BROWSER_AUDIT_OUTPUT=/home/arduano/m92-visual-audit-20260905/pruning-r1/gate-r2/browser-samples \
+nix-shell shell.nix --run 'TMPDIR=/home/arduano/t ./scripts/release-gate.sh'
+```
+
+This command passed format, warnings-denied workspace Clippy, locked all-feature native tests,
+require-clean golden, native/WASM and optimized-WASM lifecycle suites, both TypeScript packages,
+mandatory headless sample/intent/history suites, warnings-denied Rustdoc, benchmark compilation,
+performance limits, licences/package validation, browser workflows, frontend tests and final
+10-file distribution validation. The release gate exited 0 without source/tree/cleanliness drift.
+The independent survey and check commands were
+`nix-shell shell.nix --run './scripts/golden-authoring-scene-oracle.sh --survey'` and the same
+command with `--check`; their exact source observation and both successful logs are in
+`pruning-r1/golden-r2/`.
+
+Post-gate capture checks ran `audit-capture-history-r2.py --gate <gate-r2> --output
+<capture-history-audit.json>` and, under `nix-shell -p python3Packages.pillow`,
+`build-visual-review.py` with the exact gate captures, candidate registry, gate receipt and
+`--crop 272,80,1147,900`. Their successful outputs record 16 complete rows and 36 derived sheets
+from 146 original PNGs. Root inspected all 16 baseline views and mechanism/atlas/scale comparison
+sheets; the independent product review inspected all 40 baseline/edit/reload PNG states, source
+changes and both reload pairs for all eight products. Exact viewed-image hashes and limits are in
+`visual-review-result-r2.json`, `product-visual-review.md` and `product-review-sheets/receipt.json`.
+Visual inspection does not replace the independently measured native geometry or human UAT.
+
+Finalizer R6 also preserves two external-harness corrections: old-server comparison uses stable
+authenticated process/snapshot identity rather than systemd's disposable command timestamps, and
+each removed-menu search waits for its own empty-result text. The local and Tailscale menu probes
+both pass and their screenshots are identical. The finalizer itself completed successfully under
+`geosolve-m92-pruning-finalize-r6.service`, invocation `35b8c9fa14fa4e5789b539f2ace9d6ca`.

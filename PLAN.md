@@ -8117,7 +8117,7 @@ types; `/` equals `index.html`. The public release-WASM workbench and language-s
 
 ## M92 — advanced sample showcase and scale corpus
 
-Status: **in progress; 16-sample pruning qualification and replacement nomination pending**.
+Status: **in progress; 16-sample pruning qualification and immutable nomination complete; human UAT pending**.
 The user-authorized 2026-09-05 amendment removes Prusa MINI, NEMA 17, HevORT and the twin-roller
 Bezier cam. Active scope, clean breaks and integration order are recorded in
 `docs/M92_GOALS.md`; `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` owns the
@@ -8151,8 +8151,8 @@ single composite human review.
 - [x] Add exact automated coverage for representative edit, Undo/Redo/reload,
   native/headless/release-WASM parity and frontend-manifest generation for every entry, with release
   WASM below 20 MiB and the complete distribution below 30 MiB as enforced release boundaries.
-  Pre-pruning qualification is recorded below; renewed execution is pending for the 16 survivors.
-- [ ] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
+  [Renewed qualification](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination) passes for all 16 survivors.
+- [x] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
   survey/check/require-clean, package/frontend tests and the clean release gate; then freeze one
   byte-verified immutable M92 UAT without publishing Pages before human approval.
 
@@ -8162,10 +8162,18 @@ stay unchanged, ordinals become contiguous and retired cam geometry retains priv
 coverage. Registry, source/compiler/project authority, sample-wave,
 drag-witness, headless report-v2, representative-edit/history, release-WASM adapter and release-size
 owners are present. M92-F001 and M92-F002 repairs plus their focused regressions are integrated.
-The prior clean qualification and immutable UAT nomination pass only for the pre-pruning catalog;
-the 16-sample replacement requires 32 measured edits, eight public mechanism witnesses and a new
-clean gate and immutable snapshot. No M92 human row or Pages publication is claimed. See
-[pre-pruning qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
+The replacement passes 32 measured edits, eight public mechanism witnesses, the complete clean
+gate and immutable endpoint verification. No M92 human row or Pages publication is claimed. See
+[pruned qualification and nomination](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
+
+Clean pruned product source `b153a28d9e44dde934b325835913986b0e316ee7`, tree
+`f106276ebecdec1c9d2fc4c7c9937f32d2549e42`, passes the complete unchanged-source release gate.
+Its no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat._8s63qiy`, external manifest SHA-256
+`2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`, is nominated at
+**http://100.94.63.83:18092/**. All 16 browser sample workflows, 32 measured edits and eight public
+mechanism witnesses pass. Each frozen endpoint passes 19 ordinary workbench tests, the separate
+bounded Jansen workflow and exact pruned-menu/Recent checks. Fresh visual/history review covers
+all 16 samples; M92 and all human U1–U8 rows remain open, and GitHub Pages is unchanged.
 
 ### Pre-pruning implementation and qualification evidence
 
@@ -8268,7 +8276,7 @@ Pre-pruning mechanical nomination — 2026-09-05:
 Clean product source `b854d74c08833dc33412cfa859ecdef1a0bfc383`, tree
 `b6262b7ed51a47608b97264810c3192f9577bc9e`, passed the complete unchanged-source release gate on 2026-09-05
 (exit 0). The no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat.x4b870rw` has manifest SHA-256
-`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and is nominated at
+`e4b9d275038e693273cc86bd08f79ea27a42afbe39ffaf66e419fb58beef34a1` and was nominated at
 **http://100.94.63.83:18092/**. Release workbench 20/20, separate sample audit 20/20 and
 language service 1/1 pass; each frozen endpoint passes 19/19 ordinary workbench rows plus a
 separately counted 1/1 bounded Jansen drag/history/reload workflow, without retries or skips.

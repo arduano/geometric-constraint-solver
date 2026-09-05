@@ -2696,10 +2696,10 @@ Chromium 20/20 pass before both accepted M90/M91 listeners were retired. M91 is 
 ## M92 canonical bundled-sample architecture
 
 The authorized pruning amendment reduces the public catalog to 16 entries in `4/8/2/2` categories.
-Fresh qualification and replacement immutable nomination are pending; M92 and human U1–U8 remain
-open. [Pre-pruning qualification](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination)
-for `b854d74` remains historical evidence. Its still-served snapshot contains 20 samples. Frozen
-production checks count 19 ordinary workbench rows and the separate bounded Jansen workflow
+[Replacement qualification and immutable nomination](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
+pass at `b153a28`; M92 and human U1–U8 remain open. Pre-pruning `b854d74` evidence and its
+20-sample snapshot are preserved; its listener is retired. Frozen production checks pass
+19 ordinary workbench rows, the separate bounded Jansen workflow and pruned-menu/Recent probes,
 independently of catalog size.
 
 M92 replaces accumulated catalog variants with one manifest-driven registry owned by
@@ -2783,7 +2783,7 @@ geometry remained retained, but no movement or Undo entry was accepted. Browser 
 the same disabled-Undo outcome. Core repair `a9d7532` extends existing first-improvement
 backtracking to all Temporary objectives without changing budgets, tolerances or certification.
 The pre-pruning ten default-policy witnesses and Jansen/scissor browser checks passed. The active
-four-mechanism catalog retains eight default-policy witnesses for renewed qualification. The
+four-mechanism catalog passes all eight default-policy witnesses in the replacement gate. The
 required boundary preserves hard validation, explicit branches, locality and exact
 history while completing meaningful ordinary drags within the configured budget. The detailed
 reproduction and failed clean-gate receipt are in `docs/M92_VISUAL_AUDIT.md`.

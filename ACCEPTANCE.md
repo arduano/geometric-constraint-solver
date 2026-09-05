@@ -5260,8 +5260,9 @@ release-distribution checks are implemented. M92-F001 and M92-F002 are repaired 
 regressions. The complete clean qualification, immutable snapshot freeze and exact browser evidence
 for `b854d74` apply to the pre-pruning 20-sample catalog; see
 [historical qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
-Fresh qualification and replacement nomination are pending. Human M92-U1 through M92-U8 remain
-Pending / not run, and Pages publication is not authorized.
+[Pruned qualification and replacement nomination](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
+pass at `b153a28`, covering all 16 samples, 32 measured edits and eight public mechanism witnesses.
+Human M92-U1 through M92-U8 remain Pending / not run, and Pages publication is not authorized.
 
 The user-visible catalog contains exactly 16 code-authoritative entries in canonical manifest
 order: 4 mechanisms, 8 products/fabrication studies, 2 atlases and 2 scale labs. No native/code
