@@ -13,25 +13,25 @@ export default sketch(($) => {
     label: "Robotic cell backplane",
   });
   const lowerWestMount = $.geometry.centerRadiusCircle("lowerWestMount", {
-    center: [-166, -96],
+    center: [-166, -104],
     radius: mm(4),
     role: "profile",
     label: "Lower-west M8 clearance",
   });
   const lowerInnerWestMount = $.geometry.centerRadiusCircle("lowerInnerWestMount", {
-    center: [-55.33333333333333, -96],
+    center: [-55.33333333333333, -104],
     radius: mm(4),
     role: "profile",
     label: "Lower inner-west M8 clearance",
   });
   const lowerInnerEastMount = $.geometry.centerRadiusCircle("lowerInnerEastMount", {
-    center: [55.33333333333334, -96],
+    center: [55.33333333333334, -104],
     radius: mm(4),
     role: "profile",
     label: "Lower inner-east M8 clearance",
   });
   const lowerEastMount = $.geometry.centerRadiusCircle("lowerEastMount", {
-    center: [166, -96],
+    center: [166, -104],
     radius: mm(4),
     role: "profile",
     label: "Lower-east M8 clearance",
@@ -60,6 +60,8 @@ export default sketch(($) => {
     role: "profile",
     label: "Upper-east M8 clearance",
   });
+  // Lower mounts sit below the service trunk so mounting bores and clip holes
+  // remain distinct in the complete 2D layout.
   // The route geometry is intentionally repetitive in structure but not in
   // placement. Each keyed bend remains readable and independently selectable.
   const powerBus = $.geometry.polyline("powerBus", {

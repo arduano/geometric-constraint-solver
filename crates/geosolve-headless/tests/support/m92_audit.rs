@@ -239,7 +239,9 @@ pub fn assert_history(base: &CodeProject, edited: &CodeProject) {
 
 pub fn preserve(render: &HeadlessRender, key: &str, stage: &str) {
     if let Some(root) = std::env::var_os("M92_AUDIT_OUTPUT") {
-        let target = PathBuf::from(root).join(key).join(stage);
+        let parent = PathBuf::from(root).join(key);
+        std::fs::create_dir_all(&parent).unwrap();
+        let target = parent.join(stage);
         geosolve_headless::publish_render(render, &target).unwrap();
     }
 }
