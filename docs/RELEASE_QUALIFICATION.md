@@ -31,8 +31,14 @@ the exact native case inventory after preparation. `--prepare` performs that pre
 Targeted and preparation reports do not establish a complete release. `--fresh` bypasses passing
 test receipts, retaining normal compiler caches. `--reference` invokes the historical sequential
 gate and original Cargo/npm oracle. `--test-opt-level 0` selects the unoptimized test profile;
-the default level 1 retains debug assertions and overflow checks. Profile differences invalidate
+the default level 1 applies to native and non-release WASM tests and retains debug assertions and overflow checks. Profile differences invalidate
 evidence and are recorded, not silently compared as identical builds.
+
+Native workspace and default-feature headless preparations have separate identities and captured
+CLI binaries. A targeted native selector prepares only its required profile. Rust input closure
+includes literal embedded files, including Markdown consumed by tests; unrelated frontend CSS
+does not invalidate native or optimized-WASM preparation. Runtime temporary files use private
+short paths under `/tmp`; durable evidence remains in the run directory.
 
 Clean source is required for product qualification. `GEOSOLVE_ALLOW_DIRTY=1` provides provisional
 development evidence only. The runner locks its checkout against a second gate; callers must not
@@ -83,7 +89,8 @@ The latter commands validate a retained observation; they are not independent fr
 Golden updates still require explicit row-by-row review. The release gate executes require-clean
 once, preserving that complete observation and its exact comparison/clean verdict.
 
-Browser preparation optimizes WASM once and builds separate compiler-harness and production
+An authenticated WASM preparation is separate from browser bundling, so presentation changes can
+reuse the exact optimized package. Browser preparation builds separate compiler-harness and production
 distributions. All browser suites share the prepared harness server. The production manifest
 identifies the exact output to nominate; do not rebuild after qualifying it. A new artifact or
 endpoint requires fresh HTTP byte/MIME/base-path checks and bounded actual-WASM readiness:

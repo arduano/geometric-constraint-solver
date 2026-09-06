@@ -27,6 +27,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import tomllib
@@ -325,12 +326,19 @@ class Runner:
         return "run", "no verifiable successful result for these inputs", None
 
     def execute(self, stage, ready_at):
-        key = self.keys[stage.id]
         decision, reason, previous = self.decision(stage)
         if previous:
-            return {"stage": stage.id, "key": key, "status": "passed", "decision": decision,
+            return {"stage": stage.id, "key": self.keys[stage.id], "status": "passed", "decision": decision,
                     "reason": reason, "origin_run": previous["run"], "receipt_path": previous["receipt_path"],
                     "duration_seconds": 0, "avoided_seconds": previous["duration_seconds"]}
+        # Chrome's SingletonSocket must fit the OS Unix-socket path limit. Keep
+        # runtime temporary files short and private; durable evidence stays in
+        # the run directory. Cleanup also applies to timeout and harness errors.
+        with tempfile.TemporaryDirectory(prefix="gs-", dir="/tmp") as runtime:
+            return self.execute_fresh(stage, ready_at, reason, runtime)
+
+    def execute_fresh(self, stage, ready_at, reason, runtime):
+        key = self.keys[stage.id]
         directory = self.run_dir / "stages" / stage.id
         directory.mkdir(parents=True, exist_ok=False)
         scratch = directory / "scratch"
@@ -339,7 +347,7 @@ class Runner:
         env = os.environ.copy()
         env.update(dict(stage.env))
         for name in ("TMPDIR", "TMP", "TEMP", "TEMPDIR", "NIX_BUILD_TOP"):
-            env[name] = str(scratch)
+            env[name] = runtime
         env["CARGO_BUILD_JOBS"] = env.get("CARGO_BUILD_JOBS", "2")
         env["M92_AUDIT_OUTPUT"] = str(directory / "sample-audit")
         env["M92_PRODUCT_EVIDENCE"] = str(directory / "product-audit")
@@ -402,11 +410,15 @@ class Runner:
                 if stage.id in {"prepare.workspace", "prepare.headless"}:
                     prepared = read_json(self.root / stage.outputs[0] / "prepared.json")
                     for artifact in prepared["artifacts"]:
-                        if file_hash(artifact["executable"]) != artifact["sha256"]:
+                        observed = hash_output(artifact["executable"])
+                        if observed != {"sha256": artifact["sha256"]}:
                             raise ValueError("prepared Cargo executable changed")
-                        outputs[artifact["executable"]] = hash_output(Path(artifact["executable"]))
+                        outputs[artifact["executable"]] = observed
                     for auxiliary in prepared.get("auxiliary_executables", []):
-                        outputs[auxiliary["path"]] = hash_output(Path(auxiliary["path"]))
+                        observed = hash_output(auxiliary["path"])
+                        if observed != {"sha256": auxiliary["sha256"]}:
+                            raise ValueError("prepared auxiliary executable changed")
+                        outputs[auxiliary["path"]] = observed
             except (OSError, ValueError) as error:
                 with log.open("a") as output:
                     output.write(str(error) + "\n")
@@ -419,6 +431,7 @@ class Runner:
                    "revision": self.revision,
                    "environment_sha256": digest(self.environment), "exit_codes": codes, "outputs": outputs,
                    "resources": resources,
+                   "runtime_temporary_policy": "private /tmp/gs-*; removed after process-tree completion",
                    "duration_seconds": time.monotonic() - began, "wait_seconds": began - ready_at,
                    "evidence": evidence}
         write_json(directory / "receipt.json", self.store.seal(receipt))
@@ -499,6 +512,68 @@ class Runner:
         return value
 
 
+def rust_embedded_inputs(root, directory, source_patterns):
+    """Track literal Rust includes outside Cargo's ordinary crate directory.
+
+    Cargo includes are compile inputs even when the referenced file is prose or
+    belongs to another package's fixtures. These two forms cover the reviewed
+    repository sources; generated OUT_DIR includes remain covered by the owning
+    build script and assets. This is deliberately not a Rust expression evaluator.
+    """
+    literal = r'"(?:\\.|[^"\\])*"'
+    direct = re.compile(r'include_(?:str|bytes)!\s*\(\s*(' + literal + r')\s*[,)]')
+    manifest = re.compile(
+        r'include_(?:str|bytes)!\s*\(\s*concat!\s*\(\s*'
+        r'env!\s*\(\s*"CARGO_MANIFEST_DIR"\s*\)\s*,\s*'
+        r'((?:' + literal + r'\s*,?\s*)+)\)\s*\)')
+    result = set()
+    for pattern in source_patterns:
+        for source in directory.glob(pattern):
+            if source.suffix != ".rs" or not source.is_file():
+                continue
+            text = source.read_text()
+            direct_matches, manifest_matches = list(direct.finditer(text)), list(manifest.finditer(text))
+            recognized = [match.span() for match in direct_matches + manifest_matches]
+            # Macro text emitted inside build.rs string literals is generated Rust,
+            # owned by that reviewed build script and its asset directory. The one
+            # source-level generated manifest include has the same owning contract.
+            strings = [match.span() for match in re.finditer(literal, text, re.DOTALL)]
+            generated = r'include_str!\s*\(\s*env!\s*\(\s*"GEOSOLVE_BUNDLED_SAMPLE_FRONTEND_MANIFEST"\s*\)\s*\)'
+            if source.relative_to(root).as_posix() == "crates/geosolve-sketch-code/examples/generate_frontend_samples.rs":
+                recognized.extend(match.span() for match in re.finditer(generated, text))
+            plain_includes = {
+                "crates/geosolve-sketch-code/src/bundled_samples.rs":
+                    r'include!\s*\(\s*concat!\s*\(\s*env!\s*\(\s*"OUT_DIR"\s*\)\s*,\s*'
+                    r'"/bundled-compiler-envelopes/bundled-sample-registry\.rs"\s*\)\s*\)',
+                "crates/geosolve-demo-web/src/workbench/mod.rs":
+                    r'include!\s*\(\s*"golden_scene_backend_parity\.rs"\s*\)',
+            }
+            # The second existing plain include is an ordinary adjacent src file,
+            # already scanned by the crate source glob. New plain includes may
+            # contain nested includes and therefore use the all-source fallback.
+            reviewed_plain = plain_includes.get(source.relative_to(root).as_posix())
+            if reviewed_plain:
+                recognized.extend(match.span() for match in re.finditer(reviewed_plain, text))
+            for macro in re.finditer(r'include(?:_(?:str|bytes))?!', text):
+                if any(start <= macro.start() < end for start, end in recognized):
+                    continue
+                if (source.relative_to(root).as_posix() == "crates/geosolve-sketch-code/build.rs"
+                        and any(start <= macro.start() < end for start, end in strings)):
+                    continue
+                # Never guess at a new raw-string/concat/env/expression form. All
+                # source, including prose, remains an input until it is reviewed.
+                result.add("**")
+            targets = [(source.parent, json.loads(match[1])) for match in direct_matches]
+            targets += [(directory, "".join(json.loads(value) for value in re.findall(literal, match[1])).lstrip("/"))
+                        for match in manifest_matches]
+            for base, relative in targets:
+                target = (base / relative).resolve()
+                if not target.is_relative_to(root.resolve()):
+                    raise ValueError(f"Rust embedded input escapes repository: {source}: {relative}")
+                result.add(target.relative_to(root.resolve()).as_posix())
+    return result
+
+
 def crate_inputs(root, package, include_tests=True):
     """Cargo path-dependency closure; dependency tests are not production inputs."""
     result, seen = set(), set()
@@ -509,8 +584,11 @@ def crate_inputs(root, package, include_tests=True):
         rel = directory.relative_to(root).as_posix()
         manifest = tomllib.loads((directory / "Cargo.toml").read_text())
         result.update((f"{rel}/src/**", f"{rel}/assets/**", f"{rel}/build.rs", f"{rel}/Cargo.toml", f"{rel}/README.md"))
+        source_patterns = ["src/**/*.rs", "build.rs"]
         if owner and include_tests:
             result.update((f"{rel}/tests/**", f"{rel}/examples/**", f"{rel}/benches/**"))
+            source_patterns.extend(("tests/**/*.rs", "examples/**/*.rs", "benches/**/*.rs"))
+        result.update(rust_embedded_inputs(root, directory, source_patterns))
         sections = [manifest.get(section, {}) for section in ("dependencies", "build-dependencies", "dev-dependencies")]
         for target in manifest.get("target", {}).values():
             sections.extend(target.get(section, {}) for section in ("dependencies", "build-dependencies", "dev-dependencies"))
@@ -550,7 +628,9 @@ def preflight_stages():
                        "packages/geosolve-intent/node_modules", "packages/geosolve-sketch-code/node_modules")),
         Stage("preflight.frontend", (npm(FRONTEND, "ci", "--ignore-scripts"),
                                      npm(FRONTEND, "run", "check:static"), npm(FRONTEND, "test")),
-              inputs=(FRONTEND + "/**", "packages/**", "crates/geosolve-sketch-code/**"),
+              inputs=(FRONTEND + "/**", "packages/**", "crates/geosolve-sketch-code/**",
+                      "crates/geosolve-constraint-editor/src/**", "crates/geosolve-demo-web/src/**",
+                      "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md"),
               dependencies=("preflight.managed",), resource="exclusive", timeout=600,
               outputs=(FRONTEND + "/node_modules",)),
     ]
@@ -577,25 +657,57 @@ def check_inventory(root):
     print(f"sample preflight: {count} exact entries; generator count and frontend order match")
 
 
-def preparation_stages(runner):
-    # Immutable output paths are tied to source/tool/environment identity. A failed
-    # preparation is retried in a new run directory; successful outputs stay put.
-    artifact_key = digest({"source": {name: value for name, value in runner.snapshot.items()
-                                     if not matches(name, runner.policy["prose"])},
-                           "tools": runner.tools, "environment": runner.environment})
-    prepared = f"target/release-gate/prepared/{artifact_key}"
-    stages = []
-    for mode in ("workspace", "headless"):
-        out = f"{prepared}/{mode}"
-        stages.append(Stage(f"prepare.{mode}", (cmd(sys.executable, "scripts/release_gate.py", "--prepare-native", mode, "--output", out),),
-                            inputs=("crates/**", "scripts/release_gate_native.py"),
-                            dependencies=("preflight.frontend", "preflight.metadata-format"), resource="exclusive", timeout=2400,
+def rust_inputs(root):
+    return tuple(sorted({pattern for manifest in (root / "crates").glob("*/Cargo.toml")
+                         for pattern in crate_inputs(root, manifest.parent.name)}))
+
+
+def preparation_modes(patterns):
+    if not patterns:
+        return {"workspace", "headless", "wasm", "browser"}
+    modes = set()
+    for pattern in patterns:
+        if pattern.startswith("workspace."):
+            modes.add("workspace")
+        elif pattern.startswith("headless."):
+            modes.add("headless")
+        elif pattern in {"browser", "artifact.transport"}:
+            modes.update(("wasm", "browser"))
+        else:
+            return {"workspace", "headless", "wasm", "browser"}
+    return modes
+
+
+def preparation_stages(runner, modes=None):
+    modes = modes or {"workspace", "headless", "wasm", "browser"}
+    stages, prepared = [], {}
+    for mode in ("workspace", "headless", "wasm", "browser"):
+        if mode not in modes:
+            continue
+        if mode in {"workspace", "headless"}:
+            inputs = rust_inputs(runner.root) if mode == "workspace" else crate_inputs(runner.root, "geosolve-headless")
+            inputs = (*inputs, "scripts/release_gate_native.py")
+        elif mode == "wasm":
+            inputs = (*crate_inputs(runner.root, "geosolve-demo-web", include_tests=False),
+                      FRONTEND + "/scripts/build-wasm.mjs")
+        else:
+            inputs = (FRONTEND + "/**", "packages/**", "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md")
+        identity = digest({"inputs": stage_inputs(Stage("identity", (cmd("identity"),), inputs=inputs),
+                                                 runner.snapshot, runner.policy),
+                           "tools": runner.tools, "environment": runner.environment,
+                           "wasm": prepared.get("wasm") if mode == "browser" else None})
+        out = f"target/release-gate/prepared/{identity}/{mode}"
+        prepared[mode] = out
+        if mode in {"workspace", "headless"}:
+            command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-native", mode, "--output", out)
+        elif mode == "wasm":
+            command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-wasm", "--output", out)
+        else:
+            command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-browser", "--wasm-package", prepared["wasm"], "--output", out)
+        dependencies = ("preflight.frontend", "preflight.metadata-format") + (("prepare.wasm",) if mode == "browser" else ())
+        stages.append(Stage(f"prepare.{mode}", (command,), inputs=inputs,
+                            dependencies=dependencies, resource="exclusive", timeout=2400,
                             outputs=(out,), kind="build"))
-    browser_out = f"{prepared}/browser"
-    stages.append(Stage("prepare.browser", (cmd(sys.executable, "scripts/release_gate.py", "--prepare-browser", "--output", browser_out),),
-                        inputs=("crates/**", "packages/**", "LICENSE", "THIRD_PARTY_LICENSES.md", "API_COMPATIBILITY.md"),
-                        dependencies=("preflight.frontend", "preflight.metadata-format"), resource="exclusive", timeout=1200,
-                        outputs=(browser_out,), kind="build"))
     return stages, prepared
 
 
@@ -603,7 +715,9 @@ def native_stages(root, prepared):
     import release_gate_native as native
     result = []
     for mode in ("workspace", "headless"):
-        source = root / prepared / mode / "prepared.json"
+        if mode not in prepared:
+            continue
+        source = root / prepared[mode] / "prepared.json"
         value = read_json(source)
         descriptions = native.workspace_stages(value, test_threads=2) if mode == "workspace" else native.ignored_headless_stages(value)
         for description in descriptions:
@@ -613,21 +727,22 @@ def native_stages(root, prepared):
                            "geosolve-headless", "geosolve-demo-web", "geosolve-sketch-code"} else ()
             managed_artifacts = ("packages/geosolve-sketch-code/dist", "packages/geosolve-sketch-code/node_modules",
                                  "packages/geosolve-intent/dist") if managed else ()
-            auxiliary = tuple(item["path"] for item in value.get("auxiliary_executables", []))
+            auxiliary = tuple(item["path"] for item in description.get("auxiliary_executables", []))
             stage_id = mode + "." + description["id"]
             result.append(Stage(stage_id,
                 (cmd(sys.executable, "scripts/release_gate.py", "--native-run", str(source), "--native-id", description["id"], "--output", "{scratch}/native"),),
                 inputs=(*crate_inputs(root, package), *managed, "scripts/release_gate_native.py"),
                 dependencies=(f"prepare.{mode}",), resource="memory" if description["resource"] == "memory-heavy" else "normal",
-                timeout=2400, cases=tuple(description["selected"]), artifacts=(description["command"][0], *managed_artifacts, *auxiliary)))
+                timeout=2400, cases=tuple(description["selected"]), artifacts=(description["command"][0], *managed_artifacts, *auxiliary),
+                execution_key={key: description[key] for key in ("command", "env", "features", "profile")}))
     return result
 
 
 def qualification_stages(root, prepared, jobs):
     import golden_oracle
     exact_tests = read_json(root / "scripts/release_test_inventory.json")["stages"]
-    all_rust = ("crates/**", "README.md", "LICENSE", "API_COMPATIBILITY.md", "THIRD_PARTY_LICENSES.md")
-    built = ("prepare.workspace", "prepare.headless", "prepare.browser")
+    all_rust = (*rust_inputs(root), "README.md", "LICENSE", "docs/API_COMPATIBILITY.md", "THIRD_PARTY_LICENSES.md")
+    built = tuple("prepare." + mode for mode in prepared)
     result = native_stages(root, prepared)
     result.extend([
         Stage("rust.clippy", (cmd("cargo", "clippy", "--locked", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"),),
@@ -640,7 +755,10 @@ def qualification_stages(root, prepared, jobs):
               inputs=all_rust, dependencies=built, resource="exclusive", kind="build"),
         Stage("golden", (cmd("bash", "scripts/golden-authoring-scene-oracle.sh", "--require-clean", "--jobs", str(jobs),
                              "--prepared-packages", "--output-dir", "{scratch}/golden"),),
-              inputs=(*all_rust, "packages/**", "scripts/golden*", "scripts/release_gate_native.py"),
+              inputs=(*all_rust, "packages/*/src/**", "packages/*/scripts/compile*", "packages/*/tsconfig*",
+                      "scripts/golden*", "scripts/release_gate_native.py"),
+              artifacts=("packages/geosolve-sketch-code/dist", "packages/geosolve-sketch-code/node_modules",
+                         "packages/geosolve-intent/dist", "packages/geosolve-intent/node_modules"),
               dependencies=built, resource="exclusive", timeout=3600,
               cases=tuple(case for case, _ in golden_oracle.inventory())),
         Stage("wasm.check", (cmd("cargo", "check", "--locked", "-p", "geosolve-demo-web", "--all-features", "--target", "wasm32-unknown-unknown"),),
@@ -651,7 +769,8 @@ def qualification_stages(root, prepared, jobs):
               inputs=(*all_rust, "scripts/verify-geosolve-sketch-code-package.sh"), dependencies=built, resource="exclusive"),
         Stage("licenses", (cmd("cargo", "deny", "check", "licenses") if shutil.which("cargo-deny") else
                            cmd("nix-shell", "-p", "cargo-deny", "--run", "cargo deny check licenses"),),
-              inputs=("**/Cargo.toml", "deny.toml", "LICENSE", "THIRD_PARTY_LICENSES.md"), dependencies=built, resource="exclusive"),
+              inputs=("**/Cargo.toml", "deny.toml", "LICENSE", "THIRD_PARTY_LICENSES.md"), dependencies=built, resource="exclusive",
+              reusable=bool(shutil.which("cargo-deny"))),
     ])
     for target in ("m70_transition_parity", "m71_transition_parity", "m74_reference_geometry", "m75_hover_pointer_parity",
                    "m76_annotation_parity", "m77_curve_control_parity", "m79_inference_lifecycle"):
@@ -673,17 +792,18 @@ def qualification_stages(root, prepared, jobs):
     performance_cases = tuple(exact_tests["performance.interaction"] + exact_tests["performance.linkage"])
     result.append(Stage("performance", tuple(performance), inputs=all_rust, dependencies=built, resource="exclusive",
                         cases=performance_cases, test_inventories=((), (), (), tuple(exact_tests["performance.interaction"]), tuple(exact_tests["performance.linkage"]))))
-    manifest = str(root / prepared / "browser/harness.json")
-    production = str(root / prepared / "browser/production.json")
+    browser_path = root / prepared.get("browser", "target/unprepared-browser")
+    manifest = str(browser_path / "harness.json")
+    production = str(browser_path / "production.json")
     result.append(Stage("browser", (cmd(sys.executable, "scripts/release_gate.py", "--run-browser", manifest,
                                        "--jobs", str(min(jobs, 2)), "--output", "{scratch}/browser"),),
-                        inputs=(FRONTEND + "/**", "crates/**", "packages/**"), dependencies=built,
+                        inputs=(FRONTEND + "/**", "crates/**", "packages/**", "docs/API_COMPATIBILITY.md"), dependencies=built,
                         resource="memory", env=(("GEOSOLVE_E2E_ARTIFACT_MANIFEST", manifest),),
-                        artifacts=(str(root / prepared / "browser/geosolve-harness"),), timeout=2400))
+                        artifacts=(str(browser_path / "geosolve-harness"),), timeout=2400))
     result.append(Stage("artifact.transport", (cmd(sys.executable, "scripts/release_gate.py", "--verify-production", production,
                                                      "--output", "{scratch}/transport.json"),),
                         inputs=(FRONTEND + "/scripts/**",), dependencies=built, resource="memory", reusable=False, timeout=180,
-                        artifacts=(str(root / prepared / "browser/geosolve-production"),)))
+                        artifacts=(str(browser_path / "geosolve-production"),)))
     # Start the longest independent browser workload alongside native suites;
     # resource admission still permits only one memory-heavy stage at a time.
     return sorted(result, key=lambda stage: 0 if stage.id == "browser" else 1)
@@ -804,6 +924,9 @@ def documentation_delta(root, since, policy):
     changes = sorted(set(changes))
     if not changes or any(not matches(name, policy["prose"]) for name in changes):
         raise ValueError("documentation mode requires a nonempty, exclusively reviewed prose diff")
+    compiler_inputs = rust_inputs(root)
+    if any(matches(name, compiler_inputs) for name in changes):
+        raise ValueError("changed Markdown is a declared or unresolved Rust input; use affected qualification")
     # The mode checks prose, not newly packaged products (README is package data).
     # Also reject explicit embedded Markdown inputs even under a prose directory.
     for name in source_files(root):
@@ -876,10 +999,12 @@ def main():
     parser.add_argument("--docs-only", action="store_true", help="verify a prose-only diff; does not nominate new product bytes")
     parser.add_argument("--since", help="Git baseline for documentation-only verification")
     parser.add_argument("--test-opt-level", choices=("0", "1"), default="1",
-                        help="native test optimization; debug assertions/overflow checks stay enabled (default: 1)")
+                        help="non-release test optimization (native and WASM); debug assertions/overflow checks stay enabled (default: 1)")
     parser.add_argument("--check-inventory", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--check-packages", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--prepare-native", choices=("workspace", "headless"), help=argparse.SUPPRESS)
+    parser.add_argument("--prepare-wasm", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--wasm-package", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--prepare-browser", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--native-run", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--native-id", help=argparse.SUPPRESS)
@@ -898,8 +1023,15 @@ def main():
         selection = native.WORKSPACE_ARGS if args.prepare_native == "workspace" else ["-p", "geosolve-headless", *[v for n in native.HEADLESS_TARGETS for v in ("--test", n)]]
         prepare_output(args.output, lambda out: native.prepare(ROOT, selection, out))
         return 0
+    if args.prepare_wasm:
+        def build_wasm(out):
+            subprocess.run(["npm", "run", "wasm:release"], cwd=ROOT / FRONTEND, check=True)
+            shutil.copytree(ROOT / FRONTEND / "src/generated", out)
+        prepare_output(args.output, build_wasm)
+        return 0
     if args.prepare_browser:
-        prepare_output(args.output, lambda out: subprocess.run(["node", "scripts/build-release-artifacts.mjs", "--out", str(out)],
+        wasm_args = ["--wasm-package", str(args.wasm_package.resolve())] if args.wasm_package else []
+        prepare_output(args.output, lambda out: subprocess.run(["node", "scripts/build-release-artifacts.mjs", "--out", str(out), *wasm_args],
                                                               cwd=ROOT / FRONTEND, check=True))
         return 0
     if args.native_run:
@@ -952,7 +1084,7 @@ def main():
                         store.save(receipt)
     runner = Runner(ROOT, store, source_snapshot(ROOT), policy, tool_identity(ROOT), args.jobs, args.fresh)
     stages = preflight_stages()
-    preparations, prepared = preparation_stages(runner)
+    preparations, prepared = preparation_stages(runner, preparation_modes(args.stage))
     if not args.preflight:
         stages += preparations
     runner.prepare(stages)
@@ -961,8 +1093,10 @@ def main():
             action, reason, _ = runner.decision(stage)
             print(f"{action:5} {stage.id}: {reason}")
         if not args.preflight:
-            if all((ROOT / prepared / mode / "prepared.json").is_file() for mode in ("workspace", "headless")):
+            if all((ROOT / prepared[mode] / "prepared.json").is_file() for mode in ("workspace", "headless") if mode in prepared):
                 expanded = qualification_stages(ROOT, prepared, args.jobs)
+                if args.stage:
+                    expanded = [stage for stage in expanded if any(fnmatch.fnmatchcase(stage.id, pattern) for pattern in args.stage)]
                 runner.prepare(stages + expanded)
                 for stage in expanded:
                     action, reason, _ = runner.decision(stage)

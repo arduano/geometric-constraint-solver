@@ -134,6 +134,38 @@ class ReleasePolicyTests(unittest.TestCase):
         stages.append(self.stage("exclusive", "from pathlib import Path; assert not Path('target/memory.lock').exists()", resource="exclusive"))
         self.assertTrue(self.execute(self.runner(stages, jobs=3), stages)[0])
 
+    def test_runtime_socket_paths_are_short_private_isolated_and_cleaned(self):
+        # Reproduce Chrome's Unix socket shape under a deliberately long durable
+        # evidence path. Binding the socket checks the real OS limit.
+        code = """import os, pathlib, socket, tempfile
+p = pathlib.Path(os.environ['TMPDIR'])
+assert all(os.environ[k] == str(p) for k in ('TMP', 'TEMP', 'TEMPDIR', 'NIX_BUILD_TOP'))
+assert p.stat().st_mode & 0o077 == 0
+q = pathlib.Path(tempfile.mkdtemp(prefix='com.google.Chrome.', dir=p)) / 'SingletonSocket'
+s = socket.socket(socket.AF_UNIX); s.bind(str(q)); s.close()
+print(p)
+"""
+        self.store = gate.Store(self.root / "target" / ("long-evidence-" * 12))
+        stages = [self.stage("socket-a", code), self.stage("socket-b", code)]
+        runner = self.runner(stages)
+        self.assertTrue(self.execute(runner, stages)[0])
+        paths = [(runner.run_dir / "stages" / stage.id / "output.log").read_text().splitlines()[-1] for stage in stages]
+        self.assertEqual(len(set(paths)), 2)
+        self.assertTrue(all(len(path) < 30 and not Path(path).exists() for path in paths))
+
+    def test_runtime_temporary_directory_is_cleaned_after_launch_error(self):
+        from unittest.mock import patch
+        stage = self.stage("launch-error")
+        runner = self.runner([stage])
+        observed = []
+        def launch(*args):
+            observed.append(Path(args[-1]))
+            raise OSError("cannot launch executable")
+        with patch.object(runner, "execute_fresh", side_effect=launch):
+            self.assertFalse(self.execute(runner, [stage])[0])
+        self.assertEqual(len(observed), 1)
+        self.assertFalse(observed[0].exists())
+
     def test_source_mutation_rejects_all_new_cache_evidence(self):
         stage = self.stage("mutator", "from pathlib import Path; Path('unmapped.txt').write_text('changed')")
         runner = self.runner([stage])
@@ -232,6 +264,22 @@ class ReleasePolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "count is stale"):
                 gate.check_inventory(self.root)
 
+    def test_generated_catalog_drift_fails_before_any_compiler_launch(self):
+        from unittest.mock import patch
+        real_root = Path(__file__).resolve().parents[2]
+        sample_root = Path("crates/geosolve-sketch-code/assets/bundled-samples")
+        for source in (real_root / sample_root).glob("*/manifest.json"):
+            self.write(str(source.relative_to(real_root)), source.read_text())
+        generator = "packages/geosolve-sketch-code/scripts/generate-bundled-samples.mjs"
+        self.write(generator, (real_root / generator).read_text())
+        frontend = gate.FRONTEND + "/src/data/samples.json"
+        rows = json.loads((real_root / frontend).read_text())
+        rows[0], rows[1] = rows[1], rows[0]
+        self.write(frontend, json.dumps(rows))
+        with patch.object(subprocess, "Popen", side_effect=AssertionError("preflight launched a subprocess")):
+            with self.assertRaisesRegex(ValueError, "frontend inventory differs"):
+                gate.check_inventory(self.root)
+
     def test_wasm_and_performance_filters_cannot_pass_with_zero_missing_or_duplicate_tests(self):
         good = "test selected ... timing=1ms\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n"
         gate.validate_test_output(good, ["selected"])
@@ -245,6 +293,40 @@ class ReleasePolicyTests(unittest.TestCase):
         stage = self.stage("solver", inputs=("crates/geosolve-core/src/**",))
         snapshot = {"scripts/unknown_input.py": {"sha256": "a"}}
         self.assertIn("scripts/unknown_input.py", gate.stage_inputs(stage, snapshot, policy))
+
+    def test_preparation_closures_keep_css_out_of_native_and_wasm_builds(self):
+        root = Path(__file__).resolve().parents[2]
+        policy = gate.read_json(root / gate.POLICY_PATH)
+        snapshot = gate.source_snapshot(root)
+        def paths(source):
+            runner = gate.Runner(root, self.store, source, policy, self.tools)
+            return gate.preparation_stages(runner)[1]
+        before = paths(snapshot)
+        snapshot[gate.FRONTEND + "/src/styles.css"] = {"sha256": "changed"}
+        after = paths(snapshot)
+        for mode in ("workspace", "headless", "wasm"):
+            self.assertEqual(before[mode], after[mode], mode)
+        self.assertNotEqual(before["browser"], after["browser"])
+        snapshot["docs/API_COMPATIBILITY.md"] = {"sha256": "changed"}
+        self.assertNotEqual(after["browser"], paths(snapshot)["browser"])
+
+    def test_targeted_native_selection_does_not_prepare_other_profiles_or_browser(self):
+        self.assertEqual(gate.preparation_modes(["workspace.geosolve-core::*"]), {"workspace"})
+        self.assertEqual(gate.preparation_modes(["headless.*"]), {"headless"})
+        self.assertEqual(gate.preparation_modes(["browser"]), {"wasm", "browser"})
+        self.assertEqual(gate.preparation_modes(["*uncertain*"]), {"workspace", "headless", "wasm", "browser"})
+
+    def test_count_generator_repair_keeps_golden_inputs_but_compiler_changes_do_not(self):
+        root = Path(__file__).resolve().parents[2]
+        sys.path.insert(0, str(root / "scripts"))
+        policy = gate.read_json(root / gate.POLICY_PATH)
+        golden = next(stage for stage in gate.qualification_stages(root, {}, 2) if stage.id == "golden")
+        count = "packages/geosolve-sketch-code/scripts/generate-bundled-samples.mjs"
+        compiler = "packages/geosolve-sketch-code/scripts/compile-managed-batch-deno.mjs"
+        selected = gate.stage_inputs(golden, {count: "changed", compiler: "changed"}, policy)
+        self.assertNotIn(count, selected)
+        self.assertIn(compiler, selected)
+        self.assertIn("packages/geosolve-sketch-code/dist", golden.artifacts)
 
 
 if __name__ == "__main__":

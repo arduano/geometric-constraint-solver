@@ -179,13 +179,75 @@ class ExecutionTests(unittest.TestCase):
             native.run_stage(stage, self.root / "must-not-exist", timeout=1)
         self.assertFalse((self.root / "must-not-exist").exists())
 
+    def prepared_cli(self, source, directory, *, unrelated=False):
+        artifact = self.artifact()
+        environment = dict(artifact["env"])
+        if not unrelated:
+            environment["CARGO_BIN_EXE_geosolve-headless"] = str(source)
+        captured = native.preserve_auxiliary_executables(
+            [artifact], {artifact["executable"]: environment}, [{"path": str(source)}],
+            self.root / directory,
+        )
+        return artifact, captured
+
+    def test_feature_profile_cli_copies_survive_shared_cargo_path_replacement(self):
+        source = self.root / "geosolve-headless"
+        source.write_text("workspace all-features CLI")
+        source.chmod(0o755)
+        first, first_copies = self.prepared_cli(source, "workspace")
+        source.write_text("default-features CLI")
+        second, second_copies = self.prepared_cli(source, "headless")
+        source.unlink()
+        for artifact, content, directory in [(first, "workspace all-features CLI", "first-run"),
+                                              (second, "default-features CLI", "second-run")]:
+            stage = native.execution_stage(artifact, exact="ordinary")
+            captured = Path(stage["env"][native.HEADLESS_BINARY_ENV])
+            self.assertEqual(captured.read_text(), content)
+            self.assertTrue(os.access(captured, os.X_OK))
+            self.assertEqual(captured.stat().st_mode & 0o222, 0)
+            script = ("import os; from pathlib import Path; "
+                      f"assert Path(os.environ[{native.HEADLESS_BINARY_ENV!r}]).read_text()=={content!r}; "
+                      "print('test ordinary ... ok'); "
+                      "print('test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s')")
+            stage["command"] = [sys.executable, "-c", script]
+            self.assertEqual(native.run_stage(stage, self.root / directory, timeout=2)["status"], "passed")
+        self.assertNotEqual(first_copies[0]["path"], second_copies[0]["path"])
+        self.assertNotEqual(first_copies[0]["sha256"], second_copies[0]["sha256"])
+
+    def test_unrelated_test_has_no_cli_dependency_or_unnecessary_copy(self):
+        source = self.root / "unneeded-cli"
+        artifact, copies = self.prepared_cli(source, "unrelated", unrelated=True)
+        self.assertEqual(copies, [])
+        self.assertEqual(artifact["auxiliary_executables"], [])
+        self.assertNotIn(native.HEADLESS_BINARY_ENV, artifact["env"])
+        self.assertFalse((self.root / "unrelated").exists())
+
+    def test_launch_binary_missing_from_cargo_artifacts_fails_closed(self):
+        artifact = self.artifact()
+        launch = artifact["env"] | {"CARGO_BIN_EXE_geosolve-headless": "/absent-cli"}
+        with self.assertRaisesRegex(native.NativeError, "missing from compiler artifacts"):
+            native.preserve_auxiliary_executables(
+                [artifact], {artifact["executable"]: launch}, [], self.root / "missing")
+
+    def test_runtime_cli_override_must_consume_the_authenticated_copy(self):
+        source = self.root / "geosolve-headless"
+        source.write_text("qualified CLI")
+        artifact, _ = self.prepared_cli(source, "prepared")
+        for index, key in enumerate([native.HEADLESS_BINARY_ENV, "CARGO_BIN_EXE_geosolve-headless"]):
+            stage = native.execution_stage(artifact, exact="ordinary")
+            stage["env"][key] = str(source)
+            output = self.root / f"redirected-{index}"
+            with self.assertRaisesRegex(native.NativeError, "does not consume"):
+                native.run_stage(stage, output, timeout=1)
+            self.assertFalse(output.exists())
+
     @unittest.skipUnless(Path("/proc/self/status").exists(), "process-tree check uses Linux procfs")
     def test_timeout_reaps_a_descendant_that_ignores_term(self):
         pidfile = self.root / "descendant.pid"
         descendant = f"import os,signal,time; from pathlib import Path; signal.signal(signal.SIGTERM,signal.SIG_IGN); Path({str(pidfile)!r}).write_text(str(os.getpid())); time.sleep(60)"
         parent = f"import subprocess,sys,time; subprocess.Popen([sys.executable,'-c',{descendant!r}]); time.sleep(60)"
         with self.assertRaises(native.NativeError):
-            self.run_fake(parent, "descendant-timeout", timeout=0.3)
+            self.run_fake(parent, "descendant-timeout", timeout=3)
         self.assertTrue(pidfile.exists())
         pid = int(pidfile.read_text())
         deadline = time.monotonic() + 2

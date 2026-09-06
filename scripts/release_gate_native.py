@@ -16,13 +16,15 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import threading
 import time
 from typing import Any
 
-SCHEMA = "geosolve-native-stages-v1"
+SCHEMA = "geosolve-native-stages-v2"
+HEADLESS_BINARY_ENV = "GEOSOLVE_RELEASE_HEADLESS_BINARY"
 WORKSPACE_ARGS = ["--workspace", "--all-features"]
 HEADLESS_TARGETS = ["m87_headless", "m92_atlas_scale_intent", "m92_product_design_intent",
                     "m92_mechanism_design_edits", "m92_product_reference_intent"]
@@ -46,7 +48,8 @@ def require(condition: bool, message: str) -> None:
 
 
 def file_hash(path: str | Path) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -142,7 +145,7 @@ def cargo_artifacts(text: str, metadata: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def auxiliary_executables(text: str, metadata: dict[str, Any]) -> list[dict[str, str]]:
-    """CLI/example binaries are inputs even when Cargo builds them without --test."""
+    """Discover non-test binaries; launch environments decide which tests depend on them."""
     members = set(metadata["workspace_members"])
     result = {}
     for line in text.splitlines():
@@ -151,8 +154,45 @@ def auxiliary_executables(text: str, metadata: dict[str, Any]) -> list[dict[str,
                 and value.get("package_id") in members and not value.get("profile", {}).get("test")
                 and set(value["target"]["kind"]) & {"bin", "example"}):
             path = value["executable"]
-            result[path] = dict(path=path, sha256=file_hash(path))
+            result[path] = dict(path=path)
     return [result[path] for path in sorted(result)]
+
+
+def preserve_auxiliary_executables(artifacts: list[dict[str, Any]], launches: dict[str, dict[str, str]],
+                                   auxiliary: list[dict[str, str]], output: Path) -> list[dict[str, str]]:
+    """Bind only applicable Cargo binary dependencies to immutable preparation copies.
+
+    Cargo reuses target/debug/<binary> between feature selections. The copy must
+    therefore be consumed at runtime: ordinary CARGO_BIN_EXE_* lookups are rebound,
+    and the headless test's compile-time env! fallback has an explicit runtime override.
+    Copies are private to this preparation, never hard links to Cargo's mutable output.
+    """
+    available = {item["path"] for item in auxiliary}
+    copies = {}
+    for artifact in artifacts:
+        environment = dict(launches[artifact["executable"]])
+        dependencies = []
+        for key, source in sorted(environment.items()):
+            if not key.startswith("CARGO_BIN_EXE_"):
+                continue
+            require(source in available, f"Cargo launch binary is missing from compiler artifacts: {key}")
+            if source not in copies:
+                source_hash = file_hash(source)
+                directory = output / "auxiliary" / hashlib.sha256(source.encode()).hexdigest()[:16]
+                directory.mkdir(parents=True, exist_ok=False)
+                captured = directory / Path(source).name
+                shutil.copyfile(source, captured)
+                require(file_hash(captured) == source_hash, "Cargo auxiliary executable changed while copying")
+                captured.chmod(Path(source).stat().st_mode & 0o555)
+                copies[source] = dict(path=str(captured), sha256=source_hash, source_path=source)
+            captured = copies[source]
+            runtime_env = HEADLESS_BINARY_ENV if key == "CARGO_BIN_EXE_geosolve-headless" else key
+            environment[key] = captured["path"]
+            environment[runtime_env] = captured["path"]
+            dependencies.append(captured | dict(cargo_env=key, runtime_env=runtime_env))
+        artifact["env"] = environment
+        artifact["auxiliary_executables"] = dependencies
+    return [copies[source] for source in sorted(copies)]
 
 
 def expected_targets(metadata: dict[str, Any], cargo_args: list[str]) -> set[tuple[str, str, tuple[str, ...]]]:
@@ -278,9 +318,8 @@ def prepare(root: Path, cargo_args: list[str], output: Path, *, timeout: float =
     rediscovered = cargo_artifacts("\n".join(line for line in discovery.splitlines() if line.startswith("{")), metadata)
     require(artifacts == rediscovered, "Cargo listing changed the prepared executable/profile/feature inventory")
     launches = cargo_launches((output / "cargo-list/stderr.log").read_text(), {a["executable"] for a in artifacts})
+    auxiliary = preserve_auxiliary_executables(artifacts, launches, auxiliary, output)
     for index, artifact in enumerate(artifacts):
-        artifact["auxiliary_executables"] = auxiliary
-        artifact["env"] = launches[artifact["executable"]]
         require(artifact["env"]["CARGO_MANIFEST_DIR"] == artifact["cwd"], "Cargo environment has the wrong package cwd")
         artifact["sha256"] = file_hash(artifact["executable"])
         artifact["resource"] = "memory-heavy" if (artifact["package"], artifact["target"]["name"]) in MEMORY_HEAVY else "native"
@@ -343,9 +382,13 @@ def doctest_stage(root: Path) -> dict[str, Any]:
 
 def run_stage(stage: dict[str, Any], output: Path, *, timeout: float,
               env: dict[str, str] | None = None) -> dict[str, Any]:
+    require(stage.get("schema") == SCHEMA, "incompatible native stage schema")
     require(file_hash(stage["command"][0]) == stage["executable_sha256"], "prepared native executable changed")
     for auxiliary in stage.get("auxiliary_executables", []):
         require(file_hash(auxiliary["path"]) == auxiliary["sha256"], "prepared auxiliary executable changed")
+        require(stage["env"].get(auxiliary["cargo_env"]) == auxiliary["path"]
+                and stage["env"].get(auxiliary["runtime_env"]) == auxiliary["path"],
+                "native stage does not consume its prepared auxiliary executable")
     environment = dict(os.environ if env is None else env) | stage["env"]
     result = process(stage["command"], stage["cwd"], environment, output, timeout)
     try:

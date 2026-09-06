@@ -228,7 +228,6 @@ class Evaluator:
         self.artifacts, self.deno = artifacts, deno
         self.environment = {key: value for key, value in os.environ.items()
                             if not key.startswith('GEOSOLVE_GOLDEN_')}
-        self.environment.setdefault('RUST_MIN_STACK', '16777216')
 
     def test(self, key, name, env, directory, label, timeout):
         artifact = self.artifacts[key]
@@ -357,7 +356,6 @@ def prepare(root, output, processes, prepared_packages):
     preflight = output / 'preflight'
     preflight.mkdir()
     env = dict(os.environ)
-    env.setdefault('RUST_MIN_STACK', '16777216')
     env['TMPDIR'] = str(output / 'tmp')
     Path(env['TMPDIR']).mkdir()
     def run(label, command, cwd=root, stdout=None):

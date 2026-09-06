@@ -33,6 +33,15 @@ independence is not assumed when the compiled catalog changes. Measure this path
 smaller dependency boundary only if the small-change target requires it. No target is waived or
 claimed achieved by runner availability.
 
+The first integrated attempt, `20260906T105515-90e33de0`, retained successful preflight and
+preparation receipts but failed qualification: the default-feature build replaced the workspace
+CLI at Cargo's shared binary path, and Chromium could not bind its socket under the long evidence
+path. Both are harness failures, with no observed solver defect. Profile-specific captured CLI
+dependencies and private short runtime paths repair these failures. A real Chromium launch smoke
+and actual prepared CLI override probe pass. An input audit also added embedded Markdown/fixture
+dependencies and separated native, optimized-WASM and browser preparation identities. Integrated
+qualification of this repaired runner and the timing targets remain pending.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation

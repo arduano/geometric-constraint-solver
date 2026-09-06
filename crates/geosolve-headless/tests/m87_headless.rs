@@ -28,6 +28,14 @@ use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
 static NEXT_OUTPUT: AtomicU64 = AtomicU64::new(1);
 
+fn headless_binary() -> PathBuf {
+    // Cargo shares the ordinary CLI path across feature profiles. The release
+    // harness supplies a verified immutable copy for each prepared profile.
+    std::env::var_os("GEOSOLVE_RELEASE_HEADLESS_BINARY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_geosolve-headless")))
+}
+
 fn managed_fixture() -> HeadlessInput {
     const COMPILED: &str = include_str!(
         "../../../packages/geosolve-sketch-code/test/fixtures/managed-compiler-envelope.json"
@@ -161,7 +169,7 @@ fn witness_path_matches(actual: &[ManagedPathSegment], expected: &[serde_json::V
 }
 
 fn run_cli_prepare_edit(
-    binary: &str,
+    binary: &Path,
     input_flag: &str,
     input: &OsStr,
     batch: &Path,
@@ -198,7 +206,7 @@ fn write_compiler_exchange(
 }
 
 fn run_cli_two_phase_edit(
-    binary: &str,
+    binary: &Path,
     input_flag: &str,
     input: &OsStr,
     batch: &Path,
@@ -950,7 +958,8 @@ fn cli_rejects_removed_demo_vocabulary_and_unknown_sample_transactionally() {
         std::process::id()
     ));
     fs::create_dir(&root).unwrap();
-    let binary = env!("CARGO_BIN_EXE_geosolve-headless");
+    let binary = headless_binary();
+    let binary = binary.as_path();
 
     let samples = Command::new(binary).arg("samples").output().unwrap();
     assert!(samples.status.success());
@@ -1026,7 +1035,8 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
         .to_canonical_json()
         .expect("encode compiled project authority");
     fs::write(&project, canonical_project).expect("write compiled CLI project input");
-    let binary = env!("CARGO_BIN_EXE_geosolve-headless");
+    let binary = headless_binary();
+    let binary = binary.as_path();
 
     let samples = Command::new(binary)
         .arg("samples")
@@ -1247,7 +1257,8 @@ fn cli_rejects_removed_raw_source_flags_and_inputs_at_streaming_bounds() {
         std::process::id()
     ));
     fs::create_dir(&root).unwrap();
-    let binary = env!("CARGO_BIN_EXE_geosolve-headless");
+    let binary = headless_binary();
+    let binary = binary.as_path();
 
     let removed_managed = Command::new(binary)
         .args(["inspect", "--managed"])
