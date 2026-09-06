@@ -8293,29 +8293,41 @@ Exact commands, receipts and retained limitations: [final qualification and nomi
 
 ## M93 — fast, proportional release qualification
 
-Status: **in progress; runner, shared preparations and authenticated reuse implemented; integrated qualification outstanding**.
+Status: **implemented and functionally qualified; C5 edit/prune latency and supervising-user acceptance remain open**.
 The user prioritized release-gate optimization after M92 pruning consumed a 73-minute failed gate
 and a 152-minute complete replacement. [M93_GOALS.md](docs/M93_GOALS.md) owns the measurable
 contract and reuse-policy matrix; [M93_IMPLEMENTATION.md](docs/M93_IMPLEMENTATION.md) owns order.
 
-- [ ] Inventory every existing release obligation and capture per-stage input identity, timing,
+- [x] Inventory every existing release obligation and capture per-stage input identity, timing,
   resource use, selected cases and completion receipts; preserve a serial reference.
-- [ ] Fail cheap inventory/generator/package/static checks early; prepare shared native, WASM,
+- [x] Fail cheap inventory/generator/package/static checks early; prepare shared native, WASM,
   managed compiler and browser assets once per build identity.
-- [ ] Run independent suites and oracle cases with bounded CPU/RAM concurrency, isolated mutable
+- [x] Run independent suites and oracle cases with bounded CPU/RAM concurrency, isolated mutable
   state and deterministic aggregation; keep performance measurements free of competing work.
-- [ ] Implement dependency-aware run/reuse/not-applicable planning and authenticated stage/case
+- [x] Implement dependency-aware run/reuse/not-applicable planning and authenticated stage/case
   reuse, including safe resume after a failed or interrupted attempt. Unknown inputs run fresh.
-- [ ] Consolidate golden evaluation/comparison/clean classification and browser build/serve work;
+- [x] Consolidate golden evaluation/comparison/clean classification and browser build/serve work;
   preserve exact golden bytes, independent invariants and fresh checks for every new artifact.
-- [ ] Prove invalidation, serial/parallel parity, cancellation and coverage reconciliation with
+- [x] Prove invalidation, serial/parallel parity, cancellation and coverage reconciliation with
   adversarial planner fixtures; update agent/skill/release policy to use the tested workflow.
 - [ ] Measure documentation/sign-off under 1 minute, warm cheap-failure detection under 2 minutes,
   representative pruning/single-sample qualification under 10 minutes with valid reusable evidence,
   and comprehensive warm-build/fresh-results qualification at or below 45 minutes on the recorded
   host. Record cold behavior and repeated measurements; unresolved targets remain explicit.
 - [ ] Qualify the integrated runner and policy without weakening correctness/coverage, then obtain
-  supervising-user acceptance. No optimization or speed target is claimed complete by this plan.
+  supervising-user acceptance. C5 timing and milestone acceptance remain open.
+
+Corrected source `08510fc` passes all 241 stages fresh in 21m50s and a second cold-Cargo-build
+serial fresh run with independently checked semantic/inventory/golden parity. Three docs repetitions
+finish in about 1.5s and both induced failure classes in about 5s. Normal planning after an actual count-only repair retains
+211 native, one golden and nine WASM keys with their original receipts; failed-overall-run donation
+has separate signed real-child fixtures. The scheduler excludes its own competing work from
+performance stages; shared external host load is disclosed in the measurements.
+
+All six representative edit/prune qualifications pass but take 12m22s–15m41s, above the unwaived
+10-minute target. Each prune removes one Bondtech entry; the historical four-entry replay remains
+unproven. [M93_QUALIFICATION.md](docs/M93_QUALIFICATION.md) owns exact commands, source/run identities,
+resource/cache conditions and all timing misses. No service or publication changed. M93 is not closed.
 
 ## Explicit non-goals
 

@@ -7292,7 +7292,7 @@ in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination subse
 
 ## M93 release-gate optimization scenarios — in progress
 
-The runner has focused input/reuse, timeout, failure and concurrency regressions. Full real-workload qualification and latency measurements remain outstanding.
+The runner has focused input/reuse, timeout, failure and concurrency regressions, completed corrected-source serial/parallel fresh parity and repeated real-workload measurements. [M93_QUALIFICATION.md](M93_QUALIFICATION.md) records the passing functional evidence and unwaived edit/prune timing misses. The historical four-entry replay below remains unproven; measured prune repetitions remove one current entry each.
 [M93_GOALS.md](M93_GOALS.md) owns the exact policy and performance targets.
 
 - Documentation-only sign-off preserves qualified product bytes without solver/browser reruns;

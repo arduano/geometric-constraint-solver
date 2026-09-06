@@ -2,7 +2,7 @@
 
 # M93 implementation plan: release qualification
 
-Status: **in progress; runner, native/golden adapters, browser preparation and input-reuse policy implemented; integrated qualification and measured acceptance outstanding.**
+Status: **implemented and functionally qualified on corrected source; repeated edit/prune latency misses C5 and milestone acceptance remains open.**
 [M93_GOALS.md](M93_GOALS.md) owns scope, the proposed reuse matrix and measurable acceptance targets.
 
 ## Implemented checkpoint — 2026-09-06
@@ -234,6 +234,32 @@ Exact commands: `nix-shell shell.nix --run 'python3 -B -m unittest discover -s s
 `python3 /tmp/m93-benchmark-coverage-tests.py`. These are focused implementation results;
 new full qualification, actual product count-repair decisions and timing/cold parity are pending.
 
+## Corrected qualification and measured limits — 2026-09-07
+
+The [final qualification ledger](M93_QUALIFICATION.md) supersedes the pending qualification claims
+in the chronological checkpoints above. Corrected source `08510fcf554d91829c2069a068450bbd4747a6c7` passes all
+241 stages fresh in 1309.782 seconds (21m50s), plus cold-Cargo-build serial fresh run
+`20260906T222221-6165fbdf` in 6444.167 seconds. The independent comparison passes the recorded
+source/tool/profile/contract, inventory, native/WASM classifications, browser witness and golden
+checks. Cold-versus-warm timing does not isolate scheduling speedup.
+
+All six edit/prune candidates qualify with exactly 15 baseline survivor workflows reused.
+Numeric edits take 756.847 / 741.510 / 779.446 seconds; prunes take 941.424 / 768.546 / 748.195
+seconds including generation/candidate preparation and gate execution, excluding later audit and
+restoration. All miss ten minutes. The three docs repetitions take about 1.5 seconds and both
+induced preflight failure classes about 5 seconds. No timing miss is waived or load-adjusted.
+
+The actual checker-only repair proves 211 native, one golden and nine WASM exact keys, original
+origins and receipt paths remain eligible in normal planning despite all 211 native scheduling
+locks becoming conservative. The direct assertion expecting 17 fails and its repair to 16 passes;
+source and receipt indexes/control files/run inventory are unchanged afterward. This is direct
+checker execution plus read-only product planning, not a repaired full gate or actual failed
+product donor. Focused signed real-child fixtures separately prove finalized failed-run donation.
+
+The original four-entry pruning replay below remains unproven: each measured prune removes one
+current Bondtech entry while retaining its private regression fixture. C5 latency, that historical
+workload and supervising-user acceptance remain open. The accepted M92 service is unchanged.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation
@@ -295,6 +321,6 @@ Its log SHA-256 is `1c4dec05cb07d66a2b829c4efb163c3bffc382e0393efc5e74c8f2370078
 The failed predecessor, successful stage results, compiler-count correction, visual captures and
 immutable nomination receipts are all linked from [M92's audit](M92_VISUAL_AUDIT.md).
 
-No existing CLI flags, tests or APIs are claimed for the planned scheduler, selection or reuse
-features. Choose their smallest practical interfaces during implementation and document exact
-commands only after they exist and have run.
+The sequence above is the adopted implementation order. Existing CLI flags, receipt policy and
+reproduction commands are documented in [RELEASE_QUALIFICATION.md](RELEASE_QUALIFICATION.md);
+measured evidence and remaining acceptance gaps are in [M93_QUALIFICATION.md](M93_QUALIFICATION.md).

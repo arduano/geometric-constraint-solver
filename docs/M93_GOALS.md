@@ -2,7 +2,7 @@
 
 # M93 goals: fast, proportional release qualification
 
-Status: **in progress; implementation authorized on 2026-09-06; runner and focused regressions implemented, integrated qualification and latency acceptance outstanding.** M92 is closed with its accepted 16-sample catalog.
+Status: **functional qualification and measurements recorded; C5 edit/prune latency and supervising-user acceptance remain open.** M92 is closed with its accepted 16-sample catalog.
 Further sample expansion is future work and does not block this milestone.
 
 ## Outcome and measured problem
@@ -21,10 +21,10 @@ survey/check pair ran alongside the first attempt. Exact receipts and source ide
 [M92's qualification ledger](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
 These are historical elapsed times on the qualification host, not a standardized cold-cache benchmark.
 
-The current `scripts/release-gate.sh` serializes most stages and puts cheap package/frontend
-validation after expensive native and oracle work. The oracle repeatedly starts Cargo and managed
-compiler subprocesses per case. Three separate Playwright invocations rebuild their fixture server,
-and the final frontend check builds again. M93 must measure the actual costs and resource conflicts
+The M92 baseline `scripts/release-gate.sh` serialized most stages and put cheap package/frontend
+validation after expensive native and oracle work. That oracle repeatedly started Cargo and managed
+compiler subprocesses per case. Three separate Playwright invocations rebuilt their fixture server,
+and the final frontend check built again. M93 must measure the actual costs and resource conflicts
 before choosing concurrency; merely adding background shell jobs is insufficient.
 
 ## Qualification policy to implement

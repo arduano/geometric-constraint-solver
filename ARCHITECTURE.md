@@ -2801,9 +2801,9 @@ passes 2/2. This `HARNESS_ERROR` changes no production semantics and receives no
 ## M93 qualification architecture — in progress
 
 [M93_GOALS.md](docs/M93_GOALS.md) scopes release infrastructure, leaving solver/domain contracts
-unchanged. One stage/case inventory will drive dependency planning, resource-bounded execution,
+unchanged. One stage/case inventory drives dependency planning, resource-bounded execution,
 input-authenticated evidence reuse and complete coverage reconciliation. Build caches and passing
 test receipts are distinct. Each reused result retains its original provenance; unknown inputs
 force fresh work. Newly built or moved artifacts receive fresh transport verification. A complete
-fresh-results mode remains available. The runner and focused invalidation tests are implemented; integrated qualification is outstanding.
+fresh-results mode remains available. Corrected-source functional qualification and serial/parallel parity pass; [measured results](docs/M93_QUALIFICATION.md) leave C5 latency, the historical four-entry replay and milestone acceptance open.
 [Release qualification](docs/RELEASE_QUALIFICATION.md) owns the implemented commands and policy.

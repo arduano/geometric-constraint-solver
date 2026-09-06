@@ -5406,18 +5406,23 @@ accepted the delivered scope and closed M92; earlier Pending/not-run receipts re
 
 ## M93 release qualification acceptance — in progress
 
-The [M93 C1–C7 contract](docs/M93_GOALS.md#acceptance-and-speed-targets) requires complete inventory
-and input/timing receipts, cheap failure detection, sound selective reuse, serial/parallel semantic
-parity, deterministic recovery, measured latency and exact immutable-artifact verification.
+The [M93 C1–C7 contract](docs/M93_GOALS.md#acceptance-and-speed-targets) requires complete inventory,
+authenticated selection/recovery, serial/parallel semantic parity, measured latency and immutable
+artifact verification. The [qualification ledger](docs/M93_QUALIFICATION.md) records completed
+corrected-source fresh parallel and cold-Cargo-build serial gates, exact coverage/golden parity,
+focused invalidation/recovery regressions and local production transport/readiness verification.
 
-Representative docs/sign-off must finish under 1 minute; warm preflight must catch M92's stale
-count under 2 minutes; pruning and one-sample qualification target under 10 minutes with valid
-unaffected evidence; the comprehensive warm-build/fresh-results target is 45 minutes or less.
-Record host, CPU/RAM limits, cache state and all repeated outcomes. These are targets, not achieved
-results. Every omitted rerun needs an authenticated unchanged-input receipt or explicit
-inapplicability. Unknown dependencies, incomplete/corrupt evidence or policy drift require fresh
-work. The full fresh gate remains available and no residual, branch, history, golden or release
-assertion is weakened. Runner implementation and focused policy tests are present; integrated qualification, measured latency and milestone acceptance are outstanding.
+Three documentation repetitions pass the under-one-minute target (about 1.5s); both induced cheap
+failure classes pass under two minutes (about 5s). The warm comprehensive fresh gate passes the
+45-minute target at 21m50s. Cold behavior is measured separately with Nix/npm/download caches warm.
+Actual count-checker repair preserves all 221 unchanged native/golden/WASM result keys and original
+receipts in the normal planner; finalized failed-overall-run donation has separate real-child fixtures.
+
+**C5 edit/prune latency remains unwaived and unmet:** all six qualified repetitions take
+12m22s–15m41s, above ten minutes. They remove one current entry per prune, so the original historical
+four-entry replay remains unproven. Shared-host load is recorded without adjusted timing claims.
+No residual, finite validation, branch, history, golden, profile or release assertion is weakened.
+Functional qualification does not grant supervising-user milestone acceptance; M93 remains open.
 
 ## Regression and oracle policy
 
