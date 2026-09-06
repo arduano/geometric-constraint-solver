@@ -1,6 +1,1 @@
-{
-  "schema": 1,
-  "description": "Reviewed program boundaries for catalog-only equivalence; pending final integration audit. Never refreshed automatically by the runner.",
-  "browser": {"program_sha256": null},
-  "golden": {"program_sha256": null}
-}
+{"browser":{"program_files":441,"program_sha256":"d2399f73ceda97d533db2a37a3bfdf0beb0bd3cbd874f05992610790cae21faf"},"description":"Explicit M93 program-boundary audit: golden adapters use exported own fixtures; browser selected workflows use immutable selected data after exact fresh persisted-state/frame validation. Refresh only after reviewing changed program inputs.","golden":{"program_files":575,"program_sha256":"760de28e721b253db2ce9773523eb0455c542d608464057ae6d3414331292e19"},"schema":1}

@@ -869,7 +869,8 @@ def qualification_stages(root, prepared, jobs):
                         inputs=(FRONTEND + "/**", *crate_inputs(root, "geosolve-demo-web", include_tests=False),
                                 "packages/**", "docs/API_COMPATIBILITY.md"), dependencies=built,
                         resource="memory", env=(("GEOSOLVE_E2E_ARTIFACT_MANIFEST", manifest),),
-                        artifacts=(str(browser_path / "geosolve-harness"), "packages/geosolve-sketch-code/dist",
+                        artifacts=(str(browser_path / "geosolve-harness"), FRONTEND + "/node_modules",
+                                   "packages/geosolve-sketch-code/dist",
                                    "packages/geosolve-sketch-code/node_modules", "packages/geosolve-intent/dist",
                                    "packages/geosolve-intent/node_modules"), timeout=2400))
     result.append(Stage("artifact.transport", (cmd(sys.executable, "scripts/release_gate.py", "--verify-production", production,
