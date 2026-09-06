@@ -348,6 +348,13 @@ class Runner:
         # location is provenance; actual consumed bytes and selected cases are
         # the execution inputs. Normalize only our own content-addressed paths.
         raw_contract = stage.contract()
+        if stage.kind == "native":
+            # Only the prepared native adapter separates build admission from
+            # test semantics. An unreviewed concurrent writer retains the lock
+            # for fresh execution; it cannot invalidate an already completed
+            # test of identical code, runtime, inputs and selected cases. Keep
+            # the actual lock in the scheduler and full observation contract.
+            raw_contract["build_lock"] = False
         if stage.execution_key is not None:
             raw_contract["commands"] = stage.execution_key
         contract = raw_contract if stage.kind == "build" else json.loads(re.sub(
@@ -554,9 +561,10 @@ class Runner:
                             group.update(status="failed", error=str(error))
                             failed = True
                         del factories[identity]
-                # Start the next serialized builder promptly while allowing
-                # protected execution to occupy the other bounded worker slots.
-                pending.sort(key=lambda stage: 0 if stage.build_lock else 1)
+                # The sole prepared-package frontend writer should start as soon
+                # as its WASM dependency and memory slot are available. It may
+                # overlap the next Cargo builder under the reviewed program guard.
+                pending.sort(key=lambda stage: 0 if stage.id == "prepare.browser" else 1 if stage.build_lock else 2)
                 for stage in list(pending):
                     deps = [self.results.get(name) for name in stage.dependencies]
                     if any(result and result["status"] != "passed" for result in deps):
@@ -845,6 +853,27 @@ def preparation_modes(patterns):
     return modes
 
 
+def build_overlap_inputs(root, snapshot, policy):
+    """One reviewed body/writer closure protects every permitted build overlap."""
+    patterns = (*rust_inputs(root), "packages/**", FRONTEND + "/**",
+                "scripts/verify-geosolve-sketch-code-package.sh", "scripts/golden*")
+    if "**" in patterns:
+        return None
+    return stage_inputs(Stage("build-overlap", (cmd("identity"),), inputs=patterns), snapshot, policy)
+
+
+def build_overlap_reviewed(root, scope, snapshot, policy):
+    import release_equivalence
+    inputs = build_overlap_inputs(root, snapshot, policy)
+    if inputs is None:
+        return False
+    try:
+        contract = read_json(root / release_equivalence.CONTRACT_PATH)
+    except (OSError, ValueError):
+        return False
+    return release_equivalence.reviewed(scope, inputs, policy, contract)
+
+
 def preparation_stages(runner, modes=None):
     modes = {"workspace", "headless", "wasm", "browser", "lifecycle"} if modes is None else modes
     stages, prepared = [], {}
@@ -876,8 +905,15 @@ def preparation_stages(runner, modes=None):
         else:
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-browser", "--wasm-package", prepared["wasm"], "--output", out)
         dependencies = ("preflight.clippy",) + (("prepare.wasm",) if mode == "browser" else ())
+        # Only this prepared-package path is frontend-only. Its sole writer is
+        # ordered after all installs and prepare.wasm; standalone WASM fallback
+        # retains its compiler work. An unreviewed concurrent body/writer restores
+        # the shared lock, even when that body's own native overlap guard failed.
+        frontend_overlap = mode == "browser" and build_overlap_reviewed(
+            runner.root, "frontend_build_overlap", runner.snapshot, runner.policy)
         stages.append(Stage(f"prepare.{mode}", (command,), inputs=inputs,
-                            dependencies=dependencies, build_lock=True, timeout=2400,
+                            dependencies=dependencies, build_lock=not frontend_overlap,
+                            resource="memory" if mode == "browser" else "normal", timeout=2400,
                             outputs=(out,), kind="build"))
     return stages, prepared
 
@@ -886,20 +922,10 @@ def native_stages(root, prepared):
     if not ({"workspace", "headless"} & prepared.keys()):
         return []
     import release_gate_native as native
-    import release_equivalence
     # Loader closure protects binaries and libraries; this separate reviewed
     # program boundary confirms that test bodies do not mutate Cargo/npm outputs.
     policy = read_json(root / POLICY_PATH)
-    try:
-        contract = read_json(root / release_equivalence.CONTRACT_PATH)
-    except (OSError, ValueError):
-        contract = {}
-    program_patterns = (*rust_inputs(root), "packages/**", FRONTEND + "/**",
-                        "scripts/verify-geosolve-sketch-code-package.sh", "scripts/golden*")
-    overlap_inputs = stage_inputs(Stage("native-overlap", (cmd("identity"),), inputs=program_patterns),
-                                 source_snapshot(root), policy)
-    overlap_reviewed = "**" not in program_patterns and release_equivalence.reviewed(
-        "native_build_overlap", overlap_inputs, policy, contract)
+    overlap_reviewed = build_overlap_reviewed(root, "native_build_overlap", source_snapshot(root), policy)
     # These proptest suites replay tracked seeds and append new failures there.
     # Preserve that coverage and keep their source-tree writes away from Cargo.
     body_build_lock = {"geosolve-sketch::m22_properties::normal", "geosolve-linkage::m23_properties::normal"}
@@ -927,7 +953,7 @@ def native_stages(root, prepared):
                 inputs=(*package_input_maps[package], *managed, "scripts/release_gate_native.py"),
                 dependencies=(f"prepare.{mode}",), resource="memory" if description["resource"] == "memory-heavy" else "normal",
                 build_lock=description["id"] in body_build_lock or not (overlap_reviewed and description.get("build_overlap_safe", False)),
-                timeout=2400, cases=tuple(description["selected"]), artifacts=(description["command"][0], *managed_artifacts, *auxiliary),
+                timeout=2400, kind="native", cases=tuple(description["selected"]), artifacts=(description["command"][0], *managed_artifacts, *auxiliary),
                 execution_key={key: description[key] for key in ("command", "env", "features", "profile",
                                "build_overlap_safe", "runtime_closures")}))
     return result

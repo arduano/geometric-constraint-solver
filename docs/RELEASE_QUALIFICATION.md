@@ -14,8 +14,11 @@ Run in the repository Nix shell so Rust, Deno, Node, wasm-bindgen and wasm-opt m
 pinned environment. The default is three stage workers and two libtest threads per native
 stage. Up to two memory-marked stages can overlap within that total; Playwright retains one slot
 for its large sample cases. One build lock serializes Cargo writers independently of memory
-admission. Protected tests start after their own preparation and can overlap later builds.
-Package installation and generation finish during preflight, before this pipeline starts.
+admission. Protected tests start after their own preparation and can overlap later builds. Prepared frontend
+bundling can also overlap Cargo after its WASM preparation succeeds, under the separate reviewed
+`frontend_build_overlap` program boundary. It uses a memory slot and receives queue priority while
+all dependency, worker, memory and performance limits remain enforced. Package installation and
+generation finish during preflight, before this pipeline starts.
 Measured performance remains fully exclusive. Cargo compilation uses four jobs by default, with an explicit `CARGO_BUILD_JOBS`
 override recorded in the manifest. The recorded host has 64 GiB RAM; integrated qualification records the actual overlap
 and resource costs. `--jobs 1` also reduces the memory-stage limit to one.
@@ -63,7 +66,11 @@ a verified reflink or byte copy, never a hard link. Original Cargo paths remain 
 Overlap requires immutable Nix loader/library resolution, unchanged runtime environment, and the
 explicitly reviewed `native_build_overlap` program boundary. Unknown runtime inputs or changed
 program inputs retain the build lock. The two property suites that preserve source-tree
-regression seeds always retain the lock. Ordinary native children use private Deno caches and
+regression seeds always retain the lock. Prepared native stages record their actual scheduling
+lock in execution receipts and inventories, but exclude only that admission flag from semantic
+result keys. A checker-only repair can therefore retain completed native results while fresh
+execution obeys the current conservative lock. Commands, cases, source, runtime eligibility and
+closures, profiles, features, resources, timeouts, environment and artifact bytes remain inputs. Ordinary native children use private Deno caches and
 evidence folders and clear inherited golden-harness controls. Copies and runtime libraries are hash-checked before use;
 executables are checked again after execution. A targeted native selector prepares only its required profile. Rust input closure
 includes literal embedded files, including Markdown consumed by tests; unrelated frontend CSS
@@ -131,6 +138,15 @@ Only enumerated catalog data files are excluded; global/unknown inputs, executab
 symlinks remain. An unresolved Rust include or a changed program map disables this reuse. A newly
 passing baseline does not approve a changed dependency boundary. Update its digest only after an
 explicit input audit; the runner never updates it automatically.
+
+Native and frontend build overlap share the complete reviewed program-input map, with separate
+`native_build_overlap` and `frontend_build_overlap` approvals. The frontend approval covers every
+concurrently eligible Cargo/build script, native body, golden/package adapter and frontend writer.
+A missing, stale or ambiguous review restores its shared Cargo lock. After preflight and WASM
+preparation, the current frontend build is the only eligible writer of frontend generated files,
+compiler caches and Vite output; browser consumers wait for its successful completion. The
+standalone build without a prepared WASM package still performs compilation and is outside this
+relaxation. Future additional frontend writers need explicit exclusion or isolated directories.
 
 The golden adapters construct their own exported fixtures and `CodeProject::managed` projects;
 they do not select bundled samples. With the reviewed program boundary intact, their single

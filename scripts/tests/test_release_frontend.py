@@ -1,10 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Frontend result reuse never drops catalog-sensitive preflight obligations."""
 import copy
+import contextlib
 import dataclasses
+import io
 import json
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -120,6 +125,216 @@ class FrontendPreflightTests(unittest.TestCase):
         stale = dataclasses.replace(self.frontend, input_equivalence_contract=None)
         self.assertIn(self.sample, runner.inputs(stale))
         self.assertNotIn(self.sample, runner.inputs(self.frontend))
+
+
+class FrontendOverlapInputTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.policy = gate.read_json(gate.ROOT / gate.POLICY_PATH)
+        (self.root / 'scripts').mkdir()
+        (self.root / gate.POLICY_PATH).write_text(json.dumps(self.policy))
+        (self.root / 'target/native').mkdir(parents=True)
+        (self.root / 'target/native/prepared.json').write_text('{}')
+        self.sample = eq.SAMPLE_ROOT + '/one/sketch.ts'
+        self.snapshot = {
+            self.sample: stamp('sample'), eq.CATALOG: stamp('catalog'),
+            eq.FRONTEND_CATALOG: stamp('frontend catalog'),
+            'crates/geosolve-core/src/lib.rs': stamp('core program'),
+            gate.FRONTEND + '/scripts/build-release-artifacts.mjs': stamp('frontend build'),
+            'packages/geosolve-sketch-code/src/index.ts': stamp('managed program'),
+        }
+        for name in ('rust_inputs', 'crate_inputs'):
+            mock = patch.object(gate, name, return_value=('crates/**',))
+            mock.start()
+            self.addCleanup(mock.stop)
+        inputs = gate.build_overlap_inputs(self.root, self.snapshot, self.policy)
+        entry = {'program_sha256': gate.digest(eq.partition(inputs, self.policy))}
+        self.contract = {'schema': 1, 'frontend_build_overlap': entry, 'native_build_overlap': entry}
+        self.save_contract(self.contract)
+
+    def save_contract(self, value):
+        (self.root / eq.CONTRACT_PATH).write_text(json.dumps(value))
+
+    def planned(self, snapshot=None):
+        import release_gate_native as native
+        snapshot = self.snapshot if snapshot is None else snapshot
+        runner = SimpleNamespace(root=self.root, snapshot=snapshot, policy=self.policy, tools={}, environment={})
+        stages, prepared = gate.preparation_stages(runner)
+        description = {'id': 'geosolve-core::fixture::normal', 'command': ['target/native/test'],
+                       'env': {}, 'features': [], 'profile': {}, 'resource': 'native',
+                       'selected': ['exact_case'], 'build_overlap_safe': True, 'runtime_closures': {}}
+        with patch.object(gate, 'source_snapshot', return_value=snapshot), patch.object(
+                native, 'workspace_stages', return_value=[description]):
+            body = gate.native_stages(self.root, {'workspace': 'target/native'})[0]
+        return {stage.id: stage for stage in stages}, prepared, body
+
+    def test_reviewed_prepared_package_keeps_writer_dependencies_and_exact_command(self):
+        stages, prepared, body = self.planned()
+        browser = stages['prepare.browser']
+        self.assertFalse(browser.build_lock)
+        self.assertFalse(body.build_lock)
+        self.assertEqual(browser.resource, 'memory')
+        self.assertEqual(browser.kind, 'build')
+        self.assertEqual(browser.dependencies, ('preflight.clippy', 'prepare.wasm'))
+        self.assertEqual(browser.commands, (gate.cmd(sys.executable, 'scripts/release_gate.py',
+            '--prepare-browser', '--wasm-package', prepared['wasm'], '--output', prepared['browser']),))
+        self.assertEqual(browser.outputs, (prepared['browser'],))
+        self.assertTrue(all(stage.build_lock for name, stage in stages.items() if name != 'prepare.browser'))
+
+    def test_all_concurrent_program_changes_lock_both_frontend_and_native(self):
+        paths = [gate.FRONTEND + '/package.json', gate.FRONTEND + '/package-lock.json',
+                 gate.FRONTEND + '/vite.config.ts', gate.FRONTEND + '/tsconfig.app.json',
+                 gate.FRONTEND + '/postcss.config.js', gate.FRONTEND + '/tailwind.config.ts',
+                 gate.FRONTEND + '/scripts/build-release-artifacts.mjs',
+                 'crates/geosolve-core/build.rs', 'crates/geosolve-core/tests/helper.rs',
+                 'scripts/golden-authoring-scene-oracle.sh', 'scripts/verify-geosolve-sketch-code-package.sh',
+                 'packages/geosolve-sketch-code/scripts/compile-managed-batch-deno.mjs',
+                 'Cargo.lock', 'scripts/release_gate.py', 'unowned-new-writer.js']
+        for path in paths:
+            with self.subTest(path=path):
+                stages, _, body = self.planned(self.snapshot | {path: stamp('changed program')})
+                self.assertTrue(stages['prepare.browser'].build_lock)
+                self.assertTrue(body.build_lock)
+
+    def test_reviewed_catalog_numeric_edit_and_prune_keep_overlap(self):
+        variants = [self.snapshot | {self.sample: stamp('numeric edit')},
+                    {name: value for name, value in self.snapshot.items() if name != self.sample},
+                    self.snapshot | {eq.CATALOG: stamp('retired key'), eq.FRONTEND_CATALOG: stamp('pruned catalog')}]
+        for snapshot in variants:
+            stages, _, body = self.planned(snapshot)
+            self.assertFalse(stages['prepare.browser'].build_lock)
+            self.assertFalse(body.build_lock)
+
+    def test_unrecognized_data_missing_input_or_unresolved_include_locks_both(self):
+        variants = [self.snapshot | {self.sample: {'link': '../program', 'target': 'changed'}},
+                    self.snapshot | {self.sample: {'sha256': 'executable', 'executable': True}},
+                    self.snapshot | {eq.SAMPLE_ROOT + '/one/new-program.js': stamp('new program')},
+                    {name: value for name, value in self.snapshot.items() if not name.startswith('packages/')}]
+        for snapshot in variants:
+            stages, _, body = self.planned(snapshot)
+            self.assertTrue(stages['prepare.browser'].build_lock)
+            self.assertTrue(body.build_lock)
+        with patch.object(gate, 'rust_inputs', return_value=('**',)):
+            stages, _, body = self.planned()
+            self.assertTrue(stages['prepare.browser'].build_lock)
+            self.assertTrue(body.build_lock)
+
+    def test_missing_corrupt_stale_or_wrong_scope_never_authorizes_frontend_overlap(self):
+        for contract in (None, {}, {'schema': 1, 'frontend_build_overlap': {'program_sha256': 'stale'}},
+                         {'schema': 1, 'frontend_static': self.contract['frontend_build_overlap']},
+                         {'schema': 1, 'native_build_overlap': self.contract['native_build_overlap']}):
+            self.save_contract(contract)
+            self.assertTrue(self.planned()[0]['prepare.browser'].build_lock)
+        path = self.root / eq.CONTRACT_PATH
+        path.write_text('{invalid')
+        self.assertTrue(self.planned()[0]['prepare.browser'].build_lock)
+        path.unlink()
+        stages, _, body = self.planned()
+        self.assertTrue(stages['prepare.browser'].build_lock)
+        self.assertTrue(body.build_lock)
+
+
+class FrontendOverlapSchedulingTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        (self.root / '.gitignore').write_text('target/\n')
+        self.store = gate.Store(self.root / 'target/store')
+        self.policy = {'prose': [], 'global': [], 'owned': ['**'], 'memory_heavy_workers': 2}
+
+    def stage(self, name, duration=0.03, **kwargs):
+        path = self.root / 'target' / (name + '.json')
+        code = ('import json,time;from pathlib import Path;start=time.monotonic();'
+                f'time.sleep({duration});Path({str(path)!r}).write_text(json.dumps([start,time.monotonic()]))')
+        return gate.Stage(name, ((sys.executable, '-c', code),), **kwargs)
+
+    def runner(self, stages, jobs=3, fresh=True):
+        runner = gate.Runner(self.root, self.store, gate.source_snapshot(self.root), self.policy, {}, jobs, fresh)
+        runner.prepare(stages)
+        return runner
+
+    def execute(self, runner, stages, deferred=(), stop_on_failure=True):
+        with contextlib.redirect_stdout(io.StringIO()):
+            passed = runner.run(stages, deferred=deferred, stop_on_failure=stop_on_failure)
+            return passed, runner.report(final=True)
+
+    def interval(self, name):
+        return json.loads((self.root / 'target' / (name + '.json')).read_text())
+
+    def test_frontend_starts_before_queued_native_work_and_overlaps_one_cargo_writer(self):
+        wasm = self.stage('prepare.wasm', .05, build_lock=True)
+        native = [self.stage('native.' + str(i), .6, dependencies=(wasm.id,), resource='memory') for i in range(2)]
+        browser = self.stage('prepare.browser', .4, dependencies=(wasm.id,), resource='memory', kind='build')
+        builders = [self.stage('cargo.' + str(i), .7, dependencies=(wasm.id,), build_lock=True) for i in range(2)]
+        consumer = self.stage('browser.consumer', dependencies=(browser.id,), resource='memory')
+        performance = self.stage('performance', resource='exclusive')
+        stages = [wasm, *native, *builders, browser, consumer, performance]
+        self.assertTrue(self.execute(self.runner(stages), stages)[0])
+        w, b, c0, c1 = [self.interval(name) for name in (wasm.id, browser.id, builders[0].id, builders[1].id)]
+        self.assertGreaterEqual(b[0], w[1])
+        self.assertLess(b[0], c0[1])
+        self.assertLess(c0[0], b[1])
+        self.assertGreaterEqual(c1[0], c0[1])
+        self.assertLess(b[0], self.interval(native[1].id)[0])
+        self.assertGreaterEqual(self.interval(consumer.id)[0], b[1])
+        p = self.interval(performance.id)
+        self.assertTrue(all(self.interval(stage.id)[1] <= p[0] for stage in stages if stage != performance))
+        events = sorted((moment, delta, stage.resource) for stage in stages
+                        for moment, delta in zip(self.interval(stage.id), (1, -1)))
+        active = memory = 0
+        for _, delta, resource in events:
+            active += delta
+            memory += delta if resource == 'memory' else 0
+            self.assertLessEqual(active, 3)
+            self.assertLessEqual(memory, 2)
+
+    def test_stale_review_fallback_and_one_worker_keep_serial_exclusion(self):
+        for jobs, locked in ((3, True), (1, False)):
+            with self.subTest(jobs=jobs, frontend_locked=locked):
+                browser = self.stage('prepare.browser', .15, build_lock=locked, resource='memory', kind='build')
+                cargo = self.stage('cargo', .15, build_lock=True)
+                stages = [cargo, browser]
+                self.assertTrue(self.execute(self.runner(stages, jobs), stages)[0])
+                b, c = self.interval(browser.id), self.interval(cargo.id)
+                self.assertTrue(b[1] <= c[0] or c[1] <= b[0])
+
+    def test_frontend_priority_waits_for_an_available_memory_slot(self):
+        memory = [self.stage('memory.' + str(i), .4 + i * .2, resource='memory') for i in range(2)]
+        wasm = self.stage('prepare.wasm', .1, build_lock=True)
+        browser = self.stage('prepare.browser', .1, dependencies=(wasm.id,), resource='memory', kind='build')
+        stages = [*memory, wasm, browser]
+        self.assertTrue(self.execute(self.runner(stages), stages)[0])
+        b = self.interval(browser.id)
+        intervals = [self.interval(stage.id) for stage in memory]
+        self.assertGreaterEqual(b[0], min(interval[1] for interval in intervals))
+        self.assertTrue(all(interval[0] < self.interval(wasm.id)[1] for interval in intervals))
+
+    def test_failed_frontend_blocks_browser_inventory_but_retains_independent_cargo_for_resume(self):
+        browser = gate.Stage('prepare.browser', ((sys.executable, '-c', 'raise SystemExit(7)'),),
+                             resource='memory', kind='build')
+        cargo = self.stage('cargo', .15, build_lock=True, kind='build')
+        calls = []
+        deferred = [('browser', (browser.id,), lambda: calls.append(True))]
+        first = self.runner([browser, cargo], fresh=False)
+        passed, report = self.execute(first, [browser, cargo], deferred, stop_on_failure=False)
+        self.assertFalse(passed)
+        self.assertFalse(report['complete'])
+        self.assertEqual(report['deferred_groups']['browser']['status'], 'blocked')
+        self.assertFalse(calls)
+        fixed = self.stage('prepare.browser', resource='memory', kind='build')
+        next_run = self.runner([fixed, cargo], fresh=False)
+        self.assertEqual(next_run.decision(fixed)[0], 'run')
+        self.assertEqual(next_run.decision(cargo)[0], 'reuse')
+        consumer = self.stage('browser.consumer', dependencies=(fixed.id,), cases=('exact_browser_case',))
+        passed, report = self.execute(next_run, [fixed, cargo], [('browser', (fixed.id,), lambda: [consumer])])
+        self.assertTrue(passed)
+        self.assertTrue(report['complete'])
+        self.assertEqual(next_run.results[cargo.id]['origin_run'], first.run_id)
+        self.assertEqual(report['deferred_groups']['browser']['stages'], [consumer.id])
 
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@
 import contextlib
 import dataclasses
 import io
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -318,6 +319,188 @@ class InputCacheTests(unittest.TestCase):
             self.assertEqual(scan.call_count, 4)
             self.assertIn("docs/new-case.md", refreshed[0].inputs)
             self.assertNotIn("docs/case.md", refreshed[0].inputs)
+
+
+class CountRepairReceiptTests(unittest.TestCase):
+    """Actual input factories and signed Python-child receipts; no product build."""
+    checker = gate.FRONTEND + "/scripts/check-sample-manifest.mjs"
+
+    def setUp(self):
+        import release_equivalence as equivalence
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.write(".gitignore", "target/\n**/dist/\n**/node_modules/\n")
+        self.policy = gate.read_json(gate.ROOT / gate.POLICY_PATH)
+        self.write(gate.POLICY_PATH, json.dumps(self.policy))
+        self.write("scripts/release_test_inventory.json", (gate.ROOT / "scripts/release_test_inventory.json").read_text())
+        for manifest in (gate.ROOT / "crates").glob("*/Cargo.toml"):
+            package = manifest.parent.name
+            self.write(f"crates/{package}/Cargo.toml", f'[package]\nname="{package}"\nversion="0.1.0"\n')
+            self.write(f"crates/{package}/src/lib.rs", "// fixture semantic source\n")
+        self.write(self.checker, "stale count assertion\n")
+        self.probe = self.root / "target/native-probe"
+        self.write("target/native-probe", f"#!{sys.executable}\n" + '''
+import json, sys, time
+from pathlib import Path
+name = sys.argv[1] if len(sys.argv) > 1 else 'native'
+active = Path('target/builder-active')
+if name == 'native':
+    assert not active.exists(), 'native overlapped a locked builder'
+if name == 'builder':
+    active.write_text('active')
+start = time.monotonic()
+time.sleep(.15)
+if name == 'builder':
+    active.unlink()
+path = Path('target/observed-' + name + '.json')
+previous = json.loads(path.read_text()) if path.exists() else []
+path.write_text(json.dumps([*previous, [start, time.monotonic()]]))
+print('fixture child passed')
+''')
+        self.probe.chmod(0o755)
+        self.description = dict(id="geosolve-core::fixture::normal", command=[str(self.probe)], env={},
+                                features=["fixture"], profile={"test": True, "opt_level": "1"}, resource="native",
+                                selected=["fixture"], build_overlap_safe=True, runtime_closures=[{"fixture": "runtime-v1"}])
+        self.write("target/prepared/prepared.json", "{}")
+        for package in ("geosolve-intent", "geosolve-sketch-code"):
+            for output in ("dist", "node_modules"):
+                self.write(f"packages/{package}/{output}/fixture", "unchanged managed artifact")
+        patterns = (*gate.rust_inputs(self.root), "packages/**", gate.FRONTEND + "/**",
+                    "scripts/verify-geosolve-sketch-code-package.sh", "scripts/golden*")
+        selected = gate.stage_inputs(gate.Stage("review", (("identity",),), inputs=patterns),
+                                     gate.source_snapshot(self.root), self.policy)
+        contract = {"schema": 1, "native_build_overlap": {"program_sha256": gate.digest(equivalence.partition(selected, self.policy))}}
+        self.write(equivalence.CONTRACT_PATH, json.dumps(contract))
+        self.store = gate.Store(self.root / "target/store")
+
+    def write(self, name, text):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+    def runner(self, stages, *, fresh=False):
+        runner = gate.Runner(self.root, self.store, gate.source_snapshot(self.root), self.policy, {}, jobs=2, fresh=fresh)
+        runner.prepare(stages)
+        return runner
+
+    def execute(self, runner, stages):
+        with contextlib.redirect_stdout(io.StringIO()):
+            success = runner.run(stages)
+            report = runner.report(final=True)
+        return success, report
+
+    def native(self):
+        import release_gate_native as native
+        with patch.object(native, "workspace_stages", return_value=[self.description]):
+            stage, = gate.native_stages(self.root, {"workspace": "target/prepared"})
+        # The real adapter factory supplies mapping, runtime/coverage identity
+        # and admission. A small actual child substitutes for product execution.
+        return dataclasses.replace(stage, commands=(tuple(self.description["command"]),), dependencies=())
+
+    def stages(self):
+        native = self.native()
+        inventory = {stage.id: stage for stage in gate.qualification_stages(self.root, {}, 2)}
+        peers = [dataclasses.replace(inventory[name], commands=((str(self.probe), name),),
+                                     dependencies=(), cases=("fixture",), test_inventories=())
+                 for name in ("golden", "wasm.m70_transition_parity")]
+        with patch.object(gate, "ROOT", self.root):
+            catalog = next(stage for stage in gate.preflight_stages() if stage.id == "preflight.catalog")
+        check = f"from pathlib import Path; assert Path({self.checker!r}).read_text() == 'correct count assertion\\n'"
+        catalog = dataclasses.replace(catalog, commands=((sys.executable, "-c", check),),
+                                      dependencies=tuple(stage.id for stage in (native, *peers)))
+        return [native, *peers, catalog]
+
+    def test_checker_repair_reuses_native_golden_and_wasm_from_finalized_failed_run(self):
+        stages = self.stages()
+        self.assertFalse(stages[0].build_lock)
+        first = self.runner(stages)
+        success, report = self.execute(first, stages)
+        self.assertFalse(success)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(first.results[stages[-1].id]["status"], "failed")
+        first_path = first.run_dir / "qualification.json"
+        failed_bytes = first_path.read_bytes()
+        for stage in stages[:-1]:
+            self.assertIsNotNone(self.store.find(stage.id, first.keys[stage.id]))
+            self.assertNotIn(self.checker, first.inputs(stage))
+        self.assertIsNone(self.store.find(stages[-1].id, first.keys[stages[-1].id]))
+        self.assertIn(self.checker, first.inputs(stages[-1]))
+
+        self.write(self.checker, "correct count assertion\n")
+        repaired = self.stages()
+        self.assertTrue(repaired[0].build_lock)  # Review remains invalid; no repin.
+        second = self.runner(repaired)
+        for stage in repaired[:-1]:
+            self.assertEqual(second.keys[stage.id], first.keys[stage.id])
+            self.assertEqual(second.decision(stage)[0], "reuse")
+        self.assertEqual(second.decision(repaired[-1])[0], "run")
+        success, report = self.execute(second, repaired)
+        self.assertTrue(success)
+        self.assertTrue(report["complete"])
+        for stage in repaired[:-1]:
+            self.assertEqual(second.results[stage.id]["origin_run"], first.run_id)
+        self.assertTrue(next(stage for stage in report["inventory"] if stage["id"] == repaired[0].id)["build_lock"])
+        self.assertFalse(self.store.unseal(Path(second.results[repaired[0].id]["receipt_path"]))["contract"]["build_lock"])
+        for name in ("native", "golden", "wasm.m70_transition_parity"):
+            self.assertEqual(len(json.loads((self.root / f"target/observed-{name}.json").read_text())), 1)
+        self.assertEqual(first_path.read_bytes(), failed_bytes)
+
+    def test_checker_fallback_still_locks_fresh_execution_and_records_actual_contract(self):
+        self.write(self.checker, "correct count assertion\n")
+        native = self.native()
+        self.assertTrue(native.build_lock)
+        first = self.runner([native])
+        self.assertTrue(self.execute(first, [native])[0])
+        builder = gate.Stage("builder", ((str(self.probe), "builder"),), build_lock=True, kind="build")
+        stages = [builder, native]
+        second = self.runner(stages, fresh=True)
+        self.assertEqual(second.decision(native)[0], "run")
+        self.assertTrue(self.execute(second, stages)[0])
+        native_intervals = json.loads((self.root / "target/observed-native.json").read_text())
+        builder_interval, = json.loads((self.root / "target/observed-builder.json").read_text())
+        self.assertEqual(len(native_intervals), 2)
+        self.assertGreaterEqual(native_intervals[-1][0], builder_interval[1])
+        receipt = self.store.unseal(Path(second.results[native.id]["receipt_path"]))
+        self.assertTrue(receipt["contract"]["build_lock"])
+
+    def test_real_execution_inputs_still_invalidate_native_receipts(self):
+        native = self.native()
+        first = self.runner([native])
+        self.assertTrue(self.execute(first, [native])[0])
+        self.write(self.checker, "correct count assertion\n")
+        native = self.native()
+        runner = self.runner([native])
+        self.assertEqual(runner.decision(native)[0], "reuse")
+        variants = [dataclasses.replace(native, cases=("changed-case",)),
+                    dataclasses.replace(native, resource="memory"),
+                    dataclasses.replace(native, env=(("FIXTURE_MODE", "changed"),)),
+                    dataclasses.replace(native, timeout=60)]
+        for key, value in (("command", [str(self.probe), "changed-argument"]), ("env", {"FIXTURE_MODE": "changed"}),
+                           ("features", ["changed"]), ("profile", {"test": True, "opt_level": "2"}),
+                           ("runtime_closures", [{"fixture": "runtime-v2"}]), ("build_overlap_safe", False)):
+            variants.append(dataclasses.replace(native, execution_key=native.execution_key | {key: value}))
+        for changed in variants:
+            with self.subTest(contract=changed.contract()):
+                self.assertEqual(self.runner([changed]).decision(changed)[0], "run")
+        original_probe = self.probe.read_text()
+        self.probe.write_text(original_probe + "# different actual executable bytes\n")
+        self.assertEqual(self.runner([native]).decision(native)[0], "run")
+        self.probe.write_text(original_probe)
+        self.assertEqual(self.runner([native]).decision(native)[0], "reuse")
+        self.write("crates/geosolve-core/src/lib.rs", "// changed semantic source\n")
+        self.assertEqual(self.runner([native]).decision(native)[0], "run")
+
+    def test_only_explicit_native_kind_normalizes_build_admission(self):
+        native = self.native()
+        runner = self.runner([])
+        self.assertEqual(native.kind, "native")
+        for kind, name in (("test", "ordinary"), ("test", "performance"), ("build", "builder")):
+            ordinary = dataclasses.replace(native, kind=kind, id=name)
+            self.assertNotEqual(runner.key(ordinary), runner.key(dataclasses.replace(ordinary, build_lock=True)))
+        self.assertNotEqual(runner.key(native), runner.key(dataclasses.replace(native, kind="test")))
+        self.assertEqual(runner.key(native), runner.key(dataclasses.replace(native, build_lock=True)))
 
 
 if __name__ == "__main__":
