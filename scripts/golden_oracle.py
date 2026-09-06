@@ -358,8 +358,8 @@ def prepare(root, output, processes, prepared_packages):
     env = dict(os.environ)
     env['TMPDIR'] = str(output / 'tmp')
     Path(env['TMPDIR']).mkdir()
-    def run(label, command, cwd=root, stdout=None):
-        result = processes.run(command, cwd, env, preflight, label, 300, stdout=stdout)
+    def run(label, command, cwd=root, stdout=None, timeout=300):
+        result = processes.run(command, cwd, env, preflight, label, timeout, stdout=stdout)
         if result['exit_code']:
             raise ValueError(f'{label} preflight failed; see {preflight / (label + ".log")}')
     metadata_file = preflight / 'metadata.json'
@@ -375,7 +375,7 @@ def prepare(root, output, processes, prepared_packages):
         selector = ['-p', package, '--lib'] if kind == 'lib' else ['-p', package, '--test', target]
         stream = preflight / f'{key}-artifacts.jsonl'
         run(f'build-{key}', ['cargo', 'test', '--locked', *selector,
-                             '--no-run', '--message-format=json'], stdout=stream)
+                             '--no-run', '--message-format=json'], stdout=stream, timeout=1800)
         rows = native.cargo_artifacts(stream.read_text(), metadata)
         expected = native.expected_targets(metadata, selector)
         actual = {(a['package'], a['target']['name'], tuple(a['target']['kind'])) for a in rows}

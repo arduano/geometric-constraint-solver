@@ -314,6 +314,8 @@ print(p)
         self.assertEqual(gate.preparation_modes(["workspace.geosolve-core::*"]), {"workspace"})
         self.assertEqual(gate.preparation_modes(["headless.*"]), {"headless"})
         self.assertEqual(gate.preparation_modes(["browser"]), {"wasm", "browser"})
+        self.assertEqual(gate.preparation_modes(["golden", "wasm.*", "rust.*", "package.*", "licenses", "performance"]), set())
+        self.assertEqual(gate.preparation_stages(self.runner([]), set()), ([], {}))
         self.assertEqual(gate.preparation_modes(["*uncertain*"]), {"workspace", "headless", "wasm", "browser"})
 
     def test_count_generator_repair_keeps_golden_inputs_but_compiler_changes_do_not(self):

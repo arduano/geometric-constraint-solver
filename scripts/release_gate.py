@@ -673,13 +673,17 @@ def preparation_modes(patterns):
             modes.add("headless")
         elif pattern in {"browser", "artifact.transport"}:
             modes.update(("wasm", "browser"))
+        elif pattern in {"golden", "licenses", "performance"} or pattern.startswith(("rust.", "wasm.", "package.")):
+            # These stages own their Cargo builds and managed preflight inputs.
+            # No direct native executable or prepared browser is consumed.
+            continue
         else:
             return {"workspace", "headless", "wasm", "browser"}
     return modes
 
 
 def preparation_stages(runner, modes=None):
-    modes = modes or {"workspace", "headless", "wasm", "browser"}
+    modes = {"workspace", "headless", "wasm", "browser"} if modes is None else modes
     stages, prepared = [], {}
     for mode in ("workspace", "headless", "wasm", "browser"):
         if mode not in modes:
