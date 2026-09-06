@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
+import { canvasFrame, canvasVisualWitness, drawItems, expectDraft, expectItemCount, fractionToClient, presentedFrame, presentedIdentity, settlePresentation } from "./presented-canvas";
 
 const MANIFOLD_TITLE = "PC liquid-cooling manifold";
 const JANSEN_TITLE = "Theo Jansen-style walking leg · 1 DOF";
@@ -188,7 +189,7 @@ test("real Chromium exactly reproduces the pinned Deno managed compiler envelope
   assertCleanRuntime();
 });
 
-test("real WASM opens an actual sample with a styled authoritative SVG and layout floors", async ({ page }) => {
+test("real WASM opens an actual sample with a styled authoritative canvas and layout floors", async ({ page }) => {
   const assertCleanRuntime = auditRuntime(page);
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -215,11 +216,13 @@ test("real WASM opens an actual sample with a styled authoritative SVG and layou
   await expect(page.locator("body")).not.toContainText("Bootstrap {");
   await openManifold(page);
 
-  const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
+  const frame = canvasFrame(page);
   await expect(frame).toHaveCount(1);
-  await expect(frame.locator("style")).toContainText(".wb-point");
-  await expect(frame.locator(".wb-accepted-scene .wb-geometry")).toHaveCount(1);
-  expect(await frame.locator("path").count()).toBeGreaterThan(10);
+  const scene = await presentedFrame(frame);
+  expect(scene.provenance.scene).toBe("accepted");
+  expect(scene.items.filter((item) => item.kind === "polyline").length).toBeGreaterThan(10);
+  expect(scene.items.some((item) => item.layer === "points" && item.style.strokeWidth > 0)).toBe(true);
+  await canvasVisualWitness(frame);
 
   await page.getByRole("button", { name: "File menu" }).click();
   await page.getByRole("menuitem", { name: /Open/ }).click();
@@ -292,8 +295,8 @@ test("invalid source retains the accepted frame and one positioned Problem until
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
   await openManifold(page);
-  const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
-  const acceptedFrame = await frame.evaluate((element) => element.outerHTML);
+  const frame = canvasFrame(page);
+  const acceptedFrame = await presentedIdentity(frame);
 
   await page.getByRole("button", { name: "code", exact: true }).click();
   const content = page.locator(".cm-content");
@@ -307,7 +310,7 @@ test("invalid source retains the accepted frame and one positioned Problem until
   await problems.click();
   await expect(page.getByRole("tabpanel").getByRole("button")).toHaveCount(1);
   await expect(page.getByRole("tabpanel")).toContainText(/sketch\.ts:\d+:/);
-  expect(await frame.evaluate((element) => element.outerHTML)).toBe(acceptedFrame);
+  expect(await presentedIdentity(frame)).toBe(acceptedFrame);
 
   await page.getByRole("button", { name: "File menu" }).click();
   await expect(page.getByRole("menuitem", { name: "Download raw draft…" })).toBeVisible();
@@ -318,7 +321,7 @@ test("invalid source retains the accepted frame and one positioned Problem until
   await expect(page.locator("header").first()).toContainText(/accepted/i);
   await expect(page.getByRole("tab", { name: "Problems" })).toBeVisible();
   await expect(page.getByRole("tabpanel")).toContainText("No problems");
-  expect(await frame.evaluate((element) => element.outerHTML)).toBe(acceptedFrame);
+  expect(await presentedIdentity(frame)).toBe(acceptedFrame);
   assertCleanRuntime();
 });
 
@@ -362,7 +365,7 @@ test("real WASM source-backs click-authored geometry in a managed sample", async
   );
 
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
+  const frame = canvasFrame(page);
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();
   const click = async (x: number, y: number) => {
@@ -372,7 +375,7 @@ test("real WASM source-backs click-authored geometry in a managed sample", async
   await page.getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment" }).click();
   await click(0.35, 0.48);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await click(0.65, 0.55);
 
   const upgradedSource = await waitForAcceptedManagedSource(
@@ -386,7 +389,7 @@ test("real WASM source-backs click-authored geometry in a managed sample", async
       .getByRole("button", { name: "segment1", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Accepted source", { exact: true })).toBeVisible();
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
+  await expectDraft(canvasFrame(page), false);
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
   await expect(page.getByText(
     /pointer input is unavailable while a managed-source mutation is compiling/u,
@@ -413,7 +416,7 @@ test("real WASM source-backs a center-radius circle from an empty coded sketch",
   await expect(source).toContainText('import { sketch } from "@geosolve/sketch-code"');
   await page.getByRole("button", { name: "split", exact: true }).click();
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
+  const frame = canvasFrame(page);
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();
   const click = async (x: number, y: number) => {
@@ -423,7 +426,7 @@ test("real WASM source-backs a center-radius circle from an empty coded sketch",
   await page.getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Center–Radius" }).click();
   await click(0.42, 0.44);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await click(0.58, 0.44);
 
   await expect(source).toContainText(
@@ -433,10 +436,8 @@ test("real WASM source-backs a center-radius circle from an empty coded sketch",
     "const geometry1 = $.geometry.centerRadiusCircle",
   );
   await expect(source).toContainText("radius: mm(");
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
-  await expect(
-    frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve"),
-  ).toHaveCount(1);
+  await expectDraft(canvasFrame(page), false);
+  await expectItemCount(drawItems(frame, { layer: "geometry", className: "wb-curve" }), 1);
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
 
   await page.mouse.move(bounds!.x + bounds!.width * 0.70, bounds!.y + bounds!.height * 0.60);
@@ -458,7 +459,7 @@ test("two circle contacts publish their Segment and accept the next pointer gest
   );
   await page.getByRole("button", { name: "split", exact: true }).click();
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
+  const frame = canvasFrame(page);
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();
   const click = async (x: number, y: number) => {
@@ -490,7 +491,7 @@ test("two circle contacts publish their Segment and accept the next pointer gest
   await page.getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment" }).click();
   await click(0.41, 0.47);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await click(0.56, 0.47);
 
   await waitForPublishedSource(
@@ -502,10 +503,8 @@ test("two circle contacts publish their Segment and accept the next pointer gest
   expect(publishedSource).toContain("point: segment3.start");
   expect(publishedSource).toContain("curve: geometry2.span");
   expect(publishedSource).toContain("point: segment3.end");
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
-  await expect(
-    frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve"),
-  ).toHaveCount(3);
+  await expectDraft(canvasFrame(page), false);
+  await expectItemCount(drawItems(frame, { layer: "geometry", className: "wb-curve" }), 3);
   await expect(page.locator("header").first()).toContainText(/accepted/i);
 
   await page.getByRole("button", { name: "Sketch", exact: true }).click();
@@ -514,12 +513,12 @@ test("two circle contacts publish their Segment and accept the next pointer gest
     /pointer input is unavailable while a managed-source mutation is compiling/u,
   )).toHaveCount(0);
   await click(0.35, 0.55);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await expect(page.getByText(
     /pointer input is unavailable while a managed-source mutation is compiling/u,
   )).toHaveCount(0);
   await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
+  await expectDraft(canvasFrame(page), false);
   assertCleanRuntime();
 });
 
@@ -536,24 +535,11 @@ test("canonical Jansen sample Polyline Finish publishes inferred constraints int
   );
 
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
-  const originalCurveCount = await frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve").count();
+  const frame = canvasFrame(page);
+  const originalCurveCount = await drawItems(frame, { layer: "geometry", className: "wb-curve" }).count();
   const click = async (x: number, y: number) => {
-    // The split panel can letterbox the SVG. Container fractions may land
-    // outside its actual viewBox and are correctly rejected by the editor.
-    const position = await frame.evaluate((element, fraction) => {
-      const svg = element as unknown as {
-        viewBox: { baseVal: { x: number; y: number; width: number; height: number } };
-        createSVGPoint(): { x: number; y: number; matrixTransform(matrix: unknown): { x: number; y: number } };
-        getScreenCTM(): unknown;
-      };
-      const box = svg.viewBox.baseVal;
-      const point = svg.createSVGPoint();
-      point.x = box.x + box.width * fraction.x;
-      point.y = box.y + box.height * fraction.y;
-      const result = point.matrixTransform(svg.getScreenCTM());
-      return { x: result.x, y: result.y };
-    }, { x, y });
+    // Input uses the same logical view box and centred letterboxing as the canvas.
+    const position = await fractionToClient(frame, { x, y });
     await page.mouse.click(position.x, position.y);
   };
 
@@ -639,8 +625,8 @@ test("canonical Jansen sample Polyline Finish publishes inferred constraints int
 
   await expect(page.locator("header").first()).toContainText(/accepted · r2/i);
   await expect(page.getByText("Accepted source", { exact: true })).toBeVisible();
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
-  await expect(frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve")).toHaveCount(originalCurveCount + 2);
+  await expectDraft(canvasFrame(page), false);
+  await expectItemCount(drawItems(frame, { layer: "geometry", className: "wb-curve" }), originalCurveCount + 2);
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
   await expect(page.getByText(
     /pointer input is unavailable while a managed-source mutation is compiling/u,
@@ -658,38 +644,20 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
     page,
     (source) => source.includes("const point1TowerLevel0Left = $.geometry.sketchPoint"),
   );
-  const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
-  const points = frame.locator(
-    '.wb-accepted-scene .wb-points > circle.wb-point[data-interactive="true"]',
-  );
+  const frame = canvasFrame(page);
+  const points = drawItems(frame, { layer: "points", kind: "circle", interactive: true });
   expect(await points.count()).toBeGreaterThan(0);
-  const centerIndex = await points.evaluateAll((elements) => {
-    const svg = elements[0]?.closest("svg");
-    if (!svg) throw new Error("scissor lift has no authoritative SVG");
-    const viewBox = (svg.getAttribute("viewBox") ?? "")
-      .split(/\s+/u)
-      .map(Number);
-    const [minX = NaN, minY = NaN, width = NaN, height = NaN] = viewBox;
-    if (viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value))) {
-      throw new Error("scissor lift has no finite SVG viewBox");
-    }
-    const center = [
-      minX + width / 2,
-      minY + height / 2,
-    ];
-    return elements.reduce((best, element, index) => {
-      const distance = Math.hypot(
-        Number(element.getAttribute("cx")) - center[0],
-        Number(element.getAttribute("cy")) - center[1],
-      );
-      return distance < best.distance ? { index, distance } : best;
-    }, { index: 0, distance: Number.POSITIVE_INFINITY }).index;
-  });
-  const persistentId = await points.nth(centerIndex).getAttribute("data-persistent-id");
-  expect(persistentId).not.toBeNull();
-  const point = frame.locator(
-    `.wb-accepted-scene .wb-points > circle.wb-point[data-persistent-id=${JSON.stringify(persistentId)}]`,
-  );
+  const [minX, minY, width, height] = (await presentedFrame(frame)).viewBox;
+  expect([minX, minY, width, height].every(Number.isFinite)).toBe(true);
+  const center = [minX + width / 2, minY + height / 2];
+  const centerIndex = (await points.all()).reduce((best, item, index) => {
+    if (item.kind !== "circle") throw Error("Expected circle point");
+    const distance = Math.hypot(item.center[0] - center[0], item.center[1] - center[1]);
+    return distance < best.distance ? { index, distance } : best;
+  }, { index: 0, distance: Number.POSITIVE_INFINITY }).index;
+  const persistentId = (await points.nth(centerIndex).read()).metadata.persistentId;
+  expect(persistentId).toBeTruthy();
+  const point = drawItems(frame, { layer: "points", kind: "circle", persistentId });
 
   const dragBy = async (deltaX: number, deltaY: number) => {
     const before = await point.boundingBox();
@@ -737,7 +705,7 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
   expect(await page.evaluate(() => localStorage.getItem("geosolve.project.v1"))).toBeNull();
 
   // Camera state is presentation-local. Normalize it exactly as the native
-  // contact persistence test does before comparing SVG coordinates across a
+  // contact persistence test does before comparing presented coordinates across a
   // reload, then allow both retained camera frames to paint.
   await page.getByRole("button", { name: "Fit sketch" }).click();
   await page.evaluate(() => new Promise<void>((resolve) => {
@@ -745,21 +713,13 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
       (callback: () => void) => number;
     schedule(() => schedule(resolve));
   }));
-  const finalPosition = await point.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ]);
+  const finalPosition = await point.position();
 
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.locator("header").getByText(SCISSOR_TITLE, { exact: true })).toBeVisible();
-  const restoredPoint = page.locator(
-    `.wb-accepted-scene .wb-points > circle.wb-point[data-persistent-id=${JSON.stringify(persistentId)}]`,
-  );
-  await expect(restoredPoint).toHaveCount(1);
-  expect(await restoredPoint.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ])).toEqual(finalPosition);
+  const restoredPoint = drawItems(canvasFrame(page), { layer: "points", kind: "circle", persistentId });
+  await expectItemCount(restoredPoint, 1);
+  expect(await restoredPoint.position()).toEqual(finalPosition);
   expect(savedProjectFingerprint(await readSavedProject(page))).toBe(lastSavedFingerprint);
   await waitForAcceptedManagedSource(page, (source) => source === originalSource);
   const undo = page.getByRole("button", { name: "Undo" });
@@ -767,10 +727,7 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
   expect(await page.evaluate(() => localStorage.getItem("geosolve.project.v1"))).toBeNull();
   await expect(page.getByText(/QuotaExceededError/u)).toHaveCount(0);
   await undo.click();
-  await expect.poll(async () => restoredPoint.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ])).not.toEqual(finalPosition);
+  await expect.poll(async () => restoredPoint.position()).not.toEqual(finalPosition);
   assertCleanRuntime();
 });
 
@@ -785,8 +742,8 @@ test("Cubic Bézier authoring publishes one named typed declaration", async ({ p
     (accepted) => accepted.includes("const reservoirWidth = $.dimension.curveLength"),
   );
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
-  const originalCurveCount = await frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve").count();
+  const frame = canvasFrame(page);
+  const originalCurveCount = await drawItems(frame, { layer: "geometry", className: "wb-curve" }).count();
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();
   const click = async (x: number, y: number) => {
@@ -798,11 +755,11 @@ test("Cubic Bézier authoring publishes one named typed declaration", async ({ p
   await cubic.click();
   await expect(cubic).toBeHidden();
   await click(0.42, 0.55);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await click(0.55, 0.40);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await click(0.68, 0.40);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await click(0.82, 0.55);
 
   const publishedSource = await waitForAcceptedManagedSource(
@@ -820,8 +777,8 @@ test("Cubic Bézier authoring publishes one named typed declaration", async ({ p
   expect(declaration).toContain("end: [");
   expect(new TextEncoder().encode(declaration!).byteLength).toBeLessThanOrEqual(1_024);
 
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
-  await expect(frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve")).toHaveCount(originalCurveCount + 1);
+  await expectDraft(canvasFrame(page), false);
+  await expectItemCount(drawItems(frame, { layer: "geometry", className: "wb-curve" }), originalCurveCount + 1);
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
   await expect(
     page.getByRole("list", { name: "Canvas additions" })
@@ -851,9 +808,9 @@ export default sketch(($) => {
 
   const source = page.locator(".cm-content");
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
-  const curves = frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve");
-  await expect(curves).toHaveCount(2);
+  const frame = canvasFrame(page);
+  const curves = drawItems(frame, { layer: "geometry", className: "wb-curve" });
+  await expectItemCount(curves, 2);
   const clickCurve = async (index: number) => {
     const bounds = await curves.nth(index).boundingBox();
     expect(bounds).not.toBeNull();
@@ -869,7 +826,7 @@ export default sketch(($) => {
   await expect.poll(() => source.textContent(), { timeout: 30_000 }).not.toBe(beforeConstraint);
   const publishedSource = `${(await source.locator(".cm-line").allTextContents()).join("\n")}\n`;
   expect(publishedSource).toContain("$.constraint.parallel");
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
+  await expectDraft(canvasFrame(page), false);
   await expect(page.getByRole("list", { name: "Canvas additions" }).getByRole("button", { name: /^constraint\d+$/ })).toHaveCount(1);
   assertCleanRuntime();
 });
@@ -892,9 +849,9 @@ export default sketch(($) => {
   const source = page.locator(".cm-content");
   const originalSource = await source.textContent();
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
-  const curves = frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve");
-  await expect(curves).toHaveCount(2);
+  const frame = canvasFrame(page);
+  const curves = drawItems(frame, { layer: "geometry", className: "wb-curve" });
+  await expectItemCount(curves, 2);
   const clickCurve = async (index: number) => {
     const bounds = await curves.nth(index).boundingBox();
     expect(bounds).not.toBeNull();
@@ -920,10 +877,10 @@ export default sketch(($) => {
   const declarationName = declaration![1];
   const filletLabel = publishedSource.match(/label: "(Fillet \d+)"/u)?.[1];
   expect(filletLabel).toBeDefined();
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
-  const computedFillets = frame.locator(".wb-computed-geometry path.wb-computed-fillet");
-  await expect(computedFillets).toHaveCount(1);
-  const originalPath = await computedFillets.first().getAttribute("d");
+  await expectDraft(canvasFrame(page), false);
+  const computedFillets = drawItems(frame, { layer: "computed", className: "wb-computed-fillet" });
+  await expectItemCount(computedFillets, 1);
+  const originalPath = await computedFillets.first().geometryKey();
   expect(originalPath).not.toBeNull();
 
   const additions = page.getByRole("list", { name: "Canvas additions" });
@@ -957,9 +914,9 @@ export default sketch(($) => {
   await radiusInput.press("Enter");
   await expect.poll(() => page.locator("header").first().textContent()).not.toBe(revisionBeforeRadiusEdit);
   await expect.poll(() => source.textContent()).not.toBe(sourceBeforeRadiusEdit);
-  await expect(computedFillets).toHaveCount(1);
-  await expect.poll(() => computedFillets.first().getAttribute("d")).not.toBe(originalPath);
-  const editedPath = await computedFillets.first().getAttribute("d");
+  await expectItemCount(computedFillets, 1);
+  await expect.poll(() => computedFillets.first().geometryKey()).not.toBe(originalPath);
+  const editedPath = await computedFillets.first().geometryKey();
   const sourceAfterRadiusEdit = `${(await source.locator(".cm-line").allTextContents()).join("\n")}\n`;
   expect(sourceAfterRadiusEdit).toContain(`label: "${filletLabel}"`);
 
@@ -973,14 +930,14 @@ export default sketch(($) => {
   await expect(actions).toBeVisible();
   await actions.getByRole("button", { name: "Suppress" }).click();
   await expect.poll(() => source.textContent()).toContain(`$.suppress(${declarationName})`);
-  await expect(computedFillets).toHaveCount(0);
+  await expectItemCount(computedFillets, 0);
   await row.click();
   await expect(actions.getByRole("button", { name: "Restore" })).toBeVisible();
 
   await actions.getByRole("button", { name: "Restore" }).click();
   await expect.poll(() => source.textContent()).not.toContain(`$.suppress(${declarationName})`);
-  await expect(computedFillets).toHaveCount(1);
-  await expect(computedFillets.first()).toHaveAttribute("d", editedPath!);
+  await expectItemCount(computedFillets, 1);
+  await expect.poll(() => computedFillets.first().geometryKey()).toBe(editedPath);
   await expect(row).toHaveCount(1);
 
   await row.click();
@@ -988,14 +945,14 @@ export default sketch(($) => {
   await actions.getByRole("button", { name: "Delete" }).click();
   await expect.poll(() => source.textContent()).not.toContain(`const ${declarationName} =`);
   await expect(row).toHaveCount(0);
-  await expect(computedFillets).toHaveCount(0);
+  await expectItemCount(computedFillets, 0);
 
   await page.getByRole("button", { name: "Undo" }).click();
   await expect.poll(async () => `${(await source.locator(".cm-line").allTextContents()).join("\n")}\n`)
     .toBe(sourceBeforeDelete);
   await expect(row).toHaveCount(1);
-  await expect(computedFillets).toHaveCount(1);
-  await expect(computedFillets.first()).toHaveAttribute("d", editedPath!);
+  await expectItemCount(computedFillets, 1);
+  await expect.poll(() => computedFillets.first().geometryKey()).toBe(editedPath);
   assertCleanRuntime();
 });
 
@@ -1027,7 +984,7 @@ test("a downloaded reproduction imports atomically through the real bridge", asy
   await chooser.setFiles({ name: "geosolve-reproduction.txt", mimeType: "text/plain", buffer: Buffer.from(reproduction) });
   await expect(page.locator("header").getByText(MANIFOLD_TITLE, { exact: true })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText("const reservoirWidth = $.dimension.curveLength");
-  await expect(page.locator('[role="application"] svg.geosolve-authoritative-frame style')).toContainText(".wb-point");
+  expect((await presentedFrame(canvasFrame(page))).items.some((item) => item.layer === "points" && item.style.strokeWidth > 0)).toBe(true);
   assertCleanRuntime();
 });
 
@@ -1053,39 +1010,27 @@ test("the supplied native contact workspace retains a constrained point drag", a
   await expect(page.locator("header").getByText("Restored sketch", { exact: true })).toBeVisible();
 
   const persistentId = "7b80e0003fe358f731b6e557427a0673";
-  const pointSelector = `.wb-accepted-scene .wb-points > circle.wb-point[data-persistent-id=${JSON.stringify(persistentId)}]`;
-  const point = page.locator(pointSelector);
-  await expect(point).toHaveCount(1);
-  const originalPosition = await point.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ]);
+  const point = drawItems(canvasFrame(page), { layer: "points", kind: "circle", persistentId });
+  await expectItemCount(point, 1);
+  const originalPosition = await point.position();
   const before = await point.boundingBox();
   expect(before).not.toBeNull();
   const start = [before!.x + before!.width / 2, before!.y + before!.height / 2] as const;
   const target = [start[0] + 20, start[1] - 15] as const;
 
+  const initialStyle = (await point.read()).style;
   await page.mouse.move(...start);
-  await expect(point).toHaveClass(/\bgeometry-hovered\b/);
+  await expect.poll(async () => (await point.read()).style).not.toEqual(initialStyle);
   await page.mouse.down();
   await page.mouse.move(...target, { steps: 5 });
-  await expect.poll(async () => point.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ])).not.toEqual(originalPosition);
-  const terminalPreview = await point.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ]);
+  await expect.poll(async () => point.position()).not.toEqual(originalPosition);
+  const terminalPreview = await point.position();
   const savedBefore = savedProjectFingerprint(await readSavedProject(page));
   await page.mouse.up();
 
   await expect(page.locator("header").first()).toContainText(/accepted · r1/i);
   await expect(page.getByText(/candidate evaluation rejected and policy requires accepted publication/u)).toHaveCount(0);
-  await expect.poll(async () => point.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ])).toEqual(terminalPreview);
+  await expect.poll(async () => point.position()).toEqual(terminalPreview);
   await expect.poll(async () => savedProjectFingerprint(await readSavedProject(page))).not.toBe(savedBefore);
   const savedAfter = savedProjectFingerprint(await readSavedProject(page));
 
@@ -1098,33 +1043,21 @@ test("the supplied native contact workspace retains a constrained point drag", a
       (callback: () => void) => number;
     schedule(() => schedule(resolve));
   }));
-  const fittedTerminal = await point.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ]);
+  const fittedTerminal = await point.position();
 
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.locator("header").getByText("Restored sketch", { exact: true })).toBeVisible();
-  const restoredPoint = page.locator(pointSelector);
-  await expect(restoredPoint).toHaveCount(1);
-  expect(await restoredPoint.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ])).toEqual(fittedTerminal);
+  const restoredPoint = drawItems(canvasFrame(page), { layer: "points", kind: "circle", persistentId });
+  await expectItemCount(restoredPoint, 1);
+  expect(await restoredPoint.position()).toEqual(fittedTerminal);
   expect(savedProjectFingerprint(await readSavedProject(page))).toBe(savedAfter);
 
   const undo = page.getByRole("button", { name: "Undo" });
   await expect(undo).toBeEnabled();
   await undo.click();
-  await expect.poll(async () => restoredPoint.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ])).not.toEqual(fittedTerminal);
+  await expect.poll(async () => restoredPoint.position()).not.toEqual(fittedTerminal);
   await page.getByRole("button", { name: "Fit sketch" }).click();
-  await expect.poll(async () => restoredPoint.evaluate((element) => [
-    element.getAttribute("cx"),
-    element.getAttribute("cy"),
-  ])).toEqual(originalPosition);
+  await expect.poll(async () => restoredPoint.position()).toEqual(originalPosition);
   assertCleanRuntime();
 });
 
@@ -1209,9 +1142,9 @@ test("normal pointer capture release commits Circle geometry and edits its compa
   );
 
   const canvas = page.getByRole("application");
-  const frame = canvas.locator("svg.geosolve-authoritative-frame");
-  const originalCurveCount = await frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve").count();
-  const originalPointCount = await frame.locator(".wb-accepted-scene .wb-points > circle.wb-point").count();
+  const frame = canvasFrame(page);
+  const originalCurveCount = await drawItems(frame, { layer: "geometry", className: "wb-curve" }).count();
+  const originalPointCount = await drawItems(frame, { layer: "points", kind: "circle" }).count();
   const click = async (x: number, y: number) => {
     const bounds = await canvas.boundingBox();
     expect(bounds).not.toBeNull();
@@ -1222,16 +1155,16 @@ test("normal pointer capture release commits Circle geometry and edits its compa
   await page.getByRole("menuitem", { name: "Center–Radius" }).click();
   await expect(page.locator("span.font-medium", { hasText: "Center–Radius" })).toBeVisible();
   await click(0.42, 0.55);
-  await expect(frame.locator(".wb-draft")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), true);
   await click(0.52, 0.55);
   const circleSource = await waitForAcceptedManagedSource(
     page,
     (source) => source !== originalSource && source.includes("$.geometry.centerRadiusCircle"),
   );
   await expect(page.locator("header").first()).toContainText("r2");
-  await expect(frame.locator(".wb-accepted-scene .wb-geometry > path.wb-curve")).toHaveCount(originalCurveCount + 1);
-  await expect(frame.locator(".wb-accepted-scene .wb-points > circle.wb-point")).toHaveCount(originalPointCount + 1);
-  await expect(frame.locator(".wb-draft")).toHaveCount(0);
+  await expectItemCount(drawItems(frame, { layer: "geometry", className: "wb-curve" }), originalCurveCount + 1);
+  await expectItemCount(drawItems(frame, { layer: "points", kind: "circle" }), originalPointCount + 1);
+  await expectDraft(canvasFrame(page), false);
   await expect(page.locator("span.font-medium", { hasText: "Center–Radius" })).toBeVisible();
   await expect(page.getByText(
     /pointer input is unavailable while a managed-source mutation is compiling/u,
@@ -1302,14 +1235,14 @@ test("canvas chrome exposes real role state and exact Polyline Finish readiness"
 
   await page.mouse.click(bounds!.x + bounds!.width * 0.48, bounds!.y + bounds!.height * 0.44, { button: "right" });
   await expect(finish).toBeDisabled();
-  await expect(canvas.locator(".wb-draft")).toHaveCount(0);
+  await expectDraft(canvasFrame(page), false);
   await click(0.36, 0.44);
   await expect(finish).toBeDisabled();
   await click(0.62, 0.44);
   await expect(finish).toBeEnabled();
   await finish.click();
   await expect(finish).toBeDisabled();
-  await expect(canvas.locator(".wb-draft")).toHaveCount(0);
-  await expect(canvas.locator(".wb-accepted-scene .wb-geometry > path.wb-curve")).toHaveCount(1);
+  await expectDraft(canvasFrame(page), false);
+  await expectItemCount(drawItems(canvasFrame(page), { layer: "geometry", className: "wb-curve" }), 1);
   assertCleanRuntime();
 });

@@ -63,17 +63,26 @@ async function readiness(baseUrl, manifest) {
         await page.getByPlaceholder(/Search \d+ samples/).fill("water manifold");
         await page.getByRole("button", { name: "PC liquid-cooling manifold", exact: false }).click();
         await expect(page.locator("header").getByText("PC liquid-cooling manifold", { exact: true })).toBeVisible();
-        const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
+        const frame = page.locator('[role="application"] canvas[data-renderer="webgl2"]');
         await expect(frame).toHaveCount(1);
-        await expect(frame.locator(".wb-accepted-scene .wb-geometry")).toHaveCount(1);
-        await expect.poll(() => frame.locator("path").count()).toBeGreaterThan(10);
+        await expect(frame).toHaveAttribute("data-render-state", "ready");
+        await expect(page.locator('[role="application"] svg')).toHaveCount(0);
+        const drawing = await frame.evaluate((canvas) => canvas.__geosolvePresentedFrame);
+        expect(drawing?.format).toBe("geosolve-draw-frame-v1");
+        expect(drawing.provenance.scene).toBe("accepted");
+        const geometryCount = drawing.items.filter((item) => ["geometry", "computed"].includes(item.layer)).length;
+        expect(geometryCount).toBeGreaterThan(10);
+        const renderer = await frame.evaluate((canvas) => canvas.__geosolveRendererDiagnostics);
+        expect(renderer.backend).toBe("webgl2");
+        expect(renderer.state).toBe("ready");
+        const screenshotSha256 = hash(await frame.screenshot());
         await expect(page.locator("header").getByText(/accepted · r/i)).toBeVisible();
         const expectedWasm = manifest.files.find((file) => file.path.endsWith(".wasm"));
         const expectedUrl = new URL(expectedWasm.path, baseUrl).href;
         if (!wasmResponses.has(expectedUrl)) throw new Error("readiness did not load the nominated WASM module");
         if (errors.length) throw new Error(errors.join("\n"));
         return { status: "passed", browserVersion: browser.version(), sample: "pc-water-manifold",
-          wasmUrl: expectedUrl, pathCount: await frame.locator("path").count(), errors };
+          wasmUrl: expectedUrl, geometryCount, screenshotSha256, renderer, errors };
       })(),
       new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error("runtime readiness exceeded 60 seconds")), 60_000); }),
     ]);

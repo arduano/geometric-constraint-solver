@@ -16,10 +16,16 @@ import release_browser as browser
 
 
 def witness(key="one"):
-    return {"format": "geosolve-browser-sample-prefix-v1", "key": key, "title": "One",
+    return {"format": "geosolve-browser-sample-prefix-v2", "key": key, "title": "One",
             "project": "geosolve-sample-" + key, "workspaceBytes": 123,
+            "canvasVisual": {"format": "geosolve-canvas-visual-v1", "screenshotSha256": "c" * 64,
+                             "width": 1000, "height": 700,
+                             "samples": [{"itemId": "point-1", "x": 10, "y": 20, "brightPixels": 9}],
+                             "diagnostics": {"backend": "webgl2", "state": "ready",
+                                             "width": 1000, "height": 700, "pixelRatio": 1, "rasterResolution": 2,
+                                             "hardware": {"renderer": "test renderer"}}},
             **{name: "a" * 64 for name in ("workspaceSha256", "acceptedSourceSha256",
-               "fittedGeometrySha256", "authoritativeFrameSha256")}}
+               "fittedGeometrySha256", "canonicalAcceptedSceneSha256")}}
 
 
 def report(statuses):
@@ -78,7 +84,7 @@ class BrowserReuseTests(unittest.TestCase):
 
     def test_complete_initial_state_and_exact_case_identity_are_reuse_inputs(self):
         original = browser.leaf_key("program", {"data": "same"}, self.row, witness())
-        for field in ("workspaceSha256", "acceptedSourceSha256", "fittedGeometrySha256", "authoritativeFrameSha256"):
+        for field in ("workspaceSha256", "acceptedSourceSha256", "fittedGeometrySha256", "canonicalAcceptedSceneSha256"):
             changed = witness()
             changed[field] = "b" * 64
             self.assertNotEqual(original, browser.leaf_key("program", {"data": "same"}, self.row, changed))
@@ -88,11 +94,45 @@ class BrowserReuseTests(unittest.TestCase):
         self.assertNotEqual(original, browser.leaf_key("new compiler", {"data": "same"}, self.row, witness()))
 
     def test_incomplete_or_wrong_witness_cannot_authorize_reuse(self):
-        for field in ("workspaceSha256", "workspaceBytes", "project", "key", "authoritativeFrameSha256"):
+        for field in ("workspaceSha256", "workspaceBytes", "project", "key", "canonicalAcceptedSceneSha256"):
             value = witness()
             value.pop(field)
             with self.assertRaises(ValueError):
                 browser.validate_witness(value, "one")
+
+    def test_svg_or_unpainted_canvas_evidence_cannot_qualify(self):
+        invalid = []
+        old = witness()
+        old["format"] = "geosolve-browser-sample-prefix-v1"
+        invalid.append(old)
+        for field in ("canvasVisual", "canonicalAcceptedSceneSha256"):
+            value = witness()
+            value.pop(field)
+            invalid.append(value)
+        for field, bad in (("screenshotSha256", "bad"), ("samples", []), ("width", 0)):
+            value = witness()
+            value["canvasVisual"][field] = bad
+            invalid.append(value)
+        for field, bad in (("state", "lost"), ("backend", "svg"), ("hardware", {}), ("pixelRatio", 0), ("rasterResolution", float("nan"))):
+            value = witness()
+            value["canvasVisual"]["diagnostics"][field] = bad
+            invalid.append(value)
+        value = witness()
+        value["canvasVisual"]["samples"][0]["brightPixels"] = 0
+        invalid.append(value)
+        for value in invalid:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                browser.validate_witness(value, "one")
+
+    def test_changed_pixels_or_gpu_environment_invalidate_canvas_evidence(self):
+        original = browser.leaf_key("program", {}, self.row, witness())
+        for field, value in (("screenshotSha256", "d" * 64), ("width", 2000)):
+            changed = witness()
+            changed["canvasVisual"][field] = value
+            self.assertNotEqual(original, browser.leaf_key("program", {}, self.row, changed))
+        changed = witness()
+        changed["canvasVisual"]["diagnostics"]["hardware"]["renderer"] = "different GPU"
+        self.assertNotEqual(original, browser.leaf_key("program", {}, self.row, changed))
 
     def test_leaf_requires_authentic_complete_receipt_and_intact_original_logs(self):
         log = self.store.path / "run/output.json"

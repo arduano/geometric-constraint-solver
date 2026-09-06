@@ -3,20 +3,22 @@
 """Browser leaf evidence under the reviewed immutable sample-data boundary."""
 from __future__ import annotations
 import copy
+import math
 import os
 from pathlib import Path
 import re
 import subprocess
 import time
 
-SCHEMA = "geosolve-browser-leaf-v2"
+SCHEMA = "geosolve-browser-leaf-v3"
 from release_browser_context import parent_context, validate_context
 SAMPLE_ROOT = "crates/geosolve-sketch-code/assets/bundled-samples"
 CATALOG = "crates/geosolve-sketch-code/assets/bundled-sample-catalog.json"
 CATALOG_FRONTEND = "crates/geosolve-demo-web/frontend/src/data/samples.json"
 SAMPLE_PREFIX = "M92 visual workflow: "
 FILES = ("tests/e2e/language-service.spec.ts", "tests/e2e/workbench.spec.ts",
-         "tests/e2e/m92-sample-audit.spec.ts", "tests/e2e/release-catalog.spec.ts")
+         "tests/e2e/m92-sample-audit.spec.ts", "tests/e2e/release-catalog.spec.ts",
+         "tests/e2e/canvas-renderer.spec.ts")
 
 
 def identity(row):
@@ -50,15 +52,41 @@ def sample_inputs(root, snapshot, key):
 
 
 def validate_witness(value, key):
-    if value.get("format") != "geosolve-browser-sample-prefix-v1" or value.get("key") != key:
+    if value.get("format") != "geosolve-browser-sample-prefix-v2" or value.get("key") != key:
         raise ValueError("browser witness identity differs")
     if value.get("project") != "geosolve-sample-" + key or not value.get("title"):
         raise ValueError("browser witness project/title missing")
     if not isinstance(value.get("workspaceBytes"), int) or value["workspaceBytes"] <= 0:
         raise ValueError("browser witness lacks complete persisted state")
-    for name in ("workspaceSha256", "acceptedSourceSha256", "fittedGeometrySha256", "authoritativeFrameSha256"):
+    for name in ("workspaceSha256", "acceptedSourceSha256", "fittedGeometrySha256", "canonicalAcceptedSceneSha256"):
         if not re.fullmatch("[0-9a-f]{64}", value.get(name, "")):
             raise ValueError("browser witness hash missing or malformed")
+    visual = value.get("canvasVisual")
+    if not isinstance(visual, dict) or visual.get("format") != "geosolve-canvas-visual-v1":
+        raise ValueError("browser witness lacks actual canvas evidence")
+    if not re.fullmatch("[0-9a-f]{64}", visual.get("screenshotSha256", "")):
+        raise ValueError("canvas screenshot hash missing or malformed")
+    for name in ("width", "height"):
+        if type(visual.get(name)) is not int or visual[name] <= 0:
+            raise ValueError("canvas screenshot dimensions missing or malformed")
+    samples = visual.get("samples")
+    if not isinstance(samples, list) or not samples:
+        raise ValueError("canvas lacks visible geometry pixel samples")
+    for sample in samples:
+        if (not isinstance(sample, dict) or not sample.get("itemId")
+                or type(sample.get("brightPixels")) is not int or sample["brightPixels"] <= 2
+                or type(sample.get("x")) is not int or not 0 <= sample["x"] < visual["width"]
+                or type(sample.get("y")) is not int or not 0 <= sample["y"] < visual["height"]):
+            raise ValueError("canvas geometry pixel sample missing or malformed")
+    diagnostics = visual.get("diagnostics", {})
+    if (diagnostics.get("backend") != "webgl2" or diagnostics.get("state") != "ready"
+            or not isinstance(diagnostics.get("hardware"), dict)
+            or not diagnostics["hardware"].get("renderer")):
+        raise ValueError("canvas witness lacks a successfully presented WebGL2 frame")
+    for name in ("width", "height", "pixelRatio", "rasterResolution"):
+        number = diagnostics.get(name)
+        if type(number) not in (int, float) or not math.isfinite(number) or number <= 0:
+            raise ValueError("canvas witness lacks a finite visible raster surface")
     return value
 
 

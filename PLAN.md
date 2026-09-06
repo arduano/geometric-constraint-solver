@@ -8331,6 +8331,21 @@ resource/cache conditions and all timing misses. On 2026-09-07 the user said, "y
 we can close at this", accepting the delivered results with the C5 timing miss and unperformed
 historical replay. Those limitations are future work, not closure blockers. No service or publication changed.
 
+## M94 — accelerated canvas viewport
+
+Status: **implementation authorized on 2026-09-07; in progress**.
+[M94_GOALS.md](docs/M94_GOALS.md) owns scope; [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md)
+records commands, visual evidence and qualification.
+
+- [x] Capture all 16 accepted SVG sample baselines and representative interactive states.
+- [x] Add a finite Rust draw-frame API covering every viewport layer without duplicating authority.
+- [x] Replace live SVG payloads with transient bridge v2 drawing frames; preserve saved formats.
+- [x] Render through one retained TS/PixiJS WebGL2 canvas with native UI and Rust input routing.
+- [ ] Qualify resize/DPR/capture/context lifecycle, accepted-frame retention and visual parity.
+- [x] Migrate browser witnesses and tests without weakening coverage or borrowing SVG receipts.
+- [ ] Measure rendering/interaction, run the complete integrated gate, and deliver reviewed UAT.
+- [ ] Obtain supervising-user acceptance; retain any limitations explicitly at closure.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

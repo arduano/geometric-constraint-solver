@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "M92 qualified b153a28 release receipt; exact selected WASM/performance names",
+  "source": "M92/M93 retained obligations plus M94 four canvas lifecycle cases; exact selected WASM/performance names",
   "stages": {
     "wasm.m70_transition_parity": [
       "m70_transition_oracle_matches_the_cross_target_golden_bytes"
@@ -155,7 +155,7 @@
     ],
     [
       "workbench.spec.ts",
-      "real WASM opens an actual sample with a styled authoritative SVG and layout floors",
+      "real WASM opens an actual sample with a styled authoritative canvas and layout floors",
       "chromium"
     ],
     [
@@ -176,6 +176,26 @@
     [
       "workbench.spec.ts",
       "two circle contacts publish their Segment and accept the next pointer gesture",
+      "chromium"
+    ],
+    [
+      "canvas-renderer.spec.ts",
+      "M94 canvas presents actual WebGL2 pixels and remains idle without redrawing",
+      "chromium"
+    ],
+    [
+      "canvas-renderer.spec.ts",
+      "M94 canvas aligns DPR resize and hidden layouts with presented geometry and picking",
+      "chromium"
+    ],
+    [
+      "canvas-renderer.spec.ts",
+      "M94 canvas context loss retains presented evidence and restores the newest camera",
+      "chromium"
+    ],
+    [
+      "canvas-renderer.spec.ts",
+      "M94 canvas lost pointer capture cancels a preview and permits the next real gesture",
       "chromium"
     ]
   ]

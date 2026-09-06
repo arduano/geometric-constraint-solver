@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+import { canvasFrame, drawItems, expectItemCount, logicalToClient, presentedFrame } from "./presented-canvas";
 import { acceptedSource, fittedGeometry, openSamplePrefix, samples, savedWorkspace, type Edit } from "./release-sample-prefix";
 
 async function capture(page: Page, info: TestInfo, key: string, stage: string) {
@@ -14,8 +15,8 @@ async function capture(page: Page, info: TestInfo, key: string, stage: string) {
   if (process.env.M92_BROWSER_PRESERVE_WORKSPACE === "1") {
     await writeFile(join(target, `${stage}.workspace.json`), (await savedWorkspace(page)) ?? "");
   }
-  const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
-  await writeFile(join(target, `${stage}.svg`), await frame.evaluate((svg) => svg.outerHTML));
+  const frame = canvasFrame(page);
+  await writeFile(join(target, `${stage}.scene.json`), JSON.stringify(await presentedFrame(frame)));
   await writeFile(join(target, `${stage}.ts`), (await acceptedSource(page)) ?? "");
 }
 
@@ -24,14 +25,13 @@ function controlLabel(edit: Edit): string {
 }
 
 async function requireJansenDrag(page: Page, info: TestInfo, originalSource: string, baseline: string) {
-  const frame = page.locator('[role="application"] svg.geosolve-authoritative-frame');
-  const points = frame.locator('.wb-accepted-scene .wb-points > circle.wb-point');
-  await expect(points).toHaveCount(8);
-  const geometry = await points.evaluateAll((elements) => elements.map((element) => ({
-    id: element.getAttribute("data-persistent-id"),
-    x: Number(element.getAttribute("cx")),
-    y: Number(element.getAttribute("cy")),
-  })));
+  const frame = canvasFrame(page);
+  const points = drawItems(frame, { layer: "points", kind: "circle" });
+  await expectItemCount(points, 8);
+  const geometry = (await points.all()).map((item) => {
+    if (item.kind !== "circle") throw Error("Expected presented point circle");
+    return { id: item.metadata.persistentId, x: item.center[0], y: item.center[1] };
+  });
   // The authored crank starts at [15, 0], to the right of O=[0, 0]
   // and every leg joint. Use its two actual painted endpoints to calibrate
   // the model-to-screen transform, without a private bridge test hook.
@@ -40,23 +40,12 @@ async function requireJansenDrag(page: Page, info: TestInfo, originalSource: str
   expect(Math.abs(crank.y - ground.y)).toBeLessThan(0.002);
   const scale = (crank.x - ground.x) / 15;
   expect(scale).toBeGreaterThan(0);
-  const selector = (id: string | null) => `.wb-points > circle.wb-point[data-persistent-id=${JSON.stringify(id)}]`;
-  const input = frame.locator(selector(crank.id));
+  const input = drawItems(frame, { layer: "points", kind: "circle", persistentId: crank.id });
   const bounds = await input.boundingBox();
   expect(bounds).not.toBeNull();
   const start = [bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2];
   const target = { x: ground.x + 14.265847744427303 * scale, y: ground.y - 4.635254915624211 * scale };
-  const pointerTarget = await frame.evaluate((element, position) => {
-    const svg = element as unknown as {
-      createSVGPoint(): { x: number; y: number; matrixTransform(matrix: unknown): { x: number; y: number } };
-      getScreenCTM(): unknown;
-    };
-    const point = svg.createSVGPoint();
-    point.x = position.x;
-    point.y = position.y;
-    const transformed = point.matrixTransform(svg.getScreenCTM());
-    return { x: transformed.x, y: transformed.y };
-  }, target);
+  const pointerTarget = await logicalToClient(frame, target);
   const undo = page.getByRole("button", { name: "Undo", exact: true });
   await expect(undo).toBeDisabled();
   const initialSave = await savedWorkspace(page);
@@ -67,9 +56,10 @@ async function requireJansenDrag(page: Page, info: TestInfo, originalSource: str
   // Unlimited native sweeps previously missed a bounded preview exhaustion:
   // selecting the input succeeded, but no accepted frame moved or committed.
   await expect(undo).toBeEnabled();
-  const position = (id: string | null) => frame.locator(selector(id)).evaluate((element) => ({
-    x: Number(element.getAttribute("cx")), y: Number(element.getAttribute("cy")),
-  }));
+  const position = async (id: string | null) => {
+    const [x, y] = await drawItems(frame, { layer: "points", kind: "circle", persistentId: id }).position();
+    return { x, y };
+  };
   const moved = await position(crank.id);
   expect(Math.hypot(moved.x - target.x, moved.y - target.y) / scale).toBeLessThan(0.05);
   expect(await position(ground.id)).toEqual({ x: ground.x, y: ground.y });
@@ -171,7 +161,7 @@ for (const sample of samples) {
       await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(edited);
       await page.getByRole("tab", { name: "Parameters", exact: true }).click();
       await expect(page.getByRole("textbox", { name: controlLabel(edit), exact: true })).toHaveValue(value);
-      await expect(frame.locator(".wb-accepted-scene .wb-geometry")).toHaveCount(1);
+      expect((await presentedFrame(frame)).items.some((item) => item.layer === "geometry")).toBe(true);
       expect(await fittedGeometry(page)).toBe(editedGeometry);
       await capture(page, info, key, `reload-${index + 1}`);
     }

@@ -158,7 +158,10 @@ remain provenance, while the changed catalog/build/package obligations execute i
 Browser coverage has stable sample-key identities and an independently reviewed non-sample
 inventory. Each changed artifact executes the catalog/Recent/retired-origin checks and every
 sample's actual UI-open prefix. The prefix hashes the complete persisted wire (including history,
-branches and allocators), exact source, fitted geometry and authoritative SVG. A surviving sample's
+branches and allocators), exact source, fitted geometry and the canonical last-presented numeric drawing. M94 prefix v2
+additionally requires a real canvas screenshot hash, visible point pixel samples and stable WebGL2
+surface/hardware identity; old SVG prefix/leaf receipts cannot qualify this renderer. Frame counters,
+resource counters and render timing are separate telemetry, not initial-state identity. A surviving sample's
 full selection/grouping/two-edit/Undo/Redo/reload workflow can reuse a signed completed leaf only
 when its program, complete selected data and entire prefix witness match. Only manifest ordinal
 belongs exclusively to the fresh catalog check. Shared workbench and language tests execute afresh

@@ -1,9 +1,9 @@
 # GeoSolve active handoff
 
-Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization accepted and closed on 2026-09-07.**
+Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization accepted and closed on 2026-09-07; M94 accelerated canvas is in progress.**
 See [M92 sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06),
 [M93 goals](docs/M93_GOALS.md) and [implementation order](docs/M93_IMPLEMENTATION.md).
-M93 has a passing 21m50s warm fresh gate, completed cold serial parity and verified count-repair planning. The user accepted closure with edit/prune timings of 12m22s–15m41s above the ten-minute target and the historical four-entry replay unperformed. See the [qualification and sign-off ledger](docs/M93_QUALIFICATION.md). These remain recorded limitations; further optimization and sample expansion are future work. No next milestone is assigned.
+M93 has a passing 21m50s warm fresh gate, completed cold serial parity and verified count-repair planning. The user accepted closure with edit/prune timings of 12m22s–15m41s above the ten-minute target and the historical four-entry replay unperformed. See the [qualification and sign-off ledger](docs/M93_QUALIFICATION.md). These remain recorded limitations; further optimization and sample expansion are future work. [M94](docs/M94_GOALS.md) now replaces the live SVG viewport with a TypeScript WebGL2 canvas while preserving Rust authority and native surrounding UI.
 
 ## Objective
 
