@@ -339,7 +339,7 @@ describe("M88 workbench interaction contract", () => {
       reference_lab: "Reference labs", scale_study: "Scale studies",
     };
     for (const category of new Set(reviewedCatalog.samples.map((sample) => sample.category))) {
-      const group = screen.getByRole("region", { name: categoryLabels[category] });
+      const group = screen.getByRole("heading", { name: categoryLabels[category], exact: true }).closest("section")!;
       expect(within(group).getAllByRole("button").map((button) => button.firstElementChild?.textContent)).toEqual(
         reviewedCatalog.samples.filter((sample) => sample.category === category).map((sample) => sample.title),
       );
