@@ -3,6 +3,13 @@
 
 set -euo pipefail
 
+# Keep the unchanged sequential Cargo/npm driver as an independent parity reference.
+# Ordinary entry points use the bounded direct-executable runner.
+if [[ "${1:-}" != '--reference' ]]; then
+  exec python3 "$(dirname "${BASH_SOURCE[0]}")/golden_oracle.py" "$@"
+fi
+shift
+
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 golden="$root/crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv"
 header=$'case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint'

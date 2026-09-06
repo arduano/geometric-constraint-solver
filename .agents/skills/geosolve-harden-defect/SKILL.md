@@ -59,8 +59,11 @@ row; never bless changed bytes merely to make a check pass.
 
 When a production fix is authorized, keep it behind the failing regression, preserve explicit
 branches and hard/soft semantics, and re-run the focused owner test before collateral suites.
-Run the generic golden survey/check and the milestone-appropriate native, WASM, Clippy, formatting,
-and release gates described in the reference.
+Run the generic golden and milestone-appropriate native, WASM, Clippy, formatting and release
+checks described in the reference and `docs/RELEASE_QUALIFICATION.md`. Use focused checks during
+development; at nomination the integrated gate authenticates any reused unaffected evidence.
+One captured golden evaluation can supply survey/check/clean dispositions without pretending
+they were independent executions. Keep explicit golden-update review and full-fresh qualification.
 
 Report the reproduction identity, owner and root cause, regression added, production behavior
 changed or deliberately unchanged, exact commands and outcomes, acceptance criteria, and remaining

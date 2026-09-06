@@ -185,7 +185,7 @@ four mechanisms, eight product/fabrication studies, two capability atlases and t
 
 [M93](docs/M93_GOALS.md) is the next milestone: fast, proportional release qualification through
 fail-fast checks, bounded parallelism, shared builds and verified reuse of unaffected evidence.
-Implementation is not yet started. Further sample additions are future work.
+Runner implementation and focused tests are present; integrated qualification is in progress. Further sample additions are future work.
 
 Physics, collision and a production rendering system remain out of scope.
 

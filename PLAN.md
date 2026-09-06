@@ -8293,7 +8293,7 @@ Exact commands, receipts and retained limitations: [final qualification and nomi
 
 ## M93 — fast, proportional release qualification
 
-Status: **next milestone; scope approved on 2026-09-06; implementation not started**.
+Status: **in progress; runner, shared preparations and authenticated reuse implemented; integrated qualification outstanding**.
 The user prioritized release-gate optimization after M92 pruning consumed a 73-minute failed gate
 and a 152-minute complete replacement. [M93_GOALS.md](docs/M93_GOALS.md) owns the measurable
 contract and reuse-policy matrix; [M93_IMPLEMENTATION.md](docs/M93_IMPLEMENTATION.md) owns order.

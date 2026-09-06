@@ -24,6 +24,11 @@ Read `START_HERE.md`, `ARCHITECTURE.md`, `PLAN.md`, `ACCEPTANCE.md`, and `docs/S
 - Every residual implementation needs a finite-difference Jacobian test and a structured human-readable audit descriptor.
 - Every bug involving convergence, rank, scaling, or a branch flip gets a regression scenario.
 - Run format, clippy, tests, and the relevant WASM build before claiming a milestone complete.
+- Follow `docs/RELEASE_QUALIFICATION.md`: use focused checks during development and the integrated
+  gate at nomination. Reuse only authenticated unchanged-input evidence through the runner;
+  documentation-only closeout preserves the previously qualified product. Do not rerun the full
+  gate merely because an independent harness stage failed. Keep `--fresh` available for full
+  qualification and use its recorded input/coverage requirements without weakening assertions.
 - Update `PLAN.md` checkboxes and add short notes under the completed milestone.
 - Make small, reviewable commits if the supervising caller permits commits; do not rewrite history.
 

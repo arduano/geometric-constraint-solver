@@ -1,9 +1,9 @@
 # GeoSolve active handoff
 
-Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization is next.**
+Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization is in progress.**
 See [M92 sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06),
 [M93 goals](docs/M93_GOALS.md) and [implementation order](docs/M93_IMPLEMENTATION.md).
-M93 is scoped but not implemented; further sample expansion is deferred.
+M93 runner, input policy and focused regressions are implemented; integrated qualification and timing are in progress. Further sample expansion is deferred.
 
 ## Objective
 

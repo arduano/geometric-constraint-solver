@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "description": "Conservative release input ownership; unknown files affect every stage.",
+  "prose": [
+    "docs/**",
+    "START_HERE.md",
+    "ARCHITECTURE.md",
+    "PLAN.md",
+    "ACCEPTANCE.md",
+    "README.md",
+    "REFERENCES.md",
+    "OVERNIGHT_REPORT.md"
+  ],
+  "global": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "shell.nix",
+    "rust-toolchain*",
+    ".cargo/**",
+    "**/Cargo.toml",
+    "**/package-lock.json",
+    "**/package.json",
+    "AGENTS.md",
+    ".agents/**",
+    "scripts/release-gate.sh",
+    "scripts/release_gate.py",
+    "scripts/release_policy.json",
+    "scripts/tests/test_release_gate.py",
+    "scripts/golden_oracle.py",
+    "scripts/golden_oracle_test.py",
+    "scripts/release_gate_native.py",
+    "scripts/tests/test_release_gate_native.py"
+  ],
+  "owned": [
+    "crates/*/src/**", "crates/*/tests/**", "crates/*/examples/**", "crates/*/benches/**",
+    "crates/*/build.rs", "crates/*/assets/**", "crates/*/README.md",
+    "crates/geosolve-demo-web/frontend/**", "packages/geosolve-intent/**", "packages/geosolve-sketch-code/**",
+    "scripts/verify-geosolve-sketch-code-package.sh"
+  ],
+  "workers": 2,
+  "memory_heavy_workers": 1,
+  "test_threads": 2,
+  "test_opt_level": 1,
+  "debug_assertions": true,
+  "overflow_checks": true
+}

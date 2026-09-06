@@ -4,9 +4,11 @@ import { lstat, readFile, readdir } from "node:fs/promises";
 import { dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const [distributionArgument, baseArgument = "./"] = process.argv.slice(2);
+const [distributionArgument, baseArgument = "./", harnessArgument] = process.argv.slice(2);
+if (harnessArgument !== undefined && harnessArgument !== "--harness") throw new Error("unknown distribution validation option");
+const harness = harnessArgument === "--harness";
 if (!distributionArgument) {
-  throw new Error("usage: node scripts/validate-dist.mjs <distribution> [public-base]");
+  throw new Error("usage: node scripts/validate-dist.mjs <distribution> [public-base] [--harness]");
 }
 if (baseArgument !== "./" && !(baseArgument.startsWith("/") && baseArgument.endsWith("/"))) {
   throw new Error(`public base must be ./ or an absolute trailing-slash path: ${baseArgument}`);
@@ -20,6 +22,7 @@ const required = [
   "LICENSE",
   "THIRD_PARTY_LICENSES.md",
   "API_COMPATIBILITY.md",
+  ...(harness ? ["compiler-parity.html"] : []),
 ];
 const files = [];
 const directories = [];
@@ -97,17 +100,19 @@ for (const file of [...byExtension(".js"), ...byExtension(".css"), ...byExtensio
   }
 }
 
-const html = await readFile(resolve(distribution, "index.html"), "utf8");
-const applicationUrls = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css)(?:\?[^\"]*)?)"/g)].map(
-  (match) => match[1],
-);
-if (applicationUrls.length < 2) throw new Error("index.html does not load JavaScript and CSS");
-for (const url of applicationUrls) {
-  if (!url.startsWith(baseArgument)) {
-    throw new Error(`application URL does not use public base ${baseArgument}: ${url}`);
+for (const entrypoint of harness ? ["index.html", "compiler-parity.html"] : ["index.html"]) {
+  const html = await readFile(resolve(distribution, entrypoint), "utf8");
+  const applicationUrls = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css)(?:\?[^\"]*)?)"/g)].map(
+    (match) => match[1],
+  );
+  if (applicationUrls.length < (entrypoint === "index.html" ? 2 : 1)) throw new Error(`${entrypoint} does not load its application assets`);
+  for (const url of applicationUrls) {
+    if (!url.startsWith(baseArgument)) {
+      throw new Error(`application URL does not use public base ${baseArgument}: ${url}`);
+    }
+    const file = url.slice(baseArgument.length).split("?", 1)[0];
+    if (!files.includes(file)) throw new Error(`index.html references missing asset: ${file}`);
   }
-  const file = url.slice(baseArgument.length).split("?", 1)[0];
-  if (!files.includes(file)) throw new Error(`index.html references missing asset: ${file}`);
 }
 
 const wasmFile = byExtension(".wasm")[0];

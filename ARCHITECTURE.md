@@ -2798,12 +2798,12 @@ The corrected test agrees with the compiled-declaration and independent geometry
 passes 2/2. This `HARNESS_ERROR` changes no production semantics and receives no finding ID.
 `docs/M92_VISUAL_AUDIT.md` records the failed gate receipt; complete qualification subsequently passed in the final ledger.
 
-## M93 qualification architecture — planned next
+## M93 qualification architecture — in progress
 
 [M93_GOALS.md](docs/M93_GOALS.md) scopes release infrastructure, leaving solver/domain contracts
 unchanged. One stage/case inventory will drive dependency planning, resource-bounded execution,
 input-authenticated evidence reuse and complete coverage reconciliation. Build caches and passing
 test receipts are distinct. Each reused result retains its original provenance; unknown inputs
 force fresh work. Newly built or moved artifacts receive fresh transport verification. A complete
-fresh-results mode remains available. This architecture is planned; the current runner and agent
-qualification rules are unchanged until the new policy and invalidation tests are implemented.
+fresh-results mode remains available. The runner and focused invalidation tests are implemented; integrated qualification is outstanding.
+[Release qualification](docs/RELEASE_QUALIFICATION.md) owns the implemented commands and policy.

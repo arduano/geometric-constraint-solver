@@ -7,3 +7,4 @@ crates/geosolve-demo-web/frontend/node_modules/
 *.profraw
 *.svg.tmp
 .DS_Store
+__pycache__/

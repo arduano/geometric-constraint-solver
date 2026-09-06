@@ -110,15 +110,17 @@ its reproduction, finding identity, and expected disposition.
 
 ## Qualification sequence
 
-Run the narrowest focused owner test first, then broaden proportionally. Use the current generic
-oracle entry points:
+Run the narrowest focused owner test first, then broaden proportionally under
+`docs/RELEASE_QUALIFICATION.md`. Use the current generic oracle entry points; capture one evaluation
+and validate its separate dispositions without repeating the corpus merely for differently named
+receipts:
 
 ```bash
 cargo test --locked -p geosolve-constraint-editor \
   --test golden_authoring_oracle golden_oracle_inventory_and_tsv_schema_are_exhaustive -- --exact
-./scripts/golden-authoring-scene-oracle.sh --survey
-./scripts/golden-authoring-scene-oracle.sh --check
-./scripts/golden-authoring-scene-oracle.sh --require-clean
+./scripts/golden-authoring-scene-oracle.sh --survey --output-dir NEW_DIRECTORY
+./scripts/golden-authoring-scene-oracle.sh --check --from-observation NEW_DIRECTORY
+./scripts/golden-authoring-scene-oracle.sh --require-clean --from-observation NEW_DIRECTORY
 ```
 
 For adapter-crossing failures, also run the exact native `geosolve-demo-web --lib` scene test and
@@ -133,3 +135,10 @@ cargo test --locked --workspace --all-features
 Run `./scripts/release-gate.sh` from a clean nominated source for a complete release claim. During
 development only, `GEOSOLVE_ALLOW_DIRTY=1 ./scripts/release-gate.sh` may provide provisional
 evidence; never describe that dirty run as clean candidate qualification.
+
+The integrated runner owns format/Clippy/native/WASM/oracle/build/package/browser/performance
+coverage and verifies reuse against complete stage inputs. Do not run all of those commands
+separately and then repeat them in the gate. During development use focused owner and runner tests;
+after an independent harness repair reuse only unaffected completed successes via the runner.
+Unknown or changed dependencies run fresh. Use `--fresh` for explicit comprehensive fresh results.
+Prose-only sign-off does not change or requalify the accepted product bytes.

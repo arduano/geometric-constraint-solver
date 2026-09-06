@@ -20,8 +20,13 @@
     "check:licenses": "node scripts/check-runtime-licenses.mjs",
     "check:language-sdk": "node scripts/sync-language-service-declarations.mjs --check",
     "generate:language-sdk": "node scripts/sync-language-service-declarations.mjs",
-    "test:build": "node scripts/test-build-contract.mjs",
-    "validate:dist": "node scripts/validate-dist.mjs"
+    "test:build": "node scripts/test-build-contract.mjs && node --test scripts/test-release-artifact.mjs",
+    "validate:dist": "node scripts/validate-dist.mjs",
+    "check:types": "npm run check:language-sdk && tsc -b",
+    "check:static": "npm run check:manifest && npm run check:licenses && npm run test:build && npm run check:language-sdk",
+    "build:release-artifacts": "node scripts/build-release-artifacts.mjs",
+    "serve:artifact": "node scripts/serve-artifact.mjs",
+    "verify:artifact": "node scripts/verify-artifact.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",

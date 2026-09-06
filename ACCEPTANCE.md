@@ -5404,7 +5404,7 @@ recorded in its final ledger. All mechanical release criteria pass, including th
 counted bounded Jansen workflow on each frozen endpoint. The supervising caller subsequently
 accepted the delivered scope and closed M92; earlier Pending/not-run receipts remain historical.
 
-## M93 release qualification acceptance — planned next
+## M93 release qualification acceptance — in progress
 
 The [M93 C1–C7 contract](docs/M93_GOALS.md#acceptance-and-speed-targets) requires complete inventory
 and input/timing receipts, cheap failure detection, sound selective reuse, serial/parallel semantic
@@ -5417,7 +5417,7 @@ Record host, CPU/RAM limits, cache state and all repeated outcomes. These are ta
 results. Every omitted rerun needs an authenticated unchanged-input receipt or explicit
 inapplicability. Unknown dependencies, incomplete/corrupt evidence or policy drift require fresh
 work. The full fresh gate remains available and no residual, branch, history, golden or release
-assertion is weakened. Implementation and milestone acceptance are still outstanding.
+assertion is weakened. Runner implementation and focused policy tests are present; integrated qualification, measured latency and milestone acceptance are outstanding.
 
 ## Regression and oracle policy
 

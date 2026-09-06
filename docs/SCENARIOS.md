@@ -7290,9 +7290,9 @@ and linked plan/section widths. The focused manufacturing suite passes 2/2 in 7.
 This is `HARNESS_ERROR`, with no new finding ID or product change. The failed receipt is recorded
 in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination subsequently passed; see the final ledger.
 
-## M93 release-gate optimization scenarios — planned
+## M93 release-gate optimization scenarios — in progress
 
-These are acceptance scenarios to implement, not commands or passing tests that already exist.
+The runner has focused input/reuse, timeout, failure and concurrency regressions. Full real-workload qualification and latency measurements remain outstanding.
 [M93_GOALS.md](M93_GOALS.md) owns the exact policy and performance targets.
 
 - Documentation-only sign-off preserves qualified product bytes without solver/browser reruns;

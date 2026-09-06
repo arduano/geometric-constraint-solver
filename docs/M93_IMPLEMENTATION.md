@@ -2,8 +2,36 @@
 
 # M93 implementation plan: release qualification
 
-Status: **planned next; no runner or qualification-policy implementation has changed.**
+Status: **in progress; runner, native/golden adapters, browser preparation and input-reuse policy implemented; integrated qualification and measured acceptance outstanding.**
 [M93_GOALS.md](M93_GOALS.md) owns scope, the proposed reuse matrix and measurable acceptance targets.
+
+## Implemented checkpoint — 2026-09-06
+
+`scripts/release_gate.py` and `release_policy.json` own the stage inventory, dependency planning,
+private HMAC-authenticated receipts, per-stage timing/resource logs, safe resume, source checks,
+isolated scratch and bounded worker admission. `release_gate_native.py` compiles/discovers Cargo
+executables and runtime environments once, then validates exact completed libtest inventories.
+The optimized test profile uses level 1 with debug assertions and overflow checks explicitly on.
+The original sequential gate and golden driver remain available as references.
+
+`golden_oracle.py` preserves the 271 cases and existing 30/60-second limits while running direct
+executables and Deno, with deterministic reduction and retained observations. Browser preparation
+builds optimized WASM once and separate harness/production assets; all 37 browser rows share the
+prepared harness server. Exact production transport and bounded actual-WASM readiness are separate.
+[RELEASE_QUALIFICATION.md](RELEASE_QUALIFICATION.md) documents the runnable interfaces and policy.
+
+Focused checks passed: 20 scheduler/policy regressions, 16 native-adapter regressions, 13 golden
+runner regressions, 11 artifact/transport tests, existing build contracts and 97 frontend unit tests.
+Browser discovery preserves 20 workbench, 16 sample and one language row. An integrated preflight
+passed inventory, metadata/format, managed package generation/tests and frontend checks in roughly
+55 seconds. Fresh transport/readiness against unchanged M92 bytes passed in about five seconds.
+These are development results, not full M93 qualification. Native profile preparation, integrated
+fresh serial/parallel parity, representative reuse and latency measurements remain in progress.
+
+Current reuse is conservative at owning crate/test-binary and artifact boundaries; per-sample
+independence is not assumed when the compiled catalog changes. Measure this path and add a reviewed
+smaller dependency boundary only if the small-change target requires it. No target is waived or
+claimed achieved by runner availability.
 
 ## Implementation order
 

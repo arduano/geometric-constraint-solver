@@ -2,8 +2,7 @@
 
 # M93 goals: fast, proportional release qualification
 
-Status: **next milestone; scope approved by the supervising caller on 2026-09-06;
-implementation and qualification not started.** M92 is closed with its accepted 16-sample catalog.
+Status: **in progress; implementation authorized on 2026-09-06; runner and focused regressions implemented, integrated qualification and latency acceptance outstanding.** M92 is closed with its accepted 16-sample catalog.
 Further sample expansion is future work and does not block this milestone.
 
 ## Outcome and measured problem

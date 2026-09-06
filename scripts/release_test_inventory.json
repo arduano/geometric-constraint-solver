@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "source": "M92 qualified b153a28 release receipt; exact selected WASM/performance names",
+  "stages": {
+    "wasm.m70_transition_parity": [
+      "m70_transition_oracle_matches_the_cross_target_golden_bytes"
+    ],
+    "wasm.m71_transition_parity": [
+      "m71_transition_oracle_matches_the_cross_target_golden_bytes"
+    ],
+    "wasm.m74_reference_geometry": [
+      "intrinsic_datum_picking_is_pixel_bounded_native_first_and_fit_neutral",
+      "datum_inference_and_atomic_publication_match_on_native_and_wasm",
+      "datum_contextual_relations_are_order_symmetric_and_axis_parallelism_is_ordinary",
+      "datum_axis_symmetry_preselection_accepts_every_operand_permutation",
+      "datum_axis_symmetry_active_authoring_scene_lifecycle_and_reload_are_exact"
+    ],
+    "wasm.m75_hover_pointer_parity": [
+      "stored_point_and_semantic_center_precede_an_overlapping_annotation",
+      "problem_forced_annotation_uses_the_same_move_and_down_wrapper_input",
+      "pointer_context_is_revoked_by_every_scene_or_input_owner_lifecycle",
+      "passive_geometry_precedes_datum_and_datum_precedes_empty_canvas",
+      "ordinary_authoring_hover_is_the_exact_next_compatible_click_target",
+      "m86_f002_parent_endpoint_arbitration_spans_every_overlapping_fillet",
+      "m86_f002_nearer_parent_endpoint_wins_when_both_point_halos_are_hit",
+      "m86_f002_fillet_source_corner_remains_selectable_through_its_radius_surface",
+      "m86_f002_fillet_parent_remote_endpoints_beat_its_radius_surface",
+      "m86_f002_coordinate_overlap_without_coincident_does_not_claim_source_corner_priority",
+      "m86_f002_applied_fillet_keeps_its_persistent_source_corner_selectable",
+      "m86_f002_active_coincident_source_endpoints_resolve_one_deterministic_corner_point",
+      "grouped_fillet_hover_is_the_exact_next_native_click_target",
+      "first_sample_uses_prospective_geometry_context_for_hover_and_click",
+      "fillet_radius_beats_overlapping_draggable_native_geometry_for_every_modifier",
+      "exact_annotation_ties_ignore_scene_order_and_choose_the_first_occurrence",
+      "context_corridor_reveals_only_and_never_becomes_a_click_target",
+      "annotation_precedes_passive_geometry_and_pointer_move_is_state_neutral"
+    ],
+    "wasm.m76_annotation_parity": [
+      "shared_endpoint_angle_uses_the_finite_interior_wedge",
+      "profile_offset_annotation_layout_and_cache_loss_are_native_wasm_identical",
+      "annotation_geometry_and_layout_are_native_wasm_identical",
+      "annotation_drag_preview_cancel_and_commit_are_native_wasm_identical",
+      "all_twenty_constraint_glyph_families_publish_native_wasm_geometry",
+      "all_eight_dimension_families_publish_native_wasm_geometry"
+    ],
+    "wasm.m77_curve_control_parity": [
+      "size_domains_retain_and_publish_only_the_last_valid_native_wasm_sample",
+      "prepared_size_preview_and_cancellation_are_native_wasm_identical",
+      "m77_f013_elliptical_arc_authoring_uses_four_spatial_projected_stages",
+      "every_curve_family_publishes_the_same_finite_control_catalog_on_native_and_wasm",
+      "changed_trim_gestures_preserve_discrete_state_and_round_trip_history_persistence"
+    ],
+    "wasm.m79_inference_lifecycle": [
+      "m79_midpoint_line_default_keeps_anchor_and_omits_fully_redundant_direction"
+    ],
+    "wasm.lifecycle": [
+      "wasm::tests::actual_wasm_scale_samples_select_edit_validate_and_retain_history",
+      "wasm::tests::actual_wasm_handle_matches_dom_free_rust_session_for_transition_matrix",
+      "wasm::tests::actual_wasm_all_bundled_samples_match_independently_composed_production_frames"
+    ],
+    "performance.interaction": [
+      "relation_heavy_curve_control_separates_frames_from_exact_terminal_publication",
+      "pre_apply_fillet_radius_separates_frames_from_exact_apply_publication",
+      "pre_apply_offset_distance_separates_frames_from_exact_apply_publication"
+    ],
+    "performance.linkage": [
+      "exact_auto_sparse_crossover_solves_and_validates_256_moving_body_chain"
+    ]
+  }
+}
