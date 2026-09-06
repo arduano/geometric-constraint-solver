@@ -211,6 +211,29 @@ native receipts through a scheduling-lock key change. The driver stopped after f
 cleanup and before cold qualification. That repair, further guarded frontend/Cargo overlap,
 new integrated qualification, cold serial parity and milestone acceptance remain outstanding.
 
+## Count-repair and frontend-overlap correction — 2026-09-06
+
+The prepared native adapter now marks stages explicitly as native, and only those stage keys
+exclude `build_lock`. Fresh execution and full receipt/manifest contracts still record and
+obey the current lock. Source, selected cases, commands, profiles, features, runtime closure,
+artifacts, resources and timeout remain semantic inputs. Four new real-child fixtures combine
+the actual checker input mapping, stale writer review and finalized failed-run donation; they
+prove native/golden/WASM reuse after the repair while retaining the failed original receipt.
+
+Prepared browser bundling can overlap the next Cargo/lifecycle builder under its distinct
+`frontend_build_overlap` audit. Both overlap guards use one complete program-input map. The
+frontend stage remains dependent on preflight and its prepared WASM, occupies a memory slot,
+and receives scheduling priority without bypassing resource/exclusive limits. Stale, missing,
+unknown or ambiguous inputs restore shared Cargo exclusion. Nine new input and real-child
+fixtures cover writer boundaries, admission, serial fallback, failure and recovery.
+
+The combined `test_release*.py` suite passes **164 tests in 34.065 seconds** in Nix. Comparator
+fixtures pass **25/25**, benchmark coverage fixtures **9/9**, and `git diff --check` passes.
+Exact commands: `nix-shell shell.nix --run 'python3 -B -m unittest discover -s scripts/tests -p
+"test_release*.py"'`, `python3 /tmp/m93-comparator-fixture-tests.py`, and
+`python3 /tmp/m93-benchmark-coverage-tests.py`. These are focused implementation results;
+new full qualification, actual product count-repair decisions and timing/cold parity are pending.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation
