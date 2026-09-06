@@ -144,7 +144,15 @@ test("prepared Playwright discovery retains every stable sample and shared workf
   const listed = spawnSync(command, ["test", "--list"], { cwd: frontendDirectory, env, encoding: "utf8" });
   assert.equal(listed.status, 0, listed.stderr);
   const catalog = JSON.parse(await readFile(resolve(frontendDirectory, "../../geosolve-sketch-code/assets/bundled-sample-catalog.json"), "utf8"));
-  assert.match(listed.stdout, new RegExp(`Total: ${catalog.samples.length + 22} tests in 4 files`));
+  const inventory = JSON.parse(await readFile(resolve(frontendDirectory, "../../../scripts/release_test_inventory.json"), "utf8"));
+  const shared = inventory.browser_non_sample_cases;
+  const sharedFiles = new Set(shared.map(([file]) => file));
+  assert.match(listed.stdout, new RegExp(`Total: ${catalog.samples.length + shared.length} tests in ${sharedFiles.size + 1} files`));
+  const sharedRows = [...listed.stdout.matchAll(/^  \[([^\]]+)\] › ([^:]+):\d+:\d+ › (.+)$/gm)]
+    .filter(([, , file]) => file !== "m92-sample-audit.spec.ts")
+    .map(([, project, file, title]) => [file, title, project]);
+  const ordered = (rows) => rows.map((row) => JSON.stringify(row)).sort();
+  assert.deepEqual(ordered(sharedRows), ordered(shared));
   const sampleRows = [...listed.stdout.matchAll(/\[(chromium(?:-memory)?)\].*M92 visual workflow: ([a-z0-9-]+)\n/g)];
   assert.deepEqual(sampleRows.map((row) => row[2]).sort(), catalog.samples.map(({ key }) => key).sort());
   const heavy = new Set(["perforated-fixture-field", "robotic-harness-backplane", "curves-contact-continuity-atlas", "fabrication-operations-atlas"]);
@@ -154,9 +162,6 @@ test("prepared Playwright discovery retains every stable sample and shared workf
   });
   assert.equal(prefix.status, 0, prefix.stderr);
   assert.deepEqual([...prefix.stdout.matchAll(/M92 visual workflow: ([a-z0-9-]+)\n/g)].map((row) => row[1]).sort(), catalog.samples.map(({ key }) => key).sort());
-  assert.equal((listed.stdout.match(/workbench\.spec\.ts:/g) ?? []).length, 20);
-  assert.equal((listed.stdout.match(/language-service\.spec\.ts:/g) ?? []).length, 1);
-  assert.equal((listed.stdout.match(/release-catalog\.spec\.ts:/g) ?? []).length, 1);
   const production = await fixture(t);
   env.GEOSOLVE_E2E_ARTIFACT_MANIFEST = production.manifest;
   const rejected = spawnSync(command, ["test", "--list"], { cwd: frontendDirectory, env, encoding: "utf8" });

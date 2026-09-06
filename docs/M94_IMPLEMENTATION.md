@@ -122,3 +122,22 @@ first canvas build measured 37.8 ms for Jansen before the quality refinement. Th
 explicit for review; this milestone does not silently broaden into solver or camera-authority
 optimization. Raw system details, all samples and paint/task totals are in
 `target/m94/performance-{svg-hardware,canvas-hardware,canvas-hardware-final}.json`.
+
+## Qualification attempt and presentation parity
+
+Clean source `c3431f0` ran `nix-shell shell.nix --run './scripts/release-gate.sh'`; run
+`20260907T093227-241945f1` passed inventory, format/metadata, managed and frontend stages, then
+stopped in catalog preflight on an obsolete `38 tests in 4 files` assertion. This is a harness
+inventory mismatch. The repaired check reads the reviewed release inventory and compares every
+shared `(file, title, project)` identity, retaining exact sample membership and memory grouping.
+Its focused `node --test --test-name-pattern='prepared Playwright discovery'
+scripts/test-release-artifact.mjs` run passes. The repaired source map is re-reviewed for the same
+pins: only that read-only preflight checker changed; no concurrent writer or test body was added.
+
+An independent offline baseline comparison checks 2,072 painted native/computed curve and point
+items, persistent owners and 26,876 numeric coordinates/radii across all 16 fitted samples.
+Maximum difference is `0.0005` logical pixels, exactly the previous SVG's three-decimal rounding.
+The first comparison included the SVG's 70 invisible `.wb-computed-hit` DOM paths; those are
+intentionally absent from the new presentation because native Rust still owns picking. Excluding
+only those unpainted duplicates yields exact item/coordinate-shape and owner correspondence for
+every sample. Receipt: `target/m94/baseline-canvas-geometry-comparison.json`.
