@@ -3,7 +3,7 @@
 Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization is in progress.**
 See [M92 sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06),
 [M93 goals](docs/M93_GOALS.md) and [implementation order](docs/M93_IMPLEMENTATION.md).
-M93 runner, input policy and focused regressions are implemented; integrated qualification and timing are in progress. Further sample expansion is deferred.
+M93 has a passing 23m49s fresh-gate checkpoint, but repeated edit/prune timings miss ten minutes and a count-repair invalidation issue is being fixed. See [measured checkpoint](docs/M93_QUALIFICATION.md). Cold serial parity and acceptance remain outstanding. Further sample expansion is deferred.
 
 ## Objective
 

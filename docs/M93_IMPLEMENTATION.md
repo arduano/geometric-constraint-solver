@@ -202,6 +202,15 @@ The corrected runner passes **151 focused release regressions in 26.878 seconds*
 TypeScript cache smoke and `git diff --check` also pass. Golden bytes and product equations are
 unchanged by these corrections.
 
+## Measured checkpoint and recovery audit — 2026-09-06
+
+[M93_QUALIFICATION.md](M93_QUALIFICATION.md) records the `b43f54b` full fresh gate at 23m49s,
+all six passing edit/prune qualifications with missed ten-minute targets, and repeated passing
+fast paths. A subsequent audit found that a count-checker repair needlessly invalidates 209
+native receipts through a scheduling-lock key change. The driver stopped after final prune
+cleanup and before cold qualification. That repair, further guarded frontend/Cargo overlap,
+new integrated qualification, cold serial parity and milestone acceptance remain outstanding.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation
