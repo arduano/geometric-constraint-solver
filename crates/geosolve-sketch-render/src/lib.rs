@@ -7,12 +7,14 @@
 //! consumes already-composed editor/domain DTOs and owns no solver equations,
 //! accepted-scene authority, DOM, event loop, storage, or download behavior.
 
+mod drawing;
 pub mod icons;
 #[cfg(not(target_arch = "wasm32"))]
 mod native_png;
 mod scene;
 mod standalone;
 
+pub use drawing::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use native_png::*;
 pub use scene::*;

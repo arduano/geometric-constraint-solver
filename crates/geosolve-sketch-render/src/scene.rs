@@ -1350,7 +1350,10 @@ fn render_offset_chain_terminal(
     );
 }
 
-fn curve_control_is_hovered(hover: EditorHoverState, control: DocumentCurveControlId) -> bool {
+pub(crate) fn curve_control_is_hovered(
+    hover: EditorHoverState,
+    control: DocumentCurveControlId,
+) -> bool {
     matches!(
         hover.target,
         Some(EditorHoverTarget::CurveControl { control: target, .. }) if target == control
@@ -1535,7 +1538,7 @@ pub const fn curve_control_kind_key(kind: DocumentCurveControlKind) -> &'static 
     }
 }
 
-const fn curve_control_read_only_reason(
+pub(crate) const fn curve_control_read_only_reason(
     reason: DocumentCurveControlWithholdingReason,
 ) -> &'static str {
     match reason {
@@ -1608,7 +1611,7 @@ fn render_axis_datum(
     );
 }
 
-fn failed_computed_sources(
+pub(crate) fn failed_computed_sources(
     problems: &[ComputedFeatureProblemMetadata],
 ) -> BTreeSet<NativeCurveSpanSource> {
     problems
@@ -2014,7 +2017,7 @@ fn render_fillet_canvas_action(
     }
 }
 
-fn fillet_owner_is_visible(
+pub(crate) fn fillet_owner_is_visible(
     owner: geosolve_sketch_features::ComputedCornerRef,
     selection: &[SelectionItem],
 ) -> bool {
@@ -2022,7 +2025,7 @@ fn fillet_owner_is_visible(
         || selection.contains(&SelectionItem::Feature(owner.feature))
 }
 
-fn fillet_action_anchor(
+pub(crate) fn fillet_action_anchor(
     affordances: &SceneFilletCornerAffordances,
     action: &SceneFilletAction,
 ) -> ScreenPoint {
@@ -3001,7 +3004,7 @@ const fn annotation_kind(kind: SceneAnnotationKind) -> &'static str {
     }
 }
 
-fn annotation_anchor(geometry: &SceneAnnotationGeometry) -> Option<ScreenPoint> {
+pub(crate) fn annotation_anchor(geometry: &SceneAnnotationGeometry) -> Option<ScreenPoint> {
     Some(match geometry {
         SceneAnnotationGeometry::Glyph { markers } => markers.first()?.anchor,
         SceneAnnotationGeometry::RightAngle { corner, .. } => *corner,
@@ -3012,7 +3015,7 @@ fn annotation_anchor(geometry: &SceneAnnotationGeometry) -> Option<ScreenPoint> 
     })
 }
 
-fn ray_point(vertex: ScreenPoint, ray: ScreenPoint, radius: f64) -> ScreenPoint {
+pub(crate) fn ray_point(vertex: ScreenPoint, ray: ScreenPoint, radius: f64) -> ScreenPoint {
     let delta = [ray.x - vertex.x, ray.y - vertex.y];
     let length = delta[0].hypot(delta[1]);
     if length <= f64::EPSILON {
@@ -3372,7 +3375,7 @@ fn render_inference_candidates(output: &mut String, resolution: &DraftInferenceR
     }
 }
 
-const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
+pub(crate) const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
     match family {
         DraftInferenceFamily::PointIdentity => "point-identity",
         DraftInferenceFamily::DatumOrigin => "datum-origin",
@@ -3394,7 +3397,7 @@ const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
     }
 }
 
-const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
+pub(crate) const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
     match family {
         DraftInferenceFamily::PointIdentity => "Reuse existing point",
         DraftInferenceFamily::DatumOrigin => "Coincident with Origin",
@@ -3416,7 +3419,7 @@ const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
     }
 }
 
-const fn inference_relation_presentation(
+pub(crate) const fn inference_relation_presentation(
     relation: DraftInferenceRelation,
 ) -> (&'static str, &'static str, SceneConstraintGlyph) {
     match relation {
@@ -3509,7 +3512,7 @@ const fn inference_status_key(status: &DraftInferenceStatus) -> &'static str {
     }
 }
 
-const fn inference_status_warning(
+pub(crate) const fn inference_status_warning(
     status: &DraftInferenceStatus,
 ) -> Option<(&'static str, &'static str)> {
     match status {

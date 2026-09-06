@@ -880,6 +880,8 @@ dependencies = [
  "geosolve-sketch",
  "geosolve-sketch-features",
  "resvg",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
