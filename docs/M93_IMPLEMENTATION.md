@@ -69,6 +69,29 @@ catalog. Performance inputs follow their actual sketch/editor/linkage owners. Th
 can admit two memory-marked native/browser stages; exclusive builds and performance measurements
 remain serialized. Final serial/parallel and edit/prune timing acceptance remains outstanding.
 
+## Measured build and cache correction — 2026-09-06
+
+Clean `0e5d7a6` passed all 239 stages in **2,432.441 seconds (40m32s)**, with every stage
+executed and no browser workflow reused. This is the first complete M93 fresh-results baseline,
+using warm existing compiler caches. It passes the 45-minute target once; cold/reference parity
+and repetitions remain outstanding. Its exact source, signed receipt and timing summary are in
+`target/m93/baseline-fresh-confirmation.json`.
+
+The first real single-sample candidate changed only the manifold's upper-outlet source radius and
+compiled envelope. It exceeded ten minutes during preparation: workspace 361.3s (including 170s
+compilation), headless 29.3s, WASM 149.7s and browser preparation 72.2s. Full browser execution then
+took 820.4s because one generated Vitest timing-cache file changed the installed-dependency digest.
+Authenticated before/after contexts prove that program inputs, policy, tools and environment were
+otherwise equal: `target/m93/browser-leaf-cache-invalidation.json`. This is a missed C5 target,
+not a passing proportional-qualification result.
+
+The follow-up retains line-number debug information, enables incremental release/bench compilation
+with the original codegen-unit count, and raises bounded Cargo compilation to four jobs. It stops
+writing Vitest timing-cache output into installed dependencies. Optimized-WASM lifecycle compilation
+and execution are separated so the unchanged three cases can overlap other independent tests.
+Fresh runtime qualification and new complete edit/prune measurements are required before claiming
+these corrections meet the target. All earlier failures and measurements remain evidence.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation

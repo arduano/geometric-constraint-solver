@@ -365,7 +365,7 @@ class Runner:
         env.update(dict(stage.env))
         for name in ("TMPDIR", "TMP", "TEMP", "TEMPDIR", "NIX_BUILD_TOP"):
             env[name] = runtime
-        env["CARGO_BUILD_JOBS"] = env.get("CARGO_BUILD_JOBS", "2")
+        env["CARGO_BUILD_JOBS"] = env.get("CARGO_BUILD_JOBS", str(self.policy.get("cargo_build_jobs", 2)))
         env["M92_AUDIT_OUTPUT"] = str(directory / "sample-audit")
         env["M92_PRODUCT_EVIDENCE"] = str(directory / "product-audit")
         if stage.id == "browser":
@@ -522,7 +522,8 @@ class Runner:
                  "tools": self.tools, "environment_sha256": digest(self.environment),
                  "wall_seconds": time.monotonic() - self.started,
                  "worker_limits": {"stages": self.jobs, "memory_stages": self.memory_workers,
-                                   "native_threads_per_stage": self.policy.get("test_threads", 2)},
+                                   "native_threads_per_stage": self.policy.get("test_threads", 2),
+                                   "cargo_build_jobs": os.environ.get("CARGO_BUILD_JOBS", str(self.policy.get("cargo_build_jobs", 2)))},
                  "inventory": [stage.contract() for stage in self.inventory],
                  "results": [{key: result[key] for key in ("stage", "key", "status", "complete", "decision", "reason",
                                "origin_run", "receipt_path", "duration_seconds", "wait_seconds", "resources", "avoided_seconds")
@@ -670,7 +671,7 @@ def preflight_stages(include_clippy=True):
               outputs=("packages/geosolve-intent/dist", "packages/geosolve-sketch-code/dist",
                        "packages/geosolve-intent/node_modules", "packages/geosolve-sketch-code/node_modules")),
         Stage("preflight.frontend", (npm(FRONTEND, "ci", "--ignore-scripts"),
-                                     npm(FRONTEND, "run", "check:static"), npm(FRONTEND, "test")),
+                                     npm(FRONTEND, "run", "check:static"), npm(FRONTEND, "test", "--", "--no-cache")),
               inputs=(FRONTEND + "/**", "packages/**", "crates/geosolve-sketch-code/**",
                       "crates/geosolve-constraint-editor/src/**", "crates/geosolve-demo-web/src/**",
                       "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md"),
@@ -716,13 +717,15 @@ def rust_inputs(root):
 
 def preparation_modes(patterns):
     if not patterns:
-        return {"workspace", "headless", "wasm", "browser"}
+        return {"workspace", "headless", "wasm", "browser", "lifecycle"}
     modes = set()
     for pattern in patterns:
         if pattern.startswith("workspace."):
             modes.add("workspace")
         elif pattern.startswith("headless."):
             modes.add("headless")
+        elif pattern.startswith("wasm.") and fnmatch.fnmatchcase("wasm.lifecycle", pattern):
+            modes.add("lifecycle")
         elif pattern in {"browser", "artifact.transport"}:
             modes.update(("wasm", "browser"))
         elif pattern in {"golden", "licenses", "performance"} or pattern.startswith(("rust.", "wasm.", "package.")):
@@ -730,19 +733,21 @@ def preparation_modes(patterns):
             # No direct native executable or prepared browser is consumed.
             continue
         else:
-            return {"workspace", "headless", "wasm", "browser"}
+            return {"workspace", "headless", "wasm", "browser", "lifecycle"}
     return modes
 
 
 def preparation_stages(runner, modes=None):
-    modes = {"workspace", "headless", "wasm", "browser"} if modes is None else modes
+    modes = {"workspace", "headless", "wasm", "browser", "lifecycle"} if modes is None else modes
     stages, prepared = [], {}
-    for mode in ("workspace", "headless", "wasm", "browser"):
+    for mode in ("workspace", "headless", "wasm", "browser", "lifecycle"):
         if mode not in modes:
             continue
         if mode in {"workspace", "headless"}:
             inputs = rust_inputs(runner.root) if mode == "workspace" else crate_inputs(runner.root, "geosolve-headless")
             inputs = (*inputs, "scripts/release_gate_native.py")
+        elif mode == "lifecycle":
+            inputs = (*rust_inputs(runner.root), "scripts/release_gate_wasm.py", "scripts/release_gate_native.py")
         elif mode == "wasm":
             inputs = (*crate_inputs(runner.root, "geosolve-demo-web", include_tests=False),
                       FRONTEND + "/scripts/build-wasm.mjs")
@@ -756,6 +761,8 @@ def preparation_stages(runner, modes=None):
         prepared[mode] = out
         if mode in {"workspace", "headless"}:
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-native", mode, "--output", out)
+        elif mode == "lifecycle":
+            command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-lifecycle", "--output", out)
         elif mode == "wasm":
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-wasm", "--output", out)
         else:
@@ -845,10 +852,22 @@ def qualification_stages(root, prepared, jobs):
                             inputs=crate_inputs(root, "geosolve-constraint-editor"), dependencies=built, resource="exclusive",
                             cases=tuple(exact_tests["wasm." + target]), test_inventories=(tuple(exact_tests["wasm." + target]),),
                             env=(("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER", "wasm-bindgen-test-runner"),)))
-    result.append(Stage("wasm.lifecycle", (cmd("cargo", "test", "--locked", "--release", "-p", "geosolve-demo-web", "--lib", "actual_wasm_",
-                                                "--target", "wasm32-unknown-unknown"),), inputs=all_rust, dependencies=built,
-                        resource="exclusive", cases=tuple(exact_tests["wasm.lifecycle"]), test_inventories=(tuple(exact_tests["wasm.lifecycle"]),),
-                        env=(("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER", "wasm-bindgen-test-runner"),)))
+    if "lifecycle" in prepared:
+        lifecycle = read_json(root / prepared["lifecycle"] / "prepared.json")
+        if lifecycle["schema"] != "geosolve-wasm-lifecycle-preparation-v1" or sorted(lifecycle["cases"]) != sorted(exact_tests["wasm.lifecycle"]):
+            raise ValueError("prepared WASM lifecycle inventory differs")
+        if (Path(lifecycle["executable"]) != (root / prepared["lifecycle"] / "lifecycle.wasm").resolve()
+                or lifecycle["command"] != [shutil.which("wasm-bindgen-test-runner"), lifecycle["executable"], "actual_wasm_"]
+                or file_hash(lifecycle["executable"]) != lifecycle["sha256"]
+                or file_hash(lifecycle["command"][0]) != lifecycle["runner_sha256"]):
+            raise ValueError("prepared WASM lifecycle artifact or runner changed")
+        result.append(Stage("wasm.lifecycle", (tuple(lifecycle["command"]),),
+                            inputs=(*all_rust, "scripts/release_gate_wasm.py"), dependencies=built,
+                            resource="memory", cases=tuple(exact_tests["wasm.lifecycle"]),
+                            test_inventories=(tuple(exact_tests["wasm.lifecycle"]),),
+                            artifacts=(lifecycle["executable"], lifecycle["command"][0]),
+                            execution_key={key: lifecycle[key] for key in ("command", "env", "features", "profile")},
+                            env=tuple(sorted((lifecycle["env"] | {"CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER": lifecycle["command"][0]}).items()))))
     performance = [cmd("cargo", "run", "--locked", "--release", "-p", package, "--example", example)
                    for package, example in (("geosolve-sketch", "m14_performance"), ("geosolve-sketch", "m32_performance"),
                                             ("geosolve-constraint-editor", "m83_performance"))]
@@ -877,9 +896,9 @@ def qualification_stages(root, prepared, jobs):
                                                      "--output", "{scratch}/transport.json"),),
                         inputs=(FRONTEND + "/scripts/**",), dependencies=built, resource="memory", reusable=False, timeout=180,
                         artifacts=(str(browser_path / "geosolve-production"),)))
-    # Start the longest independent browser workload alongside native suites;
-    # resource admission still permits only one memory-heavy stage at a time.
-    return sorted(result, key=lambda stage: 0 if stage.id == "browser" else 1)
+    # Start browser and prepared lifecycle work alongside native suites;
+    # Resource admission preserves the configured total and memory-stage caps.
+    return sorted(result, key=lambda stage: 0 if stage.id in {"browser", "wasm.lifecycle"} else 1)
 
 
 def validate_test_output(text, expected):
@@ -1085,6 +1104,7 @@ def main():
     parser.add_argument("--check-packages", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--prepare-native", choices=("workspace", "headless"), help=argparse.SUPPRESS)
     parser.add_argument("--prepare-wasm", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--prepare-lifecycle", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--wasm-package", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--prepare-browser", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--native-run", type=Path, help=argparse.SUPPRESS)
@@ -1103,6 +1123,10 @@ def main():
         import release_gate_native as native
         selection = native.WORKSPACE_ARGS if args.prepare_native == "workspace" else ["-p", "geosolve-headless", *[v for n in native.HEADLESS_TARGETS for v in ("--test", n)]]
         prepare_output(args.output, lambda out: native.prepare(ROOT, selection, out))
+        return 0
+    if args.prepare_lifecycle:
+        import release_gate_wasm
+        prepare_output(args.output, lambda out: release_gate_wasm.prepare(ROOT, out))
         return 0
     if args.prepare_wasm:
         def build_wasm(out):
@@ -1145,6 +1169,15 @@ def main():
     os.environ["CARGO_PROFILE_TEST_OPT_LEVEL"] = args.test_opt_level
     os.environ["CARGO_PROFILE_TEST_DEBUG_ASSERTIONS"] = "true"
     os.environ["CARGO_PROFILE_TEST_OVERFLOW_CHECKS"] = "true"
+    # Keep source-line backtraces without retaining tens of GiB of variable
+    # debug data in every test executable. Caller overrides remain explicit inputs.
+    os.environ.setdefault("CARGO_PROFILE_TEST_DEBUG", policy["test_debug"])
+    # Catalog data edits otherwise repeat optimization of unchanged release code.
+    # Preserve the original non-incremental release/bench codegen-unit count;
+    # Cargo would default incremental profiles to 256 units if it were omitted.
+    for profile in ("RELEASE", "BENCH"):
+        os.environ.setdefault(f"CARGO_PROFILE_{profile}_INCREMENTAL", str(policy["release_incremental"]).lower())
+        os.environ.setdefault(f"CARGO_PROFILE_{profile}_CODEGEN_UNITS", str(policy["release_codegen_units"]))
     if "GEOSOLVE_CHROMIUM_PATH" not in os.environ and shutil.which("google-chrome"):
         os.environ["GEOSOLVE_CHROMIUM_PATH"] = shutil.which("google-chrome")
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -1174,7 +1207,7 @@ def main():
             action, reason, _ = runner.decision(stage)
             print(f"{action:5} {stage.id}: {reason}")
         if not args.preflight:
-            if all((ROOT / prepared[mode] / "prepared.json").is_file() for mode in ("workspace", "headless") if mode in prepared):
+            if all((ROOT / prepared[mode] / "prepared.json").is_file() for mode in ("workspace", "headless", "lifecycle") if mode in prepared):
                 expanded = qualification_stages(ROOT, prepared, args.jobs)
                 if args.stage:
                     expanded = [stage for stage in expanded if any(fnmatch.fnmatchcase(stage.id, pattern) for pattern in args.stage)]

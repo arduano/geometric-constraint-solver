@@ -14,7 +14,8 @@ Run in the repository Nix shell so Rust, Deno, Node, wasm-bindgen and wasm-opt m
 pinned environment. The default is two execution workers and two libtest threads per native
 stage. Up to two memory-marked stages can overlap within the same two-worker total; Playwright
 retains one slot for its large sample cases. Builds, installations and measured performance remain
-exclusive. The recorded host has 64 GiB RAM; integrated qualification records the actual overlap
+exclusive. Cargo compilation uses four jobs by default, with an explicit `CARGO_BUILD_JOBS`
+override recorded in the manifest. The recorded host has 64 GiB RAM; integrated qualification records the actual overlap
 and resource costs. `--jobs 1` also reduces the memory-stage limit to one.
 
 ```bash
@@ -39,7 +40,17 @@ Targeted and preparation reports do not establish a complete release. `--fresh` 
 test receipts, retaining normal compiler caches. `--reference` invokes the historical sequential
 gate and original Cargo/npm oracle. `--test-opt-level 0` selects the unoptimized test profile;
 the default level 1 applies to native and non-release WASM tests and retains debug assertions and overflow checks. Profile differences invalidate
-evidence and are recorded, not silently compared as identical builds.
+evidence and are recorded, not silently compared as identical builds. Tests retain source-line
+backtraces with `line-tables-only` debug information. Release and benchmark compilation enables
+Cargo incremental artifacts and explicitly retains the original 16 codegen units and level-3
+optimization. Test assertions and overflow checks remain enabled; release semantics remain unchanged.
+Profile overrides are authenticated inputs and force new qualification. These settings are being
+measured against M93's proportional-latency target; configuration alone is not a speedup claim.
+
+The optimized-WASM lifecycle tests have a separate preparation: Cargo compiles and discovers
+exactly the existing three cases, captures its runtime/package environment, and preserves the test
+WASM in an immutable preparation directory. The pinned runner executes those same cases as a bounded
+memory stage alongside independent suites. Build and execution receipts remain separate.
 
 Native workspace and default-feature headless preparations have separate identities and captured
 CLI binaries. A targeted native selector prepares only its required profile. Rust input closure
@@ -122,6 +133,10 @@ full selection/grouping/two-edit/Undo/Redo/reload workflow can reuse a signed co
 when its program, complete selected data and entire prefix witness match. Only manifest ordinal
 belongs exclusively to the fresh catalog check. Shared workbench and language tests execute afresh
 whenever the outer browser stage runs. `--fresh` bypasses all leaf reuse.
+
+Frontend unit tests use `--no-cache` during preflight. Vitest's generated timing results otherwise
+change the `node_modules` identity and needlessly invalidate every browser leaf. This prevents the
+output from being created; the gate still hashes the complete installed dependency tree.
 
 The parent binds browser execution to its actual prepared artifact and invocation; source and
 consumed artifact hashes must remain unchanged before leaves are retained. Failed batches can

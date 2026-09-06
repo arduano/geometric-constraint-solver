@@ -29,6 +29,9 @@
     "scripts/golden_oracle.py",
     "scripts/golden_oracle_test.py",
     "scripts/release_gate_native.py",
+    "scripts/release_gate_wasm.py",
+    "scripts/tests/test_release_gate_wasm.py",
+    "scripts/tests/test_release_profiles.py",
     "scripts/release_browser.py",
     "scripts/release_browser_context.py",
     "scripts/release_equivalence.py",
@@ -40,9 +43,16 @@
     "scripts/tests/test_release_gate_native.py"
   ],
   "owned": [
-    "crates/*/src/**", "crates/*/tests/**", "crates/*/examples/**", "crates/*/benches/**",
-    "crates/*/build.rs", "crates/*/assets/**", "crates/*/README.md",
-    "crates/geosolve-demo-web/frontend/**", "packages/geosolve-intent/**", "packages/geosolve-sketch-code/**",
+    "crates/*/src/**",
+    "crates/*/tests/**",
+    "crates/*/examples/**",
+    "crates/*/benches/**",
+    "crates/*/build.rs",
+    "crates/*/assets/**",
+    "crates/*/README.md",
+    "crates/geosolve-demo-web/frontend/**",
+    "packages/geosolve-intent/**",
+    "packages/geosolve-sketch-code/**",
     "scripts/verify-geosolve-sketch-code-package.sh"
   ],
   "workers": 2,
@@ -50,5 +60,9 @@
   "test_threads": 2,
   "test_opt_level": 1,
   "debug_assertions": true,
-  "overflow_checks": true
+  "overflow_checks": true,
+  "cargo_build_jobs": 4,
+  "test_debug": "line-tables-only",
+  "release_incremental": true,
+  "release_codegen_units": 16
 }
