@@ -7106,8 +7106,8 @@ passes 20/20. Both accepted M90/M91 listeners were stopped after verification. M
 
 ## M92 advanced showcase fixtures
 
-Status: **in progress; the 16-sample pruning pass is clean-qualified and immutably nominated.
-Human M92-U1–U8 remain pending and unexecuted; GitHub Pages is unchanged.**
+Status: **accepted and closed on 2026-09-06** under the [scoped user sign-off](M92_UAT.md#supervising-user-closure--2026-09-06).
+U1–U8 are accepted collectively without a separate exhaustive replay; GitHub Pages is unchanged.
 
 See [pruned qualification and nomination](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
 for `b153a28`, the 16-sample/32-edit visual and history audit and exact frozen endpoint receipts.
@@ -7289,6 +7289,27 @@ the same counts; measured height/width edits verify fixed floor height, cavity g
 and linked plan/section widths. The focused manufacturing suite passes 2/2 in 7.76 seconds.
 This is `HARNESS_ERROR`, with no new finding ID or product change. The failed receipt is recorded
 in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination subsequently passed; see the final ledger.
+
+## M93 release-gate optimization scenarios — planned
+
+These are acceptance scenarios to implement, not commands or passing tests that already exist.
+[M93_GOALS.md](M93_GOALS.md) owns the exact policy and performance targets.
+
+- Documentation-only sign-off preserves qualified product bytes without solver/browser reruns;
+  a documentation file consumed by a build/test instead invalidates its consumers.
+- Replaying the M92 four-sample pruning rejects stale counts during preflight, removes all retired
+  lookup/menu/Recent entries, qualifies the changed artifact and reuses only proven-unaffected
+  survivor and solver evidence.
+- A generator-count-only correction reruns its stage and actual output consumers, while retaining
+  independent successful stages from the failed attempt with explicit original provenance.
+- One sample edit invalidates its intent/history and relevant drag/browser checks; a shared-core,
+  compiler, lockfile, feature, fixture or policy change expands through its dependency closure.
+- Unknown inputs, removed tests, mismatched inventories, stale or tampered receipts, interrupted
+  output and timeout must never result in incomplete coverage being called qualified.
+- Serial and resource-bounded parallel runs produce identical case classifications and golden
+  bytes; no job shares mutable scratch/package/browser outputs, and performance runs are isolated.
+- Moving the exact immutable artifact repeats transport/readiness checks; changing its bytes
+  invalidates artifact evidence. Neither event automatically repeats unrelated domain suites.
 
 ## Frozen near-singular fixtures
 

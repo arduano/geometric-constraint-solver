@@ -2,8 +2,9 @@
 
 # M92 implementation: registry-first parallel sample rebuild
 
-Status: **in progress; 16-sample pruning qualification and immutable nomination pass. Earlier
-audited gate and nomination receipts remain historical. Human U1–U8 remain pending and unexecuted.**
+Status: **accepted and closed on 2026-09-06** under the [supervising-user sign-off](M92_UAT.md#supervising-user-closure--2026-09-06).
+The qualified 16-sample product is unchanged. Further sample work is deferred; [M93](M93_GOALS.md)
+addresses release qualification. Earlier nomination and Pending/not-run receipts remain historical.
 
 ## Authorized pruning continuation — 2026-09-05
 
@@ -20,7 +21,8 @@ authority and the unchanged release gate. The release workbench remains 20 rows,
 catalog count; each frozen endpoint passes 19 ordinary rows, the separate Jansen workflow and
 pruned-menu/Recent checks. The qualified replacement now serves `http://100.94.63.83:18092/`;
 the old listener was retired only after local verification and its immutable bytes are retained.
-No M92 closure, human-row disposition or Pages publication follows from this pruning authorization.
+The pruning authorization itself did not close M92; the later supervising-user sign-off recorded
+above accepts the delivered scope. No Pages publication is performed in this documentation closeout.
 
 ## Integration order
 
@@ -195,7 +197,7 @@ Its no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat._8s63qiy`, external mani
 **http://100.94.63.83:18092/**. All 16 browser sample workflows, 32 measured edits and eight public
 mechanism witnesses pass. Each frozen endpoint passes 19 ordinary workbench tests, the separate
 bounded Jansen workflow and exact pruned-menu/Recent checks. Fresh visual/history review covers
-all 16 samples; M92 and all human U1–U8 rows remain open, and GitHub Pages is unchanged.
+all 16 samples; the later scoped sign-off closes M92 and accepts U1–U8 collectively. GitHub Pages is unchanged.
 See [the exact ledger](M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
 
 ## Pre-pruning qualification

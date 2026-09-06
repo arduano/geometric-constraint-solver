@@ -177,12 +177,15 @@ which published artifact `9938976843` as deployment `6265455733`. Its exact ten-
 exact-match, and the public release-WASM workbench and language-service browser suite passes `20/20`.
 The accepted M90 and M91 services were then retired. M91 is complete and publicly closed.
 
-M92 is the current in-progress advanced sample showcase. It targets replacing the accumulated
-catalog variants with one manifest-driven, source-authoritative 16-sample registry: four mechanisms,
-eight product/fabrication studies, two capability atlases and two scale labs (`4/8/2/2`).
-The user-authorized pruning amendment supersedes the qualified 20-entry inventory. The replacement
-is clean-qualified and immutably nominated at **http://100.94.63.83:18092/**; composite human UAT
-and milestone closure remain open. See [qualification evidence](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
+M92 is accepted and closed for one manifest-driven, source-authoritative 16-sample showcase:
+four mechanisms, eight product/fabrication studies, two capability atlases and two scale labs
+(`4/8/2/2`). The qualified build remains at **http://100.94.63.83:18092/**. See
+[scoped sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06) and
+[qualification evidence](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
+
+[M93](docs/M93_GOALS.md) is the next milestone: fast, proportional release qualification through
+fail-fast checks, bounded parallelism, shared builds and verified reuse of unaffected evidence.
+Implementation is not yet started. Further sample additions are future work.
 
 Physics, collision and a production rendering system remain out of scope.
 
@@ -190,8 +193,7 @@ Physics, collision and a production rendering system remain out of scope.
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap; M91 is publicly closed and M92 is the current in-progress
-   16-sample showcase.
+3. `PLAN.md` — authoritative roadmap; M92 is closed and M93 release-gate optimization is next.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -231,8 +233,10 @@ Physics, collision and a production rendering system remain out of scope.
     clean break, F001-F006 repairs and scoped closure; M90-U1 through M90-U10 transferred into M91.
 24. `docs/M91_GOALS.md`, `docs/M91_IMPLEMENTATION.md` and `docs/M91_UAT.md` — clean-qualified,
     explicitly accepted and publicly closed code-driven-authoring milestone.
-25. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — current in-progress
-    16-sample advanced showcase, implementation ledger, nominated candidate and pending human scorecard.
+25. `docs/M92_GOALS.md`, `docs/M92_IMPLEMENTATION.md` and `docs/M92_UAT.md` — accepted and closed
+    16-sample showcase, qualification ledger and scoped sign-off.
+26. `docs/M93_GOALS.md` and `docs/M93_IMPLEMENTATION.md` — next release-gate optimization milestone,
+    proportional qualification policy, performance targets and implementation order.
 
 ## Workspace
 
@@ -286,10 +290,10 @@ snapshot remains live on Tailscale; no M88 public deployment or service retireme
 M89 established executed, reversible managed source. M90 completed the clean break to one named,
 typed V3 sketch language and removed its temporary compatibility APIs. M91's five integrated
 workstreams are clean-qualified, accepted and publicly closed; exact Pages publication and browser
-verification pass, and the accepted M90/M91 services are retired. M92 is now in progress toward one
-manifest-driven, source-authoritative 16-sample showcase split `4/8/2/2` across mechanisms,
-product/fabrication studies, capability atlases and scale labs. Mechanical qualification and immutable
-UAT nomination pass; human review and closure remain pending. New
+verification pass, and the accepted M90/M91 services are retired. M92 is accepted and closed with
+one manifest-driven, source-authoritative 16-sample showcase split `4/8/2/2` across mechanisms,
+product/fabrication studies, capability atlases and scale labs. M93 next addresses release-gate
+latency and safe proportional qualification. New
 milestones normally end in hands-on UAT after objective automation; M74 records an
 explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future

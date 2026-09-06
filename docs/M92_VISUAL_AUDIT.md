@@ -2,8 +2,10 @@
 
 # M92 visual and geometric design audit
 
-Status: **in progress; the 16-sample pruning pass is clean-qualified and immutably nominated.
-M92-U1–U8 remain pending and unexecuted.**
+Status: **accepted and closed by the supervising user on 2026-09-06.** The qualified 16-sample
+product is unchanged. [Scoped sign-off](M92_UAT.md#supervising-user-closure--2026-09-06) accepts
+U1–U8 collectively without claiming a separate exhaustive replay. Pending/not-run wording below
+records the earlier nomination checkpoints; it is superseded by that sign-off.
 
 ## Authorized pruning continuation — 2026-09-05
 
@@ -745,3 +747,13 @@ authenticated process/snapshot identity rather than systemd's disposable command
 each removed-menu search waits for its own empty-result text. The local and Tailscale menu probes
 both pass and their screenshots are identical. The finalizer itself completed successfully under
 `geosolve-m92-pruning-finalize-r6.service`, invocation `35b8c9fa14fa4e5789b539f2ace9d6ca`.
+
+## M92 closure and M93 handoff — 2026-09-06
+
+The supervising user accepted and closed the 16-sample result on the existing qualified `b153a28`
+product and immutable manifest `2dd2173040aebd99227aba488e2992ef864dd44ed2e9c95f709d5fc7884b20a9`.
+[The sign-off](M92_UAT.md#supervising-user-closure--2026-09-06) records the exact scope and human-row
+disposition. Additional samples are future work. This documentation-only closeout verifies the
+unchanged clean qualified checkout and frozen manifest against existing receipts; it does not
+rerun the release gate or claim new product qualification. [M93](M93_GOALS.md) is the next
+milestone, addressing the measured release-gate cost with parallel execution and sound reuse.

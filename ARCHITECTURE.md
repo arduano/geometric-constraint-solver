@@ -2697,7 +2697,8 @@ Chromium 20/20 pass before both accepted M90/M91 listeners were retired. M91 is 
 
 The authorized pruning amendment reduces the public catalog to 16 entries in `4/8/2/2` categories.
 [Replacement qualification and immutable nomination](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
-pass at `b153a28`; M92 and human U1–U8 remain open. Pre-pruning `b854d74` evidence and its
+pass at `b153a28`; M92 is closed under the [scoped user sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06).
+Pre-pruning `b854d74` evidence and its
 20-sample snapshot are preserved; its listener is retired. Frozen production checks pass
 19 ordinary workbench rows, the separate bounded Jansen workflow and pruned-menu/Recent probes,
 independently of catalog size.
@@ -2796,3 +2797,13 @@ plan and section each own one scalar Y datum, with no fixed points; symmetry, di
 The corrected test agrees with the compiled-declaration and independent geometry contracts and
 passes 2/2. This `HARNESS_ERROR` changes no production semantics and receives no finding ID.
 `docs/M92_VISUAL_AUDIT.md` records the failed gate receipt; complete qualification subsequently passed in the final ledger.
+
+## M93 qualification architecture — planned next
+
+[M93_GOALS.md](docs/M93_GOALS.md) scopes release infrastructure, leaving solver/domain contracts
+unchanged. One stage/case inventory will drive dependency planning, resource-bounded execution,
+input-authenticated evidence reuse and complete coverage reconciliation. Build caches and passing
+test receipts are distinct. Each reused result retains its original provenance; unknown inputs
+force fresh work. Newly built or moved artifacts receive fresh transport verification. A complete
+fresh-results mode remains available. This architecture is planned; the current runner and agent
+qualification rules are unchanged until the new policy and invalidation tests are implemented.

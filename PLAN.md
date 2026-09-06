@@ -8117,7 +8117,8 @@ types; `/` equals `index.html`. The public release-WASM workbench and language-s
 
 ## M92 — advanced sample showcase and scale corpus
 
-Status: **in progress; 16-sample pruning qualification and immutable nomination complete; human UAT pending**.
+Status: **accepted and closed by the supervising user on 2026-09-06**. More samples are future
+work; M93 below is the next milestone.
 The user-authorized 2026-09-05 amendment removes Prusa MINI, NEMA 17, HevORT and the twin-roller
 Bezier cam. Active scope, clean breaks and integration order are recorded in
 `docs/M92_GOALS.md`; `docs/M92_IMPLEMENTATION.md` owns execution and `docs/M92_UAT.md` owns the
@@ -8155,6 +8156,9 @@ single composite human review.
 - [x] Pass format, warnings-denied workspace Clippy, locked all-feature tests, golden
   survey/check/require-clean, package/frontend tests and the clean release gate; then freeze one
   byte-verified immutable M92 UAT without publishing Pages before human approval.
+- [x] Record supervising-user scoped acceptance and close M92 for the delivered 16 samples.
+  U1–U8 are accepted collectively; no separate exhaustive replay is claimed. Further samples are
+  deferred and the existing qualified product remains unchanged.
 
 Implementation checkpoint: the manifest-driven registry and all four sample waves are integrated;
 the authorized pruning revises their distribution to `4/8/2/2`. Survivor source/compiler bytes
@@ -8163,7 +8167,8 @@ coverage. Registry, source/compiler/project authority, sample-wave,
 drag-witness, headless report-v2, representative-edit/history, release-WASM adapter and release-size
 owners are present. M92-F001 and M92-F002 repairs plus their focused regressions are integrated.
 The replacement passes 32 measured edits, eight public mechanism witnesses, the complete clean
-gate and immutable endpoint verification. No M92 human row or Pages publication is claimed. See
+gate and immutable endpoint verification. The later supervising-user sign-off accepts U1–U8
+collectively and closes the milestone; no Pages publication is performed here. See
 [pruned qualification and nomination](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination).
 
 Clean pruned product source `b153a28d9e44dde934b325835913986b0e316ee7`, tree
@@ -8173,7 +8178,8 @@ Its no-rebuild ten-file snapshot `/tmp/geosolve-m92-uat._8s63qiy`, external mani
 **http://100.94.63.83:18092/**. All 16 browser sample workflows, 32 measured edits and eight public
 mechanism witnesses pass. Each frozen endpoint passes 19 ordinary workbench tests, the separate
 bounded Jansen workflow and exact pruned-menu/Recent checks. Fresh visual/history review covers
-all 16 samples; M92 and all human U1–U8 rows remain open, and GitHub Pages is unchanged.
+all 16 samples. [Scoped user sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06) closes
+M92 on 2026-09-06; further samples are deferred. GitHub Pages is unchanged.
 
 ### Pre-pruning implementation and qualification evidence
 
@@ -8284,6 +8290,32 @@ All 20 samples received visual review and two measured edits each; captured geom
 exactly through Undo/Redo/reload. M92 remains in progress; all human U1–U8 rows remain pending and
 GitHub Pages remains unchanged. Later documentation commits do not change these qualified bytes.
 Exact commands, receipts and retained limitations: [final qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
+
+## M93 — fast, proportional release qualification
+
+Status: **next milestone; scope approved on 2026-09-06; implementation not started**.
+The user prioritized release-gate optimization after M92 pruning consumed a 73-minute failed gate
+and a 152-minute complete replacement. [M93_GOALS.md](docs/M93_GOALS.md) owns the measurable
+contract and reuse-policy matrix; [M93_IMPLEMENTATION.md](docs/M93_IMPLEMENTATION.md) owns order.
+
+- [ ] Inventory every existing release obligation and capture per-stage input identity, timing,
+  resource use, selected cases and completion receipts; preserve a serial reference.
+- [ ] Fail cheap inventory/generator/package/static checks early; prepare shared native, WASM,
+  managed compiler and browser assets once per build identity.
+- [ ] Run independent suites and oracle cases with bounded CPU/RAM concurrency, isolated mutable
+  state and deterministic aggregation; keep performance measurements free of competing work.
+- [ ] Implement dependency-aware run/reuse/not-applicable planning and authenticated stage/case
+  reuse, including safe resume after a failed or interrupted attempt. Unknown inputs run fresh.
+- [ ] Consolidate golden evaluation/comparison/clean classification and browser build/serve work;
+  preserve exact golden bytes, independent invariants and fresh checks for every new artifact.
+- [ ] Prove invalidation, serial/parallel parity, cancellation and coverage reconciliation with
+  adversarial planner fixtures; update agent/skill/release policy to use the tested workflow.
+- [ ] Measure documentation/sign-off under 1 minute, warm cheap-failure detection under 2 minutes,
+  representative pruning/single-sample qualification under 10 minutes with valid reusable evidence,
+  and comprehensive warm-build/fresh-results qualification at or below 45 minutes on the recorded
+  host. Record cold behavior and repeated measurements; unresolved targets remain explicit.
+- [ ] Qualify the integrated runner and policy without weakening correctness/coverage, then obtain
+  supervising-user acceptance. No optimization or speed target is claimed complete by this plan.
 
 ## Explicit non-goals
 

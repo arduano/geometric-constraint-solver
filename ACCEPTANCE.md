@@ -5248,7 +5248,8 @@ M91 is closed.
 
 ## M92 advanced showcase acceptance
 
-Status: **in progress**.
+Status: **accepted and closed on 2026-09-06** under the [scoped user sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06).
+The accepted scope is the qualified 16-sample catalog; further samples are future work.
 
 The user-authorized pruning amendment requires the singular manifest-driven 16-sample registry in
 canonical
@@ -5262,7 +5263,8 @@ for `b854d74` apply to the pre-pruning 20-sample catalog; see
 [historical qualification and nomination](docs/M92_VISUAL_AUDIT.md#final-clean-qualification-and-immutable-nomination).
 [Pruned qualification and replacement nomination](docs/M92_VISUAL_AUDIT.md#pruned-catalog-qualification-and-immutable-nomination)
 pass at `b153a28`, covering all 16 samples, 32 measured edits and eight public mechanism witnesses.
-Human M92-U1 through M92-U8 remain Pending / not run, and Pages publication is not authorized.
+Human M92-U1 through M92-U8 are accepted collectively by the supervising caller without claiming
+a separate exhaustive replay. This documentation closeout performs no Pages deployment.
 
 The user-visible catalog contains exactly 16 code-authoritative entries in canonical manifest
 order: 4 mechanisms, 8 products/fabrication studies, 2 atlases and 2 scale labs. No native/code
@@ -5399,7 +5401,23 @@ suite passes 2/2 and agrees with independent M92 height/width geometry tests. Th
 `HARNESS_ERROR`, with no new finding ID or production change. The exact failed receipt is in
 `docs/M92_VISUAL_AUDIT.md`; the complete successful replacement gate and nomination are now
 recorded in its final ledger. All mechanical release criteria pass, including the separately
-counted bounded Jansen workflow on each frozen endpoint. Human UAT remains pending.
+counted bounded Jansen workflow on each frozen endpoint. The supervising caller subsequently
+accepted the delivered scope and closed M92; earlier Pending/not-run receipts remain historical.
+
+## M93 release qualification acceptance — planned next
+
+The [M93 C1–C7 contract](docs/M93_GOALS.md#acceptance-and-speed-targets) requires complete inventory
+and input/timing receipts, cheap failure detection, sound selective reuse, serial/parallel semantic
+parity, deterministic recovery, measured latency and exact immutable-artifact verification.
+
+Representative docs/sign-off must finish under 1 minute; warm preflight must catch M92's stale
+count under 2 minutes; pruning and one-sample qualification target under 10 minutes with valid
+unaffected evidence; the comprehensive warm-build/fresh-results target is 45 minutes or less.
+Record host, CPU/RAM limits, cache state and all repeated outcomes. These are targets, not achieved
+results. Every omitted rerun needs an authenticated unchanged-input receipt or explicit
+inapplicability. Unknown dependencies, incomplete/corrupt evidence or policy drift require fresh
+work. The full fresh gate remains available and no residual, branch, history, golden or release
+assertion is weakened. Implementation and milestone acceptance are still outstanding.
 
 ## Regression and oracle policy
 
