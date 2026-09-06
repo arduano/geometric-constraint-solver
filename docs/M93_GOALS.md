@@ -2,8 +2,12 @@
 
 # M93 goals: fast, proportional release qualification
 
-Status: **functional qualification and measurements recorded; C5 edit/prune latency and supervising-user acceptance remain open.** M92 is closed with its accepted 16-sample catalog.
+Status: **accepted and closed by the supervising user on 2026-09-07 with the measured C5 timing miss and unperformed historical replay retained as limitations.** M92 is closed with its accepted 16-sample catalog.
 Further sample expansion is future work and does not block this milestone.
+
+The original targets below remain the measurement contract. [The qualification and sign-off ledger](M93_QUALIFICATION.md)
+records the delivered results and the user's acceptance of closure at those results; acceptance
+does not turn the missed ten-minute target or unperformed replay into passing measurements.
 
 ## Outcome and measured problem
 
@@ -27,7 +31,7 @@ compiler subprocesses per case. Three separate Playwright invocations rebuilt th
 and the final frontend check built again. M93 must measure the actual costs and resource conflicts
 before choosing concurrency; merely adding background shell jobs is insufficient.
 
-## Qualification policy to implement
+## Adopted qualification policy
 
 A reviewed, machine-readable inventory must identify every stage/case, its owning source and
 transitive inputs, prerequisites, resource needs and evidence requirements. Produce a readable
@@ -87,9 +91,9 @@ logs into an input-complete cache: either prove the required identities or estab
   a documentation edit into hours of work. Report duration, critical path, work avoided, reused
   evidence and remaining work without flooding the user with unchanged polling messages.
 
-The planned policy is not permission to skip checks today. Implement it with its invalidation
-regressions, then update `AGENTS.md`, the defect-hardening skill/reference, release documentation
-and any affected CI instructions together so agents and automation use one authoritative policy.
+The implemented policy and invalidation regressions are documented in [RELEASE_QUALIFICATION.md](RELEASE_QUALIFICATION.md).
+`AGENTS.md` and the defect-hardening skill/reference use that workflow. Reuse still requires the
+runner's authenticated unchanged-input evidence; milestone acceptance does not authorize manual omissions.
 Pages is already publication-only; do not reintroduce a second complete integration gate there.
 
 ## Acceptance and speed targets
@@ -131,5 +135,6 @@ No residual equation, finite validation, Hard tolerance, branch choice, rank/DOF
 transaction/history invariant, test assertion, golden disposition or bundle ceiling may be weakened
 for speed. Profile expensive fixtures, batching and test execution profiles before changing them;
 any behavioral solver defect follows the owning-layer defect-hardening workflow. New samples and
-solver-feature work remain outside M93. Closure requires measured evidence and supervising-user
-acceptance of the optimized workflow; this plan makes no speedup or implementation claim.
+solver-feature work remain outside M93. The supervising user accepted the measured workflow on
+2026-09-07 and closed M93 with the recorded timing and replay limitations. Original targets and
+all qualification outcomes remain preserved in the ledger.

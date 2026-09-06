@@ -2,8 +2,13 @@
 
 # M93 implementation plan: release qualification
 
-Status: **implemented and functionally qualified on corrected source; repeated edit/prune latency misses C5 and milestone acceptance remains open.**
+Status: **accepted and closed by the supervising user on 2026-09-07 with the recorded C5 timing miss and historical replay limitation.**
 [M93_GOALS.md](M93_GOALS.md) owns scope, the proposed reuse matrix and measurable acceptance targets.
+
+The user accepted the delivered results with "yeah looks good to me, we can close at this".
+[M93_QUALIFICATION.md](M93_QUALIFICATION.md) owns the sign-off and exact measured scope. Earlier
+checkpoints below preserve their original pending claims as history; this acceptance supersedes
+those status claims without changing test results, timing misses or the unperformed replay.
 
 ## Implemented checkpoint — 2026-09-06
 
@@ -247,7 +252,7 @@ All six edit/prune candidates qualify with exactly 15 baseline survivor workflow
 Numeric edits take 756.847 / 741.510 / 779.446 seconds; prunes take 941.424 / 768.546 / 748.195
 seconds including generation/candidate preparation and gate execution, excluding later audit and
 restoration. All miss ten minutes. The three docs repetitions take about 1.5 seconds and both
-induced preflight failure classes about 5 seconds. No timing miss is waived or load-adjusted.
+induced preflight failure classes about 5 seconds. No timing is load-adjusted; the later sign-off accepts the C5 miss for closure.
 
 The actual checker-only repair proves 211 native, one golden and nine WASM exact keys, original
 origins and receipt paths remain eligible in normal planning despite all 211 native scheduling
@@ -257,8 +262,8 @@ checker execution plus read-only product planning, not a repaired full gate or a
 product donor. Focused signed real-child fixtures separately prove finalized failed-run donation.
 
 The original four-entry pruning replay below remains unproven: each measured prune removes one
-current Bondtech entry while retaining its private regression fixture. C5 latency, that historical
-workload and supervising-user acceptance remain open. The accepted M92 service is unchanged.
+current Bondtech entry while retaining its private regression fixture. The supervising user subsequently
+accepted closure with the C5 timing miss and that unperformed workload as limitations. The accepted M92 service is unchanged.
 
 ## Implementation order
 

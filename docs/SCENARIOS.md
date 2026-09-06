@@ -7290,14 +7290,14 @@ and linked plan/section widths. The focused manufacturing suite passes 2/2 in 7.
 This is `HARNESS_ERROR`, with no new finding ID or product change. The failed receipt is recorded
 in `docs/M92_VISUAL_AUDIT.md`; complete clean qualification and nomination subsequently passed; see the final ledger.
 
-## M93 release-gate optimization scenarios — in progress
+## M93 release-gate optimization scenarios — accepted and closed
 
-The runner has focused input/reuse, timeout, failure and concurrency regressions, completed corrected-source serial/parallel fresh parity and repeated real-workload measurements. [M93_QUALIFICATION.md](M93_QUALIFICATION.md) records the passing functional evidence and unwaived edit/prune timing misses. The historical four-entry replay below remains unproven; measured prune repetitions remove one current entry each.
+The runner has focused input/reuse, timeout, failure and concurrency regressions, completed corrected-source serial/parallel fresh parity and repeated real-workload measurements. [M93_QUALIFICATION.md](M93_QUALIFICATION.md) records the passing functional evidence and supervising-user closure on 2026-09-07 with the edit/prune timing misses accepted. The historical four-entry replay below remains unperformed and is an accepted scope limitation; measured prune repetitions remove one current entry each.
 [M93_GOALS.md](M93_GOALS.md) owns the exact policy and performance targets.
 
 - Documentation-only sign-off preserves qualified product bytes without solver/browser reruns;
   a documentation file consumed by a build/test instead invalidates its consumers.
-- Replaying the M92 four-sample pruning rejects stale counts during preflight, removes all retired
+- Deferred historical scenario (unperformed): replaying the M92 four-sample pruning rejects stale counts during preflight, removes all retired
   lookup/menu/Recent entries, qualifies the changed artifact and reuses only proven-unaffected
   survivor and solver evidence.
 - A generator-count-only correction reruns its stage and actual output consumers, while retaining

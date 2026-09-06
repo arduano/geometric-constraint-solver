@@ -5404,7 +5404,7 @@ recorded in its final ledger. All mechanical release criteria pass, including th
 counted bounded Jansen workflow on each frozen endpoint. The supervising caller subsequently
 accepted the delivered scope and closed M92; earlier Pending/not-run receipts remain historical.
 
-## M93 release qualification acceptance — in progress
+## M93 release qualification acceptance — accepted and closed on 2026-09-07
 
 The [M93 C1–C7 contract](docs/M93_GOALS.md#acceptance-and-speed-targets) requires complete inventory,
 authenticated selection/recovery, serial/parallel semantic parity, measured latency and immutable
@@ -5418,11 +5418,13 @@ failure classes pass under two minutes (about 5s). The warm comprehensive fresh 
 Actual count-checker repair preserves all 221 unchanged native/golden/WASM result keys and original
 receipts in the normal planner; finalized failed-overall-run donation has separate real-child fixtures.
 
-**C5 edit/prune latency remains unwaived and unmet:** all six qualified repetitions take
+**C5 edit/prune latency remains unmet and is accepted as a closure limitation:** all six qualified repetitions take
 12m22s–15m41s, above ten minutes. They remove one current entry per prune, so the original historical
 four-entry replay remains unproven. Shared-host load is recorded without adjusted timing claims.
 No residual, finite validation, branch, history, golden, profile or release assertion is weakened.
-Functional qualification does not grant supervising-user milestone acceptance; M93 remains open.
+After reviewing these results and limitations, the supervising user said, "yeah looks good to me,
+we can close at this" on 2026-09-07. M93 is accepted and closed at the delivered scope; the timing
+miss and unperformed historical replay remain documented without being reclassified as passes.
 
 ## Regression and oracle policy
 

@@ -6,8 +6,9 @@ M93 implements one local gate with explicit stage inputs, immutable preparation 
 bounded execution and authenticated reuse. It preserves the sequential reference and all
 existing solver, golden, native, WASM, package, browser and performance assertions.
 Completed functional qualification and measured timing limits are recorded separately in
-[M93_QUALIFICATION.md](M93_QUALIFICATION.md). Edit/prune latency and supervising-user acceptance
-remain open; runner availability is not milestone acceptance.
+[M93_QUALIFICATION.md](M93_QUALIFICATION.md). The supervising user accepted and closed M93 on
+2026-09-07 with edit/prune latency above target and the historical four-entry replay unperformed.
+That acceptance preserves the measured limitations and the evidence requirements below.
 
 ## Commands
 

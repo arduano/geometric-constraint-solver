@@ -2,7 +2,7 @@
 
 # M93 qualification and measured limits
 
-Status: **M93 remains open. Product/runner qualification is complete for the source below; C5 edit/prune latency fails and has not been waived. Supervising-user acceptance has not been granted.** M92 stays closed with its accepted 16 samples.
+Status: **M93 accepted and closed by the supervising user on 2026-09-07 at the measured scope below. C5 edit/prune latency remains missed and the historical four-entry replay remains unperformed; both are accepted closure limitations.** M92 stays closed with its accepted 16 samples.
 
 ## Qualified source
 
@@ -65,11 +65,27 @@ Previously recorded focused checks are described in [M93_IMPLEMENTATION.md](M93_
 
 Exact candidate source identities, generation/qualification commands, cache provenance and cleanup records are retained under `target/m93/recovery-qualification`. Archived measurement scripts have SHA-256 identities in `measurement-scripts/sha256.json`. `serial-parallel-comparison.json` records semantic/coverage parity; `frontend-output-stability.json` records that the later browser build preserved static dependency bytes. Earlier failures and timing misses remain in the implementation notes.
 
-## Acceptance remains open
+## Supervising-user closure — 2026-09-07
 
-C1/C3/C7 qualification and selection evidence is recorded above. C2 has three repetitions of each induced failure; C4 has completed serial/parallel parity plus separately recorded recovery regressions. C6 has a warm fresh run and a measured cold serial fresh run; the warm target passed. These are evidence statements, not supervising-user acceptance.
+C1/C3/C7 qualification and selection evidence is recorded above. C2 has three repetitions of each induced failure; C4 has completed serial/parallel parity plus separately recorded recovery regressions. C6 has a warm fresh run and a measured cold serial fresh run; the warm target passed.
 
-**C5 edit/prune latency is not met and has not been waived.** Target misses: numeric-3.1, numeric-3.2, numeric-3.25, prune-1, prune-2, prune-3. Documentation latency and the count-assertion repair evidence are recorded separately above, with their scope limitations. Milestone closure remains open under [M93_GOALS.md](M93_GOALS.md). No timing tradeoff is accepted by this generated ledger.
+After reviewing the results recorded at documentation commit `7142488c6c56c1c260e66fcf5957638b63a90362`,
+the supervising user said: **"yeah looks good to me, we can close at this"**. This closes M93 at
+qualified implementation source `08510fcf554d91829c2069a068450bbd4747a6c7`, accepting the delivered
+workflow with its measured latency and replay limitations. This sign-off changes documentation only.
+
+**C5 edit/prune latency is not met.** Target misses remain numeric-3.1, numeric-3.2, numeric-3.25,
+prune-1, prune-2 and prune-3. The user accepted those 12m22s–15m41s results and the unperformed
+historical four-entry replay for milestone closure. Neither is relabeled PASS, and the ten-minute
+target is not rewritten. Further optimization and the historical replay are future work without
+a newly assigned milestone. Documentation latency and count-repair evidence retain their scope
+limitations above. Product assertions, qualified bytes and the accepted M92 service are unchanged.
+
+The closure's optional root README status update was reverted after the docs-only guard rejected
+its basename as potentially consumed by `geosolve-sketch-code/src/lib.rs` (which includes that
+crate's own `../README.md`). The current guard is conservative across matching filenames. Root
+README wording therefore remains at its earlier checkpoint; this ledger and `START_HERE.md`
+own current status. Refining that guard is future work; no runner change or product rerun was made for sign-off.
 
 ## What remains slow
 
@@ -80,16 +96,16 @@ and are diagnostic chronology, while stage durations come from recorded receipts
 savings would not eliminate the secondary lifecycle tail. The detailed read-only review is
 `target/m93/recovery-qualification/m93-c5-latency-review.md`.
 
-The next bounded experiment is earlier WASM/frontend admission within the existing one-Cargo-writer,
+A possible future experiment is earlier WASM/frontend admission within the existing one-Cargo-writer,
 worker and memory limits, followed by the same complete coverage checks. Separating unchanged
 harness fixtures from always-fresh inventory checks is another possible saving. Neither experiment
 has run or has a promised speedup. Narrower sample reuse would require an explicit data boundary
 because the current embedded catalog changes native and WASM executable bytes; those identities
 must not be ignored. Shared-host load is reported without subtracting an estimated delay.
 
-The required historical four-entry M92 prune replay also remains unproven. These benchmarks each
+The historical four-entry M92 prune replay remains unperformed and is accepted as a closure limitation. These benchmarks each
 remove one current Bondtech entry and retain its dedicated regression fixture. That is measured
-representative scope, not acceptance of an unexecuted historical workload.
+representative scope; closure does not establish qualification of the unexecuted historical workload.
 
 ## Count repair evidence and command
 

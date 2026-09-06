@@ -8293,7 +8293,7 @@ Exact commands, receipts and retained limitations: [final qualification and nomi
 
 ## M93 — fast, proportional release qualification
 
-Status: **implemented and functionally qualified; C5 edit/prune latency and supervising-user acceptance remain open**.
+Status: **accepted and closed by the supervising user on 2026-09-07, with the measured latency and replay limitations below**.
 The user prioritized release-gate optimization after M92 pruning consumed a 73-minute failed gate
 and a 152-minute complete replacement. [M93_GOALS.md](docs/M93_GOALS.md) owns the measurable
 contract and reuse-policy matrix; [M93_IMPLEMENTATION.md](docs/M93_IMPLEMENTATION.md) owns order.
@@ -8310,12 +8310,12 @@ contract and reuse-policy matrix; [M93_IMPLEMENTATION.md](docs/M93_IMPLEMENTATIO
   preserve exact golden bytes, independent invariants and fresh checks for every new artifact.
 - [x] Prove invalidation, serial/parallel parity, cancellation and coverage reconciliation with
   adversarial planner fixtures; update agent/skill/release policy to use the tested workflow.
-- [ ] Measure documentation/sign-off under 1 minute, warm cheap-failure detection under 2 minutes,
-  representative pruning/single-sample qualification under 10 minutes with valid reusable evidence,
-  and comprehensive warm-build/fresh-results qualification at or below 45 minutes on the recorded
-  host. Record cold behavior and repeated measurements; unresolved targets remain explicit.
-- [ ] Qualify the integrated runner and policy without weakening correctness/coverage, then obtain
-  supervising-user acceptance. C5 timing and milestone acceptance remain open.
+- [x] Record repeated documentation/sign-off, cheap-failure and representative pruning/single-sample
+  measurements, plus warm and cold comprehensive fresh qualification. The under-1-minute,
+  under-2-minute and at-or-below-45-minute targets pass; the under-10-minute edit/prune target
+  remains missed and was accepted as a limitation for milestone closure.
+- [x] Qualify the integrated runner and policy without weakening correctness/coverage, then obtain
+  supervising-user acceptance, granted on 2026-09-07 for the measured scope.
 
 Corrected source `08510fc` passes all 241 stages fresh in 21m50s and a second cold-Cargo-build
 serial fresh run with independently checked semantic/inventory/golden parity. Three docs repetitions
@@ -8324,10 +8324,12 @@ finish in about 1.5s and both induced failure classes in about 5s. Normal planni
 has separate signed real-child fixtures. The scheduler excludes its own competing work from
 performance stages; shared external host load is disclosed in the measurements.
 
-All six representative edit/prune qualifications pass but take 12m22s–15m41s, above the unwaived
+All six representative edit/prune qualifications pass but take 12m22s–15m41s, above the original
 10-minute target. Each prune removes one Bondtech entry; the historical four-entry replay remains
 unproven. [M93_QUALIFICATION.md](docs/M93_QUALIFICATION.md) owns exact commands, source/run identities,
-resource/cache conditions and all timing misses. No service or publication changed. M93 is not closed.
+resource/cache conditions and all timing misses. On 2026-09-07 the user said, "yeah looks good to me,
+we can close at this", accepting the delivered results with the C5 timing miss and unperformed
+historical replay. Those limitations are future work, not closure blockers. No service or publication changed.
 
 ## Explicit non-goals
 
