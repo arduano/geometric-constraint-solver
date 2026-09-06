@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "samples": [
+    {
+      "key": "theo-jansen-leg",
+      "title": "Theo Jansen-style walking leg \u00b7 1 DOF",
+      "category": "mechanism"
+    },
+    {
+      "key": "whitworth-quick-return",
+      "title": "Whitworth quick-return \u00b7 1 DOF",
+      "category": "mechanism"
+    },
+    {
+      "key": "peaucellier-linkage",
+      "title": "Peaucellier straight-line linkage \u00b7 1 DOF",
+      "category": "mechanism"
+    },
+    {
+      "key": "five-stage-scissor-lift",
+      "title": "Generated five-stage scissor lift \u00b7 1 DOF",
+      "category": "mechanism"
+    },
+    {
+      "key": "pc-water-manifold",
+      "title": "PC liquid-cooling manifold",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "cnc-dogbone-coupon",
+      "title": "CNC joinery and dogbone fit coupon",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "vacuum-fixture-plate",
+      "title": "CNC vacuum fixture and spoilboard plate",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "dust-shoe-clamp",
+      "title": "CNC router dust shoe and spindle clamp",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "gridfinity-bin-section",
+      "title": "Gridfinity plan and 3U section",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "voron-panel",
+      "title": "Voron V0.2 motor panel",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "micron-carriage",
+      "title": "Printers for Ants Micron CNC X-carriage",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "bondtech-indx-link",
+      "title": "Bondtech INDX tool-link interface",
+      "category": "product_fabrication"
+    },
+    {
+      "key": "curves-contact-continuity-atlas",
+      "title": "Curves, contact and continuity atlas",
+      "category": "reference_lab"
+    },
+    {
+      "key": "fabrication-operations-atlas",
+      "title": "Fabrication operations, constraints, dimensions and annotations atlas",
+      "category": "reference_lab"
+    },
+    {
+      "key": "perforated-fixture-field",
+      "title": "Parametric perforated fixture field",
+      "category": "scale_study"
+    },
+    {
+      "key": "robotic-harness-backplane",
+      "title": "Dense robotic harness-routing backplane",
+      "category": "scale_study"
+    }
+  ],
+  "retired_keys": [
+    "prusa-mini-interface",
+    "nema-17-motor-interface",
+    "hevort-datum-study",
+    "twin-roller-bezier-cam",
+    "rounded-polyline",
+    "typed-panel",
+    "braced-frame",
+    "mounting-plate",
+    "compass-rose",
+    "drafting-compass",
+    "scotch-yoke",
+    "scissor-jack",
+    "five-stage-scissor-tower"
+  ]
+}

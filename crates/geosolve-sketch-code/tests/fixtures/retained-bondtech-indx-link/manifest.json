@@ -1,0 +1,32 @@
+{
+  "format": "geosolve-bundled-sample-v1",
+  "ordinal": 12,
+  "key": "bondtech-indx-link",
+  "title": "Bondtech INDX tool-link interface",
+  "summary": "A Bondtech INDX Link study pairs the published plan envelope with a schematic three-point Maxwell coupling and link-board service zone.",
+  "category": "product_fabrication",
+  "expected": { "raw_dof": 0, "effective_dof": 0 },
+  "groups": ["Tool-link envelope", "Three-point coupling", "Link-board interface"],
+  "provenance": [
+    {
+      "relationship": "dimensions_only",
+      "name": "Bondtech INDX Link simplified STEP",
+      "url": "https://github.com/BondtechAB/INDX",
+      "revision": "9c44c7ad9efb9b1d2f20c9e5d26951902685345b",
+      "path": "CAD/INDX_Link_simplified_1.0.step",
+      "licence": "GPL-3.0-only",
+      "scope": "Only the published Link assembly plan envelope and selected interface context inform this independently redrawn study; no solid or exact manufacturing geometry is imported.",
+      "notice_required": true
+    },
+    {
+      "relationship": "dimensions_only",
+      "name": "Bondtech INDX architecture README",
+      "url": "https://github.com/BondtechAB/INDX",
+      "revision": "9c44c7ad9efb9b1d2f20c9e5d26951902685345b",
+      "path": "README.md",
+      "licence": "GPL-3.0-only",
+      "scope": "The stated three-point Maxwell coupling concept informs only a schematic locating diagram; seat coordinates and board placement are illustrative, not extracted OEM dimensions.",
+      "notice_required": true
+    }
+  ]
+}

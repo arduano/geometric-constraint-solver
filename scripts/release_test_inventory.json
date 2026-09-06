@@ -66,5 +66,117 @@
     "performance.linkage": [
       "exact_auto_sparse_crossover_solves_and_validates_256_moving_body_chain"
     ]
-  }
+  },
+  "browser_non_sample_cases": [
+    [
+      "language-service.spec.ts",
+      "TypeScript worker provides diagnostics, completions, hover and signature help",
+      "chromium"
+    ],
+    [
+      "release-catalog.spec.ts",
+      "release catalog preserves reviewed order, categories and surviving Recent routes and rejects retired keys",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "CodeMirror DOM, selection, scroll, and browser-local draft survive layout changes",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "Cubic B\u00e9zier authoring publishes one named typed declaration",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "Rust-owned CAD icons and semantic groups drive the toolbar while view controls stay on canvas",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "a downloaded reproduction imports atomically through the real bridge",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "canonical Jansen sample Polyline Finish publishes inferred constraints into sketch.ts",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "canonical scissor-lift point drags remain solver overlays and accept the next gesture",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "canvas action feedback overlays the workspace without shifting it",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "canvas chrome exposes real role state and exact Polyline Finish readiness",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "computed Fillet authoring publishes one direct semantic FilletSet declaration",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "invalid source retains the accepted frame and one positioned Problem until Revert",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "managed parameter edit persists through a real bridge reload",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "non-axis Parallel authoring publishes one named typed constraint",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "normal pointer capture release commits Circle geometry and edits its compact radius",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "outside dismissal preserves the destination click",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "real Chromium exactly reproduces the pinned Deno managed compiler envelope",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "real WASM opens an actual sample with a styled authoritative SVG and layout floors",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "real WASM source-backs a center-radius circle from an empty coded sketch",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "real WASM source-backs click-authored geometry in a managed sample",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "the supplied native contact workspace retains a constrained point drag",
+      "chromium"
+    ],
+    [
+      "workbench.spec.ts",
+      "two circle contacts publish their Segment and accept the next pointer gesture",
+      "chromium"
+    ]
+  ]
 }

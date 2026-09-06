@@ -8419,7 +8419,24 @@ mod tests {
     )]
     fn all_bundled_samples_open_with_nonempty_independently_validated_native_canvases() {
         let samples = bundled_sample_catalog();
-        assert_eq!(samples.len(), 16);
+        let reviewed: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        )))
+        .expect("reviewed sample catalog contract");
+        assert_eq!(reviewed["schema"], 1);
+        assert_eq!(
+            serde_json::json!(
+                samples
+                    .iter()
+                    .map(|sample| serde_json::json!({
+                        "key": sample.key, "title": sample.title, "category": sample.category,
+                    }))
+                    .collect::<Vec<_>>()
+            ),
+            reviewed["samples"],
+            "runtime catalog must match independent reviewed order and metadata"
+        );
         for sample in samples {
             let expected_raw_dof = sample.expected.numerical_right_nullity();
             let expected_effective_dof = sample.expected.bidirectional_bounded_degrees_of_freedom();
@@ -8523,7 +8540,24 @@ mod tests {
     )]
     fn all_bundled_samples_accept_one_semantic_seed_edit_and_exact_undo() {
         let samples = bundled_sample_catalog();
-        assert_eq!(samples.len(), 16);
+        let reviewed: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        )))
+        .expect("reviewed sample catalog contract");
+        assert_eq!(reviewed["schema"], 1);
+        assert_eq!(
+            serde_json::json!(
+                samples
+                    .iter()
+                    .map(|sample| serde_json::json!({
+                        "key": sample.key, "title": sample.title, "category": sample.category,
+                    }))
+                    .collect::<Vec<_>>()
+            ),
+            reviewed["samples"],
+            "runtime catalog must match independent reviewed order and metadata"
+        );
         for (index, sample) in samples.iter().enumerate() {
             let (mut workbench, _editor) = open_with_editor(sample.key);
             let before = workbench.session.snapshot().clone();

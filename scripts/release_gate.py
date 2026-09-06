@@ -95,6 +95,9 @@ class Stage:
     id: str
     commands: tuple
     inputs: tuple = ()
+    excluded_inputs: tuple = ()
+    input_equivalence: str | None = None
+    input_equivalence_contract: object = None
     dependencies: tuple = ()
     cwd: str = "."
     env: tuple = ()
@@ -146,6 +149,17 @@ def stage_inputs(stage, snapshot, policy):
     for name in stage.inputs:
         if not any(c in name for c in "*?["):
             selected.setdefault(name, None)
+    if stage.excluded_inputs:
+        import release_equivalence
+        # Unrecognized source includes and changed program boundaries retain the
+        # entire input set. A fresh baseline alone never authorizes exclusions.
+        allowed = ("**" not in stage.inputs and stage.input_equivalence and
+                   release_equivalence.reviewed(stage.input_equivalence, selected, policy,
+                                                 stage.input_equivalence_contract))
+        if allowed:
+            selected = {name: value for name, value in selected.items()
+                        if not (matches(name, stage.excluded_inputs) and
+                                release_equivalence.catalog_data(name, value, policy))}
     return selected
 
 
@@ -267,6 +281,9 @@ class Runner:
     def __init__(self, root, store, snapshot, policy, tools, jobs=2, fresh=False, run_id=None):
         self.root, self.store, self.snapshot, self.policy, self.tools = root, store, snapshot, policy, tools
         self.jobs, self.fresh = jobs, fresh
+        self.memory_workers = min(jobs, policy.get("memory_heavy_workers", 1))
+        if self.memory_workers < 1:
+            raise ValueError("memory worker limit must be positive")
         self.run_id = run_id or time.strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8]
         self.run_dir = store.path / "runs" / self.run_id
         self.environment = effective_environment()
@@ -351,6 +368,12 @@ class Runner:
         env["CARGO_BUILD_JOBS"] = env.get("CARGO_BUILD_JOBS", "2")
         env["M92_AUDIT_OUTPUT"] = str(directory / "sample-audit")
         env["M92_PRODUCT_EVIDENCE"] = str(directory / "product-audit")
+        if stage.id == "browser":
+            from release_browser_context import parent_context
+            context = parent_context(self, stage, scratch / "browser", env)
+            context_path = directory / "browser-context.json"
+            write_json(context_path, self.store.seal(context))
+            env["GEOSOLVE_RELEASE_BROWSER_CONTEXT"] = str(context_path)
         began = time.monotonic()
         status, codes = "passed", []
         resources = []
@@ -463,7 +486,7 @@ class Runner:
                     resources = [entry.resource for entry in active.values()]
                     if "exclusive" in resources or (stage.resource == "exclusive" and active):
                         continue
-                    if stage.resource == "memory" and "memory" in resources:
+                    if stage.resource == "memory" and resources.count("memory") >= self.memory_workers:
                         continue
                     future = pool.submit(self.execute, stage, ready_times[stage.id])
                     active[future] = stage
@@ -498,6 +521,8 @@ class Runner:
                  "revision": self.revision,
                  "tools": self.tools, "environment_sha256": digest(self.environment),
                  "wall_seconds": time.monotonic() - self.started,
+                 "worker_limits": {"stages": self.jobs, "memory_stages": self.memory_workers,
+                                   "native_threads_per_stage": self.policy.get("test_threads", 2)},
                  "inventory": [stage.contract() for stage in self.inventory],
                  "results": [{key: result[key] for key in ("stage", "key", "status", "complete", "decision", "reason",
                                "origin_run", "receipt_path", "duration_seconds", "wait_seconds", "resources", "avoided_seconds")
@@ -527,50 +552,68 @@ def rust_embedded_inputs(root, directory, source_patterns):
         r'env!\s*\(\s*"CARGO_MANIFEST_DIR"\s*\)\s*,\s*'
         r'((?:' + literal + r'\s*,?\s*)+)\)\s*\)')
     result = set()
-    for pattern in source_patterns:
-        for source in directory.glob(pattern):
-            if source.suffix != ".rs" or not source.is_file():
-                continue
-            text = source.read_text()
-            direct_matches, manifest_matches = list(direct.finditer(text)), list(manifest.finditer(text))
-            recognized = [match.span() for match in direct_matches + manifest_matches]
-            # Macro text emitted inside build.rs string literals is generated Rust,
-            # owned by that reviewed build script and its asset directory. The one
-            # source-level generated manifest include has the same owning contract.
-            strings = [match.span() for match in re.finditer(literal, text, re.DOTALL)]
-            generated = r'include_str!\s*\(\s*env!\s*\(\s*"GEOSOLVE_BUNDLED_SAMPLE_FRONTEND_MANIFEST"\s*\)\s*\)'
-            if source.relative_to(root).as_posix() == "crates/geosolve-sketch-code/examples/generate_frontend_samples.rs":
-                recognized.extend(match.span() for match in re.finditer(generated, text))
-            plain_includes = {
-                "crates/geosolve-sketch-code/src/bundled_samples.rs":
-                    r'include!\s*\(\s*concat!\s*\(\s*env!\s*\(\s*"OUT_DIR"\s*\)\s*,\s*'
-                    r'"/bundled-compiler-envelopes/bundled-sample-registry\.rs"\s*\)\s*\)',
-                "crates/geosolve-demo-web/src/workbench/mod.rs":
-                    r'include!\s*\(\s*"golden_scene_backend_parity\.rs"\s*\)',
-            }
-            # The second existing plain include is an ordinary adjacent src file,
-            # already scanned by the crate source glob. New plain includes may
-            # contain nested includes and therefore use the all-source fallback.
-            reviewed_plain = plain_includes.get(source.relative_to(root).as_posix())
-            if reviewed_plain:
-                recognized.extend(match.span() for match in re.finditer(reviewed_plain, text))
-            for macro in re.finditer(r'include(?:_(?:str|bytes))?!', text):
-                if any(start <= macro.start() < end for start, end in recognized):
-                    continue
-                if (source.relative_to(root).as_posix() == "crates/geosolve-sketch-code/build.rs"
-                        and any(start <= macro.start() < end for start, end in strings)):
-                    continue
-                # Never guess at a new raw-string/concat/env/expression form. All
-                # source, including prose, remains an input until it is reviewed.
+    pending = sorted({source for pattern in source_patterns for source in directory.glob(pattern)})
+    seen = set()
+    path_attribute = re.compile(r'#\[\s*path\s*=\s*(' + literal + r')\s*\]')
+    for source in pending:
+        if source in seen:
+            continue
+        seen.add(source)
+        if source.suffix != ".rs" or not source.is_file():
+            continue
+        text = source.read_text()
+        attributes = list(path_attribute.finditer(text))
+        if len(attributes) != len(re.findall(r'#\[\s*path\s*=', text)):
+            result.add("**")
+        for attribute in attributes:
+            target = (source.parent / json.loads(attribute[1])).resolve()
+            if not target.is_relative_to(root.resolve()):
+                raise ValueError(f"Rust module input escapes repository: {source}")
+            result.add(target.relative_to(root.resolve()).as_posix())
+            if target.is_file():
+                pending.append(target)
+            else:
+                # Unresolved module path semantics require a broad closure.
                 result.add("**")
-            targets = [(source.parent, json.loads(match[1])) for match in direct_matches]
-            targets += [(directory, "".join(json.loads(value) for value in re.findall(literal, match[1])).lstrip("/"))
-                        for match in manifest_matches]
-            for base, relative in targets:
-                target = (base / relative).resolve()
-                if not target.is_relative_to(root.resolve()):
-                    raise ValueError(f"Rust embedded input escapes repository: {source}: {relative}")
-                result.add(target.relative_to(root.resolve()).as_posix())
+        direct_matches, manifest_matches = list(direct.finditer(text)), list(manifest.finditer(text))
+        recognized = [match.span() for match in direct_matches + manifest_matches]
+        # Macro text emitted inside build.rs string literals is generated Rust,
+        # owned by that reviewed build script and its asset directory. The one
+        # source-level generated manifest include has the same owning contract.
+        strings = [match.span() for match in re.finditer(literal, text, re.DOTALL)]
+        generated = r'include_str!\s*\(\s*env!\s*\(\s*"GEOSOLVE_BUNDLED_SAMPLE_FRONTEND_MANIFEST"\s*\)\s*\)'
+        if source.relative_to(root).as_posix() == "crates/geosolve-sketch-code/examples/generate_frontend_samples.rs":
+            recognized.extend(match.span() for match in re.finditer(generated, text))
+        plain_includes = {
+            "crates/geosolve-sketch-code/src/bundled_samples.rs":
+                r'include!\s*\(\s*concat!\s*\(\s*env!\s*\(\s*"OUT_DIR"\s*\)\s*,\s*'
+                r'"/bundled-compiler-envelopes/bundled-sample-registry\.rs"\s*\)\s*\)',
+            "crates/geosolve-demo-web/src/workbench/mod.rs":
+                r'include!\s*\(\s*"golden_scene_backend_parity\.rs"\s*\)',
+        }
+        # The second existing plain include is an ordinary adjacent src file,
+        # already scanned by the crate source glob. New plain includes may
+        # contain nested includes and therefore use the all-source fallback.
+        reviewed_plain = plain_includes.get(source.relative_to(root).as_posix())
+        if reviewed_plain:
+            recognized.extend(match.span() for match in re.finditer(reviewed_plain, text))
+        for macro in re.finditer(r'include(?:_(?:str|bytes))?!', text):
+            if any(start <= macro.start() < end for start, end in recognized):
+                continue
+            if (source.relative_to(root).as_posix() == "crates/geosolve-sketch-code/build.rs"
+                    and any(start <= macro.start() < end for start, end in strings)):
+                continue
+            # Never guess at a new raw-string/concat/env/expression form. All
+            # source, including prose, remains an input until it is reviewed.
+            result.add("**")
+        targets = [(source.parent, json.loads(match[1])) for match in direct_matches]
+        targets += [(directory, "".join(json.loads(value) for value in re.findall(literal, match[1])).lstrip("/"))
+                    for match in manifest_matches]
+        for base, relative in targets:
+            target = (base / relative).resolve()
+            if not target.is_relative_to(root.resolve()):
+                raise ValueError(f"Rust embedded input escapes repository: {source}: {relative}")
+            result.add(target.relative_to(root.resolve()).as_posix())
     return result
 
 
@@ -608,8 +651,8 @@ def npm(prefix, *arguments):
     return cmd("npm", "--prefix", prefix, *arguments)
 
 
-def preflight_stages():
-    return [
+def preflight_stages(include_clippy=True):
+    stages = [
         Stage("preflight.inventory", (cmd(sys.executable, "scripts/release_gate.py", "--check-inventory"),
                                       cmd("git", "diff", "--check"),
                                       cmd(sys.executable, "-m", "unittest", "discover", "-s", "scripts/tests", "-p", "test_*.py"),
@@ -633,12 +676,19 @@ def preflight_stages():
                       "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md"),
               dependencies=("preflight.managed",), resource="exclusive", timeout=600,
               outputs=(FRONTEND + "/node_modules",)),
+        Stage("preflight.clippy", (cmd("cargo", "clippy", "--locked", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"),),
+              inputs=rust_inputs(ROOT), dependencies=("preflight.frontend", "preflight.metadata-format"),
+              resource="exclusive", timeout=2400),
     ]
+    return stages if include_clippy else [stage for stage in stages if stage.id != "preflight.clippy"]
 
 
 def check_inventory(root):
     """Catch M92's stale count before any Cargo/compiler/native work."""
     directory = root / "crates/geosolve-sketch-code/assets/bundled-samples"
+    contract = read_json(directory.parent / "bundled-sample-catalog.json")
+    if contract.get("schema") != 1 or not contract.get("samples"):
+        raise ValueError("catalog contract is missing, empty or unknown")
     manifests = [read_json(p) for p in sorted(directory.glob("*/manifest.json"))]
     count = len(manifests)
     if not count or sorted(m["ordinal"] for m in manifests) != list(range(1, count + 1)):
@@ -646,15 +696,17 @@ def check_inventory(root):
     keys = [m["key"] for m in manifests]
     if len(keys) != len(set(keys)):
         raise ValueError("duplicate sample key")
-    generator = (root / "packages/geosolve-sketch-code/scripts/generate-bundled-samples.mjs").read_text()
-    expected = re.search(r"assert\.equal\(directories\.length,\s*(\d+)\)", generator)
-    if expected is None or int(expected[1]) != count:
-        raise ValueError(f"bundled generator count is stale or unknown (catalog has {count})")
+    ordered = sorted(manifests, key=lambda m: m["ordinal"])
+    if [{key: entry[key] for key in ("key", "title", "category")} for entry in ordered] != contract["samples"]:
+        raise ValueError(f"catalog contract count/order/metadata is stale (catalog has {count})")
+    retired = contract.get("retired_keys", [])
+    if len(retired) != len(set(retired)) or set(retired) & set(keys):
+        raise ValueError("retired catalog keys must be unique and absent")
     frontend = read_json(root / FRONTEND / "src/data/samples.json")
     rows = frontend if isinstance(frontend, list) else frontend.get("samples", [])
     if len(rows) != count or [row["key"] for row in rows] != [m["key"] for m in sorted(manifests, key=lambda m: m["ordinal"])]:
         raise ValueError("generated frontend inventory differs from catalog")
-    print(f"sample preflight: {count} exact entries; generator count and frontend order match")
+    print(f"sample preflight: {count} exact entries; reviewed catalog and frontend order match")
 
 
 def rust_inputs(root):
@@ -708,7 +760,7 @@ def preparation_stages(runner, modes=None):
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-wasm", "--output", out)
         else:
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-browser", "--wasm-package", prepared["wasm"], "--output", out)
-        dependencies = ("preflight.frontend", "preflight.metadata-format") + (("prepare.wasm",) if mode == "browser" else ())
+        dependencies = ("preflight.clippy",) + (("prepare.wasm",) if mode == "browser" else ())
         stages.append(Stage(f"prepare.{mode}", (command,), inputs=inputs,
                             dependencies=dependencies, resource="exclusive", timeout=2400,
                             outputs=(out,), kind="build"))
@@ -744,13 +796,16 @@ def native_stages(root, prepared):
 
 def qualification_stages(root, prepared, jobs):
     import golden_oracle
+    import release_equivalence
+    try:
+        equivalence = read_json(root / release_equivalence.CONTRACT_PATH)
+    except (OSError, ValueError):
+        equivalence = None
     exact_tests = read_json(root / "scripts/release_test_inventory.json")["stages"]
     all_rust = (*rust_inputs(root), "README.md", "LICENSE", "docs/API_COMPATIBILITY.md", "THIRD_PARTY_LICENSES.md")
     built = tuple("prepare." + mode for mode in prepared)
     result = native_stages(root, prepared)
     result.extend([
-        Stage("rust.clippy", (cmd("cargo", "clippy", "--locked", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"),),
-              inputs=all_rust, dependencies=built, resource="exclusive"),
         Stage("rust.doctests", (cmd("cargo", "test", "--locked", "--workspace", "--all-features", "--doc"),),
               inputs=all_rust, dependencies=built, env=(("RUST_MIN_STACK", "16777216"),), resource="exclusive"),
         Stage("rust.documentation", (cmd("cargo", "doc", "--locked", "--workspace", "--all-features", "--no-deps"),),
@@ -761,6 +816,13 @@ def qualification_stages(root, prepared, jobs):
                              "--prepared-packages", "--output-dir", "{scratch}/golden"),),
               inputs=(*all_rust, "packages/*/src/**", "packages/*/scripts/compile*", "packages/*/tsconfig*",
                       "scripts/golden*", "scripts/release_gate_native.py"),
+              # Audited adapters export their own fixtures and use CodeProject::managed;
+              # they never read the bundled catalog. Keep executable hashes in the
+              # original observation as provenance; all program/build inputs remain.
+              input_equivalence="golden", input_equivalence_contract=equivalence,
+              excluded_inputs=("crates/geosolve-sketch-code/assets/bundled-samples/**",
+                               "crates/geosolve-sketch-code/assets/bundled-sample-catalog.json",
+                               FRONTEND + "/src/data/samples.json"),
               artifacts=("packages/geosolve-sketch-code/dist", "packages/geosolve-sketch-code/node_modules",
                          "packages/geosolve-intent/dist", "packages/geosolve-intent/node_modules"),
               dependencies=built, resource="exclusive", timeout=3600,
@@ -794,16 +856,22 @@ def qualification_stages(root, prepared, jobs):
                     cmd("cargo", "test", "--locked", "--release", "-p", "geosolve-linkage", "--test", "m23_performance",
                         "exact_auto_sparse_crossover_solves_and_validates_256_moving_body_chain", "--", "--exact", "--ignored", "--nocapture")]
     performance_cases = tuple(exact_tests["performance.interaction"] + exact_tests["performance.linkage"])
-    result.append(Stage("performance", tuple(performance), inputs=all_rust, dependencies=built, resource="exclusive",
+    performance_inputs = tuple(sorted({item for package in (
+        "geosolve-sketch", "geosolve-constraint-editor", "geosolve-linkage")
+        for item in crate_inputs(root, package)}))
+    result.append(Stage("performance", tuple(performance), inputs=performance_inputs, dependencies=built, resource="exclusive",
                         cases=performance_cases, test_inventories=((), (), (), tuple(exact_tests["performance.interaction"]), tuple(exact_tests["performance.linkage"]))))
     browser_path = root / prepared.get("browser", "target/unprepared-browser")
     manifest = str(browser_path / "harness.json")
     production = str(browser_path / "production.json")
     result.append(Stage("browser", (cmd(sys.executable, "scripts/release_gate.py", "--run-browser", manifest,
                                        "--jobs", str(min(jobs, 2)), "--output", "{scratch}/browser"),),
-                        inputs=(FRONTEND + "/**", "crates/**", "packages/**", "docs/API_COMPATIBILITY.md"), dependencies=built,
+                        inputs=(FRONTEND + "/**", *crate_inputs(root, "geosolve-demo-web", include_tests=False),
+                                "packages/**", "docs/API_COMPATIBILITY.md"), dependencies=built,
                         resource="memory", env=(("GEOSOLVE_E2E_ARTIFACT_MANIFEST", manifest),),
-                        artifacts=(str(browser_path / "geosolve-harness"),), timeout=2400))
+                        artifacts=(str(browser_path / "geosolve-harness"), "packages/geosolve-sketch-code/dist",
+                                   "packages/geosolve-sketch-code/node_modules", "packages/geosolve-intent/dist",
+                                   "packages/geosolve-intent/node_modules"), timeout=2400))
     result.append(Stage("artifact.transport", (cmd(sys.executable, "scripts/release_gate.py", "--verify-production", production,
                                                      "--output", "{scratch}/transport.json"),),
                         inputs=(FRONTEND + "/scripts/**",), dependencies=built, resource="memory", reusable=False, timeout=180,
@@ -854,6 +922,14 @@ def validate_browser_report(discovery, actual):
 
 
 def run_browser(manifest, output, jobs):
+    if os.environ.get("GEOSOLVE_RELEASE_BROWSER_CONTEXT"):
+        import release_browser
+        store = Store(ROOT / "target/release-gate")
+        context = store.unseal(Path(os.environ["GEOSOLVE_RELEASE_BROWSER_CONTEXT"]))
+        if not context:
+            raise ValueError("browser parent context is unauthenticated")
+        release_browser.run(ROOT, store, manifest, output, jobs, context["fresh"], context)
+        return
     output.mkdir(parents=True, exist_ok=False)
     environment = dict(os.environ, GEOSOLVE_E2E_ARTIFACT_MANIFEST=str(manifest), M92_BROWSER_AUDIT_OUTPUT=str(output / "audit"))
     command = ["./node_modules/.bin/playwright", "test", "tests/e2e/language-service.spec.ts",
@@ -1087,7 +1163,7 @@ def main():
                     if receipt and receipt.get("source_sha256") == digest(original["source"]):
                         store.save(receipt)
     runner = Runner(ROOT, store, source_snapshot(ROOT), policy, tool_identity(ROOT), args.jobs, args.fresh)
-    stages = preflight_stages()
+    stages = preflight_stages(include_clippy=not args.preflight)
     preparations, prepared = preparation_stages(runner, preparation_modes(args.stage))
     if not args.preflight:
         stages += preparations

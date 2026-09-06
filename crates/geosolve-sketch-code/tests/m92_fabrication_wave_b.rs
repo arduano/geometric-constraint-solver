@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#[path = "support/catalog_contract.rs"]
+mod catalog_contract;
+#[path = "support/retained_sample.rs"]
+mod retained_sample;
+use retained_sample::TestSample;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    BundledSampleSpec, CodeProject, KeyedReconcileState, ManagedControlEdit,
-    ManagedControlEditBatch, ManagedPathSegment, ManagedSketchMutation, ManagedValue,
-    SampleCategory, SemanticOutputPath, UnitLiteral, bundled_sample, managed_control_manifest,
-    materialize_code_project_cold, prepare_managed_control_mutation, required_generated_members,
+    CodeProject, KeyedReconcileState, ManagedControlEdit, ManagedControlEditBatch,
+    ManagedPathSegment, ManagedSketchMutation, ManagedValue, SampleCategory, SemanticOutputPath,
+    UnitLiteral, managed_control_manifest, materialize_code_project_cold,
+    prepare_managed_control_mutation, required_generated_members,
 };
 use geosolve_sketch_intent::IntentSessionId;
 
@@ -44,16 +50,12 @@ fn witness_value(value: &serde_json::Value) -> ManagedValue {
     panic!("unsupported fabrication witness value: {value}");
 }
 
-fn assert_source_authority(key: &str, sample: &BundledSampleSpec, project: &CodeProject) {
+fn assert_source_authority(key: &str, sample: &TestSample, project: &CodeProject) {
     // Source-level anchors remain the authored contract. Rectangle and Slot
     // operations own their internal construction locks and are audited as
     // single source operations rather than expanded user-authored Fix rows.
     assert!(
-        sample
-            .managed_source()
-            .matches("$.constraint.fixedPoint(")
-            .count()
-            <= 2,
+        sample.source().matches("$.constraint.fixedPoint(").count() <= 2,
         "{key} uses only the minimal explicit datum anchors"
     );
     let canonical_project = project.to_canonical_json().expect("canonical project");
@@ -69,9 +71,9 @@ fn assert_source_authority(key: &str, sample: &BundledSampleSpec, project: &Code
         .as_deref()
         .expect("bundled sample compiler authority");
     compiled
-        .validate_input_source(sample.managed_source())
+        .validate_input_source(sample.source())
         .unwrap_or_else(|error| panic!("{key} source authority: {error}"));
-    assert_eq!(compiled.normalized_source, sample.managed_source(), "{key}");
+    assert_eq!(compiled.normalized_source, sample.source(), "{key}");
     assert_eq!(
         serde_json::to_string(&compiled.ir).expect("canonical IR encoding"),
         compiled.canonical_ir_json,
@@ -79,7 +81,7 @@ fn assert_source_authority(key: &str, sample: &BundledSampleSpec, project: &Code
     );
 }
 
-fn assert_group_ownership(key: &str, sample: &BundledSampleSpec, project: &CodeProject) {
+fn assert_group_ownership(key: &str, sample: &TestSample, project: &CodeProject) {
     let compiled = project
         .managed
         .compiled
@@ -98,9 +100,21 @@ fn assert_group_ownership(key: &str, sample: &BundledSampleSpec, project: &CodeP
             .iter()
             .map(|group| group.name.as_str())
             .collect::<Vec<_>>(),
-        sample.functional_groups,
+        sample.manifest()["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|group| group.as_str().unwrap())
+            .collect::<Vec<_>>(),
         "{key} ordered functional groups"
     );
+    if let Some(live) = sample.catalog_sample() {
+        assert_eq!(
+            serde_json::json!(live.functional_groups),
+            sample.manifest()["groups"],
+            "{key} generated registry preserves the declared groups"
+        );
+    }
     let mut ownership = BTreeMap::<&str, usize>::new();
     for group in &compiled.artifact.groups {
         assert!(!group.declarations.is_empty(), "{key} group {}", group.name);
@@ -115,34 +129,57 @@ fn assert_group_ownership(key: &str, sample: &BundledSampleSpec, project: &CodeP
     }
 }
 
-fn assert_external_provenance(key: &str, sample: &BundledSampleSpec) {
-    assert!(!sample.provenance.is_empty(), "{key} external provenance");
+fn assert_external_provenance(key: &str, sample: &TestSample) {
+    let manifest = sample.manifest();
+    let provenance = manifest["provenance"]
+        .as_array()
+        .expect("sample provenance");
+    if let Some(live) = sample.catalog_sample() {
+        let projected = live
+            .provenance
+            .iter()
+            .map(|record| {
+                serde_json::json!({
+                    "relationship": record.relationship,
+                    "name": record.name,
+                    "url": record.url,
+                    "revision": record.revision,
+                    "path": record.path,
+                    "licence": record.licence,
+                    "scope": record.scope,
+                    "notice_required": record.notice_required,
+                })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &projected, provenance,
+            "{key} generated registry preserves every provenance field"
+        );
+    }
+    assert!(!provenance.is_empty(), "{key} external provenance");
     let notice = sample.notice().expect("external sample notice");
     assert!(notice.contains("SPDX-License-Identifier: GPL-3.0-or-later"));
     assert!(notice.contains("manufacturing guarantee"), "{key}");
-    for provenance in sample.provenance {
-        let revision = provenance.revision.expect("immutable external revision");
-        let path = provenance.path.expect("exact external path");
+    for provenance in provenance {
+        let revision = provenance["revision"]
+            .as_str()
+            .expect("immutable external revision");
+        let path = provenance["path"].as_str().expect("exact external path");
         assert_eq!(revision.len(), 40, "{key}");
         assert!(
             revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
             "{key}"
         );
-        assert_eq!(provenance.licence, "GPL-3.0-only", "{key}");
-        assert!(provenance.notice_required, "{key}");
+        assert_eq!(provenance["licence"], "GPL-3.0-only", "{key}");
+        assert_eq!(provenance["notice_required"], true, "{key}");
         assert!(notice.contains(revision), "{key}");
         assert!(notice.contains(path), "{key}");
     }
 }
 
-fn assert_editable_and_solved(
-    key: &str,
-    sample: &BundledSampleSpec,
-    project: &CodeProject,
-    seed: u128,
-) {
+fn assert_editable_and_solved(key: &str, sample: &TestSample, project: &CodeProject, seed: u128) {
     let witnesses: serde_json::Value =
-        serde_json::from_str(sample.witnesses_json()).expect("witness JSON");
+        serde_json::from_str(sample.witnesses()).expect("witness JSON");
     let edit = &witnesses["representative_edit"];
     let declaration = edit["declaration"].as_str().expect("witness declaration");
     let path = SemanticOutputPath(
@@ -228,20 +265,30 @@ fn assert_editable_and_solved(
 }
 
 fn validate(key: &str, seed: u128) {
-    let sample = bundled_sample(key).expect("registered fabrication sample");
-    assert_eq!(sample.category, SampleCategory::ProductFabrication);
+    let sample = retained_sample::resolve(key);
+    if let Some(live) = sample.catalog_sample() {
+        assert_eq!(live.category, SampleCategory::ProductFabrication);
+    }
+    assert_eq!(
+        serde_json::from_value::<SampleCategory>(sample.manifest()["category"].clone()).unwrap(),
+        SampleCategory::ProductFabrication
+    );
     let project = sample.project();
-    assert_source_authority(key, sample, &project);
-    assert_group_ownership(key, sample, &project);
-    assert_external_provenance(key, sample);
-    assert_editable_and_solved(key, sample, &project, seed);
+    assert_source_authority(key, &sample, &project);
+    assert_group_ownership(key, &sample, &project);
+    assert_external_provenance(key, &sample);
+    assert_editable_and_solved(key, &sample, &project, seed);
 }
 
 #[test]
 fn fabrication_wave_b_is_provenanced_grouped_editable_and_fully_constrained() {
     for (ordinal, key) in SAMPLES.into_iter().enumerate() {
-        let sample = bundled_sample(key).expect("registered sample");
-        assert_eq!(sample.ordinal, ordinal + 10, "{key}");
+        let sample = retained_sample::resolve(key);
+        if let Some(live) = sample.catalog_sample() {
+            assert_eq!(live.ordinal, catalog_contract::ordinal(key), "{key}");
+        }
+        // Retired Bondtech still executes every original assertion below using
+        // its explicit archive. The loop index remains the original seed owner.
         validate(key, 0x92_70 + ordinal as u128);
     }
 }

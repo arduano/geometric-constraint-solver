@@ -2,6 +2,8 @@
 
 #[path = "support/m92_audit.rs"]
 mod audit;
+#[path = "../../geosolve-sketch-code/tests/support/retained_sample.rs"]
+mod retained_sample;
 use geosolve_sketch::{CurveDefinition, SketchDocument};
 use geosolve_sketch_code::bundled_sample;
 fn document(key: &str) -> SketchDocument {
@@ -46,7 +48,8 @@ fn voron_t_passage_and_side_notches_belong_to_one_profile() {
 #[test]
 #[ignore = "requires the built pinned TypeScript mutation sidecar"]
 fn bondtech_pitch_edit_moves_the_three_seats() {
-    let input = geosolve_headless::HeadlessInput::BundledSample("bondtech-indx-link".into());
+    let sample = retained_sample::resolve("bondtech-indx-link");
+    let input = sample_input(&sample);
     let edited = audit::edit_mm(&input, "couplingPitchRadius", &["value"], 15.0);
     let document = audit::accepted_document(edited.project());
     let seats = circles(&document)
@@ -281,19 +284,23 @@ fn micron_counterbores_fit_the_schematic_body() {
     assert_circle_enclosure(&document("micron-carriage"));
 }
 
+fn sample_input(sample: &retained_sample::TestSample) -> geosolve_headless::HeadlessInput {
+    match sample.catalog_sample() {
+        Some(live) => geosolve_headless::HeadlessInput::BundledSample(live.key.into()),
+        None => geosolve_headless::HeadlessInput::CodeProjectJson(
+            sample.project().to_canonical_json().unwrap(),
+        ),
+    }
+}
+
 fn measured_edit(key: &str, index: usize) {
-    let sample = bundled_sample(key).unwrap();
+    let sample = retained_sample::resolve(key);
     let base = sample.project();
-    let input = geosolve_headless::HeadlessInput::BundledSample(key.into());
+    let input = sample_input(&sample);
     let before = geosolve_headless::render(&input).unwrap();
     audit::assert_valid(&before);
     intent(&base, key, None);
-    let path = format!(
-        "{}/../geosolve-sketch-code/assets/bundled-samples/{key}/audit-edits.json",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let edits: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let edits = sample.edits();
     let e = &edits["edits"][index];
     let fields = e["path"]
         .as_array()

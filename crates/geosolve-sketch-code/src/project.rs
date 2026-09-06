@@ -301,7 +301,24 @@ mod tests {
     #[test]
     fn all_bundled_samples_round_trip_source_ir_and_artifacts() {
         let bundled = bundled_sample_catalog();
-        assert_eq!(bundled.len(), 16);
+        let reviewed: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        )))
+        .expect("reviewed sample catalog contract");
+        assert_eq!(reviewed["schema"], 1);
+        assert_eq!(
+            serde_json::json!(
+                bundled
+                    .iter()
+                    .map(|sample| serde_json::json!({
+                        "key": sample.key, "title": sample.title, "category": sample.category,
+                    }))
+                    .collect::<Vec<_>>()
+            ),
+            reviewed["samples"],
+            "runtime catalog must match independent reviewed order and metadata"
+        );
         for sample in bundled {
             let project = sample.project();
             let source_before = project.managed.source.clone();

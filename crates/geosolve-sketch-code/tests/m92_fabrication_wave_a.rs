@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#[path = "support/catalog_contract.rs"]
+mod catalog_contract;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -179,7 +182,11 @@ fn fabrication_wave_a_is_source_authoritative_grouped_and_fully_constrained() {
     for (ordinal, key) in SAMPLES.into_iter().enumerate() {
         let manifest: serde_json::Value =
             serde_json::from_str(&asset(key, "manifest.json")).expect("manifest JSON");
-        assert_eq!(manifest["ordinal"], ordinal + 5, "{key} ordinal");
+        assert_eq!(
+            manifest["ordinal"],
+            catalog_contract::ordinal(key),
+            "{key} ordinal"
+        );
         assert_eq!(manifest["key"], key, "{key} manifest key");
         assert_eq!(manifest["expected"]["raw_dof"], 0, "{key}");
         assert_eq!(manifest["expected"]["effective_dof"], 0, "{key}");

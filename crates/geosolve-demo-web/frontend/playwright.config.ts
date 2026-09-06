@@ -13,12 +13,13 @@ if (prepared && (prepared.format !== "geosolve-release-artifact-v1" || prepared.
 const prefix = prepared?.publicBase && prepared.publicBase !== "./" ? prepared.publicBase : "/";
 // Fresh browser contexts isolate ordinary tests. Scale/atlas and legacy payload
 // workflows share a single memory-heavy project slot under the gate's total cap.
-const memoryHeavy = /M92 visual workflow .*: (perforated-fixture-field|robotic-harness-backplane|curves-contact-continuity-atlas|fabrication-operations-atlas)|legacy|scale|recovery/i;
+const memoryHeavy = /M92 visual workflow: (perforated-fixture-field|robotic-harness-backplane|curves-contact-continuity-atlas|fabrication-operations-atlas)|legacy|scale|recovery/i;
 const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1024, height: 720 } };
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: Boolean(preparedManifest),
+  workers: preparedManifest ? 2 : undefined,
   timeout: 120_000,
   reporter: "list",
   use: {

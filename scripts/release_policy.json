@@ -29,6 +29,14 @@
     "scripts/golden_oracle.py",
     "scripts/golden_oracle_test.py",
     "scripts/release_gate_native.py",
+    "scripts/release_browser.py",
+    "scripts/release_browser_context.py",
+    "scripts/release_equivalence.py",
+    "scripts/release_equivalence.json",
+    "scripts/tests/test_release_equivalence.py",
+    "scripts/tests/test_release_browser_reuse.py",
+    "scripts/tests/test_release_inputs.py",
+    "scripts/release_test_inventory.json",
     "scripts/tests/test_release_gate_native.py"
   ],
   "owned": [
@@ -38,7 +46,7 @@
     "scripts/verify-geosolve-sketch-code-package.sh"
   ],
   "workers": 2,
-  "memory_heavy_workers": 1,
+  "memory_heavy_workers": 2,
   "test_threads": 2,
   "test_opt_level": 1,
   "debug_assertions": true,

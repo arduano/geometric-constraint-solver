@@ -1,0 +1,24 @@
+{
+  "format": "geosolve-sample-witnesses-v1",
+  "representative_edit": {
+    "declaration": "couplingPitchRadius",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 13
+    }
+  },
+  "drags": [],
+  "secondary_edit": {
+    "declaration": "couplingSeatRadius",
+    "path": [
+      "value"
+    ],
+    "replacement": {
+      "unit": "mm",
+      "value": 2.7
+    }
+  }
+}

@@ -11,8 +11,11 @@ Milestone timing and full integrated qualification remain recorded separately in
 ## Commands
 
 Run in the repository Nix shell so Rust, Deno, Node, wasm-bindgen and wasm-opt match the
-pinned environment. The default is two execution workers, two libtest threads, at most one
-memory-heavy stage and exclusive builds/installations/performance work.
+pinned environment. The default is two execution workers and two libtest threads per native
+stage. Up to two memory-marked stages can overlap within the same two-worker total; Playwright
+retains one slot for its large sample cases. Builds, installations and measured performance remain
+exclusive. The recorded host has 64 GiB RAM; integrated qualification records the actual overlap
+and resource costs. `--jobs 1` also reduces the memory-stage limit to one.
 
 ```bash
 nix-shell shell.nix --run './scripts/release-gate.sh --plan'
@@ -24,6 +27,10 @@ nix-shell shell.nix --run './scripts/release-gate.sh --stage "workspace.geosolve
 nix-shell shell.nix --run './scripts/release-gate.sh --resume RUN_ID'
 ./scripts/release-gate.sh --docs-only --since BASE_COMMIT
 ```
+
+`--preflight` runs the cheap inventory, metadata/format, managed and frontend tier. Integrated
+nomination then runs strict Clippy before preparations and semantic tests; a cold Clippy build is
+reported separately from the under-two-minute cheap failure target.
 
 `--plan` explains execution/reuse without executing tests. On an unprepared source it lists
 preparation obligations; Cargo metadata, JSON compiler artifacts and libtest discovery expand
@@ -62,9 +69,9 @@ isolated checkout for unrelated development. The runner checks source identity a
   qualified product identity. It does not qualify a newly packaged README or nominate rebuilt
   bytes. A changed document embedded by a build/test requires affected qualification. The default
   gate recognizes a prose-only diff from `HEAD^`; use `--since` for an explicit baseline.
-- Sample/catalog changes currently invalidate every consumer in the demonstrated source/artifact
-  closure. Do not manually bypass broader stages to meet the latency target. Finer per-sample
-  independence requires explicit inventory/dependency proof and invalidation tests.
+- Sample/catalog changes use the reviewed boundaries below. Native catalog consumers, artifact
+  preparation and packaging remain fresh when their complete inputs change. Do not manually bypass
+  broader stages to meet a latency target.
 
 The private `target/release-gate` store contains a mode-0600 HMAC key, signed stage results and
 qualification manifests. The trusted boundary is this OS user and checkout; it does not defend
@@ -88,6 +95,40 @@ dispositions from the captured observation:
 The latter commands validate a retained observation; they are not independent fresh executions.
 Golden updates still require explicit row-by-row review. The release gate executes require-clean
 once, preserving that complete observation and its exact comparison/clean verdict.
+
+The immutable catalog contract at `crates/geosolve-sketch-code/assets/bundled-sample-catalog.json`
+is independent expected data. Build/generator, native and frontend checks compare actual discovered
+entries against its exact order, keys, titles, categories and retired identities. Removing a sample
+requires updating that contract, contiguous manifest ordinals and the generated frontend projection;
+it does not require editing count constants in program/test source.
+
+Catalog-only equivalence is explicitly pinned in `scripts/release_equivalence.json`. It hashes the
+reviewed program input map, including adapters, tests, build scripts, compiler and runner sources.
+Only enumerated catalog data files are excluded; global/unknown inputs, executable files and
+symlinks remain. An unresolved Rust include or a changed program map disables this reuse. A newly
+passing baseline does not approve a changed dependency boundary. Update its digest only after an
+explicit input audit; the runner never updates it automatically.
+
+The golden adapters construct their own exported fixtures and `CodeProject::managed` projects;
+they do not select bundled samples. With the reviewed program boundary intact, their single
+271-case observation can survive a catalog-only change. Its original executable hashes and run
+remain provenance, while the changed catalog/build/package obligations execute independently.
+
+Browser coverage has stable sample-key identities and an independently reviewed non-sample
+inventory. Each changed artifact executes the catalog/Recent/retired-origin checks and every
+sample's actual UI-open prefix. The prefix hashes the complete persisted wire (including history,
+branches and allocators), exact source, fitted geometry and authoritative SVG. A surviving sample's
+full selection/grouping/two-edit/Undo/Redo/reload workflow can reuse a signed completed leaf only
+when its program, complete selected data and entire prefix witness match. Only manifest ordinal
+belongs exclusively to the fresh catalog check. Shared workbench and language tests execute afresh
+whenever the outer browser stage runs. `--fresh` bypasses all leaf reuse.
+
+The parent binds browser execution to its actual prepared artifact and invocation; source and
+consumed artifact hashes must remain unchanged before leaves are retained. Failed batches can
+donate complete independent single-attempt rows; skipped, retried or incomplete rows cannot pass.
+Coverage distinguishes fresh catalog/prefix checks, fresh full rows and reused original workflows.
+It never claims that an older workflow ran on newly built bytes. A witness mismatch runs the full
+row; fields must not be dropped merely to get a reuse match.
 
 An authenticated WASM preparation is separate from browser bundling, so presentation changes can
 reuse the exact optimized package. Browser preparation builds separate compiler-harness and production

@@ -40,25 +40,47 @@ mod tests {
             "theo-jansen-leg"
         );
         assert_eq!(catalog.selected_key(), Some("theo-jansen-leg"));
-        assert!(catalog.select_key("drafting-compass").is_err());
-        assert_eq!(catalog.selected_key(), Some("theo-jansen-leg"));
+        let reviewed: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        ))
+        .expect("reviewed sample catalog contract");
+        assert_eq!(reviewed["schema"], 1);
+        for retired in reviewed["retired_keys"].as_array().unwrap() {
+            assert!(catalog.select_key(retired.as_str().unwrap()).is_err());
+            assert_eq!(catalog.selected_key(), Some("theo-jansen-leg"));
+        }
     }
 
     #[test]
     fn menu_contains_each_canonical_sample_once_in_four_categories() {
         let markup = SampleCatalogState::default().menu_markup();
-        assert_eq!(markup.matches("data-sample-group-trigger").count(), 4);
-        assert_eq!(markup.matches("data-sample-id=").count(), 16);
+        let reviewed: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        ))
+        .expect("reviewed sample catalog contract");
+        assert_eq!(reviewed["schema"], 1);
+        let expected = reviewed["samples"].as_array().unwrap();
+        let categories = expected
+            .iter()
+            .map(|sample| sample["category"].as_str().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            markup.matches("data-sample-group-trigger").count(),
+            categories.len()
+        );
+        assert_eq!(markup.matches("data-sample-id=").count(), expected.len());
         assert!(!markup.contains("data-code-sample-id="));
-        for sample in geosolve_sketch_code::bundled_sample_catalog() {
-            assert_eq!(
-                markup
-                    .matches(&format!("data-sample-id=\"{}\"", sample.key))
-                    .count(),
-                1,
-                "{}",
-                sample.key
-            );
+        let mut previous = 0;
+        for sample in expected {
+            let key = sample["key"].as_str().unwrap();
+            let identity = format!("data-sample-id=\"{key}\"");
+            assert_eq!(markup.matches(&identity).count(), 1, "{key}");
+            let position = markup.find(&identity).unwrap();
+            assert!(position >= previous, "{key} reviewed menu order");
+            previous = position;
+        }
+        for retired in reviewed["retired_keys"].as_array().unwrap() {
+            assert!(!markup.contains(&format!("data-sample-id=\"{}\"", retired.as_str().unwrap())));
         }
     }
 }

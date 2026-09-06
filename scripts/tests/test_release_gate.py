@@ -134,6 +134,30 @@ class ReleasePolicyTests(unittest.TestCase):
         stages.append(self.stage("exclusive", "from pathlib import Path; assert not Path('target/memory.lock').exists()", resource="exclusive"))
         self.assertTrue(self.execute(self.runner(stages, jobs=3), stages)[0])
 
+    def test_configured_memory_parallelism_is_bounded_and_excludes_performance(self):
+        self.policy["memory_heavy_workers"] = 2
+        self.write("target/count.json", '{"active": 0, "maximum": 0}')
+        code = """import fcntl, json, time
+from pathlib import Path
+p = Path('target/count.json')
+def change(delta):
+    with Path('target/count.lock').open('w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        value = json.loads(p.read_text())
+        value['active'] += delta
+        value['maximum'] = max(value['maximum'], value['active'])
+        p.write_text(json.dumps(value))
+change(1)
+time.sleep(.25)
+change(-1)
+"""
+        stages = [self.stage(f"memory{i}", code, resource="memory") for i in range(4)]
+        stages.append(self.stage("performance", "import json; from pathlib import Path; assert json.loads(Path('target/count.json').read_text())['active'] == 0", resource="exclusive"))
+        runner = self.runner(stages, jobs=3)
+        self.assertTrue(self.execute(runner, stages)[0])
+        self.assertEqual(json.loads((self.root / "target/count.json").read_text()), {"active": 0, "maximum": 2})
+        self.assertEqual(self.runner(stages, jobs=1).memory_workers, 1)
+
     def test_runtime_socket_paths_are_short_private_isolated_and_cleaned(self):
         # Reproduce Chrome's Unix socket shape under a deliberately long durable
         # evidence path. Binding the socket checks the real OS limit.
@@ -257,11 +281,13 @@ print(p)
         sample_root = Path("crates/geosolve-sketch-code/assets/bundled-samples")
         for source in (real_root / sample_root).glob("*/manifest.json"):
             self.write(str(source.relative_to(real_root)), source.read_text())
-        generator = "packages/geosolve-sketch-code/scripts/generate-bundled-samples.mjs"
-        self.write(generator, (real_root / generator).read_text().replace("directories.length, 16", "directories.length, 20"))
+        contract_path = "crates/geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        contract = json.loads((real_root / contract_path).read_text())
+        contract["samples"].append({"key": "stale-entry", "title": "Stale", "category": "mechanism"})
+        self.write(contract_path, json.dumps(contract))
         self.write(gate.FRONTEND + "/src/data/samples.json", (real_root / gate.FRONTEND / "src/data/samples.json").read_text())
         with patch.object(subprocess, "Popen", side_effect=AssertionError("preflight launched a subprocess")):
-            with self.assertRaisesRegex(ValueError, "count is stale"):
+            with self.assertRaisesRegex(ValueError, "count/order/metadata is stale"):
                 gate.check_inventory(self.root)
 
     def test_generated_catalog_drift_fails_before_any_compiler_launch(self):
@@ -270,8 +296,8 @@ print(p)
         sample_root = Path("crates/geosolve-sketch-code/assets/bundled-samples")
         for source in (real_root / sample_root).glob("*/manifest.json"):
             self.write(str(source.relative_to(real_root)), source.read_text())
-        generator = "packages/geosolve-sketch-code/scripts/generate-bundled-samples.mjs"
-        self.write(generator, (real_root / generator).read_text())
+        contract_path = "crates/geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        self.write(contract_path, (real_root / contract_path).read_text())
         frontend = gate.FRONTEND + "/src/data/samples.json"
         rows = json.loads((real_root / frontend).read_text())
         rows[0], rows[1] = rows[1], rows[0]
@@ -329,6 +355,45 @@ print(p)
         self.assertNotIn(count, selected)
         self.assertIn(compiler, selected)
         self.assertIn("packages/geosolve-sketch-code/dist", golden.artifacts)
+
+    def test_golden_catalog_exclusion_keeps_program_fixtures_and_unknown_inputs(self):
+        root = Path(__file__).resolve().parents[2]
+        policy = gate.read_json(root / gate.POLICY_PATH)
+        golden = next(stage for stage in gate.qualification_stages(root, {}, 2) if stage.id == "golden")
+        omitted = ("crates/geosolve-sketch-code/assets/bundled-samples/one/sketch.ts",
+                   "crates/geosolve-sketch-code/assets/bundled-sample-catalog.json",
+                   gate.FRONTEND + "/src/data/samples.json")
+        retained = ("crates/geosolve-sketch-code/build.rs",
+                    "crates/geosolve-sketch-code/src/project.rs",
+                    "crates/geosolve-demo-web/src/workbench/golden_scene_backend_parity.rs",
+                    "crates/geosolve-sketch-code/tests/fixtures/golden_backend_parity_exclusions.tsv",
+                    "scripts/golden-unknown-fixture.tsv", "unreviewed.input", "Cargo.lock")
+        import release_equivalence as eq
+        snapshot = {name: {"sha256": "changed", "executable": False} for name in omitted + retained}
+        full = gate.stage_inputs(golden, snapshot, policy)
+        golden = dataclasses.replace(golden, input_equivalence_contract={
+            "schema": 1, "golden": {"program_sha256": gate.digest(eq.partition(full, policy))}})
+        selected = gate.stage_inputs(golden, snapshot, policy)
+        for name in omitted:
+            self.assertNotIn(name, selected)
+        for name in retained:
+            self.assertIn(name, selected)
+        # An explicit global classification always overrides an exclusion.
+        policy["global"].append(omitted[0])
+        self.assertIn(omitted[0], gate.stage_inputs(golden, {omitted[0]: "changed"}, policy))
+
+    def test_performance_owns_its_actual_domains_and_embedded_inputs(self):
+        root = Path(__file__).resolve().parents[2]
+        policy = gate.read_json(root / gate.POLICY_PATH)
+        stage = next(stage for stage in gate.qualification_stages(root, {}, 2) if stage.id == "performance")
+        names = ("crates/geosolve-sketch-code/assets/bundled-samples/one/sketch.ts",
+                 "crates/geosolve-core/src/solver.rs", "crates/geosolve-sketch/examples/m32_performance.rs",
+                 "crates/geosolve-constraint-editor/tests/m83_interaction_performance.rs",
+                 "crates/geosolve-linkage/tests/m23_performance.rs", "docs/M33_CAD_CAPABILITY_MATRIX.md")
+        selected = gate.stage_inputs(stage, {name: "changed" for name in names}, policy)
+        self.assertNotIn(names[0], selected)
+        for name in names[1:]:
+            self.assertIn(name, selected)
 
 
 if __name__ == "__main__":

@@ -145,6 +145,21 @@ const REMOVED: &[u8] = include_bytes!("../../../docs/missing.md");
             with self.subTest(input=name):
                 self.assertIn(name, gate.stage_inputs(stage, {name: {"sha256": "changed"}}, policy))
 
+    def test_external_path_module_and_nested_fixture_join_the_owner_closure(self):
+        self.write("crates/example/tests/owner.rs", '#[path = "../../../packages/helpers/fixture.rs"] mod fixture;')
+        self.write("packages/helpers/fixture.rs", 'const FIXTURE: &str = include_str!("../data/fixture.json");')
+        self.write("packages/data/fixture.json", "actual fixture")
+        inputs = gate.crate_inputs(self.root, "example")
+        self.assertIn("packages/helpers/fixture.rs", inputs)
+        self.assertIn("packages/data/fixture.json", inputs)
+        self.assertNotIn("**", inputs)
+
+    def test_real_retained_headless_fixture_follows_cross_package_module(self):
+        root = Path(__file__).resolve().parents[2]
+        inputs = gate.crate_inputs(root, "geosolve-headless")
+        self.assertIn("crates/geosolve-sketch-code/tests/support/retained_sample.rs", inputs)
+        self.assertIn("crates/geosolve-sketch-code/tests/fixtures/retained-bondtech-indx-link/sketch.compiled.json", inputs)
+
     def test_embedded_input_outside_repository_fails_closed(self):
         self.write("crates/example/src/lib.rs", 'const INPUT: &str = include_str!("../../../../external.md");')
         with self.assertRaisesRegex(ValueError, "escapes repository"):

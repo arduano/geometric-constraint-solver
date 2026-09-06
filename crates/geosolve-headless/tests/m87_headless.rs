@@ -605,7 +605,24 @@ fn concurrent_publication_is_atomic_no_clobber_and_io_failure_leaves_no_generati
 fn all_bundled_samples_inspect_with_deterministic_report_v2_authority() {
     let samples = bundled_sample_catalog();
     let keys = bundled_sample_keys();
-    assert_eq!(samples.len(), 16);
+    let reviewed: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+    )))
+    .expect("reviewed sample catalog contract");
+    assert_eq!(reviewed["schema"], 1);
+    assert_eq!(
+        serde_json::json!(
+            samples
+                .iter()
+                .map(|sample| serde_json::json!({
+                    "key": sample.key, "title": sample.title, "category": sample.category,
+                }))
+                .collect::<Vec<_>>()
+        ),
+        reviewed["samples"],
+        "runtime catalog must match independent reviewed order and metadata"
+    );
     assert_eq!(
         keys,
         samples.iter().map(|sample| sample.key).collect::<Vec<_>>()
@@ -1044,9 +1061,23 @@ fn cli_inspect_render_and_edit_are_browser_free_and_never_overwrite_outputs() {
         .output()
         .expect("run samples command");
     assert!(samples.status.success());
+    let reviewed: serde_json::Value = serde_json::from_str(include_str!(
+        "../../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+    ))
+    .expect("reviewed sample catalog contract");
+    assert_eq!(reviewed["schema"], 1);
     assert_eq!(
-        String::from_utf8(samples.stdout).unwrap().lines().count(),
-        16
+        String::from_utf8(samples.stdout)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        reviewed["samples"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|sample| { sample["key"].as_str().unwrap() })
+            .collect::<Vec<_>>(),
+        "CLI listing must match the independent reviewed catalog"
     );
 
     let inspected = Command::new(binary)

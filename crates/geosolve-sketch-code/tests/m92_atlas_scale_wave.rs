@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#[path = "support/catalog_contract.rs"]
+mod catalog_contract;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_constraint_editor::Viewport;
@@ -14,7 +17,6 @@ use geosolve_sketch_code::{
 use geosolve_sketch_intent::IntentSessionId;
 
 struct ExpectedSample {
-    ordinal: usize,
     key: &'static str,
     category: SampleCategory,
     raw_dof: usize,
@@ -27,7 +29,6 @@ struct ExpectedSample {
 
 const SAMPLES: [ExpectedSample; 4] = [
     ExpectedSample {
-        ordinal: 13,
         key: "curves-contact-continuity-atlas",
         category: SampleCategory::ReferenceLab,
         raw_dof: 81,
@@ -55,7 +56,6 @@ const SAMPLES: [ExpectedSample; 4] = [
         ],
     },
     ExpectedSample {
-        ordinal: 14,
         key: "fabrication-operations-atlas",
         category: SampleCategory::ReferenceLab,
         raw_dof: 255,
@@ -92,7 +92,6 @@ const SAMPLES: [ExpectedSample; 4] = [
         ],
     },
     ExpectedSample {
-        ordinal: 15,
         key: "perforated-fixture-field",
         category: SampleCategory::ScaleStudy,
         raw_dof: 772,
@@ -103,7 +102,6 @@ const SAMPLES: [ExpectedSample; 4] = [
         required_families: &[],
     },
     ExpectedSample {
-        ordinal: 16,
         key: "robotic-harness-backplane",
         category: SampleCategory::ScaleStudy,
         raw_dof: 268,
@@ -177,7 +175,12 @@ fn staged_reconciliation(project: &CodeProject) -> KeyedReconcileState {
 fn atlas_and_scale_samples_are_complete_native_scene_authorities() {
     for (index, expected) in SAMPLES.iter().enumerate() {
         let sample = bundled_sample(expected.key).expect("canonical sample key");
-        assert_eq!(sample.ordinal, expected.ordinal, "{} ordinal", expected.key);
+        assert_eq!(
+            sample.ordinal,
+            catalog_contract::ordinal(expected.key),
+            "{} ordinal",
+            expected.key
+        );
         assert_eq!(
             sample.category, expected.category,
             "{} category",

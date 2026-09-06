@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "description": "Reviewed program boundaries for catalog-only equivalence; pending final integration audit. Never refreshed automatically by the runner.",
+  "browser": {"program_sha256": null},
+  "golden": {"program_sha256": null}
+}

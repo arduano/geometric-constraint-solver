@@ -5,6 +5,7 @@ import axe from "axe-core";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import reviewedCatalog from "../../../geosolve-sketch-code/assets/bundled-sample-catalog.json";
 import { MockWorkbenchAdapter } from "./lib/mock-adapter";
 import {
   PREPARED_MANAGED_MUTATION_FORMAT,
@@ -321,18 +322,35 @@ describe("M88 workbench interaction contract", () => {
     expect(screen.getByText("Click the canvas to continue · Esc cancels")).toBeVisible();
   });
 
-  it("offers all 16 authoritative samples through semantic, searchable groups", async () => {
+  it("offers the reviewed authoritative catalog through semantic, searchable groups", async () => {
+    expect(reviewedCatalog.schema).toBe(1);
+    localStorage.setItem("geosolve-workbench-recents-v2", JSON.stringify({
+      version: 2, entries: reviewedCatalog.retired_keys.map((key) => ({ key })),
+    }));
     const { user } = await ready();
     await user.click(screen.getByRole("button", { name: "File menu" }));
     await user.click(screen.getByRole("menuitem", { name: /Open/ }));
-    expect(screen.getByText("16 samples")).toBeVisible();
+    expect(screen.getByText(`${reviewedCatalog.samples.length} samples`)).toBeVisible();
     expect(screen.getByRole("heading", { name: "Mechanisms" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Mechanisms" })).not.toBeInTheDocument();
-    for (const removed of [/Prusa MINI/, /NEMA 17/, /HevORT/, /Twin-roller Bézier cam/]) {
-      expect(screen.queryByRole("button", { name: removed })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Recent" })).queryAllByRole("button")).toEqual([]);
+    const categoryLabels: Record<string, string> = {
+      mechanism: "Mechanisms", product_fabrication: "Products & fabrication",
+      reference_lab: "Reference labs", scale_study: "Scale studies",
+    };
+    for (const category of new Set(reviewedCatalog.samples.map((sample) => sample.category))) {
+      const group = screen.getByRole("region", { name: categoryLabels[category] });
+      expect(within(group).getAllByRole("button").map((button) => button.firstElementChild?.textContent)).toEqual(
+        reviewedCatalog.samples.filter((sample) => sample.category === category).map((sample) => sample.title),
+      );
     }
 
-    const search = screen.getByPlaceholderText("Search 16 samples…");
+    const search = screen.getByPlaceholderText(`Search ${reviewedCatalog.samples.length} samples…`);
+    for (const retired of reviewedCatalog.retired_keys) {
+      fireEvent.change(search, { target: { value: retired } });
+      expect(screen.getByText("0 samples")).toBeVisible();
+    }
+    await user.clear(search);
     await user.type(search, "dust shoe");
     expect(screen.getByText("1 samples")).toBeVisible();
     await user.click(screen.getByRole("button", { name: /CNC router dust shoe and spindle clamp/ }));

@@ -16,7 +16,22 @@ use sha2::{Digest, Sha256};
 const COMPRESSION_LEVEL: u8 = 10;
 const MANIFEST_FORMAT: &str = "geosolve-bundled-sample-v1";
 const WITNESSES_FORMAT: &str = "geosolve-sample-witnesses-v1";
-const SAMPLE_COUNT: usize = 16;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CatalogContract {
+    schema: u32,
+    samples: Vec<CatalogEntry>,
+    retired_keys: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CatalogEntry {
+    key: String,
+    title: String,
+    category: ManifestCategory,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -144,6 +159,14 @@ fn main() {
 }
 
 fn validate_bundled_samples(manifest_dir: &Path) -> Vec<ValidatedSample> {
+    let contract_path = manifest_dir.join("assets/bundled-sample-catalog.json");
+    println!("cargo:rerun-if-changed={}", contract_path.display());
+    let contract: CatalogContract = read_json(&contract_path, "reviewed bundled-sample catalog");
+    assert_eq!(contract.schema, 1, "unknown catalog contract schema");
+    assert!(
+        !contract.samples.is_empty(),
+        "reviewed catalog must not be empty"
+    );
     let root = manifest_dir.join("assets/bundled-samples");
     println!("cargo:rerun-if-changed={}", root.display());
     let mut samples = directory_paths(&root)
@@ -155,19 +178,25 @@ fn validate_bundled_samples(manifest_dir: &Path) -> Vec<ValidatedSample> {
 
     assert_eq!(
         samples.len(),
-        SAMPLE_COUNT,
-        "bundled-sample registry must contain exactly {SAMPLE_COUNT} directories"
+        contract.samples.len(),
+        "bundled-sample registry must match the independent reviewed catalog"
     );
 
     let mut keys = BTreeSet::new();
     let mut titles = BTreeSet::new();
-    let mut categories = BTreeMap::<ManifestCategory, usize>::new();
     for (index, sample) in samples.iter().enumerate() {
         let manifest = &sample.manifest;
         assert_eq!(
             manifest.ordinal,
             index + 1,
-            "bundled-sample ordinals must be exactly 1..={SAMPLE_COUNT}"
+            "bundled-sample ordinals must be contiguous in reviewed order"
+        );
+        let expected = &contract.samples[index];
+        assert_eq!(manifest.key, expected.key, "catalog key/order differs");
+        assert_eq!(manifest.title, expected.title, "catalog title differs");
+        assert_eq!(
+            manifest.category, expected.category,
+            "catalog category differs"
         );
         assert!(
             keys.insert(manifest.key.as_str()),
@@ -179,15 +208,19 @@ fn validate_bundled_samples(manifest_dir: &Path) -> Vec<ValidatedSample> {
             "duplicate bundled-sample title `{}`",
             manifest.title
         );
-        *categories.entry(manifest.category).or_default() += 1;
     }
-    assert_eq!(categories.get(&ManifestCategory::Mechanism), Some(&4));
+    let retired: BTreeSet<_> = contract.retired_keys.iter().collect();
     assert_eq!(
-        categories.get(&ManifestCategory::ProductFabrication),
-        Some(&8)
+        retired.len(),
+        contract.retired_keys.len(),
+        "duplicate retired key"
     );
-    assert_eq!(categories.get(&ManifestCategory::ReferenceLab), Some(&2));
-    assert_eq!(categories.get(&ManifestCategory::ScaleStudy), Some(&2));
+    for key in &contract.retired_keys {
+        assert!(
+            !keys.contains(key.as_str()),
+            "retired catalog key must not resolve: {key}"
+        );
+    }
 
     samples
 }
@@ -657,7 +690,8 @@ fn generate_registry(samples: &[ValidatedSample], output_dir: &Path) {
     }
     write!(
         generated,
-        "\npub(super) static BUNDLED_SAMPLES: [BundledSampleSpec; {SAMPLE_COUNT}] = [\n"
+        "\npub(super) static BUNDLED_SAMPLES: [BundledSampleSpec; {}] = [\n",
+        samples.len()
     )
     .expect("writing generated Rust to a String cannot fail");
     for sample in samples {

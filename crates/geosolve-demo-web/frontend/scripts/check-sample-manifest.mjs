@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const samples = JSON.parse(await readFile(new URL("../src/data/samples.json", import.meta.url), "utf8"));
@@ -9,10 +10,17 @@ const paletteSource = await readFile(new URL("../../src/workbench/geometry_palet
 const actionSource = await readFile(new URL("../../src/workbench/action_surface.rs", import.meta.url), "utf8");
 const manifestSource = await readFile(new URL("../../src/workbench/command_manifest.rs", import.meta.url), "utf8");
 
-if (samples.length !== 16) throw new Error(`canonical registry must expose 16 samples; received ${samples.length}`);
-if (samples.map(({ ordinal }) => ordinal).join(",") !== Array.from({ length: 16 }, (_, index) => index + 1).join(",")) throw new Error("sample ordinals must be exactly 1..=16");
-const categoryCounts = Object.groupBy(samples, ({ category }) => category);
-if (categoryCounts.mechanism?.length !== 4 || categoryCounts.product_fabrication?.length !== 8 || categoryCounts.reference_lab?.length !== 2 || categoryCounts.scale_study?.length !== 2) throw new Error("sample categories must remain 4/8/2/2");
+const reviewed = JSON.parse(await readFile(new URL("../../../geosolve-sketch-code/assets/bundled-sample-catalog.json", import.meta.url), "utf8"));
+assert.equal(reviewed.schema, 1, "unknown reviewed sample catalog schema");
+assert.ok(Array.isArray(reviewed.samples) && reviewed.samples.length > 0, "reviewed sample catalog is nonempty");
+assert.deepEqual(samples.map(({ key, title, category }) => ({ key, title, category })), reviewed.samples,
+  "frontend catalog must match independent reviewed keys/order/titles/categories");
+assert.deepEqual(samples.map(({ ordinal }) => ordinal), reviewed.samples.map((_, index) => index + 1),
+  "sample ordinals must be contiguous in reviewed order");
+assert.equal(new Set(reviewed.retired_keys).size, reviewed.retired_keys.length, "reviewed retired keys must be unique");
+for (const retired of reviewed.retired_keys) {
+  assert.ok(!samples.some(({ key }) => key === retired), `retired sample remains in frontend catalog: ${retired}`);
+}
 const identities = new Set(samples.map(({ stableId }) => stableId));
 if (identities.size !== samples.length) throw new Error("sample stable IDs must be unique");
 const sampleKeys = new Set(samples.map(({ key }) => key));
@@ -50,4 +58,4 @@ for (const entry of [...commands.modify, ...commands.context, ...commands.canvas
   const keyFound = actionSource.includes(`"${entry.id}"`) || manifestSource.includes(`"${entry.id}"`);
   if (!keyFound || !(manifestSource.includes(`"${entry.label}"`) || actionSource.includes(`"${entry.label}"`))) throw new Error(`feature/display command drift: ${entry.id}`);
 }
-console.log("frontend manifests match Rust authority: 16 canonical source-authoritative samples + complete primary command inventory");
+console.log(`frontend manifests match reviewed Rust authority: ${reviewed.samples.length} canonical source-authoritative samples + complete primary command inventory`);

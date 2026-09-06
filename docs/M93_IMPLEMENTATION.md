@@ -42,6 +42,33 @@ and actual prepared CLI override probe pass. An input audit also added embedded 
 dependencies and separated native, optimized-WASM and browser preparation identities. Integrated
 qualification of this repaired runner and the timing targets remain pending.
 
+## Catalog reuse checkpoint — 2026-09-06
+
+The first repaired full attempt passed 219 stages, including all ordinary/ignored native sample
+work and 37 browser rows, before a strict-Clippy style error in the CLI test helper stopped it.
+That run took 1,339.393 seconds (22m19s); browser execution was 672.4 seconds. The focused correction
+and targeted continuation retain the earlier successes. The remaining golden (271 unchanged rows),
+37 WASM interaction tests, three optimized-WASM lifecycle tests, documentation, packaging,
+licences, benchmarks, performance and exact artifact transport have now passed. These accumulated
+targeted results are not yet a complete fresh result on the final M93 implementation.
+
+Browser cost required a smaller reviewed input boundary for the under-ten-minute sample target.
+The independent catalog contract replaces scattered count/order constants; full browser workflows
+have stable sample keys. Exact open-state witnesses gate authenticated reuse of unchanged workflows,
+with fresh shared catalog and non-sample checks. The program boundary is explicitly pinned and
+fails closed after unreviewed code/input changes. Signed invocation/build provenance and an
+independent 22-case non-sample inventory protect each browser aggregate. All 16 real prefixes pass
+twice with identical complete witnesses (one successful batch 53.4 seconds); a full Whitworth
+control passes in 13.8 seconds with the same witness. Two catalog harness failures were repaired
+and retained; the corrected catalog check passes in 11.1 seconds.
+
+The dedicated Bondtech regressions preserve the original fixture outside public catalog discovery,
+so an explicit retirement can retain every geometry/history assertion. This supports a real prune
+benchmark without silently skipping missing samples. Current product remains the accepted16-entry
+catalog. Performance inputs follow their actual sketch/editor/linkage owners. The two-worker gate
+can admit two memory-marked native/browser stages; exclusive builds and performance measurements
+remain serialized. Final serial/parallel and edit/prune timing acceptance remains outstanding.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation

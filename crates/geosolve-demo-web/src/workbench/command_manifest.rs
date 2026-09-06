@@ -1581,6 +1581,12 @@ mod tests {
         );
 
         let samples = sample_manifest();
+        let reviewed: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+        ))
+        .expect("reviewed sample catalog contract");
+        assert_eq!(reviewed["schema"], 1);
+        let expected = reviewed["samples"].as_array().unwrap();
         assert_eq!(
             samples
                 .iter()
@@ -1593,9 +1599,17 @@ mod tests {
                 .iter()
                 .filter(|sample| sample.kind == SampleKind::Code)
                 .count(),
-            16
+            expected.len()
         );
-        assert_eq!(samples.len(), 16);
+        assert_eq!(samples.len(), expected.len());
+        assert_eq!(
+            samples.iter().map(|sample| sample.key).collect::<Vec<_>>(),
+            expected
+                .iter()
+                .map(|sample| sample["key"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            "command catalog must match independent reviewed order"
+        );
         assert_eq!(
             samples.iter().map(|sample| sample.key).collect::<Vec<_>>(),
             geosolve_sketch_code::bundled_sample_catalog()

@@ -4,43 +4,64 @@ use std::collections::BTreeMap;
 
 use geosolve_sketch_code::{SampleCategory, bundled_sample, bundled_sample_catalog};
 
-const KEYS: [&str; 16] = [
-    "theo-jansen-leg",
-    "whitworth-quick-return",
-    "peaucellier-linkage",
-    "five-stage-scissor-lift",
-    "pc-water-manifold",
-    "cnc-dogbone-coupon",
-    "vacuum-fixture-plate",
-    "dust-shoe-clamp",
-    "gridfinity-bin-section",
-    "voron-panel",
-    "micron-carriage",
-    "bondtech-indx-link",
-    "curves-contact-continuity-atlas",
-    "fabrication-operations-atlas",
-    "perforated-fixture-field",
-    "robotic-harness-backplane",
-];
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CatalogContract {
+    schema: u32,
+    samples: Vec<CatalogEntry>,
+    retired_keys: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CatalogEntry {
+    key: String,
+    title: String,
+    category: SampleCategory,
+}
+
+fn reviewed_catalog() -> CatalogContract {
+    let reviewed: CatalogContract =
+        serde_json::from_str(include_str!("../assets/bundled-sample-catalog.json"))
+            .expect("reviewed sample catalog contract");
+    assert_eq!(reviewed.schema, 1);
+    assert!(!reviewed.samples.is_empty());
+    reviewed
+}
 
 #[test]
 fn canonical_registry_has_frozen_order_and_distribution() {
     let catalog = bundled_sample_catalog();
-    assert_eq!(catalog.len(), 16);
+    let reviewed = reviewed_catalog();
+    assert_eq!(catalog.len(), reviewed.samples.len());
     assert_eq!(
         catalog.iter().map(|sample| sample.key).collect::<Vec<_>>(),
-        KEYS
+        reviewed
+            .samples
+            .iter()
+            .map(|sample| sample.key.as_str())
+            .collect::<Vec<_>>()
     );
     assert_eq!(
         catalog
             .iter()
             .map(|sample| sample.ordinal)
             .collect::<Vec<_>>(),
-        (1..=16).collect::<Vec<_>>()
+        (1..=reviewed.samples.len()).collect::<Vec<_>>()
     );
 
     let mut categories = BTreeMap::new();
-    for sample in catalog {
+    for (sample, expected) in catalog.iter().zip(&reviewed.samples) {
+        assert_eq!(
+            sample.title, expected.title,
+            "{} reviewed title",
+            sample.key
+        );
+        assert_eq!(
+            sample.category, expected.category,
+            "{} reviewed category",
+            sample.key
+        );
         *categories.entry(sample.category).or_insert(0) += 1;
         assert_eq!(
             bundled_sample(sample.key).map(|found| found.ordinal),
@@ -58,29 +79,13 @@ fn canonical_registry_has_frozen_order_and_distribution() {
         assert!(!sample.managed_source().is_empty());
         assert!(!sample.witnesses_json().is_empty());
     }
-    assert_eq!(categories.get(&SampleCategory::Mechanism), Some(&4));
-    assert_eq!(
-        categories.get(&SampleCategory::ProductFabrication),
-        Some(&8)
-    );
-    assert_eq!(categories.get(&SampleCategory::ReferenceLab), Some(&2));
-    assert_eq!(categories.get(&SampleCategory::ScaleStudy), Some(&2));
+    let mut expected_categories = BTreeMap::new();
+    for sample in &reviewed.samples {
+        *expected_categories.entry(sample.category).or_insert(0) += 1;
+    }
+    assert_eq!(categories, expected_categories);
     assert!(bundled_sample("unknown-sample").is_none());
-    for retired in [
-        "prusa-mini-interface",
-        "nema-17-motor-interface",
-        "hevort-datum-study",
-        "twin-roller-bezier-cam",
-        "rounded-polyline",
-        "typed-panel",
-        "braced-frame",
-        "mounting-plate",
-        "compass-rose",
-        "drafting-compass",
-        "scotch-yoke",
-        "scissor-jack",
-        "five-stage-scissor-tower",
-    ] {
+    for retired in &reviewed.retired_keys {
         assert!(
             bundled_sample(retired).is_none(),
             "retired catalog key `{retired}` must not resolve"

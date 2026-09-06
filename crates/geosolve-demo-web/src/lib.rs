@@ -525,7 +525,24 @@ mod wasm {
             }
 
             let samples = geosolve_sketch_code::bundled_sample_catalog();
-            assert_eq!(samples.len(), 16);
+            let reviewed: serde_json::Value = serde_json::from_str(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../geosolve-sketch-code/assets/bundled-sample-catalog.json"
+            )))
+            .expect("reviewed sample catalog contract");
+            assert_eq!(reviewed["schema"], 1);
+            assert_eq!(
+                serde_json::json!(
+                    samples
+                        .iter()
+                        .map(|sample| serde_json::json!({
+                            "key": sample.key, "title": sample.title, "category": sample.category,
+                        }))
+                        .collect::<Vec<_>>()
+                ),
+                reviewed["samples"],
+                "runtime catalog must match independent reviewed order and metadata"
+            );
             for sample in samples {
                 let key = sample.key;
                 let mut handle = super::WorkbenchHandle::new(r#"{"version":1}"#)

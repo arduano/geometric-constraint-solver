@@ -80,7 +80,12 @@ for (const entry of await readdir(sampleRoot, { withFileTypes: true })) {
   directories.push({ directory, key: entry.name, ordinal: manifest.ordinal });
 }
 directories.sort((left, right) => left.ordinal - right.ordinal);
-assert.equal(directories.length, 16);
+const catalog = JSON.parse(await readFile(join(sampleRoot, "../bundled-sample-catalog.json"), "utf8"));
+assert.equal(catalog.schema, 1);
+assert.deepEqual(directories.map(({ key }) => key), catalog.samples.map(({ key }) => key));
+assert.deepEqual(directories.map(({ ordinal }) => ordinal), catalog.samples.map((_, index) => index + 1));
+assert.equal(new Set(catalog.samples.map(({ key }) => key)).size, catalog.samples.length);
+assert.equal(catalog.retired_keys.some((key) => directories.some((entry) => entry.key === key)), false);
 
 for (const { directory, key } of directories) {
   const sourcePath = join(directory, "sketch.ts");
