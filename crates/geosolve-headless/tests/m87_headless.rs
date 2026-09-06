@@ -31,9 +31,10 @@ static NEXT_OUTPUT: AtomicU64 = AtomicU64::new(1);
 fn headless_binary() -> PathBuf {
     // Cargo shares the ordinary CLI path across feature profiles. The release
     // harness supplies a verified immutable copy for each prepared profile.
-    std::env::var_os("GEOSOLVE_RELEASE_HEADLESS_BINARY")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_geosolve-headless")))
+    std::env::var_os("GEOSOLVE_RELEASE_HEADLESS_BINARY").map_or_else(
+        || PathBuf::from(env!("CARGO_BIN_EXE_geosolve-headless")),
+        PathBuf::from,
+    )
 }
 
 fn managed_fixture() -> HeadlessInput {
