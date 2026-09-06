@@ -40,7 +40,10 @@
     "scripts/tests/test_release_browser_reuse.py",
     "scripts/tests/test_release_inputs.py",
     "scripts/release_test_inventory.json",
-    "scripts/tests/test_release_gate_native.py"
+    "scripts/tests/test_release_gate_native.py",
+    "scripts/release_gate_runtime.py",
+    "scripts/tests/test_release_pipeline.py",
+    "scripts/tests/test_release_runtime.py"
   ],
   "owned": [
     "crates/*/src/**",
@@ -55,7 +58,7 @@
     "packages/geosolve-sketch-code/**",
     "scripts/verify-geosolve-sketch-code-package.sh"
   ],
-  "workers": 2,
+  "workers": 3,
   "memory_heavy_workers": 2,
   "test_threads": 2,
   "test_opt_level": 1,

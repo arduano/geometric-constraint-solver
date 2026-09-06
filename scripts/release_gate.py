@@ -102,6 +102,7 @@ class Stage:
     cwd: str = "."
     env: tuple = ()
     resource: str = "normal"
+    build_lock: bool = False
     timeout: int = 3600
     outputs: tuple = ()
     reusable: bool = True
@@ -178,7 +179,7 @@ def tool_identity(root):
                             ("node", ["--version"]), ("npm", ["--version"]),
                             ("deno", ["--version"]), ("wasm-bindgen", ["--version"]),
                             ("wasm-opt", ["--version"]), ("wasm-bindgen-test-runner", ["--version"]),
-                            ("cargo-deny", ["--version"]), ("python3", ["--version"])):
+                            ("cargo-deny", ["--version"]), ("python3", ["--version"]), ("readelf", ["--version"])):
         executable = shutil.which(tool)
         if not executable:
             tools[tool] = None
@@ -294,6 +295,7 @@ class Runner:
         self.lock = threading.Lock()
         self.started = time.monotonic()
         self.artifact_hashes = {}
+        self.deferred_groups = {}
         try:
             self.revision = {"commit": capture(["git", "rev-parse", "HEAD"], root),
                              "tree": capture(["git", "rev-parse", "HEAD^{tree}"], root)}
@@ -333,6 +335,24 @@ class Runner:
                 self.keys[stage.id] = self.key(stage)
                 remaining.remove(stage)
 
+    def register(self, stages):
+        """Append discovered obligations; active and completed contracts never change."""
+        stages = list(stages)
+        validate_inventory([*self.inventory, *stages])
+        known = set(self.keys)
+        for stage in stages:
+            if not set(stage.dependencies) <= known:
+                raise ValueError("deferred group is not ordered after registered prerequisites")
+            known.add(stage.id)
+        # A previously absent output must never donate a cached None after its
+        # preparation completes. Preserve hashes only for already consumed paths.
+        for stage in stages:
+            for name in stage.artifacts:
+                self.artifact_hashes.pop(name, None)
+        keys = {stage.id: self.key(stage) for stage in stages}
+        self.inventory.extend(stages)
+        self.keys.update(keys)
+
     def decision(self, stage):
         if (self.fresh and stage.kind != "build") or not stage.reusable:
             return "run", "fresh execution requested" if self.fresh else "fresh verification required", None
@@ -368,6 +388,10 @@ class Runner:
         env["CARGO_BUILD_JOBS"] = env.get("CARGO_BUILD_JOBS", str(self.policy.get("cargo_build_jobs", 2)))
         env["M92_AUDIT_OUTPUT"] = str(directory / "sample-audit")
         env["M92_PRODUCT_EVIDENCE"] = str(directory / "product-audit")
+        if stage.id.startswith(("workspace.", "headless.")):
+            env["M92_MECHANISM_EVIDENCE"] = str(directory / "mechanism-audit")
+            env["DENO_DIR"] = str(Path(runtime) / "deno")
+            env = {name: value for name, value in env.items() if not name.startswith("GEOSOLVE_GOLDEN_")}
         if stage.id == "browser":
             from release_browser_context import parent_context
             context = parent_context(self, stage, scratch / "browser", env)
@@ -460,27 +484,54 @@ class Runner:
         write_json(directory / "receipt.json", self.store.seal(receipt))
         return receipt
 
-    def run(self, stages, stop_on_failure=True):
+    def run(self, stages, stop_on_failure=True, deferred=()):
         # Already executed prerequisite results may be supplied by a preceding phase.
         pending = list(stages)
         active = {}
         ready_times = {}
         failed = False
+        factories = {}
+        for identity, dependencies, factory in deferred:
+            if identity in self.deferred_groups or not set(dependencies) <= set(self.keys):
+                raise ValueError("duplicate deferred group or missing preparation prerequisite")
+            self.deferred_groups[identity] = {"dependencies": list(dependencies), "status": "pending", "stages": []}
+            factories[identity] = factory
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
-            while pending or active:
+            while pending or active or factories:
+                for identity, factory in list(factories.items()):
+                    group = self.deferred_groups[identity]
+                    dependencies = [self.results.get(name) for name in group["dependencies"]]
+                    if self.stop.is_set() or (failed and stop_on_failure) or any(
+                            result and result["status"] != "passed" for result in dependencies):
+                        group["status"] = "blocked"
+                        del factories[identity]
+                        failed = True
+                    elif all(dependencies):
+                        try:
+                            expanded = list(factory())
+                            self.register(expanded)
+                            pending[0:0] = expanded
+                            group.update(status="expanded", stages=[stage.id for stage in expanded])
+                        except Exception as error:
+                            group.update(status="failed", error=str(error))
+                            failed = True
+                        del factories[identity]
+                # Start the next serialized builder promptly while allowing
+                # protected execution to occupy the other bounded worker slots.
+                pending.sort(key=lambda stage: 0 if stage.build_lock else 1)
                 for stage in list(pending):
                     deps = [self.results.get(name) for name in stage.dependencies]
                     if any(result and result["status"] != "passed" for result in deps):
                         self.results[stage.id] = {"stage": stage.id, "status": "blocked", "reason": "prerequisite failed"}
                         pending.remove(stage)
                         continue
-                    if not all(deps) and stage.dependencies:
-                        continue
-                    ready_times.setdefault(stage.id, time.monotonic())
                     if self.stop.is_set() or (failed and stop_on_failure):
                         self.results[stage.id] = {"stage": stage.id, "status": "not_run", "reason": "run stopped after failure/interruption"}
                         pending.remove(stage)
                         continue
+                    if not all(deps) and stage.dependencies:
+                        continue
+                    ready_times.setdefault(stage.id, time.monotonic())
                     if len(active) >= self.jobs:
                         break
                     resources = [entry.resource for entry in active.values()]
@@ -488,12 +539,14 @@ class Runner:
                         continue
                     if stage.resource == "memory" and resources.count("memory") >= self.memory_workers:
                         continue
+                    if stage.build_lock and any(entry.build_lock for entry in active.values()):
+                        continue
                     future = pool.submit(self.execute, stage, ready_times[stage.id])
                     active[future] = stage
                     pending.remove(stage)
                     print(f"queue {stage.id}", flush=True)
                 if not active:
-                    if pending:
+                    if pending or factories:
                         raise ValueError("unresolved scheduling prerequisites")
                     break
                 done, _ = concurrent.futures.wait(active, timeout=0.2, return_when=concurrent.futures.FIRST_COMPLETED)
@@ -512,13 +565,15 @@ class Runner:
     def report(self, final=False, scope="development"):
         unchanged = source_snapshot(self.root) == self.snapshot if final else None
         complete = final and unchanged and len(self.results) == len(self.inventory) and all(
-            result["status"] == "passed" for result in self.results.values())
+            result["status"] == "passed" for result in self.results.values()) and all(
+            group["status"] == "expanded" for group in self.deferred_groups.values())
         dirty = bool(capture(["git", "status", "--porcelain"], self.root))
         value = {"schema": SCHEMA, "run": self.run_id, "scope": scope, "complete": bool(complete),
                  "clean_source": not dirty, "qualified_release": bool(complete and scope == "release" and not dirty),
                  "status": "passed" if complete else ("running" if not final else "failed"),
                  "source_unchanged": unchanged, "source": self.snapshot,
                  "revision": self.revision,
+                 "deferred_groups": self.deferred_groups,
                  "tools": self.tools, "environment_sha256": digest(self.environment),
                  "wall_seconds": time.monotonic() - self.started,
                  "worker_limits": {"stages": self.jobs, "memory_stages": self.memory_workers,
@@ -769,13 +824,32 @@ def preparation_stages(runner, modes=None):
             command = cmd(sys.executable, "scripts/release_gate.py", "--prepare-browser", "--wasm-package", prepared["wasm"], "--output", out)
         dependencies = ("preflight.clippy",) + (("prepare.wasm",) if mode == "browser" else ())
         stages.append(Stage(f"prepare.{mode}", (command,), inputs=inputs,
-                            dependencies=dependencies, resource="exclusive", timeout=2400,
+                            dependencies=dependencies, build_lock=True, timeout=2400,
                             outputs=(out,), kind="build"))
     return stages, prepared
 
 
 def native_stages(root, prepared):
+    if not ({"workspace", "headless"} & prepared.keys()):
+        return []
     import release_gate_native as native
+    import release_equivalence
+    # Loader closure protects binaries and libraries; this separate reviewed
+    # program boundary confirms that test bodies do not mutate Cargo/npm outputs.
+    policy = read_json(root / POLICY_PATH)
+    try:
+        contract = read_json(root / release_equivalence.CONTRACT_PATH)
+    except (OSError, ValueError):
+        contract = {}
+    program_patterns = (*rust_inputs(root), "packages/**", FRONTEND + "/**",
+                        "scripts/verify-geosolve-sketch-code-package.sh", "scripts/golden*")
+    overlap_inputs = stage_inputs(Stage("native-overlap", (cmd("identity"),), inputs=program_patterns),
+                                 source_snapshot(root), policy)
+    overlap_reviewed = "**" not in program_patterns and release_equivalence.reviewed(
+        "native_build_overlap", overlap_inputs, policy, contract)
+    # These proptest suites replay tracked seeds and append new failures there.
+    # Preserve that coverage and keep their source-tree writes away from Cargo.
+    body_build_lock = {"geosolve-sketch::m22_properties::normal", "geosolve-linkage::m23_properties::normal"}
     result = []
     for mode in ("workspace", "headless"):
         if mode not in prepared:
@@ -796,8 +870,10 @@ def native_stages(root, prepared):
                 (cmd(sys.executable, "scripts/release_gate.py", "--native-run", str(source), "--native-id", description["id"], "--output", "{scratch}/native"),),
                 inputs=(*crate_inputs(root, package), *managed, "scripts/release_gate_native.py"),
                 dependencies=(f"prepare.{mode}",), resource="memory" if description["resource"] == "memory-heavy" else "normal",
+                build_lock=description["id"] in body_build_lock or not (overlap_reviewed and description.get("build_overlap_safe", False)),
                 timeout=2400, cases=tuple(description["selected"]), artifacts=(description["command"][0], *managed_artifacts, *auxiliary),
-                execution_key={key: description[key] for key in ("command", "env", "features", "profile")}))
+                execution_key={key: description[key] for key in ("command", "env", "features", "profile",
+                               "build_overlap_safe", "runtime_closures")}))
     return result
 
 
@@ -899,6 +975,45 @@ def qualification_stages(root, prepared, jobs):
     # Start browser and prepared lifecycle work alongside native suites;
     # Resource admission preserves the configured total and memory-stage caps.
     return sorted(result, key=lambda stage: 0 if stage.id in {"browser", "wasm.lifecycle"} else 1)
+
+
+def pipeline_stages(root, prepared, jobs, patterns):
+    """Declare fixed obligations and exact groups deferred until preparation passes."""
+    def selected(stages):
+        return [stage for stage in stages if not patterns or any(
+            fnmatch.fnmatchcase(stage.id, pattern) for pattern in patterns)]
+
+    # These stages own Cargo work but never mutate installed JS packages. The
+    # complete performance stage retains exclusive CPU/memory admission.
+    common = []
+    for stage in qualification_stages(root, {}, jobs):
+        if stage.id in {"browser", "artifact.transport"}:
+            continue
+        common.append(dataclasses.replace(stage, dependencies=("preflight.clippy",),
+                      build_lock=stage.id != "performance",
+                      resource="exclusive" if stage.id == "performance" else "memory" if stage.id == "golden" else "normal"))
+
+    deferred = []
+    for mode in ("workspace", "headless", "browser", "lifecycle"):
+        if mode not in prepared:
+            continue
+        dependencies = ("prepare." + mode,) + (("prepare.wasm",) if mode == "browser" else ())
+        def factory(mode=mode):
+            if mode in {"workspace", "headless"}:
+                stages = native_stages(root, {mode: prepared[mode]})
+            else:
+                own = {mode: prepared[mode]}
+                if mode == "browser":
+                    own["wasm"] = prepared["wasm"]
+                wanted = {"browser", "artifact.transport"} if mode == "browser" else {"wasm.lifecycle"}
+                stages = [stage for stage in qualification_stages(root, own, jobs) if stage.id in wanted]
+                if {stage.id for stage in stages} != wanted:
+                    raise ValueError("prepared group did not expand its complete stage inventory")
+            if not stages:
+                raise ValueError("prepared group is unexpectedly empty")
+            return selected(stages)
+        deferred.append((mode, dependencies, factory))
+    return selected(common), deferred
 
 
 def validate_test_output(text, expected):
@@ -1091,7 +1206,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", action="store_true", help="explain stage execution/reuse without running tests")
     parser.add_argument("--fresh", action="store_true", help="bypass test-result reuse (ordinary build caches remain)")
-    parser.add_argument("--jobs", type=int, default=2)
+    parser.add_argument("--jobs", type=int)
     parser.add_argument("--preflight", action="store_true", help="run only cheap preparation checks; no release claim")
     parser.add_argument("--prepare", action="store_true", help="prepare and discover all executable inventories without running test bodies")
     parser.add_argument("--stage", action="append", default=[], help="run matching stage IDs and prerequisites; reports targeted evidence")
@@ -1154,9 +1269,11 @@ def main():
     if args.run_browser:
         run_browser(args.run_browser, args.output, args.jobs)
         return 0
+    policy = read_json(ROOT / POLICY_PATH)
+    if args.jobs is None:
+        args.jobs = policy["workers"]
     if args.jobs < 1 or args.jobs > 8:
         parser.error("--jobs must be between 1 and 8")
-    policy = read_json(ROOT / POLICY_PATH)
     if args.docs_only:
         return verify_docs(ROOT, args.since or "HEAD^", policy)
     if not (args.fresh or args.plan or args.preflight or args.prepare or args.stage or args.resume):
@@ -1190,12 +1307,6 @@ def main():
         original = store.unseal(store.path / "runs" / args.resume / "qualification.json")
         if not original:
             raise ValueError("resume run is missing or unauthenticated")
-        if original["source"] == source_snapshot(ROOT):
-            for result in original["results"]:
-                if result.get("decision") == "run" and result.get("complete"):
-                    receipt = store.unseal(result.get("receipt_path", ""))
-                    if receipt and receipt.get("source_sha256") == digest(original["source"]):
-                        store.save(receipt)
     runner = Runner(ROOT, store, source_snapshot(ROOT), policy, tool_identity(ROOT), args.jobs, args.fresh)
     stages = preflight_stages(include_clippy=not args.preflight)
     preparations, prepared = preparation_stages(runner, preparation_modes(args.stage))
@@ -1207,35 +1318,58 @@ def main():
             action, reason, _ = runner.decision(stage)
             print(f"{action:5} {stage.id}: {reason}")
         if not args.preflight:
-            if all((ROOT / prepared[mode] / "prepared.json").is_file() for mode in ("workspace", "headless", "lifecycle") if mode in prepared):
-                expanded = qualification_stages(ROOT, prepared, args.jobs)
-                if args.stage:
-                    expanded = [stage for stage in expanded if any(fnmatch.fnmatchcase(stage.id, pattern) for pattern in args.stage)]
-                runner.prepare(stages + expanded)
-                for stage in expanded:
-                    action, reason, _ = runner.decision(stage)
-                    print(f"{action:5} {stage.id}: {reason}")
-            else:
-                print("run   qualification: native case inventory will be discovered by the declared preparation stages")
+            common, groups = pipeline_stages(ROOT, prepared, args.jobs, args.stage)
+            runner.register(common)
+            for stage in common:
+                action, reason, _ = runner.decision(stage)
+                print(f"{action:5} {stage.id}: {reason}")
+            for identity, dependencies, factory in groups:
+                # Reuse requires authenticated current preparation outputs. A
+                # stale metadata file is not authority for a read-only plan.
+                if all(runner.decision(next(stage for stage in preparations if stage.id == name))[0] == "reuse"
+                       for name in dependencies):
+                    expanded = factory()
+                    runner.register(expanded)
+                    for stage in expanded:
+                        action, reason, _ = runner.decision(stage)
+                        print(f"{action:5} {stage.id}: {reason}")
+                else:
+                    print(f"run   {identity}: exact case inventory pending authenticated preparation")
         return 0
     lock_file = (store.path / "runner.lock").open("a")
     try:
         fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError as error:
+        lock_file.close()
         raise ValueError("another gate owns this checkout's mutable build/install state") from error
     previous = {sig: signal.signal(sig, lambda *_: runner.stop.set()) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
-        result = runner.run(stages)
-        if result and not args.preflight:
+        if args.resume and original["source"] == runner.snapshot:
+            for result in original["results"]:
+                if result.get("decision") == "run" and result.get("complete"):
+                    receipt = store.unseal(result.get("receipt_path", ""))
+                    if receipt and receipt.get("source_sha256") == digest(original["source"]):
+                        store.save(receipt)
+        if args.preflight or args.prepare:
+            result = runner.run(stages)
+        else:
+            preflight = [stage for stage in stages if stage.id.startswith("preflight.")]
+            result = runner.run(preflight)
+            if result:
+                common, deferred = pipeline_stages(ROOT, prepared, args.jobs, args.stage)
+                runner.register(common)
+                result = runner.run([*preparations, *common], deferred=deferred)
+                if args.stage and not any(not stage.id.startswith(("prepare.", "preflight."))
+                                          for stage in runner.inventory):
+                    result = False
+                    runner.deferred_groups["selection"] = {"status": "failed", "error": "--stage matched no qualification stage"}
+        if result and args.prepare:
             expanded = qualification_stages(ROOT, prepared, args.jobs)
             if args.stage:
                 selected = {stage.id for stage in expanded if any(fnmatch.fnmatchcase(stage.id, pattern) for pattern in args.stage)}
                 if not selected:
                     raise ValueError("--stage matched no qualification stage")
                 expanded = [stage for stage in expanded if stage.id in selected]
-            if not args.prepare:
-                runner.prepare(stages + expanded)
-                result = runner.run(expanded)
         scope = "preflight" if args.preflight else "preparation" if args.prepare else "targeted" if args.stage else "release"
         report = runner.report(final=True, scope=scope)
     finally:

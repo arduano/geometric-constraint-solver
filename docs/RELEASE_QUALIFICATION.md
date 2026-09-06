@@ -11,10 +11,12 @@ Milestone timing and full integrated qualification remain recorded separately in
 ## Commands
 
 Run in the repository Nix shell so Rust, Deno, Node, wasm-bindgen and wasm-opt match the
-pinned environment. The default is two execution workers and two libtest threads per native
-stage. Up to two memory-marked stages can overlap within the same two-worker total; Playwright
-retains one slot for its large sample cases. Builds, installations and measured performance remain
-exclusive. Cargo compilation uses four jobs by default, with an explicit `CARGO_BUILD_JOBS`
+pinned environment. The default is three stage workers and two libtest threads per native
+stage. Up to two memory-marked stages can overlap within that total; Playwright retains one slot
+for its large sample cases. One build lock serializes Cargo writers independently of memory
+admission. Protected tests start after their own preparation and can overlap later builds.
+Package installation and generation finish during preflight, before this pipeline starts.
+Measured performance remains fully exclusive. Cargo compilation uses four jobs by default, with an explicit `CARGO_BUILD_JOBS`
 override recorded in the manifest. The recorded host has 64 GiB RAM; integrated qualification records the actual overlap
 and resource costs. `--jobs 1` also reduces the memory-stage limit to one.
 
@@ -35,7 +37,10 @@ reported separately from the under-two-minute cheap failure target.
 
 `--plan` explains execution/reuse without executing tests. On an unprepared source it lists
 preparation obligations; Cargo metadata, JSON compiler artifacts and libtest discovery expand
-the exact native case inventory after preparation. `--prepare` performs that preparation only.
+the exact native case inventory after preparation. The plan uses the execution scheduler's
+contracts; it expands a group only from authenticated current preparation outputs. Each deferred
+group remains an explicit obligation, and failed or unexpanded discovery prevents completion.
+`--prepare` performs preparation only.
 Targeted and preparation reports do not establish a complete release. `--fresh` bypasses passing
 test receipts, retaining normal compiler caches. `--reference` invokes the historical sequential
 gate and original Cargo/npm oracle. `--test-opt-level 0` selects the unoptimized test profile;
@@ -53,7 +58,14 @@ WASM in an immutable preparation directory. The pinned runner executes those sam
 memory stage alongside independent suites. Build and execution receipts remain separate.
 
 Native workspace and default-feature headless preparations have separate identities and captured
-CLI binaries. A targeted native selector prepares only its required profile. Rust input closure
+CLI binaries. Every native test executable is also copied into its preparation directory, using
+a verified reflink or byte copy, never a hard link. Original Cargo paths remain provenance.
+Overlap requires immutable Nix loader/library resolution, unchanged runtime environment, and the
+explicitly reviewed `native_build_overlap` program boundary. Unknown runtime inputs or changed
+program inputs retain the build lock. The two property suites that preserve source-tree
+regression seeds always retain the lock. Ordinary native children use private Deno caches and
+evidence folders and clear inherited golden-harness controls. Copies and runtime libraries are hash-checked before use;
+executables are checked again after execution. A targeted native selector prepares only its required profile. Rust input closure
 includes literal embedded files, including Markdown consumed by tests; unrelated frontend CSS
 does not invalidate native or optimized-WASM preparation. Runtime temporary files use private
 short paths under `/tmp`; durable evidence remains in the run directory.

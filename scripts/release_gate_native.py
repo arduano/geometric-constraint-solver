@@ -10,6 +10,8 @@ Cargo launch formats or test harnesses fail closed. Doctests remain Cargo-owned.
 from __future__ import annotations
 
 import argparse
+import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -181,9 +183,7 @@ def preserve_auxiliary_executables(artifacts: list[dict[str, Any]], launches: di
                 directory = output / "auxiliary" / hashlib.sha256(source.encode()).hexdigest()[:16]
                 directory.mkdir(parents=True, exist_ok=False)
                 captured = directory / Path(source).name
-                shutil.copyfile(source, captured)
-                require(file_hash(captured) == source_hash, "Cargo auxiliary executable changed while copying")
-                captured.chmod(Path(source).stat().st_mode & 0o555)
+                capture_executable(source, captured, source_hash)
                 copies[source] = dict(path=str(captured), sha256=source_hash, source_path=source)
             captured = copies[source]
             runtime_env = HEADLESS_BINARY_ENV if key == "CARGO_BIN_EXE_geosolve-headless" else key
@@ -319,19 +319,93 @@ def prepare(root: Path, cargo_args: list[str], output: Path, *, timeout: float =
     require(artifacts == rediscovered, "Cargo listing changed the prepared executable/profile/feature inventory")
     launches = cargo_launches((output / "cargo-list/stderr.log").read_text(), {a["executable"] for a in artifacts})
     auxiliary = preserve_auxiliary_executables(artifacts, launches, auxiliary, output)
+    from release_gate_runtime import inspect_runtime
     for index, artifact in enumerate(artifacts):
         require(artifact["env"]["CARGO_MANIFEST_DIR"] == artifact["cwd"], "Cargo environment has the wrong package cwd")
-        artifact["sha256"] = file_hash(artifact["executable"])
+        original = Path(artifact["executable"])
+        artifact["sha256"] = file_hash(original)
+        captured = output / "executables" / str(index) / original.name
+        capture_executable(original, captured, artifact["sha256"])
+        artifact["original_executable"] = str(original)
+        artifact["captured_executable"] = str(captured)
+        artifact["executable"] = str(captured)
+        runtime = inspect_runtime(captured, environment | artifact["env"])
+        auxiliary_runtime = [inspect_runtime(item["path"], environment | artifact["env"])
+                             for item in artifact.get("auxiliary_executables", [])]
+        for item, closure in zip(artifact.get("auxiliary_executables", []), auxiliary_runtime, strict=True):
+            if not closure["safe"]:
+                item["captured_path"] = item["path"]
+                item["path"] = item["source_path"]
+                artifact["env"][item["cargo_env"]] = item["path"]
+                artifact["env"][item["runtime_env"]] = item["path"]
+                # The fallback still owns the actual original launch bytes.
+                # Keep them in the preparation receipt as well as its copy.
+                auxiliary.append(dict(item))
+        artifact["runtime_closure"] = runtime
+        artifact["auxiliary_runtime_closures"] = auxiliary_runtime
+        artifact["build_overlap_safe"] = runtime["safe"] and all(item["safe"] for item in auxiliary_runtime)
+        if artifact["build_overlap_safe"]:
+            artifact["env"]["LD_LIBRARY_PATH"] = runtime["ld_library_path"]
+        else:
+            # Unknown loaders or relative runtime dependencies keep both the
+            # original Cargo launch path and the build lock. Relocating those
+            # executables could change $ORIGIN or executable-relative behavior.
+            artifact["executable"] = str(original)
         artifact["resource"] = "memory-heavy" if (artifact["package"], artifact["target"]["name"]) in MEMORY_HEAVY else "native"
         for label, flags in (("cases", []), ("ignored", ["--ignored"])):
             text = checked_process([artifact["executable"], *flags, "--list", "--format", "terse"],
                                    artifact["cwd"], environment | artifact["env"], output / f"list-{index}-{label}", 30)
             artifact[label] = parse_inventory(text)
         require(set(artifact["ignored"]) <= set(artifact["cases"]), "ignored inventory not contained in complete inventory")
+        require(file_hash(captured) == artifact["sha256"] and file_hash(original) == artifact["sha256"],
+                "prepared native executable changed during discovery")
     result = dict(schema=SCHEMA, root=str(root), cargo_args=cargo_args, artifacts=artifacts, auxiliary_executables=auxiliary,
                   build_command=command, metadata_sha256=hashlib.sha256(metadata_text.encode()).hexdigest())
     write_json(output / "prepared.json", result)
     return result
+
+
+def capture_executable(original, destination, expected):
+    """Private copy, optionally reflinked, never sharing writable Cargo file inodes."""
+    original, destination = Path(original), Path(destination)
+    require(original.is_file() and not original.is_symlink(), "native executable must be a regular non-symlink file")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with original.open('rb') as source, destination.open('xb') as target:
+        original_stat = os.fstat(source.fileno())
+        require(not os.path.samestat(original_stat, os.fstat(target.fileno())),
+                "native capture must not share the writable source inode")
+        try:
+            fcntl.ioctl(target.fileno(), 0x40049409, source.fileno())  # Linux FICLONE.
+        except OSError as error:
+            if error.errno not in {errno.EXDEV, errno.EOPNOTSUPP, errno.ENOTTY, errno.EINVAL,
+                                  errno.ENOSYS, errno.EPERM, errno.EACCES}:
+                raise
+            source.seek(0)
+            target.seek(0)
+            target.truncate(0)
+            shutil.copyfileobj(source, target, 1024 * 1024)
+    require(file_hash(original) == expected and file_hash(destination) == expected,
+            "native executable changed while capturing")
+    destination.chmod(original_stat.st_mode & 0o555)
+
+
+def validate_runtime_closures(stage, environment):
+    from release_gate_runtime import SCHEMA as runtime_schema, immutable, loader_environment
+    closures = stage.get("runtime_closures", [])
+    executables = [stage["command"][0], *(item["path"] for item in stage.get("auxiliary_executables", []))]
+    require(len(closures) == len(executables), "missing protected runtime closure")
+    for closure, executable in zip(closures, executables, strict=True):
+        require(closure.get("schema") == runtime_schema and closure.get("safe") is True
+                and closure.get("executable") == executable,
+                "protected runtime closure does not belong to the executable")
+        require(loader_environment(environment) == closure.get("loader_environment")
+                and environment.get("LD_LIBRARY_PATH") == closure["ld_library_path"],
+                "native stage changed its protected runtime environment")
+        libraries = closure.get("libraries", {})
+        require(bool(libraries) and closure.get("loader") in libraries,
+                "protected runtime closure lacks its native interpreter")
+        for path, expected in libraries.items():
+            require(immutable(path) and file_hash(path) == expected, "protected native runtime library changed")
 
 
 def execution_stage(artifact: dict[str, Any], *, ignored: bool = False, exact: str | None = None,
@@ -356,7 +430,9 @@ def execution_stage(artifact: dict[str, Any], *, ignored: bool = False, exact: s
                 command=command, cwd=artifact["cwd"], env=overrides, resource=artifact["resource"],
                 selected=selected, ignored=skipped, executable_sha256=artifact["sha256"],
                 filtered_out=len(artifact["cases"]) - len(selected) - len(skipped),
-                features=artifact["features"], profile=artifact["profile"], auxiliary_executables=artifact.get("auxiliary_executables", []))
+                features=artifact["features"], profile=artifact["profile"], auxiliary_executables=artifact.get("auxiliary_executables", []),
+                build_overlap_safe=artifact.get("build_overlap_safe", False),
+                runtime_closures=[artifact.get("runtime_closure", {"safe": False}), *artifact.get("auxiliary_runtime_closures", [])])
 
 
 def workspace_stages(prepared: dict[str, Any], *, test_threads: int | None = None) -> list[dict[str, Any]]:
@@ -390,9 +466,16 @@ def run_stage(stage: dict[str, Any], output: Path, *, timeout: float,
                 and stage["env"].get(auxiliary["runtime_env"]) == auxiliary["path"],
                 "native stage does not consume its prepared auxiliary executable")
     environment = dict(os.environ if env is None else env) | stage["env"]
+    if stage.get("build_overlap_safe"):
+        validate_runtime_closures(stage, environment)
     result = process(stage["command"], stage["cwd"], environment, output, timeout)
     try:
         require(result["status"] == "passed", f"native child {result['status']}")
+        require(file_hash(stage["command"][0]) == stage["executable_sha256"], "prepared native executable changed during execution")
+        for auxiliary in stage.get("auxiliary_executables", []):
+            require(file_hash(auxiliary["path"]) == auxiliary["sha256"], "prepared auxiliary changed during execution")
+        if stage.get("build_overlap_safe"):
+            validate_runtime_closures(stage, environment)
         validate_results((output / "stdout.log").read_text(), stage["selected"], stage["ignored"], stage["filtered_out"])
     except NativeError as error:
         write_json(output / "result.json", dict(schema=SCHEMA, status="failed", stage=stage, error=str(error), process=result))

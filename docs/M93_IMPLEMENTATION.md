@@ -92,6 +92,48 @@ and execution are separated so the unchanged three cases can overlap other indep
 Fresh runtime qualification and new complete edit/prune measurements are required before claiming
 these corrections meet the target. All earlier failures and measurements remain evidence.
 
+## Pipeline correction and measured limits — 2026-09-06
+
+Source `c3f86d0` passed all **240/240** stages in **4,550.336 seconds (75m50s)**,
+with every stage freshly run. This was the first build of the changed test/release profiles:
+Nix/npm/download caches were warm, while the new profile artifacts were cold. It is not a
+warm-build C6 pass. The independent evidence audit authenticated 9,856 files, 2,629 native selected
+executions (including 25 explicit ignored cases), all browser/sample coverage, 37 ordinary WASM
+cases, three release-WASM lifecycle cases and the unchanged 271-case golden. Native binaries
+occupy 14.47 GB, down from 50.56 GB with full debug information. Production bytes changed and
+received fresh transport/browser qualification; the accepted M92 service remains untouched.
+
+The real manifold radius candidate `08f2e7e`, changing 3 to 3.1 with its compiled envelope,
+qualified in **900.420 seconds (15m00s)**, or **904.101 seconds including generation**. Exactly
+15 unchanged browser workflows reused authenticated baseline evidence; the manifold and shared
+checks ran fresh. This improves the earlier 38m29s result but **fails the ten-minute C5 target**.
+The candidate and receipt indexes were restored. Preparation consumed 392.5 seconds before any
+semantic suite could start, motivating overlap of prepared execution with later compilation.
+
+At the same source tree, three documentation runs took **1.771 / 1.729 / 1.716 seconds**.
+Stale-count failures took **6.318 / 5.622 / 5.197 seconds**, and generated-order failures
+**5.297 / 5.052 / 5.174 seconds**. Every failure stopped at inventory preflight before compilers
+or semantic tests. Evidence is retained under `target/m93/compile-optimized-*` and
+`target/m93/benchmark-numeric-1-c3f86d0`.
+
+The next runner revision removes the all-preparations barrier. Each exact deferred test group
+expands after its own preparation; missing, failed or interrupted groups cannot disappear from
+qualification. Private executable copies and immutable Nix runtime closure checks protect native
+execution from Cargo replacement. A separate reviewed program digest disables native/build
+overlap after an unaudited program change. One Cargo writer, three total stages and at most two
+memory-marked stages bound admission; performance remains exclusive. Plan and execution share
+the same contracts. The unchanged 204 existing native binaries passed a read-only loader audit;
+this is runtime eligibility evidence, not a test execution or a pipeline timing result.
+
+Focused Python qualification passes **133 gate/policy/native/runtime tests** and **13 golden
+runner tests**; the independent comparison helper passes **21 fixtures**. The 19 scheduler tests
+include real child overlap, build/performance exclusion, interruption, deferred discovery,
+resume, targeted selection, read-only plan behavior and native cache/evidence isolation. Main and
+auxiliary executable replacement and loader mutation cannot produce passing native receipts.
+The two property suites that replay and persist tracked regression seeds retain the build lock.
+Integrated qualification, final edit/prune repetitions and serial/cold parity remain outstanding.
+No timing target is waived or inferred from the design.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation
