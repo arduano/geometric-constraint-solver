@@ -149,6 +149,8 @@ whenever the outer browser stage runs. `--fresh` bypasses all leaf reuse.
 Frontend unit tests use `--no-cache` during preflight. Vitest's generated timing results otherwise
 change the `node_modules` identity and needlessly invalidate every browser leaf. This prevents the
 output from being created; the gate still hashes the complete installed dependency tree.
+TypeScript's generated build-info files live in the ignored frontend `.tsbuild-cache/` directory,
+outside `node_modules`, so later type-check builds preserve the installed dependency identity.
 
 `preflight.frontend` owns installation, license/SDK checks and unit tests. Its reviewed
 `frontend_static` boundary may exclude enumerated sample-folder data, while retaining the catalog

@@ -165,6 +165,43 @@ fixtures and seven frontend command/input fixtures. The comparator's 21 fixtures
 helper's nine exact-coverage fixtures also pass. These validate runner behavior, not the pending
 latency measurements.
 
+## Final planning measurement and cache-output correction — 2026-09-06
+
+Clean `3ff6f3f` passed **241/241 fresh stages** in **1,371.336 seconds** (gate report),
+or **1,375.073 seconds / 22m55s end to end**. Independent extraction authenticated 9,877
+evidence files, 211 native stages, all 16 fresh sample workflows and the unchanged 271-case
+golden. All 37 ordinary WASM and three optimized lifecycle cases passed. Browser execution took
+773.8 seconds and isolated performance 124.7 seconds. Child CPU cost was 2,510.837 user plus
+405.539 system seconds; cumulative maximum child RSS was 2,641,696 KiB. These resource figures
+are not summed concurrent process memory. Host load and cache state accompany the raw evidence
+under `target/m93/planning-qualification`.
+
+The real numeric candidate `7eba8b5` passed all qualification obligations in **625.192 seconds**,
+or **628.827 seconds / 10m29s including generation**. Exactly 15 browser survivors and 172
+independent stages reused baseline evidence. This remains a **C5 miss**. Source and signed
+indexes were restored, and automation stopped before pruning or further repetitions.
+
+The frontend input key was correctly unchanged, but its output receipt could not be reused:
+the later browser type-check build had added exactly two `node_modules/.cache/*.tsbuildinfo`
+files. The authenticated static receipt and later browser context prove that exact difference.
+The correction moves TypeScript build-info files into the narrowly ignored frontend
+`.tsbuild-cache/` directory. A real TypeScript smoke compiled both configured cache paths,
+then rejected a subsequent invalid source edit with TS2322 while leaving the dependency tree
+unchanged. Installed dependencies remain fully hashed; no hash exclusions were added.
+
+Native preparation also uses its freshly hashed private output tree to compare captured
+executable digests with preparation metadata, avoiding a duplicate read of 14.47 GB. Original
+Cargo fallback paths and symlink paths retain separate observations. Registration, receipt
+reuse and native execution still independently validate actual bytes. Five new fixtures cover
+the single observation, wrong main/auxiliary digests, fallback paths and subsequent consumer-key
+invalidation. The duplicate read alone took 14.827 seconds offline with warm filesystem caches;
+this is a measured cost, not an integrated speedup claim. New complete qualification, edit/prune
+repetitions and cold serial parity remain required.
+
+The corrected runner passes **151 focused release regressions in 26.878 seconds**. The actual
+TypeScript cache smoke and `git diff --check` also pass. Golden bytes and product equations are
+unchanged by these corrections.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation

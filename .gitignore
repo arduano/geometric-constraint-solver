@@ -4,6 +4,7 @@
 **/.trunk/
 crates/geosolve-demo-web/frontend/src/generated/
 crates/geosolve-demo-web/frontend/node_modules/
+crates/geosolve-demo-web/frontend/.tsbuild-cache/
 *.profraw
 *.svg.tmp
 .DS_Store

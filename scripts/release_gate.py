@@ -261,6 +261,30 @@ def hash_output(path):
     return _hash_output(path, set())
 
 
+def native_output_hash(directory, frozen_tree, executable):
+    """Compare captured native bytes using the output snapshot just read once.
+
+    Preparation holds the build lock while freezing its private output tree.
+    Original Cargo fallback paths and paths through symlinks still require their
+    own observation. Consumer keys and native execution independently revalidate.
+    """
+    executable = Path(executable)
+    try:
+        parts = executable.relative_to(directory).parts
+    except ValueError:
+        return hash_output(executable)
+    observed = frozen_tree
+    if parts and ".." not in parts:
+        for part in parts:
+            if not isinstance(observed, dict) or set(observed) != {"files"}:
+                break
+            observed = observed["files"].get(part)
+        else:
+            if isinstance(observed, dict) and set(observed) == {"sha256"}:
+                return dict(observed)
+    return hash_output(executable)
+
+
 def _hash_output(path, ancestors):
     path = Path(path)
     resolved = path.resolve()
@@ -467,14 +491,16 @@ class Runner:
             try:
                 outputs = {str(self.root / name): hash_output(self.root / name) for name in stage.outputs}
                 if stage.id in {"prepare.workspace", "prepare.headless"}:
-                    prepared = read_json(self.root / stage.outputs[0] / "prepared.json")
+                    prepared_directory = self.root / stage.outputs[0]
+                    frozen_tree = outputs[str(prepared_directory)]
+                    prepared = read_json(prepared_directory / "prepared.json")
                     for artifact in prepared["artifacts"]:
-                        observed = hash_output(artifact["executable"])
+                        observed = native_output_hash(prepared_directory, frozen_tree, artifact["executable"])
                         if observed != {"sha256": artifact["sha256"]}:
                             raise ValueError("prepared Cargo executable changed")
                         outputs[artifact["executable"]] = observed
                     for auxiliary in prepared.get("auxiliary_executables", []):
-                        observed = hash_output(auxiliary["path"])
+                        observed = native_output_hash(prepared_directory, frozen_tree, auxiliary["path"])
                         if observed != {"sha256": auxiliary["sha256"]}:
                             raise ValueError("prepared auxiliary executable changed")
                         outputs[auxiliary["path"]] = observed

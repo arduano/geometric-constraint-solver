@@ -60,6 +60,74 @@ class PipelineTests(unittest.TestCase):
         self.assertLess(b[0],t[1])
         self.assertGreaterEqual(p[0],max(a[1],b[1],t[1]))
 
+    def native_preparation_fixture(self, bad=None):
+        directory = self.root / 'target/prepared/native'
+        directory.mkdir(parents=True)
+        executable, auxiliary = directory / 'executable', directory / 'auxiliary'
+        executable.write_bytes(b'captured main bytes')
+        auxiliary.write_bytes(b'captured auxiliary bytes')
+        expected = {p: gate.file_hash(p) for p in (executable, auxiliary)}
+        metadata = {'artifacts': [{'executable': str(executable), 'sha256': expected[executable]}],
+                    'auxiliary_executables': [{'path': str(auxiliary), 'sha256': expected[auxiliary]}]}
+        if bad:
+            metadata[bad][0]['sha256'] = 'wrong expected bytes'
+        (directory / 'prepared.json').write_text(json.dumps(metadata))
+        stage = self.stage('prepare.workspace', 0, outputs=('target/prepared/native',), build_lock=True, kind='build')
+        return stage, expected
+
+    def test_native_preparation_reconciles_inventory_with_one_fresh_captured_tree(self):
+        stage, expected = self.native_preparation_fixture()
+        runner = self.runner([stage])
+        with patch.object(gate, 'file_hash', wraps=gate.file_hash) as observe:
+            self.assertTrue(self.run_quiet(runner, [stage])[0])
+        for path, sha in expected.items():
+            self.assertEqual(sum(Path(call.args[0]) == path for call in observe.call_args_list), 1)
+            self.assertEqual(runner.results[stage.id]['outputs'][str(path)], {'sha256': sha})
+        # The stored preparation still checks actual output bytes before reuse.
+        next(iter(expected)).write_bytes(b'changed after preparation')
+        self.assertIsNone(self.store.find(stage.id, runner.keys[stage.id]))
+
+    def test_native_preparation_rejects_wrong_main_digest(self):
+        stage, _ = self.native_preparation_fixture('artifacts')
+        runner = self.runner([stage])
+        ok, report = self.run_quiet(runner, [stage])
+        self.assertFalse(ok)
+        self.assertFalse(report['complete'])
+        self.assertEqual(runner.results[stage.id]['status'], 'failed')
+
+    def test_native_preparation_rejects_wrong_auxiliary_digest(self):
+        stage, _ = self.native_preparation_fixture('auxiliary_executables')
+        runner = self.runner([stage])
+        self.assertFalse(self.run_quiet(runner, [stage])[0])
+        self.assertEqual(runner.results[stage.id]['status'], 'failed')
+
+    def test_native_original_and_symlink_paths_observe_current_fallback_bytes(self):
+        directory = self.root / 'target/prepared'
+        directory.mkdir(parents=True)
+        original = self.root / 'target/original'
+        original.mkdir()
+        binary = original / 'binary'
+        binary.write_bytes(b'original')
+        (directory / 'linked-parent').symlink_to(original, target_is_directory=True)
+        (directory / 'linked-file').symlink_to(binary)
+        frozen = gate.hash_output(directory)
+        binary.write_bytes(b'changed original')
+        for path in (binary, directory / 'linked-parent/binary', directory / 'linked-file',
+                     directory / '../original/binary'):
+            with self.subTest(path=path):
+                self.assertEqual(gate.native_output_hash(directory, frozen, path), gate.hash_output(path))
+
+    def test_consumer_key_rechecks_captured_bytes_after_preparation_snapshot(self):
+        stage, expected = self.native_preparation_fixture()
+        runner = self.runner([stage])
+        self.assertTrue(self.run_quiet(runner, [stage])[0])
+        binary = next(iter(expected))
+        consumer = self.stage('native-test', 0, artifacts=(str(binary),), dependencies=(stage.id,))
+        before = runner.key(consumer)
+        binary.write_bytes(b'changed captured executable')
+        runner.register([consumer])
+        self.assertNotEqual(before, runner.keys[consumer.id])
+
     def test_group_expands_after_own_preparation_before_later_build_finishes(self):
         stages = [self.stage('prepare1', .04, build_lock=True), self.stage('prepare2', .5, build_lock=True)]
         r = self.runner(stages)

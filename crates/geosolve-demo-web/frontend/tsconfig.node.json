@@ -2,7 +2,7 @@
   "compilerOptions": {
     "composite": true,
     "noEmit": true,
-    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.node.tsbuildinfo",
+    "tsBuildInfoFile": "./.tsbuild-cache/tsconfig.node.tsbuildinfo",
     "skipLibCheck": true,
     "target": "ES2022",
     "lib": ["ES2022"],
