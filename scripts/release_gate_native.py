@@ -203,7 +203,7 @@ def cargo_launches(stderr: str, executables: set[str]) -> dict[str, dict[str, st
             continue
         tokens = shlex.split(match[1])
         overrides = {}
-        while tokens and re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", tokens[0]):
+        while tokens and re.match(r"^(?:[A-Za-z_][A-Za-z_0-9]*|CARGO_BIN_EXE_[A-Za-z0-9_.-]+)=", tokens[0]):
             key, value = tokens.pop(0).split("=", 1)
             overrides[key] = value
         if not tokens or tokens[0] not in executables:

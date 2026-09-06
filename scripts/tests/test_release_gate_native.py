@@ -61,7 +61,8 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_environment_is_decoded_as_data_including_spaces_and_literal_shell_text(self):
         env = {"CARGO_MANIFEST_DIR": "/workspace/a b", "CARGO_MANIFEST_PATH": "/workspace/a b/Cargo.toml",
-               "LD_LIBRARY_PATH": "/target/debug:/lib", "CARGO_PKG_DESCRIPTION": "literal $(do-not-run) `nor-this`"}
+               "LD_LIBRARY_PATH": "/target/debug:/lib", "CARGO_PKG_DESCRIPTION": "literal $(do-not-run) `nor-this`",
+               "CARGO_BIN_EXE_geosolve-headless": "/target/debug/geosolve-headless"}
         command = " ".join([*[shlex.quote(f"{k}={v}") for k, v in env.items()],
                             shlex.quote("/target/test binary"), "--list", "--format", "terse"])
         decoded = native.cargo_launches(f"     Running `{command}`", {"/target/test binary"})
