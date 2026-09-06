@@ -330,7 +330,7 @@ describe("prepared managed browser compilation", () => {
       },
     });
     await expect(adapter.pointer({
-      version: 1,
+      version: 2,
       phase: "move",
       pointerId: 1,
       x: 10,

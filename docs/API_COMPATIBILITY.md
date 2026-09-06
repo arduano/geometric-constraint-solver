@@ -444,3 +444,12 @@ version exists in the registry. The pre-publication gate therefore checks the ex
 archive file list for all nine crates and builds every workspace target from path
 dependencies. Each package includes `LICENSE` and `README.md`. Registry publication
 itself remains a maintainer action after a repository URL and release tag exist.
+
+## M94 transient drawing protocol
+
+The browser WorkbenchHandle request/reply protocol is v2. Its snapshot frame contains a versioned
+`geosolve-draw-frame-v1` numeric drawing payload instead of SVG markup. JS and WASM consumers ship
+atomically and older request versions reject. This presentation change does not migrate the
+persisted workbench/project, document, history or reproduction contents. Tool catalogs and the
+intent/code-control RPCs retain their separately owned protocols. geosolve-sketch-render exposes
+finite presentation-only draw-frame types while preserving native SVG and PNG export interfaces.

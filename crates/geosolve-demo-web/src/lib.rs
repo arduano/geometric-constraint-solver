@@ -545,10 +545,10 @@ mod wasm {
             );
             for sample in samples {
                 let key = sample.key;
-                let mut handle = super::WorkbenchHandle::new(r#"{"version":1}"#)
+                let mut handle = super::WorkbenchHandle::new(r#"{"version":2}"#)
                     .unwrap_or_else(|error| panic!("{key} WASM workbench: {error:?}"));
                 let open = serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "sample.open",
                     "payload": { "key": key },
                 })
@@ -562,10 +562,11 @@ mod wasm {
                         .unwrap_or_else(|error| panic!("{key} WASM snapshot: {error:?}")),
                 )
                 .unwrap_or_else(|error| panic!("{key} snapshot JSON: {error}"));
-                let actual_frame = snapshot["frame"]["svg"]
-                    .as_str()
-                    .unwrap_or_else(|| panic!("{key} WASM frame SVG"))
-                    .to_owned();
+                let actual_frame = snapshot["frame"]["scene"].to_string();
+                assert_eq!(
+                    snapshot["frame"]["scene"]["format"],
+                    "geosolve-draw-frame-v1"
+                );
                 let actual_source = snapshot["source"]["files"]
                     .as_array()
                     .and_then(|files| files.iter().find(|file| file["path"] == "sketch.ts"))
@@ -600,11 +601,12 @@ mod wasm {
                         geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
                     )
                     .unwrap_or_else(|| panic!("{key} direct accepted authority"));
-                let markup = geosolve_sketch_render::svg_markup_with_computed_context_action_stamp_and_display(
+                let expected_drawing = geosolve_sketch_render::compose_draw_frame(
                     Some(&scene),
                     Some(accepted),
                     &[],
                     editor.editor().selection(),
+                    &[],
                     &[],
                     editor.editor().hover_state(),
                     None,
@@ -617,15 +619,13 @@ mod wasm {
                         grid_visible: true,
                         retain_contextual_annotations: true,
                     },
+                    None,
                     viewport,
-                );
-                let aria_label = format!("{} accepted sketch viewport", code_project.title());
-                let expected_frame = geosolve_sketch_render::interactive_scene_svg(
-                    &markup,
-                    viewport.screen_size,
-                    &aria_label,
                 )
-                .unwrap_or_else(|| panic!("{key} direct SVG frame"));
+                .unwrap_or_else(|error| panic!("{key} direct draw frame: {error}"));
+                let expected_frame = serde_json::to_value(&expected_drawing)
+                    .expect("finite draw-frame JSON")
+                    .to_string();
 
                 assert_eq!(
                     normalize_allocator_ids(&actual_frame),
@@ -792,43 +792,44 @@ mod wasm {
                     .unwrap_or_else(|| panic!("{key} managed source"))
             }
 
-            fn frame_svg<'a>(snapshot: &'a serde_json::Value, key: &str) -> &'a str {
-                snapshot["frame"]["svg"]
-                    .as_str()
-                    .unwrap_or_else(|| panic!("{key} frame SVG"))
+            fn drawing_frame<'a>(
+                snapshot: &'a serde_json::Value,
+                key: &str,
+            ) -> &'a serde_json::Value {
+                let frame = &snapshot["frame"]["scene"];
+                assert_eq!(
+                    frame["format"], "geosolve-draw-frame-v1",
+                    "{key} typed frame"
+                );
+                frame
             }
 
-            fn svg_attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
-                let marker = format!("{name}=\"");
-                let value = tag.get(tag.find(&marker)? + marker.len()..)?;
-                value.get(..value.find('"')?)
-            }
-
-            fn first_interactive_point(svg: &str, key: &str) -> ([f64; 2], String) {
-                svg.split("<circle")
-                    .skip(1)
-                    .find_map(|suffix| {
-                        let tag = suffix.get(..suffix.find("/>")?)?;
-                        if !tag.contains("class=\"wb-point")
-                            || !tag.contains("data-interactive=\"true\"")
+            fn first_interactive_point(frame: &serde_json::Value, key: &str) -> ([f64; 2], String) {
+                frame["items"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find_map(|item| {
+                        if item["layer"] != "points"
+                            || item["kind"] != "circle"
+                            || item["interactive"] != true
                         {
                             return None;
                         }
                         Some((
-                            [
-                                svg_attribute(tag, "cx")?.parse::<f64>().ok()?,
-                                svg_attribute(tag, "cy")?.parse::<f64>().ok()?,
-                            ],
-                            svg_attribute(tag, "data-persistent-id")?.to_owned(),
+                            [item["center"][0].as_f64()?, item["center"][1].as_f64()?],
+                            item["metadata"]["persistentId"].as_str()?.to_owned(),
                         ))
                     })
-                    .unwrap_or_else(|| panic!("{key} has no interactive SVG point"))
+                    .unwrap_or_else(|| panic!("{key} has no interactive drawing point"))
             }
 
-            fn persistent_point_tag<'a>(svg: &'a str, persistent_id: &str) -> Option<&'a str> {
-                svg.split("<circle").skip(1).find_map(|suffix| {
-                    let tag = suffix.get(..suffix.find("/>")?)?;
-                    (svg_attribute(tag, "data-persistent-id") == Some(persistent_id)).then_some(tag)
+            fn persistent_point<'a>(
+                frame: &'a serde_json::Value,
+                persistent_id: &str,
+            ) -> Option<&'a serde_json::Value> {
+                frame["items"].as_array()?.iter().find(|item| {
+                    item["layer"] == "points" && item["metadata"]["persistentId"] == persistent_id
                 })
             }
 
@@ -841,7 +842,7 @@ mod wasm {
             ) -> (serde_json::Value, serde_json::Value) {
                 let request = |phase: &str, buttons: u16| {
                     serde_json::json!({
-                        "version": 1,
+                        "version": 2,
                         "phase": phase,
                         "pointerId": pointer_id,
                         "x": position[0],
@@ -901,13 +902,29 @@ mod wasm {
             }
 
             fn assert_complete_frame(snapshot: &serde_json::Value, key: &str) {
-                let svg = frame_svg(snapshot, key);
-                assert!(svg.starts_with("<svg"), "{key} SVG root");
-                assert!(svg.ends_with("</svg>"), "{key} complete SVG");
-                assert!(svg.contains("wb-accepted-scene"), "{key} accepted frame");
-                assert!(svg.contains("wb-geometry"), "{key} complete geometry frame");
-                assert!(!svg.contains("NaN"), "{key} frame has no NaN");
-                assert!(!svg.contains("Infinity"), "{key} frame has no infinity");
+                let frame = drawing_frame(snapshot, key);
+                assert_eq!(
+                    frame["provenance"]["scene"], "accepted",
+                    "{key} accepted frame"
+                );
+                assert!(
+                    frame["items"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|item| item["layer"] == "geometry"),
+                    "{key} complete geometry frame"
+                );
+                let serialized = frame.to_string();
+                assert!(!serialized.contains("NaN"), "{key} frame has no NaN");
+                assert!(
+                    !serialized.contains("Infinity"),
+                    "{key} frame has no infinity"
+                );
+                assert!(
+                    snapshot["frame"].get("svg").is_none(),
+                    "{key} live bridge has no SVG"
+                );
             }
 
             let forbidden_key_fixture = serde_json::json!({
@@ -1006,13 +1023,13 @@ mod wasm {
             for (index, case) in CASES.iter().enumerate() {
                 let sample = geosolve_sketch_code::bundled_sample(case.key)
                     .unwrap_or_else(|| panic!("{} canonical sample", case.key));
-                let mut handle = super::WorkbenchHandle::new(r#"{"version":1}"#)
+                let mut handle = super::WorkbenchHandle::new(r#"{"version":2}"#)
                     .unwrap_or_else(|error| panic!("{} WASM workbench: {error:?}", case.key));
                 let opened = parse_snapshot(
                     &handle
                         .dispatch(
                             &serde_json::json!({
-                                "version": 1,
+                                "version": 2,
                                 "command": "sample.open",
                                 "payload": { "key": case.key },
                             })
@@ -1036,7 +1053,7 @@ mod wasm {
                 );
                 let base_source = managed_source(&opened, case.key).to_owned();
                 assert_eq!(base_source, sample.managed_source(), "{}", case.key);
-                let base_frame = frame_svg(&opened, case.key).to_owned();
+                let base_frame = drawing_frame(&opened, case.key).to_owned();
                 let base_controls = inspect_controls(&mut handle, case.key);
                 assert_eq!(base_controls["can_undo"], false, "{}", case.key);
                 assert_eq!(base_controls["can_redo"], false, "{}", case.key);
@@ -1084,18 +1101,28 @@ mod wasm {
                     case.key,
                 );
                 let selected_point_tag =
-                    persistent_point_tag(frame_svg(&selected_down, case.key), &point_id)
+                    persistent_point(drawing_frame(&selected_down, case.key), &point_id)
                         .unwrap_or_else(|| panic!("{} selected persistent point paint", case.key));
                 assert!(
-                    selected_point_tag.contains("class=\"wb-point selected"),
+                    selected_point_tag["className"]
+                        .as_str()
+                        .unwrap()
+                        .split_whitespace()
+                        .any(|class| class == "selected"),
                     "{} pointer down must select the exact hit point {point_id}",
                     case.key
                 );
                 assert!(selected["selection"].is_object(), "{} selection", case.key);
                 let selected_release_tag =
-                    persistent_point_tag(frame_svg(&selected, case.key), &point_id)
+                    persistent_point(drawing_frame(&selected, case.key), &point_id)
                         .unwrap_or_else(|| panic!("{} released persistent point paint", case.key));
-                assert!(selected_release_tag.contains("class=\"wb-point selected"));
+                assert!(
+                    selected_release_tag["className"]
+                        .as_str()
+                        .unwrap()
+                        .split_whitespace()
+                        .any(|class| class == "selected")
+                );
                 assert_eq!(
                     managed_source(&selected, case.key),
                     base_source,
@@ -1125,7 +1152,12 @@ mod wasm {
                     "{} deselection",
                     case.key
                 );
-                assert_eq!(frame_svg(&deselected, case.key), base_frame, "{}", case.key);
+                assert_eq!(
+                    drawing_frame(&deselected, case.key),
+                    &base_frame,
+                    "{}",
+                    case.key
+                );
                 assert_eq!(
                     managed_source(&deselected, case.key),
                     base_source,
@@ -1136,7 +1168,7 @@ mod wasm {
                     &handle
                         .dispatch(
                             &serde_json::json!({
-                                "version": 1,
+                                "version": 2,
                                 "command": "parameter.edit",
                                 "payload": {
                                     "id": control_id,
@@ -1157,7 +1189,12 @@ mod wasm {
                     "{}",
                     case.key
                 );
-                assert_eq!(frame_svg(&pending, case.key), base_frame, "{}", case.key);
+                assert_eq!(
+                    drawing_frame(&pending, case.key),
+                    &base_frame,
+                    "{}",
+                    case.key
+                );
                 assert_eq!(pending["presentation"]["canUndo"], false, "{}", case.key);
                 assert_eq!(pending["presentation"]["canRedo"], false, "{}", case.key);
                 assert!(
@@ -1250,7 +1287,7 @@ mod wasm {
                     compiled: candidate,
                 };
                 let resolve_command = serde_json::to_string(&ResolveMutationCommand {
-                    version: 1,
+                    version: 2,
                     command: "managed.mutation.resolve",
                     payload: &receipt,
                 })
@@ -1282,7 +1319,7 @@ mod wasm {
                 assert_eq!(accepted["presentation"]["canUndo"], true, "{}", case.key);
                 assert_eq!(accepted["presentation"]["canRedo"], false, "{}", case.key);
                 assert_complete_frame(&accepted, case.key);
-                let edited_frame = frame_svg(&accepted, case.key).to_owned();
+                let edited_frame = drawing_frame(&accepted, case.key).to_owned();
                 let repeated = parse_snapshot(
                     &handle
                         .snapshot()
@@ -1330,7 +1367,7 @@ mod wasm {
 
                 let undone = parse_snapshot(
                     &handle
-                        .dispatch(r#"{"version":1,"command":"history.undo"}"#)
+                        .dispatch(r#"{"version":2,"command":"history.undo"}"#)
                         .unwrap_or_else(|error| panic!("{} Undo: {error:?}", case.key)),
                     case.key,
                 );
@@ -1340,7 +1377,12 @@ mod wasm {
                     "{}",
                     case.key
                 );
-                assert_eq!(frame_svg(&undone, case.key), base_frame, "{}", case.key);
+                assert_eq!(
+                    drawing_frame(&undone, case.key),
+                    &base_frame,
+                    "{}",
+                    case.key
+                );
                 assert_eq!(undone["presentation"]["canUndo"], false, "{}", case.key);
                 assert_eq!(undone["presentation"]["canRedo"], true, "{}", case.key);
                 assert!(undone["problems"].as_array().is_some_and(Vec::is_empty));
@@ -1352,7 +1394,7 @@ mod wasm {
                 );
                 let redone = parse_snapshot(
                     &handle
-                        .dispatch(r#"{"version":1,"command":"history.redo"}"#)
+                        .dispatch(r#"{"version":2,"command":"history.redo"}"#)
                         .unwrap_or_else(|error| panic!("{} Redo: {error:?}", case.key)),
                     case.key,
                 );
@@ -1362,7 +1404,12 @@ mod wasm {
                     "{} Redo source",
                     case.key
                 );
-                assert_eq!(frame_svg(&redone, case.key), edited_frame, "{}", case.key);
+                assert_eq!(
+                    drawing_frame(&redone, case.key),
+                    &edited_frame,
+                    "{}",
+                    case.key
+                );
                 assert_eq!(redone["presentation"]["canUndo"], true, "{}", case.key);
                 assert_eq!(redone["presentation"]["canRedo"], false, "{}", case.key);
                 assert!(redone["problems"].as_array().is_some_and(Vec::is_empty));
@@ -1382,7 +1429,7 @@ mod wasm {
                 .unwrap();
                 let mut restored = super::WorkbenchHandle::new(
                     &serde_json::json!({
-                        "version": 1,
+                        "version": 2,
                         "persistedProject": persistence["contents"],
                     })
                     .to_string(),
@@ -1409,14 +1456,14 @@ mod wasm {
                 );
                 let restored_undo = parse_snapshot(
                     &restored
-                        .dispatch(r#"{"version":1,"command":"history.undo"}"#)
+                        .dispatch(r#"{"version":2,"command":"history.undo"}"#)
                         .unwrap(),
                     case.key,
                 );
                 assert_eq!(managed_source(&restored_undo, case.key), base_source);
                 let restored_redo = parse_snapshot(
                     &restored
-                        .dispatch(r#"{"version":1,"command":"history.redo"}"#)
+                        .dispatch(r#"{"version":2,"command":"history.redo"}"#)
                         .unwrap(),
                     case.key,
                 );

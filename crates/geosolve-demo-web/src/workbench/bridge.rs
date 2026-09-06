@@ -40,7 +40,7 @@ use super::{
     dispatch_projectional_construction_effects, fit_projectional_camera_to_authority,
 };
 
-const PROTOCOL_VERSION: u8 = 1;
+const PROTOCOL_VERSION: u8 = 2;
 const MAX_REQUEST_BYTES: usize = 40 * 1024 * 1024;
 const MAX_TOOL_CATALOG_BYTES: usize = 128 * 1024;
 const MAX_COMMAND_BYTES: usize = 1_024;
@@ -266,7 +266,7 @@ struct ProjectSnapshot {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FrameSnapshot {
-    svg: String,
+    scene: geosolve_sketch_render::DrawFrame,
     aria_label: String,
 }
 
@@ -3501,12 +3501,40 @@ impl WorkbenchBridge {
         {
             return frame.clone();
         }
-        let frame = self.compose_frame_snapshot();
-        self.accepted_frame = Some(frame.clone());
-        frame
+        match self.compose_frame_snapshot() {
+            Ok(frame) => {
+                self.accepted_frame = Some(frame.clone());
+                frame
+            }
+            Err(error) => {
+                self.last_error = Some(format!("Canvas scene unavailable: {error}"));
+                // A drawing failure never publishes a partial replacement or
+                // alters the retained editor's accepted mathematical state.
+                self.accepted_frame
+                    .clone()
+                    .unwrap_or_else(|| FrameSnapshot {
+                        scene: geosolve_sketch_render::DrawFrame {
+                            format: "geosolve-draw-frame-v1",
+                            view_box: [
+                                0.0,
+                                0.0,
+                                super::scene::SCREEN_SIZE[0],
+                                super::scene::SCREEN_SIZE[1],
+                            ],
+                            background: "#151619",
+                            provenance: std::collections::BTreeMap::from([(
+                                "scene".into(),
+                                "unavailable".into(),
+                            )]),
+                            items: Vec::new(),
+                        },
+                        aria_label: format!("{} sketch viewport unavailable", self.title),
+                    })
+            }
+        }
     }
 
-    fn compose_frame_snapshot(&mut self) -> FrameSnapshot {
+    fn compose_frame_snapshot(&mut self) -> Result<FrameSnapshot, String> {
         let scene = self.current_scene();
         let editor = self.editor();
         let accepted = editor.presentation_session().and_then(
@@ -3518,11 +3546,12 @@ impl WorkbenchBridge {
             selection.sort_unstable();
             selection.dedup();
         }
-        let markup = super::scene::svg_markup_with_computed_context_action_stamp_and_display(
+        let drawing = geosolve_sketch_render::compose_draw_frame(
             scene.as_ref(),
             accepted,
             &[],
             &selection,
+            &[],
             &[],
             editor.editor().hover_state(),
             self.construction_preview.as_ref(),
@@ -3535,17 +3564,17 @@ impl WorkbenchBridge {
                 grid_visible: self.grid_visible,
                 retain_contextual_annotations: true,
             },
+            None,
             self.camera.viewport(),
-        );
-        // This SVG is accepted-scene authority, not a transient status
-        // surface. Draft and error notices must not mutate a retained frame.
+        )
+        .map_err(|error| error.to_string())?;
+        // This drawing projects accepted-scene authority; draft/error notices
+        // must not mutate the retained accepted frame.
         let aria_label = format!("{} accepted sketch viewport", self.title);
-        let screen = self.camera.viewport().screen_size;
-        FrameSnapshot {
-            svg: geosolve_sketch_render::interactive_scene_svg(&markup, screen, &aria_label)
-                .expect("validated camera viewport has finite positive screen dimensions"),
+        Ok(FrameSnapshot {
+            scene: drawing,
             aria_label,
-        }
+        })
     }
 
     fn source_snapshot(&self) -> Result<SourceSnapshot, String> {
@@ -4623,7 +4652,7 @@ mod tests {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "source.prepare",
                     "payload": {
                         "path": "sketch.ts",
@@ -4670,7 +4699,7 @@ mod tests {
         buttons: u16,
     ) -> String {
         serde_json::json!({
-            "version": 1,
+            "version": 2,
             "phase": phase,
             "pointerId": pointer_id,
             "x": position.x,
@@ -4704,7 +4733,7 @@ mod tests {
         );
         WorkbenchBridge::construct_json(
             &serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "persistedProject": FIXTURE.trim_end(),
             })
             .to_string(),
@@ -4861,7 +4890,7 @@ mod tests {
         }
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
             .expect("M90-F005 drag Undo");
         assert_eq!(
             bridge
@@ -4887,7 +4916,7 @@ mod tests {
         assert_eq!(bridge.editor().coordinator().intent().redo_len(), 1);
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
             .expect("M90-F005 drag Redo");
         let redone = bridge
             .editor()
@@ -4908,7 +4937,7 @@ mod tests {
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
         let restored = WorkbenchBridge::construct_json(
             &serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "persistedProject": persisted["contents"].as_str().unwrap(),
             })
             .to_string(),
@@ -4987,13 +5016,13 @@ mod tests {
 
     #[test]
     fn managed_sample_open_failure_does_not_fall_back_to_native_catalog() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"polyline"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"polyline"}}"#)
             .unwrap();
         let pointer = |phase: &str, buttons: u16| {
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "phase": phase,
                 "pointerId": 91,
                 "x": 360.0,
@@ -5045,10 +5074,10 @@ mod tests {
 
     #[test]
     fn middle_button_gesture_pans_without_entering_semantic_interaction() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let point = bridge
@@ -5066,7 +5095,7 @@ mod tests {
         bridge
             .pointer_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "phase": "down",
                     "pointerId": 17,
                     "x": point.x,
@@ -5094,7 +5123,7 @@ mod tests {
         bridge
             .pointer_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "phase": "move",
                     "pointerId": 17,
                     "x": moved.x,
@@ -5120,7 +5149,7 @@ mod tests {
         bridge
             .pointer_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "phase": "up",
                     "pointerId": 17,
                     "x": terminal.x,
@@ -5145,10 +5174,10 @@ mod tests {
 
     #[test]
     fn middle_button_down_never_steals_an_existing_semantic_drag() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let point = bridge
@@ -5160,7 +5189,7 @@ mod tests {
             .screen_position;
         let pointer = |phase: &str, buttons: u16| {
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "phase": phase,
                 "pointerId": 23,
                 "x": point.x,
@@ -5199,17 +5228,17 @@ mod tests {
 
     #[test]
     fn click_staged_segment_and_circle_commit_through_the_direct_bridge() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
             .unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
             .unwrap();
         let revision_before = bridge.revision;
         let pointer = |phase: &str, pointer_id: u64, x: f64, y: f64, buttons: u16| {
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "phase": phase,
                 "pointerId": pointer_id,
                 "x": x,
@@ -5251,7 +5280,7 @@ mod tests {
 
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"tool.select","payload":{"id":"center-radius-circle"}}"#,
+                r#"{"version":2,"command":"tool.select","payload":{"id":"center-radius-circle"}}"#,
             )
             .unwrap();
         for (pointer_id, x, y) in [(42, 470.0, 220.0), (42, 560.0, 220.0)] {
@@ -5300,9 +5329,9 @@ export default sketch(($) => {
 });
 "#;
 
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new-code"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new-code"}"#)
             .expect("empty managed project opens");
         let source_before = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -5325,7 +5354,7 @@ export default sketch(($) => {
 
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"tool.select","payload":{"id":"center-radius-circle"}}"#,
+                r#"{"version":2,"command":"tool.select","payload":{"id":"center-radius-circle"}}"#,
             )
             .expect("center-radius circle tool activates");
 
@@ -5472,7 +5501,7 @@ export default sketch(($) => {
         assert_eq!(published["presentation"]["canUndo"], true);
         assert_eq!(published["presentation"]["canRedo"], false);
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"select"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"select"}}"#)
             .expect("Select activates after circle publication");
         let follow_up = ScreenPoint { x: 620.0, y: 260.0 };
         for (phase, buttons) in [("move", 0), ("down", 1), ("up", 0)] {
@@ -5484,7 +5513,7 @@ export default sketch(($) => {
 
         let undone: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
                 .expect("empty-circle publication Undo"),
         )
         .unwrap();
@@ -5511,13 +5540,13 @@ export default sketch(($) => {
 
     #[test]
     fn m92_f002_terminal_pointer_release_is_noop_while_managed_click_compiles() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new-code"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new-code"}"#)
             .expect("empty managed project opens");
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"tool.select","payload":{"id":"center-radius-circle"}}"#,
+                r#"{"version":2,"command":"tool.select","payload":{"id":"center-radius-circle"}}"#,
             )
             .expect("center-radius circle tool activates");
 
@@ -5616,7 +5645,7 @@ export default sketch(($) => {
         let end = scene.viewport.model_to_screen(END);
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
             .expect("Segment activates");
         for (index, position) in [start, end].into_iter().enumerate() {
             bridge
@@ -5794,7 +5823,7 @@ export default sketch(($) => {
         );
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"select"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"select"}}"#)
             .expect("Select activates after snapped Segment publication");
         let follow_up = ScreenPoint { x: 640.0, y: 300.0 };
         for (phase, buttons) in [("move", 0), ("down", 1), ("up", 0)] {
@@ -5806,7 +5835,7 @@ export default sketch(($) => {
 
         let undone: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
                 .expect("snapped Segment publication Undo"),
         )
         .unwrap();
@@ -5868,14 +5897,14 @@ export default sketch(($) => {
 
     #[test]
     fn m88_f004_finish_readiness_tracks_an_actionable_polyline_draft() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
             .unwrap();
         let selected: serde_json::Value = serde_json::from_str(
             &bridge
                 .dispatch_json(
-                    r#"{"version":1,"command":"tool.select","payload":{"id":"polyline"}}"#,
+                    r#"{"version":2,"command":"tool.select","payload":{"id":"polyline"}}"#,
                 )
                 .unwrap(),
         )
@@ -5885,7 +5914,7 @@ export default sketch(($) => {
         let project_before = bridge.export_project_json().unwrap();
         let premature: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"tool.finish"}"#)
+                .dispatch_json(r#"{"version":2,"command":"tool.finish"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -5897,7 +5926,7 @@ export default sketch(($) => {
 
         let pointer = |phase: &str, x: f64, y: f64, buttons: u16| {
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "phase": phase,
                 "pointerId": 51,
                 "x": x,
@@ -5935,7 +5964,7 @@ export default sketch(($) => {
 
         let finished: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"tool.finish"}"#)
+                .dispatch_json(r#"{"version":2,"command":"tool.finish"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -5989,7 +6018,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.select",
                     "payload": { "id": helper_id },
                 })
@@ -5999,7 +6028,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.source.open",
                     "payload": {
                         "id": helper_id,
@@ -6014,17 +6043,17 @@ export default sketch(($) => {
         let revision = bridge.revision;
         for command in [
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "command": "declaration.move",
                 "payload": { "id": helper_id, "direction": "up" },
             }),
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "command": "declaration.suppression.set",
                 "payload": { "id": helper_id, "suppressed": true },
             }),
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "command": "declaration.delete",
                 "payload": { "id": helper_id },
             }),
@@ -6045,7 +6074,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.move",
                     "payload": {
                         "id": root_id,
@@ -6083,7 +6112,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.move",
                     "payload": {
                         "id": guide_id,
@@ -6123,7 +6152,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.move",
                     "payload": {
                         "id": root_id,
@@ -6142,7 +6171,7 @@ export default sketch(($) => {
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
         let mut restored = WorkbenchBridge::construct_json(
             &serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "persistedProject": persistence["contents"],
             })
             .to_string(),
@@ -6164,7 +6193,7 @@ export default sketch(($) => {
         restored
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.delete",
                     "payload": { "id": root_id },
                 })
@@ -6180,7 +6209,7 @@ export default sketch(($) => {
         let deleted_project = canonical_project_json(&restored);
 
         restored
-            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
             .expect("closure delete Undo");
         assert_eq!(canonical_project_json(&restored), reordered_project);
         assert_eq!(
@@ -6188,7 +6217,7 @@ export default sketch(($) => {
             ["base", "offsetChain11", "profileOffset12", "guide"]
         );
         restored
-            .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
             .expect("closure delete Redo");
         assert_eq!(canonical_project_json(&restored), deleted_project);
 
@@ -6351,7 +6380,7 @@ export default sketch(($) => {
         let persisted: serde_json::Value =
             serde_json::from_str(&aborted.persistence_json().unwrap()).unwrap();
         let restore_request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": persisted["contents"].as_str().unwrap(),
         });
         let mut restored = WorkbenchBridge::construct_json(&restore_request.to_string()).unwrap();
@@ -6463,7 +6492,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.select",
                     "payload": { "id": segment_row },
                 })
@@ -6572,7 +6601,7 @@ export default sketch(($) => {
         assert!((detached_model[0] - target_model[0]).abs() <= 2.0 * f64::EPSILON);
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
             .expect("detached instance overlay Undo");
         assert!(
             bridge
@@ -6583,7 +6612,7 @@ export default sketch(($) => {
         );
         assert_eq!(canonical_project_json(&bridge), project_before);
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
             .expect("detached instance overlay Redo");
         assert!(
             !bridge
@@ -6597,7 +6626,7 @@ export default sketch(($) => {
         let persistence: serde_json::Value =
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
         let request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": persistence["contents"].as_str().unwrap(),
         });
         let restored = WorkbenchBridge::construct_json(&request.to_string())
@@ -6625,7 +6654,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.select",
                     "payload": { "id": segment_row },
                 })
@@ -6773,10 +6802,10 @@ export default sketch(($) => {
         reason = "the exact user reproduction crosses native terminal parity, source isolation, follow-up input, history, and persistence"
     )]
     fn compass_rose_point_drag_publishes_one_instance_overlay_without_compilation() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"compass-rose"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"compass-rose"}}"#,
             )
             .expect("Compass Rose opens through its checked-in managed project");
         let scene = bridge.current_scene().expect("accepted Compass Rose scene");
@@ -6925,7 +6954,7 @@ export default sketch(($) => {
         bridge
             .wheel_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "x": target.x,
                     "y": target.y,
                     "deltaX": 0.0,
@@ -6936,11 +6965,11 @@ export default sketch(($) => {
             )
             .expect("wheel remains available immediately after point publication");
         bridge
-            .cancel_json(r#"{"version":1,"reason":"escape"}"#)
+            .cancel_json(r#"{"version":2,"reason":"escape"}"#)
             .expect("cancel remains available immediately after point publication");
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
             .expect("Compass Rose point overlay Undo");
         assert!(
             bridge
@@ -6962,7 +6991,7 @@ export default sketch(($) => {
         assert_eq!(accepted_compiled_project(&bridge), project_before);
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
             .expect("Compass Rose point overlay Redo");
         assert!(
             !bridge
@@ -6990,7 +7019,7 @@ export default sketch(($) => {
         let persistence: serde_json::Value =
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
         let request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": persistence["contents"].as_str().unwrap(),
         });
         let mut restored = WorkbenchBridge::construct_json(&request.to_string())
@@ -7017,10 +7046,10 @@ export default sketch(($) => {
 
     #[test]
     fn compass_rose_outer_endpoint_drag_retains_exact_native_terminal_without_compilation() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"compass-rose"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"compass-rose"}}"#,
             )
             .expect("Compass Rose opens through its checked-in managed project");
         let scene = bridge.current_scene().expect("accepted Compass Rose scene");
@@ -7130,11 +7159,11 @@ export default sketch(($) => {
         model_target: [f64; 2],
         pointer_id: u64,
     ) {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "sample.open",
                     "payload": { "key": sample },
                 })
@@ -7325,7 +7354,7 @@ export default sketch(($) => {
         let persistence: serde_json::Value =
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
         let request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": persistence["contents"]
                 .as_str()
                 .expect("managed sample persistence contents"),
@@ -7345,7 +7374,7 @@ export default sketch(($) => {
         assert!(restored.pending_managed_mutation.is_none(), "{sample}");
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
             .unwrap_or_else(|error| panic!("{sample} terminal Undo: {error}"));
         assert_eq!(
             accepted_point_position(&bridge, point_id).map(f64::to_bits),
@@ -7411,7 +7440,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.select",
                     "payload": { "id": round_row },
                 })
@@ -7567,7 +7596,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.select",
                     "payload": { "id": round_row },
                 })
@@ -7625,21 +7654,21 @@ export default sketch(($) => {
     // through their complete readiness transitions.
     #[allow(clippy::too_many_lines)]
     fn history_readiness_tracks_ordinary_outer_and_clean_code_authority() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         let initial: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
         assert_eq!(initial["presentation"]["canUndo"], false);
         assert_eq!(initial["presentation"]["canRedo"], false);
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
             .unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
             .unwrap();
         let pointer = |phase: &str, x: f64, y: f64, buttons: u16| {
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "phase": phase,
                 "pointerId": 61,
                 "x": x,
@@ -7665,7 +7694,7 @@ export default sketch(($) => {
 
         let undone: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -7673,7 +7702,7 @@ export default sketch(($) => {
         assert_eq!(undone["presentation"]["canRedo"], true);
         let redone: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -7699,7 +7728,7 @@ export default sketch(($) => {
             &bridge
                 .dispatch_json(
                     &serde_json::json!({
-                        "version": 1,
+                        "version": 2,
                         "command": "source.change",
                         "payload": {
                             "path": "sketch.ts",
@@ -7716,7 +7745,7 @@ export default sketch(($) => {
 
         let reverted: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"source.revert"}"#)
+                .dispatch_json(r#"{"version":2,"command":"source.revert"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -7724,7 +7753,7 @@ export default sketch(($) => {
         assert_eq!(reverted["presentation"]["canRedo"], false);
         let code_undone: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -7733,23 +7762,23 @@ export default sketch(($) => {
 
     #[test]
     fn canceling_a_staged_geometry_click_clears_its_painted_preview() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
             .unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
             .unwrap();
         let revision_before = bridge.revision;
         bridge
             .pointer_json(
-                r#"{"version":1,"phase":"down","pointerId":41,"x":360,"y":280,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}"#,
+                r#"{"version":2,"phase":"down","pointerId":41,"x":360,"y":280,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}"#,
             )
             .unwrap();
         assert!(bridge.construction_preview.is_some());
 
         bridge
-            .cancel_json(r#"{"version":1,"reason":"lost-capture"}"#)
+            .cancel_json(r#"{"version":2,"reason":"lost-capture"}"#)
             .unwrap();
 
         assert!(bridge.construction_preview.is_none());
@@ -7766,10 +7795,10 @@ export default sketch(($) => {
 
     #[test]
     fn projectional_cancel_cleanup_does_not_create_a_false_problem() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let accepted = bridge
@@ -7804,10 +7833,10 @@ export default sketch(($) => {
 
     #[test]
     fn cancel_json_restores_a_live_fillet_radius_drag_without_a_false_problem() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let rail = bridge
@@ -7823,7 +7852,7 @@ export default sketch(($) => {
         bridge
             .pointer_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "phase": "down",
                     "pointerId": 51,
                     "x": rail.screen_grip.x,
@@ -7852,7 +7881,7 @@ export default sketch(($) => {
 
         let canceled: serde_json::Value = serde_json::from_str(
             &bridge
-                .cancel_json(r#"{"version":1,"reason":"lost-capture"}"#)
+                .cancel_json(r#"{"version":2,"reason":"lost-capture"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -7868,16 +7897,16 @@ export default sketch(($) => {
 
     #[test]
     fn cancel_json_restores_a_live_profile_offset_drag_without_a_false_problem() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
             .unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"rectangle"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"rectangle"}}"#)
             .unwrap();
         let pointer = |phase: &str, x: f64, y: f64, buttons: u16| {
             serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "phase": phase,
                 "pointerId": 61,
                 "x": x,
@@ -7897,7 +7926,7 @@ export default sketch(($) => {
             bridge.pointer_json(&pointer("up", x, y, 0)).unwrap();
         }
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"offset"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"offset"}}"#)
             .unwrap();
 
         let face = bridge
@@ -7950,7 +7979,7 @@ export default sketch(($) => {
 
         let canceled: serde_json::Value = serde_json::from_str(
             &bridge
-                .cancel_json(r#"{"version":1,"reason":"lost-capture"}"#)
+                .cancel_json(r#"{"version":2,"reason":"lost-capture"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -7969,29 +7998,30 @@ export default sketch(($) => {
 
     #[test]
     fn bridge_is_dom_free_versioned_and_returns_an_authoritative_frame() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         let snapshot: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
-        assert_eq!(snapshot["version"], 1);
+        assert_eq!(snapshot["version"], 2);
         assert_eq!(snapshot["revision"], 0);
         assert_eq!(snapshot["project"]["status"], "accepted");
-        assert!(
-            snapshot["frame"]["svg"]
-                .as_str()
-                .unwrap()
-                .starts_with("<svg")
+        assert_eq!(
+            snapshot["frame"]["scene"]["format"],
+            "geosolve-draw-frame-v1"
         );
-        assert!(
-            snapshot["frame"]["svg"]
-                .as_str()
-                .unwrap()
-                .contains("wb-accepted-scene")
+        assert_eq!(
+            snapshot["frame"]["scene"]["viewBox"],
+            serde_json::json!([0.0, 0.0, 1000.0, 700.0])
         );
+        assert_eq!(
+            snapshot["frame"]["scene"]["provenance"]["scene"],
+            "accepted"
+        );
+        assert!(snapshot["frame"].get("svg").is_none());
     }
 
     #[test]
     fn bootstrap_metadata_never_enters_presentation_labels() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         let snapshot: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
         let serialized = snapshot.to_string();
@@ -8010,7 +8040,7 @@ export default sketch(($) => {
             &bridge
                 .dispatch_json(
                     &serde_json::json!({
-                        "version": 1,
+                        "version": 2,
                         "command": "declaration.select",
                         "payload": { "id": imported["id"] },
                     })
@@ -8025,42 +8055,56 @@ export default sketch(($) => {
 
     #[test]
     fn authoritative_frame_embeds_renderer_owned_interactive_scene_presentation() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let snapshot: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
-        let frame = snapshot["frame"]["svg"].as_str().unwrap();
-
-        assert!(frame.starts_with("<svg class=\"geosolve-authoritative-frame\""));
-        assert!(frame.contains("<style>"));
-        assert!(frame.find("<style>") < frame.find("wb-accepted-scene"));
-        assert!(frame.contains(".wb-curve { fill: none; stroke: #e5e8df;"));
-        assert!(frame.contains(".wb-point { fill: #131718; stroke: #8fd2ca;"));
-        assert!(frame.contains(".wb-computed-fillet { stroke: #8ed5ca;"));
-        assert!(frame.contains(".wb-computed-hit { fill: none; stroke: transparent;"));
-        assert!(frame.contains(".wb-fillet-radius-grip { fill: #171c1d;"));
-        assert!(frame.contains(".wb-dimension { color: #79bfc4;"));
-        assert!(frame.contains(".wb-curve[data-role=\"construction\"]"));
-        assert!(!frame.contains(".workbench {"));
-        assert!(!frame.contains(".wb-app-bar"));
+        let frame = &snapshot["frame"]["scene"];
+        let items = frame["items"].as_array().expect("complete drawing items");
+        let curves = items
+            .iter()
+            .filter(|item| item["layer"] == "geometry")
+            .collect::<Vec<_>>();
+        let points = items
+            .iter()
+            .filter(|item| item["layer"] == "points")
+            .collect::<Vec<_>>();
+        assert!(!curves.is_empty(), "native geometry has typed paint");
+        assert!(!points.is_empty(), "native points have typed paint");
+        assert!(
+            curves
+                .iter()
+                .any(|item| item["style"]["stroke"] == "#e5e8df")
+        );
+        assert!(
+            points
+                .iter()
+                .all(|item| item["kind"] == "circle" && item["style"]["fill"] == "#131718")
+        );
+        assert!(items.iter().all(|item| item["style"].is_object()));
+        assert!(frame["provenance"]["parameterDigest"].is_string());
+        assert!(frame["provenance"]["externalDigest"].is_string());
+        assert!(frame["provenance"]["activationDigest"].is_string());
+        assert!(snapshot["frame"].get("svg").is_none());
+        assert!(!frame.to_string().contains("<svg"));
     }
 
     #[test]
     fn malformed_and_oversized_requests_are_atomic() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         let before = bridge.export_project_json().unwrap();
         assert!(
             bridge
-                .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
+                .dispatch_json(r#"{"version":99,"command":"project.new"}"#)
                 .is_err()
         );
         assert!(
             bridge
-                .dispatch_json(r#"{"version":1,"command":"project.new","extra":true}"#)
+                .dispatch_json(r#"{"version":2,"command":"project.new","extra":true}"#)
                 .is_err()
         );
         assert!(WorkbenchBridge::construct_json(&" ".repeat(MAX_REQUEST_BYTES + 1)).is_err());
@@ -8069,13 +8113,13 @@ export default sketch(($) => {
 
     #[test]
     fn resize_changes_no_semantic_or_frame_authority() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         let before = bridge.export_project_json().unwrap();
         let frame_before: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
         assert_eq!(
             bridge
-                .resize_json(r#"{"version":1,"width":1920,"height":1080,"pixelRatio":2}"#)
+                .resize_json(r#"{"version":2,"width":1920,"height":1080,"pixelRatio":2}"#)
                 .unwrap(),
             "null"
         );
@@ -8088,10 +8132,10 @@ export default sketch(($) => {
 
     #[test]
     fn successful_project_import_retains_live_viewport_and_pointer_alignment() {
-        let mut donor = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut donor = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         donor
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .expect("Typed Panel donor project");
         let exported: serde_json::Value =
@@ -8102,11 +8146,11 @@ export default sketch(($) => {
 
         let host_size = [968.75, 820.0];
         let pixel_ratio = 2.5_f64;
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .resize_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "width": host_size[0],
                     "height": host_size[1],
                     "pixelRatio": pixel_ratio,
@@ -8117,7 +8161,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "project.import",
                     "payload": {
                         "path": "project.json",
@@ -8159,10 +8203,10 @@ export default sketch(($) => {
 
     #[test]
     fn code_sample_source_failure_retains_the_accepted_frame() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let accepted: serde_json::Value =
@@ -8175,7 +8219,7 @@ export default sketch(($) => {
             .clone();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"source.prepare","payload":{"path":"sketch.ts","contents":"not managed source"}}"#,
+                r#"{"version":2,"command":"source.prepare","payload":{"path":"sketch.ts","contents":"not managed source"}}"#,
             )
             .unwrap();
         let PendingManagedMutation::Source { prepared } = bridge
@@ -8198,7 +8242,7 @@ export default sketch(($) => {
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
         assert_eq!(failed["project"]["status"], "failed");
         assert!(!failed["problems"].as_array().unwrap().is_empty());
-        assert_eq!(failed["frame"]["svg"], accepted["frame"]["svg"]);
+        assert_eq!(failed["frame"]["scene"], accepted["frame"]["scene"]);
         assert_eq!(
             bridge
                 .code_project
@@ -8211,10 +8255,10 @@ export default sketch(($) => {
 
     #[test]
     fn source_keystroke_snapshot_reuses_the_cached_accepted_frame() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let accepted: serde_json::Value =
@@ -8227,7 +8271,7 @@ export default sketch(($) => {
         let draft: serde_json::Value = serde_json::from_str(
             &bridge
                 .dispatch_json(
-                    r#"{"version":1,"command":"source.change","payload":{"path":"sketch.ts","contents":"not managed source"}}"#,
+                    r#"{"version":2,"command":"source.change","payload":{"path":"sketch.ts","contents":"not managed source"}}"#,
                 )
                 .unwrap(),
         )
@@ -8243,7 +8287,7 @@ export default sketch(($) => {
             assert!(
                 bridge
                     .dispatch_json(
-                        &serde_json::json!({ "version": 1, "command": retired }).to_string()
+                        &serde_json::json!({ "version": 2, "command": retired }).to_string()
                     )
                     .unwrap_err()
                     .contains("unknown workbench command")
@@ -8259,7 +8303,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "source.prepare",
                     "payload": {
                         "path": "sketch.ts",
@@ -8292,7 +8336,7 @@ export default sketch(($) => {
         assert!(!code.is_dirty());
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
             .expect("one undo returns to source before raw Apply");
         assert_eq!(
             declaration_order(&bridge),
@@ -8302,10 +8346,10 @@ export default sketch(($) => {
 
     #[test]
     fn managed_compiler_context_is_on_demand_and_contains_only_pinned_patch_plans() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let snapshot = bridge.snapshot_json().unwrap();
@@ -8313,7 +8357,7 @@ export default sketch(($) => {
 
         let context: serde_json::Value =
             serde_json::from_str(&bridge.managed_compiler_context_json().unwrap()).unwrap();
-        assert_eq!(context["version"], 1);
+        assert_eq!(context["version"], 2);
         let patches = context["patches"].as_object().unwrap();
         assert_eq!(patches.len(), 1);
         let fillets = patches.get("fillets").expect("Typed Panel patch binding");
@@ -8327,10 +8371,10 @@ export default sketch(($) => {
 
     #[test]
     fn selected_generated_fillet_publishes_its_exact_managed_source_owner() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let opened: serde_json::Value =
@@ -8351,7 +8395,7 @@ export default sketch(($) => {
             &bridge
                 .dispatch_json(
                     &serde_json::json!({
-                        "version": 1,
+                        "version": 2,
                         "command": "declaration.select",
                         "payload": { "id": fillet["id"] },
                     })
@@ -8390,10 +8434,10 @@ export default sketch(($) => {
 
     #[test]
     fn m89_ordered_declaration_panel_is_source_owned_and_nests_generated_outputs() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let snapshot: serde_json::Value =
@@ -8439,7 +8483,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.source.open",
                     "payload": { "id": invocation["id"], "from": from, "to": to },
                 })
@@ -8450,7 +8494,7 @@ export default sketch(($) => {
             bridge
                 .dispatch_json(
                     &serde_json::json!({
-                        "version": 1,
+                        "version": 2,
                         "command": "declaration.source.open",
                         "payload": { "id": invocation["id"], "from": from + 1, "to": to },
                     })
@@ -8526,7 +8570,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": lower_left_id, "visible": false },
                 })
@@ -8566,7 +8610,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": lower_left_id, "visible": true },
                 })
@@ -8577,7 +8621,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": panel_id, "visible": false },
                 })
@@ -8602,7 +8646,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": lifecycle_group_id, "visible": false },
                 })
@@ -8624,7 +8668,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": lifecycle_group_id, "visible": true },
                 })
@@ -8649,7 +8693,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": panel_id, "visible": true },
                 })
@@ -8659,7 +8703,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": guide_id, "visible": false },
                 })
@@ -8708,7 +8752,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.isolate",
                     "payload": { "id": declarations_group_id },
                 })
@@ -8728,7 +8772,7 @@ export default sketch(($) => {
         );
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"explorer.visibility.restore"}"#)
+            .dispatch_json(r#"{"version":2,"command":"explorer.visibility.restore"}"#)
             .expect("isolate baseline restores");
         let restored_visibility: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
@@ -8746,7 +8790,7 @@ export default sketch(($) => {
         );
 
         bridge
-            .dispatch_json(r#"{"version":1,"command":"view.construction.toggle"}"#)
+            .dispatch_json(r#"{"version":2,"command":"view.construction.toggle"}"#)
             .expect("construction presentation toggles");
         let construction_hidden: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
@@ -8768,7 +8812,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.isolate",
                     "payload": { "id": declarations_group_id },
                 })
@@ -8778,7 +8822,7 @@ export default sketch(($) => {
         let persistence: serde_json::Value =
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
         let restore_request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": persistence["contents"].as_str().unwrap(),
         });
         let mut reloaded = WorkbenchBridge::construct_json(&restore_request.to_string())
@@ -8801,7 +8845,7 @@ export default sketch(($) => {
         let reproduction: serde_json::Value =
             serde_json::from_str(&bridge.reproduction_json().unwrap()).unwrap();
         let reproduction_request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": reproduction["contents"].as_str().unwrap(),
         });
         let mut reproduced = WorkbenchBridge::construct_json(&reproduction_request.to_string())
@@ -8822,7 +8866,7 @@ export default sketch(($) => {
         );
 
         reloaded
-            .dispatch_json(r#"{"version":1,"command":"explorer.visibility.restore"}"#)
+            .dispatch_json(r#"{"version":2,"command":"explorer.visibility.restore"}"#)
             .expect("reloaded isolate baseline restores");
         let reloaded_restored: serde_json::Value =
             serde_json::from_str(&reloaded.snapshot_json().unwrap()).unwrap();
@@ -8884,7 +8928,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "explorer.visibility.set",
                     "payload": { "id": lifecycle_id, "visible": false },
                 })
@@ -9047,7 +9091,7 @@ export default sketch(($) => {
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
         let mut restored = WorkbenchBridge::construct_json(
             &serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "persistedProject": persistence["contents"],
             })
             .to_string(),
@@ -9107,7 +9151,7 @@ export default sketch(($) => {
         })
         .unwrap();
         let mut restored = WorkbenchBridge::construct_json(
-            &serde_json::json!({ "version": 1, "persistedProject": encoded }).to_string(),
+            &serde_json::json!({ "version": 2, "persistedProject": encoded }).to_string(),
         )
         .expect("bounded stale presentation state restores");
         assert!(restored.explorer_visibility.hidden_rows.is_empty());
@@ -9142,7 +9186,7 @@ export default sketch(($) => {
         })
         .unwrap();
         let Err(error) = WorkbenchBridge::construct_json(
-            &serde_json::json!({ "version": 1, "persistedProject": oversized }).to_string(),
+            &serde_json::json!({ "version": 2, "persistedProject": oversized }).to_string(),
         ) else {
             panic!("oversized Explorer visibility must reject");
         };
@@ -9178,7 +9222,7 @@ export default sketch(($) => {
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
         let panel_id = managed_row_id(&base_snapshot, "panel");
         let invalid = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "command": "declaration.move",
             "payload": { "id": panel_id, "direction": "down" },
         });
@@ -9198,7 +9242,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.move",
                     "payload": {
                         "id": guide_id,
@@ -9233,7 +9277,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.suppression.set",
                     "payload": { "id": guide_id, "suppressed": true },
                 })
@@ -9266,7 +9310,7 @@ export default sketch(($) => {
         bridge
             .dispatch_json(
                 &serde_json::json!({
-                    "version": 1,
+                    "version": 2,
                     "command": "declaration.suppression.set",
                     "payload": { "id": lower_left_id, "suppressed": true },
                 })
@@ -9360,7 +9404,7 @@ export default sketch(($) => {
 
         for expected in ["direct-suppressed", "reordered", "base"] {
             bridge
-                .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
                 .expect("lifecycle undo");
             assert_eq!(
                 canonical_project_json(&bridge),
@@ -9377,7 +9421,7 @@ export default sketch(($) => {
         assert_eq!(canonical_project_json(&bridge), base_project);
         for _ in 0..3 {
             bridge
-                .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
                 .expect("lifecycle redo");
         }
         assert_eq!(canonical_project_json(&bridge), final_project);
@@ -9385,7 +9429,7 @@ export default sketch(($) => {
         let persistence_envelope: serde_json::Value =
             serde_json::from_str(&final_persistence).unwrap();
         let restore_request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": persistence_envelope["contents"].as_str().unwrap(),
         });
         let mut restored = WorkbenchBridge::construct_json(&restore_request.to_string())
@@ -9453,14 +9497,14 @@ export default sketch(($) => {
 
     #[test]
     fn m92_legacy_recovery_is_strict_and_retains_presentation_and_history() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"dust-shoe-clamp"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"dust-shoe-clamp"}}"#,
             )
             .unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"view.construction.toggle"}"#)
+            .dispatch_json(r#"{"version":2,"command":"view.construction.toggle"}"#)
             .unwrap();
         let legacy = m92_legacy_envelope(&bridge);
         let recovered = WorkbenchBridge::restore_legacy_code_workbench(&legacy).unwrap();
@@ -9472,7 +9516,7 @@ export default sketch(($) => {
             recovered.export_project_json().unwrap(),
             bridge.export_project_json().unwrap()
         );
-        let request = serde_json::json!({"version":1,"persistedProject":recovered.persistence_contents().unwrap()}).to_string();
+        let request = serde_json::json!({"version":2,"persistedProject":recovered.persistence_contents().unwrap()}).to_string();
         let ordinary = WorkbenchBridge::construct_json(&request).unwrap();
         assert_eq!(
             ordinary.persistence_contents().unwrap(),
@@ -9538,7 +9582,7 @@ export default sketch(($) => {
             original_code["session"].as_str().unwrap()
         );
         assert_eq!(envelope["presentation"], original_envelope["presentation"]);
-        let request = serde_json::json!({"version":1,"persistedProject":compact}).to_string();
+        let request = serde_json::json!({"version":2,"persistedProject":compact}).to_string();
         eprintln!(
             "captured legacy {} bytes -> compact {} bytes -> request {} bytes",
             legacy.len(),
@@ -9549,11 +9593,11 @@ export default sketch(($) => {
         assert_eq!(restored.persistence_contents().unwrap(), compact);
         let edited = recovered.export_project_json().unwrap();
         recovered
-            .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
             .unwrap();
         assert_ne!(recovered.export_project_json().unwrap(), edited);
         recovered
-            .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+            .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
             .unwrap();
         assert_eq!(recovered.export_project_json().unwrap(), edited);
         assert!(
@@ -9591,11 +9635,11 @@ export default sketch(($) => {
             ),
         ];
         for (key, label, value, fixture) in cases {
-            let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+            let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
             bridge
                 .dispatch_json(
                     &serde_json::json!({
-                        "version": 1, "command": "sample.open", "payload": { "key": key },
+                        "version": 2, "command": "sample.open", "payload": { "key": key },
                     })
                     .to_string(),
                 )
@@ -9608,7 +9652,7 @@ export default sketch(($) => {
             bridge
                 .dispatch_json(
                     &serde_json::json!({
-                        "version": 1, "command": "parameter.edit",
+                        "version": 2, "command": "parameter.edit",
                         "payload": { "id": parameter.id, "value": value },
                     })
                     .to_string(),
@@ -9626,14 +9670,14 @@ export default sketch(($) => {
             let receipt = pending_managed_receipt(&bridge, compiled);
             bridge.resolve_pending_managed_mutation(receipt).unwrap();
             bridge
-                .dispatch_json(r#"{"version":1,"command":"history.undo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.undo"}"#)
                 .unwrap();
             bridge
-                .dispatch_json(r#"{"version":1,"command":"history.redo"}"#)
+                .dispatch_json(r#"{"version":2,"command":"history.redo"}"#)
                 .unwrap();
             let persistence = bridge.persistence_contents().unwrap();
             let request =
-                serde_json::json!({ "version": 1, "persistedProject": persistence }).to_string();
+                serde_json::json!({ "version": 2, "persistedProject": persistence }).to_string();
             eprintln!(
                 "{key}: persisted {} bytes, browser request {} bytes",
                 persistence.len(),
@@ -9668,21 +9712,21 @@ export default sketch(($) => {
 
     #[test]
     fn browser_persistence_reproduction_and_trace_transports_are_bounded_and_restorable() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
             .dispatch_json(
-                r#"{"version":1,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
             )
             .unwrap();
         let canonical = bridge.export_project_json().unwrap();
 
         let persisted: serde_json::Value =
             serde_json::from_str(&bridge.persistence_json().unwrap()).unwrap();
-        assert_eq!(persisted["version"], 1);
+        assert_eq!(persisted["version"], 2);
         let persisted_contents = persisted["contents"].as_str().unwrap();
         assert!(persisted_contents.len() <= MAX_REQUEST_BYTES);
         let restored_request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": persisted_contents,
         });
         let restored = WorkbenchBridge::construct_json(&restored_request.to_string()).unwrap();
@@ -9693,7 +9737,7 @@ export default sketch(($) => {
         let reproduction_contents = reproduction["contents"].as_str().unwrap();
         assert!(reproduction_contents.len() <= MAX_REQUEST_BYTES);
         let reproduction_request = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "persistedProject": reproduction_contents,
         });
         let reproduced =
@@ -9702,7 +9746,7 @@ export default sketch(($) => {
 
         bridge
             .pointer_json(
-                r#"{"version":1,"phase":"down","pointerId":7,"x":500,"y":350,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}"#,
+                r#"{"version":2,"phase":"down","pointerId":7,"x":500,"y":350,"buttons":1,"modifiers":{"alt":false,"ctrl":false,"meta":false,"shift":false}}"#,
             )
             .unwrap();
         let trace: serde_json::Value =
@@ -9728,9 +9772,9 @@ export default sketch(($) => {
             .map(|entry| entry["id"].as_str().unwrap())
             .chain(["select"])
         {
-            let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+            let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
             let request = serde_json::json!({
-                "version": 1,
+                "version": 2,
                 "command": "tool.select",
                 "payload": { "id": id },
             });
@@ -9743,9 +9787,9 @@ export default sketch(($) => {
 
     #[test]
     fn canvas_view_actions_do_not_replace_the_active_authoring_tool() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
             .unwrap();
         assert_eq!(bridge.active_tool, "segment");
 
@@ -9753,7 +9797,7 @@ export default sketch(($) => {
             bridge
                 .dispatch_json(
                     &serde_json::json!({
-                        "version": 1,
+                        "version": 2,
                         "command": "tool.select",
                         "payload": { "id": action },
                     })
@@ -9771,7 +9815,7 @@ export default sketch(($) => {
                 &bridge
                     .dispatch_json(
                         &serde_json::json!({
-                            "version": 1,
+                            "version": 2,
                             "command": command,
                         })
                         .to_string(),
@@ -9787,7 +9831,7 @@ export default sketch(($) => {
         let revision = bridge.revision;
         let role_snapshot: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"geometry.authoring-role.toggle"}"#)
+                .dispatch_json(r#"{"version":2,"command":"geometry.authoring-role.toggle"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -9802,12 +9846,12 @@ export default sketch(($) => {
 
     #[test]
     fn selected_curve_role_is_distinct_from_the_new_curve_authoring_role() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
             .unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
             .unwrap();
 
         for (x, y) in [(360, 280), (560, 280)] {
@@ -9815,7 +9859,7 @@ export default sketch(($) => {
                 bridge
                     .pointer_json(
                         &serde_json::json!({
-                            "version": 1,
+                            "version": 2,
                             "phase": phase,
                             "pointerId": 63,
                             "x": x,
@@ -9853,7 +9897,7 @@ export default sketch(($) => {
 
         let toggled: serde_json::Value = serde_json::from_str(
             &bridge
-                .dispatch_json(r#"{"version":1,"command":"geometry.role.toggle"}"#)
+                .dispatch_json(r#"{"version":2,"command":"geometry.role.toggle"}"#)
                 .unwrap(),
         )
         .unwrap();
@@ -9873,12 +9917,12 @@ export default sketch(($) => {
 
     #[test]
     fn complete_preselection_returns_to_select_after_one_shot_authoring() {
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"project.new"}"#)
+            .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
             .unwrap();
         bridge
-            .dispatch_json(r#"{"version":1,"command":"tool.select","payload":{"id":"segment"}}"#)
+            .dispatch_json(r#"{"version":2,"command":"tool.select","payload":{"id":"segment"}}"#)
             .unwrap();
 
         for (x, y) in [(360, 280), (560, 340)] {
@@ -9886,7 +9930,7 @@ export default sketch(($) => {
                 bridge
                     .pointer_json(
                         &serde_json::json!({
-                            "version": 1,
+                            "version": 2,
                             "phase": phase,
                             "pointerId": 64,
                             "x": x,
@@ -9921,7 +9965,7 @@ export default sketch(($) => {
         let applied: serde_json::Value = serde_json::from_str(
             &bridge
                 .dispatch_json(
-                    r#"{"version":1,"command":"tool.select","payload":{"id":"horizontal"}}"#,
+                    r#"{"version":2,"command":"tool.select","payload":{"id":"horizontal"}}"#,
                 )
                 .unwrap(),
         )
@@ -9983,7 +10027,7 @@ export default sketch(($) => {
             assert!(!svg.contains(" on"));
         }
 
-        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":1}"#).unwrap();
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         let snapshot = bridge.snapshot_json().unwrap();
         assert!(!snapshot.contains("geometry-segment"));
         assert!(!snapshot.contains("toolCatalog"));

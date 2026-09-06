@@ -75,7 +75,7 @@ async function resolvePreparedManagedMutation(
   try {
     const { applyManagedSketchMutation, compileManagedSource } = await import("./managed-compiler");
     const compilerContext = await adapter.managedCompilerContext();
-    if (compilerContext.version !== 1) {
+    if (compilerContext.version !== 2) {
       throw new Error("Unsupported managed compiler context");
     }
     const options = { patches: compilerContext.patches as never };
@@ -103,7 +103,7 @@ async function resolvePreparedManagedMutation(
       MANAGED_COMPILER_DIAGNOSTIC_LIMIT,
     );
     const restored = await adapter.dispatch({
-      version: 1,
+      version: 2,
       command: "managed.mutation.abort",
       payload: { ticketDigest, candidateSource, diagnostic, span: failure.span },
     });
@@ -111,7 +111,7 @@ async function resolvePreparedManagedMutation(
   }
 
   const resolved = await adapter.dispatch({
-    version: 1,
+    version: 2,
     command: "managed.mutation.resolve",
     payload: resolutionPayload,
   });
@@ -119,7 +119,7 @@ async function resolvePreparedManagedMutation(
   const rejection = terminalNativeRejection(checked, pending);
   if (rejection) {
     const restored = await adapter.dispatch({
-      version: 1,
+      version: 2,
       command: "managed.mutation.abort",
       payload: {
         ticketDigest,

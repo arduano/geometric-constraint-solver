@@ -16,7 +16,7 @@ const catalog = {
   ],
   geometryRole: tool("inspector.geometry-role", "geometry-role", "Toggle Profile / Construction", "geometry-role-construction"),
 };
-const snapshot: WorkbenchSnapshot = { version: 1, revision: 0, project: { title: "Bridge", status: "accepted" }, presentation: { activeTool: "select", gridVisible: true, constructionVisible: true, visibilityRestoreAvailable: false, canUndo: false, canRedo: false, canFinish: false, geometryRole: "profile" }, frame: { svg: "<svg/>", ariaLabel: "frame" }, source: { selectedPath: "", files: [], dirty: false }, explorer: [], parameters: [], problems: [] };
+const snapshot: WorkbenchSnapshot = { version: 2, revision: 0, project: { title: "Bridge", status: "accepted" }, presentation: { activeTool: "select", gridVisible: true, constructionVisible: true, visibilityRestoreAvailable: false, canUndo: false, canRedo: false, canFinish: false, geometryRole: "profile" }, frame: { scene: { format: "geosolve-draw-frame-v1", viewBox: [0, 0, 1000, 700], background: "#121617", provenance: { scene: "none" }, items: [] }, ariaLabel: "frame" }, source: { selectedPath: "", files: [], dirty: false }, explorer: [], parameters: [], problems: [] };
 
 class FakeHandle implements JsonWorkbenchHandle {
   static requests: string[] = [];
@@ -24,16 +24,16 @@ class FakeHandle implements JsonWorkbenchHandle {
   constructor(request: string) { FakeHandle.requests.push(request); }
   snapshot() { return JSON.stringify(snapshot); }
   toolCatalog() { FakeHandle.catalogReads += 1; return JSON.stringify(catalog); }
-  managedCompilerContext() { return JSON.stringify({ version: 1, patches: {} }); }
+  managedCompilerContext() { return JSON.stringify({ version: 2, patches: {} }); }
   dispatch(request: string) { FakeHandle.requests.push(request); return JSON.stringify({ ...snapshot, revision: 1 }); }
   pointer() { return "null"; }
   wheel() { return "null"; }
   resize() { return "null"; }
   cancel() { return JSON.stringify(snapshot); }
-  exportProject() { return JSON.stringify({ version: 1, filename: "project.json", contents: "{}" }); }
-  persistProject() { return JSON.stringify({ version: 1, contents: "{}" }); }
-  exportReproduction() { return JSON.stringify({ version: 1, filename: "repro.txt", contents: "repro" }); }
-  exportInteractionTrace() { return JSON.stringify({ version: 1, filename: "trace.txt", contents: "trace" }); }
+  exportProject() { return JSON.stringify({ version: 2, filename: "project.json", contents: "{}" }); }
+  persistProject() { return JSON.stringify({ version: 2, contents: "{}" }); }
+  exportReproduction() { return JSON.stringify({ version: 2, filename: "repro.txt", contents: "repro" }); }
+  exportInteractionTrace() { return JSON.stringify({ version: 2, filename: "trace.txt", contents: "trace" }); }
   intentRpc(request: string) { return request; }
   codeControlRpc(request: string) { return request; }
 }
@@ -43,15 +43,15 @@ describe("WasmWorkbenchAdapter", () => {
     FakeHandle.requests = [];
     FakeHandle.catalogReads = 0;
     const adapter = new WasmWorkbenchAdapter(FakeHandle);
-    expect((await adapter.construct({ version: 1 })).project.title).toBe("Bridge");
+    expect((await adapter.construct({ version: 2 })).project.title).toBe("Bridge");
     expect((await adapter.snapshot()).presentation.canFinish).toBe(false);
     expect((await adapter.toolCatalog()).sections).toHaveLength(4);
     expect((await adapter.toolCatalog()).sections[0]?.commands[0]?.icon.key).toBe("geometry-segment");
     expect((await adapter.managedCompilerContext()).patches).toEqual({});
     expect(FakeHandle.catalogReads).toBe(1);
-    expect((await adapter.dispatch({ version: 1, command: "project.new" })).revision).toBe(1);
-    expect(await adapter.resize({ version: 1, width: 1024, height: 720, pixelRatio: 1 })).toBeNull();
-    expect(FakeHandle.requests.map((request) => JSON.parse(request))).toEqual([{ version: 1 }, { version: 1, command: "project.new" }]);
+    expect((await adapter.dispatch({ version: 2, command: "project.new" })).revision).toBe(1);
+    expect(await adapter.resize({ version: 2, width: 1024, height: 720, pixelRatio: 1 })).toBeNull();
+    expect(FakeHandle.requests.map((request) => JSON.parse(request))).toEqual([{ version: 2 }, { version: 2, command: "project.new" }]);
   });
   it("recovers legacy persistence from unchanged raw bytes and replaces only a validated handle", async () => {
     const freed: string[] = [];
@@ -72,19 +72,19 @@ describe("WasmWorkbenchAdapter", () => {
       }
     }
     const adapter = new WasmWorkbenchAdapter(RecoveringHandle);
-    await adapter.construct({ version: 1 });
-    await expect(adapter.construct({ version: 1, persistedProject: "bad legacy" })).rejects.toThrow("legacy validation rejected");
+    await adapter.construct({ version: 2 });
+    await expect(adapter.construct({ version: 2, persistedProject: "bad legacy" })).rejects.toThrow("legacy validation rejected");
     expect(freed).toEqual([]);
     expect((await adapter.snapshot()).project.title).toBe("Bridge");
-    await expect(adapter.construct({ version: 1, persistedProject: "bad snapshot" })).rejects.toThrow();
+    await expect(adapter.construct({ version: 2, persistedProject: "bad snapshot" })).rejects.toThrow();
     expect(freed).toEqual(["invalid candidate"]);
     expect((await adapter.snapshot()).project.title).toBe("Bridge");
     // Duplicate keys are intentionally retained for Rust to reject; JS must not
     // normalize the incoming string before forwarding it.
     const original = '{"format":"legacy","format":"duplicate"}';
-    await adapter.construct({ version: 1, persistedProject: original });
+    await adapter.construct({ version: 2, persistedProject: original });
     expect(recovered).toEqual(["bad legacy", "bad snapshot", original]);
-    expect(freed).toEqual(["invalid candidate", '{"version":1}']);
+    expect(freed).toEqual(["invalid candidate", '{"version":2}']);
   });
 
 });

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createCanvasRenderer, type CanvasRenderer, type RendererState } from "../lib/canvas-renderer";
 import type { WorkbenchAdapter, WorkbenchSnapshot } from "../lib/adapter";
 
 interface CanvasViewportProps {
@@ -12,6 +13,9 @@ interface CanvasViewportProps {
 
 export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange, onError }: CanvasViewportProps) {
   const host = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const renderer = useRef<CanvasRenderer | null>(null);
+  const [renderState, setRenderState] = useState<RendererState>("initializing");
   const capturedPointer = useRef<number | null>(null);
 
   const retireCapture = (pointerId: number) => {
@@ -23,7 +27,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
 
   const cancelCapturedPointer = (pointerId: number) => {
     if (!retireCapture(pointerId)) return;
-    void adapter.cancel({ version: 1, reason: "lost-capture" }).then((next) => next && onSnapshot(next)).catch(onError);
+    void adapter.cancel({ version: 2, reason: "lost-capture" }).then((next) => next && onSnapshot(next)).catch(onError);
   };
 
   const sendPointer = async (event: React.PointerEvent, phase: "down" | "move" | "up") => {
@@ -49,7 +53,7 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
       retireCapture(event.pointerId);
     }
     try {
-      const next = await adapter.pointer({ version: 1, phase, pointerId: event.pointerId, x: event.clientX - bounds.left, y: event.clientY - bounds.top, buttons: event.buttons, modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey } });
+      const next = await adapter.pointer({ version: 2, phase, pointerId: event.pointerId, x: event.clientX - bounds.left, y: event.clientY - bounds.top, buttons: event.buttons, modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey } });
       if (next) onSnapshot(next);
     } catch (error) {
       onError(error);
@@ -57,14 +61,39 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
   };
 
   useEffect(() => {
+    if (!canvas.current) return;
+    const active = createCanvasRenderer(canvas.current, { onState: setRenderState });
+    renderer.current = active;
+    return () => { active.destroy(); renderer.current = null; };
+  }, []);
+
+  useEffect(() => { renderer.current?.accept(snapshot.frame.scene); }, [snapshot.frame.scene]);
+
+  useEffect(() => {
     const element = host.current;
     if (!element) return;
+    let media: MediaQueryList | null = null;
+    let size = { width: 0, height: 0 };
+    const resize = () => {
+      const pixelRatio = window.devicePixelRatio || 1;
+      renderer.current?.resize({ ...size, pixelRatio });
+      if (size.width <= 0 || size.height <= 0) return;
+      void adapter.resize({ version: 2, ...size, pixelRatio }).then((next) => next && onSnapshot(next)).catch(onError);
+    };
+    const watchPixelRatio = () => {
+      media?.removeEventListener("change", changedPixelRatio);
+      media = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      media.addEventListener("change", changedPixelRatio);
+    };
+    const changedPixelRatio = () => { resize(); watchPixelRatio(); };
     const observer = new ResizeObserver(([entry]) => {
-      if (entry.contentRect.width <= 0 || entry.contentRect.height <= 0) return;
-      void adapter.resize({ version: 1, width: entry.contentRect.width, height: entry.contentRect.height, pixelRatio: window.devicePixelRatio }).then((next) => next && onSnapshot(next)).catch(onError);
+      size = { width: entry.contentRect.width, height: entry.contentRect.height };
+      resize();
     });
     observer.observe(element);
-    return () => observer.disconnect();
+    watchPixelRatio();
+    window.addEventListener("resize", resize);
+    return () => { observer.disconnect(); media?.removeEventListener("change", changedPixelRatio); window.removeEventListener("resize", resize); };
   }, [adapter, onError, onSnapshot]);
 
   return (
@@ -79,8 +108,12 @@ export function CanvasViewport({ adapter, snapshot, onSnapshot, onCaptureChange,
       onPointerUp={(event) => void sendPointer(event, "up")}
       onPointerCancel={(event) => cancelCapturedPointer(event.pointerId)}
       onLostPointerCapture={(event) => cancelCapturedPointer(event.pointerId)}
-      onWheel={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); void adapter.wheel({ version: 1, x: event.clientX - bounds.left, y: event.clientY - bounds.top, deltaX: event.deltaX, deltaY: event.deltaY, ctrl: event.ctrlKey }).then((next) => next && onSnapshot(next)).catch(onError); }}
-      dangerouslySetInnerHTML={{ __html: snapshot.frame.svg }}
-    />
+      onWheel={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); void adapter.wheel({ version: 2, x: event.clientX - bounds.left, y: event.clientY - bounds.top, deltaX: event.deltaX, deltaY: event.deltaY, ctrl: event.ctrlKey }).then((next) => next && onSnapshot(next)).catch(onError); }}
+    >
+      <canvas ref={canvas} className="geosolve-canvas" aria-hidden="true" />
+      {renderState !== "ready" && <div className="geosolve-render-status" role="status">
+        {renderState === "lost" ? "Graphics connection lost. Waiting for recovery…" : renderState === "unavailable" ? "WebGL2 is unavailable. Enable graphics acceleration to show this sketch." : "Preparing sketch…"}
+      </div>}
+    </div>
   );
 }

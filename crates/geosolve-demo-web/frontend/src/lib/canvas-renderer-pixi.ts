@@ -1,0 +1,179 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import "pixi.js/filters";
+import { BlurFilter, CanvasTextMetrics, Color, Container, Graphics, Text, TextStyle, WebGLRenderer } from "pixi.js";
+import type { DrawFrame, DrawItem, DrawPoint } from "./canvas-scene";
+import { dashedSegments, fitDrawing, textRasterOrigin } from "./canvas-renderer-geometry";
+
+export interface CanvasSurface { width: number; height: number; pixelRatio: number }
+export interface BackendStats { resources: number; created: number; destroyed: number; updated: number; rasterResolution?: number }
+export interface CanvasBackend {
+  readonly hardware: Readonly<Record<string, string>>;
+  render(frame: DrawFrame, surface: CanvasSurface): BackendStats;
+  destroy(): void;
+}
+interface Entry { container: Container; content: Graphics | Text; shadow: Graphics | null; blur: BlurFilter | null; signature: string; kind: DrawItem["kind"]; textSignature: string }
+
+function colorValue(value: string) { const color = new Color(value); return { color: color.toNumber(), alpha: color.alpha }; }
+function contour(item: Exclude<DrawItem, { kind: "text" }>, map: (p: DrawPoint) => DrawPoint, scale: number): { points: DrawPoint[]; closed: boolean } {
+  if (item.kind === "polyline") return { points: item.points.map(map), closed: item.closed };
+  if (item.kind === "rect") {
+    const [x, y] = map([item.x, item.y]); const [w, h] = [item.width * scale, item.height * scale];
+    const radius = Math.min(item.radius * scale, w / 2, h / 2);
+    if (!radius) return { points: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], closed: true };
+    const points: DrawPoint[] = [];
+    for (const [cx, cy, start] of [[x + w - radius, y + radius, -Math.PI / 2], [x + w - radius, y + h - radius, 0], [x + radius, y + h - radius, Math.PI / 2], [x + radius, y + radius, Math.PI]]) {
+      const steps = Math.max(4, Math.ceil(Math.PI / 2 / Math.acos(Math.max(-1, 1 - 0.1 / radius))));
+      for (let i = 0; i <= steps; i++) { const t = start + i / steps * Math.PI / 2; points.push([cx + radius * Math.cos(t), cy + radius * Math.sin(t)]); }
+    }
+    return { points, closed: true };
+  }
+  const center = map(item.center);
+  const radii = item.kind === "circle" ? [item.radius * scale, item.radius * scale] : item.radii.map((v) => v * scale);
+  const rotation = item.kind === "ellipse" ? item.rotation : 0;
+  const maximum = Math.max(...radii);
+  const count = Math.max(16, Math.ceil(Math.PI * 2 / Math.acos(Math.max(-1, 1 - 0.1 / Math.max(maximum, 0.1)))));
+  const points: DrawPoint[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / count * Math.PI * 2; const x = radii[0] * Math.cos(t); const y = radii[1] * Math.sin(t);
+    points.push([center[0] + x * Math.cos(rotation) - y * Math.sin(rotation), center[1] + x * Math.sin(rotation) + y * Math.cos(rotation)]);
+  }
+  return { points, closed: true };
+}
+function path(graphics: Graphics, points: DrawPoint[], closed: boolean) {
+  if (!points.length) return;
+  graphics.moveTo(...points[0]);
+  for (const point of points.slice(1)) graphics.lineTo(...point);
+  if (closed) graphics.closePath();
+}
+function paint(graphics: Graphics, item: Exclude<DrawItem, { kind: "text" }>, map: (p: DrawPoint) => DrawPoint, scale: number, shadow?: string) {
+  graphics.clear();
+  const { style } = item;
+  const strokeScale = style.nonScalingStroke ? 1 : scale;
+  const paintColor = (value: string) => {
+    const original = colorValue(value);
+    if (!shadow) return original;
+    const halo = colorValue(shadow);
+    return { color: halo.color, alpha: halo.alpha * original.alpha };
+  };
+  const drawShape = () => {
+    if (item.kind === "polyline") path(graphics, item.points.map(map), item.closed);
+    else if (item.kind === "circle") graphics.circle(...map(item.center), item.radius * scale);
+    else if (item.kind === "ellipse") {
+      const center = map(item.center);
+      graphics.context.translate(...center).rotate(item.rotation).ellipse(0, 0, item.radii[0] * scale, item.radii[1] * scale).resetTransform();
+    } else graphics.roundRect(...map([item.x, item.y]), item.width * scale, item.height * scale, item.radius * scale);
+  };
+  if (style.fill) { drawShape(); graphics.fill(paintColor(style.fill)); }
+  if (style.stroke && style.strokeWidth > 0) {
+    const stroke = { ...paintColor(style.stroke), width: style.strokeWidth * strokeScale, cap: style.lineCap, join: style.lineJoin };
+    if (style.dash.length) {
+      const outline = contour(item, map, scale);
+      for (const segment of dashedSegments(outline.points, outline.closed, style.dash.map((length) => length * strokeScale))) { path(graphics, segment, false); graphics.stroke(stroke); }
+    } else { drawShape(); graphics.stroke(stroke); }
+  }
+}
+
+export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<CanvasBackend> {
+  // Request precisely WebGL2. Never silently fall back to software Canvas2D or WebGL1.
+  const gl = canvas.getContext("webgl2", { alpha: false, antialias: true, stencil: true, preserveDrawingBuffer: true, premultipliedAlpha: true });
+  if (!gl) throw new Error("WebGL2 is unavailable");
+  const renderer = new WebGLRenderer();
+  try {
+    await renderer.init({ canvas, context: gl, width: 1, height: 1, resolution: 1, antialias: true, backgroundAlpha: 1, clearBeforeRender: true, manageImports: false, gcActive: false, eventMode: "none", eventFeatures: { move: false, globalMove: false, click: false, wheel: false } });
+  } catch (error) { try { renderer.destroy({ removeView: false }); } catch { /* Partial initialization may not own all systems yet. */ } throw error; }
+  if (renderer.context.webGLVersion !== 2) { renderer.destroy({ removeView: false }); throw new Error("The renderer did not acquire WebGL2"); }
+  // A bare Pixi renderer otherwise starts a system ticker for events/GC. The host
+  // owns pointer routing and presentation is strictly on demand; collect only after draws.
+  // Pixi 8.20.1 documents and implements null detachment but omits it in the declaration.
+  if (renderer.events) {
+    const detachEvents = renderer.events.setTargetElement.bind(renderer.events) as (element: HTMLElement | null) => void;
+    detachEvents(null);
+  }
+  renderer.scheduler.destroy();
+  const debug = gl.getExtension("WEBGL_debug_renderer_info");
+  const hardware = Object.freeze({ api: "WebGL2", vendor: String(gl.getParameter(debug?.UNMASKED_VENDOR_WEBGL ?? gl.VENDOR)), renderer: String(gl.getParameter(debug?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER)), version: String(gl.getParameter(gl.VERSION)) });
+  const stage = new Container({ eventMode: "none", interactiveChildren: false });
+  const entries = new Map<string, Entry>();
+  let surfaceKey = "";
+  let created = 0; let destroyed = 0; let updated = 0; let disposed = false;
+  function remove(entry: Entry) {
+    entry.blur?.destroy();
+    entry.container.destroy({ children: true, texture: true, textureSource: true });
+    destroyed++;
+  }
+  return {
+    hardware,
+    render(frame, surface) {
+      if (disposed || gl.isContextLost()) throw new Error("WebGL2 context is unavailable for presentation");
+      // Supersample low-DPR displays so thin CAD strokes and small dimension
+      // text retain subpixel coverage comparable to the SVG baseline.
+      const rasterResolution = Math.max(2, surface.pixelRatio);
+      const nextSurface = `${surface.width}:${surface.height}:${surface.pixelRatio}`;
+      if (nextSurface !== surfaceKey) { renderer.resize(surface.width, surface.height, rasterResolution); surfaceKey = nextSurface; }
+      renderer.background.color = frame.background;
+      const fit = fitDrawing(frame.viewBox, surface.width, surface.height);
+      const map = (p: DrawPoint): DrawPoint => [fit.x + p[0] * fit.scale, fit.y + p[1] * fit.scale];
+      const present = new Set(frame.items.map((item) => item.id));
+      for (const [id, entry] of entries) if (!present.has(id)) { remove(entry); entries.delete(id); }
+      frame.items.forEach((item, index) => {
+        let entry = entries.get(item.id);
+        if (entry && entry.kind !== item.kind) { remove(entry); entries.delete(item.id); entry = undefined; }
+        if (!entry) {
+          const container = new Container({ eventMode: "none", interactiveChildren: false });
+          const content = item.kind === "text" ? new Text({ text: "", resolution: rasterResolution }) : new Graphics();
+          container.addChild(content); stage.addChild(container);
+          entry = { container, content, shadow: null, blur: null, signature: "", kind: item.kind, textSignature: "" };
+          entries.set(item.id, entry); created++;
+        }
+        // Paint order is explicitly native-authored; semantic keys do not reorder anything.
+        stage.setChildIndex(entry.container, index);
+        const signature = `${JSON.stringify(item)}:${nextSurface}:${JSON.stringify(frame.viewBox)}`;
+        if (entry.signature === signature) return;
+        const { style } = item;
+        entry.container.alpha = style.opacity;
+        if (item.kind === "text" && entry.content instanceof Text) {
+          const text = entry.content;
+          const textSignature = JSON.stringify([item.text, style, fit.scale, rasterResolution]);
+          if (textSignature !== entry.textSignature) {
+            const textStyle = new TextStyle({ fontFamily: style.fontFamily.split(",").map((font) => font.trim().replace(/^['"]|['"]$/g, "")), fontSize: style.fontSize * fit.scale,
+              fontWeight: String(style.fontWeight) as "400", fill: style.fill ? colorValue(style.fill) : { color: 0, alpha: 0 },
+              stroke: style.stroke ? { ...colorValue(style.stroke), width: style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale), join: style.lineJoin } : undefined,
+              textBaseline: "alphabetic", letterSpacing: style.letterSpacing * fit.scale, padding: Math.max(style.strokeWidth, style.shadow?.blur ?? 0) * 2,
+              dropShadow: style.shadow ? { ...colorValue(style.shadow.color), blur: style.shadow.blur, distance: Math.hypot(...style.shadow.offset), angle: Math.atan2(style.shadow.offset[1], style.shadow.offset[0]) } : false });
+            text.text = item.text; text.style = textStyle; text.resolution = rasterResolution;
+            text.anchor.set(0, 0);
+            const metrics = CanvasTextMetrics.measureText(item.text, textStyle);
+            const origin = textRasterOrigin(metrics, style.textAnchor, style.textBaseline, style.stroke ? style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale) : 0);
+            text.pivot.set(origin.x, origin.y);
+            entry.textSignature = textSignature;
+          }
+          text.position.set(...map(item.position)); text.rotation = item.rotation;
+        } else if (item.kind !== "text" && entry.content instanceof Graphics) {
+          paint(entry.content, item, map, fit.scale);
+          if (style.shadow) {
+            if (!entry.shadow) { entry.shadow = new Graphics(); entry.container.addChildAt(entry.shadow, 0); }
+            paint(entry.shadow, item, map, fit.scale, style.shadow.color);
+            entry.shadow.position.set(...style.shadow.offset);
+            if (!entry.blur) entry.blur = new BlurFilter({ strength: style.shadow.blur, quality: 4 });
+            entry.blur.strength = style.shadow.blur;
+            entry.shadow.filters = style.shadow.blur ? [entry.blur] : [];
+          } else if (entry.shadow) { entry.shadow.destroy(); entry.shadow = null; entry.blur?.destroy(); entry.blur = null; }
+        }
+        entry.signature = signature; updated++;
+      });
+      renderer.render({ container: stage });
+      renderer.gc.run();
+      gl.flush();
+      const error = gl.getError();
+      if (error !== gl.NO_ERROR) throw new Error(`WebGL2 presentation failed with error ${error}`);
+      if (gl.isContextLost()) throw new Error("WebGL2 context was lost during presentation");
+      return { resources: entries.size, created, destroyed, updated, rasterResolution };
+    },
+    destroy() {
+      if (disposed) return;
+      disposed = true;
+      for (const entry of entries.values()) remove(entry);
+      entries.clear(); stage.destroy(); renderer.destroy({ removeView: false });
+    },
+  };
+}

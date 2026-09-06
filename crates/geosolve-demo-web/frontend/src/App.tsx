@@ -163,7 +163,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       }
       const persistedProject = storedProject.value ?? undefined;
       try {
-        await install(await adapter.construct({ version: 1, persistedProject }));
+        await install(await adapter.construct({ version: 2, persistedProject }));
       }
       catch (error) {
         if (startupRequest.current !== request) return;
@@ -173,7 +173,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
         }
         projectAutosaveSafe.current = false;
         try {
-          const installed = await install(await adapter.construct({ version: 1 }));
+          const installed = await install(await adapter.construct({ version: 2 }));
           if (!installed) return;
           if (!storedProject.autosaveSafe) {
             setActionError(`The fallback saved workspace could not be restored: ${errorText(error)}; IndexedDB authority was unread, so the existing browser data was retained and automatic project saving remains paused until you use Save in browser.`);
@@ -215,7 +215,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   }, [acceptSnapshot, reportError]);
   const command = useCallback(async (name: string, payload?: unknown) => {
     try {
-      const next = await adapter.dispatch({ version: 1, command: name, payload });
+      const next = await adapter.dispatch({ version: 2, command: name, payload });
       if (projectAutosaveSafe.current) setActionError(null);
       const accepted = await acceptSnapshot(next);
       if (DURABLE_REPLACEMENT_COMMANDS.has(name)) {
@@ -235,7 +235,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   }, [acceptSnapshot, adapter, queueProjectSave, reportError]);
   const verifiedCommand = useCallback(async (name: string, payload?: unknown) => {
     try {
-      const next = assertWorkbenchSnapshot(await adapter.dispatch({ version: 1, command: name, payload }));
+      const next = assertWorkbenchSnapshot(await adapter.dispatch({ version: 2, command: name, payload }));
       if (projectAutosaveSafe.current) setActionError(null);
       return await acceptSnapshot(next);
     } catch (error) {
@@ -294,7 +294,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       if (event.key !== "Escape") return;
       if (reproOpen) { event.preventDefault(); setReproOpen(false); return; }
       if (transient.active) { event.preventDefault(); transient.close(true); return; }
-      if (capturedGesture) { event.preventDefault(); setCapturedGesture(false); void adapter.cancel({ version: 1, reason: "escape" }).then((next) => next && acceptSnapshot(next)).catch(reportError); return; }
+      if (capturedGesture) { event.preventDefault(); setCapturedGesture(false); void adapter.cancel({ version: 2, reason: "escape" }).then((next) => next && acceptSnapshot(next)).catch(reportError); return; }
       if (activeTool !== "select") { event.preventDefault(); chooseTool("select"); queueMicrotask(() => document.querySelector<HTMLElement>('[aria-label="Select"]')?.focus()); }
     };
     document.addEventListener("keydown", onWorkspaceKey);

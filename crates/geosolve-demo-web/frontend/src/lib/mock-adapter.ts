@@ -60,13 +60,17 @@ function mockExplorer(): DeclarationRow[] {
 
 function initialSnapshot(): WorkbenchSnapshot {
   return {
-    version: 1,
+    version: 2,
     revision: 1,
     project: { title: "Untitled sketch", status: "accepted" },
     presentation: { activeTool: "select", gridVisible: true, constructionVisible: true, visibilityRestoreAvailable: false, canUndo: false, canRedo: false, canFinish: false, geometryRole: "profile" },
     frame: {
       ariaLabel: "Accepted GeoSolve sketch viewport",
-      svg: `<svg viewBox="0 0 900 600" role="img" aria-label="Empty accepted sketch"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M 24 0 L 0 0 0 24" fill="none" stroke="#353a40" stroke-width="1"/></pattern></defs><rect width="900" height="600" fill="url(#grid)"/><path d="M180 390 L430 390 L610 210" fill="none" stroke="#e7a83e" stroke-width="3"/><circle cx="180" cy="390" r="6" fill="#f1c36d"/><circle cx="610" cy="210" r="6" fill="#f1c36d"/></svg>`,
+      scene: {
+        format: "geosolve-draw-frame-v1", viewBox: [0, 0, 1000, 700], background: "#121617",
+        provenance: { scene: "accepted", document: "mock", revision: "1" },
+        items: [],
+      },
     },
     source: { selectedPath: "sketch.ts", dirty: false, files: [{ path: "sketch.ts", language: "typescript", contents: SOURCE, readOnly: false }, { path: "fillets.ts", language: "typescript", contents: "export const radius = 4;\n", readOnly: true }] },
     explorer: mockExplorer(),
@@ -89,10 +93,10 @@ function initialSnapshot(): WorkbenchSnapshot {
 export class MockWorkbenchAdapter implements WorkbenchAdapter {
   protected state = initialSnapshot();
   private visibilityRestore: Map<string, boolean> | null = null;
-  async construct(_input?: { version: 1; persistedProject?: string }): Promise<WorkbenchSnapshot> { return structuredClone(this.state); }
+  async construct(_input?: { version: 2; persistedProject?: string }): Promise<WorkbenchSnapshot> { return structuredClone(this.state); }
   async toolCatalog(): Promise<ToolCatalog> { return structuredClone(MOCK_TOOL_CATALOG); }
   async snapshot(): Promise<WorkbenchSnapshot> { return structuredClone(this.state); }
-  async managedCompilerContext() { return { version: 1 as const, patches: {} }; }
+  async managedCompilerContext() { return { version: 2 as const, patches: {} }; }
   async dispatch(input: { command: string; payload?: unknown }): Promise<WorkbenchSnapshot> {
     if (input.command === "managed.mutation.resolve") {
       const pending = this.state.pendingManagedMutation;
@@ -252,11 +256,11 @@ export class MockWorkbenchAdapter implements WorkbenchAdapter {
   async pointer(_input: PointerSample): Promise<WorkbenchSnapshot | null> { return null; }
   async wheel(): Promise<WorkbenchSnapshot | null> { return null; }
   async resize(): Promise<WorkbenchSnapshot | null> { return null; }
-  async cancel(_input: { version: 1; reason: "escape" | "lost-capture" | "blur" }): Promise<WorkbenchSnapshot | null> { return null; }
-  async exportProject() { return { version: 1 as const, filename: "project.json", contents: JSON.stringify(this.state, null, 2) }; }
-  async persistProject() { return { version: 1 as const, contents: JSON.stringify(this.state) }; }
-  async exportReproduction() { return { version: 1 as const, filename: "geosolve-reproduction.txt", contents: JSON.stringify(this.state) }; }
-  async exportInteractionTrace() { return { version: 1 as const, filename: "geosolve-interaction-trace.txt", contents: "No interaction trace events recorded." }; }
+  async cancel(_input: { version: 2; reason: "escape" | "lost-capture" | "blur" }): Promise<WorkbenchSnapshot | null> { return null; }
+  async exportProject() { return { version: 2 as const, filename: "project.json", contents: JSON.stringify(this.state, null, 2) }; }
+  async persistProject() { return { version: 2 as const, contents: JSON.stringify(this.state) }; }
+  async exportReproduction() { return { version: 2 as const, filename: "geosolve-reproduction.txt", contents: JSON.stringify(this.state) }; }
+  async exportInteractionTrace() { return { version: 2 as const, filename: "geosolve-interaction-trace.txt", contents: "No interaction trace events recorded." }; }
 }
 
 function findDeclaration(rows: DeclarationRow[], id: string): DeclarationRow | undefined {

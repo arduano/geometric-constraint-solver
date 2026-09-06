@@ -44,7 +44,7 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
 
   constructor(private readonly Handle: JsonWorkbenchHandleConstructor) {}
 
-  async construct(input: { version: 1; persistedProject?: string }): Promise<WorkbenchSnapshot> {
+  async construct(input: { version: 2; persistedProject?: string }): Promise<WorkbenchSnapshot> {
     let candidate: JsonWorkbenchHandle;
     try {
       candidate = new this.Handle(JSON.stringify(input));
@@ -73,16 +73,16 @@ export class WasmWorkbenchAdapter implements WorkbenchAdapter {
     return this.catalog;
   }
   async snapshot() { return decodeSnapshot(this.required().snapshot()); }
-  async dispatch(input: { version: 1; command: string; payload?: unknown }) { return decodeSnapshot(this.required().dispatch(JSON.stringify(input))); }
-  async managedCompilerContext() { return JSON.parse(this.required().managedCompilerContext()) as { version: 1; patches: Record<string, unknown> }; }
+  async dispatch(input: { version: 2; command: string; payload?: unknown }) { return decodeSnapshot(this.required().dispatch(JSON.stringify(input))); }
+  async managedCompilerContext() { return JSON.parse(this.required().managedCompilerContext()) as { version: 2; patches: Record<string, unknown> }; }
   async pointer(input: PointerSample) { return decodeOptionalSnapshot(this.required().pointer(JSON.stringify(input))); }
-  async wheel(input: { version: 1; x: number; y: number; deltaX: number; deltaY: number; ctrl: boolean }) { return decodeOptionalSnapshot(this.required().wheel(JSON.stringify(input))); }
-  async resize(input: { version: 1; width: number; height: number; pixelRatio: number }) { return decodeOptionalSnapshot(this.required().resize(JSON.stringify(input))); }
-  async cancel(input: { version: 1; reason: "escape" | "lost-capture" | "blur" }) { return decodeOptionalSnapshot(this.required().cancel(JSON.stringify(input))); }
-  async exportProject() { return JSON.parse(this.required().exportProject()) as { version: 1; filename: string; contents: string }; }
-  async persistProject() { return JSON.parse(this.required().persistProject()) as { version: 1; contents: string }; }
-  async exportReproduction() { return JSON.parse(this.required().exportReproduction()) as { version: 1; filename: string; contents: string }; }
-  async exportInteractionTrace() { return JSON.parse(this.required().exportInteractionTrace()) as { version: 1; filename: string; contents: string }; }
+  async wheel(input: { version: 2; x: number; y: number; deltaX: number; deltaY: number; ctrl: boolean }) { return decodeOptionalSnapshot(this.required().wheel(JSON.stringify(input))); }
+  async resize(input: { version: 2; width: number; height: number; pixelRatio: number }) { return decodeOptionalSnapshot(this.required().resize(JSON.stringify(input))); }
+  async cancel(input: { version: 2; reason: "escape" | "lost-capture" | "blur" }) { return decodeOptionalSnapshot(this.required().cancel(JSON.stringify(input))); }
+  async exportProject() { return JSON.parse(this.required().exportProject()) as { version: 2; filename: string; contents: string }; }
+  async persistProject() { return JSON.parse(this.required().persistProject()) as { version: 2; contents: string }; }
+  async exportReproduction() { return JSON.parse(this.required().exportReproduction()) as { version: 2; filename: string; contents: string }; }
+  async exportInteractionTrace() { return JSON.parse(this.required().exportInteractionTrace()) as { version: 2; filename: string; contents: string }; }
 
   applyIntentRpc(request: string) { return this.required().intentRpc(request); }
   applyCodeControlRpc(request: string) { return this.required().codeControlRpc(request); }

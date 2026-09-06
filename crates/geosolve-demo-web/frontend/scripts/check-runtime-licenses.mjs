@@ -16,7 +16,7 @@ if (JSON.stringify(declaredRuntime) !== JSON.stringify(lockedRuntime)) {
   throw new Error("package.json runtime dependencies drifted from package-lock.json");
 }
 
-const permitted = new Set(["0BSD", "Apache-2.0", "ISC", "MIT"]);
+const permitted = new Set(["0BSD", "Apache-2.0", "BSD-3-Clause", "ISC", "MIT"]);
 const runtimePackages = Object.entries(lock.packages)
   .filter(([path, metadata]) => path && metadata.dev !== true)
   .map(([path, metadata]) => ({

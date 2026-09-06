@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import type { ToolCatalog } from "./tool-catalog";
+import { assertDrawFrame, type DrawFrame } from "./canvas-scene";
 import type {
   CompiledManagedSource,
   ManagedSketchMutation,
 } from "./managed-compiler";
 
-export const WORKBENCH_PROTOCOL_VERSION = 1 as const;
+export const WORKBENCH_PROTOCOL_VERSION = 2 as const;
 
 export type WorkspaceMode = "design" | "split" | "code";
 export type ProjectStatus = "accepted" | "dirty" | "failed";
@@ -126,7 +127,7 @@ export interface WorkbenchSnapshot {
   revision: number;
   project: { title: string; sampleKey?: string; status: ProjectStatus };
   presentation: { activeTool: string; gridVisible: boolean; constructionVisible: boolean; visibilityRestoreAvailable: boolean; canUndo: boolean; canRedo: boolean; canFinish: boolean; geometryRole: "profile" | "construction"; selectedGeometryRole?: "profile" | "construction" | "mixed" };
-  frame: { svg: string; ariaLabel: string };
+  frame: { scene: DrawFrame; ariaLabel: string };
   source: { selectedPath: string; files: SourceFileSnapshot[]; dirty: boolean };
   explorer: DeclarationRow[];
   selection?: { id: string; label: string; kind: string; ownership?: string; source?: { path: string; from: number; to: number } };
@@ -146,22 +147,24 @@ export interface PointerSample {
 }
 
 export interface WorkbenchAdapter {
-  construct(input: { version: 1; persistedProject?: string }): Promise<WorkbenchSnapshot>;
+  construct(input: { version: 2; persistedProject?: string }): Promise<WorkbenchSnapshot>;
   toolCatalog(): Promise<ToolCatalog>;
   snapshot(): Promise<WorkbenchSnapshot>;
-  dispatch(input: { version: 1; command: string; payload?: unknown }): Promise<WorkbenchSnapshot>;
-  managedCompilerContext(): Promise<{ version: 1; patches: Record<string, unknown> }>;
+  dispatch(input: { version: 2; command: string; payload?: unknown }): Promise<WorkbenchSnapshot>;
+  managedCompilerContext(): Promise<{ version: 2; patches: Record<string, unknown> }>;
   pointer(input: PointerSample): Promise<WorkbenchSnapshot | null>;
-  wheel(input: { version: 1; x: number; y: number; deltaX: number; deltaY: number; ctrl: boolean }): Promise<WorkbenchSnapshot | null>;
-  resize(input: { version: 1; width: number; height: number; pixelRatio: number }): Promise<WorkbenchSnapshot | null>;
-  cancel(input: { version: 1; reason: "escape" | "lost-capture" | "blur" }): Promise<WorkbenchSnapshot | null>;
-  exportProject(): Promise<{ version: 1; filename: string; contents: string }>;
-  persistProject(): Promise<{ version: 1; contents: string }>;
-  exportReproduction(): Promise<{ version: 1; filename: string; contents: string }>;
-  exportInteractionTrace(): Promise<{ version: 1; filename: string; contents: string }>;
+  wheel(input: { version: 2; x: number; y: number; deltaX: number; deltaY: number; ctrl: boolean }): Promise<WorkbenchSnapshot | null>;
+  resize(input: { version: 2; width: number; height: number; pixelRatio: number }): Promise<WorkbenchSnapshot | null>;
+  cancel(input: { version: 2; reason: "escape" | "lost-capture" | "blur" }): Promise<WorkbenchSnapshot | null>;
+  exportProject(): Promise<{ version: 2; filename: string; contents: string }>;
+  persistProject(): Promise<{ version: 2; contents: string }>;
+  exportReproduction(): Promise<{ version: 2; filename: string; contents: string }>;
+  exportInteractionTrace(): Promise<{ version: 2; filename: string; contents: string }>;
 }
 
 export function assertWorkbenchSnapshot(value: WorkbenchSnapshot): WorkbenchSnapshot {
+  if (!value || typeof value !== "object" || !value.frame || typeof value.frame.ariaLabel !== "string") throw new Error("Unsupported or malformed workbench snapshot");
+  assertDrawFrame(value.frame.scene);
   const geometryRole = value.presentation?.geometryRole;
   const selectedGeometryRole = value.presentation?.selectedGeometryRole;
   if (value.version !== WORKBENCH_PROTOCOL_VERSION || !Number.isSafeInteger(value.revision) || typeof value.presentation?.activeTool !== "string" || typeof value.presentation?.gridVisible !== "boolean" || typeof value.presentation?.constructionVisible !== "boolean" || typeof value.presentation?.visibilityRestoreAvailable !== "boolean" || typeof value.presentation?.canUndo !== "boolean" || typeof value.presentation?.canRedo !== "boolean" || typeof value.presentation?.canFinish !== "boolean" || (geometryRole !== "profile" && geometryRole !== "construction") || (selectedGeometryRole !== undefined && selectedGeometryRole !== "profile" && selectedGeometryRole !== "construction" && selectedGeometryRole !== "mixed") || !Array.isArray(value.explorer) || !value.explorer.every(validDeclarationRow) || (value.pendingManagedMutation !== undefined && !validPreparedManagedMutation(value.pendingManagedMutation))) {

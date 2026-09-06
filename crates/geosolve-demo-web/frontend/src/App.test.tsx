@@ -701,7 +701,7 @@ describe("M88 workbench interaction contract", () => {
       phases: string[] = [];
       cancels: string[] = [];
       override async pointer(input: PointerSample) { this.phases.push(input.phase); return null; }
-      override async cancel(input: { version: 1; reason: "escape" | "lost-capture" | "blur" }) { this.cancels.push(input.reason); return null; }
+      override async cancel(input: { version: 2; reason: "escape" | "lost-capture" | "blur" }) { this.cancels.push(input.reason); return null; }
     }
     const adapter = new PointerAdapter();
     await ready(adapter);
@@ -795,7 +795,7 @@ describe("M88 workbench interaction contract", () => {
     class PersistenceAdapter extends MockWorkbenchAdapter {
       restored?: string;
       exports = 0;
-      override async construct(input?: { version: 1; persistedProject?: string }) { this.restored = input?.persistedProject; return super.construct(); }
+      override async construct(input?: { version: 2; persistedProject?: string }) { this.restored = input?.persistedProject; return super.construct(); }
       override async exportProject(): Promise<never> { this.exports += 1; throw new Error("dirty draft cannot be exported canonically"); }
     }
     const adapter = new PersistenceAdapter();
@@ -871,7 +871,7 @@ describe("M88 workbench interaction contract", () => {
       saves = 0;
       override async persistProject() {
         this.saves += 1;
-        return { version: 1 as const, contents: "exact-saved-project" };
+        return { version: 2 as const, contents: "exact-saved-project" };
       }
     }
     const adapter = new ExactPersistenceAdapter();
@@ -903,7 +903,7 @@ describe("M88 workbench interaction contract", () => {
       saves = 0;
       override async persistProject() {
         this.saves += 1;
-        return { version: 1 as const, contents: "stable-project" };
+        return { version: 2 as const, contents: "stable-project" };
       }
     }
     const adapter = new StablePersistenceAdapter();
@@ -937,7 +937,7 @@ describe("M88 workbench interaction contract", () => {
         return this.snapshot();
       }
       override async persistProject() {
-        return { version: 1 as const, contents: `replacement-${this.generation}` };
+        return { version: 2 as const, contents: `replacement-${this.generation}` };
       }
     }
     const adapter = new CollidingReplacementAdapter();
@@ -954,7 +954,7 @@ describe("M88 workbench interaction contract", () => {
 
   it("retains rejected saved bytes when constructing the fresh fallback also fails", async () => {
     class RejectingPersistenceAndFallbackAdapter extends MockWorkbenchAdapter {
-      override async construct(input?: { version: 1; persistedProject?: string }): Promise<never> {
+      override async construct(input?: { version: 2; persistedProject?: string }): Promise<never> {
         if (input?.persistedProject) throw new Error("saved payload is invalid");
         throw new Error("fresh construction failed");
       }
@@ -971,7 +971,7 @@ describe("M88 workbench interaction contract", () => {
 
   it("retains unread IndexedDB authority when its legacy fallback is also rejected", async () => {
     class RejectingLegacyFallbackAdapter extends MockWorkbenchAdapter {
-      override async construct(input?: { version: 1; persistedProject?: string }) {
+      override async construct(input?: { version: 2; persistedProject?: string }) {
         if (input?.persistedProject) throw new Error("legacy fallback is invalid");
         return super.construct();
       }
@@ -1002,7 +1002,7 @@ describe("M88 workbench interaction contract", () => {
     const fallbackGate = new Promise<void>((resolve) => { releaseFallback = resolve; });
     class DelayedFallbackAdapter extends MockWorkbenchAdapter {
       fallbackStarted = false;
-      override async construct(input?: { version: 1; persistedProject?: string }) {
+      override async construct(input?: { version: 2; persistedProject?: string }) {
         if (input?.persistedProject) throw new Error("saved payload is invalid");
         this.fallbackStarted = true;
         await fallbackGate;
@@ -1062,7 +1062,7 @@ describe("M88 workbench interaction contract", () => {
 
   it("retains rejected bytes until an explicit manual replacement save", async () => {
     class RejectingPersistenceAdapter extends MockWorkbenchAdapter {
-      override async construct(input?: { version: 1; persistedProject?: string }) {
+      override async construct(input?: { version: 2; persistedProject?: string }) {
         if (input?.persistedProject) throw new Error("saved payload is invalid");
         return super.construct();
       }
@@ -1087,7 +1087,7 @@ describe("M88 workbench interaction contract", () => {
 
   it.each(["valid", "malformed"])("preserves a %s unapplied draft across rejected restoration and fallback edits", async (kind) => {
     class RejectingPersistenceAdapter extends MockWorkbenchAdapter {
-      override async construct(input?: { version: 1; persistedProject?: string }) {
+      override async construct(input?: { version: 2; persistedProject?: string }) {
         if (input?.persistedProject) throw new Error("saved payload is invalid");
         return super.construct();
       }
