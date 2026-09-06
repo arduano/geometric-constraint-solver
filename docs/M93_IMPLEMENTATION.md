@@ -134,6 +134,37 @@ The two property suites that replay and persist tracked regression seeds retain 
 Integrated qualification, final edit/prune repetitions and serial/cold parity remain outstanding.
 No timing target is waived or inferred from the design.
 
+## Warm pipeline measurement and planning correction — 2026-09-06
+
+Clean `7de0a25` passed **240/240 stages**, all freshly executed, in **1,392.971 seconds**
+(23m13s gate report; **1,395.136 seconds / 23m15s end to end**). Existing compilation caches
+were warm. The independent audit authenticated 9,872 evidence files, 2,629 native selected
+executions, all 16 fresh sample workflows, 37 ordinary WASM cases, three release-WASM lifecycle
+cases and the unchanged 271-case golden. Evidence lives in `target/m93/pipeline-qualification`.
+The three-worker pipeline meets the warm comprehensive target at this checkpoint.
+
+The real numeric candidate `c591c16` qualified in **637.353 seconds**, or **640.937 seconds
+(10m41s) including generation**. Exactly 15 unchanged browser workflows and 172 independent
+stages reused authenticated baseline evidence. This **misses C5 by 41 seconds**; qualification
+success does not waive the latency target. Source and signed indexes were restored. Three
+documentation runs took **1.363 / 1.334 / 1.354 seconds**; stale-count failures took
+**4.542 / 4.573 / 4.692 seconds**, and generated-order failures **4.836 / 4.688 / 4.684 seconds**.
+Every induced failure stopped during inventory preflight before compilation or semantic tests.
+
+The follow-up caches repeated source-boundary scans within one frozen runner and computes each
+owning crate's dependency/include closure once per native inventory expansion. Artifact hashes
+and runtime validation remain required. It separates reusable frontend licenses, SDK checks and
+unit tests from sample-sensitive manifest checks and browser-test discovery. Catalog metadata
+remains an input to both stages. The narrower static boundary requires an explicit program audit;
+missing or changed review evidence restores the full input set. Qualification and new measurements
+of this follow-up remain pending, along with final serial/cold parity and user acceptance.
+
+Independent review found no input-cache lifecycle defect and approved the current static consumer
+boundary. **146 focused release tests pass in 28.598 seconds**, including six cache-isolation
+fixtures and seven frontend command/input fixtures. The comparator's 21 fixtures and benchmark
+helper's nine exact-coverage fixtures also pass. These validate runner behavior, not the pending
+latency measurements.
+
 ## Implementation order
 
 1. **Instrument and inventory.** Decompose `scripts/release-gate.sh` into one reviewed obligation

@@ -39,6 +39,7 @@
     "scripts/tests/test_release_equivalence.py",
     "scripts/tests/test_release_browser_reuse.py",
     "scripts/tests/test_release_inputs.py",
+    "scripts/tests/test_release_frontend.py",
     "scripts/release_test_inventory.json",
     "scripts/tests/test_release_gate_native.py",
     "scripts/release_gate_runtime.py",

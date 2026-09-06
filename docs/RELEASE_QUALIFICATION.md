@@ -150,6 +150,15 @@ Frontend unit tests use `--no-cache` during preflight. Vitest's generated timing
 change the `node_modules` identity and needlessly invalidate every browser leaf. This prevents the
 output from being created; the gate still hashes the complete installed dependency tree.
 
+`preflight.frontend` owns installation, license/SDK checks and unit tests. Its reviewed
+`frontend_static` boundary may exclude enumerated sample-folder data, while retaining the catalog
+contract and generated UI metadata. `preflight.catalog` always follows it and owns manifest checks
+and the complete build-contract/discovery command. Discovery imports sample sources and witnesses,
+so these checks retain sample inputs. A numeric sample edit can reuse unaffected static results;
+catalog edits still invalidate the UI metadata consumers. Missing or stale audit pins disable the
+exclusion. Each runner shares input scans only across identical boundaries, exclusions and review
+contracts within its frozen source snapshot; a new plan starts with an empty scan cache.
+
 The parent binds browser execution to its actual prepared artifact and invocation; source and
 consumed artifact hashes must remain unchanged before leaves are retained. Failed batches can
 donate complete independent single-attempt rows; skipped, retried or incomplete rows cannot pass.

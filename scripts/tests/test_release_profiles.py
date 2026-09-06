@@ -165,7 +165,8 @@ class ReleaseProfileTests(unittest.TestCase):
     def test_frontend_preflight_disables_mutable_test_cache(self):
         frontend = next(stage for stage in gate.preflight_stages() if stage.id == "preflight.frontend")
         self.assertIn(gate.npm(gate.FRONTEND, "test", "--", "--no-cache"), frontend.commands)
-        self.assertIn(gate.npm(gate.FRONTEND, "run", "check:static"), frontend.commands)
+        self.assertIn(gate.npm(gate.FRONTEND, "run", "check:licenses"), frontend.commands)
+        self.assertIn(gate.npm(gate.FRONTEND, "run", "check:language-sdk"), frontend.commands)
 
 
 if __name__ == "__main__":

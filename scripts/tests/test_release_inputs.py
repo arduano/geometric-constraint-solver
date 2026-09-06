@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Regression coverage for compile inputs outside normal Cargo source ownership."""
 import contextlib
+import dataclasses
 import io
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import release_gate as gate
@@ -164,6 +166,158 @@ const REMOVED: &[u8] = include_bytes!("../../../docs/missing.md");
         self.write("crates/example/src/lib.rs", 'const INPUT: &str = include_str!("../../../../external.md");')
         with self.assertRaisesRegex(ValueError, "escapes repository"):
             gate.crate_inputs(self.root, "example")
+
+
+class InputCacheTests(unittest.TestCase):
+    """Memoization preserves reviewed input semantics without running build tools."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.policy = {"prose": ["docs/**"], "global": ["Cargo.lock"], "owned": ["crates/**", "packages/**"]}
+        self.snapshot = {name: {"sha256": name, "executable": False} for name in (
+            "Cargo.lock", "crates/example/src/lib.rs", "packages/helper.ts", "docs/note.md", "unknown-input")}
+
+    def runner(self, *, snapshot=None, policy=None, root=None):
+        root = self.root if root is None else root
+        with patch.object(gate, "capture", return_value="fixture-revision"):
+            return gate.Runner(root, gate.Store(root / "target/store", create=False),
+                               self.snapshot if snapshot is None else snapshot,
+                               self.policy if policy is None else policy, {})
+
+    def write(self, name, text):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+    def reviewed_stage(self):
+        import release_equivalence as equivalence
+        sample = equivalence.SAMPLE_ROOT + "/fixture/sketch.compiled.json"
+        self.snapshot[sample] = {"sha256": "catalog-v1", "executable": False}
+        stage = gate.Stage("reviewed", (("true",),), inputs=("crates/**",),
+                           excluded_inputs=(equivalence.SAMPLE_ROOT + "/**",), input_equivalence="fixture")
+        full = gate.stage_inputs(stage, self.snapshot, self.policy)
+        contract = {"schema": 1, "fixture": {"program_sha256": gate.digest(equivalence.partition(full, self.policy))}}
+        return dataclasses.replace(stage, input_equivalence_contract=contract), sample
+
+    def test_shared_boundaries_scan_once_and_distinct_boundaries_keep_their_inputs(self):
+        native = gate.Stage("native.a", (("true",),), inputs=("crates/**", "docs/missing.md"))
+        sibling = dataclasses.replace(native, id="native.b", cases=("different-case",))
+        package = gate.Stage("package", (("true",),), inputs=("packages/**",))
+        runner = self.runner()
+        with patch.object(gate, "stage_inputs", wraps=gate.stage_inputs) as scan:
+            runner.prepare([native, sibling, package])
+            self.assertEqual(scan.call_count, 2)
+            self.assertEqual(set(runner.inputs(native)),
+                             {"Cargo.lock", "unknown-input", "crates/example/src/lib.rs", "docs/missing.md"})
+            self.assertIsNone(runner.inputs(native)["docs/missing.md"])
+            self.assertEqual(set(runner.inputs(package)), {"Cargo.lock", "unknown-input", "packages/helper.ts"})
+            self.assertNotEqual(runner.key(native), runner.key(sibling))
+            self.assertEqual(scan.call_count, 2)
+
+    def test_exclusions_scope_and_contract_never_share_an_unreviewed_result(self):
+        reviewed, sample = self.reviewed_stage()
+        full = dataclasses.replace(reviewed, excluded_inputs=())
+        no_contract = dataclasses.replace(reviewed, input_equivalence_contract=None)
+        wrong_contract = dataclasses.replace(reviewed, input_equivalence_contract={"schema": 1, "fixture": {"program_sha256": "stale"}})
+        other_scope = dataclasses.replace(reviewed, input_equivalence="other")
+        unresolved = dataclasses.replace(reviewed, inputs=("**",))
+        runner = self.runner()
+        self.assertNotIn(sample, runner.inputs(reviewed))
+        for stage in (full, no_contract, wrong_contract, other_scope, unresolved):
+            with self.subTest(stage=stage):
+                self.assertIn(sample, runner.inputs(stage))
+        # A mutable contract value is fingerprinted by contents on every lookup.
+        reviewed.input_equivalence_contract["fixture"]["program_sha256"] = "changed-review"
+        self.assertIn(sample, runner.inputs(reviewed))
+
+    def test_prepare_recomputes_cached_boundaries_after_snapshot_and_policy_reset(self):
+        stage = gate.Stage("native", (("true",),), inputs=("crates/**",))
+        sibling = dataclasses.replace(stage, id="sibling")
+        runner = self.runner()
+        with patch.object(gate, "stage_inputs", wraps=gate.stage_inputs) as scan:
+            runner.prepare([stage, sibling])
+            before = runner.keys[stage.id]
+            self.assertEqual(scan.call_count, 1)
+            runner.snapshot = self.snapshot | {"crates/example/src/lib.rs": {"sha256": "changed", "executable": False}}
+            runner.policy = self.policy | {"global": ["Cargo.lock", "docs/**"]}
+            runner.prepare([stage, sibling])
+            self.assertEqual(scan.call_count, 2)
+            self.assertNotEqual(runner.keys[stage.id], before)
+            self.assertEqual(runner.inputs(stage)["crates/example/src/lib.rs"]["sha256"], "changed")
+            self.assertIn("docs/note.md", runner.inputs(stage))
+
+    def test_new_runner_source_policy_and_root_are_isolated(self):
+        stage = gate.Stage("native", (("true",),), inputs=("crates/**",))
+        original = self.runner()
+        original_key = original.key(stage)
+        changed_source = self.snapshot | {"crates/example/src/lib.rs": {"sha256": "changed", "executable": False}}
+        source_runner = self.runner(snapshot=changed_source)
+        policy_runner = self.runner(policy=self.policy | {"global": ["Cargo.lock", "packages/**"]})
+        root_runner = self.runner(root=self.root / "another-worktree")
+        self.assertEqual(source_runner.inputs(stage)["crates/example/src/lib.rs"]["sha256"], "changed")
+        self.assertIn("packages/helper.ts", policy_runner.inputs(stage))
+        self.assertNotIn("packages/helper.ts", original.inputs(stage))
+        for changed in (source_runner, policy_runner, root_runner):
+            self.assertNotEqual(original_key, changed.key(stage))
+        self.assertEqual(original.key(stage), original_key)
+
+    def test_cached_catalog_equivalence_survives_data_only_changes_and_rejects_program_changes(self):
+        stage, sample = self.reviewed_stage()
+        original = self.runner()
+        original_key = original.key(stage)
+        data = self.snapshot | {sample: {"sha256": "catalog-v2", "executable": False}}
+        data_runner = self.runner(snapshot=data)
+        self.assertEqual(original_key, data_runner.key(stage))
+        changed = data | {"crates/example/src/lib.rs": {"sha256": "new-reader", "executable": False}}
+        changed_runner = self.runner(snapshot=changed)
+        self.assertIn(sample, changed_runner.inputs(stage))
+        self.assertNotEqual(original_key, changed_runner.key(stage))
+        for value in ({"sha256": "catalog-v2", "executable": True}, {"link": "other", "target": "catalog-v2"}):
+            guarded = self.runner(snapshot=data | {sample: value})
+            self.assertIn(sample, guarded.inputs(stage))
+            self.assertNotEqual(original_key, guarded.key(stage))
+
+    def test_native_package_closures_scan_once_per_call_and_keep_embedded_dependency_inputs(self):
+        import release_gate_native as native
+        self.write("crates/example/Cargo.toml", '[package]\nname="example"\nversion="0.1.0"\n[dependencies]\ndep={path="../dep"}\n')
+        self.write("crates/dep/Cargo.toml", '[package]\nname="dep"\nversion="0.1.0"\n')
+        self.write("crates/geosolve-headless/Cargo.toml", '[package]\nname="geosolve-headless"\nversion="0.1.0"\n[dependencies]\nexample={path="../example"}\n')
+        self.write("crates/example/tests/case.rs", '#[path="../../../packages/fixture.rs"] mod fixture;')
+        self.write("packages/fixture.rs", 'const INPUT: &str = include_str!("../docs/case.md");')
+        self.write("crates/dep/src/lib.rs", 'const INPUT: &str = include_str!("../../../docs/production.md");')
+        self.write("crates/dep/tests/case.rs", 'const INPUT: &str = include_str!("../../../docs/dependency-test.md");')
+        expected = {package: gate.crate_inputs(self.root, package) for package in ("example", "geosolve-headless")}
+        self.assertIn("packages/fixture.rs", expected["example"])
+        self.assertIn("docs/case.md", expected["example"])
+        self.assertIn("docs/production.md", expected["example"])
+        self.assertNotIn("docs/dependency-test.md", expected["example"])
+
+        def description(package, name):
+            return dict(id=f"{package}::{name}::normal", command=["/protected/test"], env={}, features=[], profile={},
+                        resource="native", selected=[name], build_overlap_safe=False, runtime_closures=[])
+
+        workspace = [description("example", "a"), description("example", "b"), description("geosolve-headless", "normal")]
+        ignored = [description("geosolve-headless", "ignored")]
+        managed = ("packages/geosolve-sketch-code/src/**", "packages/geosolve-sketch-code/scripts/compile*",
+                   "packages/geosolve-sketch-code/scripts/mutate*", "packages/geosolve-intent/src/**")
+        with patch.object(gate, "read_json", return_value=self.policy), \
+                patch.object(gate, "rust_inputs", return_value=("crates/**",)), \
+                patch.object(gate, "source_snapshot", return_value=self.snapshot), \
+                patch.object(native, "workspace_stages", return_value=workspace), \
+                patch.object(native, "ignored_headless_stages", return_value=ignored), \
+                patch.object(gate, "crate_inputs", wraps=gate.crate_inputs) as scan:
+            stages = gate.native_stages(self.root, {"workspace": "target/workspace", "headless": "target/headless"})
+            self.assertEqual([call.args[1] for call in scan.call_args_list], ["example", "geosolve-headless"])
+            for stage in stages:
+                package = stage.id.split(".", 1)[1].split("::")[0]
+                suffix = managed if package == "geosolve-headless" else ()
+                self.assertEqual(stage.inputs, (*expected[package], *suffix, "scripts/release_gate_native.py"))
+            self.write("packages/fixture.rs", 'const INPUT: &str = include_str!("../docs/new-case.md");')
+            refreshed = gate.native_stages(self.root, {"workspace": "target/workspace", "headless": "target/headless"})
+            self.assertEqual(scan.call_count, 4)
+            self.assertIn("docs/new-case.md", refreshed[0].inputs)
+            self.assertNotIn("docs/case.md", refreshed[0].inputs)
 
 
 if __name__ == "__main__":

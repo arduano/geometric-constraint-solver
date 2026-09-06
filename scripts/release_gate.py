@@ -295,6 +295,7 @@ class Runner:
         self.lock = threading.Lock()
         self.started = time.monotonic()
         self.artifact_hashes = {}
+        self.input_maps = {}
         self.deferred_groups = {}
         try:
             self.revision = {"commit": capture(["git", "rev-parse", "HEAD"], root),
@@ -308,6 +309,16 @@ class Runner:
             self.artifact_hashes[name] = hash_output(path) if path.exists() else None
         return self.artifact_hashes[name]
 
+    def inputs(self, stage):
+        # The snapshot and policy belong to one frozen run. Stages sharing an
+        # input boundary need one scan; distinct exclusions/contracts remain
+        # distinct and a new Runner always starts with an empty map.
+        identity = canonical((stage.inputs, stage.excluded_inputs, stage.input_equivalence,
+                              stage.input_equivalence_contract))
+        if identity not in self.input_maps:
+            self.input_maps[identity] = stage_inputs(stage, self.snapshot, self.policy)
+        return self.input_maps[identity]
+
     def key(self, stage):
         # Preparation receipts may move when an unrelated input changes. Their
         # location is provenance; actual consumed bytes and selected cases are
@@ -318,7 +329,7 @@ class Runner:
         contract = raw_contract if stage.kind == "build" else json.loads(re.sub(
             r"target/release-gate/prepared/[0-9a-f]{64}", "target/release-gate/prepared/{identity}", canonical(raw_contract).decode()))
         return digest({"schema": SCHEMA, "root": str(self.root.resolve()), "contract": contract,
-                       "inputs": stage_inputs(stage, self.snapshot, self.policy), "policy": self.policy,
+                       "inputs": self.inputs(stage), "policy": self.policy,
                        "tools": self.tools, "environment": self.environment,
                        "artifacts": {re.sub(r"target/release-gate/prepared/[0-9a-f]{64}", "target/release-gate/prepared/{identity}", name):
                                      self.artifact_hash(name)
@@ -327,6 +338,7 @@ class Runner:
     def prepare(self, stages):
         validate_inventory(stages)
         self.artifact_hashes.clear()
+        self.input_maps.clear()
         self.inventory = stages
         remaining = list(stages)
         while remaining:
@@ -708,6 +720,14 @@ def npm(prefix, *arguments):
 
 
 def preflight_stages(include_clippy=True):
+    import release_equivalence
+    try:
+        equivalence = read_json(ROOT / release_equivalence.CONTRACT_PATH)
+    except (OSError, ValueError):
+        equivalence = None
+    frontend_inputs = (FRONTEND + "/**", "packages/**", "crates/geosolve-sketch-code/**",
+                       "crates/geosolve-constraint-editor/src/**", "crates/geosolve-demo-web/src/**",
+                       "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md")
     stages = [
         Stage("preflight.inventory", (cmd(sys.executable, "scripts/release_gate.py", "--check-inventory"),
                                       cmd("git", "diff", "--check"),
@@ -726,14 +746,21 @@ def preflight_stages(include_clippy=True):
               outputs=("packages/geosolve-intent/dist", "packages/geosolve-sketch-code/dist",
                        "packages/geosolve-intent/node_modules", "packages/geosolve-sketch-code/node_modules")),
         Stage("preflight.frontend", (npm(FRONTEND, "ci", "--ignore-scripts"),
-                                     npm(FRONTEND, "run", "check:static"), npm(FRONTEND, "test", "--", "--no-cache")),
-              inputs=(FRONTEND + "/**", "packages/**", "crates/geosolve-sketch-code/**",
-                      "crates/geosolve-constraint-editor/src/**", "crates/geosolve-demo-web/src/**",
-                      "LICENSE", "THIRD_PARTY_LICENSES.md", "docs/API_COMPATIBILITY.md"),
+                                     npm(FRONTEND, "run", "check:licenses"),
+                                     npm(FRONTEND, "run", "check:language-sdk"),
+                                     npm(FRONTEND, "test", "--", "--no-cache")),
+              inputs=frontend_inputs, input_equivalence="frontend_static", input_equivalence_contract=equivalence,
+              # These tests use UI/catalog metadata and private mocked geometry.
+              # Catalog-sensitive Playwright discovery stays fresh below.
+              excluded_inputs=(release_equivalence.SAMPLE_ROOT + "/**",),
               dependencies=("preflight.managed",), resource="exclusive", timeout=600,
               outputs=(FRONTEND + "/node_modules",)),
+        Stage("preflight.catalog", (npm(FRONTEND, "run", "check:manifest"),
+                                    npm(FRONTEND, "run", "test:build")),
+              inputs=frontend_inputs, dependencies=("preflight.frontend", "preflight.metadata-format"),
+              resource="exclusive", timeout=600),
         Stage("preflight.clippy", (cmd("cargo", "clippy", "--locked", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"),),
-              inputs=rust_inputs(ROOT), dependencies=("preflight.frontend", "preflight.metadata-format"),
+              inputs=rust_inputs(ROOT), dependencies=("preflight.catalog", "preflight.frontend", "preflight.metadata-format"),
               resource="exclusive", timeout=2400),
     ]
     return stages if include_clippy else [stage for stage in stages if stage.id != "preflight.clippy"]
@@ -851,6 +878,7 @@ def native_stages(root, prepared):
     # Preserve that coverage and keep their source-tree writes away from Cargo.
     body_build_lock = {"geosolve-sketch::m22_properties::normal", "geosolve-linkage::m23_properties::normal"}
     result = []
+    package_input_maps = {}
     for mode in ("workspace", "headless"):
         if mode not in prepared:
             continue
@@ -859,6 +887,8 @@ def native_stages(root, prepared):
         descriptions = native.workspace_stages(value, test_threads=2) if mode == "workspace" else native.ignored_headless_stages(value)
         for description in descriptions:
             package = description["id"].split("::")[0]
+            if package not in package_input_maps:
+                package_input_maps[package] = crate_inputs(root, package)
             managed = ("packages/geosolve-sketch-code/src/**", "packages/geosolve-sketch-code/scripts/compile*",
                        "packages/geosolve-sketch-code/scripts/mutate*", "packages/geosolve-intent/src/**") if package in {
                            "geosolve-headless", "geosolve-demo-web", "geosolve-sketch-code"} else ()
@@ -868,7 +898,7 @@ def native_stages(root, prepared):
             stage_id = mode + "." + description["id"]
             result.append(Stage(stage_id,
                 (cmd(sys.executable, "scripts/release_gate.py", "--native-run", str(source), "--native-id", description["id"], "--output", "{scratch}/native"),),
-                inputs=(*crate_inputs(root, package), *managed, "scripts/release_gate_native.py"),
+                inputs=(*package_input_maps[package], *managed, "scripts/release_gate_native.py"),
                 dependencies=(f"prepare.{mode}",), resource="memory" if description["resource"] == "memory-heavy" else "normal",
                 build_lock=description["id"] in body_build_lock or not (overlap_reviewed and description.get("build_overlap_safe", False)),
                 timeout=2400, cases=tuple(description["selected"]), artifacts=(description["command"][0], *managed_artifacts, *auxiliary),
