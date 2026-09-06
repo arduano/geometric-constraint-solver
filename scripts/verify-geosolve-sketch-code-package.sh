@@ -11,7 +11,8 @@ package_name="geosolve-sketch-code"
 package_id="$(cargo pkgid -p "$package_name")"
 package_version="${package_id##*#}"
 package_version="${package_version##*@}"
-archive="$repo_root/target/package/$package_name-$package_version.crate"
+cargo_target_dir="$(cargo metadata --locked --offline --format-version 1 --no-deps | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')"
+archive="$cargo_target_dir/package/$package_name-$package_version.crate"
 staging_parent="${TMPDIR:-/tmp}"
 case "$staging_parent" in
   /*) ;;
@@ -86,7 +87,10 @@ done
 # authority; the extracted code crate itself has no workspace-relative asset.
 cargo package --locked --allow-dirty --no-verify -p "$package_name" "${patches[@]}"
 tar -xzf "$archive" -C "$staging_dir"
+# Reuse dependency compilation across independently extracted archives. Cargo still
+# checks this newly extracted package and its exact normalized manifest every time.
 cargo check \
+  --target-dir "$cargo_target_dir/package-verification" \
   --locked \
   --offline \
   --manifest-path "$staging_dir/$package_name-$package_version/Cargo.toml" \
