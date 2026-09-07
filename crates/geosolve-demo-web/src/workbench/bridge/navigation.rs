@@ -40,6 +40,7 @@ struct NavigationIndex {
 
 #[derive(Clone, Default)]
 struct NavigationEntry {
+    label: String,
     nodes: BTreeSet<NodeId>,
     items: BTreeSet<SelectionItem>,
     sources: BTreeSet<SelectionSourceSnapshot>,
@@ -134,6 +135,7 @@ impl WorkbenchBridge {
                 entries.insert(
                     entry.id,
                     NavigationEntry {
+                        label: String::new(),
                         items: items.into_iter().collect(),
                         nodes: entry.nodes.into_iter().collect(),
                         sources: BTreeSet::from([SelectionSourceSnapshot {
@@ -286,6 +288,12 @@ impl WorkbenchBridge {
             .expect("navigation index installed")
             .explorer
             .clone();
+        let target = self.navigation_inspector_row_id();
+        mark(&mut rows, target);
+        rows
+    }
+
+    fn navigation_inspector_row_id(&self) -> Option<&str> {
         let selected = self.editor().selected_declaration();
         let cache = self.navigation.cache.as_ref().unwrap();
         let items = canonical_selection(
@@ -306,7 +314,7 @@ impl WorkbenchBridge {
                         .is_some_and(|entry| entry.items.is_empty())
             })
             .count();
-        let target = selected.and_then(|node| {
+        selected.and_then(|node| {
             cache
                 .entries
                 .iter()
@@ -326,10 +334,8 @@ impl WorkbenchBridge {
                         *id,
                     )
                 })
-                .map(|(id, _)| id.clone())
-        });
-        mark(&mut rows, target.as_deref());
-        rows
+                .map(|(id, _)| id.as_str())
+        })
     }
 
     pub(super) fn navigation_selection_snapshot(
@@ -342,6 +348,11 @@ impl WorkbenchBridge {
             return None;
         }
         let mut selection = self.selection_snapshot()?;
+        if let Some(id) = self.navigation_inspector_row_id() {
+            selection
+                .label
+                .clone_from(&self.navigation.cache.as_ref()?.entries.get(id)?.label);
+        }
         if let Some(source) = navigation.sources.first() {
             selection.source = Some(source.clone());
         }
@@ -595,6 +606,7 @@ fn complete_hierarchy(rows: &[ExplorerSnapshot], entries: &mut BTreeMap<String, 
             .filter_map(|child| entries.get(&child.id).cloned())
             .collect::<Vec<_>>();
         let entry = entries.entry(row.id.clone()).or_default();
+        entry.label.clone_from(&row.label);
         entry.children = row.children.iter().map(|child| child.id.clone()).collect();
         for child in children {
             entry.children.extend(child.children);

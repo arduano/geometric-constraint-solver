@@ -79,3 +79,29 @@ Multiple empty generated siblings resolve to their common declaration rather tha
 
 Clean integrated qualification, final dense comparison, frozen Tailscale candidate and
 supervising-user acceptance remain outstanding.
+
+
+## Visual review and preflight interruption
+
+The independent browser pass also qualified Jansen's existing authoring→Open source workflow;
+it explicitly returns to Select before navigation. Four targeted workflows pass in 30.3 seconds.
+Visual review then found that the declaration selected-background CSS was absent, and generated
+centre/curve/radius ports shared a label. Explicit state classes now paint the background; colliding
+member labels append their authenticated output path. Inspector navigation uses the same friendly
+row label instead of an internal generated alias. A browser computed-color assertion joins the
+actual selected-canvas-pixel witness. Final polished candidate-r2 checks pass **4/4** in 32.2s,
+with screenshots in `target/m95/browser-polished`; the subsequent Inspector-label-only refinement
+is covered by the next integrated build. Strict Clippy passes in `target/m95/label-clippy-r2.log`.
+
+The clean `e2abf18` nomination started run `20260907T181340-9f40bbb2`, then was deliberately
+interrupted during `preflight.frontend` to incorporate those visual findings. Its three completed
+preflight stages are recorded successes, not complete product qualification. Resume will authenticate
+any reusable inputs; no domain/golden/browser gate passed is claimed from that interrupted attempt.
+
+Preliminary repeated direct-WASM selection in the robotic harness (12 member/invocation pairs)
+measures 14.6 ms median for one exact member and 9.7 ms for its 18-output invocation. M94's prior
+Explorer route takes 40.4/39.8 ms while publishing complete snapshots and lacking canvas-output
+selection. M95 delta payloads are about 457–481 thousand UTF-16 characters versus 1.069 million;
+both runs preserve exact complete persistence. These are synchronous bridge phase measurements,
+not end-to-end FPS. The richer new behavior and differing payloads are disclosed; final artifact
+pan/zoom/drag checks remain. Raw evidence: `target/m95/performance-{m94,provisional}/selection.json`.

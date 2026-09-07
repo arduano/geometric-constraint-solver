@@ -93,6 +93,7 @@ test("M95 canvas and Explorer selection reveal exact source without stealing cur
 
   await row(page, "first").click();
   await expect(row(page, "first")).toHaveAttribute("aria-current", "true");
+  await expect(row(page, "first")).toHaveCSS("background-color", "rgba(251, 191, 36, 0.1)");
   await expect(row(page, "Edges")).toHaveAttribute("aria-pressed", "mixed");
   await expect.poll(() => highlightedSource(page)).toContain('$.geometry.segment("first"');
   const after = await editorSelection(page);
@@ -205,6 +206,7 @@ test("M95 scale navigation selects generated harness members and their invocatio
   await expect.poll(() => highlightedSource(page)).toContain('$.use("powerHarness"');
   await expect.poll(async () => (await selectedCurveIds(canvas)).length).toBeGreaterThan(0);
   const selectedMember = await selectedCurveIds(canvas);
+  await expect(page.getByRole("tabpanel", { name: "Inspector", exact: true })).not.toContainText("code.generated.");
   const timings = [];
   for (let index = 0; index < 3; index++) {
     const begin = Date.now();

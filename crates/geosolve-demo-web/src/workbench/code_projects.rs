@@ -3713,7 +3713,7 @@ impl CodeProjectWorkbench {
                         .then(|| control.id.0.clone())
                     })
                 });
-                let generated = generated_by_declaration
+                let mut generated = generated_by_declaration
                     .remove(&declaration.symbol)
                     .unwrap_or_default()
                     .into_iter()
@@ -3753,7 +3753,8 @@ impl CodeProjectWorkbench {
                             suppression_token,
                         }
                     })
-                    .collect();
+                    .collect::<Vec<_>>();
+                distinguish_generated_output_labels(&mut generated);
                 ManagedDeclarationPanelRow {
                     id: managed_panel_row_id(&declaration.symbol),
                     symbol: declaration.symbol.clone(),
@@ -4121,6 +4122,29 @@ fn generated_panel_row_id(address: &GeneratedMemberAddress) -> String {
         serde_json::to_string(address)
             .expect("validated generated-member addresses serialize infallibly"),
     )
+}
+
+// A generated member can expose separate curve/centre/radius ports. Keep
+// familiar short labels when unique and name the output only for collisions.
+fn distinguish_generated_output_labels(rows: &mut [ManagedGeneratedPanelRow]) {
+    let mut counts = BTreeMap::<String, usize>::new();
+    for row in rows.iter() {
+        *counts.entry(row.label.clone()).or_default() += 1;
+    }
+    for row in rows {
+        if counts[&row.label] > 1 {
+            let output = row
+                .address
+                .output
+                .iter()
+                .map(|part| part.strip_prefix("field:").unwrap_or(part))
+                .collect::<Vec<_>>()
+                .join(" / ");
+            if !output.is_empty() {
+                row.label = format!("{} / {output}", row.label);
+            }
+        }
+    }
 }
 
 fn generated_member_label(address: &GeneratedMemberAddress) -> String {
