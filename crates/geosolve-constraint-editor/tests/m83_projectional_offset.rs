@@ -1135,6 +1135,46 @@ fn projectional_offset_stale_topology_and_invalid_distance_cannot_apply() {
 }
 
 #[test]
+fn m95_profile_offset_navigation_maps_private_helper_to_visible_operation() {
+    let mut session = fixture(true, 0x9500_0ff5_0001);
+    let mut state = offset_state(&session, true);
+    session
+        .apply_profile_offset(&mut state, key("offset.navigation"))
+        .unwrap();
+    let node = profile_offset_node(&session);
+    let helper = session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|candidate| {
+            matches!(candidate.kind, IntentNodeKind::Aggregate { .. })
+                && session.visible_declaration_owner(candidate.id) == Some(node)
+        })
+        .expect("private Profile Offset aggregate")
+        .id;
+    let dimension = profile_offset_dimension(&session);
+    let items = session.navigation_selection_items([node]);
+    assert_eq!(session.navigation_selection_items([helper]), items);
+    assert!(items.contains(&SelectionItem::Dimension(dimension)));
+    assert_eq!(
+        items
+            .iter()
+            .filter(|item| matches!(item, SelectionItem::Curve(_)))
+            .count(),
+        4
+    );
+    assert!(session.select_navigation_declarations([helper], Modifiers::default()));
+    assert_eq!(session.selected_declaration(), Some(node));
+    assert_eq!(session.selected_navigation_declarations(), vec![node]);
+    for item in items {
+        assert_eq!(session.navigation_declaration_owners(item), vec![node]);
+    }
+    assert_independently_valid(&session);
+}
+
+#[test]
 fn face_offset_is_one_transaction_with_exact_properties_and_stable_native_identity() {
     let mut session = fixture(true, 0x8300_0ff5_0001);
     let mut state = offset_state(&session, true);

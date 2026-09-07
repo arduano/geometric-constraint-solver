@@ -696,6 +696,71 @@ fn ownership_validation_rejects_computed_feature_and_fillet_corner_permutations(
 }
 
 #[test]
+fn m95_computed_navigation_selects_exact_feature_and_corner_without_parent_ownership() {
+    let (mut session, viewport) = fixture();
+    let node = create_fillet(&mut session, viewport);
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let feature = accepted.features.features()[0].id;
+    let ComputedFeatureDefinition::FilletSet(fillet) = &accepted.features.features()[0].definition;
+    let corner = geosolve_sketch_features::ComputedCornerRef {
+        feature,
+        corner: fillet.corners[0].id,
+    };
+    let identity = session.coordinator().intent().identity();
+    let evidence = accepted.evidence.clone();
+    assert_eq!(
+        session.navigation_selection_items([node]),
+        vec![
+            SelectionItem::Feature(feature),
+            SelectionItem::FeatureCorner(corner)
+        ]
+    );
+    assert!(session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(session.selected_declaration(), Some(node));
+    assert_eq!(
+        session.navigation_declaration_owners(SelectionItem::Feature(feature)),
+        vec![node]
+    );
+    assert_eq!(
+        session.navigation_declaration_owners(SelectionItem::FeatureCorner(corner)),
+        vec![node]
+    );
+    session.set_selection([SelectionItem::FeatureCorner(corner)]);
+    assert_eq!(session.selected_navigation_declarations(), vec![node]);
+    assert_eq!(session.coordinator().intent().identity(), identity);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        evidence
+    );
+    session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetSuppressed {
+                node,
+                suppressed: true,
+            }],
+        ))
+        .unwrap();
+    assert!(session.navigation_selection_items([node]).is_empty());
+    assert!(session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(session.selected_navigation_declarations(), vec![node]);
+    assert!(session.editor().selection().is_empty());
+    assert!(
+        session
+            .scene(viewport, 0.5)
+            .unwrap()
+            .computed_curves
+            .is_empty()
+    );
+    assert_independently_valid(&session);
+}
+
+#[test]
 fn computed_fillet_is_exactly_cold_reconstructed_and_composed() {
     let (mut session, viewport) = fixture();
     create_fillet(&mut session, viewport);

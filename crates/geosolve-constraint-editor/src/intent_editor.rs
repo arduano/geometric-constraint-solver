@@ -707,6 +707,176 @@ impl ProjectionalEditorSession {
         self.selected_declaration.is_some() == node.is_some()
     }
 
+    /// Resolves the complete accepted native output owned by declarations.
+    ///
+    /// Referenced operands never become owned selection. Suppressed, retired,
+    /// missing and failed computed outputs contribute no items. Presentation
+    /// visibility is not changed; hosts can additionally filter these identities
+    /// through their retained scene's native visibility policy.
+    #[must_use]
+    pub fn navigation_selection_items(
+        &self,
+        nodes: impl IntoIterator<Item = NodeId>,
+    ) -> Vec<SelectionItem> {
+        let nodes = nodes
+            .into_iter()
+            .filter_map(|node| self.visible_declaration_owner(node))
+            .collect::<std::collections::BTreeSet<_>>();
+        let Some(accepted) = self.coordinator.accepted_materialization() else {
+            return Vec::new();
+        };
+        let mut items = std::collections::BTreeSet::new();
+        for node in nodes {
+            let Some(owner) = accepted.ownership.node(node) else {
+                continue;
+            };
+            for binding in &owner.owned {
+                append_navigation_binding_items(accepted, *binding, &mut items);
+            }
+        }
+        items.into_iter().collect()
+    }
+
+    /// Projects authenticated native output bindings without expanding an exact
+    /// point or span to the rest of its owning declaration. Unknown bindings
+    /// and outputs absent from accepted geometry contribute no selectable item.
+    /// This read-only projection authenticates native existence, not a caller's
+    /// source ownership. Callers resolving source ports must first exclude
+    /// borrowed operands using their accepted provenance and ownership map.
+    #[must_use]
+    pub fn navigation_selection_items_for_bindings(
+        &self,
+        bindings: impl IntoIterator<Item = IntentNativeBinding>,
+    ) -> Vec<SelectionItem> {
+        let Some(accepted) = self.coordinator.accepted_materialization() else {
+            return Vec::new();
+        };
+        let mut items = std::collections::BTreeSet::new();
+        for binding in bindings {
+            if accepted
+                .ownership
+                .ports
+                .iter()
+                .any(|(_, candidate)| *candidate == binding)
+                || accepted
+                    .ownership
+                    .nodes
+                    .iter()
+                    .any(|owner| owner.owned.contains(&binding))
+            {
+                append_navigation_binding_items(accepted, binding, &mut items);
+            }
+        }
+        items.into_iter().collect()
+    }
+
+    /// Selects declarations and their exact native outputs for cross-view navigation.
+    ///
+    /// Plain navigation replaces selection. Shift, Control and Command toggle
+    /// the complete requested set: remove it when fully selected, otherwise add
+    /// every missing item. A unique declaration without native output remains a
+    /// logical selection. Unknown declarations and captured gestures reject
+    /// atomically. This method performs no solve, serialization or history write.
+    pub fn select_navigation_declarations(
+        &mut self,
+        nodes: impl IntoIterator<Item = NodeId>,
+        modifiers: Modifiers,
+    ) -> bool {
+        if self.editor.active_pointer_gesture().is_some() {
+            return false;
+        }
+        let mut requested = std::collections::BTreeSet::new();
+        for node in nodes {
+            let Some(node) = self.visible_declaration_owner(node) else {
+                return false;
+            };
+            requested.insert(node);
+        }
+        let items = self.navigation_selection_items(requested.iter().copied());
+        let previous_logical = self.selected_declaration;
+        let mut selection = if modifiers.extends_selection() {
+            self.editor.selection().to_vec()
+        } else {
+            Vec::new()
+        };
+        let remove = modifiers.extends_selection()
+            && if items.is_empty() {
+                requested.len() == 1 && requested.iter().next().copied() == previous_logical
+            } else {
+                items.iter().all(|item| selection.contains(item))
+            };
+        if remove {
+            selection.retain(|item| !items.contains(item));
+        } else {
+            for item in items {
+                if !selection.contains(&item) {
+                    selection.push(item);
+                }
+            }
+        }
+        self.set_selection(selection);
+        if !remove
+            && self
+                .selected_declaration
+                .is_some_and(|owner| requested.iter().any(|node| *node != owner))
+        {
+            self.selected_declaration = None;
+        }
+        if self.editor.selection().is_empty() && !remove && requested.len() == 1 {
+            self.selected_declaration = requested.iter().next().copied().filter(|node| {
+                !modifiers.extends_selection()
+                    || previous_logical.is_none()
+                    || previous_logical == Some(*node)
+            });
+        }
+        true
+    }
+
+    /// Returns every visible accepted declaration owning one exact native item.
+    ///
+    /// This read-only projection does not choose an Inspector or mutation target.
+    /// Shared references are not owners. Private Profile Offset aggregates map
+    /// to their visible operation; feature corners retain their feature identity.
+    #[must_use]
+    pub fn navigation_declaration_owners(&self, item: SelectionItem) -> Vec<NodeId> {
+        let Some(accepted) = self.coordinator.accepted_materialization() else {
+            return Vec::new();
+        };
+        if !navigation_item_exists(accepted, item) {
+            return Vec::new();
+        }
+        accepted
+            .ownership
+            .nodes
+            .iter()
+            .filter(|owner| {
+                owner
+                    .owned
+                    .iter()
+                    .any(|binding| navigation_binding_selects_item(accepted, *binding, item))
+            })
+            .filter_map(|owner| self.visible_declaration_owner(owner.node))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    /// All visible declaration owners of current native selection, or the sole
+    /// logical declaration when no native item is selected.
+    #[must_use]
+    pub fn selected_navigation_declarations(&self) -> Vec<NodeId> {
+        if self.editor.selection().is_empty() {
+            return self.selected_declaration.into_iter().collect();
+        }
+        self.editor
+            .selection()
+            .iter()
+            .flat_map(|item| self.navigation_declaration_owners(*item))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
     /// Builds the schema-derived Inspector for the selected declaration.
     #[must_use]
     pub fn selected_inspector(
@@ -3792,7 +3962,10 @@ impl ProjectionalEditorSession {
             .and_then(|node| self.visible_declaration_owner(node));
     }
 
-    fn visible_declaration_owner(&self, node: NodeId) -> Option<NodeId> {
+    /// Resolves an existing declaration to its visible organizational owner.
+    /// Private one-consumer Profile Offset aggregates navigate to the operation.
+    #[must_use]
+    pub fn visible_declaration_owner(&self, node: NodeId) -> Option<NodeId> {
         let graph = self.coordinator.intent().graph();
         let declaration = graph.node(node)?;
         if !matches!(declaration.kind, IntentNodeKind::Aggregate { .. }) {
@@ -3857,6 +4030,124 @@ fn projectional_fillet_radius_group_patch(
         IntentPatchPolicy::RetainFailedIntent,
         operations,
     ))
+}
+
+fn append_navigation_binding_items(
+    accepted: &ColdIntentMaterialization,
+    binding: IntentNativeBinding,
+    items: &mut std::collections::BTreeSet<SelectionItem>,
+) {
+    let document = accepted.session.design_document();
+    match binding {
+        IntentNativeBinding::Point(point) if document.point(point).is_some() => {
+            items.insert(SelectionItem::Point(point));
+        }
+        IntentNativeBinding::Curve(curve) => {
+            if let Ok(spans) = document.curve_spans(curve) {
+                items.extend(spans.into_iter().map(SelectionItem::Curve));
+            }
+        }
+        IntentNativeBinding::CurveSpan(span) => {
+            if document
+                .curve_spans(span.curve)
+                .is_ok_and(|spans| spans.contains(&span))
+            {
+                items.insert(SelectionItem::Curve(span));
+            }
+        }
+        IntentNativeBinding::Constraint(constraint)
+            if document
+                .constraint(constraint)
+                .is_some_and(|entry| !entry.suppressed) =>
+        {
+            items.insert(SelectionItem::Constraint(constraint));
+        }
+        IntentNativeBinding::Dimension(dimension)
+            if document
+                .dimension(dimension)
+                .is_some_and(|entry| !entry.suppressed) =>
+        {
+            items.insert(SelectionItem::Dimension(dimension));
+        }
+        IntentNativeBinding::ComputedFeature(feature) => {
+            if accepted
+                .computed
+                .feature_evaluations()
+                .iter()
+                .any(|evaluation| {
+                    evaluation.feature == feature
+                        && matches!(
+                            &evaluation.state,
+                            geosolve_sketch_features::ComputedFeatureEvaluationState::Current {
+                                corner_edges
+                            } if !corner_edges.is_empty()
+                        )
+                })
+            {
+                items.insert(SelectionItem::Feature(feature));
+            }
+        }
+        IntentNativeBinding::ComputedFeatureCorner(corner) => {
+            for evaluation in accepted.computed.feature_evaluations() {
+                if let geosolve_sketch_features::ComputedFeatureEvaluationState::Current {
+                    corner_edges,
+                } = &evaluation.state
+                    && corner_edges
+                        .iter()
+                        .any(|(candidate, _)| *candidate == corner)
+                {
+                    items.insert(SelectionItem::FeatureCorner(
+                        geosolve_sketch_features::ComputedCornerRef {
+                            feature: evaluation.feature,
+                            corner,
+                        },
+                    ));
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn navigation_binding_selects_item(
+    accepted: &ColdIntentMaterialization,
+    binding: IntentNativeBinding,
+    item: SelectionItem,
+) -> bool {
+    match (binding, item) {
+        (IntentNativeBinding::CurveSpan(candidate), SelectionItem::Curve(span)) => {
+            candidate == span
+        }
+        (
+            IntentNativeBinding::ComputedFeatureCorner(candidate),
+            SelectionItem::FeatureCorner(corner),
+        ) => {
+            candidate == corner.corner
+                && accepted
+                    .features
+                    .corner(corner.feature, candidate)
+                    .is_some()
+        }
+        _ => native_binding_selects_item(binding, item),
+    }
+}
+
+fn navigation_item_exists(accepted: &ColdIntentMaterialization, item: SelectionItem) -> bool {
+    let document = accepted.session.design_document();
+    match item {
+        SelectionItem::Point(point) => document.point(point).is_some(),
+        SelectionItem::Curve(span) => document
+            .curve_spans(span.curve)
+            .is_ok_and(|spans| spans.contains(&span)),
+        SelectionItem::Constraint(constraint) => document.constraint(constraint).is_some(),
+        SelectionItem::Dimension(dimension) => document.dimension(dimension).is_some(),
+        SelectionItem::Feature(feature) => accepted.features.feature(feature).is_some(),
+        SelectionItem::FeatureCorner(corner) => accepted
+            .features
+            .corner(corner.feature, corner.corner)
+            .is_some(),
+        SelectionItem::Datum(_) => false,
+    }
 }
 
 fn native_binding_selects_item(binding: IntentNativeBinding, item: SelectionItem) -> bool {

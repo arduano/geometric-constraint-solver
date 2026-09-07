@@ -781,6 +781,365 @@ fn click_only_point_route_is_cancelled_before_the_next_press() {
 }
 
 #[test]
+fn m95_declaration_navigation_selects_owned_canvas_items_without_changing_authority() {
+    let (mut session, point, viewport) = fixture();
+    let node = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership
+        .exact_owner(IntentNativeBinding::Point(point))
+        .unwrap();
+    let identity = session.coordinator().intent().identity();
+    let history = session.coordinator().intent().undo_len();
+    let scene = session.scene(viewport, 0.5).unwrap();
+    assert!(session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(session.editor().selection(), &[SelectionItem::Point(point)]);
+    assert_eq!(session.selected_declaration(), Some(node));
+    assert_eq!(session.coordinator().intent().identity(), identity);
+    assert_eq!(session.coordinator().intent().undo_len(), history);
+    assert_eq!(session.scene(viewport, 0.5).unwrap(), scene);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "complete output ownership and set toggles share one authority witness"
+)]
+fn m95_navigation_selects_complete_owned_outputs_and_toggles_sets_without_aliasing_operands() {
+    let (mut session, corner, diagonal, _viewport) = shared_corner_rectangle_diagonal_fixture();
+    let ownership = &session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership;
+    let rectangle = ownership
+        .exact_owner(IntentNativeBinding::Point(corner))
+        .unwrap();
+    let line = ownership
+        .exact_owner(IntentNativeBinding::Curve(diagonal.curve))
+        .unwrap();
+    let identity = session.coordinator().intent().identity();
+    let native = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document()
+        .clone();
+    let history = session.coordinator().intent().undo_len();
+    let rectangle_items = session.navigation_selection_items([rectangle]);
+    assert_eq!(
+        rectangle_items
+            .iter()
+            .filter(|item| matches!(item, SelectionItem::Point(_)))
+            .count(),
+        4
+    );
+    assert_eq!(
+        rectangle_items
+            .iter()
+            .filter(|item| matches!(item, SelectionItem::Curve(_)))
+            .count(),
+        4
+    );
+    assert_eq!(
+        session.navigation_selection_items([line]),
+        vec![SelectionItem::Curve(diagonal)]
+    );
+    assert_eq!(
+        session.navigation_declaration_owners(SelectionItem::Point(corner)),
+        vec![rectangle]
+    );
+    assert_eq!(
+        session.navigation_declaration_owners(SelectionItem::Curve(diagonal)),
+        vec![line]
+    );
+    assert!(
+        session
+            .navigation_declaration_owners(SelectionItem::Curve(CurveSpan {
+                curve: diagonal.curve,
+                segment: 19
+            }))
+            .is_empty()
+    );
+    session.set_selection([SelectionItem::Point(corner)]);
+    let extend = Modifiers {
+        shift: true,
+        ..Modifiers::default()
+    };
+    assert!(session.select_navigation_declarations([rectangle], extend));
+    assert_eq!(session.editor().selection().len(), rectangle_items.len());
+    assert!(
+        rectangle_items
+            .iter()
+            .all(|item| session.editor().selection().contains(item))
+    );
+    assert_eq!(session.selected_declaration(), Some(rectangle));
+    assert!(session.select_navigation_declarations([line], extend));
+    let mut owners = vec![rectangle, line];
+    owners.sort();
+    assert_eq!(session.selected_navigation_declarations(), owners);
+    assert_eq!(session.selected_declaration(), None);
+    assert!(
+        session
+            .selected_inspector(&session.workbench_projection())
+            .is_none()
+    );
+    assert!(session.select_navigation_declarations([rectangle], extend));
+    assert_eq!(
+        session.editor().selection(),
+        &[SelectionItem::Curve(diagonal)]
+    );
+    assert_eq!(session.selected_declaration(), Some(line));
+    assert!(
+        session.select_navigation_declarations([rectangle, line, rectangle], Modifiers::default())
+    );
+    assert_eq!(
+        session.editor().selection().len(),
+        rectangle_items.len() + 1
+    );
+    assert_eq!(session.selected_declaration(), None);
+    assert_eq!(session.coordinator().intent().identity(), identity);
+    assert_eq!(session.coordinator().intent().undo_len(), history);
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document(),
+        &native
+    );
+}
+
+#[test]
+fn m95_suppressed_and_deleted_declaration_navigation_never_restores_geometry() {
+    let (mut session, point, viewport) = fixture();
+    let node = session.navigation_declaration_owners(SelectionItem::Point(point))[0];
+    session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetSuppressed {
+                node,
+                suppressed: true,
+            }],
+        ))
+        .unwrap();
+    let identity = session.coordinator().intent().identity();
+    let history = session.coordinator().intent().undo_len();
+    assert!(session.navigation_selection_items([node]).is_empty());
+    assert!(session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(session.selected_navigation_declarations(), vec![node]);
+    assert!(session.editor().selection().is_empty());
+    assert!(session.scene(viewport, 0.5).unwrap().points.is_empty());
+    assert_eq!(session.coordinator().intent().identity(), identity);
+    assert_eq!(session.coordinator().intent().undo_len(), history);
+    session.delete_declaration(node).unwrap();
+    session.set_selection([SelectionItem::Datum(SketchDatum::XAxis)]);
+    assert!(!session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(
+        session.editor().selection(),
+        &[SelectionItem::Datum(SketchDatum::XAxis)]
+    );
+    assert!(session.selected_navigation_declarations().is_empty());
+    assert!(
+        session
+            .navigation_declaration_owners(SelectionItem::Point(point))
+            .is_empty()
+    );
+}
+
+#[test]
+fn m95_navigation_rejects_captured_gestures_and_preserves_visibility_policy() {
+    let (mut session, point, viewport) = fixture();
+    let node = session.navigation_declaration_owners(SelectionItem::Point(point))[0];
+    let scene = session.scene(viewport, 0.5).unwrap();
+    session
+        .pointer_down(&scene, pointer(951, viewport.model_to_screen([1.0, 2.0])))
+        .unwrap();
+    assert!(session.editor().active_pointer_gesture().is_some());
+    let selected = session.editor().selection().to_vec();
+    assert!(!session.select_navigation_declarations([], Modifiers::default()));
+    assert_eq!(session.editor().selection(), selected);
+    session.cancel_interaction();
+    let visibility = geosolve_constraint_editor::GeometryVisibility {
+        explicit_construction: false,
+        implicit_construction: false,
+        reference_geometry: false,
+    };
+    session.editor_mut().set_geometry_visibility(visibility);
+    assert!(session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(
+        session.editor().geometry_interaction_policy().visibility,
+        visibility
+    );
+}
+
+#[test]
+fn m95_constraint_navigation_selects_the_annotation_without_selecting_its_operands() {
+    let (mut session, point, _viewport) = fixture();
+    let owner = session.navigation_declaration_owners(SelectionItem::Point(point))[0];
+    let point_port = session
+        .coordinator()
+        .intent()
+        .graph()
+        .node(owner)
+        .unwrap()
+        .port_by_selector(primary())
+        .unwrap()
+        .as_ref(owner);
+    let draft = IntentNodeDraft::new(
+        IntentNodeKind::Constraint {
+            constraint: geosolve_sketch_intent::ConstraintKind::FixedPoint,
+        },
+        key("fixed.point"),
+    )
+    .with_input(
+        geosolve_sketch_intent::InputSlot::new(geosolve_sketch_intent::InputRole::Point, 0),
+        geosolve_sketch_intent::PatchPortRef::Stable { port: point_port },
+    );
+    session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("fixed"),
+                draft: Box::new(draft),
+                cell: None,
+            }],
+        ))
+        .unwrap();
+    let (node, constraint) = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .ownership
+        .nodes
+        .iter()
+        .find_map(|owner| {
+            owner.owned.iter().find_map(|binding| match binding {
+                IntentNativeBinding::Constraint(constraint) => Some((owner.node, *constraint)),
+                _ => None,
+            })
+        })
+        .expect("standalone fixed-point declaration");
+    assert_eq!(
+        session.navigation_selection_items([node]),
+        vec![SelectionItem::Constraint(constraint)]
+    );
+    assert!(session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(
+        session.editor().selection(),
+        &[SelectionItem::Constraint(constraint)]
+    );
+    assert_eq!(session.selected_navigation_declarations(), vec![node]);
+    assert_eq!(session.selected_declaration(), Some(node));
+    session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::SetSuppressed {
+                node,
+                suppressed: true,
+            }],
+        ))
+        .unwrap();
+    assert!(session.navigation_selection_items([node]).is_empty());
+    assert!(session.select_navigation_declarations([node], Modifiers::default()));
+    assert_eq!(session.selected_declaration(), Some(node));
+    assert!(session.editor().selection().is_empty());
+}
+
+#[test]
+fn m95_exact_output_navigation_keeps_one_polyline_span_and_point_helper_exact() {
+    let (mut session, borrowed, _viewport) = fixture();
+    let borrowed_owner = session.navigation_declaration_owners(SelectionItem::Point(borrowed))[0];
+    let plan = ConstructionCommitPlan {
+        proposal: ConstructionProposal::PolylinePath {
+            points: vec![
+                ConstructionPoint::New([0.0, 0.0]),
+                ConstructionPoint::New([1.0, 0.0]),
+                ConstructionPoint::Existing {
+                    id: borrowed,
+                    position: [1.0, 2.0],
+                },
+            ],
+            closed: false,
+        },
+        curve_roles: vec![GeometryRole::Profile],
+        relations: Vec::new(),
+    };
+    let patch = projectional_construction_patch(
+        session.coordinator().intent().identity(),
+        session.coordinator().intent(),
+        &session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .ownership,
+        GeometryToolVariant::Polyline,
+        &plan,
+    )
+    .unwrap();
+    let alias = patch.geometry_alias.clone();
+    let outcome = session.apply_patch(patch.patch).unwrap();
+    let node = outcome.aliases.node(&alias).unwrap();
+    let items = session.navigation_selection_items([node]);
+    let spans = items
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Curve(span) => Some(*span),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let point = items
+        .iter()
+        .find_map(|item| match item {
+            SelectionItem::Point(point) => Some(*point),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(spans.len(), 2);
+    assert_eq!(spans[0].curve, spans[1].curve);
+    assert!(!items.contains(&SelectionItem::Point(borrowed)));
+    let before = session.coordinator().intent().identity();
+    let selected = session.editor().selection().to_vec();
+    assert_eq!(
+        session.navigation_selection_items_for_bindings([
+            IntentNativeBinding::CurveSpan(spans[1]),
+            IntentNativeBinding::Point(point),
+            IntentNativeBinding::CurveSpan(spans[1]),
+            IntentNativeBinding::CurveSpan(CurveSpan {
+                curve: spans[0].curve,
+                segment: 99
+            }),
+        ]),
+        vec![SelectionItem::Point(point), SelectionItem::Curve(spans[1])]
+    );
+    assert_eq!(
+        session
+            .navigation_selection_items_for_bindings([IntentNativeBinding::Curve(spans[0].curve),]),
+        spans
+            .iter()
+            .copied()
+            .map(SelectionItem::Curve)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        session.navigation_declaration_owners(SelectionItem::Curve(spans[1])),
+        vec![node]
+    );
+    assert_eq!(
+        session.navigation_declaration_owners(SelectionItem::Point(borrowed)),
+        vec![borrowed_owner]
+    );
+    assert_eq!(session.coordinator().intent().identity(), before);
+    assert_eq!(session.editor().selection(), selected);
+}
+
+#[test]
 fn native_and_design_selection_project_to_one_exact_declaration_owner() {
     let (mut session, point, _viewport) = fixture();
     let node = *session
