@@ -90,9 +90,9 @@ a different materialization path. A much larger source drag previews but rejects
 an explicit Problem and retains original authority; it is not counted as accepted movement.
 
 The first headless Vulkan captures omit many line strokes despite populated frame data; those
-captures do not establish full visual parity. Renderer/capture diagnosis remains separate from
-the measured synchronous WASM publication costs. Final qualification and replacement delivery
-will be recorded after the repair stabilizes.
+captures do not establish full visual parity. Follow-up investigation identified M94-F004 below.
+The independently timed synchronous WASM publication work remains valid; final drawing and
+renderer timings must come from the corrected complete canvas.
 
 ## Implemented correction
 
@@ -168,3 +168,44 @@ nix-shell shell.nix --run 'GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18106/ GEOSOLV
 Result: 4/4 passed in 42.1 seconds, including actual WebGL2 point pixels/idle behavior,
 DPR/resize/picking and drag/Undo, context loss, and lost-capture cancellation/next gesture.
 This point-pixel suite alone does not resolve the separate polyline-stroke observation above.
+
+## M94-F004 — context loss during first shader compilation
+
+The visual audit independently reproduced a pre-existing renderer recovery defect on both the
+F002 baseline and provisional F003 artifacts. On this Chrome/ANGLE run the context is lost during
+initial batch-shader compilation. Pixi 8.20.1 generates empty uniform-upload functions from the
+failed shader's missing active-uniform metadata. Restoration rebuilds GPU programs but keeps
+those empty functions. Batched lines/grid/text consequently use zero GPU transform/color uniforms,
+while independently drawn large point/circle outlines remain visible. Rust frame geometry,
+tessellated path vertices and native accepted authority are intact.
+
+A diagnostic no-batch path restores strokes. Resetting only Pixi's uniform-upload caches after
+context restoration restores strokes while retaining batching. These experiments are browser
+response instrumentation, not qualified production artifacts. The correction is confined to
+renderer recovery, with a pinned-version compatibility seam and fresh retained presentation
+resources after restoration. No native geometry/solver policy is involved.
+
+Evidence: `target/m94/drag/visual-audit/{trace-deep.log,sync.json,sync-calls.json,no-batch.png,
+context-cache-clear.png}`. The earlier point-pixel tests passed even with missing strokes; the
+restoration regression now also needs real line-interior and label pixels, including loss during
+first compilation. Focused correction and qualification outcomes will be recorded below.
+
+The final first-shader regression fails on the F002 artifact with zero line-interior pixels
+(`regression-before-r3.log`) and passes against the corrected frontend (`regression-after-r3.log`,
+10.6 seconds). It strengthens the existing context-restoration browser case with a separate fresh
+context and checks line-interior plus both X/Y label pixels; all prior lifecycle assertions remain.
+The production backend resets the two version-checked Pixi 8.20.1 uniform-upload caches on the
+first draw following restoration and recreates retained paint/text resources once. Ordinary GPU
+batching and translation reuse remain enabled. Unsupported cache structure fails visibly.
+
+```bash
+nix-shell shell.nix --run 'npm --prefix crates/geosolve-demo-web/frontend run check:types && npm --prefix crates/geosolve-demo-web/frontend run test -- --no-cache src/lib/canvas-renderer-pixi.test.ts && GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18107/ GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers 1 --output /tmp/m94-f004-canvas'
+```
+
+Typecheck, five renderer resource tests and all four canvas cases pass (browser 48.0 seconds).
+`visual-audit/f004-actual/before-wheel.png` also visibly restores the complete backplane, grid and
+both datum labels with actual hardware rendering. Early test attempts interrupted Pixi's shader
+capability probe and hung its synchronous retry loop; the final injector targets only the first
+actual batch shader. A preliminary compiler declaration mismatch and one browser executable
+launch failure were corrected before the decisive red/green and final focused checks. Those
+failed attempts remain in the evidence directory; none is counted as a passing result.

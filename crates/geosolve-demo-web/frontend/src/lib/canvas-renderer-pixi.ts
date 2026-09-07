@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import "pixi.js/filters";
-import { BlurFilter, CanvasTextMetrics, Color, Container, Graphics, Text, TextStyle, WebGLRenderer } from "pixi.js";
+import { BlurFilter, CanvasTextMetrics, Color, Container, Graphics, Text, TextStyle, VERSION, WebGLRenderer } from "pixi.js";
 import type { DrawFrame, DrawItem, DrawPoint, DrawStyle } from "./canvas-scene";
 import { dashedSegments, fitDrawing, textRasterOrigin } from "./canvas-renderer-geometry";
 
@@ -12,6 +12,22 @@ export interface CanvasBackend {
   destroy(): void;
 }
 interface Entry { container: Container; content: Graphics | Text; shadow: Graphics | null; blur: BlurFilter | null; item: DrawItem | null; kind: DrawItem["kind"]; scale: number; resolution: number; position: DrawPoint | null }
+
+/** Pixi 8.20.1 retains generated uniform uploaders across context restoration.
+ * Loss during shader compilation can cache empty uploaders from absent uniform
+ * metadata. Recompile them for the restored context, preserving normal batching.
+ * Keep this version-bound compatibility seam explicit until upstream fixes it.
+ */
+function invalidateRestoredUniformUploads(renderer: WebGLRenderer) {
+  const system = renderer.uniformGroup as unknown as Record<string, unknown>;
+  const caches = ["_cache", "_uniformGroupSyncHash"] as const;
+  if (String(VERSION) !== "8.20.1" || !system || caches.some((key) => {
+    const value = system[key];
+    return !value || typeof value !== "object" || Array.isArray(value)
+      || ![Object.prototype, null].includes(Object.getPrototypeOf(value));
+  })) throw new Error("Unsupported Pixi uniform-cache restoration contract");
+  for (const key of caches) system[key] = Object.create(null) as Record<string, unknown>;
+}
 
 function sameStyle(a: DrawStyle, b: DrawStyle): boolean {
   return a === b || a.fill === b.fill && a.stroke === b.stroke && a.strokeWidth === b.strokeWidth
@@ -130,7 +146,11 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
   const stage = new Container({ eventMode: "none", interactiveChildren: false });
   const entries = new Map<string, Entry>();
   let surfaceKey = "";
-  let created = 0; let destroyed = 0; let updated = 0; let repainted = 0; let disposed = false;
+  let created = 0; let destroyed = 0; let updated = 0; let repainted = 0; let disposed = false; let restored = false;
+  // Registered after Pixi initialization: rebuild only on the next render, after
+  // all of Pixi's own context-restoration listeners have completed.
+  const contextRestored = () => { restored = true; };
+  canvas.addEventListener("webglcontextrestored", contextRestored);
   function remove(entry: Entry) {
     entry.blur?.destroy();
     entry.container.destroy({ children: true, texture: true, textureSource: true });
@@ -140,6 +160,14 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
     hardware,
     render(frame, surface) {
       if (disposed || gl.isContextLost()) throw new Error("WebGL2 context is unavailable for presentation");
+      if (restored) {
+        invalidateRestoredUniformUploads(renderer);
+        // Textures rasterized during a failed first draw can also be incomplete.
+        // Retire retained presentation resources once; native frame authority and
+        // ordinary translation/resource reuse remain unchanged.
+        for (const entry of entries.values()) remove(entry);
+        entries.clear(); surfaceKey = ""; restored = false;
+      }
       // Supersample low-DPR displays so thin CAD strokes and small dimension
       // text retain subpixel coverage comparable to the SVG baseline.
       const rasterResolution = Math.max(2, surface.pixelRatio);
@@ -217,6 +245,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
     destroy() {
       if (disposed) return;
       disposed = true;
+      canvas.removeEventListener("webglcontextrestored", contextRestored);
       for (const entry of entries.values()) remove(entry);
       entries.clear(); stage.destroy(); renderer.destroy({ removeView: false });
     },

@@ -85,3 +85,8 @@ transport, preserving every semantic sample, independent native validation, exac
 history and strict imported-byte validation. No solver algorithm or branch policy changes.
 [The drag report](M94_DRAG_OPTIMIZATION.md) records reproduction, implementation, focused evidence,
 remaining costs and final qualification/delivery. M94 remains open for supervising-user acceptance.
+
+The F003 visual audit also reproduced M94-F004: loss during initial GPU shader compilation retained
+empty Pixi upload caches after restoration. The same correction pass repairs that presentation
+recovery and strengthens the existing context-loss test with real line/text pixels, while keeping
+GPU batching and all native authority unchanged. It is included in the replacement qualification.

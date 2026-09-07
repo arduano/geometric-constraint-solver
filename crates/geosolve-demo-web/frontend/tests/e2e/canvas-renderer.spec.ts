@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { compareFittedGeometry } from "../fitted-geometry";
 import { acceptedSource, fittedGeometry, samples, savedWorkspace } from "./release-sample-prefix";
-import { canvasFrame, canvasVisualWitness, drawItems, fractionToClient, presentedFrame, presentedIdentity, rendererDiagnostics, settlePresentation } from "./presented-canvas";
+import { canvasFrame, canvasVisualWitness, decodeScreenshot, drawItems, fractionToClient, presentedFrame, presentedIdentity, rendererDiagnostics, settlePresentation } from "./presented-canvas";
 
 async function openJansen(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -213,6 +213,10 @@ test("M94 canvas context loss retains presented evidence and restores the newest
   await expect.poll(() => presentedIdentity(canvas)).not.toBe(initial);
   expect(await savedWorkspace(page)).toBe(workspace);
   await info.attach("canvas-restored-pixels", { body: JSON.stringify(await canvasVisualWitness(canvas)), contentType: "application/json" });
+  await test.step("first-shader loss restores batched line and text pixels", async () => {
+    const fresh = await page.context().browser()!.newContext({ baseURL: new URL(".", page.url()).href });
+    try { await exerciseFirstShaderLoss(await fresh.newPage(), info); } finally { await fresh.close(); }
+  });
 });
 
 test("M94 canvas lost pointer capture cancels a preview and permits the next real gesture", async ({ page }) => {
@@ -247,3 +251,75 @@ test("M94 canvas lost pointer capture cancels a preview and permits the next rea
   await expect(page.getByRole("tabpanel").getByText("Ownership", { exact: true })).toBeVisible();
   expect((await presentedFrame(canvas)).provenance.scene).toBe("accepted");
 });
+
+
+async function exerciseFirstShaderLoss(page: Page, info: TestInfo) {
+  await page.addInitScript(() => {
+    const prototype = Reflect.get(globalThis, "WebGL2RenderingContext").prototype;
+    const original = Reflect.get(prototype, "compileShader");
+    let injected = false;
+    Reflect.set(globalThis, "__m94FirstShaderLoss", { injected: 0, restored: 0 });
+    type Context = {
+      canvas: { closest?: (selector: string) => unknown; addEventListener: (name: string, callback: () => void, options: { once: boolean }) => void };
+      getExtension: (name: string) => { loseContext(): void; restoreContext(): void } | null;
+      getShaderSource: (shader: unknown) => string | null;
+    };
+    Reflect.set(prototype, "compileShader", function (this: Context, shader: unknown) {
+      // Skip Pixi's capability probes: exercise the actual first batch program.
+      if (!injected && this.canvas.closest?.('[role="application"]') && this.getShaderSource(shader)?.includes('SHADER_NAME batch-')) {
+        injected = true;
+        const extension = this.getExtension("WEBGL_lose_context");
+        if (!extension) throw Error("WebGL2 context loss extension unavailable");
+        const evidence = Reflect.get(globalThis, "__m94FirstShaderLoss");
+        evidence.injected++;
+        this.canvas.addEventListener("webglcontextrestored", () => evidence.restored++, { once: true });
+        this.canvas.addEventListener("webglcontextlost", () => setTimeout(() => extension.restoreContext(), 100), { once: true });
+        // Loss during the first compilation leaves no active-uniform metadata.
+        // The subsequent restore must not reuse an empty upload function.
+        extension.loseContext();
+      }
+      Reflect.apply(original, this, [shader]);
+    });
+  });
+  const canvas = await openJansen(page);
+  await expect.poll(() => page.evaluate(() => Reflect.get(globalThis, "__m94FirstShaderLoss")))
+    .toEqual({ injected: 1, restored: 1 });
+  await page.mouse.move(0, 0);
+  await settlePresentation(page);
+  const scene = await presentedFrame(canvas);
+  const screenshot = await canvas.screenshot();
+  await info.attach("first-shader-loss-pixels", { body: screenshot, contentType: "image/png" });
+  const pixels = decodeScreenshot(screenshot);
+  const box = (await canvas.boundingBox())!;
+  const scaleX = pixels.width / box.width; const scaleY = pixels.height / box.height;
+  const countColor = (bounds: { x: number; y: number; width: number; height: number }, color: string) => {
+    const target = color.match(/[a-f\d]{2}/gi)!.map((component) => Number.parseInt(component, 16));
+    let count = 0;
+    for (let y = Math.max(0, Math.floor(bounds.y * scaleY)); y < Math.min(pixels.height, Math.ceil((bounds.y + bounds.height) * scaleY)); y++) {
+      for (let x = Math.max(0, Math.floor(bounds.x * scaleX)); x < Math.min(pixels.width, Math.ceil((bounds.x + bounds.width) * scaleX)); x++) {
+        const offset = (y * pixels.width + x) * pixels.channels;
+        if (target.every((value, channel) => Math.abs(pixels.pixels[offset + channel] - value) < 35)) count++;
+      }
+    }
+    return count;
+  };
+  const candidates = scene.items.flatMap((item) => item.kind === "polyline" && item.layer === "geometry" && item.style.stroke
+    ? item.points.slice(1).map((point, index) => ({ item, x: (point[0] + item.points[index][0]) / 2,
+      y: (point[1] + item.points[index][1]) / 2, length: Math.hypot(point[0] - item.points[index][0], point[1] - item.points[index][1]) })) : [])
+    .filter((candidate) => candidate.length > 40 && candidate.x > 10 && candidate.x < box.width - 10 && candidate.y > 10 && candidate.y < box.height - 10)
+    .sort((a, b) => b.length - a.length);
+  expect(candidates.length).toBeGreaterThan(0);
+  const line = candidates[0];
+  const linePixels = countColor({ x: line.x - 4, y: line.y - 4, width: 8, height: 8 }, line.item.style.stroke!);
+  expect(linePixels, "restored batched line must paint its interior, away from point markers").toBeGreaterThan(2);
+  const labels = scene.items.filter((item) => item.kind === "text" && item.className === "wb-datum-label");
+  expect(labels).toHaveLength(2);
+  const textPixels = labels.map((item) => {
+    if (item.kind !== "text" || !item.style.fill) throw Error("Expected colored datum text");
+    const size = item.style.fontSize;
+    const count = countColor({ x: item.position[0], y: item.position[1] - size * 1.5, width: size * 1.5, height: size * 1.8 }, item.style.fill);
+    expect(count, `restored glyph ${item.text} must have actual colored text pixels`).toBeGreaterThan(2);
+    return { id: item.id, count };
+  });
+  await info.attach("first-shader-loss-evidence", { body: JSON.stringify({ line: line.item.id, linePixels, textPixels }), contentType: "application/json" });
+}

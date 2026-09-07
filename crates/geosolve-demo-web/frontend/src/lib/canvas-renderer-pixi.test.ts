@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DrawFrame, DrawItem, DrawStyle } from "./canvas-scene";
 
-const fake = vi.hoisted(() => ({ graphics: [] as { destroyed: boolean; clears: number; parent: { position: { set: ReturnType<typeof vi.fn> } } | null; stroke: ReturnType<typeof vi.fn> }[], texts: [] as { style: unknown }[], render: vi.fn(), rendererDestroy: vi.fn(), reorder: vi.fn() }));
+const fake = vi.hoisted(() => ({ uniformSystems: [] as Record<string, unknown>[], graphics: [] as { destroyed: boolean; clears: number; parent: { position: { set: ReturnType<typeof vi.fn> } } | null; stroke: ReturnType<typeof vi.fn> }[], texts: [] as { style: unknown }[], render: vi.fn(), rendererDestroy: vi.fn(), reorder: vi.fn() }));
 vi.mock("pixi.js/filters", () => ({}));
 vi.mock("pixi.js", () => {
   class Container {
@@ -21,8 +21,9 @@ vi.mock("pixi.js", () => {
     circle() { return this; } roundRect() { return this; } fill() { return this; } stroke = vi.fn(() => this);
   }
   class Text extends Container { text = ""; style = {}; resolution = 1; constructor() { super(); fake.texts.push(this); } }
-  return { Container, Graphics, Text, TextStyle: class {}, CanvasTextMetrics: { measureText: () => ({ height: 12, lineHeight: 12, maxLineWidth: 40, fontProperties: { ascent: 10, descent: 2, fontSize: 12 } }) }, Color: class { alpha = 1; toNumber() { return 0xffffff; } },
+  return { VERSION: "8.20.1", Container, Graphics, Text, TextStyle: class {}, CanvasTextMetrics: { measureText: () => ({ height: 12, lineHeight: 12, maxLineWidth: 40, fontProperties: { ascent: 10, descent: 2, fontSize: 12 } }) }, Color: class { alpha = 1; toNumber() { return 0xffffff; } },
     BlurFilter: class { strength = 0; destroy() {} }, WebGLRenderer: class {
+      uniformGroup: Record<string, unknown> = { _cache: { stale: () => undefined }, _uniformGroupSyncHash: { stale: () => undefined } }; constructor() { fake.uniformSystems.push(this.uniformGroup); }
       context = { webGLVersion: 2 }; events = undefined; scheduler = { destroy: vi.fn() }; gc = { run: vi.fn() }; background = { color: "" }; init = async () => undefined; resize = vi.fn(); render = fake.render; destroy = fake.rendererDestroy;
     } };
 });
@@ -55,6 +56,28 @@ describe("Pixi resource ownership (GPU calls replaced, no claim of WebGL qualifi
     backend.render(frame([{ ...text, text: "Diameter" }]), surface);
     expect(fake.texts.at(-1)!.style).not.toBe(rasterStyle);
     backend.destroy(); backend.destroy(); expect(fake.rendererDestroy).toHaveBeenCalledTimes(1);
+  });
+  it("rebuilds lost-context resources and invalidates first-compile uniform caches exactly once", async () => {
+    const canvas = document.createElement("canvas");
+    const gl = { getExtension: () => null, getParameter: () => "test-double", isContextLost: () => false, flush() {}, getError: () => 0, NO_ERROR: 0 };
+    vi.spyOn(canvas, "getContext").mockReturnValue(gl as never);
+    const backend = await createPixiBackend(canvas);
+    const text: DrawItem = { ...item("label"), kind: "text", position: [10, 10], text: "X", rotation: 0 };
+    const drawing = frame([item("a"), text]);
+    backend.render(drawing, surface);
+    const oldGraphic = fake.graphics.at(-1)!; const oldText = fake.texts.at(-1)!;
+    const uniforms = fake.uniformSystems.at(-1)!;
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+    expect(backend.render(drawing, surface)).toMatchObject({ resources: 2, created: 4, destroyed: 2 });
+    expect(oldGraphic.destroyed).toBe(true);
+    expect(fake.texts.at(-1)).not.toBe(oldText);
+    expect(Object.keys(uniforms._cache as object)).toEqual([]);
+    expect(Object.keys(uniforms._uniformGroupSyncHash as object)).toEqual([]);
+    expect(backend.render(drawing, surface)).toMatchObject({ resources: 2, created: 4, destroyed: 2 });
+    uniforms._cache = [];
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+    expect(() => backend.render(drawing, surface)).toThrow("Unsupported Pixi uniform-cache restoration contract");
+    backend.destroy();
   });
   it("does not choose another rendering API when WebGL2 creation fails", async () => {
     const canvas = document.createElement("canvas"); const get = vi.spyOn(canvas, "getContext").mockReturnValue(null);
