@@ -111,6 +111,16 @@ presentation tolerance, with finite coordinates and Undo movement greater than t
 Complete saved-state/source/history checks remain exact. The interrupted run remains incomplete;
 the frontend-only correction resumes its authenticated unaffected successes.
 
+Run `20260907T124645-844ebf32` on `87c3e5c` passed preparation and production transport but
+could not start browser tests: the earlier interrupted run left its owned server on port 4173.
+The verified stale process was retired. Resumed run `20260907T125206-1d6dbfa8` passed all
+17 fresh catalog/sample prefixes and 40/41 full browser cases, including every sample workflow
+and the replacement-layout regressions. The sole failure was another `HARNESS_ERROR`: the
+managed-segment fixture's fixed click fractions now landed near existing geometry and correctly
+published an inferred `constraint2`, violating its segment-only group expectation. Its clicks
+move into empty space above the sample; exact source, group membership and Undo/Redo checks stay.
+Neither issue changes product bytes or mathematical expectations. Final qualification follows.
+
 ## Implementation checkpoint
 
 The live bridge now emits transient protocol v2 with finite numeric `DrawFrame` primitives;

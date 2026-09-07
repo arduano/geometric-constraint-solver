@@ -382,9 +382,11 @@ test("real WASM source-backs click-authored geometry in a managed sample", async
 
   await page.getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment" }).click();
-  await click(0.35, 0.48);
+  // Keep this source-backing fixture above the fitted sample, away from the
+  // existing geometry and inferred relations exercised by other cases.
+  await click(0.31, 0.14);
   await expectDraft(canvasFrame(page), true);
-  await click(0.65, 0.55);
+  await click(0.66, 0.22);
 
   const upgradedSource = await waitForAcceptedManagedSource(
     page,
