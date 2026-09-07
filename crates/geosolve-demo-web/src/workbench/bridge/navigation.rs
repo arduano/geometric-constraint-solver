@@ -650,7 +650,7 @@ fn collect_navigation_rows(
             && !missing_logical_child
         {
             Some("selected")
-        } else if owned > 0 || entry.children.iter().any(|id| explicit.contains(id)) {
+        } else if owned > 0 || logical || entry.children.iter().any(|id| explicit.contains(id)) {
             Some("partial")
         } else {
             None

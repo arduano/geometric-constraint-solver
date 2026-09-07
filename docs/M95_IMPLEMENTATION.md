@@ -105,3 +105,18 @@ selection. M95 delta payloads are about 457–481 thousand UTF-16 characters ver
 both runs preserve exact complete persistence. These are synchronous bridge phase measurements,
 not end-to-end FPS. The richer new behavior and differing payloads are disclosed; final artifact
 pan/zoom/drag checks remain. Raw evidence: `target/m95/performance-{m94,provisional}/selection.json`.
+
+
+**M95-F002 — retained hidden selection lost its partial group marker.** With two hidden circles,
+select both rows, toggle the second off, then create a dirty source draft. Accepted logical
+selection survives index reconciliation, but the ancestor row omitted that logical coverage.
+The extended `m95_multiple_hidden_rows_keep_browsing_without_inventing_an_inspector` regression
+fails on `9acc023` (`target/m95/hidden-draft-red.log`). Counting that retained logical coverage in
+the partial-row case repairs the projection without changing selection, source ownership or history.
+The complete focused `m95_` suite passes **10/10**, then strict Clippy passes in
+`target/m95/hidden-draft-green.log`.
+
+Run `20260907T182205-867074e5` was deliberately interrupted in `prepare.workspace` for this
+one-line correction after all six preflight stages passed. Its incomplete qualification is
+retained honestly; the next nomination resumes with input-authenticated successes. No completed
+domain/golden/browser suite was repeated due to either preflight interruption.

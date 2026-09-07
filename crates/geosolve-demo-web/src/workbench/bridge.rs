@@ -9724,6 +9724,23 @@ export default sketch(($) => {
         assert_eq!(remaining["sources"].as_array().unwrap().len(), 1);
         assert!(bridge.editor().selected_declaration().is_some());
         assert_eq!(bridge.persistence_contents().unwrap(), before);
+        let source = bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .managed_source()
+            .to_owned();
+        bridge
+            .change_source("sketch.ts", format!("{source}\n// dirty draft"))
+            .unwrap();
+        let dirty = serde_json::to_value(bridge.navigation_snapshot()).unwrap();
+        assert!(
+            dirty["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["id"] == initial["explorer"][0]["id"] && row["state"] == "partial")
+        );
     }
 
     #[test]
