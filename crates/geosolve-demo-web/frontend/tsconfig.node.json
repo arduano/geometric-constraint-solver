@@ -11,5 +11,5 @@
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "tests/e2e", "src/lib/canvas-scene.ts"]
+  "include": ["vite.config.ts", "playwright.config.ts", "tests/e2e", "tests/fitted-geometry.ts", "src/lib/canvas-scene.ts"]
 }

@@ -187,3 +187,12 @@ Focused repair qualification passes:
   reports existing dead-code warnings; the integrated warnings-denied workspace Clippy remains required.
 
 Logs: `/tmp/m94-{fitted-geometry-unit,browser-harness-repair,wasm-lifecycle-repair}.log`.
+
+Run `20260907T100735-2c84bd07` on `8220cf8` passed every native workspace/headless
+obligation and optimized WASM preparation, then failed browser preparation with TS6307: the new
+helper was outside the composite `tsconfig.node.json` file list. Direct strict TypeScript checks
+had not exercised that project-reference boundary. Adding the exact helper file to the existing
+include list fixes the build contract; `nix-shell shell.nix --run
+'npm --prefix crates/geosolve-demo-web/frontend run check:types'` passes. This configuration-only
+repair changes no test assertion or product behavior. Native/WASM successes remain eligible for
+authenticated reuse in the replacement integrated run. Log: `/tmp/m94-composite-types-repair.log`.
