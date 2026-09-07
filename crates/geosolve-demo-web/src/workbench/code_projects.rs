@@ -131,6 +131,10 @@ struct PendingSemanticPointDrag {
     /// Source detachment may replace that node, so accepted publication
     /// restores the presentation selection through this stable alias.
     selected_alias: Option<geosolve_sketch_intent::IntentKey>,
+    /// Exact canvas selection before the originating press. A native press
+    /// may replace it before semantic disambiguation, and code persistence
+    /// deliberately carries no transient selection to restore on rejection.
+    origin_selection: Vec<SelectionItem>,
     /// Exact native authority from which the authenticated point gesture
     /// began when a referenced consumer first needed local detachment.
     /// Producer gestures use the accepted code checkpoint directly.
@@ -2315,6 +2319,7 @@ impl CodeProjectWorkbench {
         pointer_id: u64,
         native_point: geosolve_sketch::DesignPointId,
         preferred_declaration: Option<&SemanticSymbol>,
+        origin_selection: &[SelectionItem],
     ) -> Result<Option<PreparedCodePointDrag>, String> {
         if self.pending_semantic_point_drag.is_some() {
             return Err("another authenticated semantic point gesture is still pending".into());
@@ -2353,6 +2358,7 @@ impl CodeProjectWorkbench {
                 native_point,
                 point,
                 selected_alias,
+                origin_selection: origin_selection.to_vec(),
                 detached_origin_checkpoint: None,
             });
             return Ok(None);
@@ -2393,6 +2399,7 @@ impl CodeProjectWorkbench {
             native_point: detached_point,
             point,
             selected_alias,
+            origin_selection: origin_selection.to_vec(),
             detached_origin_checkpoint: Some(checkpoint),
         });
         Ok(Some(PreparedCodePointDrag {
@@ -2447,6 +2454,11 @@ impl CodeProjectWorkbench {
                     );
                 }
             }
+            // Restore the authenticated consumer owner and its original
+            // native selection independently. The declaration-only setter
+            // clears native items; reprojecting a shared producer point could
+            // instead replace the consumer's deliberately chosen source lens.
+            editor.editor_mut().set_selection(pending.origin_selection);
             Ok(Some(editor))
         } else {
             Ok(None)
@@ -7319,6 +7331,75 @@ fn escape_attribute(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detached_point_cancel_restores_exact_selected_items_and_consumer_owner() {
+        let compiled = CompiledManagedSource::from_json(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-compiler-envelope.json"
+        )))
+        .unwrap();
+        let (mut workbench, mut editor) = CodeProjectWorkbench::open_managed_test_compiled(
+            "m95-rejected-drag-selection",
+            compiled,
+        )
+        .unwrap();
+        let owner = SemanticSymbol("segment".into());
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let consumer = expansion
+            .declaration_provenance
+            .iter()
+            .find(|(_, declaration)| **declaration == owner)
+            .and_then(|(alias, _)| editor.coordinator().intent().graph().node_by_symbol(alias))
+            .unwrap()
+            .id;
+        let point = expansion
+            .writable_points
+            .iter()
+            .filter(|point| point.source.is_reference())
+            .find_map(|point| expanded_port_point(&editor, &point.handle))
+            .unwrap();
+        let owned_items = editor.navigation_selection_items([consumer]);
+        assert_eq!(owned_items.len(), 2);
+        for selection in [owned_items.clone(), vec![owned_items[1]], Vec::new()] {
+            let persistence = workbench.to_persistence_json().unwrap();
+            let identity = workbench.code_session_identity().clone();
+            // Native pointer-down can replace the pre-press selection with
+            // the shared producer; rollback must use the explicitly captured
+            // origin rather than this current presentation.
+            editor.set_selection([SelectionItem::Point(point)]);
+            assert!(
+                workbench
+                    .prepare_semantic_point_drag(&editor, 95_003, point, Some(&owner), &selection,)
+                    .unwrap()
+                    .is_some()
+            );
+            assert!(
+                workbench
+                    .cancel_semantic_point_drag(Some(95_004))
+                    .unwrap()
+                    .is_none()
+            );
+            let restored = workbench
+                .cancel_semantic_point_drag(Some(95_003))
+                .unwrap()
+                .unwrap();
+            assert_eq!(restored.editor().selection(), selection);
+            assert_eq!(
+                workbench.selected_managed_declaration(&restored).unwrap(),
+                Some(owner.clone())
+            );
+            assert_eq!(workbench.code_session_identity(), &identity);
+            assert_eq!(workbench.to_persistence_json().unwrap(), persistence);
+            assert!(!workbench.has_any_pending_semantic_point_drag());
+            editor = restored;
+        }
+    }
 
     fn infeasible_contact_range_fixture(limited: bool) -> CompiledManagedSource {
         let fixture = if limited {

@@ -31,6 +31,7 @@ impl Default for NavigationState {
 
 struct NavigationIndex {
     key: String,
+    geometry_key: String,
     authority: String,
     source: Option<String>,
     unavailable_reason: Option<String>,
@@ -93,22 +94,29 @@ struct SourceRequest {
 }
 
 impl WorkbenchBridge {
-    fn navigation_cache_key(&self) -> String {
+    fn navigation_geometry_key(&self) -> String {
         // All values are small authority tokens or bounded presentation state.
         // Camera and selection are deliberately absent from the index lifetime.
         serde_json::json!({
             "instance": self.navigation.instance,
-            "pending": self.pending_managed_mutation.is_some(),
             "intent": self.editor().coordinator().intent().identity(),
             "code": self.code_project.as_ref().map(CodeProjectWorkbench::code_session_identity),
-            "dirty": self.code_project.as_ref().is_some_and(CodeProjectWorkbench::is_dirty),
             "hidden": self.explorer_visibility.hidden_rows,
             "visibility": format!("{:?}", self.editor().editor().geometry_interaction_policy().visibility),
         }).to_string()
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one accepted ownership/cache publication, with a scene-free draft-only refresh"
+    )]
     pub(super) fn ensure_navigation_index(&mut self) {
-        let key = self.navigation_cache_key();
+        let geometry_key = self.navigation_geometry_key();
+        let key = serde_json::json!({"geometry":geometry_key,
+            "pending":self.pending_managed_mutation.is_some(),
+            "dirty":self.code_project.as_ref().is_some_and(CodeProjectWorkbench::is_dirty),
+        })
+        .to_string();
         if self
             .navigation
             .cache
@@ -117,7 +125,14 @@ impl WorkbenchBridge {
         {
             return;
         }
-        self.refresh_current_scene();
+        let reuse_items = self
+            .navigation
+            .cache
+            .as_ref()
+            .is_some_and(|cache| cache.geometry_key == geometry_key);
+        if !reuse_items {
+            self.refresh_current_scene();
+        }
         let mut entries = BTreeMap::new();
         let (source, source_digest, unavailable_reason) = if let Some(code) = &self.code_project {
             let index = code.navigation_index(self.editor());
@@ -178,7 +193,17 @@ impl WorkbenchBridge {
         let explorer = self.explorer_snapshot();
         complete_hierarchy(&explorer, &mut entries);
         let policy = self.editor().editor().geometry_interaction_policy();
-        for entry in entries.values_mut() {
+        for (id, entry) in &mut entries {
+            if reuse_items
+                && let Some(previous) = self
+                    .navigation
+                    .cache
+                    .as_ref()
+                    .and_then(|cache| cache.entries.get(id))
+            {
+                entry.items.clone_from(&previous.items);
+                continue;
+            }
             entry.items =
                 canonical_selection(entry.items.iter().copied(), self.retained_scene.as_ref());
             entry.items.retain(|item| {
@@ -195,6 +220,7 @@ impl WorkbenchBridge {
         .to_string();
         self.navigation.cache = Some(NavigationIndex {
             key,
+            geometry_key,
             authority,
             source,
             unavailable_reason,

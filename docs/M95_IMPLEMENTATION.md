@@ -120,3 +120,38 @@ Run `20260907T182205-867074e5` was deliberately interrupted in `prepare.workspac
 one-line correction after all six preflight stages passed. Its incomplete qualification is
 retained honestly; the next nomination resumes with input-authenticated successes. No completed
 domain/golden/browser suite was repeated due to either preflight interruption.
+
+
+## Integrated workbench collateral findings
+
+Clean run `20260907T182743-7a9994e0` at `0bf3cb5` passed preflight and native preparation, then
+stopped at the full demo-web suite: **320 passed, two failed, one existing ignored**. The failures
+were existing owner regressions, not new assertion assumptions:
+
+- **M95-F003 — dirty-source keystroke rebuilt accepted scene.**
+  `source_keystroke_snapshot_reuses_the_cached_accepted_frame` failed its retained-scene sentinel.
+  The navigation cache incorrectly composed a scene when only dirty/pending status changed. It now
+  reuses the accepted item projection by geometry identity and refreshes source availability without
+  scene composition. The exact regression passes (`target/m95/source-cache-green.log`), and all ten
+  M95 bridge cases plus strict Clippy pass (`target/m95/cache-collateral.log`).
+- **M95-F004 — rejected detached point drag cleared the originating selection.** At `0bf3cb5`,
+  `managed_selected_reference_rejected_terminal_restores_exact_authority_and_next_gesture`
+  expected the original Point/Curve selection but received an empty list. The managed owner now
+  captures native selection before pointer-down and restores it independently of the authenticated
+  consumer alias after rejection. This preserves the chosen consumer source owner even when the
+  pressed point is shared with its producer. The new owner regression
+  `detached_point_cancel_restores_exact_selected_items_and_consumer_owner` covers complete,
+  partial and empty selections, foreign-pointer cancellation, exact persistence and code history.
+
+The owner regression passes **1/1** and the existing `managed_selected_reference_` bridge cases
+pass **2/2**, including successful publication and the next gesture after rejection. Exact commands
+inside `nix-shell shell.nix --run` were `CARGO_BUILD_JOBS=4 cargo test --locked -p
+geosolve-demo-web --lib detached_point_cancel_restores_exact_selected_items_and_consumer_owner
+-- --nocapture`, `CARGO_BUILD_JOBS=4 cargo test --locked -p geosolve-demo-web --lib
+managed_selected_reference_ -- --nocapture`, `cargo fmt --all -- --check`, and
+`CARGO_BUILD_JOBS=4 cargo clippy --locked -p geosolve-demo-web --all-targets --all-features --
+-D warnings`. All pass; logs are `target/m95-{detached-point-cancel,reference-drag,rollback-format,
+rollback-clippy}-check.log`. A separate bounded review found no additional checkpoint blocker.
+
+The failed run retains completed receipts and source identity; the replacement runner will validate
+reuse. Exact golden/browser/build obligations remain pending until complete qualification.

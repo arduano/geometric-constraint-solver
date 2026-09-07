@@ -2483,6 +2483,7 @@ impl WorkbenchBridge {
             .code_project
             .as_ref()
             .map(|code| code.selected_managed_declaration(self.editor()));
+        let origin_selection = self.editor().editor().selection().to_vec();
         let mut effects = match self.editor_mut().pointer_down(&scene, input) {
             Ok(effects) => effects,
             Err(error) => {
@@ -2508,6 +2509,7 @@ impl WorkbenchBridge {
                     input.pointer_id,
                     route.point,
                     preferred.as_ref(),
+                    &origin_selection,
                 ),
                 None => Ok(None),
             };
