@@ -97,6 +97,20 @@ all 36 renderer tests pass, including unchanged native SVG/PNG and uncontainable
 the Nix shell; logs are `target/m94/aspect/{red-narrow-fit,narrow-fit-checks,narrow-fit-clippy}.log`.
 The interrupted gate is incomplete; only authenticated unaffected passing stages may be reused.
 
+The next run, `20260907T121437-7cc42073` on `d7beceb`, passed native/WASM, package,
+golden 271/271 and all 17 browser sample prefixes before the full browser suite exposed a
+replacement-layout fit defect. Opening a sample fitted the old Design canvas before the UI
+changed to narrower Split, cropping painted points. The existing styled-canvas/layout case
+reproduced it. App now requests one Rust Fit after replacement layout effects settle, measuring
+the final host first. Hidden replacements retain that request until shown; ordinary pane/window
+resizing still preserves centre/zoom. The same browser case covers opening from Code as well.
+
+That run also exposed a separate `HARNESS_ERROR`: scissor reload differed by about `3e-14` CSS
+pixels after refitting. Reload/refit position assertions now use the existing `1e-9` pixel
+presentation tolerance, with finite coordinates and Undo movement greater than that tolerance.
+Complete saved-state/source/history checks remain exact. The interrupted run remains incomplete;
+the frontend-only correction resumes its authenticated unaffected successes.
+
 ## Implementation checkpoint
 
 The live bridge now emits transient protocol v2 with finite numeric `DrawFrame` primitives;

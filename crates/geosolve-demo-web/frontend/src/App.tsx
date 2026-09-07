@@ -2,7 +2,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Panel, PanelGroup, PanelResizeHandle, type PanelGroupStorage } from "react-resizable-panels";
 import { Activity, AlertTriangle, ChevronDown, Code2, Download, FileJson, FolderOpen, Menu, PackageOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, RotateCcw, Save, Undo2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WorkbenchAdapter, WorkbenchSnapshot, WorkspaceMode } from "./lib/adapter";
 import { assertWorkbenchSnapshot } from "./lib/adapter";
 import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from "./lib/browser-storage";
@@ -56,6 +56,8 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
   const [toolCatalog, setToolCatalog] = useState<ToolCatalog | null>(null);
   const [startupError, setStartupError] = useState<string | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>(initialPresentation.mode);
+  const [replacementFitRequest, setReplacementFitRequest] = useState(0);
+  const fittedReplacement = useRef(0);
   const activeTool = snapshot?.presentation.activeTool ?? "select";
   const [capturedGesture, setCapturedGesture] = useState(false);
   const [reproOpen, setReproOpen] = useState(false);
@@ -221,6 +223,7 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       if (DURABLE_REPLACEMENT_COMMANDS.has(name)) {
         suppressInstalledSnapshotAutosave.current = accepted;
         projectSaveEpoch.current += 1;
+        setReplacementFitRequest((request) => request + 1);
         void queueProjectSave("replacement", false);
       } else if (PRESENTATION_SAVE_COMMANDS.has(name)) {
         void queueProjectSave("auto", false);
@@ -233,6 +236,28 @@ export default function App({ adapter = FALLBACK, projectStore = DEFAULT_PROJECT
       return current;
     }
   }, [acceptSnapshot, adapter, queueProjectSave, reportError]);
+
+  useLayoutEffect(() => {
+    if (replacementFitRequest === fittedReplacement.current) return;
+    // Project replacement can also switch Design/Code to Split. Fit only after
+    // the panels finish their layout effects, before the next paint. A hidden
+    // canvas keeps the request until it is shown.
+    let cancelled = false;
+    const epoch = projectSaveEpoch.current;
+    const frame = requestAnimationFrame(() => {
+      const bounds = document.querySelector<HTMLElement>('[role="application"]')?.getBoundingClientRect();
+      if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+      void (async () => {
+        await adapter.resize({ version: 2, width: bounds.width, height: bounds.height, pixelRatio: window.devicePixelRatio || 1 });
+        if (cancelled || epoch !== projectSaveEpoch.current) return;
+        const next = await adapter.dispatch({ version: 2, command: "view.fit" });
+        if (cancelled || epoch !== projectSaveEpoch.current) return;
+        fittedReplacement.current = replacementFitRequest;
+        await acceptSnapshot(next);
+      })().catch(reportError);
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [acceptSnapshot, adapter, mode, replacementFitRequest, reportError]);
   const verifiedCommand = useCallback(async (name: string, payload?: unknown) => {
     try {
       const next = assertWorkbenchSnapshot(await adapter.dispatch({ version: 2, command: name, payload }));

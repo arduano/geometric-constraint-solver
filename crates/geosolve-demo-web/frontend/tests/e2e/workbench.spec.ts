@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
+import { FITTED_GEOMETRY_TOLERANCE_PIXELS } from "../fitted-geometry";
 import { canvasFrame, canvasVisualWitness, drawItems, expectDraft, expectItemCount, fractionToClient, presentedFrame, presentedIdentity, settlePresentation } from "./presented-canvas";
 
 const MANIFOLD_TITLE = "PC liquid-cooling manifold";
@@ -14,6 +15,10 @@ const reviewedCatalog = JSON.parse(readFileSync(
 expect(reviewedCatalog.schema).toBe(1);
 expect(reviewedCatalog.samples.length).toBeGreaterThan(0);
 
+function presentedPointDistance(actual: [number, number], expected: [number, number]) {
+  expect([...actual, ...expected].every(Number.isFinite)).toBe(true);
+  return Math.hypot(actual[0] - expected[0], actual[1] - expected[1]);
+}
 
 function auditRuntime(page: Page) {
   const errors: string[] = [];
@@ -238,7 +243,10 @@ test("real WASM opens an actual sample with a styled authoritative canvas and la
   expect(Number.parseFloat(await page.locator(".cm-content").evaluate((element) => element.ownerDocument.defaultView?.getComputedStyle(element).fontSize ?? "0"))).toBeGreaterThanOrEqual(12);
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "split", exact: true }).click();
+  // Opening from Code also restores the side panels. The initial fit must use
+  // their final layout, without an extra user Fit click.
+  await openManifold(page);
+  await canvasVisualWitness(frame);
   const splitBounds = await editor.boundingBox();
   expect(splitBounds?.width).toBeGreaterThanOrEqual(520);
   expect(splitBounds?.height).toBeGreaterThanOrEqual(500);
@@ -719,7 +727,7 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
   await expect(page.locator("header").getByText(SCISSOR_TITLE, { exact: true })).toBeVisible();
   const restoredPoint = drawItems(canvasFrame(page), { layer: "points", kind: "circle", persistentId });
   await expectItemCount(restoredPoint, 1);
-  expect(await restoredPoint.position()).toEqual(finalPosition);
+  expect(presentedPointDistance(await restoredPoint.position(), finalPosition)).toBeLessThanOrEqual(FITTED_GEOMETRY_TOLERANCE_PIXELS);
   expect(savedProjectFingerprint(await readSavedProject(page))).toBe(lastSavedFingerprint);
   await waitForAcceptedManagedSource(page, (source) => source === originalSource);
   const undo = page.getByRole("button", { name: "Undo" });
@@ -727,7 +735,7 @@ test("canonical scissor-lift point drags remain solver overlays and accept the n
   expect(await page.evaluate(() => localStorage.getItem("geosolve.project.v1"))).toBeNull();
   await expect(page.getByText(/QuotaExceededError/u)).toHaveCount(0);
   await undo.click();
-  await expect.poll(async () => restoredPoint.position()).not.toEqual(finalPosition);
+  await expect.poll(async () => presentedPointDistance(await restoredPoint.position(), finalPosition)).toBeGreaterThan(FITTED_GEOMETRY_TOLERANCE_PIXELS);
   assertCleanRuntime();
 });
 
@@ -1049,15 +1057,15 @@ test("the supplied native contact workspace retains a constrained point drag", a
   await expect(page.locator("header").getByText("Restored sketch", { exact: true })).toBeVisible();
   const restoredPoint = drawItems(canvasFrame(page), { layer: "points", kind: "circle", persistentId });
   await expectItemCount(restoredPoint, 1);
-  expect(await restoredPoint.position()).toEqual(fittedTerminal);
+  expect(presentedPointDistance(await restoredPoint.position(), fittedTerminal)).toBeLessThanOrEqual(FITTED_GEOMETRY_TOLERANCE_PIXELS);
   expect(savedProjectFingerprint(await readSavedProject(page))).toBe(savedAfter);
 
   const undo = page.getByRole("button", { name: "Undo" });
   await expect(undo).toBeEnabled();
   await undo.click();
-  await expect.poll(async () => restoredPoint.position()).not.toEqual(fittedTerminal);
+  await expect.poll(async () => presentedPointDistance(await restoredPoint.position(), fittedTerminal)).toBeGreaterThan(FITTED_GEOMETRY_TOLERANCE_PIXELS);
   await page.getByRole("button", { name: "Fit sketch" }).click();
-  await expect.poll(async () => restoredPoint.position()).toEqual(originalPosition);
+  await expect.poll(async () => presentedPointDistance(await restoredPoint.position(), originalPosition)).toBeLessThanOrEqual(FITTED_GEOMETRY_TOLERANCE_PIXELS);
   assertCleanRuntime();
 });
 
