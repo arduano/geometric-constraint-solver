@@ -7316,10 +7316,16 @@ The runner has focused input/reuse, timeout, failure and concurrency regressions
 [M94_GOALS.md](M94_GOALS.md) requires fitted visuals for all 16 samples, manifold edits, both
 atlases, Jansen crank/foot drag, and both dense scale labs. Exercise hover/selection, dimensions,
 construction/inference previews, Undo/Redo/reload and rejected-source retained frames through
-real pointer events. Test letterboxing, DPR, resize/hidden layouts, capture cancellation and
+real pointer events. Test full-canvas aspect-ratio adaptation, DPR, resize/hidden layouts, capture cancellation and
 WebGL context restoration without changing mathematical authority or accepted persistence.
 Canvas screenshot evidence supplements typed presented-frame and unchanged complete workspace
 witnesses; the old SVG browser witness schema cannot supply new renderer qualification.
+
+M94-F001 resizes the live canvas through wide, tall and fractional CSS dimensions. Require the
+draw frame to cover the complete canvas, undistorted geometry, fixed CSS-pixel pick tolerances,
+correct input in the former letterbox margins, cursor-anchored zoom and pan, and unchanged
+accepted geometry/history on resize. Repeat at DPR 2 and after hide/show and project restoration.
+Fit must use the current dimensions; ordinary resizing preserves the camera centre and zoom.
 
 ## Frozen near-singular fixtures
 

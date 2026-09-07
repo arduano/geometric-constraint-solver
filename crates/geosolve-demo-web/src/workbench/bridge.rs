@@ -554,6 +554,7 @@ pub(crate) struct WorkbenchBridge {
     explorer_visibility: ExplorerVisibilityState,
     title: String,
     host_size: [f64; 2],
+    host_size_received: bool,
     pixel_ratio: f64,
     captured_pointer: Option<u64>,
     canvas_pan: Option<CanvasPanGesture>,
@@ -748,6 +749,7 @@ impl WorkbenchBridge {
             explorer_visibility: ExplorerVisibilityState::default(),
             title,
             host_size: super::scene::SCREEN_SIZE,
+            host_size_received: false,
             pixel_ratio: 1.0,
             captured_pointer: None,
             canvas_pan: None,
@@ -929,8 +931,9 @@ impl WorkbenchBridge {
         }
     }
 
-    /// Resize is deliberately presentation-only. It updates only CSS-to-scene
-    /// coordinate normalization and publishes no replacement frame.
+    /// Resize changes the camera's CSS-pixel workplane and reprojects its frame.
+    /// Document and history stay unchanged. After the initial fit, center and zoom
+    /// stay unchanged too; DPR is raster-only.
     pub(crate) fn resize_json(&mut self, request: &str) -> Result<String, String> {
         let request: ResizeRequest = decode_request(request)?;
         require_version(request.version)?;
@@ -946,9 +949,27 @@ impl WorkbenchBridge {
         {
             return Err("resize requires finite bounded positive presentation extents".into());
         }
-        self.host_size = [request.width, request.height];
+        let screen_size = [request.width, request.height];
+        if self.host_size.map(f64::to_bits) == screen_size.map(f64::to_bits) {
+            self.host_size_received = true;
+            self.pixel_ratio = request.pixel_ratio;
+            return Ok("null".into());
+        }
+        // Pointer gestures are expressed in the previous screen coordinates.
+        // Restore any provisional edit before changing that coordinate space.
+        self.cancel_active_gesture(None)?;
+        self.camera.resize(screen_size);
+        // Construction restores documents before the browser can measure its host.
+        // Fit that first presentation once; subsequent pane/window resizes retain
+        // the user's center and CSS-pixel zoom level.
+        if !self.host_size_received {
+            let _ = fit_projectional_camera_to_authority(&mut self.camera, &self.authority);
+        }
+        self.host_size = screen_size;
+        self.host_size_received = true;
         self.pixel_ratio = request.pixel_ratio;
-        Ok("null".into())
+        self.preserve_frame_once = false;
+        self.snapshot_json()
     }
 
     pub(crate) fn cancel_json(&mut self, request: &str) -> Result<String, String> {
@@ -1142,15 +1163,7 @@ impl WorkbenchBridge {
             "project.new-code" => self.new_code_project(),
             "project.import" => {
                 let payload: SourcePayload = decode_payload(payload)?;
-                let mut replacement = Self::restore(&payload.contents)?;
-                // Import atomically replaces document/application authority, not the
-                // live presentation host. ResizeObserver may not emit another sample
-                // when the surrounding DOM box is unchanged, so retain the exact CSS
-                // extent and device scale already authenticated by `resize_json`.
-                replacement.host_size = self.host_size;
-                replacement.pixel_ratio = self.pixel_ratio;
-                *self = replacement;
-                Ok(())
+                self.import_project(&payload.contents)
             }
             "sample.open" => {
                 let payload: SamplePayload = decode_payload(payload)?;
@@ -1222,6 +1235,20 @@ impl WorkbenchBridge {
             "view.origin" => self.center_canvas_origin(),
             _ => Err(format!("unknown workbench command `{command}`")),
         }
+    }
+
+    fn import_project(&mut self, contents: &str) -> Result<(), String> {
+        let mut replacement = Self::restore(contents)?;
+        // Import replaces document authority but retains the measured host: an
+        // unchanged DOM box will not trigger another ResizeObserver notification.
+        replacement.host_size = self.host_size;
+        replacement.host_size_received = self.host_size_received;
+        replacement.pixel_ratio = self.pixel_ratio;
+        replacement.camera.resize(self.host_size);
+        let _ =
+            fit_projectional_camera_to_authority(&mut replacement.camera, &replacement.authority);
+        *self = replacement;
+        Ok(())
     }
 
     fn dispatch_explorer_presentation(
@@ -3515,12 +3542,7 @@ impl WorkbenchBridge {
                     .unwrap_or_else(|| FrameSnapshot {
                         scene: geosolve_sketch_render::DrawFrame {
                             format: "geosolve-draw-frame-v1",
-                            view_box: [
-                                0.0,
-                                0.0,
-                                super::scene::SCREEN_SIZE[0],
-                                super::scene::SCREEN_SIZE[1],
-                            ],
+                            view_box: [0.0, 0.0, self.host_size[0], self.host_size[1]],
                             background: "#151619",
                             provenance: std::collections::BTreeMap::from([(
                                 "scene".into(),
@@ -8112,22 +8134,184 @@ export default sketch(($) => {
     }
 
     #[test]
-    fn resize_changes_no_semantic_or_frame_authority() {
+    fn resize_reprojects_full_canvas_without_changing_semantic_authority() {
         let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        bridge
+            .resize_json(r#"{"version":2,"width":1000,"height":700,"pixelRatio":1}"#)
+            .unwrap();
+        bridge.camera = super::super::scene::CanvasCamera::new([4.0, -3.0], 75.0).unwrap();
+        let camera_before = bridge.camera;
         let before = bridge.export_project_json().unwrap();
+        let persistence_before = bridge.persistence_json().unwrap();
         let frame_before: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
-        assert_eq!(
-            bridge
+        let resized: serde_json::Value = serde_json::from_str(
+            &bridge
                 .resize_json(r#"{"version":2,"width":1920,"height":1080,"pixelRatio":2}"#)
                 .unwrap(),
-            "null"
+        )
+        .unwrap();
+        assert_eq!(
+            resized["frame"]["scene"]["viewBox"],
+            serde_json::json!([0.0, 0.0, 1920.0, 1080.0])
         );
         assert_eq!(bridge.export_project_json().unwrap(), before);
         let frame_after: serde_json::Value =
             serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
         assert_eq!(frame_after["revision"], frame_before["revision"]);
-        assert_eq!(frame_after["frame"], frame_before["frame"]);
+        assert_eq!(frame_after["frame"], resized["frame"]);
+        assert_eq!(
+            bridge.camera.viewport().screen_size.map(f64::to_bits),
+            [1920.0_f64, 1080.0].map(f64::to_bits)
+        );
+        assert_eq!(
+            bridge.camera.model_center().map(f64::to_bits),
+            camera_before.model_center().map(f64::to_bits)
+        );
+        assert_eq!(
+            bridge.camera.pixels_per_model_unit().to_bits(),
+            camera_before.pixels_per_model_unit().to_bits()
+        );
+        assert_eq!(bridge.persistence_json().unwrap(), persistence_before);
+        assert_eq!(
+            bridge
+                .resize_json(r#"{"version":2,"width":1920,"height":1080,"pixelRatio":3}"#)
+                .unwrap(),
+            "null"
+        );
+        let dpr_only: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(dpr_only["frame"], resized["frame"]);
+    }
+
+    #[test]
+    fn resized_canvas_picks_and_zooms_in_former_letterbox_bands() {
+        for extent in [[1920.0, 600.0], [400.0, 1200.0]] {
+            let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+            bridge.resize_json(&serde_json::json!({"version": 2, "width": extent[0], "height": extent[1], "pixelRatio": 2.5}).to_string()).unwrap();
+            bridge
+                .dispatch_json(
+                    r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                )
+                .unwrap();
+            assert_eq!(
+                bridge.camera.viewport().screen_size.map(f64::to_bits),
+                extent.map(f64::to_bits)
+            );
+            let scene = bridge.current_scene().unwrap();
+            let (minimum, maximum) = scene.model_bounds().unwrap();
+            for corner in [minimum, maximum] {
+                let position = scene.viewport.model_to_screen(corner);
+                assert!(position.x >= 64.0 - 1.0e-7 && position.x <= extent[0] - 64.0 + 1.0e-7);
+                assert!(position.y >= 64.0 - 1.0e-7 && position.y <= extent[1] - 64.0 + 1.0e-7);
+            }
+            // Separate the native corner from its nearby computed Fillet grip,
+            // whose legitimate pick priority otherwise depends on the fitted zoom.
+            assert!(bridge.camera.zoom_about(
+                ScreenPoint {
+                    x: extent[0] * 0.5,
+                    y: extent[1] * 0.5
+                },
+                10.0
+            ));
+            let point = *bridge.current_scene().unwrap().points.first().unwrap();
+            let target = ScreenPoint { x: 25.0, y: 25.0 };
+            assert!(bridge.camera.pan_from(
+                bridge.camera.model_center(),
+                point.screen_position,
+                target
+            ));
+            bridge.retained_scene = None;
+            bridge
+                .pointer_json(&pointer_request("move", 94_001, target, 0))
+                .unwrap();
+            assert_eq!(
+                bridge.editor().editor().hover_state().target,
+                Some(EditorHoverTarget::Geometry(SelectionItem::Point(point.id)))
+            );
+            let anchored = bridge.camera.viewport().screen_to_model(target);
+            bridge
+                .wheel_json(r#"{"version":2,"x":25,"y":25,"deltaX":0,"deltaY":-100,"ctrl":false}"#)
+                .unwrap();
+            let after = bridge.camera.viewport().screen_to_model(target);
+            assert!((after[0] - anchored[0]).abs() < 1.0e-12);
+            assert!((after[1] - anchored[1]).abs() < 1.0e-12);
+            bridge
+                .dispatch_json(r#"{"version":2,"command":"project.new"}"#)
+                .unwrap();
+            assert_eq!(
+                bridge.camera.viewport().screen_size.map(f64::to_bits),
+                extent.map(f64::to_bits)
+            );
+        }
+    }
+
+    #[test]
+    fn restored_canvas_fits_first_measured_host_and_then_retains_zoom() {
+        let mut original = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        original
+            .dispatch_json(
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+            )
+            .unwrap();
+        let persistence: serde_json::Value =
+            serde_json::from_str(&original.persistence_json().unwrap()).unwrap();
+        let mut restored = WorkbenchBridge::construct_json(
+            &serde_json::json!({"version": 2, "persistedProject": persistence["contents"]})
+                .to_string(),
+        )
+        .unwrap();
+        let before = restored.export_project_json().unwrap();
+        restored
+            .resize_json(r#"{"version":2,"width":400,"height":900,"pixelRatio":2}"#)
+            .unwrap();
+        let scene = restored.current_scene().unwrap();
+        let (minimum, maximum) = scene.model_bounds().unwrap();
+        for corner in [minimum, maximum] {
+            let p = scene.viewport.model_to_screen(corner);
+            assert!(p.x >= 64.0 - 1.0e-7 && p.x <= 336.0 + 1.0e-7);
+            assert!(p.y >= 64.0 - 1.0e-7 && p.y <= 836.0 + 1.0e-7);
+        }
+        let fitted = restored.camera;
+        restored
+            .resize_json(r#"{"version":2,"width":1600,"height":500,"pixelRatio":2}"#)
+            .unwrap();
+        assert_eq!(
+            restored.camera.model_center().map(f64::to_bits),
+            fitted.model_center().map(f64::to_bits)
+        );
+        assert_eq!(
+            restored.camera.pixels_per_model_unit().to_bits(),
+            fitted.pixels_per_model_unit().to_bits()
+        );
+        assert_eq!(restored.export_project_json().unwrap(), before);
+    }
+
+    #[test]
+    fn resize_cancels_captured_drag_before_reprojecting_and_preserves_document() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        bridge
+            .dispatch_json(
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+            )
+            .unwrap();
+        let before = bridge.export_project_json().unwrap();
+        let scene = bridge.current_scene().unwrap();
+        let point = scene.points.first().unwrap().screen_position;
+        bridge
+            .pointer_json(&pointer_request("down", 94_002, point, 1))
+            .unwrap();
+        assert_eq!(bridge.captured_pointer, Some(94_002));
+        bridge
+            .resize_json(r#"{"version":2,"width":1600,"height":500,"pixelRatio":1}"#)
+            .unwrap();
+        assert_eq!(bridge.captured_pointer, None);
+        assert!(bridge.canvas_pan.is_none());
+        assert_eq!(bridge.export_project_json().unwrap(), before);
+        assert_eq!(
+            bridge.camera.viewport().screen_size.map(f64::to_bits),
+            [1600.0_f64, 500.0].map(f64::to_bits)
+        );
     }
 
     #[test]
@@ -8179,6 +8363,10 @@ export default sketch(($) => {
         assert_eq!(bridge.pixel_ratio.to_bits(), pixel_ratio.to_bits());
 
         let scene = bridge.current_scene().expect("imported accepted scene");
+        assert_eq!(
+            scene.viewport.screen_size.map(f64::to_bits),
+            host_size.map(f64::to_bits)
+        );
         let point = *scene
             .points
             .first()

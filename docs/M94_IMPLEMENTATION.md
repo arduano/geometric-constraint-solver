@@ -2,7 +2,7 @@
 
 # M94 implementation and qualification
 
-Status: **implementation qualified on 2026-09-07; awaiting supervising-user acceptance**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract.
+Status: **initial implementation qualified on 2026-09-07; M94-F001 aspect-ratio correction in progress**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract. Supervising-user acceptance remains pending.
 
 Baseline source: `37e39159790094e4b4fa0e8f9dac0a1c636d38bf`. The accepted M92 service and
 immutable artifact remain unchanged. Source, browser and image evidence will be recorded under
@@ -11,6 +11,75 @@ immutable artifact remain unchanged. Source, browser and image evidence will be 
 Parallel ownership: Rust drawing composition; TS/PixiJS renderer; baseline/browser migration;
 root bridge/protocol, acceptance documentation and integrated qualification. Cargo/npm writers
 are coordinated and the full gate runs only after the integrated candidate stabilizes.
+
+## M94-F001 — canvas aspect ratio and mouse coordinates
+
+User report against the initial Tailscale candidate: the canvas retains a fixed aspect ratio
+instead of adapting to its available dimensions, as did the preceding SVG implementation.
+Reproduced at source `9dfc0b216036f49803f7035dd1321ec9872fe42d`, with qualified product
+`85c57f1e0ac125195aaac69c3f6db5e2f7f2c46d` served at `http://100.94.63.83:18096/`.
+No project payload was supplied. The existing real-WASM DPR/resize browser case independently
+observes a 1000 px drawing width inside an 871.921875 px CSS canvas. Its new full-size assertion
+fails against the frozen original artifact in 7.1 seconds.
+
+Classification: `DEFECT` in presentation camera/bridge ownership, with no solver-equation change.
+`CanvasCamera::viewport()` fixes the scene at 1000×700; `resize_json` updates input host extents
+but never the camera or drawing. Pixi and pointer normalization therefore consistently letterbox
+the same obsolete plane. The correction must share actual CSS dimensions between camera, fit,
+paint and pointer routing; preserve uniform geometric scale, accepted authority and history;
+and keep DPR confined to rasterization. Focused camera/bridge regressions and the existing
+browser lifecycle case own this correction. The 271-row mathematical oracle remains unchanged.
+
+Reproduction command (expected failure):
+`GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18096/ npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --grep 'M94 canvas aligns DPR' --workers=1`.
+The repair gives `CanvasCamera` a validated live extent and a `resize` method; reset, fit and
+retained transforms preserve/use it. The bridge publishes a reprojected frame on CSS resize,
+rolls back any captured provisional gesture, and preserves accepted documents, history and
+revision. Restored content fits the first measured host once; subsequent resizes preserve
+centre/zoom. Import adopts the existing host and refits; DPR-only changes remain frame-free.
+Static SVG/PNG exports retain their canonical default dimensions.
+
+Focused commands through `nix-shell shell.nix --run` pass:
+
+- `cargo test --locked -p geosolve-demo-web --lib workbench::bridge::tests::resize -- --nocapture`
+  — 3/3 (full-frame/state retention, former-margin picking/zoom, captured-drag cancellation).
+- `cargo test --locked -p geosolve-demo-web --lib restored_canvas_fits_first_measured_host_and_then_retains_zoom -- --nocapture`
+  — 1/1; the existing `successful_project_import_retains_live_viewport_and_pointer_alignment`
+  regression also passes.
+- `cargo test --locked -p geosolve-sketch-render camera_ -- --nocapture` — 7/7.
+- `cargo fmt --all` and focused renderer/demo Clippy with
+  `--all-targets --all-features -- -D warnings` — pass.
+- `npm --prefix crates/geosolve-demo-web/frontend run check:types` — pass.
+
+Logs are in `target/m94/aspect/{focused-tests,bridge-integration-tests,clippy}.log`.
+An initial fixture picked a nearby higher-priority Fillet grip at low zoom; the isolated point
+fixture now separates those legitimate owners. An overly broad `canvas` test selector was stopped
+after it selected all bundled samples; the exact owner filters above replace that incomplete
+development run.
+
+The development release build (`npm --prefix crates/geosolve-demo-web/frontend run
+build:release-artifacts -- --out /tmp/geosolve-m94-f001-development`) passes with
+`CARGO_BUILD_JOBS=4 CARGO_PROFILE_RELEASE_INCREMENTAL=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`
+inside the Nix shell. The same compiler-harness and production build scripts remain in use.
+
+All four canvas lifecycle cases pass against its production server at `http://127.0.0.1:18097/`:
+the initial focused run passes idle/pixels and lost capture; the replacement context-loss case
+passes; the expanded DPR/aspect case passes in 27.1 seconds. Exact frontend command:
+`GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18097/ npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/canvas-renderer.spec.ts --workers=1`;
+replacement filters are `--grep 'aligns DPR|context loss'` and `--grep 'aligns DPR'`.
+Logs/traces remain under `target/m94/aspect/green-browser*`; earlier failing batches remain failed.
+The new mouse fixture exposes the former margins by hiding Explorer, accounting for retained
+pane proportions after a narrow window. The context-loss fixture zooms out so its unchanged
+complete-marker pixel assertion does not sample naturally clipped geometry after zooming in.
+No pixel or coordinate tolerance was loosened.
+
+Six full-page screenshots of Jansen and the manifold at 1440×900, 2200×800 and 1280×1200 were
+captured and visually inspected under `target/m94/aspect/visual`. Their recorded logical drawing
+extents equal the measured CSS canvas extents, including fractional widths; geometry retains
+uniform scale and the fitted scenes use the available proportions. The expanded browser case
+also checks exact centred positions, fixed point radii, persisted-state retention, real segment
+creation, picking, free-point drag/Undo, cursor-anchored zoom and exact pan displacement in both
+former-margin orientations at DPR 2. Integrated qualification and replacement delivery remain pending.
 
 ## Implementation checkpoint
 

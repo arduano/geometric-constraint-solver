@@ -48,12 +48,12 @@ impl RetainedCameraTransform {
     pub fn between(exact: CanvasCamera, desired: CanvasCamera) -> Option<Self> {
         let scale = desired.pixels_per_model_unit / exact.pixels_per_model_unit;
         let translate = [
-            SCREEN_SIZE[0] * 0.5
+            desired.screen_size[0] * 0.5
                 + (exact.model_center[0] - desired.model_center[0]) * desired.pixels_per_model_unit
-                - scale * SCREEN_SIZE[0] * 0.5,
-            SCREEN_SIZE[1] * 0.5
+                - scale * exact.screen_size[0] * 0.5,
+            desired.screen_size[1] * 0.5
                 + (desired.model_center[1] - exact.model_center[1]) * desired.pixels_per_model_unit
-                - scale * SCREEN_SIZE[1] * 0.5,
+                - scale * exact.screen_size[1] * 0.5,
         ];
         (scale.is_finite() && scale > 0.0 && translate.into_iter().all(f64::is_finite))
             .then_some(Self { translate, scale })
@@ -142,6 +142,7 @@ impl RetainedFixedSizeTransform {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CanvasCamera {
+    screen_size: [f64; 2],
     model_center: [f64; 2],
     pixels_per_model_unit: f64,
 }
@@ -149,6 +150,7 @@ pub struct CanvasCamera {
 impl Default for CanvasCamera {
     fn default() -> Self {
         Self {
+            screen_size: SCREEN_SIZE,
             model_center: [0.0, 0.0],
             pixels_per_model_unit: DEFAULT_PIXELS_PER_MODEL_UNIT,
         }
@@ -163,6 +165,7 @@ impl CanvasCamera {
             && (MIN_PIXELS_PER_MODEL_UNIT..=MAX_PIXELS_PER_MODEL_UNIT)
                 .contains(&pixels_per_model_unit))
         .then_some(Self {
+            screen_size: SCREEN_SIZE,
             model_center,
             pixels_per_model_unit,
         })
@@ -183,12 +186,36 @@ impl CanvasCamera {
     /// Panics only if a private camera mutation violates the finite center or
     /// canonical scale invariants enforced by [`CanvasCamera::new`].
     pub fn viewport(self) -> Viewport {
-        Viewport::new(SCREEN_SIZE, self.model_center, self.pixels_per_model_unit)
-            .expect("CanvasCamera construction and mutation preserve viewport invariants")
+        Viewport::new(
+            self.screen_size,
+            self.model_center,
+            self.pixels_per_model_unit,
+        )
+        .expect("CanvasCamera construction and mutation preserve viewport invariants")
     }
 
     pub fn reset(&mut self) {
-        *self = Self::default();
+        self.model_center = [0.0, 0.0];
+        self.pixels_per_model_unit = DEFAULT_PIXELS_PER_MODEL_UNIT;
+    }
+
+    /// Changes the CSS-pixel workplane extent while preserving its center and scale.
+    /// Invalid or unchanged extents leave the camera untouched.
+    pub fn resize(&mut self, screen_size: [f64; 2]) -> bool {
+        if screen_size.map(f64::to_bits) == self.screen_size.map(f64::to_bits)
+            || !screen_size
+                .into_iter()
+                .all(|extent| extent.is_finite() && extent > 0.0)
+        {
+            return false;
+        }
+        self.screen_size = screen_size;
+        true
+    }
+
+    fn fit_margins(self) -> [f64; 2] {
+        self.screen_size
+            .map(|extent| FIT_MARGIN_PIXELS.min(extent * 0.25))
     }
 
     pub fn center_origin(&mut self) -> bool {
@@ -254,11 +281,12 @@ impl CanvasCamera {
         self.fit_model_bounds(scene.model_bounds())
     }
 
-    /// Fits explicit finite model bounds into the canonical canvas.
+    /// Fits explicit finite model bounds into this camera's canvas.
     ///
     /// Empty, reversed, non-finite, or uncontainable bounds are rejected
     /// without changing the camera. A successful fit guarantees that the
-    /// complete bounds map finitely inside the canonical 64 px margin while
+    /// complete bounds map finitely inside a 64 px margin (reduced to a quarter
+    /// of each extent for small canvases) while
     /// honoring the finite 2–2000 px/model-unit scale interval.
     pub fn fit_model_bounds(&mut self, bounds: Option<([f64; 2], [f64; 2])>) -> bool {
         let Some((minimum, maximum)) = bounds else {
@@ -278,9 +306,10 @@ impl CanvasCamera {
         if !spans.into_iter().all(f64::is_finite) {
             return false;
         }
+        let margins = self.fit_margins();
         let available = [
-            SCREEN_SIZE[0] - 2.0 * FIT_MARGIN_PIXELS,
-            SCREEN_SIZE[1] - 2.0 * FIT_MARGIN_PIXELS,
+            self.screen_size[0] - 2.0 * margins[0],
+            self.screen_size[1] - 2.0 * margins[1],
         ];
         let model_center = [minimum[0] + spans[0] * 0.5, minimum[1] + spans[1] * 0.5];
         let mut pixels_per_model_unit = MAX_PIXELS_PER_MODEL_UNIT;
@@ -298,6 +327,7 @@ impl CanvasCamera {
         pixels_per_model_unit = pixels_per_model_unit.min(MAX_PIXELS_PER_MODEL_UNIT);
 
         let candidate = Self {
+            screen_size: self.screen_size,
             model_center,
             pixels_per_model_unit,
         };
@@ -323,6 +353,7 @@ fn bounds_fit_with_margin(camera: CanvasCamera, minimum: [f64; 2], maximum: [f64
     const CONTAINMENT_EPSILON_PIXELS: f64 = 1.0e-7;
 
     let viewport = camera.viewport();
+    let margins = camera.fit_margins();
     [
         minimum,
         [minimum[0], maximum[1]],
@@ -334,10 +365,10 @@ fn bounds_fit_with_margin(camera: CanvasCamera, minimum: [f64; 2], maximum: [f64
     .all(|point| {
         point.x.is_finite()
             && point.y.is_finite()
-            && point.x >= FIT_MARGIN_PIXELS - CONTAINMENT_EPSILON_PIXELS
-            && point.x <= SCREEN_SIZE[0] - FIT_MARGIN_PIXELS + CONTAINMENT_EPSILON_PIXELS
-            && point.y >= FIT_MARGIN_PIXELS - CONTAINMENT_EPSILON_PIXELS
-            && point.y <= SCREEN_SIZE[1] - FIT_MARGIN_PIXELS + CONTAINMENT_EPSILON_PIXELS
+            && point.x >= margins[0] - CONTAINMENT_EPSILON_PIXELS
+            && point.x <= viewport.screen_size[0] - margins[0] + CONTAINMENT_EPSILON_PIXELS
+            && point.y >= margins[1] - CONTAINMENT_EPSILON_PIXELS
+            && point.y <= viewport.screen_size[1] - margins[1] + CONTAINMENT_EPSILON_PIXELS
     })
 }
 
@@ -3808,6 +3839,67 @@ mod tests {
     use geosolve_sketch::{
         DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument, SolverConfig,
     };
+
+    #[test]
+    fn camera_resize_preserves_scale_center_and_cursor_zoom_without_distortion() {
+        let mut camera = CanvasCamera::new([4.0, -3.0], 75.0).unwrap();
+        let exact = camera;
+        assert!(camera.resize([1920.0, 540.0]));
+        let viewport = camera.viewport();
+        assert_eq!(
+            viewport.screen_size.map(f64::to_bits),
+            [1920.0_f64, 540.0].map(f64::to_bits)
+        );
+        assert_eq!(
+            viewport.model_center.map(f64::to_bits),
+            exact.model_center().map(f64::to_bits)
+        );
+        assert_eq!(viewport.pixels_per_model_unit.to_bits(), 75.0_f64.to_bits());
+        let center = viewport.model_to_screen([4.0, -3.0]);
+        assert_eq!(center, ScreenPoint { x: 960.0, y: 270.0 });
+        let horizontal = viewport.model_to_screen([5.0, -3.0]);
+        let vertical = viewport.model_to_screen([4.0, -2.0]);
+        assert_eq!(
+            (horizontal.x - center.x).to_bits(),
+            (center.y - vertical.y).to_bits()
+        );
+        let transform = RetainedCameraTransform::between(exact, camera).unwrap();
+        assert_eq!(
+            transform.map_screen_point(exact.viewport().model_to_screen([5.0, -2.0])),
+            Some(viewport.model_to_screen([5.0, -2.0]))
+        );
+
+        let anchor = ScreenPoint { x: 50.0, y: 75.0 };
+        let anchored_model = viewport.screen_to_model(anchor);
+        assert!(camera.zoom_about(anchor, 1.25));
+        let after = camera.viewport().screen_to_model(anchor);
+        assert!((after[0] - anchored_model[0]).abs() < 1.0e-12);
+        assert!((after[1] - anchored_model[1]).abs() < 1.0e-12);
+        let before_invalid = camera;
+        for invalid in [[0.0, 1.0], [1.0, f64::NAN], [f64::INFINITY, 1.0]] {
+            assert!(!camera.resize(invalid));
+            assert_eq!(camera, before_invalid);
+        }
+        camera.reset();
+        assert_eq!(
+            camera.viewport().screen_size.map(f64::to_bits),
+            [1920.0_f64, 540.0].map(f64::to_bits)
+        );
+    }
+
+    #[test]
+    fn camera_fit_uses_wide_tall_and_small_live_extents() {
+        for extent in [[1800.0, 400.0], [400.0, 1200.0], [120.0, 90.0]] {
+            let mut camera = CanvasCamera::default();
+            assert!(camera.resize(extent));
+            assert!(camera.fit_model_bounds(Some(([-5.0, -3.0], [5.0, 3.0]))));
+            assert_eq!(
+                camera.viewport().screen_size.map(f64::to_bits),
+                extent.map(f64::to_bits)
+            );
+            assert!(bounds_fit_with_margin(camera, [-5.0, -3.0], [5.0, 3.0]));
+        }
+    }
 
     #[test]
     fn camera_fit_rejects_empty_and_invalid_bounds_without_mutation() {

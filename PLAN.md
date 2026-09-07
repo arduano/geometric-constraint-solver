@@ -8333,7 +8333,7 @@ historical replay. Those limitations are future work, not closure blockers. No s
 
 ## M94 — accelerated canvas viewport
 
-Status: **implementation qualified on 2026-09-07; awaiting supervising-user acceptance**.
+Status: **initial implementation qualified on 2026-09-07; M94-F001 aspect-ratio correction in progress**.
 [M94_GOALS.md](docs/M94_GOALS.md) owns scope; [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md)
 records commands, visual evidence and qualification.
 
@@ -8344,6 +8344,7 @@ records commands, visual evidence and qualification.
 - [x] Qualify resize/DPR/capture/context lifecycle, accepted-frame retention and visual parity.
 - [x] Migrate browser witnesses and tests without weakening coverage or borrowing SVG receipts.
 - [x] Measure rendering/interaction, run the complete integrated gate, and deliver reviewed UAT.
+- [ ] Correct M94-F001: use the full canvas aspect ratio for drawing, Fit and mouse input.
 - [ ] Obtain supervising-user acceptance; retain any limitations explicitly at closure.
 
 Clean source `85c57f1` passes integrated run `20260907T101813-cd18572a`: 241/241 stages,

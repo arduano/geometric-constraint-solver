@@ -13,8 +13,9 @@ pub(super) struct ClientRect {
     pub(super) height: f64,
 }
 
-/// Maps CSS client coordinates into the editor's fixed screen coordinate system.
-/// Device scale deliberately does not enter this conversion.
+/// Maps CSS client coordinates into the editor's current screen coordinate system.
+/// The live canvas uses matching CSS extents; mismatched embedded views retain
+/// uniform fitting. Device scale deliberately does not enter this conversion.
 pub(super) fn normalize_client_point(
     rect: ClientRect,
     screen_size: [f64; 2],

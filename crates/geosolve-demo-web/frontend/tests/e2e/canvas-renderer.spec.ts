@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { compareFittedGeometry } from "../fitted-geometry";
 import { acceptedSource, fittedGeometry, samples, savedWorkspace } from "./release-sample-prefix";
 import { canvasFrame, canvasVisualWitness, drawItems, fractionToClient, presentedFrame, presentedIdentity, rendererDiagnostics, settlePresentation } from "./presented-canvas";
@@ -17,6 +17,93 @@ async function openJansen(page: Page) {
   await page.getByRole("button", { name: "design", exact: true }).click();
   await fittedGeometry(page);
   return canvasFrame(page);
+}
+
+async function expectFullCanvas(canvas: Locator, pixelRatio: number) {
+  await expect.poll(async () => {
+    const frame = await presentedFrame(canvas);
+    const box = await canvas.boundingBox();
+    if (!box) throw Error("Expected visible canvas");
+    return Math.max(Math.abs(frame.viewBox[2] - box.width), Math.abs(frame.viewBox[3] - box.height));
+  }, { message: "logical drawing area must fill the actual canvas without fixed-aspect letterboxing" }).toBeLessThan(0.01);
+  const backing = await canvas.evaluate((element) => ({
+    width: Reflect.get(element, "width"), height: Reflect.get(element, "height"),
+    css: element.getBoundingClientRect().toJSON(), ratio: Reflect.get(globalThis, "devicePixelRatio"),
+  }));
+  expect(backing.ratio).toBe(pixelRatio);
+  expect(Math.abs(backing.width - backing.css.width * pixelRatio)).toBeLessThanOrEqual(2);
+  expect(Math.abs(backing.height - backing.css.height * pixelRatio)).toBeLessThanOrEqual(2);
+}
+
+async function exerciseFormerLetterbox(page: Page, canvas: Locator, size: { width: number; height: number }) {
+  await page.setViewportSize(size);
+  await page.getByRole("button", { name: "File menu" }).click();
+  await page.getByRole("menuitem", { name: /Open/ }).click();
+  await page.getByRole("button", { name: "New sketch" }).click();
+  await expect(page.locator("header").getByText("Untitled sketch", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "design", exact: true }).click();
+  await expectFullCanvas(canvas, 2);
+  const box = (await canvas.boundingBox())!;
+  const wide = box.width / box.height > 10 / 7;
+  const band = wide ? (box.width - box.height * 10 / 7) / 2 : (box.height - box.width * 7 / 10) / 2;
+  expect(band, "exercise a substantial area outside the old 1000 × 700 drawing rectangle").toBeGreaterThan(100);
+  const start = wide ? { x: band / 2, y: box.height * 0.32 } : { x: box.width * 0.32, y: band / 2 };
+  const end = { x: start.x + 45, y: start.y + 65 };
+  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Segment", exact: true }).click();
+  await page.mouse.click(box.x + start.x, box.y + start.y);
+  await page.mouse.click(box.x + end.x, box.y + end.y);
+  const points = drawItems(canvas, { layer: "points", kind: "circle", interactive: true });
+  await expect.poll(() => points.count()).toBe(2);
+  await page.keyboard.press("Escape");
+  const first = points.first(); const second = points.nth(1);
+  const assertPosition = async (point: typeof first, position: { x: number; y: number }) => {
+    await expect.poll(async () => {
+      const [x, y] = await point.position();
+      return Math.hypot(x - position.x, y - position.y);
+    }).toBeLessThan(0.75);
+  };
+  // Expected coordinates come directly from real CSS mouse positions, independent
+  // of the presented-frame coordinate helper used by the other canvas tests.
+  await assertPosition(first, start);
+  await assertPosition(second, end);
+  await page.mouse.click(box.x + start.x, box.y + start.y);
+  await expect(page.getByRole("tabpanel").getByText("Ownership", { exact: true })).toBeVisible();
+  const saved = await savedWorkspace(page);
+  const moved = { x: start.x + 23, y: start.y - 17 };
+  await page.mouse.move(box.x + start.x, box.y + start.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + moved.x, box.y + moved.y, { steps: 4 });
+  await page.mouse.up();
+  await assertPosition(first, moved);
+  await assertPosition(second, end);
+  await expect.poll(() => savedWorkspace(page)).not.toBe(saved);
+  const dragged = await savedWorkspace(page);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await assertPosition(first, start);
+  await assertPosition(second, end);
+  await expect.poll(() => savedWorkspace(page)).not.toBe(dragged);
+  const beforeNavigation = await savedWorkspace(page);
+
+  // Zoom preserves the world point under the mouse; panning translates every
+  // point by exactly the CSS displacement, including at DPR 2 in the old bands.
+  const distance = async () => {
+    const [a, b] = await Promise.all([first.position(), second.position()]);
+    return Math.hypot(a[0] - b[0], a[1] - b[1]);
+  };
+  const beforeZoom = await distance();
+  await page.mouse.move(box.x + start.x, box.y + start.y);
+  await page.mouse.wheel(0, -120);
+  await expect.poll(distance).toBeGreaterThan(beforeZoom * 1.04);
+  await assertPosition(first, start);
+  const beforePan = await second.position();
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(box.x + start.x + 37, box.y + start.y + 29, { steps: 3 });
+  await page.mouse.up({ button: "middle" });
+  await assertPosition(first, { x: start.x + 37, y: start.y + 29 });
+  await assertPosition(second, { x: beforePan[0] + 37, y: beforePan[1] + 29 });
+  expect(await savedWorkspace(page)).toBe(beforeNavigation);
+  return canvasVisualWitness(canvas);
 }
 
 test("M94 canvas presents actual WebGL2 pixels and remains idle without redrawing", async ({ page }, info) => {
@@ -50,17 +137,29 @@ test("M94 canvas aligns DPR resize and hidden layouts with presented geometry an
     const highDpr = await second.newPage();
     const highCanvas = await openJansen(highDpr);
     expect(compareFittedGeometry(await fittedGeometry(highDpr), geometry).equal).toBe(true);
-    const backing = await highCanvas.evaluate((element) => ({
-      width: Reflect.get(element, "width"), height: Reflect.get(element, "height"),
-      css: element.getBoundingClientRect().toJSON(), ratio: Reflect.get(globalThis, "devicePixelRatio"),
-    }));
-    expect(backing.ratio).toBe(2);
-    expect(Math.abs(backing.width - backing.css.width * 2)).toBeLessThanOrEqual(2);
-    expect(Math.abs(backing.height - backing.css.height * 2)).toBeLessThanOrEqual(2);
-    for (const size of [{ width: 1440, height: 900 }, { width: 1600, height: 1000 }]) {
+    await expectFullCanvas(highCanvas, 2);
+    const highSaved = await savedWorkspace(highDpr);
+    for (const size of [{ width: 2200, height: 800 }, { width: 1280, height: 1200 }]) {
+      const before = await presentedFrame(highCanvas);
+      const beforePoints = await drawItems(highCanvas, { layer: "points", kind: "circle", interactive: true }).all();
       await highDpr.setViewportSize(size);
-      await settlePresentation(highDpr);
-      const point = drawItems(highCanvas, { layer: "points", kind: "circle", interactive: true }).first();
+      await expectFullCanvas(highCanvas, 2);
+      const after = await presentedFrame(highCanvas);
+      const afterPoints = await drawItems(highCanvas, { layer: "points", kind: "circle", interactive: true }).all();
+      expect(afterPoints.length).toBe(beforePoints.length);
+      for (let i = 0; i < beforePoints.length; i++) {
+        const a = beforePoints[i]; const b = afterPoints[i];
+        if (a.kind !== "circle" || b.kind !== "circle") throw Error("Expected circular point markers");
+        expect(b.metadata.persistentId).toBe(a.metadata.persistentId);
+        expect(b.center[0] - after.viewBox[2] / 2).toBeCloseTo(a.center[0] - before.viewBox[2] / 2, 4);
+        expect(b.center[1] - after.viewBox[3] / 2).toBeCloseTo(a.center[1] - before.viewBox[3] / 2, 4);
+        expect(b.radius).toBe(a.radius);
+      }
+      expect(await savedWorkspace(highDpr)).toBe(highSaved);
+      const visible = afterPoints.find((point) => point.kind === "circle"
+        && point.center[0] > 10 && point.center[0] < after.viewBox[2] - 10
+        && point.center[1] > 10 && point.center[1] < after.viewBox[3] - 10)!;
+      const point = drawItems(highCanvas, { layer: "points", kind: "circle", persistentId: visible.metadata.persistentId });
       const bounds = await point.boundingBox();
       await highDpr.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
       await expect(highDpr.getByRole("tabpanel").getByText("Ownership", { exact: true })).toBeVisible();
@@ -68,8 +167,18 @@ test("M94 canvas aligns DPR resize and hidden layouts with presented geometry an
     await highDpr.getByRole("button", { name: "code", exact: true }).click();
     await expect(highDpr.locator(".cm-editor")).toBeVisible();
     await highDpr.getByRole("button", { name: "design", exact: true }).click();
-    await settlePresentation(highDpr);
+    await expectFullCanvas(highCanvas, 2);
+    expect(await savedWorkspace(highDpr)).toBe(highSaved);
+    await fittedGeometry(highDpr);
     await info.attach("canvas-dpr2-pixels", { body: JSON.stringify(await canvasVisualWitness(highCanvas)), contentType: "application/json" });
+    // Pane minimums can change their retained proportions after a narrow window.
+    // Free the Explorer width to make the wide/portrait margin witnesses explicit.
+    await highDpr.getByRole("button", { name: "Hide Explorer", exact: true }).click();
+    for (const size of [{ width: 2200, height: 800 }, { width: 1280, height: 1200 }]) {
+      await info.attach(`canvas-former-letterbox-${size.width}x${size.height}`, {
+        body: JSON.stringify(await exerciseFormerLetterbox(highDpr, highCanvas, size)), contentType: "application/json",
+      });
+    }
   } finally { await second.close(); }
   expect(await savedWorkspace(page)).toBe(saved);
   expect(compareFittedGeometry(await fittedGeometry(page), geometry).equal).toBe(true);
@@ -93,7 +202,9 @@ test("M94 canvas context loss retains presented evidence and restores the newest
   const position = await canvas.boundingBox();
   expect(position).not.toBeNull();
   await page.mouse.move(position!.x + position!.width / 2, position!.y + position!.height / 2);
-  await page.mouse.wheel(0, -120);
+  // Zoom out so the complete fitted point markers remain available to the
+  // pixel witness after restoration, including at a tall canvas aspect ratio.
+  await page.mouse.wheel(0, 120);
   await page.waitForTimeout(150);
   expect((await rendererDiagnostics(canvas)).frameCount).toBe(before.frameCount);
   expect(await canvas.evaluate((element) => JSON.stringify(Reflect.get(element, "__geosolvePresentedFrame")))).toBe(initial);

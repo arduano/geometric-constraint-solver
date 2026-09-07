@@ -18,7 +18,7 @@ describe("canvas host lifecycle", () => {
   it("preserves CSS-local pointer input and normal pointer-up capture retirement", async () => {
     const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer"); const cancel = vi.spyOn(h.adapter, "cancel");
     vi.spyOn(h.host, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 2000, 700));
-    // Native bridge owns letterbox mapping: these remain CSS coordinates, independent of DPR.
+    // Native bridge owns the camera mapping: these remain CSS coordinates, independent of DPR.
     const send = (type: string, properties: Record<string, unknown>) => {
       const event = new Event(type, { bubbles: true }); Object.assign(event, { pointerId: 7, button: 0, buttons: 1, clientX: 620, clientY: 80, ...properties }); fireEvent(h.host, event);
     };

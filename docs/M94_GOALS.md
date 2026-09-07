@@ -34,8 +34,9 @@ parallel DOM scene is an implementation path. Native SVG/PNG export APIs remain 
 - All 16 samples retain their intended appearance and complete two-edit/history workflows. Review
   side-by-side fitted captures plus hover, selection, drafting, dimension and zoom states. Small
   antialiasing/glow differences are permissible; missing information, clipping and pick drift are not.
-- Camera letterboxing and CSS pointer normalization match existing behavior. Backing DPR never
-  changes semantic coordinates. Hidden layouts, resize, DPR changes, lost capture, stale frames,
+- The camera uses the full canvas CSS width and height at any desktop aspect ratio, with uniform
+  model scale and matching pointer coordinates. Resize preserves camera centre and zoom; Fit uses
+  the current dimensions. Backing DPR never changes semantic coordinates. Hidden layouts, resize, DPR changes, lost capture, stale frames,
   context restoration and disposal receive targeted tests. GPU failure is a native viewport error;
   existing code/document controls remain usable.
 - Accepted scene identity, finite geometry, independent residual validation, branches, history,
