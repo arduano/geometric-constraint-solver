@@ -2,7 +2,7 @@
 
 # M94 implementation and qualification
 
-Status: **in progress**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract.
+Status: **implementation qualified on 2026-09-07; awaiting supervising-user acceptance**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract.
 
 Baseline source: `37e39159790094e4b4fa0e8f9dac0a1c636d38bf`. The accepted M92 service and
 immutable artifact remain unchanged. Source, browser and image evidence will be recorded under
@@ -196,3 +196,95 @@ include list fixes the build contract; `nix-shell shell.nix --run
 'npm --prefix crates/geosolve-demo-web/frontend run check:types'` passes. This configuration-only
 repair changes no test assertion or product behavior. Native/WASM successes remain eligible for
 authenticated reuse in the replacement integrated run. Log: `/tmp/m94-composite-types-repair.log`.
+
+## Qualified candidate — 2026-09-07
+
+Product source `85c57f1e0ac125195aaac69c3f6db5e2f7f2c46d`, tree
+`34632b1f2b73462b1b0fa184d46be12b35e68520`, passes:
+
+```bash
+nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260907T100735-2c84bd07'
+```
+
+Signed run `20260907T101813-cd18572a` records **241/241 passing stages**, 25 freshly executed
+and 216 authenticated reused successes, in **1289.36 seconds (21m29s)**. Its complete, clean-source,
+source-unchanged and qualified-release flags are true. The nomination audit also authenticated
+every individual passing receipt. Coverage includes format, warnings-denied Clippy, all native
+workspace/headless obligations, optimized WASM/build/lifecycle and interaction parity, Rustdoc,
+package archives, licences, release ceilings, golden, browser and exclusive performance gates.
+
+The mathematical oracle is **271/271**, with its reviewed TSV unchanged. Browser prefix coverage
+is 17/17 (catalog plus all 16 sample opens), followed by 41/41 complete cases: the full reviewed
+42-case inventory is covered without retries, flakes or skips. Every sample completes both edits,
+Undo/Redo and reload; Jansen additionally completes its numeric constrained-drag history check.
+The four canvas lifecycle cases cover real pixels/idle frames, DPR/resize/hidden layouts, context
+loss/restoration and lost pointer capture. The final performance stage passes in 136.1 seconds;
+its 256-moving-body independent-validation crossover passes in 130.60 seconds.
+
+### Files/API and mathematical behavior
+
+- `geosolve-sketch-render::drawing` adds the finite `DrawFrame`/`DrawItem` presentation schema and
+  `compose_draw_frame`; the live adapter emits bridge v2 numeric scene output.
+- Frontend `canvas-scene.ts`, `canvas-renderer.ts`, `canvas-renderer-pixi.ts`,
+  `canvas-renderer-geometry.ts` and `canvas-viewport.tsx` own validated immutable inputs, retained
+  WebGL2 resources, drawing and native input/lifecycle routing.
+- Canvas browser observers/witnesses, lifecycle/sample tests, capture/performance tools and licence
+  notices support qualification. The geometry comparator is test-only.
+- No solver equation, residual, rank/DOF, branch, domain model or hard/soft behavior changed. Rust
+  remains authoritative; native SVG/PNG exports and persisted formats retain their prior contracts.
+
+### Exact production visual and runtime evidence
+
+The prepared production payload remains byte-identical across the test-only corrections. Its
+12 files were served at `http://127.0.0.1:18096/` during the final run and captured with:
+
+```bash
+nix-shell shell.nix --run 'GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18096/ M94_CAPTURE_OUTPUT=target/m94/production-review node crates/geosolve-demo-web/frontend/scripts/m94-capture-canvas.mjs'
+nix-shell shell.nix --run 'GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18096/ M94_CAPTURE_OUTPUT=target/m94/production-hardware M94_CAPTURE_SAMPLE=theo-jansen-leg M94_HARDWARE=1 node crates/geosolve-demo-web/frontend/scripts/m94-capture-canvas.mjs'
+```
+
+The first run captures **16 samples/35 states** with Chromium 151/SwiftShader. Fitted comparisons
+`target/m94/production-comparison-{0,1,2,3}.png` preserve the accepted geometry, dimension positions,
+construction marks, controls and layout; the refined raster matches the SVG background and keeps
+thin lines legible. Interactive state pairs are in `production-state-comparison-{0,1,2}.png`.
+The independent final geometry audit compares 2,072 painted items and 26,876 scalars: maximum
+difference `0.0005` logical pixels, the old SVG rounding, with exact item/owner correspondence.
+Receipt: `target/m94/baseline-production-geometry-comparison.json`.
+
+The hardware capture draws four actual production states through **NVIDIA RTX 3090 / ANGLE Vulkan /
+WebGL2**. `target/m94/production-gpu-unavailable.json` additionally authenticates all 12 local/HTTP
+files and passes native error, code/parameter editing, complete-source canonical export, save and
+reload with only WebGL2 context creation forced to return null. No frame is fabricated and no page
+error occurs. Executed command: `nix-shell shell.nix --run 'node /tmp/m94-gpu-unavailable.mjs
+--endpoint http://127.0.0.1:18096/ --artifact-dir target/release-gate/prepared/d3985da5e2bcaf5781dad3309fe6971e9df88db2401f163402fc202b1eeebe25/browser/geosolve-production
+--output target/m94/production-gpu-unavailable.json'`. The exact script is preserved at
+`target/m94/gpu-unavailable-check.mjs`; its evidence records the invocation and script SHA-256.
+
+### Frozen delivery and acceptance boundary
+
+The read-only snapshot is `/tmp/geosolve-m94-uat.jkpamgan/geosolve-production`; its original
+manifest and signed qualification receipt are preserved alongside it. Nomination record:
+`target/m94/nomination.json`. It contains **12 files / 27,573,549 bytes**, files aggregate
+`639eea21e62ef1244b18ba51f4938b5baf80d7b31455c0bee2050540f633dc1d`, original manifest SHA-256
+`f2e222ae2948762391118723142aaa452529697f596522683d74397abf25e2ea`. No rebuild supplies the
+nomination. Exact moved-copy/endpoint verification passes:
+
+```bash
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest /tmp/geosolve-m94-uat.jkpamgan/production.json --directory /tmp/geosolve-m94-uat.jkpamgan/geosolve-production --url http://127.0.0.1:18096/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m94/frozen-endpoint.json'
+```
+
+Every file and `/` byte/MIME check and bounded real-WASM readiness pass. An earlier standalone
+endpoint attempt used Playwright's unpinned cached browser and failed to load system libraries;
+its failed receipt remains `production-endpoint.json`. The pinned Chromium replacement and frozen
+copy verification pass without any product change.
+
+The local candidate is **ready for supervising-user acceptance**. M94 remains open. The accepted
+M92 service and external publications are unchanged. The documented dense-scene/end-to-end
+60 Hz limitation remains: latency measurements used the development compiler-harness build,
+while final production hardware/pixel checks establish actual acceleration and visual behavior.
+No uniform speedup or 60 Hz qualification is claimed. The conservative stale-pin behavior noted
+above remains explicit; future audit-pin refresh requires the normal source review.
+
+Documentation-only nomination notes preserve the qualified product identity. Their closeout
+checker is `./scripts/release-gate.sh --docs-only --since 85c57f1`; this checks prose diff, links
+and input ownership without rebuilding or repeating product qualification.

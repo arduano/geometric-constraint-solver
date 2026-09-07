@@ -5426,13 +5426,15 @@ After reviewing these results and limitations, the supervising user said, "yeah 
 we can close at this" on 2026-09-07. M93 is accepted and closed at the delivered scope; the timing
 miss and unperformed historical replay remain documented without being reclassified as passes.
 
-## M94 accelerated canvas acceptance — in progress
+## M94 accelerated canvas acceptance — awaiting supervising-user acceptance
 
 [M94_GOALS.md](docs/M94_GOALS.md#acceptance) requires complete viewport drawing and interaction,
 all 16 sample visual/history workflows, finite accepted-frame retention, lifecycle/coordinate
 alignment, new canvas browser witnesses, actual GPU evidence and complete integrated qualification.
 Native UI/export compatibility, exact mathematical golden results and existing release ceilings
-remain required. No implementation, visual or performance pass is claimed before execution.
+remain required. The integrated gate, all 16 sample workflows, 35 production visual captures and
+actual hardware/failure checks pass on source `85c57f1`; exact evidence and measured performance
+limits are in [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md). Human acceptance remains pending.
 
 ## Regression and oracle policy
 

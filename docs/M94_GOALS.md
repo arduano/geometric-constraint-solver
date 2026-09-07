@@ -2,7 +2,7 @@
 
 # M94 — accelerated canvas viewport
 
-Status: **implementation authorized on 2026-09-07; in progress**. M93 remains accepted and closed.
+Status: **implementation qualified on 2026-09-07; awaiting supervising-user acceptance**. M93 remains accepted and closed.
 
 ## Outcome and ownership
 

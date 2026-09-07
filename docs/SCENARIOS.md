@@ -7311,7 +7311,7 @@ The runner has focused input/reuse, timeout, failure and concurrency regressions
 - Moving the exact immutable artifact repeats transport/readiness checks; changing its bytes
   invalidates artifact evidence. Neither event automatically repeats unrelated domain suites.
 
-## M94 accelerated canvas scenarios — in progress
+## M94 accelerated canvas scenarios — implementation qualified
 
 [M94_GOALS.md](M94_GOALS.md) requires fitted visuals for all 16 samples, manifold edits, both
 atlases, Jansen crank/foot drag, and both dense scale labs. Exercise hover/selection, dimensions,

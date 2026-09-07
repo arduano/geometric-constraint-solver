@@ -2808,7 +2808,7 @@ force fresh work. Newly built or moved artifacts receive fresh transport verific
 fresh-results mode remains available. Corrected-source functional qualification and serial/parallel parity pass. The supervising user accepted closure on 2026-09-07 with the [recorded C5 timing miss and unperformed historical four-entry replay](docs/M93_QUALIFICATION.md).
 [Release qualification](docs/RELEASE_QUALIFICATION.md) owns the implemented commands and policy.
 
-## M94 accelerated canvas architecture — in progress
+## M94 accelerated canvas architecture — implementation qualified
 
 [M94](docs/M94_GOALS.md) introduces a typed presentation draw frame after Rust authenticates and
 composes EditorScene. TypeScript/PixiJS consumes ordered finite paint primitives; geometry,
