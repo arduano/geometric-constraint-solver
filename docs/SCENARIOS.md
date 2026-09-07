@@ -7351,7 +7351,7 @@ These fixtures test truthful singularity/rank reporting and finite state retenti
 
 The detailed L3 fixture above demonstrates that geometric alignment does not itself justify an M9 warning when the selected driver makes the reported position/velocity matrices full-rank and well-conditioned. The detailed sketch fixture demonstrates actual dependent gradients and therefore does report numerical singularity.
 
-## M95 connected selection scenarios — qualified, user acceptance pending
+## M95 connected selection scenarios — accepted and closed on 2026-09-07
 
 - Select a visible point, curve, annotation or computed Fillet on canvas. Its exact Explorer
   owner and accepted source statements highlight; visible source reveals without changing cursor,

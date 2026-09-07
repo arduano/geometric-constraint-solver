@@ -2,11 +2,12 @@
 
 # M95 implementation and qualification
 
-Status: **implemented and qualified; supervising-user acceptance pending**.
+Status: **accepted and closed on 2026-09-07**; [M95_CLOSURE.md](M95_CLOSURE.md) records
+explicit UAT acceptance and the fresh-session handoff.
 [M95_QUALIFICATION.md](M95_QUALIFICATION.md) records the final `f18ff9e` product, complete gate,
 frozen Tailscale candidate and performance evidence. The ledger below preserves the development
 and failed-run history from accepted M94 closure source `d4438a9`; those intermediate statuses
-are superseded by final qualification. M94 remains served at port 18096.
+are superseded by final qualification and user acceptance. M94 remains served at port 18096.
 
 ## Reproduction and implementation
 

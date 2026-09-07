@@ -2,8 +2,8 @@
 
 # M95 — connected code, Explorer and canvas selection
 
-Status: **implemented and qualified; supervising-user acceptance pending**. The separate frozen
-candidate is at `http://100.94.63.83:18100/`; [M95_QUALIFICATION.md](M95_QUALIFICATION.md) records
+Status: **accepted and closed on 2026-09-07**. [M95_CLOSURE.md](M95_CLOSURE.md) records the
+user's UAT acceptance. The separate frozen product is at `http://100.94.63.83:18100/`; [M95_QUALIFICATION.md](M95_QUALIFICATION.md) records
 its exact product and evidence. M94 remains accepted at port 18096.
 
 ## Outcome

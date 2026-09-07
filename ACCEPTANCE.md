@@ -5462,7 +5462,7 @@ release including saving, and the pinned Pixi recovery seam are explicitly retai
 - SolveSpace and PlaneGCS are references/oracles, not dependencies.
 - An external convergence flag is never accepted without local independent validation.
 
-## M95 connected selection acceptance — qualified, user acceptance pending
+## M95 connected selection acceptance — accepted and closed on 2026-09-07
 
 [M95_GOALS.md](docs/M95_GOALS.md) requires exact accepted canvas/Explorer/source ownership for
 ordinary declarations, constraints/dimensions, computed features, groups and generated members.
@@ -5477,4 +5477,6 @@ Dirty/stale/unmatched source, Unicode boundaries, authoring/capture and Apply/hi
 must retain truthful authority. Navigation must preserve exact saved bytes and history, perform
 no compilation/solve/checkpoint/save, and preserve M94 camera/drag paths. Owning regressions,
 real browser pixels/workflows and dense timings precede one clean integrated qualification and
-an independently byte-verified candidate. User acceptance remains required for milestone closure.
+an independently byte-verified candidate. The user explicitly accepted UAT and requested closure
+on 2026-09-07; [M95_CLOSURE.md](docs/M95_CLOSURE.md) records acceptance of the qualified scope
+and its disclosed limits. M95 is closed.

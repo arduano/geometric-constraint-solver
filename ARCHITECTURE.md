@@ -2824,7 +2824,7 @@ context restoration clears invalid upload caches and rebuilds retained paint res
 [The M94 closure audit](docs/M94_CLOSURE.md) records accepted source `7727cbf`, complete
 qualification and the remaining dense-editing/context-compatibility limits.
 
-## M95 connected selection — implemented and qualified
+## M95 connected selection — accepted and closed on 2026-09-07
 
 Native accepted output ownership now has a navigation API separate from singular declaration
 mutation selection. The WASM bridge caches declaration/group/member mappings by Intent, code,
@@ -2841,4 +2841,5 @@ only when selected identities change. Explicit reverse navigation opens Split wh
 Dirty/retained-invalid text disables source links while preserving accepted row browsing; active
 tools and captured gestures block explicit cross-view selection. M94 pan/zoom and point-preview
 routes retain their narrow frame transport. Persisted formats and solver behavior do not change.
-[M95_GOALS.md](docs/M95_GOALS.md) and [evidence](docs/M95_IMPLEMENTATION.md) own nomination status.
+[M95_GOALS.md](docs/M95_GOALS.md), [evidence](docs/M95_IMPLEMENTATION.md) and
+[closure](docs/M95_CLOSURE.md) record the accepted scope and product identity.

@@ -1,8 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M95 connected navigation — qualified candidate
+# M95 connected navigation — accepted product
 
-**Implemented and qualified; supervising-user acceptance is pending.** Review the frozen candidate
+**Accepted and closed on 2026-09-07.** [M95_CLOSURE.md](M95_CLOSURE.md) records explicit UAT
+acceptance. The frozen accepted product remains available
 at **http://100.94.63.83:18100/**. Accepted M94 remains at port 18096, and M92 at port 18092.
 No Pages publication or subsequent milestone is included.
 
@@ -135,8 +136,10 @@ Reports and screenshots remain under `target/m95/performance-final`, `performanc
 All mechanical M95 criteria pass: exact accepted ownership, source/Explorer/canvas agreement,
 truthful multi-owner Inspector, modifier/group/generated/hidden behavior, stale/dirty/Unicode
 handling, tool/capture guards, history/replacement reconciliation, saved-byte preservation and
-qualified canvas performance. No implementation blocker remains. Supervising-user acceptance is
-required to close the milestone; it has not been inferred from automated or visual agent review.
+qualified canvas performance. No implementation blocker remains. The supervising user explicitly
+accepted UAT and requested closure on 2026-09-07. This accepts the qualified milestone and its
+disclosed limits without asserting an unrecorded exhaustive human replay; see
+[M95_CLOSURE.md](M95_CLOSURE.md).
 
 Source sites cover compiler-authenticated builder expressions, not arbitrary TypeScript references
 or the preceding `const name =` prefix. Selecting a full declaration line intersects its expression;

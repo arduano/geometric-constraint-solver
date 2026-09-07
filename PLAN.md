@@ -8368,7 +8368,7 @@ end-to-end 60 Hz limits remain documented. It is superseded by the accepted prod
 
 ## M95 — connected code, Explorer and canvas selection
 
-Status: **implemented and qualified; supervising-user acceptance pending**. [M95_GOALS.md](docs/M95_GOALS.md) owns
+Status: **accepted and closed on 2026-09-07**. [M95_GOALS.md](docs/M95_GOALS.md) owns
 scope; [M95_IMPLEMENTATION.md](docs/M95_IMPLEMENTATION.md) records executed evidence.
 
 - [x] Reproduce the native selection gaps and add separate accepted-output navigation APIs.
@@ -8378,11 +8378,13 @@ scope; [M95_IMPLEMENTATION.md](docs/M95_IMPLEMENTATION.md) records executed evid
 - [x] Preserve history, mutation authority, visibility and M94 navigation/drag performance.
 - [x] Qualify focused native/frontend/browser workflows and one clean integrated candidate.
 - [x] Freeze and byte-verify a separate Tailscale candidate at `http://100.94.63.83:18100/`.
-- [ ] Record supervising-user acceptance before closure.
+- [x] Record supervising-user acceptance and close M95 on 2026-09-07.
 
 Product `f18ff9e` passes all 241 gate stages, 45 browser cases and the unchanged 271-row golden
 contract. [Final qualification](docs/M95_QUALIFICATION.md) records the authenticated evidence,
 visibility batching repair and remaining dense editing costs.
+The user explicitly accepted UAT and requested closure. [Closure and handoff](docs/M95_CLOSURE.md)
+records the accepted endpoint, preserved evidence and fresh-session instructions. No M96 is scoped.
 
 ## Explicit non-goals
 
