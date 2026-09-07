@@ -25,6 +25,7 @@ declare const collectionOwnerBrand: unique symbol;
 declare const unitBrand: unique symbol;
 declare const sketchBrand: unique symbol;
 declare const patchBrand: unique symbol;
+declare const patchApplicationBrand: unique symbol;
 
 const referenceRuntime = Symbol("geosolve.authoring.reference");
 const sketchRuntime = Symbol("geosolve.authoring.sketch");
@@ -325,6 +326,16 @@ export type PolylineFeature<Project, Key extends PropertyKey> = FeatureRef<Proje
     Key,
     FeatureCornerRef<Project>
   >;
+}>;
+
+/** Two rounded walls around an editable polyline, with optional semicircular caps. */
+export type PolylineChannelFeature<Project> = FeatureRef<Project, "feature", {
+  readonly left: FeatureRef<Project, "feature", object>;
+  readonly right: FeatureRef<Project, "feature", object>;
+  readonly startLeft: PointRef<Project>;
+  readonly startRight: PointRef<Project>;
+  readonly endLeft: PointRef<Project>;
+  readonly endRight: PointRef<Project>;
 }>;
 
 export interface BSplineControl<Project, Key extends PropertyKey> {
@@ -1084,6 +1095,18 @@ export interface ComputedBuilder<Project> {
 
 /** Host-authored declarations admitted only inside trusted custom patches. */
 export interface PatchComputedBuilder<Project> extends ComputedBuilder<Project> {
+  /**
+   * Compose native offsets, corner fillets, and caps around a keyed polyline.
+   * Width is the full width; the centreline bend radius must exceed half width.
+   * Interior vertices require nonzero, nonreversing turns and sufficient bend room.
+   * Closed inputs ignore caps. Intersecting boundaries reject during composition.
+   */
+  polylineChannel(id: string, values: PresentationOptions & {
+    readonly polyline: Reproject<PolylineFeature<unknown, string>, Project>;
+    readonly width: Length;
+    readonly bendRadius: Length;
+    readonly caps: "both" | "end" | "none";
+  }): PolylineChannelFeature<Project>;
   fillet(id: string, values: PresentationOptions & {
     readonly corner: FeatureCornerRef<Project>;
     readonly radius: Length;
@@ -1272,6 +1295,11 @@ type PatchInvocationInputs<Schemas extends InputSchemas, Project> = {
   readonly [Key in keyof Schemas]: Reproject<SchemaValue<Schemas[Key]>, Project>;
 };
 
+/** A managed patch invocation is a groupable declaration with its typed outputs. */
+export type PatchApplication<Project, Result> = Reproject<Result, Project> & {
+  readonly [patchApplicationBrand]: (project: Project) => Project;
+};
+
 export interface SketchBuilder<Project> {
   readonly geometry: GeometryBuilder<Project>;
   readonly constraint: ConstraintBuilder<Project>;
@@ -1283,8 +1311,8 @@ export interface SketchBuilder<Project> {
     id: string,
     patch: PatchDefinition<Schemas, Result>,
     inputs: PatchInvocationInputs<Schemas, Project>,
-  ): Reproject<Result, Project>;
-  group(label: string, declarations: readonly OutputRef<Project, FeatureKind>[]): void;
+  ): PatchApplication<Project, Result>;
+  group(label: string, declarations: readonly (OutputRef<Project, FeatureKind> | PatchApplication<Project, unknown>)[]): void;
   suppress(declaration: OutputRef<Project, FeatureKind>): void;
 }
 
@@ -1594,6 +1622,7 @@ function managedSpline<Project, Key extends string>(
 
 const HOST_ONLY_AUTHORING_FAMILIES = new Set([
   "computed.fillet",
+  "computed.polylineChannel",
   "computed.roundedRectangleProfile",
 ]);
 
@@ -1725,7 +1754,7 @@ function createSketchBuilder(): SketchBuilder<SketchExecutionProject> {
       id: string,
       patch: PatchDefinition<Schemas, Result>,
       inputs: PatchInvocationInputs<Schemas, SketchExecutionProject>,
-    ): Reproject<Result, SketchExecutionProject> => {
+    ): PatchApplication<SketchExecutionProject, Result> => {
       requireId(id, "patch application ID");
       if (usedIds.has(id)) throw new TypeError(`duplicate declaration ID ${JSON.stringify(id)}`);
       usedIds.add(id);
@@ -1733,7 +1762,7 @@ function createSketchBuilder(): SketchBuilder<SketchExecutionProject> {
       return patch[patchRuntime].build(
         builder as unknown as PatchBuilder<PatchProject>,
         inputs as unknown as PatchInputs<Schemas, PatchProject>,
-      ) as Reproject<Result, SketchExecutionProject>;
+      ) as PatchApplication<SketchExecutionProject, Result>;
     },
     group: (label: string) => {
       if (label.length === 0) throw new TypeError("group label cannot be empty");

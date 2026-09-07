@@ -23,6 +23,9 @@ const PROFILE_OFFSET_REORDERED: &str = include_str!(
 const OPERATION_CATALOG: &str = include_str!(
     "../../../packages/geosolve-sketch-code/test/fixtures/managed-clean-operation-catalog.json"
 );
+const POLYLINE_PROFILE_OFFSET: &str = include_str!(
+    "../../../packages/geosolve-sketch-code/test/fixtures/managed-polyline-profile-offset.json"
+);
 
 fn materialized_from_with_project(
     envelope: &str,
@@ -96,6 +99,69 @@ fn retained_profile_offset_plan_rehydrates_after_native_reauthentication() {
 
     rehydrate_materialized_code_project(Box::new(materialized.editor), materialized.expansion)
         .expect("native-authenticated warm rehydration");
+}
+
+#[test]
+fn native_polyline_offsets_materialize_exact_walls_and_reauthenticate() {
+    let materialized = materialized_from(POLYLINE_PROFILE_OFFSET, 0x96_0f00);
+    assert_eq!(materialized.expansion.operation_plans.len(), 2);
+    let accepted = materialized
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .expect("both native offsets retain accepted authority");
+    assert!(accepted.validation.hard_residuals_validated);
+    assert!(accepted.validation.all_active_features_current);
+    assert!(
+        accepted
+            .validation
+            .maximum_normalized_hard_residual
+            .is_some_and(|residual| residual.is_finite() && residual <= 1.0e-9)
+    );
+    let document = accepted.session.design_document();
+    let points = document
+        .points()
+        .iter()
+        .map(|point| point.position)
+        .collect::<Vec<_>>();
+    assert!(
+        points
+            .iter()
+            .flatten()
+            .all(|coordinate| coordinate.is_finite())
+    );
+    assert!(
+        document
+            .scalars()
+            .iter()
+            .all(|scalar| scalar.value.is_finite())
+    );
+    assert_eq!(document.curves().len(), 5);
+    // Independent analytic witness: the original L and its two 3 mm mitered
+    // offsets have these nine vertices. A source-alias repair cannot silently
+    // exchange sides, omit a wall or bind either wall to a different span.
+    let expected = [
+        [0.0, 0.0],
+        [30.0, 0.0],
+        [30.0, 30.0],
+        [0.0, 3.0],
+        [27.0, 3.0],
+        [27.0, 30.0],
+        [0.0, -3.0],
+        [33.0, -3.0],
+        [33.0, 30.0],
+    ];
+    assert_eq!(points.len(), expected.len());
+    for expected in expected {
+        assert!(
+            points.iter().any(|point| {
+                (point[0] - expected[0]).abs() <= 1.0e-9 && (point[1] - expected[1]).abs() <= 1.0e-9
+            }),
+            "missing native source/offset vertex {expected:?}: {points:?}",
+        );
+    }
+    rehydrate_materialized_code_project(Box::new(materialized.editor), materialized.expansion)
+        .expect("source-keyed native plans reauthenticate with the same accepted geometry");
 }
 
 #[test]

@@ -822,13 +822,13 @@ fn semantic_path_text(path: &SemanticOutputPath) -> String {
 }
 
 fn supported_declaration_family(value: &str) -> bool {
-    // These two families are deliberately patch-private host-authored
-    // composites. Unlike ordinary clean declarations, neither pretends to be
+    // These families are deliberately patch-private native-authored
+    // composites. Unlike ordinary clean declarations, none pretends to be
     // one standalone Intent node. Expansion authenticates them through the
-    // existing native Fillet/rounded-profile authoring routes.
+    // existing native dimension/geometry and Fillet authoring routes.
     if matches!(
         value,
-        "computed.fillet" | "computed.roundedRectangleProfile"
+        "computed.fillet" | "computed.roundedRectangleProfile" | "computed.polylineChannel"
     ) {
         return true;
     }

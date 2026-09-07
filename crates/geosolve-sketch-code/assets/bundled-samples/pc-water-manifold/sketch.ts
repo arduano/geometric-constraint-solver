@@ -1,6 +1,8 @@
 "use geosolve sketch";
 import { sketch, mm } from "@geosolve/sketch-code";
 import { waterChannel } from "./patches/water-channel.patch.ts";
+import { pointToPointChannel } from "./patches/point-to-point-channel.patch.ts";
+import { siliconeGroove } from "./patches/silicone-groove.patch.ts";
 
 export default sketch(($) => {
   // One absolute anchor plus driving dimensions locates the complete 240 × 120 mm plate.
@@ -50,6 +52,7 @@ export default sketch(($) => {
   const reservoir = $.geometry.twoPointAlignedRectangle("reservoir", {
     firstCorner: [-108, -42],
     oppositeCorner: [-48, 42],
+    role: "construction",
   });
   const reservoirLocated = $.constraint.coincident("reservoirLocated", {
     first: reservoir.corners[0],
@@ -66,7 +69,7 @@ export default sketch(($) => {
   // A dimensioned construction spine locates all three reservoir outlets.
   const lowerOutletDatum = $.geometry.segment("lowerOutletDatum", {
     start: reservoir.corners[1],
-    end: [-48, -30],
+    end: [-48, -22],
     branchDirection: [0, 1],
     role: "construction",
   });
@@ -75,7 +78,7 @@ export default sketch(($) => {
   });
   const lowerOutletLength = $.dimension.curveLength("lowerOutletLength", {
     curve: lowerOutletDatum.span,
-    value: mm(12),
+    value: mm(20),
   });
   const middleOutletDatum = $.geometry.segment("middleOutletDatum", {
     start: lowerOutletDatum.end,
@@ -88,11 +91,11 @@ export default sketch(($) => {
   });
   const middleOutletLength = $.dimension.curveLength("middleOutletLength", {
     curve: middleOutletDatum.span,
-    value: mm(30),
+    value: mm(22),
   });
   const upperOutletDatum = $.geometry.segment("upperOutletDatum", {
     start: middleOutletDatum.end,
-    end: [-48, 30],
+    end: [-48, 22],
     branchDirection: [0, 1],
     role: "construction",
   });
@@ -101,25 +104,26 @@ export default sketch(($) => {
   });
   const upperOutletLength = $.dimension.curveLength("upperOutletLength", {
     curve: upperOutletDatum.span,
-    value: mm(30),
+    value: mm(22),
   });
   // Routed channel centre lines join one shared reservoir.
   const upperCenterline = $.geometry.polyline("upperCenterline", {
     vertices: [{
       key: "reservoir",
-      position: [-48, 30],
+      position: [-48, 22],
     }, {
       key: "approach",
-      position: [-26, 30],
+      position: [-26, 22],
     }, {
       key: "rise",
-      position: [-26, 44],
+      position: [-26, 40],
     }, {
       key: "port",
-      position: [100, 44],
+      position: [96, 40],
     }],
     closed: false,
     branchDirections: [[1, 0], [0, 1], [1, 0]],
+    role: "construction",
   });
   const upperCenterLocated = $.constraint.coincident("upperCenterLocated", {
     first: upperCenterline.vertices.byKey.reservoir,
@@ -140,11 +144,11 @@ export default sketch(($) => {
   });
   const upperCenterLength1 = $.dimension.curveLength("upperCenterLength1", {
     curve: upperCenterline.segments.byKey.approach,
-    value: mm(14),
+    value: mm(18),
   });
   const upperCenterLength2 = $.dimension.curveLength("upperCenterLength2", {
     curve: upperCenterline.segments.byKey.rise,
-    value: mm(126),
+    value: mm(122),
   });
   // Middle route deliberately differs in keyed topology and packaging dimensions.
   const middleCenterline = $.geometry.polyline("middleCenterline", {
@@ -156,13 +160,14 @@ export default sketch(($) => {
       position: [-4, 0],
     }, {
       key: "rise",
-      position: [-4, 14],
+      position: [-4, 18],
     }, {
       key: "port",
-      position: [100, 14],
+      position: [96, 18],
     }],
     closed: false,
     branchDirections: [[1, 0], [0, 1], [1, 0]],
+    role: "construction",
   });
   const middleCenterLocated = $.constraint.coincident("middleCenterLocated", {
     first: middleCenterline.vertices.byKey.reservoir,
@@ -183,29 +188,30 @@ export default sketch(($) => {
   });
   const middleCenterLength1 = $.dimension.curveLength("middleCenterLength1", {
     curve: middleCenterline.segments.byKey.approach,
-    value: mm(14),
+    value: mm(18),
   });
   const middleCenterLength2 = $.dimension.curveLength("middleCenterLength2", {
     curve: middleCenterline.segments.byKey.rise,
-    value: mm(104),
+    value: mm(100),
   });
   // Lower route mirrors the packaging direction while keeping its own stable keys.
   const lowerCenterline = $.geometry.polyline("lowerCenterline", {
     vertices: [{
       key: "reservoir",
-      position: [-48, -30],
+      position: [-48, -22],
     }, {
       key: "approach",
-      position: [-26, -30],
+      position: [-26, -22],
     }, {
       key: "drop",
-      position: [-26, -44],
+      position: [-26, -40],
     }, {
       key: "port",
-      position: [100, -44],
+      position: [96, -40],
     }],
     closed: false,
     branchDirections: [[1, 0], [0, -1], [1, 0]],
+    role: "construction",
   });
   const lowerCenterLocated = $.constraint.coincident("lowerCenterLocated", {
     first: lowerCenterline.vertices.byKey.reservoir,
@@ -226,56 +232,158 @@ export default sketch(($) => {
   });
   const lowerCenterLength1 = $.dimension.curveLength("lowerCenterLength1", {
     curve: lowerCenterline.segments.byKey.approach,
-    value: mm(14),
+    value: mm(18),
   });
   const lowerCenterLength2 = $.dimension.curveLength("lowerCenterLength2", {
     curve: lowerCenterline.segments.byKey.drop,
-    value: mm(126),
+    value: mm(122),
   });
-  // One AI-authored structural rule rounds every current water-channel corner.
-  // One common closed seal surrounds the entire connected wet circuit.
-  const channelBendRadius = mm(5);
-  const upperChannelBends = $.use("upperChannelBends", waterChannel, {
-    corners: upperCenterline.filletableCorners,
+  // Each route is 12 mm wide, with tangent wall bends and a rounded outlet.
+  // The open inlets join the reservoir perimeter without closing off the mouths.
+  const channelWidth = mm(12);
+  const channelBendRadius = mm(8);
+  const upperChannel = $.use("upperChannel", waterChannel, {
+    polyline: upperCenterline,
+    width: channelWidth,
     bendRadius: channelBendRadius,
   });
-  const middleChannelBends = $.use("middleChannelBends", waterChannel, {
-    corners: middleCenterline.filletableCorners,
+  const middleChannel = $.use("middleChannel", waterChannel, {
+    polyline: middleCenterline,
+    width: channelWidth,
     bendRadius: channelBendRadius,
   });
-  const lowerChannelBends = $.use("lowerChannelBends", waterChannel, {
-    corners: lowerCenterline.filletableCorners,
+  const lowerChannel = $.use("lowerChannel", waterChannel, {
+    polyline: lowerCenterline,
+    width: channelWidth,
     bendRadius: channelBendRadius,
   });
-  const upperOutlet = $.geometry.centerRadiusCircle("upperOutlet", {
-    center: upperCenterline.vertices.byKey.port,
+  // A separate stair-shaped passage links two ports in the open lower bay.
+  const stairStartX = $.geometry.segment("stairStartX", {
+    start: reservoir.corners[1],
+    end: [0, -42],
+    branchDirection: [1, 0],
+    role: "construction",
+  });
+  const stairStartXAxis = $.constraint.horizontal("stairStartXAxis", {
+    span: stairStartX.span,
+  });
+  const stairStartXLength = $.dimension.curveLength("stairStartXLength", {
+    curve: stairStartX.span,
+    value: mm(48),
+  });
+  const stairStartY = $.geometry.segment("stairStartY", {
+    start: stairStartX.end,
+    end: [0, -20],
+    branchDirection: [0, 1],
+    role: "construction",
+  });
+  const stairStartYAxis = $.constraint.vertical("stairStartYAxis", {
+    span: stairStartY.span,
+  });
+  const stairStartYLength = $.dimension.curveLength("stairStartYLength", {
+    curve: stairStartY.span,
+    value: mm(22),
+  });
+  const stairCenterline = $.geometry.polyline("stairCenterline", {
+    vertices: [{
+      key: "inlet",
+      position: [0, -20],
+    }, {
+      key: "approach",
+      position: [30, -20],
+    }, {
+      key: "rise",
+      position: [30, -2],
+    }, {
+      key: "outlet",
+      position: [82, -2],
+    }],
+    closed: false,
+    branchDirections: [[1, 0], [0, 1], [1, 0]],
+    role: "construction",
+  });
+  const stairCenterLocated = $.constraint.coincident("stairCenterLocated", {
+    first: stairCenterline.vertices.byKey.inlet,
+    second: stairStartY.end,
+  });
+  const stairCenterAxis0 = $.constraint.horizontal("stairCenterAxis0", {
+    span: stairCenterline.segments.byKey.inlet,
+  });
+  const stairCenterAxis1 = $.constraint.vertical("stairCenterAxis1", {
+    span: stairCenterline.segments.byKey.approach,
+  });
+  const stairCenterAxis2 = $.constraint.horizontal("stairCenterAxis2", {
+    span: stairCenterline.segments.byKey.rise,
+  });
+  const stairCenterLength0 = $.dimension.curveLength("stairCenterLength0", {
+    curve: stairCenterline.segments.byKey.inlet,
+    value: mm(30),
+  });
+  const stairCenterLength1 = $.dimension.curveLength("stairCenterLength1", {
+    curve: stairCenterline.segments.byKey.approach,
+    value: mm(18),
+  });
+  const stairCenterLength2 = $.dimension.curveLength("stairCenterLength2", {
+    curve: stairCenterline.segments.byKey.rise,
+    value: mm(52),
+  });
+  const stairChannel = $.use("stairChannel", pointToPointChannel, {
+    polyline: stairCenterline,
+    width: channelWidth,
+    bendRadius: channelBendRadius,
+  });
+  const stairInlet = $.geometry.centerRadiusCircle("stairInlet", {
+    center: stairCenterline.vertices.byKey.inlet,
     radius: mm(3),
-    label: "Upper outlet bore",
+    label: "Stair inlet bore",
   });
-  const upperOutletRadius = $.dimension.radius("upperOutletRadius", {
-    curve: upperOutlet.curve,
+  const stairInletRadius = $.dimension.radius("stairInletRadius", {
+    curve: stairInlet.curve,
     value: mm(3),
-    label: "Outlet radius",
   });
-  const middleOutlet = $.geometry.centerRadiusCircle("middleOutlet", {
-    center: middleCenterline.vertices.byKey.port,
+  const stairOutlet = $.geometry.centerRadiusCircle("stairOutlet", {
+    center: stairCenterline.vertices.byKey.outlet,
     radius: mm(3),
-    label: "Middle outlet bore",
+    label: "Stair outlet bore",
   });
-  const middleOutletRadius = $.dimension.radius("middleOutletRadius", {
-    curve: middleOutlet.curve,
+  const stairOutletRadius = $.dimension.radius("stairOutletRadius", {
+    curve: stairOutlet.curve,
     value: mm(3),
-    label: "Outlet radius",
   });
-  const lowerOutlet = $.geometry.centerRadiusCircle("lowerOutlet", {
-    center: lowerCenterline.vertices.byKey.port,
-    radius: mm(3),
-    label: "Lower outlet bore",
+  const reservoirBottom = $.geometry.segment("reservoirBottom", {
+    start: reservoir.corners[0],
+    end: reservoir.corners[1],
+    branchDirection: [1, 0],
   });
-  const lowerOutletRadius = $.dimension.radius("lowerOutletRadius", {
-    curve: lowerOutlet.curve,
-    value: mm(3),
-    label: "Outlet radius",
+  const reservoirLowerMouth = $.geometry.segment("reservoirLowerMouth", {
+    start: reservoir.corners[1],
+    end: lowerChannel.profile.startRight,
+    branchDirection: [0, 1],
+  });
+  const reservoirLowerBridge = $.geometry.segment("reservoirLowerBridge", {
+    start: lowerChannel.profile.startLeft,
+    end: middleChannel.profile.startRight,
+    branchDirection: [0, 1],
+  });
+  const reservoirUpperBridge = $.geometry.segment("reservoirUpperBridge", {
+    start: middleChannel.profile.startLeft,
+    end: upperChannel.profile.startRight,
+    branchDirection: [0, 1],
+  });
+  const reservoirUpperMouth = $.geometry.segment("reservoirUpperMouth", {
+    start: upperChannel.profile.startLeft,
+    end: reservoir.corners[2],
+    branchDirection: [0, 1],
+  });
+  const reservoirTop = $.geometry.segment("reservoirTop", {
+    start: reservoir.corners[2],
+    end: reservoir.corners[3],
+    branchDirection: [-1, 0],
+  });
+  const reservoirLeft = $.geometry.segment("reservoirLeft", {
+    start: reservoir.corners[3],
+    end: reservoir.corners[0],
+    branchDirection: [0, -1],
   });
   const sealInsetX = $.geometry.segment("sealInsetX", {
     start: reservoir.corners[0],
@@ -305,7 +413,7 @@ export default sketch(($) => {
   });
   const sealPortX = $.geometry.segment("sealPortX", {
     start: upperCenterline.vertices.byKey.port,
-    end: [106, 44],
+    end: [106, 40],
     branchDirection: [1, 0],
     role: "construction",
   });
@@ -314,7 +422,7 @@ export default sketch(($) => {
   });
   const sealPortXLength = $.dimension.curveLength("sealPortXLength", {
     curve: sealPortX.span,
-    value: mm(6),
+    value: mm(10),
   });
   const sealPortY = $.geometry.segment("sealPortY", {
     start: sealPortX.end,
@@ -327,12 +435,75 @@ export default sketch(($) => {
   });
   const sealPortYLength = $.dimension.curveLength("sealPortYLength", {
     curve: sealPortY.span,
-    value: mm(6),
+    value: mm(10),
   });
-  const commonSeal = $.geometry.twoPointAlignedRectangle("commonSeal", {
-    firstCorner: sealInsetY.end,
-    oppositeCorner: sealPortY.end,
+  // One 2.4 mm wide seal groove encloses the entire connected wet circuit.
+  const commonSeal = $.geometry.polyline("commonSeal", {
+    vertices: [{
+      key: "southWest",
+      position: sealInsetY.end,
+    }, {
+      key: "southEast",
+      position: [106, -50],
+    }, {
+      key: "northEast",
+      position: sealPortY.end,
+    }, {
+      key: "northWest",
+      position: [-114, 50],
+    }],
+    closed: true,
+    branchDirections: [[1, 0], [0, 1], [-1, 0], [0, -1]],
     label: "Shared wet-circuit O-ring centreline",
+    role: "construction",
+  });
+  const sealBottomAxis = $.constraint.horizontal("sealBottomAxis", {
+    span: commonSeal.segments.byKey.southWest,
+  });
+  const sealRightAxis = $.constraint.vertical("sealRightAxis", {
+    span: commonSeal.segments.byKey.southEast,
+  });
+  const sealTopAxis = $.constraint.horizontal("sealTopAxis", {
+    span: commonSeal.segments.byKey.northEast,
+  });
+  const sealLeftAxis = $.constraint.vertical("sealLeftAxis", {
+    span: commonSeal.segments.byKey.northWest,
+  });
+  const commonSealGroove = $.use("commonSealGroove", siliconeGroove, {
+    polyline: commonSeal,
+    width: mm(2.4),
+    bendRadius: mm(5),
+  });
+  // Through-bores share the rounded outlet centres and retain independent radii.
+  const upperOutlet = $.geometry.centerRadiusCircle("upperOutlet", {
+    center: upperCenterline.vertices.byKey.port,
+    radius: mm(3),
+    label: "Upper outlet bore",
+  });
+  const upperOutletRadius = $.dimension.radius("upperOutletRadius", {
+    curve: upperOutlet.curve,
+    value: mm(3),
+    label: "Outlet radius",
+  });
+  const middleOutlet = $.geometry.centerRadiusCircle("middleOutlet", {
+    center: middleCenterline.vertices.byKey.port,
+    radius: mm(3),
+    label: "Middle outlet bore",
+  });
+  const middleOutletRadius = $.dimension.radius("middleOutletRadius", {
+    curve: middleOutlet.curve,
+    value: mm(3),
+    label: "Outlet radius",
+  });
+  const lowerOutlet = $.geometry.centerRadiusCircle("lowerOutlet", {
+    center: lowerCenterline.vertices.byKey.port,
+    radius: mm(3),
+    label: "Lower outlet bore",
+  });
+  const lowerOutletRadius = $.dimension.radius("lowerOutletRadius", {
+    curve: lowerOutlet.curve,
+    value: mm(3),
+    label: "Outlet radius",
   });
   // Dimensioned construction rails carry eight referenced 5 mm screw centers.
   const topScrewInset = $.geometry.segment("topScrewInset", {
@@ -529,11 +700,12 @@ export default sketch(($) => {
     curve: screwSeOuter.curve,
     value: mm(5),
   });
-  $.group("Manifold envelope and reservoir", [plate, plateAnchor, plateWidth, plateHeight, reservoirInsetX, reservoirInsetXAxis, reservoirInsetXLength, reservoirInsetY, reservoirInsetYAxis, reservoirInsetYLength, reservoir, reservoirLocated, reservoirWidth, reservoirHeight, lowerOutletDatum, lowerOutletAxis, lowerOutletLength, middleOutletDatum, middleOutletAxis, middleOutletLength, upperOutletDatum, upperOutletAxis, upperOutletLength]);
-  $.group("Upper channel circuit", [upperCenterline, upperCenterLocated, upperCenterAxis0, upperCenterAxis1, upperCenterAxis2, upperCenterLength0, upperCenterLength1, upperCenterLength2, upperChannelBends, upperOutlet, upperOutletRadius]);
-  $.group("Middle channel circuit", [middleCenterline, middleCenterLocated, middleCenterAxis0, middleCenterAxis1, middleCenterAxis2, middleCenterLength0, middleCenterLength1, middleCenterLength2, middleChannelBends, middleOutlet, middleOutletRadius]);
-  $.group("Lower channel circuit", [lowerCenterline, lowerCenterLocated, lowerCenterAxis0, lowerCenterAxis1, lowerCenterAxis2, lowerCenterLength0, lowerCenterLength1, lowerCenterLength2, lowerChannelBends, lowerOutlet, lowerOutletRadius]);
-  $.group("Shared circuit seal", [commonSeal, sealInsetX, sealInsetXAxis, sealInsetXLength, sealInsetY, sealInsetYAxis, sealInsetYLength, sealPortX, sealPortXAxis, sealPortXLength, sealPortY, sealPortYAxis, sealPortYLength]);
+  $.group("Manifold envelope and reservoir", [plate, plateAnchor, plateWidth, plateHeight, reservoirInsetX, reservoirInsetXAxis, reservoirInsetXLength, reservoirInsetY, reservoirInsetYAxis, reservoirInsetYLength, reservoir, reservoirLocated, reservoirWidth, reservoirHeight, lowerOutletDatum, lowerOutletAxis, lowerOutletLength, middleOutletDatum, middleOutletAxis, middleOutletLength, upperOutletDatum, upperOutletAxis, upperOutletLength, reservoirBottom, reservoirLowerMouth, reservoirLowerBridge, reservoirUpperBridge, reservoirUpperMouth, reservoirTop, reservoirLeft]);
+  $.group("Upper channel circuit", [upperCenterline, upperCenterLocated, upperCenterAxis0, upperCenterAxis1, upperCenterAxis2, upperCenterLength0, upperCenterLength1, upperCenterLength2, upperChannel, upperOutlet, upperOutletRadius]);
+  $.group("Middle channel circuit", [middleCenterline, middleCenterLocated, middleCenterAxis0, middleCenterAxis1, middleCenterAxis2, middleCenterLength0, middleCenterLength1, middleCenterLength2, middleChannel, middleOutlet, middleOutletRadius]);
+  $.group("Lower channel circuit", [lowerCenterline, lowerCenterLocated, lowerCenterAxis0, lowerCenterAxis1, lowerCenterAxis2, lowerCenterLength0, lowerCenterLength1, lowerCenterLength2, lowerChannel, lowerOutlet, lowerOutletRadius]);
+  $.group("Point-to-point stair channel", [stairStartX, stairStartXAxis, stairStartXLength, stairStartY, stairStartYAxis, stairStartYLength, stairCenterline, stairCenterLocated, stairCenterAxis0, stairCenterAxis1, stairCenterAxis2, stairCenterLength0, stairCenterLength1, stairCenterLength2, stairChannel, stairInlet, stairInletRadius, stairOutlet, stairOutletRadius]);
+  $.group("Shared circuit seal", [commonSeal, sealBottomAxis, sealRightAxis, sealTopAxis, sealLeftAxis, commonSealGroove, sealInsetX, sealInsetXAxis, sealInsetXLength, sealInsetY, sealInsetYAxis, sealInsetYLength, sealPortX, sealPortXAxis, sealPortXLength, sealPortY, sealPortYAxis, sealPortYLength]);
   $.group("Fastener stack", [topScrewInset, topScrewInsetAxis, topScrewInsetLength, topScrewRail0, topScrewRail0Axis, topScrewRail0Length, topScrewRail1, topScrewRail1Axis, topScrewRail1Length, topScrewRail2, topScrewRail2Axis, topScrewRail2Length, topScrewRail3, topScrewRail3Axis, topScrewRail3Length, bottomScrewInset, bottomScrewInsetAxis, bottomScrewInsetLength, bottomScrewRail0, bottomScrewRail0Axis, bottomScrewRail0Length, bottomScrewRail1, bottomScrewRail1Axis, bottomScrewRail1Length, bottomScrewRail2, bottomScrewRail2Axis, bottomScrewRail2Length, bottomScrewRail3, bottomScrewRail3Axis, bottomScrewRail3Length, screwNwOuter, screwNwInner, screwNeInner, screwNeOuter, screwSwOuter, screwSwInner, screwSeInner, screwSeOuter, screwNwOuterDiameter, screwNwInnerDiameter, screwNeInnerDiameter, screwNeOuterDiameter, screwSwOuterDiameter, screwSwInnerDiameter, screwSeInnerDiameter, screwSeOuterDiameter]);
   return {};
 });

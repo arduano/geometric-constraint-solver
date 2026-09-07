@@ -75,6 +75,7 @@ fn result_catalog_contains_only_clean_methods_and_patch_private_composites() {
         .collect::<BTreeSet<_>>();
     expected.extend([
         "computed.fillet".to_owned(),
+        "computed.polylineChannel".to_owned(),
         "computed.roundedRectangleProfile".to_owned(),
     ]);
     assert_eq!(actual, expected);

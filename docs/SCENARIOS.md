@@ -7371,3 +7371,36 @@ The detailed L3 fixture above demonstrates that geometric alignment does not its
 - Repeat selection in the dense robotic harness, inspect actual canvas highlight pixels and
   preserved CodeMirror cursor/focus, and compare M94 pan/zoom/point-preview paths. Qualification
   uses the integrated runner and frozen artifact rather than rebuilding the accepted M94 service.
+
+## M96 finite-width manifold scenarios — provisionally verified, final user review pending
+
+- Offset one keyed L-shaped polyline by 3 mm on each side, fillet the walls at
+  R2/R8 and connect semicircular R3 caps. Check finite accepted geometry and
+  independent wall distances, arc radii, closure and area.
+- Connect three 12 mm routes to the reservoir through open inlet mouths; retain
+  one continuous wet boundary and a separate 2.4 mm perimeter silicone groove.
+  Add a separate 12 mm two-bend stair passage with R6 end caps and two port bores;
+  independently check its area, closure and clearance from the shared wet boundary.
+- Change reservoir width from 60 to 62 mm and verify all three outlets translate
+  from x96 to x98 with their walls and seal; the independent stair shifts by 2 mm. Change one outlet bore radius,
+  verify sibling locality, Undo/Redo and restore the exact persisted geometry.
+- Reject infeasible radii, reversing corners and invalid geometry without
+  publishing partial channels. Authenticate retained operation plans and stable
+  keyed source references across replay and vertex insertion (M96-F001).
+- M96-F002: author an R3.8 Fillet at the translated 217.6 by 97.6 mm groove
+  corner, including scales 1e-6, 1 and 1e6. Check centre, radius, contact distance,
+  tangency and Current status, while parallel parents and out-of-span radii fail.
+- M96-F003: reject the R3 outlet cap on `[0,0] → [30,0] → [30,30] → [5,30] → [5,5]`:
+  it crosses the first y3 wall at x`5 ± sqrt(5)`. Rejected source edits retain the
+  previous complete accepted project. M96-F004 selects each wall's native and
+  computed geometry together without the producer polyline or opposite wall.
+- M96-F005: change a driven L-channel's first leg from 30 to 32 mm while retaining
+  its source point seeds. Validate joined walls and R2/R8 bends from current solved
+  geometry during incremental editing, cold replay and native restoration.
+
+- M96-F006: cross the 128-coordinate projected-priority boundary with a fully
+  constrained affine system and conflicting seed preferences (127, 128 and 161
+  coordinates). Require independent finite hard residuals, full rank, zero DOF,
+  preserved unique geometry and unchanged positive preference cost. Retain the
+  large underconstrained/curvature controls, mixed fixed/free preference motion and
+  active-bound fail-closed behavior, and the 12 mm manifold 60→62 mm edit.

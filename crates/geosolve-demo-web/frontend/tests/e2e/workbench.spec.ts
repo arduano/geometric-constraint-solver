@@ -220,6 +220,8 @@ test("real WASM opens an actual sample with a styled authoritative canvas and la
   await expect(page.locator("body")).not.toContainText("IntentBootstrapMetadata");
   await expect(page.locator("body")).not.toContainText("Bootstrap {");
   await openManifold(page);
+  await expect(page.getByTitle("TypeScript editor diagnostics. Ctrl/Cmd+Shift+M opens the diagnostics panel."))
+    .toContainText("No TypeScript issues");
 
   const frame = canvasFrame(page);
   await expect(frame).toHaveCount(1);

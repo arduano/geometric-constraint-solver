@@ -27,6 +27,8 @@ use geosolve_sketch_intent::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod channel;
+
 use crate::declaration_catalog::{
     CodeAuthoringArgumentKind, CodeAuthoringAvailability, CodeAuthoringCollectionMember,
     CodeAuthoringDeclarationDescriptor, CodeAuthoringDeclarationKind, CodeAuthoringDynamicChildren,
@@ -213,6 +215,18 @@ pub struct KeyedFilletHostRequest {
 #[serde(tag = "request", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CodeHostRequest {
     FilletAtCorner(KeyedFilletHostRequest),
+    /// Validation-only ownership of a complete channel after native and computed
+    /// composition. This creates no geometry, feature or solver equation.
+    ChannelBoundaryCheck {
+        invocation: SemanticSymbol,
+        output: GeneratedMemberAddress,
+        identity: GeneratedMemberIdentity,
+        supports: Vec<ExpandedPort>,
+        expected_components: u8,
+        expected_open_ends: u8,
+        #[serde(default)]
+        suppressed: bool,
+    },
     RoundedRectangleProfile {
         invocation: SemanticSymbol,
         output: GeneratedMemberAddress,
@@ -1747,13 +1761,23 @@ fn apply_host_interaction_overlay(
 ) -> Result<(), CodeExpansionError> {
     for request in requests {
         match request {
+            CodeHostRequest::ChannelBoundaryCheck { .. } => {}
             CodeHostRequest::FilletAtCorner(request) => {
-                let alias = host_intent_alias(&request.output, request.identity, None)?;
+                let suffix = (request.member_key != request.output.member_key)
+                    .then(|| serde_json::to_string(&request.member_key))
+                    .transpose()
+                    .map_err(|error| CodeExpansionError::Encoding(error.to_string()))?;
+                let alias =
+                    host_intent_alias(&request.output, request.identity, suffix.as_deref())?;
                 let address = CodeGeneratedChildAddress::new(
                     project.clone(),
                     request.output.clone(),
                     request.identity,
-                    SemanticOutputPath::default(),
+                    suffix
+                        .as_ref()
+                        .map_or_else(SemanticOutputPath::default, |key| {
+                            member_path(&[], key, &[])
+                        }),
                 );
                 request.suppressed |= overlay
                     .generated_child_suppression(&address)
@@ -1819,6 +1843,7 @@ fn validate_suppression_authority(
 
 fn suppress_host_request(request: &mut CodeHostRequest) {
     match request {
+        CodeHostRequest::ChannelBoundaryCheck { suppressed, .. } => *suppressed = true,
         CodeHostRequest::FilletAtCorner(request) => request.suppressed = true,
         CodeHostRequest::RoundedRectangleProfile {
             corners,
@@ -4128,7 +4153,7 @@ fn operation_source_member_key(
                     source.declaration
                 ),
             })?;
-    let mut paths = lowered
+    let paths = lowered
         .paths
         .iter()
         .filter_map(|(path, value)| match value {
@@ -4140,9 +4165,11 @@ fn operation_source_member_key(
                 Some(path)
             }
             _ => None,
-        });
+        })
+        .collect::<Vec<_>>();
     let path = paths
-        .next()
+        .first()
+        .copied()
         .ok_or_else(|| CodeExpansionError::OperationPlanning {
             declaration: declaration.symbol.0.clone(),
             message: format!(
@@ -4150,15 +4177,19 @@ fn operation_source_member_key(
                 source.declaration
             ),
         })?;
-    if paths.next().is_some() {
-        return Err(CodeExpansionError::OperationPlanning {
-            declaration: declaration.symbol.0.clone(),
-            message: format!(
-                "native operation result source `{}` has ambiguous managed output paths",
-                source.declaration
-            ),
-        });
-    }
+    let path = if paths.len() == 1 {
+        path
+    } else {
+        canonical_polyline_source_path(lowered, source, &paths).ok_or_else(|| {
+            CodeExpansionError::OperationPlanning {
+                declaration: declaration.symbol.0.clone(),
+                message: format!(
+                    "native operation result source `{}` has ambiguous managed output paths",
+                    source.declaration
+                ),
+            }
+        })?
+    };
     let key = structured_reference_text(owner, path);
     if key.len() > 256 {
         return Err(CodeExpansionError::OperationPlanning {
@@ -4169,6 +4200,53 @@ fn operation_source_member_key(
         });
     }
     Ok(key)
+}
+
+fn canonical_polyline_source_path<'a>(
+    lowered: &SemanticDeclaration,
+    source: &PreparedIntentOperationSourceRef,
+    paths: &[&'a SemanticOutputPath],
+) -> Option<&'a SemanticOutputPath> {
+    // Polyline lowering deliberately publishes indexed, member-keyed and byKey
+    // aliases. Admit exactly that set, using the readable keyed spelling so an
+    // earlier vertex insertion cannot rename an operation's source member.
+    if paths.len() != 3 {
+        return None;
+    }
+    let (collection, suffix): (&str, &[&str]) = match source.kind {
+        IntentPortKind::Point => ("vertices", &["position"]),
+        IntentPortKind::CurveSpan => ("segments", &[]),
+        _ => return None,
+    };
+    paths.iter().copied().find(|path| {
+        let [
+            ManagedPathSegment::Field(root),
+            ManagedPathSegment::Field(by_key),
+            ManagedPathSegment::Field(key),
+        ] = path.0.as_slice()
+        else {
+            return false;
+        };
+        if root != collection || by_key != "byKey" {
+            return false;
+        }
+        let Some(SemanticValue::Collection(members)) =
+            lowered.paths.get(&fields_path(&[collection]))
+        else {
+            return false;
+        };
+        let Some(SemanticValue::Port(member)) = members.get(key) else {
+            return false;
+        };
+        member.alias == source.declaration
+            && member.selector == source.selector
+            && member.kind == source.kind
+            && paths.contains(&&member_path(&[collection], key, suffix))
+            && paths.iter().any(|candidate| {
+                matches!(candidate.0.get(1), Some(ManagedPathSegment::Index(index))
+                    if **candidate == index_path(&[collection], *index, suffix))
+            })
+    })
 }
 
 fn structured_reference_text(declaration: &SemanticSymbol, path: &SemanticOutputPath) -> String {
@@ -6731,6 +6809,9 @@ fn lower_template_family(
         "computed.fillet" => {
             lower_generated_fillet(builder, plan, member_key, outputs, &bindings.direct)
         }
+        "computed.polylineChannel" => {
+            channel::lower(builder, plan, outputs, bindings, overlay, operation_planner)
+        }
         _ => lower_catalog_template(
             builder,
             plan,
@@ -8609,6 +8690,111 @@ mod tests {
                 ManagedPathSegment::Field("curve".into()),
             ]),
         );
+    }
+
+    #[test]
+    fn operation_source_polyline_aliases_keep_keyed_identity_after_vertex_insertion() {
+        let operation = declaration(
+            "offset",
+            &["operation", "profileOffset"],
+            ManagedValue::Object(BTreeMap::new()),
+        );
+        for single_curve in [false, true] {
+            for insert_vertex in [false, true] {
+                let mut polyline = single_curve_polyline_declaration();
+                let ManagedValue::Object(arguments) = &mut polyline.arguments else {
+                    unreachable!()
+                };
+                if !single_curve {
+                    arguments.remove("representation");
+                    arguments.remove("role");
+                }
+                if insert_vertex {
+                    let Some(ManagedValue::Array(vertices)) = arguments.get_mut("vertices") else {
+                        unreachable!()
+                    };
+                    vertices.insert(
+                        0,
+                        ManagedValue::Object(BTreeMap::from([
+                            ("key".into(), ManagedValue::String("newStart".into())),
+                            (
+                                "position".into(),
+                                ManagedValue::Array(vec![
+                                    ManagedValue::Number(-10.0),
+                                    ManagedValue::Number(0.0),
+                                ]),
+                            ),
+                        ])),
+                    );
+                }
+                let mut builder = ExpansionBuilder::new(
+                    ProjectKey("polyline-operation-aliases".into()),
+                    ManagedSuppressionProjection::default(),
+                );
+                lower_direct_polyline(
+                    &mut builder,
+                    &polyline,
+                    None,
+                    &CodeInteractionOverlay::empty(),
+                )
+                .expect("source Polyline lowering");
+                let semantic = &builder.declarations[&polyline.symbol];
+                for (collection, kind) in [
+                    ("vertices", IntentPortKind::Point),
+                    ("segments", IntentPortKind::CurveSpan),
+                ] {
+                    let Some(SemanticValue::Port(source)) = semantic
+                        .paths
+                        .get(&fields_path(&[collection, "byKey", "v1"]))
+                    else {
+                        panic!("Polyline exposes each keyed point and span")
+                    };
+                    assert_eq!(
+                        operation_source_member_key(
+                            &builder,
+                            &operation,
+                            &source_ref(&source.alias, source.selector, source.kind),
+                            &[kind],
+                        )
+                        .expect("known Polyline aliases have one stable keyed identity"),
+                        format!("geometry1.{collection}.byKey.v1"),
+                        "identity must not depend on representation or insertion ordinal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn operation_source_members_reject_unrelated_duplicate_paths() {
+        let (mut builder, alias) = builder_with_source_outputs();
+        let owner = SemanticSymbol("west".into());
+        let source = builder.declarations[&owner].paths[&fields_path(&["span"])].clone();
+        builder
+            .declarations
+            .get_mut(&owner)
+            .unwrap()
+            .paths
+            .insert(fields_path(&["unrelatedSpan"]), source);
+        let operation = declaration(
+            "offset",
+            &["operation", "profileOffset"],
+            ManagedValue::Object(BTreeMap::new()),
+        );
+        assert!(matches!(
+            operation_source_member_key(
+                &builder,
+                &operation,
+                &source_ref(
+                    &alias,
+                    node_selector(IntentPortRole::Span, 0),
+                    IntentPortKind::CurveSpan,
+                ),
+                &[IntentPortKind::CurveSpan],
+            ),
+            Err(CodeExpansionError::OperationPlanning { message, .. })
+                if message.contains("ambiguous managed output paths")
+        ));
     }
 
     #[test]

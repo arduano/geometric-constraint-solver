@@ -159,15 +159,26 @@ fn typescript_emitted_artifacts_are_byte_exact_rust_canonical_values() {
 }
 
 #[test]
-fn canonical_water_patch_is_byte_identical_to_the_typescript_compiler_fixture() {
+fn manifold_patches_authenticate_their_sources_and_native_channel_composition() {
     assert!(bundled_sample("pc-water-manifold").is_some());
-    let expected = include_str!(
-        "../../../packages/geosolve-sketch-code/test/fixtures/water-channel.artifact.json"
-    );
-    let bundled = include_str!(
-        "../assets/bundled-samples/pc-water-manifold/patches/water-channel.artifact.json"
-    );
-    assert_eq!(bundled, expected);
+    for stem in ["water-channel", "silicone-groove"] {
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("assets/bundled-samples/pc-water-manifold/patches");
+        let source = std::fs::read_to_string(directory.join(format!("{stem}.patch.ts")))
+            .expect("bundled patch source");
+        let artifact = std::fs::read_to_string(directory.join(format!("{stem}.artifact.json")))
+            .expect("bundled patch artifact");
+        let validated = PatchModuleArtifact::from_canonical_json(&artifact).unwrap();
+        assert_eq!(
+            validated.artifact().source_digest,
+            intent_content_digest(source.as_bytes()).to_string()
+        );
+        assert_eq!(validated.artifact().templates.len(), 1);
+        assert_eq!(
+            validated.artifact().templates[0].declaration_family,
+            "computed.polylineChannel"
+        );
+    }
 }
 
 #[test]

@@ -8,12 +8,13 @@ use std::{
     fs,
 };
 
+use geosolve_constraint_editor::ProjectionalEditorSession;
 use geosolve_sketch::{DocumentId, PersistentId};
 use geosolve_sketch_code::{
-    CodeProject, CodeProjectFile, CompiledManagedSource, KeyedReconcileState, PatchModuleArtifact,
-    ProjectKey, materialize_code_project_cold, required_generated_members,
+    CodeProject, CompiledManagedSource, KeyedReconcileState, bundled_sample,
+    materialize_code_project_cold, rehydrate_materialized_code_project, required_generated_members,
 };
-use geosolve_sketch_intent::IntentSessionId;
+use geosolve_sketch_intent::{IntentSession, IntentSessionId};
 
 const SAMPLES: [&str; 5] = [
     "pc-water-manifold",
@@ -46,57 +47,10 @@ fn compiled(key: &str) -> CompiledManagedSource {
 }
 
 fn project(key: &str) -> CodeProject {
-    let compiled = compiled(key);
-    if key == "pc-water-manifold" {
-        let custom_source = asset(key, "patches/water-channel.patch.ts");
-        let artifact = asset(key, "patches/water-channel.artifact.json");
-        let patch: PatchModuleArtifact =
-            serde_json::from_str(&artifact).expect("patch artifact shape");
-        let validated = patch.clone().validate().expect("valid patch artifact");
-        let managed = compiled
-            .into_managed_document()
-            .expect("valid manifold managed document");
-        let mut custom_files = BTreeMap::new();
-        custom_files.insert(
-            "patches/water-channel.patch.ts".to_owned(),
-            CodeProjectFile {
-                path: "patches/water-channel.patch.ts".to_owned(),
-                source_digest: geosolve_sketch_intent::intent_content_digest(
-                    custom_source.as_bytes(),
-                )
-                .to_string(),
-                contents: custom_source,
-                managed: false,
-            },
-        );
-        let mut artifacts = BTreeMap::new();
-        artifacts.insert(
-            validated.digest().to_owned(),
-            serde_json::from_str(validated.canonical_json()).expect("canonical patch json"),
-        );
-        let project = CodeProject {
-            project: ProjectKey(format!("geosolve-sample-{key}")),
-            managed,
-            custom_files,
-            artifacts,
-            lock: serde_json::json!({
-                "format": "geosolve-lock-v1",
-                "modules": {
-                    patch.module_specifier.clone(): {
-                        "artifact": validated.digest(),
-                        "source": patch.source_digest,
-                        "interface": patch.interface_digest,
-                        "sdk_abi": patch.sdk_abi
-                    }
-                }
-            }),
-        };
-        project.validate().expect("valid manifold project");
-        project
-    } else {
-        CodeProject::managed(ProjectKey(format!("geosolve-sample-{key}")), compiled)
-            .expect("valid fabrication project")
-    }
+    compiled(key);
+    bundled_sample(key)
+        .expect("registered fabrication sample")
+        .project()
 }
 
 fn validate(key: &str, seed: u128) {
@@ -175,6 +129,70 @@ fn validate(key: &str, seed: u128) {
         "{key} equality DOF"
     );
     assert_eq!(effective, 0, "{key} bidirectional bounded DOF");
+    if key == "pc-water-manifold" {
+        validate_manifold_restore(&materialized, seed);
+    }
+}
+
+fn validate_manifold_restore(
+    materialized: &geosolve_sketch_code::MaterializedCodeProject,
+    seed: u128,
+) {
+    let state = materialized
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let document_before = state.document().clone();
+    let intent_wire = materialized
+        .editor
+        .coordinator()
+        .intent()
+        .to_canonical_json()
+        .unwrap();
+    let expansion_wire = serde_json::to_string(&materialized.expansion).unwrap();
+    let restored_editor = ProjectionalEditorSession::restore(
+        IntentSession::from_json(&intent_wire).unwrap(),
+        DocumentId(PersistentId::from_u128(seed)),
+        1.0,
+    )
+    .expect("channel native checkpoint independently restores");
+    let restored = rehydrate_materialized_code_project(
+        Box::new(restored_editor),
+        serde_json::from_str(&expansion_wire).unwrap(),
+    )
+    .expect("channel host members and boundary checks reauthenticate");
+    assert_eq!(
+        restored
+            .editor
+            .coordinator()
+            .intent()
+            .to_canonical_json()
+            .unwrap(),
+        intent_wire,
+        "manifold serialized native checkpoint is reproduced exactly",
+    );
+    assert_eq!(restored.host_outputs, materialized.host_outputs);
+    assert_eq!(
+        serde_json::to_string(&restored.expansion).unwrap(),
+        expansion_wire
+    );
+    let accepted = restored
+        .editor
+        .coordinator()
+        .accepted_materialization()
+        .unwrap();
+    assert_eq!(
+        accepted
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        &document_before
+    );
 }
 
 #[test]

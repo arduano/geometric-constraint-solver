@@ -5,6 +5,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync, inflateSync } from "node:zlib";
+import { manifoldPatches } from "./manifold-patches.mjs";
 
 import {
   applyManagedSketchMutation,
@@ -88,6 +89,7 @@ assert.equal(new Set(catalog.samples.map(({ key }) => key)).size, catalog.sample
 assert.equal(catalog.retired_keys.some((key) => directories.some((entry) => entry.key === key)), false);
 
 for (const { directory, key } of directories) {
+  if (key === "pc-water-manifold") await manifoldPatches(directory, check);
   const sourcePath = join(directory, "sketch.ts");
   const compiledPath = join(directory, "sketch.compiled.json");
   const source = await readFile(sourcePath, "utf8");

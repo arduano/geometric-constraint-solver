@@ -138,7 +138,21 @@ export async function canvasVisualWitness(canvas: Locator) {
   if (!box) throw Error("Canvas must be visible for pixel qualification");
   const points = scene.items.filter((item): item is DrawItem & { kind: "circle" } => item.layer === "points" && item.kind === "circle");
   expect(points.length).toBeGreaterThan(0);
-  const sampled = points.filter((_, index) => index % Math.max(1, Math.floor(points.length / 8)) === 0).slice(0, 8);
+  // Native paint order permits later filled markers and annotation masks to
+  // cover earlier point rings. Sample exposed discs from the presented frame;
+  // retain the same real-pixel and seven-sector assertions for selected rings.
+  const exposed = points.filter((point) => !scene.items.slice(scene.items.indexOf(point) + 1).some((later) => {
+    if (!later.style.fill || later.style.opacity <= 0) return false;
+    if (later.kind === "circle") return Math.hypot(point.center[0] - later.center[0], point.center[1] - later.center[1])
+      < point.radius + later.radius;
+    if (later.kind === "rect") return point.center[0] + point.radius > later.x
+      && point.center[0] - point.radius < later.x + later.width
+      && point.center[1] + point.radius > later.y
+      && point.center[1] - point.radius < later.y + later.height;
+    return false;
+  }));
+  expect(exposed.length, "presented scene must contain exposed point markers").toBeGreaterThan(0);
+  const sampled = exposed.filter((_, index) => index % Math.max(1, Math.floor(exposed.length / 8)) === 0).slice(0, 8);
   const samples = [];
   for (const point of sampled) {
     const client = await logicalToClient(canvas, { x: point.center[0], y: point.center[1] });

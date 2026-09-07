@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use geosolve_constraint_editor::IntentNativeBinding;
+use geosolve_constraint_editor::{IntentNativeBinding, SceneComputedCurve, Viewport};
 use geosolve_headless::{
     HeadlessInput, HeadlessPreparedEdit, HeadlessRender, inspect, prepare_edit, publish_render,
     render, resolve_edit,
 };
-use geosolve_sketch::{CurveDefinition, DocumentId, PersistentId};
+use geosolve_sketch::{
+    CurveDefinition, CurveSpan, DocumentArcSweep, DocumentId, GeometryRole, PersistentId,
+    SketchDocument,
+};
 use geosolve_sketch_code::{
     CodeProject, KeyedReconcileState, ManagedControlEdit, ManagedControlEditBatch,
     ManagedPathSegment, ManagedValue, PreparedManagedMutationReceipt, SketchCodeSession,
@@ -23,7 +26,19 @@ use std::{
 struct Geometry {
     points: Vec<[f64; 2]>,
     radius: Option<f64>,
+    edges: Vec<BoundaryEdge>,
 }
+
+#[derive(Clone, Debug)]
+struct BoundaryEdge {
+    points: Vec<[f64; 2]>,
+    signed_area: f64,
+    radius: Option<f64>,
+}
+#[allow(
+    clippy::too_many_lines,
+    reason = "one accepted-geometry reader keeps residual, mobility and ownership authentication together"
+)]
 fn geometry(project: &CodeProject) -> BTreeMap<String, Geometry> {
     let generated = KeyedReconcileState::empty()
         .plan(
@@ -75,44 +90,180 @@ fn geometry(project: &CodeProject) -> BTreeMap<String, Geometry> {
         state.diagnostics().rank.unwrap().numerical_right_nullity,
         Some(0)
     );
+    let scene = materialized
+        .editor
+        .scene(
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 1.0).unwrap(),
+            0.25,
+        )
+        .unwrap();
     let mut result = BTreeMap::<String, Geometry>::new();
-    for (alias, decl) in &materialized.expansion.declaration_provenance {
-        let node = coordinator.intent().graph().node_by_symbol(alias).unwrap();
-        for port in node.ports.values() {
-            let Some(IntentNativeBinding::Curve(id)) =
-                accepted.ownership.port(port.as_ref(node.id))
-            else {
-                continue;
-            };
-            let curve = document.curve(id).unwrap();
-            let (ids, radius) = match &curve.definition {
-                CurveDefinition::Line { start, end, .. } => (vec![*start, *end], None),
-                CurveDefinition::Polyline { points, .. } => (points.clone(), None),
-                CurveDefinition::Circle { center, radius } => {
-                    (vec![*center], Some(document.scalar(*radius).unwrap().value))
-                }
-                _ => continue,
-            };
-            let points = ids
-                .into_iter()
-                .map(|id| document.point(id).unwrap().position)
-                .collect::<Vec<_>>();
-            if let Some(existing) = result.get_mut(&decl.0) {
-                for point in points {
-                    if !existing.points.contains(&point) {
-                        existing.points.push(point);
-                    }
-                }
-            } else {
-                result.insert(decl.0.clone(), Geometry { points, radius });
+    for curve in document.curves() {
+        let owner = accepted
+            .ownership
+            .exact_owner(IntentNativeBinding::Curve(curve.id))
+            .expect("native curve owner");
+        let declaration = materialized
+            .expansion
+            .declaration_provenance
+            .iter()
+            .find_map(|(alias, declaration)| {
+                coordinator
+                    .intent()
+                    .graph()
+                    .node_by_symbol(alias)
+                    .filter(|node| node.id == owner)
+                    .map(|_| declaration.0.clone())
+            })
+            .expect("managed curve declaration");
+        let (ids, radius) = match &curve.definition {
+            CurveDefinition::Line { start, end, .. } => (vec![*start, *end], None),
+            CurveDefinition::Polyline { points, .. } => (points.clone(), None),
+            CurveDefinition::Circle { center, radius } => {
+                (vec![*center], Some(document.scalar(*radius).unwrap().value))
+            }
+            CurveDefinition::CircularArc { .. } => (Vec::new(), None),
+            _ => continue,
+        };
+        let points = ids
+            .into_iter()
+            .map(|id| document.point(id).unwrap().position)
+            .collect::<Vec<_>>();
+        let edges = if matches!(curve.definition, CurveDefinition::Circle { .. }) {
+            Vec::new()
+        } else {
+            scene
+                .curves
+                .iter()
+                .filter(|visible| {
+                    visible.span.curve == curve.id
+                        && visible.role == GeometryRole::Profile
+                        && !visible.origin.is_implicit_construction()
+                })
+                .map(|visible| {
+                    boundary_edge(
+                        document,
+                        visible.span,
+                        *visible.screen_parameters.first().unwrap(),
+                        *visible.screen_parameters.last().unwrap(),
+                    )
+                })
+                .collect()
+        };
+        let existing = result.entry(declaration).or_insert_with(|| Geometry {
+            points: Vec::new(),
+            radius,
+            edges: Vec::new(),
+        });
+        for point in points {
+            if !existing.points.contains(&point) {
+                existing.points.push(point);
             }
         }
+        existing.edges.extend(edges);
+    }
+    for curve in &scene.computed_curves {
+        let invocation = materialized
+            .host_outputs
+            .iter()
+            .find_map(|(address, outputs)| {
+                outputs
+                    .iter()
+                    .any(|output| output.owner == curve.owner)
+                    .then_some(&address.invocation)
+            })
+            .expect("generated Fillet retains its patch invocation owner");
+        result
+            .get_mut(invocation)
+            .expect("Fillet native parent geometry")
+            .edges
+            .push(computed_boundary_edge(curve));
     }
     for value in result.values_mut() {
         canonical_rectangle_order(value);
     }
     result
 }
+// Read the accepted native curve parametrization. The area integral is exact for
+// the line and circular-arc walls; samples are used only for containment/clearance.
+fn boundary_edge(
+    document: &SketchDocument,
+    span: CurveSpan,
+    lower: f64,
+    upper: f64,
+) -> BoundaryEdge {
+    let curve = document.curve(span.curve).unwrap();
+    let radius = match curve.definition {
+        CurveDefinition::CircularArc { radius, .. } => Some(document.scalar(radius).unwrap().value),
+        _ => None,
+    };
+    let count = if radius.is_some() { 64 } else { 1 };
+    let points = (0..=count)
+        .map(|i| {
+            let point = document
+                .evaluate_curve_jet(
+                    span,
+                    lower + (upper - lower) * f64::from(i) / f64::from(count),
+                )
+                .unwrap()
+                .position;
+            [point.x, point.y]
+        })
+        .collect::<Vec<_>>();
+    let start = points[0];
+    let end = *points.last().unwrap();
+    let signed_area = if let CurveDefinition::CircularArc { center, .. } = curve.definition {
+        let center = document.point(center).unwrap().position;
+        let tangent = document
+            .evaluate_curve_jet(span, lower)
+            .unwrap()
+            .first_derivative;
+        let radius = radius.unwrap();
+        let direction =
+            ((start[0] - center[0]) * tangent.y - (start[1] - center[1]) * tangent.x).signum();
+        let sweep = direction * tangent.norm() * (upper - lower) / radius;
+        0.5 * (center[0] * (end[1] - start[1]) - center[1] * (end[0] - start[0])
+            + radius * radius * sweep)
+    } else {
+        0.5 * (start[0] * end[1] - start[1] * end[0])
+    };
+    BoundaryEdge {
+        points,
+        signed_area,
+        radius,
+    }
+}
+
+fn computed_boundary_edge(curve: &SceneComputedCurve) -> BoundaryEdge {
+    let sweep = match curve.sweep {
+        DocumentArcSweep::CounterClockwise => {
+            (curve.end_angle - curve.start_angle).rem_euclid(std::f64::consts::TAU)
+        }
+        DocumentArcSweep::Clockwise => {
+            -(curve.start_angle - curve.end_angle).rem_euclid(std::f64::consts::TAU)
+        }
+    };
+    let points = (0..=64)
+        .map(|i| {
+            let angle = curve.start_angle + sweep * f64::from(i) / 64.0;
+            [
+                curve.center[0] + curve.radius * angle.cos(),
+                curve.center[1] + curve.radius * angle.sin(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let start = points[0];
+    let end = *points.last().unwrap();
+    let signed_area = 0.5
+        * (curve.center[0] * (end[1] - start[1]) - curve.center[1] * (end[0] - start[0])
+            + curve.radius * curve.radius * sweep);
+    BoundaryEdge {
+        points,
+        signed_area,
+        radius: Some(curve.radius),
+    }
+}
+
 fn canonical_rectangle_order(value: &mut Geometry) {
     if value.points.len() == 4 {
         let min = [
@@ -274,36 +425,351 @@ fn declared_radius_edit_changes_the_accepted_spindle_bore() {
     let g = geometry(edited.project());
     near(g["spindleBore"].radius.unwrap(), 33.0, key);
 }
+#[derive(Debug)]
+struct BoundaryLoop {
+    points: Vec<[f64; 2]>,
+    area: f64,
+}
+
+fn same_point(a: [f64; 2], b: [f64; 2]) -> bool {
+    (a[0] - b[0]).hypot(a[1] - b[1]) < 1e-7
+}
+
+fn boundary_loops(mut edges: Vec<BoundaryEdge>) -> Vec<BoundaryLoop> {
+    // Every endpoint must have exactly one mate. This rejects open mouths,
+    // disconnected wall ends and branching/overlapping reservoir partitions.
+    for edge in &edges {
+        for point in [edge.points[0], *edge.points.last().unwrap()] {
+            let incidence = edges
+                .iter()
+                .flat_map(|e| [e.points[0], *e.points.last().unwrap()])
+                .filter(|candidate| same_point(point, *candidate))
+                .count();
+            assert_eq!(incidence, 2, "closed two-valent boundary at {point:?}");
+        }
+    }
+    let mut loops = Vec::new();
+    while let Some(first) = edges.pop() {
+        let start = first.points[0];
+        let mut end = *first.points.last().unwrap();
+        let mut points = first.points;
+        let mut area = first.signed_area;
+        while !same_point(start, end) {
+            let index = edges
+                .iter()
+                .position(|edge| {
+                    same_point(edge.points[0], end) || same_point(*edge.points.last().unwrap(), end)
+                })
+                .expect("one continued boundary edge");
+            let mut next = edges.remove(index);
+            if !same_point(next.points[0], end) {
+                next.points.reverse();
+                next.signed_area = -next.signed_area;
+            }
+            end = *next.points.last().unwrap();
+            points.extend(next.points.into_iter().skip(1));
+            area += next.signed_area;
+        }
+        loops.push(BoundaryLoop {
+            points,
+            area: area.abs(),
+        });
+    }
+    loops.sort_by(|a, b| a.area.total_cmp(&b.area));
+    loops
+}
+
+fn inside(point: [f64; 2], boundary: &BoundaryLoop) -> bool {
+    boundary
+        .points
+        .windows(2)
+        .filter(|edge| {
+            let [a, b] = [edge[0], edge[1]];
+            (a[1] > point[1]) != (b[1] > point[1])
+                && point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]
+        })
+        .count()
+        % 2
+        == 1
+}
+
+fn point_segment_distance(point: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let delta = [b[0] - a[0], b[1] - a[1]];
+    let length_squared = delta[0] * delta[0] + delta[1] * delta[1];
+    assert!(length_squared > 0.0);
+    let parameter = (((point[0] - a[0]) * delta[0] + (point[1] - a[1]) * delta[1])
+        / length_squared)
+        .clamp(0.0, 1.0);
+    (point[0] - a[0] - parameter * delta[0]).hypot(point[1] - a[1] - parameter * delta[1])
+}
+
+fn boundary_distance(point: [f64; 2], boundary: &BoundaryLoop) -> f64 {
+    boundary
+        .points
+        .windows(2)
+        .map(|edge| point_segment_distance(point, edge[0], edge[1]))
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn segment_pair_distance(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> f64 {
+    let cross = |u: [f64; 2], v: [f64; 2]| u[0] * v[1] - u[1] * v[0];
+    let first = [b[0] - a[0], b[1] - a[1]];
+    let second = [d[0] - c[0], d[1] - c[1]];
+    let offset = [c[0] - a[0], c[1] - a[1]];
+    let denominator = cross(first, second);
+    if denominator != 0.0
+        && (0.0..=1.0).contains(&(cross(offset, second) / denominator))
+        && (0.0..=1.0).contains(&(cross(offset, first) / denominator))
+    {
+        return 0.0;
+    }
+    [
+        point_segment_distance(a, c, d),
+        point_segment_distance(b, c, d),
+        point_segment_distance(c, a, b),
+        point_segment_distance(d, a, b),
+    ]
+    .into_iter()
+    .fold(f64::INFINITY, f64::min)
+}
+
+fn boundary_clearance(first: &BoundaryLoop, second: &BoundaryLoop) -> f64 {
+    first
+        .points
+        .windows(2)
+        .flat_map(|a| {
+            second
+                .points
+                .windows(2)
+                .map(move |b| segment_pair_distance(a[0], a[1], b[0], b[1]))
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one sample contract keeps connected and separate wet areas, groove area and machining clearances together"
+)]
+fn assert_manifold_profiles(g: &BTreeMap<String, Geometry>, reservoir_width: f64) {
+    let mut wet_edges = Vec::new();
+    for prefix in ["upper", "middle", "lower", "stair"] {
+        let channel = &g[&format!("{prefix}Channel")];
+        let mut radii = channel
+            .edges
+            .iter()
+            .filter_map(|edge| edge.radius)
+            .collect::<Vec<_>>();
+        radii.sort_by(f64::total_cmp);
+        let expected = if prefix == "stair" {
+            &[2.0, 2.0, 6.0, 6.0, 14.0, 14.0][..]
+        } else {
+            &[2.0, 2.0, 6.0, 14.0, 14.0][..]
+        };
+        assert_eq!(
+            radii.len(),
+            expected.len(),
+            "four wall fillets and the requested end caps for {prefix}"
+        );
+        for (radius, &expected) in radii.into_iter().zip(expected) {
+            near(radius, expected, "channel wall/cap radius");
+        }
+        let source = &g[&format!("{prefix}Centerline")].points;
+        assert_eq!(source.len(), 4, "three spans with two bends for {prefix}");
+        let inlet = source[0];
+        for y in [inlet[1] - 6.0, inlet[1] + 6.0] {
+            assert!(
+                channel.edges.iter().any(|edge| {
+                    same_point(edge.points[0], [inlet[0], y])
+                        || same_point(*edge.points.last().unwrap(), [inlet[0], y])
+                }),
+                "12 mm inlet wall at {prefix}: {y}"
+            );
+        }
+        for source_span in source.windows(2) {
+            let station = [
+                f64::midpoint(source_span[0][0], source_span[1][0]),
+                f64::midpoint(source_span[0][1], source_span[1][1]),
+            ];
+            let walls = channel
+                .edges
+                .iter()
+                .filter(|edge| {
+                    edge.radius.is_none()
+                        && (point_segment_distance(
+                            station,
+                            edge.points[0],
+                            *edge.points.last().unwrap(),
+                        ) - 6.0)
+                            .abs()
+                            < 1e-7
+                })
+                .count();
+            assert_eq!(
+                walls, 2,
+                "two walls 6 mm from each {prefix} centerline span"
+            );
+        }
+        if prefix != "stair" {
+            wet_edges.extend(channel.edges.clone());
+        }
+    }
+    for name in [
+        "reservoirBottom",
+        "reservoirLowerMouth",
+        "reservoirLowerBridge",
+        "reservoirUpperBridge",
+        "reservoirUpperMouth",
+        "reservoirTop",
+        "reservoirLeft",
+    ] {
+        wet_edges.extend(g[name].edges.clone());
+    }
+    let wet = boundary_loops(wet_edges);
+    assert_eq!(
+        wet.len(),
+        1,
+        "one connected reservoir and three open water routes"
+    );
+    // Each 162 mm route loses 32 mm at its two R8 bends and gains 8π mm.
+    // Multiplying by the 12 mm width and adding three R6 half-discs gives
+    // an area independent of how the patch assembled its native operations.
+    near(
+        wet[0].area,
+        reservoir_width * 84.0 + 4680.0 + 342.0 * std::f64::consts::PI,
+        "connected wet area in square millimetres",
+    );
+    let stair_source = &g["stairCenterline"].points;
+    for (actual, expected) in
+        stair_source
+            .iter()
+            .zip([[0.0, -20.0], [30.0, -20.0], [30.0, -2.0], [82.0, -2.0]])
+    {
+        near(
+            actual[0],
+            expected[0] + reservoir_width - 60.0,
+            "stair X follows reservoir width",
+        );
+        near(actual[1], expected[1], "stair rise and end levels");
+    }
+    let stair = boundary_loops(g["stairChannel"].edges.clone());
+    assert_eq!(
+        stair.len(),
+        1,
+        "one separate closed point-to-point water route"
+    );
+    // The 100 mm source loses 32 mm and gains 8π mm through its R8 bends;
+    // its two R6 half-disc caps contribute another 36π square millimetres.
+    near(
+        stair[0].area,
+        816.0 + 132.0 * std::f64::consts::PI,
+        "separate stair water area in square millimetres",
+    );
+    assert!(
+        stair[0].points.iter().all(|p| !inside(*p, &wet[0]))
+            && wet[0].points.iter().all(|p| !inside(*p, &stair[0])),
+        "the stair and shared circuit have separate interiors"
+    );
+    // Include line-interior crossings, not only sampled boundary vertices.
+    // These 64-chord arcs deviate by less than 0.002 mm from their exact circles.
+    let water_clearance = boundary_clearance(&stair[0], &wet[0]);
+    assert!(
+        water_clearance > 7.99,
+        "stair/shared water clearance: {water_clearance}"
+    );
+    let seal = &g["commonSealGroove"];
+    let mut radii = seal
+        .edges
+        .iter()
+        .filter_map(|edge| edge.radius)
+        .collect::<Vec<_>>();
+    radii.sort_by(f64::total_cmp);
+    assert_eq!(radii.len(), 8, "four inner and four outer seal fillets");
+    for (radius, expected) in radii
+        .into_iter()
+        .zip([3.8, 3.8, 3.8, 3.8, 6.2, 6.2, 6.2, 6.2])
+    {
+        near(radius, expected, "seal groove wall radius");
+    }
+    let seal = boundary_loops(seal.edges.clone());
+    assert_eq!(seal.len(), 2, "separate closed inner and outer seal walls");
+    near(
+        seal[1].area - seal[0].area,
+        2.4 * (600.0 + 2.0 * (reservoir_width - 60.0) + 10.0 * std::f64::consts::PI),
+        "2.4 mm seal groove area in square millimetres",
+    );
+    for (name, boundary) in [("shared circuit", &wet[0]), ("stair", &stair[0])] {
+        assert!(
+            boundary.points.iter().all(|p| inside(*p, &seal[0])),
+            "inner groove wall encloses the complete {name} wet boundary"
+        );
+        let wet_clearance = boundary_clearance(boundary, &seal[0]);
+        assert!(
+            wet_clearance > 2.79,
+            "{name} wet/groove clearance: {wet_clearance}"
+        );
+    }
+    // Bores are through-features and may grow independently of the milled pocket.
+    // Include their actual radii in sealing clearance, including the 3.5 mm edit.
+    for name in [
+        "upperOutlet",
+        "middleOutlet",
+        "lowerOutlet",
+        "stairInlet",
+        "stairOutlet",
+    ] {
+        let bore = &g[name];
+        assert!(inside(bore.points[0], &seal[0]));
+        let clearance = boundary_distance(bore.points[0], &seal[0]) - bore.radius.unwrap();
+        assert!(
+            clearance > 1.29,
+            "{name} bore/groove clearance: {clearance}"
+        );
+    }
+    for (name, center) in [
+        ("stairInlet", stair_source[0]),
+        ("stairOutlet", stair_source[3]),
+    ] {
+        let bore = &g[name];
+        near(bore.radius.unwrap(), 3.0, "stair through-bore radius");
+        assert!(
+            same_point(bore.points[0], center),
+            "{name} shares its cap center"
+        );
+        assert!(
+            inside(center, &stair[0]),
+            "{name} opens into the stair pocket"
+        );
+        let clearance = boundary_distance(center, &stair[0]) - bore.radius.unwrap();
+        assert!(clearance > 2.99, "{name}/pocket clearance: {clearance}");
+    }
+    let plate = &g["plate"].points;
+    assert!(
+        seal[1].points.iter().all(|p| {
+            p[0] - plate[0][0] > 4.79
+                && plate[2][0] - p[0] > 4.79
+                && p[1] - plate[0][1] > 4.79
+                && plate[2][1] - p[1] > 4.79
+        }),
+        "outer groove stays inside the plate edge"
+    );
+    for (name, screw) in g
+        .iter()
+        .filter(|(name, shape)| name.starts_with("screw") && shape.radius.is_some())
+    {
+        assert!(
+            !inside(screw.points[0], &seal[1]),
+            "{name} stays outside seal"
+        );
+        let clearance = boundary_distance(screw.points[0], &seal[1]) - screw.radius.unwrap();
+        assert!(clearance > 2.29, "{name}/groove clearance: {clearance}");
+    }
+}
+
 #[test]
-// M92-F008: independent accepted-geometry regression.
+// M92-F008, extended for native channel and groove area instead of centreline bounds.
 fn manifold_seal_encloses_the_shared_reservoir_and_routes() {
     let g = geometry(&bundled_sample("pc-water-manifold").unwrap().project());
-    let wet = g
-        .iter()
-        .filter(|(k, _)| k.as_str() == "reservoir" || k.ends_with("Centerline"))
-        .flat_map(|(_, v)| &v.points)
-        .collect::<Vec<_>>();
-    assert!(
-        g.iter().filter(|(k, _)| k.ends_with("Seal")).any(|(_, v)| {
-            let min = [
-                v.points.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min),
-                v.points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min),
-            ];
-            let max = [
-                v.points
-                    .iter()
-                    .map(|p| p[0])
-                    .fold(f64::NEG_INFINITY, f64::max),
-                v.points
-                    .iter()
-                    .map(|p| p[1])
-                    .fold(f64::NEG_INFINITY, f64::max),
-            ];
-            wet.iter()
-                .all(|p| p[0] > min[0] && p[0] < max[0] && p[1] > min[1] && p[1] < max[1])
-        }),
-        "a closed seal must enclose the complete connected wet circuit instead of traversing the reservoir"
-    );
+    assert_manifold_profiles(&g, 60.0);
 }
 #[test]
 // M92-F009: independent accepted-geometry regression.
@@ -475,14 +941,16 @@ fn manifold_reservoir_and_outlet_edits_retain_the_shared_circuit() {
         );
         near(
             g[&format!("{prefix}Outlet")].points[0][0],
-            102.0,
+            98.0,
             "outlet follows reservoir",
         );
     }
     near(g["commonSeal"].points[1][0], 108.0, "seal tracks extent");
+    assert_manifold_profiles(&g, 62.0);
     let e = edit("pc-water-manifold", "upperOutletRadius", "value", 3.5);
     let g = geometry(e.project());
     near(g["upperOutlet"].radius.unwrap(), 3.5, "outlet size");
+    assert_manifold_profiles(&g, 60.0);
     near(
         g["middleOutlet"].radius.unwrap(),
         3.0,

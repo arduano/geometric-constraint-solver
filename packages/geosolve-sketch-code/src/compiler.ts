@@ -401,6 +401,7 @@ class StructuralPatchRecorder {
 
 const HOST_ONLY_PATCH_FAMILIES = new Set([
   "computed.fillet",
+  "computed.polylineChannel",
   "computed.roundedRectangleProfile",
 ]);
 
@@ -596,7 +597,8 @@ function declarationResultShape(family: string): CatalogResultShape {
 }
 
 function declarationRootKind(family: string, fallback: FeatureKind): FeatureKind {
-  if (family === "computed.fillet" || family === "computed.roundedRectangleProfile") {
+  if (family === "computed.fillet" || family === "computed.roundedRectangleProfile"
+    || family === "computed.polylineChannel") {
     return "feature";
   }
   const entry = (DECLARATION_RESULT_CATALOG as unknown as Readonly<Record<string, {

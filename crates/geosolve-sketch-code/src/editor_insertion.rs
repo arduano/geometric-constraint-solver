@@ -1130,6 +1130,7 @@ fn record_target_owners(
                 record_alias_owner(editor, owners, &child.alias, declaration, &child_path, None)?;
             }
             let active_request = expansion.host_requests.iter().any(|request| match request {
+                crate::CodeHostRequest::ChannelBoundaryCheck { .. } => false,
                 crate::CodeHostRequest::FilletAtCorner(request) => {
                     request.output == *address && request.identity == *identity
                 }

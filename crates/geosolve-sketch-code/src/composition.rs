@@ -22,6 +22,8 @@ use geosolve_sketch_intent::{
 };
 use thiserror::Error;
 
+mod channel_validation;
+
 use crate::expansion::{CodeOperationPlanner, expand_code_project_with_overlay_and_planner};
 use crate::{
     AuditedCodeWork, CodeExpansionError, CodeHostRequest, CodeInteractionOverlay, CodeProject,
@@ -160,6 +162,8 @@ pub enum CodeCompositionError {
     RehydratedOperationPlanMismatch { symbol: String },
     #[error("restored generated host member `{member}` does not match the expanded code payload")]
     RehydratedHostMismatch { member: String },
+    #[error("channel boundary `{member}` rejected: {diagnostic}")]
+    InvalidChannelBoundary { member: String, diagnostic: String },
 }
 
 struct NativeCodeOperationPlanner {
@@ -337,6 +341,7 @@ fn materialize_expanded_code_project_cold(
         return Err(CodeCompositionError::BaseNotAccepted);
     }
 
+    channel_validation::validate(&editor, &base_outcome.aliases, &expansion.host_requests)?;
     Ok(ColdMaterializedCodeProject {
         editor,
         expansion,
@@ -372,6 +377,7 @@ pub fn rehydrate_materialized_code_project(
     authenticate_rehydrated_operation_plans(&editor, &expansion)?;
     let aliases = rehydrate_base_aliases(&editor, &expansion)?;
     let host_outputs = rehydrate_host_outputs(&editor, &aliases, &expansion.host_requests)?;
+    channel_validation::validate(&editor, &aliases, &expansion.host_requests)?;
     let base_outcome = ProjectionalPatchOutcome {
         identity: editor.coordinator().intent().identity(),
         disposition: IntentPlanDisposition::Accepted,
@@ -1109,6 +1115,7 @@ fn materialize_code_project_incremental_with_overlay_and_work(
     let editor = editor.into_delegated_accepted_authority()?;
     base_outcome.identity = editor.coordinator().intent().identity();
 
+    channel_validation::validate(&editor, &base_outcome.aliases, &expansion.host_requests)?;
     Ok(MaterializedCodeProject {
         editor,
         expansion,
@@ -1178,6 +1185,7 @@ fn materialize_unchanged_host_project_incremental(
     base_outcome.identity = editor.coordinator().intent().identity();
     validate_native_authority(&editor)?;
 
+    channel_validation::validate(&editor, &base_outcome.aliases, &expansion.host_requests)?;
     Ok(MaterializedCodeProject {
         editor,
         expansion,
@@ -1189,7 +1197,8 @@ fn materialize_unchanged_host_project_incremental(
 fn host_request_display_path(request: &CodeHostRequest) -> String {
     match request {
         CodeHostRequest::FilletAtCorner(request) => request.output.display_path(),
-        CodeHostRequest::RoundedRectangleProfile { output, .. } => output.display_path(),
+        CodeHostRequest::ChannelBoundaryCheck { output, .. }
+        | CodeHostRequest::RoundedRectangleProfile { output, .. } => output.display_path(),
     }
 }
 
@@ -1741,6 +1750,7 @@ fn materialize_warm_host_oracle(
     let host_outputs =
         materialize_host_requests(&mut editor, &base_outcome.aliases, &expansion.host_requests)?;
     validate_native_authority(&editor)?;
+    channel_validation::validate(&editor, &base_outcome.aliases, &expansion.host_requests)?;
     Ok(MaterializedCodeProject {
         editor,
         expansion,
@@ -2153,13 +2163,20 @@ fn expand_host_members(
     let mut result = BTreeMap::new();
     for request in requests {
         let members = match request {
+            CodeHostRequest::ChannelBoundaryCheck { .. } => Vec::new(),
             CodeHostRequest::FilletAtCorner(request) => vec![HostMemberRequest {
                 key: HostMemberKey {
                     address: request.output.clone(),
                     member_key: request.member_key.clone(),
                 },
                 request: request.clone(),
-                suffix: None,
+                // Ordinary keyed templates own one output per member. A composite
+                // may instead own stable descendants of a fixed output feature.
+                // Keep historical single-member symbols byte-identical.
+                suffix: (request.member_key != request.output.member_key)
+                    .then(|| serde_json::to_string(&request.member_key))
+                    .transpose()
+                    .map_err(|error| CodeCompositionError::Encoding(error.to_string()))?,
             }],
             CodeHostRequest::RoundedRectangleProfile {
                 output,

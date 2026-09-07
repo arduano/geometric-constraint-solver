@@ -5480,3 +5480,17 @@ real browser pixels/workflows and dense timings precede one clean integrated qua
 an independently byte-verified candidate. The user explicitly accepted UAT and requested closure
 on 2026-09-07; [M95_CLOSURE.md](docs/M95_CLOSURE.md) records acceptance of the qualified scope
 and its disclosed limits. M95 is closed.
+
+## M96 manifold channel acceptance — implementation verified, final user review pending
+
+[M96_GOALS.md](docs/M96_GOALS.md) requires reusable polyline water-channel and
+silicone-groove patches composed from native offsets, corner fillets and end arcs.
+The amended sample contains three 12 mm reservoir passages, a separate 12 mm
+point-to-point stair passage with two bends, and a closed 2.4 mm groove. It retains
+driving dimensions, three original outlets and eight screws, and adds two stair ports.
+Independent accepted-geometry checks cover closure, widths, areas, separation and
+source edits; edit/history/restoration, WASM and browser checks pass in provisional
+integrated run `20260908T012505-e9d6c999`. The exact frozen development preview is
+`http://100.94.63.83:18101/`; [implementation evidence](docs/M96_IMPLEMENTATION.md)
+records the commands and limits. Changes remain uncommitted. Earlier positive
+feedback on the 6 mm version is not final acceptance of the amended 12 mm layout.

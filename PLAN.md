@@ -8384,7 +8384,32 @@ Product `f18ff9e` passes all 241 gate stages, 45 browser cases and the unchanged
 contract. [Final qualification](docs/M95_QUALIFICATION.md) records the authenticated evidence,
 visibility batching repair and remaining dense editing costs.
 The user explicitly accepted UAT and requested closure. [Closure and handoff](docs/M95_CLOSURE.md)
-records the accepted endpoint, preserved evidence and fresh-session instructions. No M96 is scoped.
+records the accepted endpoint, preserved evidence and fresh-session instructions.
+
+## M96 — finite-width manifold channels and silicone grooves
+
+Status: **implementation and provisional development qualification complete; final user acceptance pending.**
+[M96_GOALS.md](docs/M96_GOALS.md) owns the scope.
+
+- [x] Prove two native offsets, corner fillets, and semicircular caps on an open route.
+- [x] Reproduce and regress keyed Polyline offset output alias ambiguity (M96-F001).
+- [x] Compose native geometry through a reusable polyline custom-patch helper.
+- [x] Rebuild connected water boundaries and a finite-width closed silicone groove.
+- [x] Verify width, closure, area, clearances, source edits and persistence independently.
+- [x] Complete format, Clippy, focused tests, WASM and provisional integrated qualification.
+- [x] Present the amended 12 mm sample and frozen development preview.
+- [ ] Record final user acceptance and qualify clean source before a release claim.
+
+The original 6 mm/R5 prototype was positively reviewed. The 2026-09-08 amendment
+uses 12 mm channels with centreline R8 and adds a separate two-bend stair passage
+with rounded ends in the space between the middle and lower routes.
+The offset alias regression preserves stable keyed paths and rejects unrelated ambiguity.
+Run `20260908T012505-e9d6c999` passes all 243 integrated obligations on unchanged dirty source.
+[M96-F006](docs/M96_F006.md) preserves editability across the large fully constrained
+priority-solver boundary. [Implementation evidence](docs/M96_IMPLEMENTATION.md)
+records the finite areas, clearances, edit/history/restoration and exact served bytes.
+This is provisional development evidence; the earlier 6 mm visual feedback is not
+final acceptance of this amended layout.
 
 ## Explicit non-goals
 

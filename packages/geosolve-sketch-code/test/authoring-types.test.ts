@@ -23,8 +23,10 @@ import type {
   NativeCurveSpanRef,
   OperationBuilder,
   OutputRef,
+  PatchApplication,
   PatchBuilder,
   PointRef,
+  SketchBuilder,
   SketchExecutionProject,
   SketchProject,
 } from "../src/authoring.js";
@@ -241,6 +243,9 @@ sketch((s) => {
   const end = s.geometry.sketchPoint("end", { point: [1, 0] });
   const result = s.use("generated", generated, { start: start.point, end: end.point });
   const span: NativeCurveSpanRef<SketchExecutionProject> = result.edge.span;
+  s.group("Generated", [start, end, result]);
+  // @ts-expect-error An arbitrary output record is not a patch invocation.
+  s.group("Invalid record", [{ edge: result.edge }]);
   return { start, end, result, span };
 });
 
@@ -249,6 +254,12 @@ declare interface Beta extends SketchProject<"beta"> {}
 declare const alphaBuilder: GeometryBuilder<Alpha>;
 declare const alphaPoint: PointRef<Alpha>;
 declare const betaPoint: PointRef<Beta>;
+declare const alphaSketchBuilder: SketchBuilder<Alpha>;
+declare const alphaPatch: PatchApplication<Alpha, { point: PointRef<Alpha> }>;
+declare const betaPatch: PatchApplication<Beta, { point: PointRef<Beta> }>;
+alphaSketchBuilder.group("same project", [alphaPoint, alphaPatch]);
+// @ts-expect-error A patch invocation from another project cannot enter a group.
+alphaSketchBuilder.group("foreign patch", [betaPatch]);
 alphaBuilder.segment("valid", { start: alphaPoint, end: [1, 0] });
 // @ts-expect-error Cross-project references cannot enter an Alpha declaration.
 alphaBuilder.segment("foreign", { start: alphaPoint, end: betaPoint });

@@ -1248,6 +1248,23 @@ structural repetition. Supporting Circle, Coincident, FixedPoint, curve-length/d
 Polyline `.byKey` and profile/construction-role syntax lower directly to existing intent/document
 semantics and add no equation or runtime TypeScript dependency.
 
+M96 replaces the manifold's centreline-only patch with finite-width water and silicone
+custom patches, plus a water variant with caps at both ends for the separate stair passage.
+The patch-private `computed.polylineChannel` composite lowers in Rust
+to ordinary native supporting-line offset dimensions, computed Fillets, Center
+Arcs and endpoint contacts. The input polyline remains the geometric dependency;
+numeric calculations provide initialization and explicit contact branches only.
+Native solving, independent residual validation and authenticated restoration remain
+authoritative. Internal declaration aliases derive from reconciled patch identity
+and stable source keys, and final ownership belongs to the patch invocation.
+The TypeScript recorder publishes a fixed semantic result inventory without
+executing geometry or admitting arbitrary plan-dependent operation outputs.
+A validation-only host request checks accepted native line/arc boundaries after
+Fillet composition, including closure, intersections and expected components.
+It creates no persistent computed-feature kind or solver equation.
+M96's 12 mm amendment passes provisional development qualification; final acceptance
+and clean-source qualification remain pending. M95 retains accepted product authority.
+
 PNG export remains outside every sketch/code authority boundary. The browser wraps the already
 composed SVG viewport in self-contained paint rules, hides hit/provisional/error-only presentation,
 rasterizes through Canvas at 2000 × 1400 and downloads `geosolve-sketch.png`. It neither reads the

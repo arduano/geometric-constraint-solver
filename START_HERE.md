@@ -7,7 +7,13 @@ Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optim
 `http://100.94.63.83:18100/`. M94 remains accepted at port 18096. Selection preserves layout and code cursor/focus; UI selections reveal
 highlighted source when visible, and reverse code-to-canvas navigation uses an explicit action.
 [M95 closure and fresh-session handoff](docs/M95_CLOSURE.md) is the current continuation point.
-No next milestone is scoped or authorized; await the user's next task.
+**M96's 12 mm manifold amendment is implemented and provisionally verified; final user
+acceptance and clean-source qualification remain pending.** The frozen development
+preview is `http://100.94.63.83:18101/`. It contains three reservoir passages,
+a separate two-bend stair passage and a 2.4 mm silicone groove. [M96 goals](docs/M96_GOALS.md)
+and [implementation evidence](docs/M96_IMPLEMENTATION.md) record the API, geometry,
+full integrated run `20260908T012505-e9d6c999` and the solver correction needed to preserve editing.
+M95 remains the accepted product; M96 changes are uncommitted.
 See [M92 sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06),
 [M93 goals](docs/M93_GOALS.md) and [implementation order](docs/M93_IMPLEMENTATION.md).
 M93 has a passing 21m50s warm fresh gate, completed cold serial parity and verified count-repair planning. The user accepted closure with edit/prune timings of 12m22s–15m41s above the ten-minute target and the historical four-entry replay unperformed. See the [qualification and sign-off ledger](docs/M93_QUALIFICATION.md). These remain recorded limitations; further optimization and sample expansion are future work. [M94](docs/M94_GOALS.md) now replaces the live SVG viewport with a TypeScript WebGL2 canvas while preserving Rust authority and native surrounding UI.

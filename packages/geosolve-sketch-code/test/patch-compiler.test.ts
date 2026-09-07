@@ -10,6 +10,39 @@ import {
   compilePatchArtifact,
 } from "../src/compiler.js";
 
+test("a polyline channel patch records native composition inputs without evaluating geometry", () => {
+  const channel = definePatch(
+    { polyline: t.feature("polyline"), width: t.length(), bendRadius: t.length() },
+    (p, { polyline, width, bendRadius }) => ({
+      channel: p.computed.polylineChannel("walls", {
+        polyline, width, bendRadius, caps: "both",
+      }),
+    }),
+  );
+  const compiled = compilePatchArtifact({
+    source: "polyline channel",
+    moduleSpecifier: "./patches/channel.patch.ts",
+    exportName: "channel",
+    patch: channel,
+  });
+  assert.deepEqual(compiled.artifact.inputs, {
+    bendRadius: "scalar", polyline: "feature", width: "scalar",
+  });
+  assert.equal(compiled.artifact.templates.length, 1);
+  const template = compiled.artifact.templates[0]!;
+  assert.equal(template.declaration_family, "computed.polylineChannel");
+  assert.deepEqual(template.outputs, [
+    { path: ["endLeft"], kind: "point" },
+    { path: ["endRight"], kind: "point" },
+    { path: ["left"], kind: "feature" },
+    { path: ["right"], kind: "feature" },
+    { path: ["startLeft"], kind: "point" },
+    { path: ["startRight"], kind: "point" },
+  ]);
+  assert.match(compiled.canonicalJson, /"source":"input","name":"polyline"/u);
+  assert.doesNotMatch(compiled.canonicalJson, /node_id|port_id|equation|residual|function/u);
+});
+
 test("patch artifacts retain local IDs and ordinary result paths", () => {
   const roundEveryCorner = definePatch(
     { corners: t.keyed(t.corner()), radius: t.length() },

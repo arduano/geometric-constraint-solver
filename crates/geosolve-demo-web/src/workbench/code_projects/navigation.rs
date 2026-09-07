@@ -117,20 +117,14 @@ impl CodeProjectWorkbench {
             let Some(declaration_nodes) = declarations.get_mut(&owner) else {
                 continue;
             };
-            let nodes = generated_member_nodes(
-                &member.address,
-                expansion,
-                &nodes_by_alias,
-                &host_nodes,
-                &mut BTreeSet::new(),
-            );
-            let exact_bindings = NavigationBindingResolver {
+            let resolver = NavigationBindingResolver {
                 editor,
                 expansion,
                 nodes_by_alias: &nodes_by_alias,
                 host_nodes: &host_nodes,
-            }
-            .member_bindings(&member.address, &mut BTreeSet::new());
+            };
+            let nodes = generated_member_nodes(&member.address, &resolver, &mut BTreeSet::new());
+            let exact_bindings = resolver.member_bindings(&member.address, &mut BTreeSet::new());
             declaration_nodes.extend(&nodes);
             generated_entries.entry(owner).or_default().push((
                 generated_panel_row_id(&member.address),
@@ -182,23 +176,100 @@ impl NavigationBindingResolver<'_> {
         address: &GeneratedMemberAddress,
         visiting: &mut BTreeSet<GeneratedMemberAddress>,
     ) -> BTreeSet<IntentNativeBinding> {
-        // A generated Fillet owns its host result, never the input corner
-        // which its expansion recipe references before native evaluation.
-        if let Some(nodes) = self.host_nodes.get(address) {
-            return nodes
-                .iter()
-                .flat_map(|node| self.owned_bindings(*node).iter().copied())
-                .collect();
-        }
         if !visiting.insert(address.clone()) {
             return BTreeSet::new();
         }
         let mut bindings = BTreeSet::new();
-        if let Some(provenance) = self.expansion.generated_provenance.get(address) {
+        // Ordinary Fillets own their host results, never their borrowed input
+        // corners. Composite outputs may additionally own native aggregate spans.
+        if let Some(nodes) = self.host_nodes.get(address) {
+            bindings.extend(
+                nodes
+                    .iter()
+                    .flat_map(|node| self.owned_bindings(*node).iter().copied()),
+            );
+        } else if let Some(provenance) = self.expansion.generated_provenance.get(address) {
             self.collect_target_bindings(&provenance.target, visiting, &mut bindings);
         }
+        bindings.extend(self.member_aggregate_bindings(address));
         visiting.remove(address);
         bindings
+    }
+
+    fn member_aggregate_bindings(
+        &self,
+        address: &GeneratedMemberAddress,
+    ) -> BTreeSet<IntentNativeBinding> {
+        let mut bindings = BTreeSet::new();
+        if let Some(provenance) = self.expansion.generated_provenance.get(address) {
+            self.collect_aggregate_bindings(&provenance.target, &address.invocation, &mut bindings);
+        }
+        bindings
+    }
+
+    fn collect_aggregate_bindings(
+        &self,
+        target: &ExpandedSemanticTarget,
+        invocation: &str,
+        bindings: &mut BTreeSet<IntentNativeBinding>,
+    ) {
+        let (alias, selector) = match target {
+            ExpandedSemanticTarget::Declaration { alias, .. } => (alias, None),
+            ExpandedSemanticTarget::Port { port } => {
+                (&port.alias, Some((port.selector, port.kind)))
+            }
+            ExpandedSemanticTarget::Collection { members } => {
+                for member in members.values() {
+                    self.collect_aggregate_bindings(member, invocation, bindings);
+                }
+                return;
+            }
+            ExpandedSemanticTarget::FeatureCorner { .. }
+            | ExpandedSemanticTarget::HostOutput { .. } => return,
+        };
+        if self
+            .expansion
+            .declaration_provenance
+            .get(alias)
+            .is_none_or(|owner| owner.0 != invocation)
+        {
+            return;
+        }
+        let Some(accepted) = self.editor.coordinator().accepted_materialization() else {
+            return;
+        };
+        let graph = self.editor.coordinator().intent().graph();
+        let Some(node) = graph.node_by_symbol(alias) else {
+            return;
+        };
+        for port in node
+            .ports
+            .values()
+            .filter(|port| selector.is_none_or(|selector| selector == (port.selector, port.kind)))
+        {
+            let Some(aggregate) = accepted.ownership.aggregate(port.as_ref(node.id)) else {
+                continue;
+            };
+            for span in &aggregate.spans {
+                let Some(owner) = accepted
+                    .ownership
+                    .exact_owner(IntentNativeBinding::Curve(span.curve))
+                    .and_then(|owner| graph.node(owner))
+                else {
+                    continue;
+                };
+                // An aggregate can contain operands from other declarations. Its
+                // output only acquires spans generated by this same invocation.
+                if self
+                    .expansion
+                    .declaration_provenance
+                    .get(&owner.symbol)
+                    .is_some_and(|owner| owner.0 == invocation)
+                {
+                    bindings.insert(IntentNativeBinding::CurveSpan(*span));
+                }
+            }
+        }
     }
 
     fn collect_target_bindings(
@@ -277,29 +348,29 @@ fn source_owner(
 
 fn generated_member_nodes(
     address: &GeneratedMemberAddress,
-    expansion: &ExpandedCodeProject,
-    nodes_by_alias: &BTreeMap<&IntentKey, NodeId>,
-    host_nodes: &BTreeMap<GeneratedMemberAddress, BTreeSet<NodeId>>,
+    resolver: &NavigationBindingResolver<'_>,
     visiting: &mut BTreeSet<GeneratedMemberAddress>,
 ) -> BTreeSet<NodeId> {
-    // Host outputs own generated Fillets. Their provenance target can be
-    // the input corner, which must not be mistaken for that Fillet's output.
-    if let Some(nodes) = host_nodes.get(address) {
-        return nodes.clone();
-    }
     if !visiting.insert(address.clone()) {
         return BTreeSet::new();
     }
     let mut nodes = BTreeSet::new();
-    if let Some(provenance) = expansion.generated_provenance.get(address) {
-        collect_target_nodes(
-            &provenance.target,
-            expansion,
-            nodes_by_alias,
-            host_nodes,
-            visiting,
-            &mut nodes,
-        );
+    // Host-only Fillets must not acquire the input corner in their provenance.
+    if let Some(hosts) = resolver.host_nodes.get(address) {
+        nodes.extend(hosts);
+    } else if let Some(provenance) = resolver.expansion.generated_provenance.get(address) {
+        collect_target_nodes(&provenance.target, resolver, visiting, &mut nodes);
+    }
+    if let Some(accepted) = resolver.editor.coordinator().accepted_materialization() {
+        for binding in resolver.member_aggregate_bindings(address) {
+            if let IntentNativeBinding::CurveSpan(span) = binding {
+                nodes.extend(
+                    accepted
+                        .ownership
+                        .exact_owner(IntentNativeBinding::Curve(span.curve)),
+                );
+            }
+        }
     }
     visiting.remove(address);
     nodes
@@ -307,9 +378,7 @@ fn generated_member_nodes(
 
 fn collect_target_nodes(
     target: &ExpandedSemanticTarget,
-    expansion: &ExpandedCodeProject,
-    nodes_by_alias: &BTreeMap<&IntentKey, NodeId>,
-    host_nodes: &BTreeMap<GeneratedMemberAddress, BTreeSet<NodeId>>,
+    resolver: &NavigationBindingResolver<'_>,
     visiting: &mut BTreeSet<GeneratedMemberAddress>,
     nodes: &mut BTreeSet<NodeId>,
 ) {
@@ -319,30 +388,17 @@ fn collect_target_nodes(
         ExpandedSemanticTarget::FeatureCorner { corner } => Some(&corner.point.alias),
         ExpandedSemanticTarget::Collection { members } => {
             for member in members.values() {
-                collect_target_nodes(
-                    member,
-                    expansion,
-                    nodes_by_alias,
-                    host_nodes,
-                    visiting,
-                    nodes,
-                );
+                collect_target_nodes(member, resolver, visiting, nodes);
             }
             None
         }
         ExpandedSemanticTarget::HostOutput { address, .. } => {
-            nodes.extend(generated_member_nodes(
-                address,
-                expansion,
-                nodes_by_alias,
-                host_nodes,
-                visiting,
-            ));
+            nodes.extend(generated_member_nodes(address, resolver, visiting));
             None
         }
     };
     if let Some(alias) = alias
-        && let Some(node) = nodes_by_alias.get(alias)
+        && let Some(node) = resolver.nodes_by_alias.get(alias)
     {
         nodes.insert(*node);
     }
@@ -442,6 +498,194 @@ mod tests {
     }
 
     #[test]
+    fn navigation_channel_wall_members_include_native_spans_and_computed_bends() {
+        let (workbench, editor) = CodeProjectWorkbench::open_key("pc-water-manifold").unwrap();
+        assert_channel_wall_navigation(
+            &workbench,
+            &editor,
+            &[
+                ("upperChannel", 3),
+                ("middleChannel", 3),
+                ("lowerChannel", 3),
+                ("stairChannel", 3),
+                ("commonSealGroove", 4),
+            ],
+        );
+    }
+
+    #[test]
+    fn navigation_open_channel_keeps_native_wall_spans_alongside_generated_fillets() {
+        let (workbench, editor) =
+            CodeProjectWorkbench::import_canonical_project_json(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../geosolve-sketch-code/tests/fixtures/m96/channel-zigzag.project.json"
+            )))
+            .unwrap();
+        assert_channel_wall_navigation(&workbench, &editor, &[("wet", 3)]);
+    }
+
+    fn assert_channel_wall_navigation(
+        workbench: &CodeProjectWorkbench,
+        editor: &ProjectionalEditorSession,
+        invocations: &[(&str, usize)],
+    ) {
+        let before = workbench.session.to_canonical_json().unwrap();
+        let index = workbench.navigation_index(editor);
+        assert!(index.blocked_reason.is_none());
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let graph = editor.coordinator().intent().graph();
+        let accepted = editor.coordinator().accepted_materialization().unwrap();
+        let mut walls = 0;
+        for (address, provenance) in &expansion.generated_provenance {
+            let Some((_, span_count)) = invocations
+                .iter()
+                .find(|(name, _)| *name == address.invocation)
+            else {
+                continue;
+            };
+            let ExpandedSemanticTarget::Declaration { alias, .. } = &provenance.target else {
+                continue;
+            };
+            let node = graph.node_by_symbol(alias).unwrap();
+            let aggregates = accepted
+                .ownership
+                .aggregates
+                .iter()
+                .filter(|aggregate| aggregate.port.node == node.id)
+                .collect::<Vec<_>>();
+            if aggregates.is_empty() {
+                continue;
+            }
+            assert_eq!(
+                aggregates.len(),
+                1,
+                "one wall aggregate per generated member"
+            );
+            let spans = &aggregates[0].spans;
+            assert_eq!(spans.len(), *span_count);
+            let row = entry(&index, &generated_panel_row_id(address));
+            let bindings = row
+                .exact_bindings
+                .as_ref()
+                .unwrap()
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>();
+            let mut expected = BTreeSet::new();
+            for span in spans {
+                let owner = accepted
+                    .ownership
+                    .exact_owner(IntentNativeBinding::Curve(span.curve))
+                    .unwrap();
+                assert_eq!(
+                    expansion.declaration_provenance[&graph.node(owner).unwrap().symbol].0,
+                    address.invocation
+                );
+                assert!(
+                    row.nodes.contains(&owner),
+                    "wall member retains its native straight-span owner"
+                );
+                expected.insert(IntentNativeBinding::CurveSpan(*span));
+            }
+            let mut bend_nodes = 0;
+            for child in &expansion.generated_children {
+                let CodeOwnerAddress::GeneratedMember {
+                    address: child_address,
+                } = &child.address.owner.address
+                else {
+                    continue;
+                };
+                if child_address != address {
+                    continue;
+                }
+                let node = graph.node_by_symbol(&child.alias).unwrap().id;
+                assert!(
+                    row.nodes.contains(&node),
+                    "wall member retains its computed bend owner"
+                );
+                expected.extend(accepted.ownership.node(node).unwrap().owned.iter().copied());
+                bend_nodes += 1;
+            }
+            assert_eq!(bend_nodes, if *span_count == 4 { 4 } else { 2 });
+            assert_eq!(
+                bindings, expected,
+                "wall selection is exactly its straight spans and bends"
+            );
+            let declaration = entry(&index, &format!("managed:{}", address.invocation));
+            assert_eq!(
+                (row.source_start, row.source_end),
+                (declaration.source_start, declaration.source_end)
+            );
+            walls += 1;
+        }
+        assert_eq!(
+            walls,
+            invocations.len() * 2,
+            "both walls of every requested passage and seal"
+        );
+        assert_eq!(workbench.session.to_canonical_json().unwrap(), before);
+    }
+
+    #[test]
+    fn navigation_generated_aggregate_excludes_spans_borrowed_from_another_declaration() {
+        let compiled = compiled_fixture(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../packages/geosolve-sketch-code/test/fixtures/managed-profile-offset-closure-base.json"
+        )));
+        let (workbench, editor) = CodeProjectWorkbench::open_managed_test_compiled(
+            "m96-borrowed-aggregate-navigation",
+            compiled,
+        )
+        .unwrap();
+        let expansion = workbench
+            .session
+            .snapshot()
+            .accepted_expansion
+            .as_ref()
+            .unwrap();
+        let graph = editor.coordinator().intent().graph();
+        let nodes_by_alias = graph
+            .nodes()
+            .values()
+            .map(|node| (&node.symbol, node.id))
+            .collect();
+        let resolver = NavigationBindingResolver {
+            editor: &editor,
+            expansion,
+            nodes_by_alias: &nodes_by_alias,
+            host_nodes: &BTreeMap::new(),
+        };
+        let mut aggregates = 0;
+        for aggregate in &editor
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .ownership
+            .aggregates
+        {
+            let node = graph.node(aggregate.port.node).unwrap();
+            let owner = &expansion.declaration_provenance[&node.symbol];
+            let target = ExpandedSemanticTarget::Declaration {
+                alias: node.symbol.clone(),
+                kind: geosolve_sketch_code::FeatureKind::Feature,
+            };
+            let mut bindings = BTreeSet::new();
+            resolver.collect_aggregate_bindings(&target, &owner.0, &mut bindings);
+            assert!(
+                bindings.is_empty(),
+                "aggregate membership does not confer ownership of its input curves"
+            );
+            aggregates += 1;
+        }
+        assert!(aggregates > 0);
+    }
+
+    #[test]
     fn navigation_target_collection_recurses_all_members_and_deduplicates_aliases() {
         let (workbench, editor) = CodeProjectWorkbench::open_key("typed-panel").unwrap();
         let expansion = workbench
@@ -484,9 +728,12 @@ mod tests {
         let mut actual = BTreeSet::new();
         collect_target_nodes(
             &collection,
-            expansion,
-            &nodes_by_alias,
-            &BTreeMap::new(),
+            &NavigationBindingResolver {
+                editor: &editor,
+                expansion,
+                nodes_by_alias: &nodes_by_alias,
+                host_nodes: &BTreeMap::new(),
+            },
             &mut BTreeSet::new(),
             &mut actual,
         );

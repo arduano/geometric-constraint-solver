@@ -26,6 +26,8 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const check = process.argv.includes("--check");
+const manifoldWaterArtifact = JSON.parse(await readFile(resolve(packageRoot,
+  "../../crates/geosolve-sketch-code/assets/bundled-samples/pc-water-manifold/patches/water-channel.artifact.json"), "utf8"));
 
 const fixtures = [
   {
@@ -398,6 +400,39 @@ const managedSketchFixtures = [
   {
     source: "test/managed/managed-profile-offset-closure.sketch.ts",
     fixture: "test/fixtures/managed-profile-offset-closure-base.json",
+  },
+  {
+    source: "test/managed/managed-polyline-profile-offset.sketch.ts",
+    fixture: "test/fixtures/managed-polyline-profile-offset.json",
+  },
+  {
+    source: "test/fixtures/managed-channel-boundary-driven.sketch.ts",
+    fixture: "test/fixtures/managed-channel-boundary-driven.json",
+    options: { patches: { waterChannel: manifoldWaterArtifact } },
+  },
+  {
+    source: "test/fixtures/managed-channel-boundary-driven.sketch.ts",
+    fixture: "test/fixtures/managed-channel-boundary-driven-edited.json",
+    options: { patches: { waterChannel: manifoldWaterArtifact } },
+    mutation: {
+      mutation: "set_value", declaration: "firstLength", path: ["value"],
+      expected: { kind: "unit", value: { unit: "mm", value: 30 } },
+      value: { kind: "unit", value: { unit: "mm", value: 32 } },
+    },
+  },
+  {
+    source: "test/fixtures/managed-channel-boundary.sketch.ts",
+    fixture: "test/fixtures/managed-channel-boundary.json",
+    options: { patches: { waterChannel: manifoldWaterArtifact } },
+  },
+  {
+    source: "test/fixtures/managed-channel-boundary.sketch.ts",
+    fixture: "test/fixtures/managed-channel-boundary-self-intersection.json",
+    options: { patches: { waterChannel: manifoldWaterArtifact } },
+    mutation: {
+      mutation: "set_value", declaration: "route", path: ["vertices", 4, "position", 1],
+      expected: { kind: "number", value: 10 }, value: { kind: "number", value: 5 },
+    },
   },
   {
     source: "test/managed/managed-profile-offset-closure.sketch.ts",

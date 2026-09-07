@@ -64,6 +64,38 @@ export const DECLARATION_RESULT_CATALOG = {
       }
     }
   },
+  "computed.polylineChannel": {
+    "feature_kind": "feature",
+    "outputs": {
+      "shape": "object",
+      "fields": {
+        "endLeft": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "endRight": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "left": {
+          "shape": "leaf",
+          "kind": "feature"
+        },
+        "right": {
+          "shape": "leaf",
+          "kind": "feature"
+        },
+        "startLeft": {
+          "shape": "leaf",
+          "kind": "point"
+        },
+        "startRight": {
+          "shape": "leaf",
+          "kind": "point"
+        }
+      }
+    }
+  },
   "computed.roundedRectangleProfile": {
     "feature_kind": "feature",
     "outputs": {

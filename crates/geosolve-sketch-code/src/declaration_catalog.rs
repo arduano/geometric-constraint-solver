@@ -1589,6 +1589,17 @@ pub struct CodeDeclarationResultDescriptor {
 pub fn declaration_result_catalog() -> BTreeMap<String, CodeDeclarationResultDescriptor> {
     let mut catalog = BTreeMap::from([
         (
+            "computed.polylineChannel".into(),
+            descriptor(object([
+                ("left", leaf(FeatureKind::Feature)),
+                ("right", leaf(FeatureKind::Feature)),
+                ("startLeft", leaf(FeatureKind::Point)),
+                ("startRight", leaf(FeatureKind::Point)),
+                ("endLeft", leaf(FeatureKind::Point)),
+                ("endRight", leaf(FeatureKind::Point)),
+            ])),
+        ),
+        (
             "computed.fillet".into(),
             descriptor(object([("arc", leaf(FeatureKind::CurveSpan))])),
         ),
