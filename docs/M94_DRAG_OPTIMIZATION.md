@@ -2,7 +2,7 @@
 
 # M94-F003 — dense backplane dragging
 
-Status: bounded repair implemented and focused checks pass; final qualification pending. M94 remains open for supervising-user acceptance.
+Status: M94-F003/F004 qualified and delivered on 2026-09-07 from `7727cbf`. M94 remains open for supervising-user acceptance.
 
 The supervising user reported dragging in the dense robotic harness taking about two seconds per
 move and authorized a correction if it fits M94. The reproduced delay is principally the release
@@ -190,7 +190,7 @@ context-cache-clear.png}`. The earlier point-pixel tests passed even with missin
 restoration regression now also needs real line-interior and label pixels, including loss during
 first compilation. Focused correction and qualification outcomes will be recorded below.
 
-The final first-shader regression fails on the F002 artifact with zero line-interior pixels
+The final first-shader regression fails on the pre-F004 provisional artifact with zero line-interior pixels
 (`regression-before-r3.log`) and passes against the corrected frontend (`regression-after-r3.log`,
 10.6 seconds). It strengthens the existing context-restoration browser case with a separate fresh
 context and checks line-interior plus both X/Y label pixels; all prior lifecycle assertions remain.
@@ -209,3 +209,75 @@ capability probe and hung its synchronous retry loop; the final injector targets
 actual batch shader. A preliminary compiler declaration mismatch and one browser executable
 launch failure were corrected before the decisive red/green and final focused checks. Those
 failed attempts remain in the evidence directory; none is counted as a passing result.
+
+## Final qualification and delivery
+
+Product `7727cbfc35f64aad42023305601879b5d0c4f2b4`, tree
+`019e2c4c1c5d0d1b9147d1d05ec3320174d807af`, passes:
+
+```bash
+nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260907T143802-fee2e639'
+```
+
+Run `20260907T161218-24b782dc`: **241/241 stages passed, 69 fresh and 172 authenticated reused**,
+30m33s wall time. Fresh qualification includes all workspace code-session/workbench tests,
+headless sample edit/Undo/Redo/reload and mechanism/atlas/scale checks, warnings-denied Clippy,
+formatting, Rust documentation/doctests, WASM build/lifecycle, packaging/licences and browser.
+The full browser inventory is 42 cases: 17 fresh catalog/sample-open prefix checks and 41 fresh
+full workflows account for every case, with zero reused sample leaves, skips, retries or failures.
+The strengthened context-loss case includes its first-batch-shader-loss line/text pixel substep.
+All **271 mathematical golden rows are unchanged**, SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+The unaffected exclusive performance stage is authenticated reuse. No source changed during the gate.
+
+The exact qualified 12-file production artifact (27,708,655 bytes), aggregate
+`b5f8554f8234e6674ac9b3939b8fba702d2484cb5321fd31fcdec97e8984d5c0`, is frozen read-only at
+`/tmp/geosolve-m94-f003-uat.qwhvb8yw/geosolve-production` and served at
+**http://100.94.63.83:18096/** (also loopback 18096). Only the previous M94-F002 server was replaced;
+accepted M92 on 18092 remains running. The F002 nomination is retained in
+`target/m94/drag/nomination-f002.json`; the current nomination is `target/m94/nomination.json`.
+
+```bash
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest /tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json --directory /tmp/geosolve-m94-f003-uat.qwhvb8yw/geosolve-production --url http://100.94.63.83:18096/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m94/drag/tailscale-final.json'
+nix-shell shell.nix --run 'DRAG_URL=http://100.94.63.83:18096/ DRAG_MANIFEST=/tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json DRAG_OUTPUT=/home/arduano/programming/geometric-constraint-solver/target/m94/drag/final node target/m94/drag/final-point-probe.mjs'
+```
+
+Served file/root byte and MIME checks and actual WASM startup pass. Same actual GPU, viewport,
+DPR, supersampling and ordered point gestures as baseline, now with complete visible strokes:
+
+| Phase, milliseconds | Mount centre before → final | Power-bus source before → final |
+| --- | ---: | ---: |
+| Accepted move median WASM | 55.3 → 30.4 | 55.9 → 37.2 |
+| Accepted move median browser-action wall | 91.2 → 71.0 | 92.6 → 77.4 |
+| Renderer CPU submission median | 3.5 → 3.3 | 3.9 → 3.2 |
+| Pointer-up WASM | 1386.9 → 887.0 | 1394.1 → 902.9 |
+| Following persistence encoding | 371.3 → 360.3 | 371.5 → 352.9 |
+| Release browser-action wall | 1834.2 → 1315.1 | 1835.2 → 1318.9 |
+
+Point-preview WASM cost falls **33–45%**; release browser-action wall falls **about 28%**.
+Both exact `(+12,-6)` CSS-pixel terminals publish accepted geometry with no Problems or page
+exceptions. Final screenshots were visually checked for complete strokes/grid/axis labels and
+movement. The first final browser context records initial shader-failure/context-loss console
+messages, then correctly restores complete pixels; the second has no console warnings. F004
+repairs recovery, not the external initial context-loss trigger. Baseline renderer timings came
+from an incomplete recovered image and are not evidence of equal drawing work or renderer speedup.
+The WASM and browser-action improvements are measured separately.
+
+Evidence: `target/m94/drag/{freeze.json,tailscale-final.json,comparison-final.json,final/}` and
+`target/m94/drag/release-gate.log`. M94 stays open. Remaining ordinary preview work exceeds a
+16.7ms budget; release still spends roughly 0.9s publishing and 0.35s encoding persistence.
+Computed Fillet rail dragging has its separately recorded higher preview cost and is not optimized
+by the point-only path. Further reductions need broader publication/materialization or scene work;
+this pass preserves every semantic input and acceptance boundary.
+
+Final direct-WASM check on the served artifact also passes both exact point terminals, unchanged
+source bytes and empty Problems; pointer-up takes 942.5ms and 883.8ms in these separate calls.
+
+```bash
+nix-shell shell.nix --run 'DRAG_URL=http://100.94.63.83:18096/ DRAG_MANIFEST=/tmp/geosolve-m94-f003-uat.qwhvb8yw/production.json DRAG_OUTPUT=/home/arduano/programming/geometric-constraint-solver/target/m94/drag/final node target/m94/drag/direct-probe.mjs'
+```
+
+Temporary development servers on 18106 and 18107 are retired. The qualified 18096 candidate and
+accepted M92 18092 service remain available. Documentation-only closeout uses `./scripts/release-gate.sh --docs-only --since 7727cbf`
+and passes diff/link/input checks (three prose files). It does not rebuild or replace the qualified
+bytes. Log: `target/m94/drag/docs-only.log`.

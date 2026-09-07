@@ -5,7 +5,9 @@ See [M92 sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06),
 [M93 goals](docs/M93_GOALS.md) and [implementation order](docs/M93_IMPLEMENTATION.md).
 M93 has a passing 21m50s warm fresh gate, completed cold serial parity and verified count-repair planning. The user accepted closure with edit/prune timings of 12m22s–15m41s above the ten-minute target and the historical four-entry replay unperformed. See the [qualification and sign-off ledger](docs/M93_QUALIFICATION.md). These remain recorded limitations; further optimization and sample expansion are future work. [M94](docs/M94_GOALS.md) now replaces the live SVG viewport with a TypeScript WebGL2 canvas while preserving Rust authority and native surrounding UI.
 
-M94-F002 navigation optimization is now qualified and delivered at `http://100.94.63.83:18096/` from `93fdcbf`. [The report](docs/M94_NAVIGATION_OPTIMIZATION.md) records the measured pan/zoom/hover gains, preserved behavior, complete gate and remaining dense-frame/editing limits. M94 remains open for supervising-user acceptance.
+M94-F003/F004 dense point-drag optimization and GPU context recovery are qualified and delivered from `7727cbf` at `http://100.94.63.83:18096/`. [The drag report](docs/M94_DRAG_OPTIMIZATION.md) records 33–45% lower point-preview WASM work, about 28% lower release wall time, exact semantics, 241 passing gate stages and remaining costs. M94 remains open for supervising-user acceptance.
+
+Previous M94-F002 navigation optimization was qualified and delivered at `http://100.94.63.83:18096/` from `93fdcbf`. [The report](docs/M94_NAVIGATION_OPTIMIZATION.md) records the measured pan/zoom/hover gains, preserved behavior, complete gate and remaining dense-frame/editing limits. M94 remains open for supervising-user acceptance.
 
 ## Objective
 
