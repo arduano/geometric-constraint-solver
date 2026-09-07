@@ -643,8 +643,8 @@ mod wasm {
                     snapshot["problems"].as_array().is_some_and(Vec::is_empty),
                     "{key} has no hidden production-adapter problem",
                 );
-                assert!(
-                    actual_frame.contains("wb-accepted-scene"),
+                assert_eq!(
+                    snapshot["frame"]["scene"]["provenance"]["scene"], "accepted",
                     "{key} accepted frame"
                 );
             }
@@ -831,6 +831,38 @@ mod wasm {
                 frame["items"].as_array()?.iter().find(|item| {
                     item["layer"] == "points" && item["metadata"]["persistentId"] == persistent_id
                 })
+            }
+
+            fn assert_selected_point_paint(
+                frame: &serde_json::Value,
+                base: &serde_json::Value,
+                point_id: &str,
+                context: &str,
+            ) {
+                let point = persistent_point(frame, point_id)
+                    .unwrap_or_else(|| panic!("{context} selected persistent point {point_id}"));
+                let original = persistent_point(base, point_id)
+                    .unwrap_or_else(|| panic!("{context} original persistent point {point_id}"));
+                for field in ["id", "semanticKey", "kind", "center", "radius"] {
+                    assert_eq!(
+                        point[field], original[field],
+                        "{context} selection preserves exact point {point_id} {field}"
+                    );
+                }
+                assert_eq!(
+                    point["style"]["stroke"], "#efb856",
+                    "{context} exact hit point {point_id} selection stroke"
+                );
+                // Hover shares the gold stroke; only selection paints this halo.
+                assert_eq!(
+                    point["style"]["shadow"],
+                    serde_json::json!({
+                        "color": "#efb85673",
+                        "blur": 3.0,
+                        "offset": [0.0, 0.0],
+                    }),
+                    "{context} exact hit point {point_id} selection halo"
+                );
             }
 
             fn click(
@@ -1100,28 +1132,18 @@ mod wasm {
                     false,
                     case.key,
                 );
-                let selected_point_tag =
-                    persistent_point(drawing_frame(&selected_down, case.key), &point_id)
-                        .unwrap_or_else(|| panic!("{} selected persistent point paint", case.key));
-                assert!(
-                    selected_point_tag["className"]
-                        .as_str()
-                        .unwrap()
-                        .split_whitespace()
-                        .any(|class| class == "selected"),
-                    "{} pointer down must select the exact hit point {point_id}",
-                    case.key
+                assert_selected_point_paint(
+                    drawing_frame(&selected_down, case.key),
+                    &base_frame,
+                    &point_id,
+                    &format!("{} pointer down", case.key),
                 );
                 assert!(selected["selection"].is_object(), "{} selection", case.key);
-                let selected_release_tag =
-                    persistent_point(drawing_frame(&selected, case.key), &point_id)
-                        .unwrap_or_else(|| panic!("{} released persistent point paint", case.key));
-                assert!(
-                    selected_release_tag["className"]
-                        .as_str()
-                        .unwrap()
-                        .split_whitespace()
-                        .any(|class| class == "selected")
+                assert_selected_point_paint(
+                    drawing_frame(&selected, case.key),
+                    &base_frame,
+                    &point_id,
+                    &format!("{} pointer release", case.key),
                 );
                 assert_eq!(
                     managed_source(&selected, case.key),

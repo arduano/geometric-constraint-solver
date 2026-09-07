@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { expect, test, type Page } from "@playwright/test";
+import { compareFittedGeometry } from "../fitted-geometry";
 import { acceptedSource, fittedGeometry, samples, savedWorkspace } from "./release-sample-prefix";
 import { canvasFrame, canvasVisualWitness, drawItems, fractionToClient, presentedFrame, presentedIdentity, rendererDiagnostics, settlePresentation } from "./presented-canvas";
 
@@ -48,7 +49,7 @@ test("M94 canvas aligns DPR resize and hidden layouts with presented geometry an
   try {
     const highDpr = await second.newPage();
     const highCanvas = await openJansen(highDpr);
-    expect(await fittedGeometry(highDpr)).toBe(geometry);
+    expect(compareFittedGeometry(await fittedGeometry(highDpr), geometry).equal).toBe(true);
     const backing = await highCanvas.evaluate((element) => ({
       width: Reflect.get(element, "width"), height: Reflect.get(element, "height"),
       css: element.getBoundingClientRect().toJSON(), ratio: Reflect.get(globalThis, "devicePixelRatio"),
@@ -71,7 +72,7 @@ test("M94 canvas aligns DPR resize and hidden layouts with presented geometry an
     await info.attach("canvas-dpr2-pixels", { body: JSON.stringify(await canvasVisualWitness(highCanvas)), contentType: "application/json" });
   } finally { await second.close(); }
   expect(await savedWorkspace(page)).toBe(saved);
-  expect(await fittedGeometry(page)).toBe(geometry);
+  expect(compareFittedGeometry(await fittedGeometry(page), geometry).equal).toBe(true);
   await canvasVisualWitness(canvas);
 });
 

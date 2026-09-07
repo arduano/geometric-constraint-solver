@@ -3,8 +3,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+import { compareFittedGeometry } from "../fitted-geometry";
 import { canvasFrame, drawItems, expectItemCount, logicalToClient, presentedFrame } from "./presented-canvas";
 import { acceptedSource, fittedGeometry, openSamplePrefix, samples, savedWorkspace, type Edit } from "./release-sample-prefix";
+
+function expectGeometry(actual: string, expected: string, shouldMatch = true) {
+  const comparison = compareFittedGeometry(actual, expected);
+  expect(comparison.equal, comparison.difference ?? "geometry is unchanged within 1e-9 logical px").toBe(shouldMatch);
+}
 
 async function capture(page: Page, info: TestInfo, key: string, stage: string) {
   const target = process.env.M92_BROWSER_AUDIT_OUTPUT
@@ -68,23 +74,23 @@ async function requireJansenDrag(page: Page, info: TestInfo, originalSource: str
   await expect.poll(() => acceptedSource(page)).toBe(originalSource);
   await expect.poll(() => savedWorkspace(page)).not.toBe(initialSave);
   const terminal = await fittedGeometry(page);
-  expect(terminal).not.toBe(baseline);
+  expectGeometry(terminal, baseline, false);
   await capture(page, info, "theo-jansen-leg", "drag-terminal");
   const terminalSave = await savedWorkspace(page);
   await undo.click();
-  expect(await fittedGeometry(page)).toBe(baseline);
+  expectGeometry(await fittedGeometry(page), baseline);
   await expect(undo).toBeDisabled();
   await expect.poll(() => savedWorkspace(page)).not.toBe(terminalSave);
   const undoSave = await savedWorkspace(page);
   await page.getByRole("button", { name: "Redo", exact: true }).click();
-  expect(await fittedGeometry(page)).toBe(terminal);
+  expectGeometry(await fittedGeometry(page), terminal);
   await expect.poll(() => savedWorkspace(page)).not.toBe(undoSave);
   await page.reload({ waitUntil: "networkidle" });
   await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(originalSource);
-  expect(await fittedGeometry(page)).toBe(terminal);
+  expectGeometry(await fittedGeometry(page), terminal);
   await capture(page, info, "theo-jansen-leg", "drag-reload");
   await undo.click();
-  expect(await fittedGeometry(page)).toBe(baseline);
+  expectGeometry(await fittedGeometry(page), baseline);
   await expect(undo).toBeDisabled();
 }
 
@@ -112,10 +118,10 @@ for (const sample of samples) {
     // accepted path without creating a design-history entry.
     await page.getByRole("button", { name: /^Isolate / }).first().click();
     await expect(page.getByRole("button", { name: "Restore visibility before isolate" })).toBeEnabled();
-    expect(await fittedGeometry(page)).not.toBe(baselineGeometry);
+    expectGeometry(await fittedGeometry(page), baselineGeometry, false);
     expect(await acceptedSource(page)).toBe(original);
     await page.getByRole("button", { name: "Restore visibility before isolate" }).click();
-    expect(await fittedGeometry(page)).toBe(baselineGeometry);
+    expectGeometry(await fittedGeometry(page), baselineGeometry);
     const explorer = page.getByRole("complementary", { name: "Explorer", exact: true });
     const horizontalScroll = await explorer.evaluate((root) => [...root.querySelectorAll("*")]
       .map((element) => ({ left: element.scrollLeft, overflow: element.scrollWidth - element.clientWidth }))
@@ -144,17 +150,17 @@ for (const sample of samples) {
       await expect(control).toHaveValue(value);
       const edited = await acceptedSource(page);
       const editedGeometry = await fittedGeometry(page);
-      expect(editedGeometry).not.toBe(baselineGeometry);
+      expectGeometry(editedGeometry, baselineGeometry, false);
       await capture(page, info, key, `edit-${index + 1}`);
       await page.getByRole("button", { name: "Undo", exact: true }).click();
       await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(original);
       await expect(control).toHaveValue(beforeValue);
-      expect(await fittedGeometry(page)).toBe(baselineGeometry);
+      expectGeometry(await fittedGeometry(page), baselineGeometry);
       await capture(page, info, key, `undo-${index + 1}`);
       await page.getByRole("button", { name: "Redo", exact: true }).click();
       await expect.poll(() => acceptedSource(page), { timeout: 60_000 }).toBe(edited);
       await expect(control).toHaveValue(value);
-      expect(await fittedGeometry(page)).toBe(editedGeometry);
+      expectGeometry(await fittedGeometry(page), editedGeometry);
       await capture(page, info, key, `redo-${index + 1}`);
       await page.reload({ waitUntil: "networkidle" });
       await expect(page.locator("header").getByText(manifest.title, { exact: true })).toBeVisible();
@@ -162,7 +168,7 @@ for (const sample of samples) {
       await page.getByRole("tab", { name: "Parameters", exact: true }).click();
       await expect(page.getByRole("textbox", { name: controlLabel(edit), exact: true })).toHaveValue(value);
       expect((await presentedFrame(frame)).items.some((item) => item.layer === "geometry")).toBe(true);
-      expect(await fittedGeometry(page)).toBe(editedGeometry);
+      expectGeometry(await fittedGeometry(page), editedGeometry);
       await capture(page, info, key, `reload-${index + 1}`);
     }
     expect(errors).toEqual([]);

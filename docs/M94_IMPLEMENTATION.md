@@ -141,3 +141,49 @@ The first comparison included the SVG's 70 invisible `.wb-computed-hit` DOM path
 intentionally absent from the new presentation because native Rust still owns picking. Excluding
 only those unpainted duplicates yields exact item/coordinate-shape and owner correspondence for
 every sample. Receipt: `target/m94/baseline-canvas-geometry-comparison.json`.
+
+## Qualification harness corrections
+
+Run `20260907T093757-164f743d` on `3bcb0d7` resumed the initial inventory repair.
+Format, warnings-denied Clippy, preparations, completed native suites, documentation, benchmark
+compilation and production transport passed. The runner stopped scheduling after WASM lifecycle
+failed, preserving independent running browser evidence: 17/17 catalog/sample prefixes and 36/41
+full browser cases passed; five sample rows failed. This attempt remains failed and incomplete.
+
+The three failing WASM assertions still expected SVG class tokens. The independent numeric
+owner-frame comparison already passed; the repair asserts typed accepted provenance and the
+exact persistent point's selected stroke plus selection-only halo at pointer-down and release.
+It also checks that selection preserves the point's identity and geometry. Source, authority,
+finite validation, rank/DOF, deselection and complete history assertions remain intact.
+
+All five terminal browser failures were exact string comparisons of numeric fitted geometry:
+Jansen Undo, scissor isolation restoration, Gridfinity Redo, and vacuum/Voron reload. Independent
+trace comparison checked all 1,513 numbers with identical structure and nonnumeric values; maximum
+difference was `2.2737367544323206e-13` logical pixels. SVG previously rounded these coordinates
+to three decimal places. A test-only comparator now requires exact structure/order/kinds and uses
+an absolute `1e-9` logical-pixel tolerance, with exact radian rotations and malformed/nonfinite
+rejection. The same comparison guards inequality, preventing rounding noise from qualifying a
+no-op edit. Raw captures, complete workspace/source hashes and canonical drawing/pixel witnesses
+remain unrounded and unchanged. These are harness migration corrections, not mathematical defects
+or changes to golden expectations.
+
+The existing global overlap/equivalence pins are deliberately not refreshed for this isolated
+test repair. The runner must authenticate unaffected successes and use its conservative build
+locks wherever the prior source audit no longer matches; no manual result bypass is authorized.
+
+Focused repair qualification passes:
+
+- `nix-shell shell.nix --run 'cargo fmt --all -- --check'`.
+- Frontend `npm test -- --no-cache tests/fitted-geometry.test.ts` — 19/19; the helper also
+  accepts every captured terminal pair within the measured bounds above.
+- Frontend `npm run test:e2e -- tests/e2e/m92-sample-audit.spec.ts --workers=1 --grep
+  'M92 visual workflow: (theo-jansen-leg|five-stage-scissor-lift|gridfinity-bin-section|vacuum-fixture-plate|voron-panel)$'
+  --output=/tmp/m94-browser-harness-repair-results` against the existing local production
+  candidate — 5/5 in 3.0 minutes.
+- `nix-shell shell.nix --run 'CARGO_BUILD_JOBS=4 CARGO_PROFILE_RELEASE_INCREMENTAL=true
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner
+  cargo test --locked --release -p geosolve-demo-web --lib actual_wasm_ --target wasm32-unknown-unknown'`
+  — 3/3 in 107.65 seconds, after 43.55-second compilation. The default-feature WASM test build
+  reports existing dead-code warnings; the integrated warnings-denied workspace Clippy remains required.
+
+Logs: `/tmp/m94-{fitted-geometry-unit,browser-harness-repair,wasm-lifecycle-repair}.log`.
