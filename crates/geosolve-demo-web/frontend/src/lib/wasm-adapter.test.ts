@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from "vitest";
 import { WasmWorkbenchAdapter, type JsonWorkbenchHandle } from "./wasm-adapter";
-import type { WorkbenchSnapshot } from "./adapter";
+import { getCanvasSnapshotSequence, isCanvasOnlySnapshot, type WorkbenchSnapshot } from "./adapter";
 
 const icon = (key: string) => ({ key, svg: `<svg class="wb-palette-icon" viewBox="-10 -10 20 20" aria-hidden="true" focusable="false" data-icon-key="${key}"><path d="M-8 5L8-5"/></svg>` });
 const tool = (stableId: string, toolId: string, label: string, key: string) => ({ stableId, toolId, label, group: label, icon: icon(key) });
@@ -85,6 +85,49 @@ describe("WasmWorkbenchAdapter", () => {
     await adapter.construct({ version: 2, persistedProject: original });
     expect(recovered).toEqual(["bad legacy", "bad snapshot", original]);
     expect(freed).toEqual(["invalid candidate", '{"version":2}']);
+  });
+
+  it("accepts finite canvas-only updates against the current settled revision and retains UI identities", async () => {
+    let response = "null";
+    class FrameHandle extends FakeHandle {
+      override wheel() { return response; }
+    }
+    const adapter = new WasmWorkbenchAdapter(FrameHandle);
+    const base = await adapter.construct({ version: 2 });
+    const frame = { ...snapshot.frame, scene: { ...snapshot.frame.scene, viewBox: [0, 0, 900, 800] } };
+    response = JSON.stringify({ version: 2, kind: "frame", revision: 0, frame });
+    const next = (await adapter.wheel({ version: 2, x: 100, y: 100, deltaX: 0, deltaY: 1, ctrl: false }))!;
+    expect(isCanvasOnlySnapshot(next)).toBe(true);
+    expect(getCanvasSnapshotSequence(next)).toBeGreaterThan(getCanvasSnapshotSequence(base)!);
+    expect(next.frame).toEqual(frame);
+    for (const key of ["source", "explorer", "parameters", "presentation", "project", "problems"] as const) expect(next[key]).toBe(base[key]);
+    expect(Object.isFrozen(next.frame.scene.items)).toBe(true);
+    response = JSON.stringify({ version: 2, kind: "frame", revision: 1, frame });
+    await expect(adapter.wheelBatch([])).rejects.toThrow("matching settled");
+    response = JSON.stringify({ version: 2, kind: "frame", revision: 0, frame, explorer: [] });
+    await expect(adapter.wheelBatch([])).rejects.toThrow("matching settled");
+    response = JSON.stringify({ version: 2, kind: "frame", revision: 0, frame: { ...frame, scene: { ...frame.scene, viewBox: [0, 0, null, 800] } } });
+    await expect(adapter.wheelBatch([])).rejects.toThrow("finite typed primitives");
+    const full = await adapter.dispatch({ version: 2, command: "project.new" });
+    expect(isCanvasOnlySnapshot(full)).toBe(false);
+    expect(getCanvasSnapshotSequence(full)).toBeGreaterThan(getCanvasSnapshotSequence(next)!);
+    response = JSON.stringify({ version: 2, kind: "frame", revision: 1, frame });
+    expect((await adapter.wheelBatch([]))?.source).toBe(full.source);
+  });
+
+  it("forwards every ordered wheel anchor and clamp input in a single Rust batch", async () => {
+    let request = "";
+    class BatchHandle extends FakeHandle {
+      override wheel(input?: string) { request = input ?? ""; return "null"; }
+    }
+    const adapter = new WasmWorkbenchAdapter(BatchHandle);
+    await adapter.construct({ version: 2 });
+    const samples = [
+      { version: 2 as const, x: 20, y: 30, deltaX: 0, deltaY: -5000, ctrl: false },
+      { version: 2 as const, x: 40, y: 50, deltaX: 0, deltaY: 60, ctrl: true },
+    ];
+    await adapter.wheelBatch(samples);
+    expect(JSON.parse(request)).toEqual({ version: 2, samples });
   });
 
 });

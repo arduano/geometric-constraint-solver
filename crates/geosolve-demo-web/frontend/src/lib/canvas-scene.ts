@@ -49,6 +49,9 @@ const nonnegative = (value: unknown): value is number => finite(value) && value 
 const point = (value: unknown): value is DrawPoint => Array.isArray(value) && value.length === 2 && value.every(finite);
 const strings = (value: unknown): value is Record<string, string> => record(value) && Object.values(value).every((entry) => typeof entry === "string");
 const nullableString = (value: unknown) => value === null || typeof value === "string";
+// Only this module can mark a frame trusted, after validating and freezing every child.
+// Object.isFrozen at the root alone would permit later mutation of geometry or styles.
+const immutableFrames = new WeakSet<object>();
 // Native palette is serialized as concrete CSS colours, never CSS variables or markup.
 const color = (value: unknown): value is string => typeof value === "string" && /^(?:#[0-9a-f]{3,4}|#[0-9a-f]{6}|#[0-9a-f]{8}|(?:rgb|rgba|hsl|hsla)\([\d\s.,%/+\-]+\)|[a-z]+)$/i.test(value);
 function style(value: unknown): value is DrawStyle {
@@ -81,6 +84,7 @@ function item(value: unknown): value is DrawItem {
   }
 }
 export function assertDrawFrame(value: unknown): asserts value is DrawFrame {
+  if (value !== null && typeof value === "object" && immutableFrames.has(value)) return;
   if (!record(value) || value.format !== "geosolve-draw-frame-v1" || !Array.isArray(value.viewBox)
     || value.viewBox.length !== 4 || !value.viewBox.every(finite) || value.viewBox[2] <= 0 || value.viewBox[3] <= 0
     || !color(value.background) || !strings(value.provenance)
@@ -90,13 +94,20 @@ export function assertDrawFrame(value: unknown): asserts value is DrawFrame {
   }
 }
 
-/** Clone once at the input boundary: observers and caller mutation cannot alter accepted renderer input. */
-export function immutableDrawFrame(frame: DrawFrame): DrawFrame {
+/** Adopt a newly decoded boundary value. The caller must relinquish mutation of its complete tree. */
+export function freezeDrawFrame(frame: unknown): DrawFrame {
   assertDrawFrame(frame);
-  const copy = structuredClone(frame);
+  if (immutableFrames.has(frame)) return frame;
   function freeze(value: unknown): void {
     if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); }
   }
-  freeze(copy);
-  return copy;
+  freeze(frame);
+  immutableFrames.add(frame);
+  return frame;
+}
+
+/** Isolate mutable callers; a validated boundary frame can be retained without another tree walk. */
+export function immutableDrawFrame(frame: DrawFrame): DrawFrame {
+  if (immutableFrames.has(frame)) return frame;
+  return freezeDrawFrame(structuredClone(frame));
 }

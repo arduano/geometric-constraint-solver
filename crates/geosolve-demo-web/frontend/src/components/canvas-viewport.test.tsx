@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
+import { markCanvasOnlySnapshot, stampCanvasSnapshot, type WheelSample, type WorkbenchAdapter, type WorkbenchSnapshot } from "../lib/adapter";
 import { CanvasViewport } from "./canvas-viewport";
 import { MockWorkbenchAdapter } from "../lib/mock-adapter";
 import { createCanvasRenderer } from "../lib/canvas-renderer";
 
 vi.mock("../lib/canvas-renderer", () => ({ createCanvasRenderer: vi.fn(() => ({ accept: vi.fn(), resize: vi.fn(), destroy: vi.fn() })) }));
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-async function setup() {
+async function setup(activeTool = "select", strict = false) {
   const adapter = new MockWorkbenchAdapter(); const snapshot = await adapter.snapshot();
+  snapshot.presentation.activeTool = activeTool;
   const onCaptureChange = vi.fn(); const onSnapshot = vi.fn(); const onError = vi.fn();
-  const view = render(<CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={onCaptureChange} onError={onError} />);
+  const element = <CanvasViewport adapter={adapter} snapshot={snapshot} onSnapshot={onSnapshot} onCaptureChange={onCaptureChange} onError={onError} />;
+  const view = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { adapter, snapshot, onCaptureChange, onSnapshot, onError, view, host: view.getByRole("application") };
 }
 describe("canvas host lifecycle", () => {
@@ -40,5 +44,219 @@ describe("canvas host lifecycle", () => {
     expect(h.host.querySelectorAll("canvas")).toHaveLength(1); expect(h.host.querySelector("svg")).toBeNull();
     expect(renderer.accept).toHaveBeenCalledWith(h.snapshot.frame.scene);
     h.view.unmount(); expect(renderer.destroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+function pointerEvent(host: HTMLElement, type: string, properties: Record<string, unknown> = {}) {
+  const event = new Event(type, { bubbles: true });
+  Object.assign(event, { pointerId: 7, button: 0, buttons: 0, clientX: 20, clientY: 30, ...properties });
+  fireEvent(host, event);
+}
+function animationFrames() {
+  let identifier = 0;
+  const pending = new Map<number, FrameRequestCallback>();
+  vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => { pending.set(++identifier, callback); return identifier; }));
+  vi.stubGlobal("cancelAnimationFrame", vi.fn((id: number) => { pending.delete(id); }));
+  return async () => {
+    await act(async () => {
+      const batch = [...pending.values()]; pending.clear();
+      for (const callback of batch) callback(16);
+    });
+  };
+}
+
+describe("canvas input scheduling", () => {
+  it("coalesces Select hover to the newest CSS-local sample once per animation frame", async () => {
+    const frame = animationFrames(); const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer");
+    vi.spyOn(h.host, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 50, 900, 700));
+    for (let offset = 0; offset < 100; offset += 1) pointerEvent(h.host, "pointermove", { clientX: 300 + offset, clientY: 100 });
+    expect(pointer).not.toHaveBeenCalled();
+    await frame();
+    expect(pointer).toHaveBeenCalledTimes(1);
+    expect(pointer.mock.calls[0][0]).toMatchObject({ phase: "move", x: 299, y: 50, buttons: 0 });
+    await frame(); expect(pointer).toHaveBeenCalledTimes(1);
+  });
+
+  it("drains newest middle pan before exact release while retiring capture immediately", async () => {
+    const frame = animationFrames(); const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer");
+    pointerEvent(h.host, "pointerdown", { button: 1, buttons: 4 });
+    pointerEvent(h.host, "pointermove", { button: -1, buttons: 4, clientX: 50 });
+    pointerEvent(h.host, "pointermove", { button: -1, buttons: 4, clientX: 70 });
+    pointerEvent(h.host, "pointerup", { button: 1, clientX: 90 });
+    pointerEvent(h.host, "lostpointercapture");
+    expect(h.onCaptureChange.mock.calls).toEqual([[true], [false]]);
+    await waitFor(() => expect(pointer).toHaveBeenCalledTimes(3));
+    expect(pointer.mock.calls.map(([sample]) => [sample.phase, sample.x])).toEqual([["down", 20], ["move", 70], ["up", 90]]);
+    await frame(); expect(pointer).toHaveBeenCalledTimes(3);
+  });
+
+  it("preserves every solver drag and authoring move in input order", async () => {
+    animationFrames(); const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer");
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    for (const x of [30, 40, 50]) pointerEvent(h.host, "pointermove", { buttons: 1, clientX: x });
+    pointerEvent(h.host, "pointerup", { clientX: 60 });
+    await waitFor(() => expect(pointer).toHaveBeenCalledTimes(5));
+    expect(pointer.mock.calls.map(([sample]) => sample.x)).toEqual([20, 30, 40, 50, 60]);
+    const authoring = { ...h.snapshot, presentation: { ...h.snapshot.presentation, activeTool: "line" } };
+    h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={authoring} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
+    for (const x of [70, 80, 90]) pointerEvent(h.host, "pointermove", { clientX: x });
+    await waitFor(() => expect(pointer).toHaveBeenCalledTimes(8));
+    expect(pointer.mock.calls.slice(5).map(([sample]) => sample.x)).toEqual([70, 80, 90]);
+  });
+
+  it("flushes pending input before loss cancellation and waits for asynchronous operations", async () => {
+    animationFrames(); const h = await setup();
+    let completeDown!: (snapshot: WorkbenchSnapshot | null) => void;
+    const down = new Promise<WorkbenchSnapshot | null>((resolve) => { completeDown = resolve; });
+    const order: string[] = [];
+    vi.spyOn(h.adapter, "pointer").mockImplementation(async (sample) => { order.push(`${sample.phase}:${sample.x}`); return sample.phase === "down" ? down : null; });
+    vi.spyOn(h.adapter, "cancel").mockImplementation(async () => { order.push("cancel"); return null; });
+    pointerEvent(h.host, "pointerdown", { button: 1, buttons: 4 });
+    pointerEvent(h.host, "pointermove", { buttons: 4, clientX: 80 });
+    pointerEvent(h.host, "lostpointercapture");
+    expect(order).toEqual(["down:20"]);
+    await act(async () => completeDown(null));
+    await waitFor(() => expect(order).toEqual(["down:20", "move:80", "cancel"]));
+  });
+
+  it("batches exact ordered wheel operations without merging changing anchors or opposite deltas", async () => {
+    const frame = animationFrames(); const h = await setup();
+    const wheelBatch = vi.fn(async (_samples: WheelSample[]) => null);
+    (h.adapter as WorkbenchAdapter).wheelBatch = wheelBatch;
+    const pointer = vi.spyOn(h.adapter, "pointer");
+    pointerEvent(h.host, "pointermove", { clientX: 35 });
+    fireEvent.wheel(h.host, { clientX: 60, clientY: 70, deltaX: 2, deltaY: 10000 });
+    fireEvent.wheel(h.host, { clientX: 80, clientY: 90, deltaX: -3, deltaY: -10000, ctrlKey: true });
+    expect(pointer).toHaveBeenCalledTimes(1); expect(wheelBatch).not.toHaveBeenCalled();
+    await frame();
+    expect(wheelBatch).toHaveBeenCalledExactlyOnceWith([
+      { version: 2, x: 60, y: 70, deltaX: 2, deltaY: 10000, ctrl: false },
+      { version: 2, x: 80, y: 90, deltaX: -3, deltaY: -10000, ctrl: true },
+    ]);
+  });
+
+  it("flushes wheel input before external pointer and keyboard command handlers", async () => {
+    const frame = animationFrames(); const h = await setup(); const order: string[] = [];
+    (h.adapter as WorkbenchAdapter).wheelBatch = vi.fn(async () => { order.push("wheel"); return null; });
+    const clicked = () => order.push("outside-click");
+    const keyed = () => order.push("outside-key");
+    document.addEventListener("pointerdown", clicked);
+    document.addEventListener("keydown", keyed);
+    try {
+      fireEvent.wheel(h.host, { clientX: 11, deltaY: 40 });
+      pointerEvent(document.body, "pointerdown");
+      expect(order).toEqual(["wheel", "outside-click"]);
+      await act(async () => {});
+      fireEvent.wheel(h.host, { clientX: 22, deltaY: -10 });
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(order).toEqual(["wheel", "outside-click", "wheel", "outside-key"]);
+      await frame(); expect(order).toHaveLength(4);
+    } finally {
+      document.removeEventListener("pointerdown", clicked);
+      document.removeEventListener("keydown", keyed);
+    }
+  });
+
+  it("bounds wheel batches and preserves fallback wheel order before a pointer terminal", async () => {
+    const frame = animationFrames(); const h = await setup();
+    const batches: WheelSample[][] = [];
+    (h.adapter as WorkbenchAdapter).wheelBatch = vi.fn(async (samples) => { batches.push(samples); return null; });
+    for (let x = 0; x < 260; x += 1) fireEvent.wheel(h.host, { clientX: x, clientY: 20, deltaY: x % 2 ? 300 : -300 });
+    await frame();
+    expect(batches.map((batch) => batch.length)).toEqual([256, 4]);
+    expect(batches.flat().map((sample) => sample.x)).toEqual(Array.from({ length: 260 }, (_, x) => x));
+    delete (h.adapter as WorkbenchAdapter).wheelBatch;
+    const order: string[] = [];
+    vi.spyOn(h.adapter as WorkbenchAdapter, "wheel").mockImplementation(async (sample: WheelSample) => { order.push(`wheel:${sample.x}`); return null; });
+    vi.spyOn(h.adapter, "pointer").mockImplementation(async (sample) => { order.push(`pointer:${sample.phase}`); return null; });
+    fireEvent.wheel(h.host, { clientX: 11, deltaY: 40 }); fireEvent.wheel(h.host, { clientX: 22, deltaY: -10 });
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    await waitFor(() => expect(order).toEqual(["wheel:11", "wheel:22", "pointer:down"]));
+  });
+
+  it("drops stale queued input and in-flight publications on adapter replacement and unmount", async () => {
+    const frame = animationFrames(); const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer");
+    pointerEvent(h.host, "pointermove");
+    const replacement = new MockWorkbenchAdapter();
+    h.view.rerender(<CanvasViewport adapter={replacement} snapshot={h.snapshot} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
+    await frame(); expect(pointer).not.toHaveBeenCalled();
+    let complete!: (snapshot: WorkbenchSnapshot) => void;
+    vi.spyOn(replacement, "pointer").mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+    pointerEvent(h.host, "pointerdown", { buttons: 1 });
+    h.view.unmount();
+    await act(async () => complete(h.snapshot));
+    expect(h.onSnapshot).not.toHaveBeenCalled(); expect(h.onError).not.toHaveBeenCalled();
+  });
+
+  it("drops deferred hover on pointer leave and hidden documents", async () => {
+    const frame = animationFrames(); const h = await setup(); const pointer = vi.spyOn(h.adapter, "pointer");
+    pointerEvent(h.host, "pointermove"); pointerEvent(h.host, "pointerout");
+    await frame(); expect(pointer).not.toHaveBeenCalled();
+    pointerEvent(h.host, "pointermove");
+    vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    fireEvent(document, new Event("visibilitychange"));
+    await frame(); expect(pointer).not.toHaveBeenCalled();
+  });
+
+  it("paints validated canvas-only results directly and keeps newer camera frames across delayed full commits", async () => {
+    const frame = animationFrames(); const h = await setup();
+    const renderer = vi.mocked(createCanvasRenderer).mock.results.at(-1)!.value;
+    const full = { ...h.snapshot, frame: { ...h.snapshot.frame, scene: structuredClone(h.snapshot.frame.scene) } };
+    const delta = markCanvasOnlySnapshot({ ...full, frame: { ...full.frame, scene: structuredClone(full.frame.scene) } });
+    vi.spyOn(h.adapter, "pointer").mockResolvedValueOnce(full).mockResolvedValueOnce(delta);
+    pointerEvent(h.host, "pointermove", { clientX: 40 }); await frame();
+    pointerEvent(h.host, "pointermove", { clientX: 60 }); await frame();
+    expect(h.onSnapshot).toHaveBeenCalledExactlyOnceWith(full);
+    expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(delta.frame.scene);
+    h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={full} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
+    expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(delta.frame.scene);
+    const external = { ...full, frame: { ...full.frame, scene: structuredClone(full.frame.scene) } };
+    h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={external} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
+    expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(external.frame.scene);
+  });
+
+  it("rejects stale external full frames and late input results using adapter decode order", async () => {
+    const frame = animationFrames(); const h = await setup();
+    const renderer = vi.mocked(createCanvasRenderer).mock.results.at(-1)!.value;
+    const external = stampCanvasSnapshot({ ...h.snapshot, frame: { ...h.snapshot.frame, scene: structuredClone(h.snapshot.frame.scene) } }, 1);
+    const delta = markCanvasOnlySnapshot(stampCanvasSnapshot({ ...h.snapshot, frame: { ...h.snapshot.frame, scene: structuredClone(h.snapshot.frame.scene) } }, 2));
+    vi.spyOn(h.adapter, "pointer").mockResolvedValueOnce(delta).mockResolvedValueOnce(external);
+    pointerEvent(h.host, "pointermove"); await frame();
+    const presentations = vi.mocked(renderer.accept).mock.calls.length;
+    h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={external} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
+    expect(renderer.accept).toHaveBeenCalledTimes(presentations);
+    expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(delta.frame.scene);
+    pointerEvent(h.host, "pointermove"); await frame();
+    expect(renderer.accept).toHaveBeenCalledTimes(presentations);
+    expect(h.onSnapshot).not.toHaveBeenCalled();
+    const replacement = stampCanvasSnapshot({ ...h.snapshot, frame: { ...h.snapshot.frame, scene: structuredClone(h.snapshot.frame.scene) } }, 3);
+    h.view.rerender(<CanvasViewport adapter={h.adapter} snapshot={replacement} onSnapshot={h.onSnapshot} onCaptureChange={h.onCaptureChange} onError={h.onError} />);
+    expect(vi.mocked(renderer.accept).mock.calls.at(-1)?.[0]).toBe(replacement.frame.scene);
+  });
+
+  it("flushes movement before positive resize and drops deferred input when the canvas becomes hidden", async () => {
+    const frame = animationFrames();
+    let resized!: ResizeObserverCallback;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) { resized = callback; }
+      observe() {} disconnect() {} unobserve() {}
+    });
+    const h = await setup(); const order: string[] = [];
+    vi.spyOn(h.adapter, "pointer").mockImplementation(async (sample) => { order.push(`pointer:${sample.x}`); return null; });
+    vi.spyOn(h.adapter as WorkbenchAdapter, "resize").mockImplementation(async (sample) => { order.push(`resize:${sample.width}`); return null; });
+    const resize = (width: number, height: number) => act(() => resized([{ target: h.host, contentRect: new DOMRect(0, 0, width, height), borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }], {} as ResizeObserver));
+    pointerEvent(h.host, "pointermove", { clientX: 55 });
+    resize(500, 400);
+    await waitFor(() => expect(order).toEqual(["pointer:55", "resize:500"]));
+    pointerEvent(h.host, "pointermove", { clientX: 75 });
+    resize(0, 0);
+    await frame();
+    expect(order).toEqual(["pointer:55", "resize:500"]);
+  });
+
+  it("continues processing after React StrictMode effect teardown and setup", async () => {
+    const frame = animationFrames(); const h = await setup("select", true); const pointer = vi.spyOn(h.adapter, "pointer");
+    pointerEvent(h.host, "pointermove"); await frame(); expect(pointer).toHaveBeenCalledTimes(1);
   });
 });

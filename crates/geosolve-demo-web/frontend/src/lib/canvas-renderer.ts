@@ -32,6 +32,17 @@ export interface CanvasRenderer {
   destroy(): void;
 }
 
+/** Exact equality with an identity fast path and early exit, without serializing a whole frame. */
+function sameFrameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((value, index) => sameFrameValue(value, b[index]));
+  if (Array.isArray(b)) return false;
+  const left = a as Record<string, unknown>; const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every((key) => Object.hasOwn(right, key) && sameFrameValue(left[key], right[key]));
+}
+
 /** Owns only presentation. The readonly observers report completed draws, never pending snapshots. */
 export function createCanvasRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}): CanvasRenderer {
   const requestFrame = options.requestFrame ?? requestAnimationFrame;
@@ -39,7 +50,6 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement, options: Rendere
   const now = options.now ?? (() => performance.now());
   let backend: CanvasBackend | null = null;
   let accepted: DrawFrame | null = null;
-  let acceptedIdentity = "";
   let acceptedId = 0;
   let presented: DrawFrame | null = null;
   let pending: number | null = null;
@@ -117,9 +127,8 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement, options: Rendere
     accept(frame) {
       if (disposed) return;
       const copy = immutableDrawFrame(frame);
-      const identity = JSON.stringify(copy);
-      if (identity === acceptedIdentity) return;
-      accepted = copy; acceptedIdentity = identity; acceptedId++; dirty = true; schedule();
+      if (sameFrameValue(copy, accepted)) return;
+      accepted = copy; acceptedId++; dirty = true; schedule();
     },
     resize(next) {
       if (disposed) return;

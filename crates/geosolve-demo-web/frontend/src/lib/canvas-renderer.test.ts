@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it, vi } from "vitest";
 import { createCanvasRenderer } from "./canvas-renderer";
-import { assertDrawFrame, type DrawFrame, type DrawStyle } from "./canvas-scene";
+import { assertDrawFrame, freezeDrawFrame, immutableDrawFrame, type DrawFrame, type DrawStyle } from "./canvas-scene";
 import { dashedSegments, fitDrawing, textRasterOrigin } from "./canvas-renderer-geometry";
 import type { CanvasBackend } from "./canvas-renderer-pixi";
 
@@ -44,6 +44,19 @@ describe("on-demand accepted-frame presentation", () => {
     expect(h.canvas.__geosolvePresentedFrame).toEqual(frame());
     expect(h.canvas.dataset.presentedFrame).toBe("1");
     expect(h.canvas.__geosolveRendererDiagnostics?.state).toBe("unavailable");
+    h.renderer.destroy();
+  });
+  it("retains a boundary-owned frozen frame directly and skips unchanged publications", async () => {
+    const h = harness(); const input = freezeDrawFrame(frame());
+    h.renderer.accept(input); await h.ready(); h.flush();
+    expect(h.canvas.__geosolvePresentedFrame).toBe(input);
+    h.renderer.accept(input);
+    h.renderer.accept(freezeDrawFrame(frame()));
+    expect(h.callbacks.size).toBe(0);
+    // Non-paint metadata still belongs to the exact presented-frame observer.
+    h.renderer.accept(freezeDrawFrame({ ...frame(), provenance: { revision: "next" } })); h.flush();
+    expect(h.canvas.__geosolvePresentedFrame?.provenance).toEqual({ revision: "next" });
+    expect(h.backend.render).toHaveBeenCalledTimes(2);
     h.renderer.destroy();
   });
   it("cancels queued draws during context loss and restores the newest retained input", async () => {
@@ -99,6 +112,18 @@ describe("on-demand accepted-frame presentation", () => {
 });
 
 describe("typed drawing boundary and raster stroke helpers", () => {
+  it("freezes every boundary child and never trusts a merely shallow-frozen or mutable caller", () => {
+    const input = frame(); const frozen = freezeDrawFrame(input);
+    expect(frozen).toBe(input); expect(immutableDrawFrame(frozen)).toBe(frozen);
+    expect(() => { frozen.items[0].style.dash.push(4); }).toThrow();
+    expect(() => { frozen.viewBox[2] = 4; }).toThrow();
+    const mutable = frame(); const isolated = immutableDrawFrame(mutable);
+    mutable.items[0].style.opacity = 0;
+    expect(isolated.items[0].style.opacity).toBe(1);
+    const shallow = Object.freeze(frame()); shallow.items[0].style.strokeWidth = Infinity;
+    expect(() => freezeDrawFrame(shallow)).toThrow("Invalid geosolve drawing frame");
+    expect(() => immutableDrawFrame(shallow)).toThrow("Invalid geosolve drawing frame");
+  });
   it("rejects invalid geometry, non-finite styles, duplicate keys and unsupported primitives", () => {
     for (const bad of [
       { ...frame(), viewBox: [0, 0, 0, 700] },

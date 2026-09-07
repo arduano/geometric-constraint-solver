@@ -58,3 +58,19 @@ output, never accepted-scene or interaction input authority. Transient bridge v2
 with its JS/WASM consumers; saved document and reproduction compatibility remains unchanged.
 No publication, accepted-service replacement or milestone closure is inferred from implementation.
 Exact implementation evidence and remaining work belong in [M94_IMPLEMENTATION.md](M94_IMPLEMENTATION.md).
+
+## Authorized navigation optimization — 2026-09-07
+
+The supervising user requested implementation of the measured dense-fixture optimizations,
+prioritizing non-mutating pan, zoom and hover. M94-F002 follows the reproduced bridge and renderer
+bottlenecks in [the diagnosis](M94_PERFORMANCE_DIAGNOSIS.md). Keep document/UI projections out of
+camera updates, reproject authenticated retained scenes, retain GPU paths across exact
+translations, and coalesce redundant hover/pan and ordered wheel samples before frame composition.
+Rust still owns every camera operation, clamp, pick and annotation layout. Changes to native
+publication/solver algorithms are a separate optimization concern.
+
+Qualification compares direct WASM and actual GPU submission timings with the preserved baseline,
+and exercises persistence/history preservation, picking after navigation, annotations/strokes,
+resize/DPR and terminal/cancellation ordering. The stable candidate receives one integrated
+qualification with authenticated unaffected reuse and exact replacement delivery at port 18096.
+M94 remains open for supervising-user acceptance.

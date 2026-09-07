@@ -146,6 +146,34 @@ export interface PointerSample {
   modifiers: { alt: boolean; ctrl: boolean; meta: boolean; shift: boolean };
 }
 
+/** Camera-only transport results retain all non-canvas state from one validated base. */
+const canvasOnlySnapshots = new WeakSet<WorkbenchSnapshot>();
+const canvasSnapshotSequences = new WeakMap<WorkbenchSnapshot, number>();
+/** Decode order within an adapter lifetime, independent of durable document revision. */
+export function stampCanvasSnapshot(snapshot: WorkbenchSnapshot, sequence: number): WorkbenchSnapshot {
+  canvasSnapshotSequences.set(snapshot, sequence);
+  return snapshot;
+}
+export function getCanvasSnapshotSequence(snapshot: WorkbenchSnapshot): number | undefined {
+  return canvasSnapshotSequences.get(snapshot);
+}
+
+export function markCanvasOnlySnapshot(snapshot: WorkbenchSnapshot): WorkbenchSnapshot {
+  canvasOnlySnapshots.add(snapshot);
+  return snapshot;
+}
+export function isCanvasOnlySnapshot(snapshot: WorkbenchSnapshot): boolean {
+  return canvasOnlySnapshots.has(snapshot);
+}
+export interface WheelSample {
+  version: 2;
+  x: number;
+  y: number;
+  deltaX: number;
+  deltaY: number;
+  ctrl: boolean;
+}
+
 export interface WorkbenchAdapter {
   construct(input: { version: 2; persistedProject?: string }): Promise<WorkbenchSnapshot>;
   toolCatalog(): Promise<ToolCatalog>;
@@ -153,7 +181,8 @@ export interface WorkbenchAdapter {
   dispatch(input: { version: 2; command: string; payload?: unknown }): Promise<WorkbenchSnapshot>;
   managedCompilerContext(): Promise<{ version: 2; patches: Record<string, unknown> }>;
   pointer(input: PointerSample): Promise<WorkbenchSnapshot | null>;
-  wheel(input: { version: 2; x: number; y: number; deltaX: number; deltaY: number; ctrl: boolean }): Promise<WorkbenchSnapshot | null>;
+  wheel(input: WheelSample): Promise<WorkbenchSnapshot | null>;
+  wheelBatch?(inputs: WheelSample[]): Promise<WorkbenchSnapshot | null>;
   resize(input: { version: 2; width: number; height: number; pixelRatio: number }): Promise<WorkbenchSnapshot | null>;
   cancel(input: { version: 2; reason: "escape" | "lost-capture" | "blur" }): Promise<WorkbenchSnapshot | null>;
   exportProject(): Promise<{ version: 2; filename: string; contents: string }>;

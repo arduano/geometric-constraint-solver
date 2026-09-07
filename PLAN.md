@@ -8345,6 +8345,7 @@ records commands, visual evidence and qualification.
 - [x] Migrate browser witnesses and tests without weakening coverage or borrowing SVG receipts.
 - [x] Measure rendering/interaction, run the complete integrated gate, and deliver reviewed UAT.
 - [x] Correct M94-F001: use the full canvas aspect ratio for drawing, Fit and mouse input.
+- [ ] Optimize M94-F002 dense-fixture navigation: frame-only transport, retained reprojection/GPU resources and exact batched camera input; measure and qualify before replacing the candidate.
 - [ ] Obtain supervising-user acceptance; retain any limitations explicitly at closure.
 
 M94-F001 replacement `2f1711b` passes all 241 stages in `20260907T131046-91e1a335` and is byte-verified at

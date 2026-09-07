@@ -5,7 +5,7 @@
 Status: **M94-F001 aspect-ratio correction qualified and delivered on 2026-09-07**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract. Supervising-user acceptance remains pending.
 
 Follow-up [dense-fixture performance diagnosis](M94_PERFORMANCE_DIAGNOSIS.md) identifies measured
-bridge/snapshot, renderer/UI and native publication costs. It changes no implementation or served bytes.
+bridge/snapshot, renderer/UI and native publication costs. That diagnosis changed no implementation or served bytes. The subsequently authorized [M94-F002 navigation optimization](M94_NAVIGATION_OPTIMIZATION.md) now implements the first repair; its qualification and delivery record is maintained separately.
 
 Baseline source: `37e39159790094e4b4fa0e8f9dac0a1c636d38bf`. The accepted M92 service and
 immutable artifact remain unchanged. Source, browser and image evidence will be recorded under

@@ -119,6 +119,20 @@ struct WheelRequest {
     _ctrl: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WheelBatchRequest {
+    version: u8,
+    samples: Vec<WheelRequest>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum WheelInputRequest {
+    Single(WheelRequest),
+    Batch(WheelBatchRequest),
+}
+
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ResizeRequest {
@@ -427,6 +441,17 @@ struct BridgeSnapshot {
     #[serde(rename = "pendingManagedMutation")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pending_managed_mutation: Option<PendingManagedMutationSnapshot>,
+}
+
+/// Transient paint publication against the host's existing complete snapshot.
+/// Only routes that cannot change its source, Explorer, selection, capabilities,
+/// Problems or pending compiler state may use this narrower response.
+#[derive(Debug, Serialize)]
+struct FrameUpdate<'a> {
+    version: u8,
+    kind: &'static str,
+    revision: u64,
+    frame: &'a FrameSnapshot,
 }
 
 #[derive(Debug, Serialize)]
@@ -768,6 +793,56 @@ impl WorkbenchBridge {
         serde_json::to_string(&snapshot).map_err(|error| error.to_string())
     }
 
+    fn frame_update_json(&mut self) -> Result<String, String> {
+        match self.compose_frame_snapshot() {
+            Ok(frame) => self.accepted_frame = Some(frame),
+            Err(error) => self.last_error = Some(format!("Canvas scene unavailable: {error}")),
+        }
+        if self.last_error.is_some() {
+            // Composition failures still publish the ordinary Problems surface
+            // alongside the retained accepted frame.
+            return self.snapshot_json();
+        }
+        serde_json::to_string(&FrameUpdate {
+            version: PROTOCOL_VERSION,
+            kind: "frame",
+            revision: self.revision,
+            frame: self
+                .accepted_frame
+                .as_ref()
+                .expect("successful composition installed the accepted frame"),
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    /// Conservative classification, independent of host event coalescing.
+    /// A canvas pan is permitted; every semantic/draft gesture remains on the
+    /// complete publication path even before it changes durable revision.
+    fn select_navigation_is_transient(&self) -> bool {
+        let editor = self.editor();
+        self.last_error.is_none()
+            && self.accepted_frame.is_some()
+            && !self.preserve_frame_once
+            && self.active_tool == "select"
+            && self.authoring.active_tool().is_none()
+            && self.feature_authoring.active_tool().is_none()
+            && !self.offset_authoring.is_active()
+            && self.captured_pointer.is_none()
+            && self.construction_preview.is_none()
+            && self.pending_managed_mutation.is_none()
+            && !editor.feature_authoring_radius_drag_active()
+            && !editor.offset_authoring_distance_drag_active()
+            && editor.editor().tool() == EditorTool::Select
+            && editor.editor().active_pointer_gesture().is_none()
+            && editor.editor().geometry_draft_status().is_none()
+            && editor.editor().draft_inference_resolution().is_none()
+            && editor.editor().fillet_branch_preview().is_none()
+            && self
+                .code_project
+                .as_ref()
+                .is_none_or(|code| !code.has_any_pending_semantic_point_drag())
+    }
+
     /// Returns the immutable Rust-owned CAD tool and icon catalog.
     ///
     /// This capability is deliberately separate from [`Self::snapshot_json`]
@@ -868,8 +943,18 @@ impl WorkbenchBridge {
                 .interaction_trace
                 .record("browser.pointerup", &trace_detail),
         }
+        let transient_before = self.select_navigation_is_transient();
+        let hover_before = self.editor().editor().hover_state();
+        let frame_was_current = self
+            .retained_scene
+            .as_ref()
+            .is_some_and(|scene| scene.viewport == self.camera.viewport());
+        let select_hover = matches!(request.phase, PointerPhase::Move)
+            && request.buttons == 0
+            && self.canvas_pan.is_none();
         self.last_error = None;
-        if !self.route_canvas_pan(request, input) {
+        let canvas_pan = self.route_canvas_pan(request, input);
+        if !canvas_pan {
             match request.phase {
                 PointerPhase::Down => self.pointer_down(input),
                 PointerPhase::Move => self.pointer_move(input),
@@ -896,6 +981,19 @@ impl WorkbenchBridge {
                 self.last_error.as_deref().unwrap_or("none"),
             ),
         );
+        if transient_before && self.select_navigation_is_transient() {
+            if canvas_pan {
+                return self.frame_update_json();
+            }
+            if select_hover {
+                return if frame_was_current && self.editor().editor().hover_state() == hover_before
+                {
+                    Ok("null".into())
+                } else {
+                    self.frame_update_json()
+                };
+            }
+        }
         self.snapshot_json()
     }
 
@@ -906,26 +1004,49 @@ impl WorkbenchBridge {
                     .into(),
             );
         }
-        let request: WheelRequest = decode_request(request)?;
-        require_version(request.version)?;
-        if ![request.x, request.y, request.delta_x, request.delta_y]
-            .into_iter()
-            .all(f64::is_finite)
-        {
-            return Err("wheel coordinates and deltas must be finite".into());
+        let request: WheelInputRequest = decode_request(request)?;
+        let samples = match request {
+            WheelInputRequest::Single(sample) => vec![sample],
+            WheelInputRequest::Batch(batch) => {
+                require_version(batch.version)?;
+                if batch.samples.is_empty() || batch.samples.len() > 256 {
+                    return Err("wheel batch requires between 1 and 256 samples".into());
+                }
+                batch.samples
+            }
+        };
+        // Validate the entire batch before cancellation or camera publication.
+        // Applying each exact sample to a private camera preserves varying
+        // anchors and zoom clamps; summing deltas would not be equivalent.
+        let mut camera = self.camera;
+        let mut changed = false;
+        for sample in samples {
+            require_version(sample.version)?;
+            if ![sample.x, sample.y, sample.delta_x, sample.delta_y]
+                .into_iter()
+                .all(f64::is_finite)
+            {
+                return Err("wheel coordinates and deltas must be finite".into());
+            }
+            let anchor = self
+                .normalize_client_point([sample.x, sample.y], false)
+                .ok_or_else(|| "wheel anchor is outside the fitted sketch plane".to_owned())?;
+            changed |= camera.zoom_about(anchor, (-sample.delta_y * 0.0015).exp());
         }
+        let transient = self.select_navigation_is_transient();
+        let hover_before = self.editor().editor().hover_state();
         self.cancel_active_gesture(None)?;
-        let anchor = self
-            .normalize_client_point([request.x, request.y], false)
-            .ok_or_else(|| "wheel anchor is outside the fitted sketch plane".to_owned())?;
-        let factor = (-request.delta_y * 0.0015).exp();
-        if self.camera.zoom_about(anchor, factor) {
-            self.retained_scene = None;
+        self.camera = camera;
+        if changed {
             self.notice = format!(
                 "Canvas zoom {:.1} px / unit",
                 self.camera.pixels_per_model_unit()
             );
+        }
+        if !transient || !self.select_navigation_is_transient() {
             self.snapshot_json()
+        } else if changed || self.editor().editor().hover_state() != hover_before {
+            self.frame_update_json()
         } else {
             Ok("null".into())
         }
@@ -1999,6 +2120,11 @@ impl WorkbenchBridge {
     }
 
     fn reconciled_explorer_visibility(&self) -> ExplorerVisibilityState {
+        if self.explorer_visibility.hidden_rows.is_empty()
+            && self.explorer_visibility.isolate_restore.is_none()
+        {
+            return self.explorer_visibility.clone();
+        }
         let rows = self.base_explorer_snapshot();
         let mut current = std::collections::BTreeSet::new();
         collect_explorer_row_ids(&rows, &mut current);
@@ -2387,7 +2513,6 @@ impl WorkbenchBridge {
             .camera
             .pan_from(gesture.origin_center, gesture.origin, input.position)
         {
-            self.retained_scene = None;
             self.notice = "Canvas panned".into();
         }
         if matches!(request.phase, PointerPhase::Up) {
@@ -3224,6 +3349,7 @@ impl WorkbenchBridge {
     /// this path so the chrome cannot advertise a mode that was silently
     /// deactivated underneath it.
     fn cancel_active_gesture(&mut self, pointer: Option<u64>) -> Result<(), String> {
+        let retain_navigation_scene = self.select_navigation_is_transient();
         // Provisional Fillet and Profile Offset drags retain their authoring
         // collector state outside `ConstraintEditor`. Use their projectional
         // cancellation routes so the exact pointer-down state is restored
@@ -3254,7 +3380,9 @@ impl WorkbenchBridge {
         self.dispatch_construction(effects);
         self.captured_pointer = None;
         self.canvas_pan = None;
-        self.retained_scene = None;
+        if !retain_navigation_scene {
+            self.retained_scene = None;
+        }
         self.cancel_code_drag(pointer)
     }
 
@@ -3348,11 +3476,26 @@ impl WorkbenchBridge {
     }
 
     fn current_scene(&mut self) -> Option<EditorScene> {
-        if let Some(scene) = self.retained_scene.as_ref()
-            && scene.viewport == self.camera.viewport()
-            && self.authority.retained_scene_is_current(scene)
-        {
-            return Some(scene.clone());
+        self.refresh_current_scene();
+        self.retained_scene.clone()
+    }
+
+    fn refresh_current_scene(&mut self) {
+        if let Some(mut scene) = self.retained_scene.take() {
+            // The public owner authenticates all retained non-camera inputs,
+            // retessellates curves at the existing pixel chord tolerance, and
+            // reprojects CSS-sized annotations/controls transactionally.
+            let reusable = if scene.viewport == self.camera.viewport() {
+                self.authority.retained_scene_is_current(&scene)
+            } else {
+                self.editor()
+                    .reproject_scene(&mut scene, self.camera.viewport())
+                    .is_ok()
+            };
+            if reusable {
+                self.retained_scene = Some(scene);
+                return;
+            }
         }
         let presentation = self.authority.scene_presentation(
             self.camera.viewport(),
@@ -3372,10 +3515,12 @@ impl WorkbenchBridge {
             }
         }
         self.retained_scene = scene;
-        self.retained_scene.clone()
     }
 
     fn hidden_scene_items(&self, scene: &EditorScene) -> Vec<SelectionItem> {
+        if self.explorer_visibility.hidden_rows.is_empty() {
+            return Vec::new();
+        }
         let rows = self.explorer_snapshot();
         let mut hidden_rows = Vec::new();
         collect_effectively_hidden_leaves(&rows, &mut hidden_rows);
@@ -3557,7 +3702,10 @@ impl WorkbenchBridge {
     }
 
     fn compose_frame_snapshot(&mut self) -> Result<FrameSnapshot, String> {
-        let scene = self.current_scene();
+        // Drawing only borrows the authenticated cache. Pointer consumers still
+        // receive an owned scene while mutating their independent editor state.
+        self.refresh_current_scene();
+        let scene = self.retained_scene.as_ref();
         let editor = self.editor();
         let accepted = editor.presentation_session().and_then(
             geosolve_sketch::RetainedSketchDocumentSession::accepted_state_for_current_input,
@@ -3569,7 +3717,7 @@ impl WorkbenchBridge {
             selection.dedup();
         }
         let drawing = geosolve_sketch_render::compose_draw_frame(
-            scene.as_ref(),
+            scene,
             accepted,
             &[],
             &selection,
@@ -5092,6 +5240,320 @@ mod tests {
                 .completed_stages,
             draft_stages_before,
         );
+    }
+
+    #[test]
+    fn navigation_updates_only_the_frame_and_preserves_complete_persistence() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        bridge
+            .dispatch_json(
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+            )
+            .unwrap();
+        let persistence = bridge.persistence_json().unwrap();
+        let original: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+
+        let empty = ScreenPoint { x: 5.0, y: 5.0 };
+        assert_eq!(
+            bridge
+                .pointer_json(&pointer_request("move", 94_100, empty, 0))
+                .unwrap(),
+            "null",
+            "unchanged empty hover publishes no workbench or frame",
+        );
+
+        let wheel: serde_json::Value = serde_json::from_str(
+            &bridge
+                .wheel_json(
+                    r#"{"version":2,"x":400,"y":300,"deltaX":0,"deltaY":-100,"ctrl":false}"#,
+                )
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(wheel["kind"], "frame");
+        assert_eq!(wheel["version"], 2);
+        assert_eq!(wheel["revision"], original["revision"]);
+        assert_eq!(wheel.as_object().unwrap().len(), 4);
+        let complete: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(wheel["frame"], complete["frame"]);
+        assert_ne!(wheel["frame"], original["frame"]);
+        for field in [
+            "project",
+            "presentation",
+            "source",
+            "explorer",
+            "selection",
+            "parameters",
+            "problems",
+        ] {
+            assert_eq!(
+                complete[field], original[field],
+                "navigation changed {field}"
+            );
+        }
+
+        let origin = ScreenPoint { x: 400.0, y: 300.0 };
+        for (phase, position, buttons) in [
+            ("down", origin, 4),
+            ("move", ScreenPoint { x: 440.0, y: 320.0 }, 4),
+            ("up", ScreenPoint { x: 455.0, y: 327.0 }, 0),
+        ] {
+            let update: serde_json::Value = serde_json::from_str(
+                &bridge
+                    .pointer_json(&pointer_request(phase, 94_100, position, buttons))
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(update["kind"], "frame");
+            assert_eq!(update["revision"], original["revision"]);
+            let complete: serde_json::Value =
+                serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+            assert_eq!(update["frame"], complete["frame"]);
+        }
+        assert_eq!(bridge.persistence_json().unwrap(), persistence);
+    }
+
+    #[test]
+    fn navigation_hover_refreshes_picking_and_selection_keeps_the_full_contract() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        bridge
+            .dispatch_json(
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+            )
+            .unwrap();
+        bridge
+            .wheel_json(r#"{"version":2,"x":400,"y":300,"deltaX":0,"deltaY":-100,"ctrl":false}"#)
+            .unwrap();
+        let point = bridge.current_scene().unwrap().points[0];
+        let hover: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("move", 94_101, point.screen_position, 0))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(hover["kind"], "frame");
+        assert!(bridge.editor().editor().hover_state().target.is_some());
+        let full: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        assert_eq!(hover["frame"], full["frame"]);
+        assert_eq!(
+            bridge
+                .pointer_json(&pointer_request("move", 94_101, point.screen_position, 0))
+                .unwrap(),
+            "null",
+        );
+        let selection: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("down", 94_101, point.screen_position, 1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(selection.get("kind").is_none());
+        assert!(selection.get("source").is_some());
+        assert!(selection.get("presentation").is_some());
+
+        // Wheel cancellation retires semantic capture and restores any preview.
+        // Such a transition must keep Problems/history/selection publication.
+        let canceled: serde_json::Value = serde_json::from_str(
+            &bridge
+                .wheel_json(r#"{"version":2,"x":400,"y":300,"deltaX":0,"deltaY":100,"ctrl":false}"#)
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(canceled.get("kind").is_none());
+        assert!(canceled.get("problems").is_some());
+        assert!(bridge.captured_pointer.is_none());
+
+        bridge.last_error = Some("retained error requiring Problems refresh".into());
+        let recovered: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request(
+                    "move",
+                    94_101,
+                    ScreenPoint { x: 5.0, y: 5.0 },
+                    0,
+                ))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(recovered.get("kind").is_none());
+        assert!(recovered["problems"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn navigation_reprojects_authenticated_geometry_and_retains_hidden_items() {
+        let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        bridge
+            .dispatch_json(
+                r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+            )
+            .unwrap();
+        assert!(
+            bridge
+                .authority
+                .retained_scene_is_current(&bridge.retained_scene.clone().unwrap())
+        );
+        bridge
+            .wheel_json(r#"{"version":2,"x":400,"y":300,"deltaX":0,"deltaY":-100,"ctrl":false}"#)
+            .unwrap();
+        assert!(
+            bridge
+                .authority
+                .retained_scene_is_current(&bridge.retained_scene.clone().unwrap())
+        );
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        let panel = nested_explorer_row(&snapshot, "panel")["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 2,
+                    "command": "explorer.visibility.set",
+                    "payload": {"id": panel, "visible": false},
+                })
+                .to_string(),
+            )
+            .unwrap();
+        let persisted = bridge.persistence_json().unwrap();
+        let hidden = bridge.current_scene().unwrap();
+        assert!(hidden.points.is_empty());
+        for delta in [-350, 150, 700] {
+            let update: serde_json::Value = serde_json::from_str(
+                &bridge
+                    .wheel_json(
+                        &serde_json::json!({
+                            "version": 2, "x": 400, "y": 300,
+                            "deltaX": 0, "deltaY": delta, "ctrl": false,
+                        })
+                        .to_string(),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(update["kind"], "frame");
+            let retained = bridge.current_scene().unwrap();
+            assert!(retained.points.is_empty());
+            assert_eq!(retained.viewport, bridge.camera.viewport());
+
+            let mut cold = bridge
+                .authority
+                .scene_presentation(
+                    bridge.camera.viewport(),
+                    super::super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+                )
+                .scene
+                .unwrap();
+            cold.hide_items(bridge.hidden_scene_items(&cold)).unwrap();
+            assert_eq!(retained.points, cold.points);
+            assert_eq!(retained.curves, cold.curves);
+            assert_eq!(retained.computed_curves, cold.computed_curves);
+            assert_eq!(retained.datums, cold.datums);
+            assert_eq!(retained.curve_controls, cold.curve_controls);
+            assert_eq!(retained.curve_control_guides, cold.curve_control_guides);
+            assert_eq!(retained.fillet_affordances, cold.fillet_affordances);
+        }
+        assert_eq!(bridge.persistence_json().unwrap(), persisted);
+
+        // Public DTO tampering cannot become authenticated just by moving the
+        // camera: discard that cache and reconstruct from the accepted owner.
+        let scene = bridge.retained_scene.as_mut().unwrap();
+        scene.computed_curves[0].screen_polyline[0].x += 100.0;
+        bridge
+            .wheel_json(r#"{"version":2,"x":400,"y":300,"deltaX":0,"deltaY":-100,"ctrl":false}"#)
+            .unwrap();
+        let recovered = bridge.current_scene().unwrap();
+        let mut cold = bridge
+            .authority
+            .scene_presentation(
+                bridge.camera.viewport(),
+                super::super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+            )
+            .scene
+            .unwrap();
+        cold.hide_items(bridge.hidden_scene_items(&cold)).unwrap();
+        assert_eq!(recovered.computed_curves, cold.computed_curves);
+        assert_eq!(bridge.persistence_json().unwrap(), persisted);
+    }
+
+    #[test]
+    fn navigation_wheel_batch_matches_exact_sequential_camera_and_rejects_invalid_tail() {
+        let mut sequential = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        let mut batched = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
+        for bridge in [&mut sequential, &mut batched] {
+            bridge
+                .dispatch_json(
+                    r#"{"version":2,"command":"sample.open","payload":{"key":"typed-panel"}}"#,
+                )
+                .unwrap();
+        }
+        let original = batched.persistence_json().unwrap();
+        let samples = [
+            (100.0, 200.0, -100.0),
+            (710.5, 650.25, -100_000.0),
+            (200.0, 310.0, 60.0),
+            (850.5, 30.0, 100_000.0),
+            (400.0, 300.0, -250.0),
+        ]
+        .map(|(x, y, delta)| {
+            serde_json::json!({
+                "version": 2, "x": x, "y": y,
+                "deltaX": 0, "deltaY": delta, "ctrl": false,
+            })
+        });
+        for sample in &samples {
+            sequential.wheel_json(&sample.to_string()).unwrap();
+        }
+        let update: serde_json::Value = serde_json::from_str(
+            &batched
+                .wheel_json(&serde_json::json!({"version": 2, "samples": samples}).to_string())
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(update["kind"], "frame");
+        assert_eq!(batched.camera, sequential.camera);
+        let batched_scene = batched.current_scene().unwrap();
+        let sequential_scene = sequential.current_scene().unwrap();
+        assert_eq!(batched_scene.points.len(), sequential_scene.points.len());
+        for (batched, sequential) in batched_scene.points.iter().zip(&sequential_scene.points) {
+            assert_eq!(
+                batched.model_position.map(f64::to_bits),
+                sequential.model_position.map(f64::to_bits),
+            );
+            assert_eq!(batched.screen_position, sequential.screen_position);
+        }
+        assert_eq!(batched_scene.curves.len(), sequential_scene.curves.len());
+        for (batched, sequential) in batched_scene.curves.iter().zip(&sequential_scene.curves) {
+            assert_eq!(batched.screen_polyline, sequential.screen_polyline);
+            assert_eq!(batched.screen_parameters, sequential.screen_parameters);
+        }
+        assert_eq!(batched.persistence_json().unwrap(), original);
+
+        batched.fit_canvas().unwrap();
+        let camera = batched.camera;
+        let scene = batched.current_scene().unwrap();
+        let point = scene.points[0].screen_position;
+        batched
+            .pointer_json(&pointer_request("down", 94_110, point, 1))
+            .unwrap();
+        let capture = batched.captured_pointer;
+        assert!(capture.is_some());
+        for invalid in [
+            serde_json::json!({"version": 3, "samples": samples}),
+            serde_json::json!({"version": 2, "samples": []}),
+            serde_json::json!({"version": 2, "samples": vec![samples[0].clone(); 257]}),
+            serde_json::json!({"version": 2, "samples": [samples[0], {"version": 3, "x": 0, "y": 0, "deltaX": 0, "deltaY": 0, "ctrl": false}]}),
+            serde_json::json!({"version": 2, "samples": [samples[0], {"version": 2, "x": -1, "y": 0, "deltaX": 0, "deltaY": 0, "ctrl": false}]}),
+        ] {
+            assert!(batched.wheel_json(&invalid.to_string()).is_err());
+            assert_eq!(batched.camera, camera);
+            assert_eq!(batched.captured_pointer, capture);
+            assert_eq!(batched.persistence_json().unwrap(), original);
+        }
     }
 
     #[test]

@@ -1,17 +1,52 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import "pixi.js/filters";
 import { BlurFilter, CanvasTextMetrics, Color, Container, Graphics, Text, TextStyle, WebGLRenderer } from "pixi.js";
-import type { DrawFrame, DrawItem, DrawPoint } from "./canvas-scene";
+import type { DrawFrame, DrawItem, DrawPoint, DrawStyle } from "./canvas-scene";
 import { dashedSegments, fitDrawing, textRasterOrigin } from "./canvas-renderer-geometry";
 
 export interface CanvasSurface { width: number; height: number; pixelRatio: number }
-export interface BackendStats { resources: number; created: number; destroyed: number; updated: number; rasterResolution?: number }
+export interface BackendStats { resources: number; created: number; destroyed: number; updated: number; repainted?: number; rasterResolution?: number }
 export interface CanvasBackend {
   readonly hardware: Readonly<Record<string, string>>;
   render(frame: DrawFrame, surface: CanvasSurface): BackendStats;
   destroy(): void;
 }
-interface Entry { container: Container; content: Graphics | Text; shadow: Graphics | null; blur: BlurFilter | null; signature: string; kind: DrawItem["kind"]; textSignature: string }
+interface Entry { container: Container; content: Graphics | Text; shadow: Graphics | null; blur: BlurFilter | null; item: DrawItem | null; kind: DrawItem["kind"]; scale: number; resolution: number; position: DrawPoint | null }
+
+function sameStyle(a: DrawStyle, b: DrawStyle): boolean {
+  return a === b || a.fill === b.fill && a.stroke === b.stroke && a.strokeWidth === b.strokeWidth
+    && a.opacity === b.opacity && a.lineCap === b.lineCap && a.lineJoin === b.lineJoin && a.nonScalingStroke === b.nonScalingStroke
+    && a.fontFamily === b.fontFamily && a.fontSize === b.fontSize && a.fontWeight === b.fontWeight
+    && a.textAnchor === b.textAnchor && a.textBaseline === b.textBaseline && a.letterSpacing === b.letterSpacing
+    && a.dash.length === b.dash.length && a.dash.every((value, index) => value === b.dash[index])
+    && (a.shadow === b.shadow || !!a.shadow && !!b.shadow && a.shadow.color === b.shadow.color
+      && a.shadow.blur === b.shadow.blur && a.shadow.offset[0] === b.shadow.offset[0] && a.shadow.offset[1] === b.shadow.offset[1]);
+}
+function origin(item: DrawItem): DrawPoint {
+  if (item.kind === "text") return item.position;
+  if (item.kind === "rect") return [item.x, item.y];
+  if (item.kind === "polyline") return item.points[0] ?? [0, 0];
+  return item.center;
+}
+/** Compare the exact native-authored shape in local coordinates, excluding its position.
+ * A camera translation can move retained GPU geometry without rebuilding stroke tessellation.
+ * No tolerance or camera inference is used: an actual change still rebuilds its raster path.
+ */
+function sameLocalGeometry(a: DrawItem, b: DrawItem): boolean {
+  if (a === b) return true;
+  switch (a.kind) {
+    case "circle": return b.kind === "circle" && a.radius === b.radius;
+    case "ellipse": return b.kind === "ellipse" && a.radii[0] === b.radii[0] && a.radii[1] === b.radii[1] && a.rotation === b.rotation;
+    case "rect": return b.kind === "rect" && a.width === b.width && a.height === b.height && a.radius === b.radius;
+    case "text": return b.kind === "text" && a.text === b.text;
+    case "polyline": {
+      if (b.kind !== "polyline" || a.closed !== b.closed || a.points.length !== b.points.length) return false;
+      const from = origin(a); const to = origin(b);
+      return a.points.every((point, index) => point[0] - from[0] === b.points[index][0] - to[0]
+        && point[1] - from[1] === b.points[index][1] - to[1]);
+    }
+  }
+}
 
 function colorValue(value: string) { const color = new Color(value); return { color: color.toNumber(), alpha: color.alpha }; }
 function contour(item: Exclude<DrawItem, { kind: "text" }>, map: (p: DrawPoint) => DrawPoint, scale: number): { points: DrawPoint[]; closed: boolean } {
@@ -95,7 +130,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
   const stage = new Container({ eventMode: "none", interactiveChildren: false });
   const entries = new Map<string, Entry>();
   let surfaceKey = "";
-  let created = 0; let destroyed = 0; let updated = 0; let disposed = false;
+  let created = 0; let destroyed = 0; let updated = 0; let repainted = 0; let disposed = false;
   function remove(entry: Entry) {
     entry.blur?.destroy();
     entry.container.destroy({ children: true, texture: true, textureSource: true });
@@ -122,19 +157,28 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
           const container = new Container({ eventMode: "none", interactiveChildren: false });
           const content = item.kind === "text" ? new Text({ text: "", resolution: rasterResolution }) : new Graphics();
           container.addChild(content); stage.addChild(container);
-          entry = { container, content, shadow: null, blur: null, signature: "", kind: item.kind, textSignature: "" };
+          entry = { container, content, shadow: null, blur: null, item: null, kind: item.kind, scale: 0, resolution: 0, position: null };
           entries.set(item.id, entry); created++;
         }
         // Paint order is explicitly native-authored; semantic keys do not reorder anything.
-        stage.setChildIndex(entry.container, index);
-        const signature = `${JSON.stringify(item)}:${nextSurface}:${JSON.stringify(frame.viewBox)}`;
-        if (entry.signature === signature) return;
+        // Pixi's setChildIndex searches twice even when the child is already in place.
+        if (stage.children[index] !== entry.container) stage.setChildIndex(entry.container, index);
         const { style } = item;
+        const anchor = origin(item); const position = map(anchor);
+        const previous = entry.item;
+        const paintChanged = !previous || entry.scale !== fit.scale || !sameStyle(previous.style, style)
+          || !sameLocalGeometry(previous, item) || item.kind === "text" && entry.resolution !== rasterResolution;
+        const positionChanged = !entry.position || entry.position[0] !== position[0] || entry.position[1] !== position[1];
+        const rotationChanged = item.kind === "text" && (!previous || previous.kind !== "text" || previous.rotation !== item.rotation);
+        entry.item = item;
+        if (!paintChanged && !positionChanged && !rotationChanged) return;
+        // Keep CSS stroke widths, glyph sizes and shadow offsets in their original units;
+        // only translation is delegated to the container transform.
+        if (positionChanged) entry.container.position.set(...position);
         entry.container.alpha = style.opacity;
         if (item.kind === "text" && entry.content instanceof Text) {
           const text = entry.content;
-          const textSignature = JSON.stringify([item.text, style, fit.scale, rasterResolution]);
-          if (textSignature !== entry.textSignature) {
+          if (paintChanged) {
             const textStyle = new TextStyle({ fontFamily: style.fontFamily.split(",").map((font) => font.trim().replace(/^['"]|['"]$/g, "")), fontSize: style.fontSize * fit.scale,
               fontWeight: String(style.fontWeight) as "400", fill: style.fill ? colorValue(style.fill) : { color: 0, alpha: 0 },
               stroke: style.stroke ? { ...colorValue(style.stroke), width: style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale), join: style.lineJoin } : undefined,
@@ -145,21 +189,22 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
             const metrics = CanvasTextMetrics.measureText(item.text, textStyle);
             const origin = textRasterOrigin(metrics, style.textAnchor, style.textBaseline, style.stroke ? style.strokeWidth * (style.nonScalingStroke ? 1 : fit.scale) : 0);
             text.pivot.set(origin.x, origin.y);
-            entry.textSignature = textSignature;
           }
-          text.position.set(...map(item.position)); text.rotation = item.rotation;
-        } else if (item.kind !== "text" && entry.content instanceof Graphics) {
-          paint(entry.content, item, map, fit.scale);
+          text.rotation = item.rotation;
+        } else if (paintChanged && item.kind !== "text" && entry.content instanceof Graphics) {
+          const local = (point: DrawPoint): DrawPoint => [(point[0] - anchor[0]) * fit.scale, (point[1] - anchor[1]) * fit.scale];
+          paint(entry.content, item, local, fit.scale);
           if (style.shadow) {
             if (!entry.shadow) { entry.shadow = new Graphics(); entry.container.addChildAt(entry.shadow, 0); }
-            paint(entry.shadow, item, map, fit.scale, style.shadow.color);
+            paint(entry.shadow, item, local, fit.scale, style.shadow.color);
             entry.shadow.position.set(...style.shadow.offset);
             if (!entry.blur) entry.blur = new BlurFilter({ strength: style.shadow.blur, quality: 4 });
             entry.blur.strength = style.shadow.blur;
             entry.shadow.filters = style.shadow.blur ? [entry.blur] : [];
           } else if (entry.shadow) { entry.shadow.destroy(); entry.shadow = null; entry.blur?.destroy(); entry.blur = null; }
         }
-        entry.signature = signature; updated++;
+        entry.scale = fit.scale; entry.resolution = rasterResolution; entry.position = position; updated++;
+        if (paintChanged) repainted++;
       });
       renderer.render({ container: stage });
       renderer.gc.run();
@@ -167,7 +212,7 @@ export async function createPixiBackend(canvas: HTMLCanvasElement): Promise<Canv
       const error = gl.getError();
       if (error !== gl.NO_ERROR) throw new Error(`WebGL2 presentation failed with error ${error}`);
       if (gl.isContextLost()) throw new Error("WebGL2 context was lost during presentation");
-      return { resources: entries.size, created, destroyed, updated, rasterResolution };
+      return { resources: entries.size, created, destroyed, updated, repainted, rasterResolution };
     },
     destroy() {
       if (disposed) return;
