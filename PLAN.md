@@ -8333,7 +8333,7 @@ historical replay. Those limitations are future work, not closure blockers. No s
 
 ## M94 — accelerated canvas viewport
 
-Status: **initial implementation qualified on 2026-09-07; M94-F001 aspect-ratio correction in progress**.
+Status: **M94-F001 aspect-ratio correction qualified and delivered on 2026-09-07**.
 [M94_GOALS.md](docs/M94_GOALS.md) owns scope; [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md)
 records commands, visual evidence and qualification.
 
@@ -8344,10 +8344,14 @@ records commands, visual evidence and qualification.
 - [x] Qualify resize/DPR/capture/context lifecycle, accepted-frame retention and visual parity.
 - [x] Migrate browser witnesses and tests without weakening coverage or borrowing SVG receipts.
 - [x] Measure rendering/interaction, run the complete integrated gate, and deliver reviewed UAT.
-- [ ] Correct M94-F001: use the full canvas aspect ratio for drawing, Fit and mouse input.
+- [x] Correct M94-F001: use the full canvas aspect ratio for drawing, Fit and mouse input.
 - [ ] Obtain supervising-user acceptance; retain any limitations explicitly at closure.
 
-Clean source `85c57f1` passes integrated run `20260907T101813-cd18572a`: 241/241 stages,
+M94-F001 replacement `2f1711b` passes all 241 stages in `20260907T131046-91e1a335` and is byte-verified at
+`http://100.94.63.83:18096/`. Full CSS extent, uniform scale, mouse input and project-layout Fit
+pass; the mathematical oracle and static exports remain unchanged. Human acceptance stays open.
+
+Historical initial candidate: clean source `85c57f1` passes integrated run `20260907T101813-cd18572a`: 241/241 stages,
 25 fresh and 216 authenticated reused successes, in 21m29s. All 271 golden cases and the complete
 42-case browser inventory pass. The 12-file frozen candidate is served locally at
 `http://127.0.0.1:18096/`; 16 samples/35 states match the SVG baseline. Dense-scene and

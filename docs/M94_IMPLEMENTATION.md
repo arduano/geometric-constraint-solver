@@ -2,7 +2,7 @@
 
 # M94 implementation and qualification
 
-Status: **initial implementation qualified on 2026-09-07; M94-F001 aspect-ratio correction in progress**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract. Supervising-user acceptance remains pending.
+Status: **M94-F001 aspect-ratio correction qualified and delivered on 2026-09-07**. [M94_GOALS.md](M94_GOALS.md) owns the approved contract. Supervising-user acceptance remains pending.
 
 Baseline source: `37e39159790094e4b4fa0e8f9dac0a1c636d38bf`. The accepted M92 service and
 immutable artifact remain unchanged. Source, browser and image evidence will be recorded under
@@ -120,6 +120,51 @@ managed-segment fixture's fixed click fractions now landed near existing geometr
 published an inferred `constraint2`, violating its segment-only group expectation. Its clicks
 move into empty space above the sample; exact source, group membership and Undo/Redo checks stay.
 Neither issue changes product bytes or mathematical expectations. Final qualification follows.
+
+### M94-F001 final qualification and delivery
+
+Clean source `2f1711b26ec8c852074b99ded98b2a94c567dfc4` passes integrated run `20260907T131046-91e1a335`: all
+241 stages pass, 8 fresh and 233 authenticated reused successes,
+in 19m15s. Exact final command:
+`nix-shell shell.nix --run './scripts/release-gate.sh --resume 20260907T125206-1d6dbfa8'`.
+Log: `target/m94/aspect/release-gate-r5.log`. This receipt covers formatting, warnings-denied
+Clippy, all-feature workspace and default-feature headless suites, production WASM, lifecycle,
+adapter parity, Rustdocs, package/licences, unchanged 271-row golden and performance coverage.
+All 17 fresh catalog/sample prefixes and the complete 42-case browser inventory pass with no
+skips, retries or flakes. Unaffected results retain their original execution provenance.
+
+Focused App checks pass 41/41 plus TypeScript declarations/types:
+`nix-shell shell.nix --run 'npm --prefix crates/geosolve-demo-web/frontend run test -- --no-cache src/App.test.tsx && npm --prefix crates/geosolve-demo-web/frontend run check:types'`.
+The focused seven-case browser run passes; the final segment-only fixture passes in 20.0s against
+the exact prepared artifact using `test:e2e -- tests/e2e/workbench.spec.ts --grep
+"real WASM source-backs click-authored" --workers=1`. Logs:
+`target/m94/aspect/{layout-focused-r2,layout-browser,clear-segment}.log`.
+
+All six narrow/wide/normal dense-scene images are retained in
+`target/m94/aspect/dense-visual-final`, with matching fractional CSS/draw-frame extents.
+Final-run Jansen/manifold and scale screenshots supplement the real pointer/pixel regressions.
+Acceptance covers full-area drawing, undistorted scale, DPR2, former-margin creation/picking/drag,
+Undo/Redo/reload, cursor-anchored zoom/pan, gesture cancellation, hidden/restored layouts and
+replacement fitting after panel layout. No solver equations, branches, persistence formats,
+golden expectations or canonical static SVG/PNG exports changed.
+
+The authenticated production output was copied without rebuilding to
+`/tmp/geosolve-m94-f001-uat.5ch5abfw/geosolve-production`; all files are read-only and every file hash/size matches.
+Nomination: `target/m94/nomination.json`; original candidate record:
+`target/m94/aspect/nomination-original.json`. The new snapshot contains
+12 files / 27,572,752 bytes, files aggregate
+`16fb8cad31e55bde243607a8db06969287a3b3d04b19fa34586a97a8b4f439ae`. The same endpoint serves it:
+`http://100.94.63.83:18096/`. Final exact served-byte/media-type and real-WASM readiness receipt:
+`target/m94/aspect/tailscale-final.json`. Executed endpoint command:
+
+```bash
+nix-shell shell.nix --run 'GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix crates/geosolve-demo-web/frontend run verify:artifact -- --manifest /tmp/geosolve-m94-f001-uat.5ch5abfw/production.json --directory /tmp/geosolve-m94-f001-uat.5ch5abfw/geosolve-production --url http://100.94.63.83:18096/ --receipt /home/arduano/programming/geometric-constraint-solver/target/m94/aspect/tailscale-final.json'
+```
+
+M94-F001 is corrected. Supervising-user acceptance of M94 remains pending; the previously
+documented dense-scene/end-to-end performance limits remain. The accepted M92 endpoint is
+unchanged. Documentation closeout uses `./scripts/release-gate.sh --docs-only --since 2f1711b26ec8c852074b99ded98b2a94c567dfc4`,
+preserving these qualified product bytes.
 
 ## Implementation checkpoint
 

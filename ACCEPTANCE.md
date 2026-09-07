@@ -5434,7 +5434,9 @@ alignment, new canvas browser witnesses, actual GPU evidence and complete integr
 Native UI/export compatibility, exact mathematical golden results and existing release ceilings
 remain required. The integrated gate, all 16 sample workflows, 35 production visual captures and
 actual hardware/failure checks pass on source `85c57f1`; exact evidence and measured performance
-limits are in [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md). Human acceptance remains pending.
+limits are in [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md). The M94-F001 replacement now
+passes full-aspect drawing/input and layout fitting on `2f1711b` with complete qualification
+and exact Tailscale delivery. Human acceptance remains pending.
 
 ## Regression and oracle policy
 
