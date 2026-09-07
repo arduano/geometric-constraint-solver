@@ -2,9 +2,11 @@
 
 # M95 implementation and qualification
 
-Status: **in progress** from accepted M94 closure source `d4438a9`.
-[M95_GOALS.md](M95_GOALS.md) records the approved contract. M94 remains served at port 18096;
-M95 has only a provisional development build, with no clean nomination or user acceptance yet.
+Status: **implemented and qualified; supervising-user acceptance pending**.
+[M95_QUALIFICATION.md](M95_QUALIFICATION.md) records the final `f18ff9e` product, complete gate,
+frozen Tailscale candidate and performance evidence. The ledger below preserves the development
+and failed-run history from accepted M94 closure source `d4438a9`; those intermediate statuses
+are superseded by final qualification. M94 remains served at port 18096.
 
 ## Reproduction and implementation
 

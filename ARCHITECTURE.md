@@ -2824,7 +2824,7 @@ context restoration clears invalid upload caches and rebuilds retained paint res
 [The M94 closure audit](docs/M94_CLOSURE.md) records accepted source `7727cbf`, complete
 qualification and the remaining dense-editing/context-compatibility limits.
 
-## M95 connected selection — implementation in progress
+## M95 connected selection — implemented and qualified
 
 Native accepted output ownership now has a navigation API separate from singular declaration
 mutation selection. The WASM bridge caches declaration/group/member mappings by Intent, code,

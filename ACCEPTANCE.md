@@ -5462,7 +5462,7 @@ release including saving, and the pinned Pixi recovery seam are explicitly retai
 - SolveSpace and PlaneGCS are references/oracles, not dependencies.
 - An external convergence flag is never accepted without local independent validation.
 
-## M95 connected selection acceptance — implementation in progress
+## M95 connected selection acceptance — qualified, user acceptance pending
 
 [M95_GOALS.md](docs/M95_GOALS.md) requires exact accepted canvas/Explorer/source ownership for
 ordinary declarations, constraints/dimensions, computed features, groups and generated members.

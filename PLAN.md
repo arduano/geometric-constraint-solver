@@ -8368,16 +8368,21 @@ end-to-end 60 Hz limits remain documented. It is superseded by the accepted prod
 
 ## M95 — connected code, Explorer and canvas selection
 
-Status: **implementation authorized and in progress**. [M95_GOALS.md](docs/M95_GOALS.md) owns
+Status: **implemented and qualified; supervising-user acceptance pending**. [M95_GOALS.md](docs/M95_GOALS.md) owns
 scope; [M95_IMPLEMENTATION.md](docs/M95_IMPLEMENTATION.md) records executed evidence.
 
 - [x] Reproduce the native selection gaps and add separate accepted-output navigation APIs.
 - [x] Build authenticated multi-owner source/row mappings, including generated members and groups.
 - [x] Synchronize canvas and Explorer; highlight/reveal source without changing cursor or layout.
 - [x] Add explicit Show in canvas/Show in code and strict Unicode/stale/dirty source handling.
-- [ ] Preserve history, mutation authority, visibility and M94 navigation/drag performance.
-- [ ] Qualify focused native/frontend/browser workflows and one clean integrated candidate.
-- [ ] Freeze a separate Tailscale candidate and record supervising-user acceptance before closure.
+- [x] Preserve history, mutation authority, visibility and M94 navigation/drag performance.
+- [x] Qualify focused native/frontend/browser workflows and one clean integrated candidate.
+- [x] Freeze and byte-verify a separate Tailscale candidate at `http://100.94.63.83:18100/`.
+- [ ] Record supervising-user acceptance before closure.
+
+Product `f18ff9e` passes all 241 gate stages, 45 browser cases and the unchanged 271-row golden
+contract. [Final qualification](docs/M95_QUALIFICATION.md) records the authenticated evidence,
+visibility batching repair and remaining dense editing costs.
 
 ## Explicit non-goals
 

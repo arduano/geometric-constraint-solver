@@ -1,9 +1,10 @@
 # GeoSolve active handoff
 
-Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization and M94 accelerated canvas accepted and closed on 2026-09-07; M95 connected code/Explorer/canvas selection is in progress.**
+Current roadmap: **M92 accepted and closed on 2026-09-06; M93 release-gate optimization and M94 accelerated canvas accepted and closed on 2026-09-07; M95 connected code/Explorer/canvas selection is implemented and qualified, awaiting supervising-user acceptance.**
 
-[M95 goals](docs/M95_GOALS.md) and [implementation evidence](docs/M95_IMPLEMENTATION.md) own the
-authorized next milestone. Selection preserves layout and code cursor/focus; UI selections reveal
+[M95 goals](docs/M95_GOALS.md), [implementation evidence](docs/M95_IMPLEMENTATION.md) and
+[final qualification](docs/M95_QUALIFICATION.md) record the delivered candidate at
+`http://100.94.63.83:18100/`. M94 remains accepted at port 18096. Selection preserves layout and code cursor/focus; UI selections reveal
 highlighted source when visible, and reverse code-to-canvas navigation uses an explicit action.
 See [M92 sign-off](docs/M92_UAT.md#supervising-user-closure--2026-09-06),
 [M93 goals](docs/M93_GOALS.md) and [implementation order](docs/M93_IMPLEMENTATION.md).

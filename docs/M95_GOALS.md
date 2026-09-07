@@ -2,8 +2,9 @@
 
 # M95 — connected code, Explorer and canvas selection
 
-Status: **implementation authorized and in progress**. M94 is accepted and closed; its frozen
-port-18096 service remains the accepted baseline. No M95 qualification or acceptance is claimed.
+Status: **implemented and qualified; supervising-user acceptance pending**. The separate frozen
+candidate is at `http://100.94.63.83:18100/`; [M95_QUALIFICATION.md](M95_QUALIFICATION.md) records
+its exact product and evidence. M94 remains accepted at port 18096.
 
 ## Outcome
 
