@@ -28,6 +28,11 @@ pub const MAX_CODE_SESSION_WIRE_INTEGER: u64 = 9_007_199_254_740_991;
 const SESSION_WIRE_VERSION: &str = "geosolve-sketch-code-session-v2";
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 
+#[cfg(test)]
+thread_local! {
+    static SNAPSHOT_VALIDATION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CodeSessionIdentity {
@@ -152,6 +157,65 @@ mod tests {
             );
         }
         assert_eq!(session.structural_expansions(), 0);
+    }
+
+    #[test]
+    fn prepared_publication_reuses_validation_and_preserves_exact_history_wire() {
+        let mut session = session("prepared-validation");
+        let origin = session.snapshot().clone();
+        SNAPSHOT_VALIDATION_CALLS.set(0);
+        let prepared = prepare_fixture_edit(
+            &session,
+            "restored",
+            0x94_0003,
+            serde_json::json!({"accepted": "quoted \"checkpoint\"\nλ"}),
+        );
+        assert_eq!(SNAPSHOT_VALIDATION_CALLS.get(), 1);
+        let next = prepared.next().clone();
+        let stale = prepared.clone();
+        SNAPSHOT_VALIDATION_CALLS.set(0);
+        session
+            .apply_prepared(prepared)
+            .expect("validated exact-CAS publication");
+        assert_eq!(
+            SNAPSHOT_VALIDATION_CALLS.get(),
+            0,
+            "private immutable prepared snapshots must not repeat structural expansion validation",
+        );
+        assert_eq!(session.snapshot(), &next);
+        assert_eq!(session.undo.len(), 1);
+        assert_eq!(session.undo[0].snapshot, origin);
+        let legacy_wire = SessionWire {
+            version: SESSION_WIRE_VERSION.into(),
+            identity: session.identity.clone(),
+            snapshot: session.snapshot.clone(),
+            undo: session.undo.clone(),
+            redo: session.redo.clone(),
+            structural_expansions: session.structural_expansions,
+        };
+        let canonical = session.to_canonical_json().unwrap();
+        assert_eq!(canonical, serde_json::to_string(&legacy_wire).unwrap());
+        let mut count = WireByteCount::default();
+        serde_json::to_writer(&mut count, &legacy_wire).unwrap();
+        assert_eq!(
+            count.0,
+            canonical.len(),
+            "escaped UTF-8 bytes retain the exact wire bound"
+        );
+        let restored = SketchCodeSession::from_json(&canonical).unwrap();
+        assert_eq!(restored, session);
+        assert!(matches!(
+            session.apply_prepared(stale),
+            Err(CodeSessionError::StaleSession { .. })
+        ));
+        assert_eq!(session.to_canonical_json().unwrap(), canonical);
+        session.undo().unwrap().unwrap();
+        assert_eq!(
+            session.snapshot().editor_checkpoint,
+            origin.editor_checkpoint
+        );
+        session.redo().unwrap().unwrap();
+        assert_eq!(session.snapshot().editor_checkpoint, next.editor_checkpoint);
     }
 
     #[test]
@@ -389,6 +453,23 @@ pub struct PreparedCodeEdit {
 }
 
 impl PreparedCodeEdit {
+    /// All creation routes validate once before handing out an immutable
+    /// capability. There is no deserializer or mutable accessor for this type.
+    fn new(
+        expected: CodeSessionIdentity,
+        next: CodeSessionSnapshot,
+        plan: Option<KeyedReconcilePlan>,
+        label: String,
+    ) -> Result<Self, CodeSessionError> {
+        validate_snapshot(&next)?;
+        Ok(Self {
+            expected,
+            next,
+            plan,
+            label,
+        })
+    }
+
     pub fn expected(&self) -> &CodeSessionIdentity {
         &self.expected
     }
@@ -431,6 +512,35 @@ struct SessionWire {
     undo: Vec<HistoryEntry>,
     redo: Vec<HistoryEntry>,
     structural_expansions: u64,
+}
+
+/// Identical canonical field order without cloning current and historical
+/// compiler artifacts/checkpoints just to serialize them.
+#[derive(Serialize)]
+struct SessionWireRef<'a> {
+    version: &'static str,
+    identity: &'a CodeSessionIdentity,
+    snapshot: &'a CodeSessionSnapshot,
+    undo: &'a [HistoryEntry],
+    redo: &'a [HistoryEntry],
+    structural_expansions: u64,
+}
+
+#[derive(Default)]
+struct WireByteCount(usize);
+
+impl std::io::Write for WireByteCount {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0 = self
+            .0
+            .checked_add(bytes.len())
+            .ok_or_else(|| std::io::Error::other("serialized code session size overflow"))?;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -647,13 +757,7 @@ impl SketchCodeSession {
         next.editor_checkpoint = editor_checkpoint.clone();
         next.accepted_editor_checkpoint = editor_checkpoint;
         next.failure = None;
-        validate_snapshot(&next)?;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: Some(plan),
-            label: label.into(),
-        })
+        PreparedCodeEdit::new(expected.clone(), next, Some(plan), label.into())
     }
 
     /// Retains a fully parsed code project and optional expansion over the
@@ -727,13 +831,7 @@ impl SketchCodeSession {
             diagnostic: diagnostic.into(),
             attempted_source_digest: next.managed.source_digest.clone(),
         });
-        validate_snapshot(&next)?;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan,
-            label: label.into(),
-        })
+        PreparedCodeEdit::new(expected.clone(), next, plan, label.into())
     }
 
     /// Publishes one already accepted action from the delegated headless
@@ -755,13 +853,7 @@ impl SketchCodeSession {
             next.editor_checkpoint = editor_checkpoint.clone();
         }
         next.accepted_editor_checkpoint = editor_checkpoint;
-        validate_snapshot(&next)?;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: None,
-            label: label.into(),
-        })
+        PreparedCodeEdit::new(expected.clone(), next, None, label.into())
     }
 
     /// Stages an override together with its exact replacement expansion and
@@ -898,13 +990,7 @@ impl SketchCodeSession {
         next.editor_checkpoint = editor_checkpoint.clone();
         next.accepted_editor_checkpoint = editor_checkpoint;
         next.failure = None;
-        validate_snapshot(&next)?;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: None,
-            label: label.into(),
-        })
+        PreparedCodeEdit::new(expected.clone(), next, None, label.into())
     }
 
     /// Stages reset-to-code for one semantic draft. `None` means no draft was
@@ -1010,7 +1096,9 @@ impl SketchCodeSession {
         work: &mut CodeWorkReceipt,
     ) -> Result<CodeSessionReceipt, CodeSessionError> {
         self.authenticate(&prepared.expected)?;
-        validate_snapshot(&prepared.next)?;
+        // PreparedCodeEdit::new validated the private immutable candidate.
+        // Publication must still authenticate the live owner, allocator and
+        // complete resulting history; imported bytes take full validation.
         if prepared.next.managed.declaration_name_high_water
             < self.snapshot.managed.declaration_name_high_water
         {
@@ -1165,12 +1253,12 @@ impl SketchCodeSession {
     /// Serializes the complete composite history and opaque editor
     /// checkpoints. No editor-owned history is mirrored or replayed.
     pub fn to_canonical_json(&self) -> Result<String, CodeSessionError> {
-        let wire = SessionWire {
-            version: SESSION_WIRE_VERSION.into(),
-            identity: self.identity.clone(),
-            snapshot: self.snapshot.clone(),
-            undo: self.undo.clone(),
-            redo: self.redo.clone(),
+        let wire = SessionWireRef {
+            version: SESSION_WIRE_VERSION,
+            identity: &self.identity,
+            snapshot: &self.snapshot,
+            undo: &self.undo,
+            redo: &self.redo,
             structural_expansions: self.structural_expansions,
         };
         let json = serde_json::to_string(&wire)
@@ -1324,13 +1412,7 @@ impl SketchCodeSession {
         next.editor_checkpoint = editor_checkpoint.clone();
         next.accepted_editor_checkpoint = editor_checkpoint;
         next.failure = None;
-        validate_snapshot(&next)?;
-        Ok(PreparedCodeEdit {
-            expected: expected.clone(),
-            next,
-            plan: None,
-            label: label.into(),
-        })
+        PreparedCodeEdit::new(expected.clone(), next, None, label.into())
     }
 }
 
@@ -1485,17 +1567,18 @@ fn validate_wire_size(
     structural_expansions: u64,
 ) -> Result<(), CodeSessionError> {
     validate_history_identity_consistency(snapshot, undo, redo)?;
-    let wire = SessionWire {
-        version: SESSION_WIRE_VERSION.into(),
-        identity: identity.clone(),
-        snapshot: snapshot.clone(),
-        undo: undo.to_vec(),
-        redo: redo.to_vec(),
+    let wire = SessionWireRef {
+        version: SESSION_WIRE_VERSION,
+        identity,
+        snapshot,
+        undo,
+        redo,
         structural_expansions,
     };
-    let actual = serde_json::to_vec(&wire)
-        .map_err(|error| CodeSessionError::Serialization(error.to_string()))?
-        .len();
+    let mut count = WireByteCount::default();
+    serde_json::to_writer(&mut count, &wire)
+        .map_err(|error| CodeSessionError::Serialization(error.to_string()))?;
+    let actual = count.0;
     if actual > crate::CODE_PROJECT_LIMIT {
         Err(CodeSessionError::ResourceLimit {
             actual,
@@ -1541,6 +1624,8 @@ pub enum CodeSessionError {
     reason = "one audit pass validates all current and accepted snapshot cross-links"
 )]
 fn validate_snapshot(snapshot: &CodeSessionSnapshot) -> Result<(), CodeSessionError> {
+    #[cfg(test)]
+    SNAPSHOT_VALIDATION_CALLS.with(|calls| calls.set(calls.get() + 1));
     if snapshot.managed.declaration_name_high_water > MAX_CODE_SESSION_WIRE_INTEGER {
         return Err(CodeSessionError::InvalidPersistence(
             "declaration-name high-water is outside the exact JavaScript integer range".into(),

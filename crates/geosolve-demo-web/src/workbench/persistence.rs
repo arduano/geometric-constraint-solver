@@ -26,6 +26,11 @@ use geosolve_sketch_intent::{
     intent_legacy_content_digest,
 };
 
+#[cfg(test)]
+std::thread_local! {
+    static PROJECTIONAL_INTENT_DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 const PROJECTIONAL_WORKSPACE_VERSION: u32 = 8;
 const FLAT_WORKSPACE_VERSION: u32 = 6;
 const ABANDONED_WORKSPACE_VERSION: u32 = 7;
@@ -742,6 +747,26 @@ impl WorkspaceSnapshot {
         computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
         retained_revisions: WorkspaceRevisions,
     ) -> Result<Self, String> {
+        let intent_json = projectional
+            .coordinator()
+            .intent()
+            .to_canonical_json()
+            .map_err(|error| error.to_string())?;
+        Self::capture_projectional_editor(
+            projectional,
+            computed_evaluation_high_water,
+            retained_revisions,
+            intent_json,
+        )?
+        .validated()
+    }
+
+    fn capture_projectional_editor(
+        projectional: &ProjectionalEditorSession,
+        computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
+        retained_revisions: WorkspaceRevisions,
+        intent_json: String,
+    ) -> Result<Self, String> {
         let coordinator = projectional.coordinator();
         let intent = coordinator.intent();
         let materialization = coordinator.accepted_materialization().ok_or_else(|| {
@@ -762,7 +787,7 @@ impl WorkspaceSnapshot {
             .accepted()
             .is_some_and(|authority| authority.target == intent.semantic_identity());
 
-        Self {
+        Ok(Self {
             version: PROJECTIONAL_WORKSPACE_VERSION,
             design: document_payload(design)?,
             accepted: Some(document_payload(accepted)?),
@@ -775,15 +800,10 @@ impl WorkspaceSnapshot {
                 projectional.editor().annotation_layout(),
             ),
             revisions,
-            intent_session_json: Some(
-                intent
-                    .to_canonical_json()
-                    .map_err(|error| error.to_string())?,
-            ),
+            intent_session_json: Some(intent_json),
             origin: WorkspaceSnapshotOrigin::ProjectionalV8,
             migrated_historical_contact_domain: false,
-        }
-        .validated()
+        })
     }
 
     /// Captures the same authenticated projectional materialization while
@@ -794,19 +814,44 @@ impl WorkspaceSnapshot {
         computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
         retained_revisions: WorkspaceRevisions,
     ) -> Result<Self, String> {
-        let mut snapshot = Self::from_projectional_editor_with_persistence_high_water(
+        let delegated = projectional
+            .coordinator()
+            .intent()
+            .delegated_checkpoint()
+            .map_err(|error| error.to_string())?;
+        let intent_json = delegated
+            .to_canonical_json()
+            .map_err(|error| error.to_string())?;
+        let mut snapshot = Self::capture_projectional_editor(
             projectional,
             computed_evaluation_high_water,
             retained_revisions,
+            intent_json,
         )?;
-        snapshot.intent_session_json = Some(
-            projectional
-                .coordinator()
-                .intent()
-                .to_delegated_checkpoint_json()
-                .map_err(|error| error.to_string())?,
-        );
-        snapshot.validated()
+        snapshot.retain_bounded_annotation_layout();
+        // The public delegated-checkpoint API already validates this exact
+        // history-free Intent authority. Authenticate the captured native
+        // evidence against it without decoding its just-encoded JSON again.
+        snapshot.validate_with_intent(&delegated)?;
+        Ok(snapshot)
+    }
+
+    /// Encodes one delegated checkpoint directly from live projectional authority.
+    ///
+    /// Capture validates the exact native evidence against the public API's
+    /// validated delegated Intent. The private wire encoder receives that
+    /// immutable local snapshot before any caller can mutate its fields.
+    pub(crate) fn encode_delegated_projectional_editor(
+        projectional: &ProjectionalEditorSession,
+        computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
+        retained_revisions: WorkspaceRevisions,
+    ) -> Result<String, String> {
+        Self::from_delegated_projectional_editor(
+            projectional,
+            computed_evaluation_high_water,
+            retained_revisions,
+        )?
+        .encode_projectional_wire()
     }
 
     fn from_checkpoint(
@@ -876,40 +921,46 @@ impl WorkspaceSnapshot {
                 if self.version == PROJECTIONAL_WORKSPACE_VERSION =>
             {
                 self.validate()?;
-                let intent_session_json = self
-                    .intent_session_json
-                    .as_deref()
-                    .ok_or_else(|| "workspace v8 requires a canonical intent session".to_owned())?;
-                let materialization = WorkspaceMaterializationV8Ref::from_snapshot(self);
-                let annotation_layout_json = self.annotation_layout_json.as_deref();
-                let digest_payload = workspace_v8_digest_payload_from_parts(
-                    PROJECTIONAL_WORKSPACE_VERSION,
-                    intent_session_json,
-                    &materialization,
-                    &annotation_layout_json,
-                );
-                let digest = intent_content_digest(&digest_payload);
-                drop(digest_payload);
-                let wire = WorkspaceSnapshotV8Ref {
-                    version: PROJECTIONAL_WORKSPACE_VERSION,
-                    intent_session_json,
-                    materialization,
-                    annotation_layout_json,
-                    digest,
-                };
-                let json = serde_json::to_string(&wire).map_err(|error| error.to_string())?;
-                if json.len() > MAX_WORKSPACE_JSON_BYTES {
-                    return Err(format!(
-                        "workspace v8 exceeds the {MAX_WORKSPACE_JSON_BYTES}-byte limit"
-                    ));
-                }
-                Ok(json)
+                self.encode_projectional_wire()
             }
             WorkspaceSnapshotOrigin::LegacyBootstrap { source_version } => Err(format!(
                 "legacy workspace v{source_version} must be normalized into per-object bootstrap declarations before v8 encoding"
             )),
             _ => Err("workspace snapshot version/origin is inconsistent".into()),
         }
+    }
+
+    // Called only after ordinary snapshot validation or immediately after
+    // authenticated delegated capture. External snapshots still use `encode`.
+    fn encode_projectional_wire(&self) -> Result<String, String> {
+        let intent_session_json = self
+            .intent_session_json
+            .as_deref()
+            .ok_or_else(|| "workspace v8 requires a canonical intent session".to_owned())?;
+        let materialization = WorkspaceMaterializationV8Ref::from_snapshot(self);
+        let annotation_layout_json = self.annotation_layout_json.as_deref();
+        let digest_payload = workspace_v8_digest_payload_from_parts(
+            PROJECTIONAL_WORKSPACE_VERSION,
+            intent_session_json,
+            &materialization,
+            &annotation_layout_json,
+        );
+        let digest = intent_content_digest(&digest_payload);
+        drop(digest_payload);
+        let wire = WorkspaceSnapshotV8Ref {
+            version: PROJECTIONAL_WORKSPACE_VERSION,
+            intent_session_json,
+            materialization,
+            annotation_layout_json,
+            digest,
+        };
+        let json = serde_json::to_string(&wire).map_err(|error| error.to_string())?;
+        if json.len() > MAX_WORKSPACE_JSON_BYTES {
+            return Err(format!(
+                "workspace v8 exceeds the {MAX_WORKSPACE_JSON_BYTES}-byte limit"
+            ));
+        }
+        Ok(json)
     }
 
     #[allow(
@@ -1156,7 +1207,7 @@ impl WorkspaceSnapshot {
         Ok(snapshot)
     }
 
-    fn validated(mut self) -> Result<Self, String> {
+    fn retain_bounded_annotation_layout(&mut self) {
         if self
             .annotation_layout_json
             .as_ref()
@@ -1164,6 +1215,10 @@ impl WorkspaceSnapshot {
         {
             self.annotation_layout_json = None;
         }
+    }
+
+    fn validated(mut self) -> Result<Self, String> {
+        self.retain_bounded_annotation_layout();
         self.validate()?;
         Ok(self)
     }
@@ -1240,6 +1295,8 @@ impl WorkspaceSnapshot {
     }
 
     pub(crate) fn intent_session(&self) -> Result<Option<IntentSession>, String> {
+        #[cfg(test)]
+        PROJECTIONAL_INTENT_DECODES.with(|count| count.set(count.get() + 1));
         self.intent_session_json
             .as_deref()
             .map(IntentSession::from_json)
@@ -1248,6 +1305,8 @@ impl WorkspaceSnapshot {
     }
 
     pub(crate) fn validate_delegated_intent_checkpoint(&self) -> Result<(), String> {
+        #[cfg(test)]
+        PROJECTIONAL_INTENT_DECODES.with(|count| count.set(count.get() + 1));
         let json = self.intent_session_json.as_deref().ok_or_else(|| {
             "delegated workspace requires projectional intent authority".to_owned()
         })?;
@@ -1986,9 +2045,7 @@ mod tests {
         (snapshot, intent, accepted)
     }
 
-    #[test]
-    fn delegated_projectional_checkpoint_has_no_nested_history_and_cold_restores() {
-        let (_, _, _) = m83_projectional_fixture();
+    fn delegated_projectional_fixture() -> ProjectionalEditorSession {
         let document = DocumentId(PersistentId::from_u128(0x84_d1_u128 << 64));
         let mut coordinator = ProjectionalIntentCoordinator::empty(
             IntentSessionId::from_raw(0x84_d1),
@@ -2034,7 +2091,12 @@ mod tests {
                 ))
                 .unwrap();
         }
-        let projectional = ProjectionalEditorSession::new(coordinator);
+        ProjectionalEditorSession::new(coordinator)
+    }
+
+    #[test]
+    fn delegated_projectional_checkpoint_has_no_nested_history_and_cold_restores() {
+        let projectional = delegated_projectional_fixture();
         assert_eq!(projectional.coordinator().intent().undo_len(), 2);
         let snapshot = WorkspaceSnapshot::from_delegated_projectional_editor(
             &projectional,
@@ -2064,6 +2126,89 @@ mod tests {
         let restored = projectional_editor_from_snapshot(&decoded).unwrap();
         assert_eq!(restored.coordinator().intent().undo_len(), 0);
         assert!(restored.coordinator().accepted_materialization().is_some());
+    }
+
+    #[test]
+    fn delegated_checkpoint_encoding_preserves_bytes_without_redecoding_live_authority() {
+        let mut projectional = delegated_projectional_fixture();
+        projectional.undo().unwrap().expect("one edit undone");
+        assert_eq!(projectional.coordinator().intent().undo_len(), 1);
+        assert_eq!(projectional.coordinator().intent().redo_len(), 1);
+        let document = projectional
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .id();
+        let layout = AnnotationLayoutState::from_entries([AnnotationLayoutEntry {
+            key: AnnotationLayoutKey {
+                document,
+                source: geosolve_sketch::DocumentSourceId(PersistentId::from_u128(0x94_0301)),
+                item: SelectionItem::Constraint(geosolve_sketch::DocumentConstraintId(
+                    PersistentId::from_u128(0x94_0302),
+                )),
+                kind: SceneAnnotationKind::Constraint(SceneConstraintGlyph::Fixed),
+                marker_index: Some(0),
+            },
+            placement: AnnotationPlacement::Free {
+                offset_pixels: [17.0, -11.0],
+            },
+        }]);
+        projectional
+            .editor_mut()
+            .restore_annotation_layout(layout.clone());
+        let (evaluation, revisions) =
+            WorkspaceSnapshot::projectional_authority_metadata(&projectional).unwrap();
+        // Preserve the prior full-capture/delegation path as the byte oracle.
+        let mut legacy = WorkspaceSnapshot::from_projectional_editor_with_persistence_high_water(
+            &projectional,
+            evaluation,
+            revisions,
+        )
+        .unwrap();
+        legacy.intent_session_json = Some(
+            projectional
+                .coordinator()
+                .intent()
+                .to_delegated_checkpoint_json()
+                .unwrap(),
+        );
+        let legacy = legacy.validated().unwrap();
+        legacy.validate_delegated_intent_checkpoint().unwrap();
+        let expected = legacy.encode().unwrap();
+        super::PROJECTIONAL_INTENT_DECODES.with(|count| count.set(0));
+        let encoded = WorkspaceSnapshot::encode_delegated_projectional_editor(
+            &projectional,
+            evaluation,
+            revisions,
+        )
+        .unwrap();
+        let decode_count = super::PROJECTIONAL_INTENT_DECODES.with(std::cell::Cell::get);
+        assert_eq!(
+            encoded, expected,
+            "delegation preserves the exact canonical wire"
+        );
+        assert_eq!(
+            decode_count, 0,
+            "live accepted authority must not be decoded again during encoding"
+        );
+        let decoded = WorkspaceSnapshot::decode(&encoded).unwrap();
+        decoded.validate_delegated_intent_checkpoint().unwrap();
+        assert_eq!(decoded.annotation_layout().entries(), layout.entries());
+        assert_eq!(projectional.coordinator().intent().undo_len(), 1);
+        assert_eq!(projectional.coordinator().intent().redo_len(), 1);
+        let restored = projectional_editor_from_snapshot(&decoded).unwrap();
+        assert_eq!(restored.coordinator().intent().undo_len(), 0);
+        assert_eq!(restored.coordinator().intent().redo_len(), 0);
+        assert_eq!(
+            restored.coordinator().intent().graph(),
+            projectional.coordinator().intent().graph()
+        );
+        assert_eq!(
+            restored.coordinator().intent().accepted(),
+            projectional.coordinator().intent().accepted()
+        );
     }
 
     #[test]

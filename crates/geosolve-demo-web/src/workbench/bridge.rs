@@ -454,6 +454,20 @@ struct FrameUpdate<'a> {
     frame: &'a FrameSnapshot,
 }
 
+/// The chrome inputs that ordinary Point previews may retain. Native preview
+/// geometry has its own accepted scene and is deliberately absent here.
+#[derive(Debug, Eq, PartialEq)]
+struct PointPreviewPresentationIdentity {
+    revision: u64,
+    intent: geosolve_sketch_intent::IntentSessionIdentity,
+    code: Option<geosolve_sketch_code::CodeSessionIdentity>,
+    route: geosolve_constraint_editor::PreparedPointDragRoute,
+    selected_declaration: Option<NodeId>,
+    selection: Vec<SelectionItem>,
+    geometry_policy: geosolve_constraint_editor::GeometryInteractionPolicy,
+    latest_diagnostic: Option<IntentKey>,
+}
+
 #[derive(Debug, Serialize)]
 struct ExportSnapshot {
     version: u8,
@@ -843,6 +857,66 @@ impl WorkbenchBridge {
                 .is_none_or(|code| !code.has_any_pending_semantic_point_drag())
     }
 
+    /// Only an already-owned ordinary Point continuation may omit unchanged
+    /// chrome. Press, terminal, authoring, other drag kinds and error recovery
+    /// retain complete snapshots, independent of browser input scheduling.
+    fn point_preview_presentation_identity(
+        &self,
+        request: PointerRequest,
+    ) -> Option<PointPreviewPresentationIdentity> {
+        let editor = self.editor();
+        let interaction = editor.editor();
+        if !matches!(request.phase, PointerPhase::Move)
+            || self.last_error.is_some()
+            || self.accepted_frame.is_none()
+            || self.preserve_frame_once
+            || self.active_tool != "select"
+            || interaction.tool() != EditorTool::Select
+            || self.canvas_pan.is_some()
+            || self.captured_pointer != Some(request.pointer_id)
+            || self.authoring.active_tool().is_some()
+            || self.feature_authoring.active_tool().is_some()
+            || self.offset_authoring.is_active()
+            || self.construction_preview.is_some()
+            || self.pending_managed_mutation.is_some()
+            || editor.feature_authoring_radius_drag_active()
+            || editor.offset_authoring_distance_drag_active()
+            || interaction.geometry_draft_status().is_some()
+            || interaction.draft_inference_resolution().is_some()
+            || interaction.fillet_branch_preview().is_some()
+            || !interaction.active_pointer_gesture().is_some_and(|gesture| {
+                gesture.pointer_id == request.pointer_id
+                    && gesture.kind == ActivePointerGestureKind::Point
+            })
+            || self.code_project.as_ref().is_some_and(|code| {
+                code.has_any_pending_semantic_point_drag()
+                    && !code.has_pending_semantic_point_drag(request.pointer_id)
+            })
+        {
+            return None;
+        }
+        let route = interaction.prepared_point_drag_route()?;
+        if route.pointer_id != request.pointer_id {
+            return None;
+        }
+        let intent = editor.coordinator().intent();
+        Some(PointPreviewPresentationIdentity {
+            revision: self.revision,
+            intent: intent.identity(),
+            code: self
+                .code_project
+                .as_ref()
+                .map(|code| code.code_session_identity().clone()),
+            route,
+            selected_declaration: editor.selected_declaration(),
+            selection: interaction.selection().to_vec(),
+            geometry_policy: interaction.geometry_interaction_policy(),
+            latest_diagnostic: intent
+                .latest_attempt()
+                .and_then(|attempt| attempt.diagnostic.clone()),
+        })
+    }
+
     /// Returns the immutable Rust-owned CAD tool and icon catalog.
     ///
     /// This capability is deliberately separate from [`Self::snapshot_json`]
@@ -944,6 +1018,7 @@ impl WorkbenchBridge {
                 .record("browser.pointerup", &trace_detail),
         }
         let transient_before = self.select_navigation_is_transient();
+        let point_preview_before = self.point_preview_presentation_identity(request);
         let hover_before = self.editor().editor().hover_state();
         let frame_was_current = self
             .retained_scene
@@ -966,6 +1041,29 @@ impl WorkbenchBridge {
             // prior accepted scene remains authoritative.
             self.notice = "Interaction retained its prior accepted state".into();
         }
+        self.record_pointer_presentation();
+        if transient_before && self.select_navigation_is_transient() {
+            if canvas_pan {
+                return self.frame_update_json();
+            }
+            if select_hover {
+                return if frame_was_current && self.editor().editor().hover_state() == hover_before
+                {
+                    Ok("null".into())
+                } else {
+                    self.frame_update_json()
+                };
+            }
+        }
+        if let Some(before) = point_preview_before
+            && self.point_preview_presentation_identity(request).as_ref() == Some(&before)
+        {
+            return self.frame_update_json();
+        }
+        self.snapshot_json()
+    }
+
+    fn record_pointer_presentation(&mut self) {
         self.interaction_trace.record(
             if self.last_error.is_some() {
                 "bridge.presentation.retained"
@@ -981,20 +1079,6 @@ impl WorkbenchBridge {
                 self.last_error.as_deref().unwrap_or("none"),
             ),
         );
-        if transient_before && self.select_navigation_is_transient() {
-            if canvas_pan {
-                return self.frame_update_json();
-            }
-            if select_hover {
-                return if frame_was_current && self.editor().editor().hover_state() == hover_before
-                {
-                    Ok("null".into())
-                } else {
-                    self.frame_update_json()
-                };
-            }
-        }
-        self.snapshot_json()
     }
 
     pub(crate) fn wheel_json(&mut self, request: &str) -> Result<String, String> {
@@ -5243,6 +5327,237 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one protocol regression keeps omitted-state parity, preview persistence and terminal authority together"
+    )]
+    fn point_preview_frame_delta_matches_full_snapshot_without_publishing_durable_state() {
+        let mut bridge = managed_bridge();
+        let opened: serde_json::Value =
+            serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+        bridge
+            .dispatch_json(
+                &serde_json::json!({
+                    "version": 2, "command": "declaration.select",
+                    "payload": {"id": managed_row_id(&opened, "segment")},
+                })
+                .to_string(),
+            )
+            .unwrap();
+        let scene = bridge.current_scene().unwrap();
+        let origin = scene
+            .points
+            .iter()
+            .find(|point| {
+                point.model_position.map(f64::to_bits) == [1.25_f64, -6.5].map(f64::to_bits)
+            })
+            .unwrap()
+            .screen_position;
+        let target = scene.viewport.model_to_screen([-2.0, 4.0]);
+        let revision = bridge.revision;
+        let pressed: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("down", 94_200, origin, 1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(pressed.get("kind").is_none());
+        assert!(
+            bridge
+                .code_project
+                .as_ref()
+                .unwrap()
+                .has_pending_semantic_point_drag(94_200)
+        );
+        let persistence = bridge.persistence_json().unwrap();
+        let identity = bridge.editor().coordinator().intent().identity();
+        let code_identity = bridge
+            .code_project
+            .as_ref()
+            .unwrap()
+            .code_session_identity()
+            .clone();
+        for step in 1..=3 {
+            let fraction = f64::from(step) / 3.0;
+            let position = ScreenPoint {
+                x: (target.x - origin.x).mul_add(fraction, origin.x),
+                y: (target.y - origin.y).mul_add(fraction, origin.y),
+            };
+            let update: serde_json::Value = serde_json::from_str(
+                &bridge
+                    .pointer_json(&pointer_request("move", 94_200, position, 1))
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(update["kind"], "frame");
+            assert_eq!(update["revision"], revision);
+            assert_eq!(update.as_object().unwrap().len(), 4);
+            let complete: serde_json::Value =
+                serde_json::from_str(&bridge.snapshot_json().unwrap()).unwrap();
+            let mut reconstructed = pressed.clone();
+            reconstructed["frame"] = update["frame"].clone();
+            assert_eq!(
+                reconstructed, complete,
+                "every omitted section must remain exact"
+            );
+            assert_eq!(bridge.persistence_json().unwrap(), persistence);
+            assert_eq!(bridge.editor().coordinator().intent().identity(), identity);
+            assert_eq!(
+                bridge
+                    .code_project
+                    .as_ref()
+                    .unwrap()
+                    .code_session_identity(),
+                &code_identity
+            );
+        }
+        let terminal: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("up", 94_200, target, 0))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(terminal.get("kind").is_none());
+        assert_eq!(terminal["revision"], revision + 1);
+        assert_eq!(terminal["presentation"]["canUndo"], true);
+        assert_ne!(bridge.persistence_json().unwrap(), persistence);
+        let accepted = bridge
+            .editor()
+            .coordinator()
+            .accepted_materialization()
+            .unwrap();
+        assert!(accepted.validation.hard_residuals_validated);
+        assert!(accepted.validation.all_active_features_current);
+        assert!(
+            accepted
+                .validation
+                .maximum_normalized_hard_residual
+                .is_none_or(|value| value.is_finite() && value <= 1.0e-9)
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one gesture lifecycle verifies full error, recovery and cancellation publication"
+    )]
+    fn point_preview_errors_recovery_and_cancellation_keep_complete_snapshots() {
+        let mut bridge = managed_bridge();
+        bridge.snapshot_json().unwrap();
+        let origin = bridge.current_scene().unwrap().points[0].screen_position;
+        let original_persistence = bridge.persistence_json().unwrap();
+        bridge
+            .pointer_json(&pointer_request("down", 94_201, origin, 1))
+            .unwrap();
+        let first = ScreenPoint {
+            x: origin.x + 6.0,
+            y: origin.y + 3.0,
+        };
+        bridge.last_error = Some("earlier interaction error still presented in Problems".into());
+        let recovered: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("move", 94_201, first, 1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(recovered.get("kind").is_none());
+        assert_eq!(recovered["project"]["status"], "accepted");
+        assert!(recovered["problems"].as_array().unwrap().is_empty());
+
+        let second = ScreenPoint {
+            x: origin.x + 12.0,
+            y: origin.y + 6.0,
+        };
+        let update: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("move", 94_201, second, 1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(update["kind"], "frame");
+
+        // Deliberately prepare only the disposable headless gesture, omitting
+        // its projectional owner route. The real bridge must expose the typed
+        // missing-authority error through full Problems publication.
+        let point = bridge
+            .editor()
+            .editor()
+            .prepared_point_drag_route()
+            .unwrap()
+            .point;
+        bridge.editor_mut().cancel_interaction();
+        let scene = bridge.current_scene().unwrap();
+        let position = scene
+            .points
+            .iter()
+            .find(|candidate| candidate.id == point)
+            .unwrap()
+            .screen_position;
+        let _ = bridge.editor_mut().editor_mut().pointer_down(
+            &scene,
+            PointerInput {
+                pointer_id: 94_201,
+                position,
+                modifiers: Modifiers::default(),
+            },
+        );
+        let invalid_target = ScreenPoint {
+            x: position.x + 12.0,
+            y: position.y + 12.0,
+        };
+        let rejected: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("move", 94_201, invalid_target, 1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(rejected.get("kind").is_none());
+        assert_eq!(rejected["project"]["status"], "failed");
+        assert!(
+            rejected["problems"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|problem| problem["id"] == "workbench-interaction")
+        );
+        assert_eq!(bridge.persistence_json().unwrap(), original_persistence);
+
+        let canceled: serde_json::Value = serde_json::from_str(
+            &bridge
+                .cancel_json(r#"{"version":2,"reason":"lost-capture"}"#)
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(canceled.get("kind").is_none());
+        assert!(bridge.captured_pointer.is_none());
+        assert_eq!(bridge.persistence_json().unwrap(), original_persistence);
+        let origin = bridge.current_scene().unwrap().points[0].screen_position;
+        let pressed: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("down", 94_202, origin, 1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(pressed.get("kind").is_none());
+        assert!(pressed["problems"].as_array().unwrap().is_empty());
+        let target = ScreenPoint {
+            x: origin.x + 6.0,
+            y: origin.y + 3.0,
+        };
+        let update: serde_json::Value = serde_json::from_str(
+            &bridge
+                .pointer_json(&pointer_request("move", 94_202, target, 1))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(update["kind"], "frame");
+        bridge
+            .cancel_json(r#"{"version":2,"reason":"escape"}"#)
+            .unwrap();
+        assert_eq!(bridge.persistence_json().unwrap(), original_persistence);
+    }
+
+    #[test]
     fn navigation_updates_only_the_frame_and_preserves_complete_persistence() {
         let mut bridge = WorkbenchBridge::construct_json(r#"{"version":2}"#).unwrap();
         bridge
@@ -7877,6 +8192,16 @@ export default sketch(($) => {
                 .expect("managed sample code workbench after Undo")
                 .managed_test_overlay_is_empty(),
             "{sample} Undo removes the instance placement",
+        );
+    }
+
+    #[test]
+    fn backplane_point_drag_preserves_exact_terminal_source_and_history() {
+        require_managed_sample_point_drag(
+            "robotic-harness-backplane",
+            [-156.0, 82.0],
+            [-162.0, 85.0],
+            94_003,
         );
     }
 

@@ -4547,13 +4547,12 @@ fn encode_editor_checkpoint(
 ) -> Result<serde_json::Value, String> {
     let (computed_evaluation_high_water, revisions) =
         super::persistence::WorkspaceSnapshot::projectional_authority_metadata(editor)?;
-    let delegated = super::persistence::WorkspaceSnapshot::from_delegated_projectional_editor(
+    super::persistence::WorkspaceSnapshot::encode_delegated_projectional_editor(
         editor,
         computed_evaluation_high_water,
         revisions,
-    )?;
-    delegated.validate_delegated_intent_checkpoint()?;
-    delegated.encode().map(serde_json::Value::String)
+    )
+    .map(serde_json::Value::String)
 }
 
 fn validate_editor_checkpoint(checkpoint: &serde_json::Value) -> Result<(), String> {

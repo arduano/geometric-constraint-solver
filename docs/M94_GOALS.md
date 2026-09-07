@@ -74,3 +74,14 @@ and exercises persistence/history preservation, picking after navigation, annota
 resize/DPR and terminal/cancellation ordering. The stable candidate receives one integrated
 qualification with authenticated unaffected reuse and exact replacement delivery at port 18096.
 M94 remains open for supervising-user acceptance.
+
+## Authorized dense-backplane drag optimization — 2026-09-07
+
+The supervising user requested a further performance audit and a correction if it fits this
+milestone. M94-F003 reproduces the reported two-second pause principally at point-drag release
+and identifies repeated checkpoint validation/serialization and full preview UI publication.
+The bounded correction reuses validated immutable internal state and the existing frame-only
+transport, preserving every semantic sample, independent native validation, exact terminal,
+history and strict imported-byte validation. No solver algorithm or branch policy changes.
+[The drag report](M94_DRAG_OPTIMIZATION.md) records reproduction, implementation, focused evidence,
+remaining costs and final qualification/delivery. M94 remains open for supervising-user acceptance.
