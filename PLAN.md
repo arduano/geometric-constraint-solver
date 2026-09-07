@@ -8333,7 +8333,7 @@ historical replay. Those limitations are future work, not closure blockers. No s
 
 ## M94 — accelerated canvas viewport
 
-Status: **M94-F001 aspect-ratio correction qualified and delivered on 2026-09-07**.
+Status: **M94-F002 navigation optimization qualified and delivered on 2026-09-07**.
 [M94_GOALS.md](docs/M94_GOALS.md) owns scope; [M94_IMPLEMENTATION.md](docs/M94_IMPLEMENTATION.md)
 records commands, visual evidence and qualification.
 
@@ -8345,8 +8345,10 @@ records commands, visual evidence and qualification.
 - [x] Migrate browser witnesses and tests without weakening coverage or borrowing SVG receipts.
 - [x] Measure rendering/interaction, run the complete integrated gate, and deliver reviewed UAT.
 - [x] Correct M94-F001: use the full canvas aspect ratio for drawing, Fit and mouse input.
-- [ ] Optimize M94-F002 dense-fixture navigation: frame-only transport, retained reprojection/GPU resources and exact batched camera input; measure and qualify before replacing the candidate.
+- [x] Optimize M94-F002 dense-fixture navigation: frame-only transport, retained reprojection/GPU resources and exact batched camera input; measure and qualify before replacing the candidate.
 - [ ] Obtain supervising-user acceptance; retain any limitations explicitly at closure.
+
+M94-F002 product `93fdcbf` passes all 241 stages in `20260907T143802-fee2e639` (23 fresh, 218 reused; 21m57s). Its final artifact is byte-verified at port 18096. Field pan/zoom bridge medians fall from about 220/208 ms to 18/17 ms; full figures and remaining dense-frame/editing limits are in [the optimization report](docs/M94_NAVIGATION_OPTIMIZATION.md). M94 still awaits supervising-user acceptance.
 
 M94-F001 replacement `2f1711b` passes all 241 stages in `20260907T131046-91e1a335` and is byte-verified at
 `http://100.94.63.83:18096/`. Full CSS extent, uniform scale, mouse input and project-layout Fit
