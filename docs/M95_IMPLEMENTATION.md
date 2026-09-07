@@ -155,3 +155,57 @@ rollback-clippy}-check.log`. A separate bounded review found no additional check
 
 The failed run retains completed receipts and source identity; the replacement runner will validate
 reuse. Exact golden/browser/build obligations remain pending until complete qualification.
+
+## Final-browser harness migration and dense visibility repair
+
+Replacement `097c42c` run `20260907T184559-a60cf7cb` passes the native workbench suite
+(**323 passed, one existing ignored**), native/headless qualifications, golden compatibility,
+optimized WASM lifecycle/parity, package, licence and artifact transport checks. Its browser stage
+fails after 1149.1 seconds: all three M95 cases pass, but five old workbench assumptions and one
+dense workflow need correction. The run remains failed; exclusive performance was not reached.
+
+The five workbench failures are `HARNESS_ERROR`: an Explorer group can now share the toolbar's
+accessible name “Sketch”, and authored Fillet/Circle rows cannot navigate while the authoring tool
+remains active. Toolbar locators now scope to `Primary tools`; those workflows explicitly return
+to Select. The Fillet Inspector assertion follows the selected source declaration's displayed name.
+The first focused pass is **4/5**, and the remaining Fillet workflow passes **1/1** after that
+heading correction. Commands use `GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18109/
+GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome npm --prefix
+crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/workbench.spec.ts --grep
+'outside dismissal|Rust-owned CAD|computed Fillet authoring|normal pointer capture release|canvas
+chrome exposes' --workers=1`; the follow-up grep is `computed Fillet authoring`.
+Logs: `target/m95/browser-{harness-repair,fillet-harness}.log`.
+
+**M95-F005 — dense hidden-row resolution repeats the complete declaration projection.** The
+perforated-field workflow exhausts its unchanged 360-second budget during its second Undo.
+The trace records 135.7 seconds in Isolate and 66.6 seconds in Fit while isolated. In
+`hidden_scene_items`, every hidden leaf calls the full declaration-panel projection; M95's
+navigation-index scene demand magnifies that existing repeated work. One accepted projection
+now supplies the complete batch, retaining the same row resolver and owned-binding semantics.
+
+The independent direct-WASM probe on the failed artifact measures Isolate **139,916.7 ms** and
+isolated Fit **82,067.2 ms**. The repaired development release measures **759.6 ms** and
+**522.9 ms**, with identical visible item counts (96 isolated, 861 restored), no problems and exact
+complete persistence after restoration. Restore/full Fit are 268.3/217.3 ms in the repaired run.
+These are single controlled sequences, not percentile claims. Probe source and reports are
+`target/m95/visibility-probe.mjs` and `target/m95/visibility-{before,after}.json`; the script uses
+`NAV_MANIFEST`, `NAV_URL` and `NAV_OUTPUT`. No timeout or assertion budget is increased.
+
+The existing native owner regression
+`m91_explorer_visibility_is_composed_presentation_only_and_restorable` passes **1/1**, followed
+by all **10/10** `m95_` bridge cases. Commands inside `nix-shell shell.nix --run` are
+`CARGO_BUILD_JOBS=4 cargo test --locked -p geosolve-demo-web --lib TEST_FILTER -- --nocapture`.
+Strict `cargo clippy --locked -p geosolve-demo-web --lib --tests -- -D warnings` and formatting
+pass after a behavior-equivalent match simplification. Logs: `target/m95/visibility-{owner,clippy}.log`.
+The repaired development release is `/tmp/geosolve-m95-visibility-r1`; its full field/browser
+recheck and replacement nomination remain pending below.
+
+The repaired browser replay passes **4/4 in 5.8 minutes**: the unchanged perforated-field
+workflow (5.4 minutes) plus all three M95 cases. Exact command:
+`GEOSOLVE_E2E_BASE_URL=http://127.0.0.1:18110/ GEOSOLVE_CHROMIUM_PATH=/home/arduano/.nix-profile/bin/google-chrome
+npm --prefix crates/geosolve-demo-web/frontend run test:e2e -- tests/e2e/m92-sample-audit.spec.ts
+tests/e2e/m95-navigation.spec.ts --grep 'perforated-fixture-field|M95' --workers=1
+--output=/home/arduano/programming/geometric-constraint-solver/target/m95/visibility-browser`.
+Log: `target/m95/visibility-browser.log`. The native
+`m91_reprojected_isolate_restores_surviving_child_visibility_after_reload` regression also passes
+**1/1** with the same Cargo test invocation pattern (`target/m95/visibility-history.log`).

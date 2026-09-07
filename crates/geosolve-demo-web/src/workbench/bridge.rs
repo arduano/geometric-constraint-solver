@@ -3627,23 +3627,41 @@ impl WorkbenchBridge {
         let Some(materialization) = self.editor().coordinator().accepted_materialization() else {
             return Vec::new();
         };
+        // Resolve one accepted declaration projection for the entire visibility
+        // batch. Rebuilding the panel for every hidden generated row turns dense
+        // group isolation into repeated whole-project work.
+        let managed = self
+            .code_project
+            .as_ref()
+            .map(|code| code.declaration_panel_projection(self.editor()));
+        let ordinary = managed.is_none().then(|| {
+            self.editor()
+                .workbench_projection()
+                .outline
+                .into_iter()
+                .flat_map(|cell| cell.declarations)
+                .map(|declaration| (intent_panel_row_id(&declaration.symbol), declaration.node))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        });
         let mut nodes = std::collections::BTreeSet::new();
         for id in hidden_rows {
-            let node = match self.declaration_row_target(&id) {
+            let target = managed.as_ref().map_or_else(
+                || {
+                    ordinary
+                        .as_ref()?
+                        .get(&id)
+                        .copied()
+                        .map(|node| DeclarationRowTarget::Intent { node })
+                },
+                |projection| managed_declaration_row_target(&projection.declarations, &id),
+            );
+            let node = match target {
+                Some(DeclarationRowTarget::Intent { node }) => Some(node),
                 Some(
-                    DeclarationRowTarget::Intent { node }
-                    | DeclarationRowTarget::Managed {
-                        node: Some(node), ..
-                    }
-                    | DeclarationRowTarget::Generated {
-                        node: Some(node), ..
-                    },
-                ) => Some(node),
-                Some(
-                    DeclarationRowTarget::Managed { node: None, .. }
-                    | DeclarationRowTarget::Generated { node: None, .. },
-                )
-                | None => None,
+                    DeclarationRowTarget::Managed { node, .. }
+                    | DeclarationRowTarget::Generated { node, .. },
+                ) => node,
+                None => None,
             };
             if let Some(node) = node {
                 nodes.insert(node);

@@ -49,7 +49,7 @@ async function exerciseFormerLetterbox(page: Page, canvas: Locator, size: { widt
   expect(band, "exercise a substantial area outside the old 1000 × 700 drawing rectangle").toBeGreaterThan(100);
   const start = wide ? { x: band / 2, y: box.height * 0.32 } : { x: box.width * 0.32, y: band / 2 };
   const end = { x: start.x + 45, y: start.y + 65 };
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment", exact: true }).click();
   await page.mouse.click(box.x + start.x, box.y + start.y);
   await page.mouse.click(box.x + end.x, box.y + end.y);

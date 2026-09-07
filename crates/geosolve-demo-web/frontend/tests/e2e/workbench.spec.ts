@@ -380,7 +380,7 @@ test("real WASM source-backs click-authored geometry in a managed sample", async
     await page.mouse.click(bounds!.x + bounds!.width * x, bounds!.y + bounds!.height * y);
   };
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment" }).click();
   // Keep this source-backing fixture above the fitted sample, away from the
   // existing geometry and inferred relations exercised by other cases.
@@ -433,7 +433,7 @@ test("real WASM source-backs a center-radius circle from an empty coded sketch",
     await page.mouse.click(bounds!.x + bounds!.width * x, bounds!.y + bounds!.height * y);
   };
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Center–Radius" }).click();
   await click(0.42, 0.44);
   await expectDraft(canvasFrame(page), true);
@@ -486,19 +486,19 @@ test("two circle contacts publish their Segment and accept the next pointer gest
     }));
   };
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Center–Radius" }).click();
   await click(0.32, 0.47);
   await click(0.41, 0.47);
   await waitForPublishedSource("const geometry1 = $.geometry.centerRadiusCircle");
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Center–Radius" }).click();
   await click(0.65, 0.47);
   await click(0.74, 0.47);
   await waitForPublishedSource("const geometry2 = $.geometry.centerRadiusCircle");
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment" }).click();
   await click(0.41, 0.47);
   await expectDraft(canvasFrame(page), true);
@@ -517,7 +517,7 @@ test("two circle contacts publish their Segment and accept the next pointer gest
   await expectItemCount(drawItems(frame, { layer: "geometry", className: "wb-curve" }), 3);
   await expect(page.locator("header").first()).toContainText(/accepted/i);
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment" }).click();
   await expect(page.getByText(
     /pointer input is unavailable while a managed-source mutation is compiling/u,
@@ -553,7 +553,7 @@ test("canonical Jansen sample Polyline Finish publishes inferred constraints int
     await page.mouse.click(position.x, position.y);
   };
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Polyline" }).click();
   const finish = page.getByRole("button", { name: "Finish" });
   await expect(finish).toBeDisabled();
@@ -761,7 +761,7 @@ test("Cubic Bézier authoring publishes one named typed declaration", async ({ p
     await page.mouse.click(bounds!.x + bounds!.width * x, bounds!.y + bounds!.height * y);
   };
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   const cubic = page.getByRole("menuitem", { name: "Cubic", exact: true });
   await cubic.click();
   await expect(cubic).toBeHidden();
@@ -897,10 +897,11 @@ export default sketch(($) => {
   const additions = page.getByRole("list", { name: "Canvas additions" });
   const row = additions.getByRole("button", { name: declarationName, exact: true });
   await expect(row).toHaveCount(1);
+  await page.getByRole("button", { name: "Select", exact: true }).click();
   await row.click();
   await page.getByRole("tab", { name: "Inspector" }).click();
   const details = page.getByRole("tabpanel");
-  await expect(details.getByRole("heading", { name: filletLabel!, exact: true })).toBeVisible();
+  await expect(details.getByRole("heading", { name: declarationName, exact: true })).toBeVisible();
   await expect(details.getByText("Modifiable in source", { exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Parameters" }).click();
@@ -932,7 +933,7 @@ export default sketch(($) => {
   expect(sourceAfterRadiusEdit).toContain(`label: "${filletLabel}"`);
 
   await page.getByRole("tab", { name: "Inspector" }).click();
-  await expect(details.getByRole("heading", { name: filletLabel!, exact: true })).toBeVisible();
+  await expect(details.getByRole("heading", { name: declarationName, exact: true })).toBeVisible();
   await expect(details.getByText("Modifiable in source", { exact: true })).toBeVisible();
   const actions = additions.getByRole("group", {
     name: `${declarationName} actions`,
@@ -1075,7 +1076,7 @@ test("the supplied native contact workspace retains a constrained point drag", a
 test("outside dismissal preserves the destination click", async ({ page }) => {
   const assertCleanRuntime = auditRuntime(page);
   await boot(page);
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Segment" })).toBeVisible();
   await page.getByRole("button", { name: "code", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Segment" })).toBeHidden();
@@ -1111,7 +1112,7 @@ test("Rust-owned CAD icons and semantic groups drive the toolbar while view cont
   await boot(page);
   await expect(page.getByRole("navigation", { name: "Primary tools" }).locator('svg[data-icon-key="geometry-select"]')).toBeVisible();
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await expect(page.getByRole("menuitem")).toHaveCount(25);
   await expect(page.getByRole("heading", { name: "Rectangles" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Segment" }).locator('svg[data-icon-key="geometry-segment"]')).toBeVisible();
@@ -1131,13 +1132,13 @@ test("Rust-owned CAD icons and semantic groups drive the toolbar while view cont
   await expect(page.getByRole("menuitem", { name: "Offset" }).locator('svg[data-icon-key="modify-offset"]')).toBeVisible();
   await expect(page.getByRole("menuitem", { name: /grid|fit|origin/i })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Segment" }).click();
   await expect(page.locator("span.font-medium", { hasText: "Segment" })).toBeVisible();
   await page.getByRole("button", { name: "Hide grid" }).click();
   await expect(page.getByRole("button", { name: "Show grid" })).toBeVisible();
   await expect(page.locator("span.font-medium", { hasText: "Segment" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sketch", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("toolbar", { name: "Canvas view" }).getByRole("button")).toHaveCount(3);
   assertCleanRuntime();
 });
@@ -1162,7 +1163,7 @@ test("normal pointer capture release commits Circle geometry and edits its compa
     await page.mouse.click(bounds!.x + bounds!.width * x, bounds!.y + bounds!.height * y);
   };
 
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Center–Radius" }).click();
   await expect(page.locator("span.font-medium", { hasText: "Center–Radius" })).toBeVisible();
   await click(0.42, 0.55);
@@ -1184,6 +1185,7 @@ test("normal pointer capture release commits Circle geometry and edits its compa
   const additions = page.getByRole("list", { name: "Canvas additions" });
   const compactCircle = additions.getByRole("button", { name: /^geometry\d+$/ });
   await expect(compactCircle).toHaveCount(1);
+  await page.getByRole("button", { name: "Select", exact: true }).click();
   await compactCircle.click();
   const circleName = (await compactCircle.textContent())?.trim() ?? null;
   expect(circleName).not.toBeNull();
@@ -1227,7 +1229,7 @@ test("canvas chrome exposes real role state and exact Polyline Finish readiness"
   await openNewSketch(page);
 
   await expect(page.getByRole("button", { name: /New curves:/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Sketch", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary tools" }).getByRole("button", { name: "Sketch", exact: true }).click();
   await page.getByRole("menuitem", { name: "Polyline" }).click();
 
   const role = page.getByRole("button", { name: "New curves: Profile. Change to Construction" });
